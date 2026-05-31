@@ -623,8 +623,8 @@ export default function GeneratePage() {
             ? sort.dir === 1 ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />
             : <ChevronsUpDown className="size-3 opacity-40" />;
 
-    const SortTh = ({ label, k, align = "right" }: { label: string; k: SortKey; align?: "left" | "right" }) => (
-        <TableHead className={`text-xs ${align === "right" ? "text-right" : ""}`}>
+    const SortTh = ({ label, k, align = "right", thClass = "" }: { label: string; k: SortKey; align?: "left" | "right"; thClass?: string }) => (
+        <TableHead className={`text-xs ${align === "right" ? "text-right" : ""} ${thClass}`}>
             <button type="button" onClick={() => toggleSort(k)} className="inline-flex items-center gap-1 hover:text-foreground">
                 {label}{sortIcon(k)}
             </button>
@@ -802,14 +802,16 @@ export default function GeneratePage() {
             ) : null}
 
             <div className="rounded-sm border">
-                <Table>
+                {/* Compact density: tighter than the default shadcn cell padding so the
+                    grid fits more columns and the Product name gets the leftover width. */}
+                <Table className="[&_th]:h-9 [&_th]:px-2 [&_td]:px-2 [&_td]:py-1">
                     <TableHeader>
                         <TableRow>
                             <TableHead className="w-8">
                                 <Checkbox checked={allSelected} onCheckedChange={toggleAll} aria-label="Select all visible rows" />
                             </TableHead>
                             <TableHead className="w-8 text-xs">#</TableHead>
-                            <SortTh label="Product name" k="name" align="left" />
+                            <SortTh label="Product name" k="name" align="left" thClass="w-full min-w-[240px]" />
                             {show("brand") ? <SortTh label="Brand" k="brand" align="left" /> : null}
                             {show("category") ? <SortTh label="Category" k="category" align="left" /> : null}
                             {show("group") ? <SortTh label="Group" k="group" align="left" /> : null}
@@ -876,17 +878,17 @@ export default function GeneratePage() {
                                     </TableCell>
                                     {show("brand") ? (
                                         <TableCell>
-                                            <Input value={r.brand} onChange={(e) => update(r.id, { brand: e.target.value })} placeholder="—" className="h-7 w-28 text-xs" />
+                                            <Input value={r.brand} onChange={(e) => update(r.id, { brand: e.target.value })} placeholder="—" className="h-7 w-24 text-xs" />
                                         </TableCell>
                                     ) : null}
                                     {show("category") ? (
                                         <TableCell>
-                                            <Input value={r.category} onChange={(e) => update(r.id, { category: e.target.value })} placeholder="—" className="h-7 w-28 text-xs" />
+                                            <Input value={r.category} onChange={(e) => update(r.id, { category: e.target.value })} placeholder="—" className="h-7 w-24 text-xs" />
                                         </TableCell>
                                     ) : null}
                                     {show("group") ? (
                                         <TableCell>
-                                            <Input value={r.group} onChange={(e) => update(r.id, { group: e.target.value })} placeholder="—" className="h-7 w-28 text-xs" />
+                                            <Input value={r.group} onChange={(e) => update(r.id, { group: e.target.value })} placeholder="—" className="h-7 w-24 text-xs" />
                                         </TableCell>
                                     ) : null}
                                     {show("stock") ? (
@@ -1016,7 +1018,7 @@ export default function GeneratePage() {
     );
 
     return (
-        <div className="h-full overflow-y-auto px-6 pt-4 pb-10">
+        <div className="h-full overflow-y-auto px-4 pt-4 pb-10">
             {/* <div className="mb-3">
                 <h1 className="text-lg font-semibold">Print labels — UI only</h1>
                 <p className="text-sm text-muted-foreground">
