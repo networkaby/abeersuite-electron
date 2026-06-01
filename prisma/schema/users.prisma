@@ -60,6 +60,7 @@ model User {
   posCashDrops            PosCashDrop[]       @relation("PosCashDropBy")
   handoversReceived       PosHandover[]       @relation("HandoverToUser")
   quickNotes              QuickNote[]
+  loyaltyLedgerEntries    LoyaltyLedger[]     @relation("LoyaltyLedgerCreatedBy")
 }
 
 // ── QuickNote — per-user scratch pad ──────────────────────────────────────

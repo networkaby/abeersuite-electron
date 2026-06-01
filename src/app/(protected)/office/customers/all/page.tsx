@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { LoyaltyPanel } from "@/modules/loyalty/components/LoyaltyPanel";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { PRIORITY_META } from "@/utils/constants";
 import { initials } from "@/modules/customer/lib/initials";
@@ -85,8 +86,8 @@ type CompanyDetail = {
 };
 
 type SelectedItem = { kind: "person" | "company"; id: number };
-type PersonTab = "transactions" | "profile" | "tickets" | "devices" | "companies";
-type CompanyTab = "transactions" | "profile" | "contacts" | "devices";
+type PersonTab = "transactions" | "profile" | "tickets" | "devices" | "companies" | "loyalty";
+type CompanyTab = "transactions" | "profile" | "contacts" | "devices" | "loyalty";
 
 
 export default function AllCustomersPage() {
@@ -108,6 +109,7 @@ export default function AllCustomersPage() {
 
     const perms = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
     const canManageUsers = perms.includes(PERMISSIONS.USERS_MANAGE) || perms.includes(PERMISSIONS.ADMIN_BYPASS);
+    const canManageLoyalty = perms.includes(PERMISSIONS.LOYALTY_MANAGE) || perms.includes(PERMISSIONS.ADMIN_BYPASS);
 
     useEffect(() => {
         axios.get<PersonRow[]>("/api/person").then((res) => setPeople(res.data)).catch(() => setPeople([]));
@@ -384,7 +386,7 @@ export default function AllCustomersPage() {
 
                         <div className="border-b bg-card px-6">
                             <div className="flex gap-2 py-2">
-                                {(["transactions", "profile", "tickets", "devices", "companies"] as PersonTab[]).map((item) => (
+                                {(["transactions", "profile", "tickets", "devices", "companies", "loyalty"] as PersonTab[]).map((item) => (
                                     <Button key={item} type="button" size="sm" variant={personTab === item ? "default" : "ghost"} onClick={() => handlePersonTabChange(item)}>
                                         {item}
                                     </Button>
@@ -483,6 +485,10 @@ export default function AllCustomersPage() {
                                 />
                             )}
 
+                            {personTab === "loyalty" && (
+                                <LoyaltyPanel accountId={personDetail.accountId} canManage={canManageLoyalty} />
+                            )}
+
                             {personTab === "transactions" && (
                                 txLoading ? (
                                     <div className="flex items-center justify-center py-16 text-muted-foreground"><Loader2 size={20} className="animate-spin" /></div>
@@ -530,7 +536,7 @@ export default function AllCustomersPage() {
 
                         <div className="border-b bg-card px-6">
                             <div className="flex gap-2 py-2">
-                                {(["transactions", "profile", "contacts", "devices"] as CompanyTab[]).map((item) => (
+                                {(["transactions", "profile", "contacts", "devices", "loyalty"] as CompanyTab[]).map((item) => (
                                     <Button key={item} type="button" size="sm" variant={companyTab === item ? "default" : "ghost"} onClick={() => handleCompanyTabChange(item)}>
                                         {item}
                                     </Button>
@@ -601,6 +607,10 @@ export default function AllCustomersPage() {
                                         </CardContent>
                                     </Card>
                                 )
+                            )}
+
+                            {companyTab === "loyalty" && (
+                                <LoyaltyPanel accountId={companyDetail.accountId} canManage={canManageLoyalty} />
                             )}
 
                             {companyTab === "transactions" && (

@@ -72,6 +72,9 @@ model Account {
   counterWallet          PosCounter[]            @relation("CounterWallet")
   counterCheque          PosCounter[]            @relation("CounterCheque")
   counterBankTransfer    PosCounter[]            @relation("CounterBankTransfer")
+  // Loyalty reverse rels
+  loyalty                LoyaltyAccount?         @relation("AccountLoyalty")
+  loyaltyRedeemConfig    LoyaltyConfig[]         @relation("LoyaltyRedeemLedger")
 
   @@index([isActive])
   @@index([personId])

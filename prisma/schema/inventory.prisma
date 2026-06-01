@@ -40,6 +40,7 @@ model InvCategory {
 
   products         InvProduct[]
   attributeMasters InvAttributeMaster[]
+  loyaltyEarnRules LoyaltyEarnRule[]    @relation("InvCategoryLoyaltyRules")
 
   @@index([parentId])
 }
@@ -64,7 +65,8 @@ model InvProductGroup {
   hsnCode    String?
   taxability Taxability?
 
-  products InvProduct[]
+  products         InvProduct[]
+  loyaltyEarnRules LoyaltyEarnRule[] @relation("InvProductGroupLoyaltyRules")
 
   @@unique([name])
   @@index([parentId])
@@ -280,6 +282,7 @@ model InvProduct {
   branchStocks InvProductBranch[]
   bomOutputs   InvBom[]           @relation("BomOutput")
   bomConsume   InvBomLine[]       @relation("BomConsume")
+  loyaltyEarnRules LoyaltyEarnRule[]  @relation("InvProductLoyaltyRules")
 
   @@index([unitId])
   @@index([categoryId])
@@ -406,10 +409,12 @@ model InvVoucher {
   createdBy    User                    @relation("InvVoucherCreatedBy", fields: [createdById], references: [id])
   cancelledBy  User?                   @relation("InvVoucherCancelledBy", fields: [cancelledById], references: [id])
   deletedBy    User?                   @relation("InvVoucherDeletedBy", fields: [deletedById], references: [id])
-  lines        InvVoucherLine[]
-  charges      InvVoucherCharge[]
-  tenders      InvVoucherTender[]
-  stockEntries InvStockLedger[]
+  lines         InvVoucherLine[]
+  charges       InvVoucherCharge[]
+  tenders       InvVoucherTender[]
+  stockEntries  InvStockLedger[]
+  loyaltyLots   LoyaltyLot[]            @relation("InvVoucherLoyaltyLots")
+  loyaltyLedger LoyaltyLedger[]         @relation("InvVoucherLoyaltyLedger")
   createdAt    DateTime                @default(now())
   updatedAt    DateTime                @updatedAt
 

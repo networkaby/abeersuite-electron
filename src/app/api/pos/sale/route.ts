@@ -10,6 +10,14 @@ import * as Sentry from "@sentry/nextjs";
 import { validateRequest } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { checkCreditLimit, CreditLimitError } from "@/shared/lib/accountancy/checkCreditLimit";
+import {
+    ratesFromConfig,
+    buildRulesIndex,
+    clampRedemption,
+    applyLoyaltyForSale,
+    type EarnLine,
+    type TaxonomyMaps,
+} from "@/modules/loyalty/lib";
 // Note: branch context comes from the cashier's active shift, NOT from the
 // session cookie. This allows multiple browsers / users to bill in parallel
 // from different counters without their active-branch cookie interfering.
@@ -70,6 +78,13 @@ const createSchema = z.object({
     shippingAmt: z.number().min(0).default(0),
     roundOff:    z.number().default(0),  // signed
     charges:     z.array(chargeSchema).default([]),
+    // Voucher-level tier discount (₹). Reduces the bill via the existing
+    // discountAmt → "Discount Allowed" path. Client-supplied (cashier-trusted,
+    // same as line prices). Server still validates payment total == bill total.
+    discountAmt: z.number().min(0).default(0),
+    // Loyalty points the customer wants to burn. The server is authoritative for
+    // the ₹ value (recomputed from LoyaltyConfig) and validates against balance.
+    redeemPoints: z.number().int().min(0).default(0),
 });
 
 class GlPostFailedError extends Error {
@@ -152,6 +167,20 @@ export async function POST(req: Request) {
                    ?? customerAccount.companyId
                    ?? customerAccount.id;
 
+    // ── Loyalty context ───────────────────────────────────────────────────
+    // Only identified customers (a real Person/Company account) earn or redeem;
+    // anonymous walk-in / counter ledgers never accrue points.
+    const isIdentified = customerAccount.personId !== null || customerAccount.companyId !== null;
+    const loyaltyConfig = await prisma.loyaltyConfig.upsert({
+        where: { id: 1 }, create: { id: 1 }, update: {},
+    });
+    const loyaltyRates = ratesFromConfig(loyaltyConfig);
+    const loyaltyEnabled = isIdentified && loyaltyRates.enabled;
+    const loyaltyWallet = loyaltyEnabled
+        ? await prisma.loyaltyAccount.findUnique({ where: { accountId: customerAccount.id }, select: { pointsBalance: true } })
+        : null;
+    const loyaltyBalance = loyaltyWallet?.pointsBalance ?? 0;
+
     // ── Validate line items + payment totals ──────────────────────────────
     const computedLines = body.lines.map((l) => {
         const lineSubtotal = l.quantity * l.unitPrice;
@@ -170,13 +199,47 @@ export async function POST(req: Request) {
     // source of truth (calcVoucherTotals) so /api/inventory/vouchers and
     // /api/pos/sale always agree on the math.
     const taxAmount = computedLines.reduce((s, l) => s + l.taxAmount, 0);
-    const chargesNet = body.charges.reduce((s, c) => s + c.amount, 0);
+
+    // ── Discounts: tier (Discount Allowed) + loyalty redemption (Loyalty Points
+    // Redeemed) ───────────────────────────────────────────────────────────────
+    // goodsValue = pre-tax goods (Σ qty × unit price). The tier discount rides the
+    // voucher-level discountAmt path; the loyalty redemption rides a negative
+    // charge to the dedicated ledger so the two are broken out in the P&L.
+    const goodsValue = body.lines.reduce((s, l) => s + l.quantity * l.unitPrice, 0);
+    const tierDiscount = Math.min(Math.max(0, body.discountAmt), goodsValue);
+
+    // Server owns the redemption ₹ value — never trust the client. Clamp against
+    // the live balance and the post-tier goods value.
+    const requestedRedeem = loyaltyEnabled ? body.redeemPoints : 0;
+    const redeemBase = Math.max(0, goodsValue - tierDiscount);
+    const redemption = clampRedemption(requestedRedeem, loyaltyBalance, redeemBase, loyaltyRates);
+    if (requestedRedeem > 0 && redemption.points === 0 && redemption.reason) {
+        return NextResponse.json({ error: redemption.reason, code: "LOYALTY_REDEEM_REJECTED" }, { status: 422 });
+    }
+    const redeemPoints     = redemption.points;
+    const redemptionRupees = redemption.value;
+    if (redemptionRupees > 0 && loyaltyConfig.redeemExpenseAccountId == null) {
+        return NextResponse.json(
+            { error: "Loyalty redemption ledger is not configured. Re-run the bootstrap seed.", code: "LOYALTY_LEDGER_MISSING" },
+            { status: 422 },
+        );
+    }
+
+    // Loyalty redemption as a negative charge row on the dedicated ledger. Posts
+    // Dr "Loyalty Points Redeemed" via postInvVoucherToGl's charge handling and
+    // lowers the bill via chargesNet — no change to the protected GL math.
+    const loyaltyCharge = redemptionRupees > 0 && loyaltyConfig.redeemExpenseAccountId != null
+        ? { accountId: loyaltyConfig.redeemExpenseAccountId, description: `Loyalty: ${redeemPoints} pts redeemed`, amount: -redemptionRupees }
+        : null;
+    const allCharges = loyaltyCharge ? [...body.charges, loyaltyCharge] : body.charges;
+
+    const chargesNet = allCharges.reduce((s, c) => s + c.amount, 0);
     const { subtotal, totalAmount } = calcVoucherTotals(
         computedLines,
         body.shippingAmt,
-        0,              // POS has no voucher-level discount today
+        tierDiscount,   // voucher-level tier discount
         body.roundOff,
-        chargesNet,
+        chargesNet,     // includes the negative loyalty-redemption charge
     );
 
     const paymentTotal = body.payments.reduce((s, p) => s + p.amount, 0);
@@ -219,6 +282,34 @@ export async function POST(req: Request) {
         select: { gstStateCode: true },
     });
     const sellerStateCode = (posBranch?.gstStateCode || "").trim() || null;
+
+    // ── Pre-load loyalty earn context (reads, outside the tx) ──────────────
+    // Resolves each line's taxonomy + the earn-rule index + group/category
+    // parent chains so the per-line multiplier (product → group → category →
+    // global) can be computed during the atomic post. Skipped entirely for
+    // walk-in / disabled so a normal anonymous sale does no extra queries.
+    let earnLines: EarnLine[] = [];
+    let rulesIndex = buildRulesIndex([]);
+    let taxonomyMaps: TaxonomyMaps = { groupParent: new Map(), categoryParent: new Map() };
+    if (loyaltyEnabled) {
+        const productIds = [...new Set(body.lines.map((l) => l.productId))];
+        const [products, groups, categories, rules] = await Promise.all([
+            prisma.invProduct.findMany({ where: { id: { in: productIds } }, select: { id: true, groupId: true, categoryId: true } }),
+            prisma.invProductGroup.findMany({ select: { id: true, parentId: true } }),
+            prisma.invCategory.findMany({ select: { id: true, parentId: true } }),
+            prisma.loyaltyEarnRule.findMany({ where: { enabled: true }, select: { scope: true, categoryId: true, groupId: true, productId: true, multiplier: true, enabled: true } }),
+        ]);
+        const taxById = new Map(products.map((p) => [p.id, p]));
+        earnLines = body.lines.map((l) => {
+            const p = taxById.get(l.productId);
+            return { productId: l.productId, groupId: p?.groupId ?? null, categoryId: p?.categoryId ?? null, goods: l.quantity * l.unitPrice };
+        });
+        rulesIndex = buildRulesIndex(rules.map((r) => ({ ...r, multiplier: Number(r.multiplier) })));
+        taxonomyMaps = {
+            groupParent: new Map(groups.map((g) => [g.id, g.parentId])),
+            categoryParent: new Map(categories.map((c) => [c.id, c.parentId])),
+        };
+    }
 
     try {
         const result = await prisma.$transaction(async (tx) => {
@@ -263,6 +354,7 @@ export async function POST(req: Request) {
                     deliveryMode:   "COUNTER",
                     placeOfSupply:  sellerStateCode,
                     shippingAmt:    body.shippingAmt,
+                    discountAmt:    tierDiscount,
                     roundOff:       body.roundOff,
                     subtotal,
                     taxAmount,
@@ -287,9 +379,9 @@ export async function POST(req: Request) {
                             reference: t.reference,
                         })),
                     },
-                    ...(body.charges.length > 0 ? {
+                    ...(allCharges.length > 0 ? {
                         charges: {
-                            create: body.charges.map((c) => ({
+                            create: allCharges.map((c) => ({
                                 accountId:   c.accountId,
                                 description: c.description?.trim() || null,
                                 amount:      c.amount,
@@ -321,6 +413,7 @@ export async function POST(req: Request) {
                     subtotal:    voucher.subtotal,
                     taxAmount:   voucher.taxAmount,
                     shippingAmt: voucher.shippingAmt,
+                    discountAmt: voucher.discountAmt,
                     roundOff:    voucher.roundOff,
                     totalAmount: voucher.totalAmount,
                     tenders:     voucher.tenders.map((t) => ({
@@ -350,6 +443,24 @@ export async function POST(req: Request) {
                 data:  { journalEntryId: gl.journalEntryId },
             });
 
+            // ── 3b. Loyalty: redeem (consume oldest lots) + earn (new lot) ─
+            // Identified customers only. Runs inside the tx so points move
+            // atomically with the sale; a GL failure above already rolled back.
+            let loyaltyResult = { pointsEarned: 0, pointsRedeemed: 0, newBalance: loyaltyBalance };
+            if (loyaltyEnabled) {
+                loyaltyResult = await applyLoyaltyForSale(tx, {
+                    accountId:        customerAccount.id,
+                    voucherId:        voucher.id,
+                    earnLines,
+                    combinedDiscount: tierDiscount + redemptionRupees,
+                    redeemPoints,
+                    rates:            loyaltyRates,
+                    rulesIndex,
+                    taxonomyMaps,
+                    createdById:      user!.id,
+                });
+            }
+
             // ── 4. Stock ledger + per-branch + org-wide stock decrement ───
             const date = new Date(body.issueDate);
             for (const line of voucher.lines) {
@@ -372,6 +483,10 @@ export async function POST(req: Request) {
                 voucherRef:     voucher.reference,
                 journalEntryId: gl.journalEntryId,
                 shiftId:        shift.id,
+                // Loyalty outcome — surfaced on the POS success toast.
+                pointsEarned:   loyaltyResult.pointsEarned,
+                pointsRedeemed: loyaltyResult.pointsRedeemed,
+                loyaltyBalance: loyaltyResult.newBalance,
                 // Back-compat aliases — PosScreen still reads these names.
                 invoiceId:      voucher.id,
                 invoiceNumber:  voucher.reference,

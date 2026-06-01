@@ -179,7 +179,8 @@
       "PowerShell($f=\"C:\\\\Users\\\\User\\\\.claude\\\\projects\\\\D--our-own-website-service-mgmt-experiment\\\\memory\\\\permission_matrix.md\"; $b=[System.IO.File]::ReadAllBytes\\($f\\); \"Length: $\\($b.Length\\)\"; \"First 16 bytes: \" + \\(\\($b[0..15] | ForEach-Object { $_.ToString\\('X2'\\) }\\) -join ' '\\); \"As ascii start: \" + [System.Text.Encoding]::ASCII.GetString\\($b[0..40]\\))",
       "Bash(cd \"C:/Users/User/.claude/projects/D--our-own-website-service-mgmt-experiment/memory/\"; rm tally_module_status.md && echo \"deleted tally_module_status.md\"; ls -1 | grep -E \"tally|accountancy|seeds_arch\")",
       "Bash(echo \"exit=$?\")",
-      "Bash(PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION=\"pnpm prisma db push --force-reset && pnpm prisma db seed is good\" pnpm prisma db push --accept-data-loss)"
+      "Bash(PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION=\"pnpm prisma db push --force-reset && pnpm prisma db seed is good\" pnpm prisma db push --accept-data-loss)",
+      "Bash(grep -E \"\\\\.\\(tsx?|jsx?\\)$\")"
     ]
   }
 }

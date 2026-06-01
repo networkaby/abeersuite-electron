@@ -81,6 +81,9 @@ export const PERMISSIONS = {
     FINANCE_ALLOCATION_MANAGE:          "finance:allocation:manage",
     FINANCE_OPENING_BALANCE_MANAGE:     "finance:opening-balance:manage",
 
+    // Loyalty — earn/redeem wallet config + manual adjustments
+    LOYALTY_MANAGE:                     "loyalty:manage",
+
     // Inventory
     INVENTORY_MANAGE:                   "inventory:manage",
     INVENTORY_VIEW_BR:                  "inventory:view:branch",

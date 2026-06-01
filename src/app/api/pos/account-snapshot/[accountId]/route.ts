@@ -104,7 +104,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
             deletedAt: null,
         };
 
-        const [lifetimeAgg, ytdAgg, latestVoucher, latestTicket, recentTickets, ledgerOutstanding] = await Promise.all([
+        const [lifetimeAgg, ytdAgg, latestVoucher, latestTicket, recentTickets, ledgerOutstanding, loyaltyWallet, loyaltyConfig] = await Promise.all([
             prisma.invVoucher.aggregate({
                 where: baseWhere,
                 _sum: { totalAmount: true },
@@ -137,6 +137,10 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
             // Receivables-engine-backed overdue: respects VoucherAllocation
             // netting (POS cash receipts, partial settlements, etc.).
             getLedgerOutstanding(accountId),
+            // Real persisted loyalty balance + the rates the POS UI needs to
+            // compute the ₹ value of a redemption live.
+            prisma.loyaltyAccount.findUnique({ where: { accountId }, select: { pointsBalance: true } }),
+            prisma.loyaltyConfig.findUnique({ where: { id: 1 } }),
         ]);
 
         const lifetimeTotal = Number(lifetimeAgg?._sum.totalAmount ?? 0);
@@ -144,7 +148,17 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
         const invoiceCount = lifetimeAgg?._count._all ?? 0;
 
         const discountPct = lifetimeTotal >= 200000 ? 8 : lifetimeTotal >= 50000 ? 5 : lifetimeTotal >= 10000 ? 2 : 0;
-        const loyaltyPoints = Math.floor(lifetimeTotal / 100);
+        // Real persisted wallet balance (was a derived ⌊lifetime/100⌋ placeholder).
+        const loyaltyPoints = loyaltyWallet?.pointsBalance ?? 0;
+        const loyaltyRates = loyaltyConfig
+            ? {
+                  enabled:            loyaltyConfig.enabled,
+                  globalEarnRatePer:  Number(loyaltyConfig.globalEarnRatePer),
+                  redeemValue:        Number(loyaltyConfig.redeemValue),
+                  minRedeemPoints:    loyaltyConfig.minRedeemPoints,
+                  maxRedeemPctOfBill: loyaltyConfig.maxRedeemPctOfBill == null ? null : Number(loyaltyConfig.maxRedeemPctOfBill),
+              }
+            : null;
 
         const customerLevel = lifetimeTotal >= 200000 ? "Platinum"
                               : lifetimeTotal >= 50000  ? "Gold"
@@ -182,6 +196,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
             turnover: { lifetime: lifetimeTotal, last12Months: ytdTotal, invoiceCount },
             discountPct,
             loyaltyPoints,
+            loyaltyRates,
             customerLevel,
             creditLimit,
             balanceDue,

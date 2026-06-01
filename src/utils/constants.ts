@@ -549,11 +549,11 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         icon: TicketPercent,
         key: "retention",
         dashboardHref: "/office/roadmap/retention",
-        pathPrefixes: ["/office/roadmap/retention"],
+        pathPrefixes: ["/office/roadmap/retention", "/office/customer-retention"],
         children: [
             // { label: "Overview", icon: ChartArea, href: "/office/roadmap/retention" },
             { label: "Coupon programs", icon: BadgePercent, href: "/office/roadmap/retention/coupons" },
-            { label: "Loyalty", icon: Gift, href: "/office/roadmap/retention/loyalty" },
+            { label: "Loyalty", icon: Gift, href: "/office/customer-retention/loyalty", permission: "loyalty:manage" },
             { label: "Campaigns", icon: Megaphone, href: "/office/roadmap/retention/campaigns" },
         ],
     },

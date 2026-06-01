@@ -32,6 +32,7 @@ import { invNextRef } from "@/modules/inventory/lib/stock";
 import { recordStockMovement } from "@/modules/inventory/lib/stockMovement";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import { postInvVoucherToGl } from "@/modules/accountancy/lib/postInvVoucher";
+import { reverseLoyaltyForReturn } from "@/modules/loyalty/lib";
 import * as Sentry from "@sentry/nextjs";
 
 const returnLineSchema = z.object({
@@ -135,6 +136,14 @@ export async function POST(req: Request) {
                        ?? original.accountId;
 
         const sellerStateCode = (original.branch.gstStateCode || "").trim() || null;
+
+        // ── Loyalty reversal context ──────────────────────────────────────────
+        // Fraction of the original sale being returned (by pre-tax goods value),
+        // used to claw back earned / restore redeemed points proportionally.
+        const originalGoods = original.lines.reduce((s, l) => s + Number(l.quantity) * Number(l.rate), 0);
+        const returnFraction = originalGoods > 0 ? returnSubtotal / originalGoods : 1;
+        const loyaltyConfig = await prisma.loyaltyConfig.findUnique({ where: { id: 1 }, select: { expiryMonths: true } });
+        const loyaltyExpiryMonths = loyaltyConfig?.expiryMonths ?? 12;
 
         // ── Transaction ───────────────────────────────────────────────────────
         const result = await prisma.$transaction(async (tx) => {
@@ -241,6 +250,18 @@ export async function POST(req: Request) {
                 data:  { journalEntryId: gl.journalEntryId },
             });
 
+            // 2b. Loyalty reversal — claw back earned / restore redeemed points
+            // proportional to the value returned. No-ops (returns null) when the
+            // original sale had no loyalty activity (walk-in / pre-loyalty / SALE).
+            const loyalty = await reverseLoyaltyForReturn(tx, {
+                accountId:         original.accountId!,
+                originalVoucherId: original.id,
+                returnVoucherId:   voucher.id,
+                returnFraction,
+                expiryMonths:      loyaltyExpiryMonths,
+                createdById:       user!.id,
+            });
+
             // 3. Stock IN for each returned product.
             for (const { voucherLine, qty } of stockLines) {
                 const productId = voucherLine.productId!;
@@ -262,6 +283,8 @@ export async function POST(req: Request) {
                 returnVoucherRef: voucher.reference,
                 journalEntryId:  gl.journalEntryId,
                 returnTotal,
+                pointsClawedBack: loyalty?.pointsClawedBack ?? 0,
+                pointsRestored:   loyalty?.pointsRestored ?? 0,
                 // Back-compat aliases for the dialog
                 returnInvoiceId: voucher.id,
                 returnNumber:    voucher.reference,

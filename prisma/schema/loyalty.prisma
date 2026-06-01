@@ -1,0 +1,128 @@
+// ── Loyalty (POS earn + redeem wallet) ──────────────────────────────────────
+//
+// Lot-based points wallet for identified customers. Earning posts NOTHING to
+// the GL — points are an operational liability we track outside the books.
+// Redemption reduces the bill via a negative InvVoucherCharge that posts to a
+// dedicated "Loyalty Points Redeemed" expense ledger (see /api/pos/sale).
+//
+// Expiry is DYNAMIC + LAZY: a lot is valid iff it was earned within the CURRENT
+// LoyaltyConfig.expiryMonths window (`earnedAt > now − expiryMonths`), evaluated
+// live at read/redeem time. Nothing is ever destructively expired, so widening
+// the window revives recently-lapsed points and narrowing it drops them — the
+// balance always "meets the current condition". No sweep job, no stored expiry.
+//
+// Model map:
+//   LoyaltyConfig    — singleton (id=1) holding the global rates + expiry window.
+//   LoyaltyEarnRule  — per category/group/product multiplier overrides on the
+//                      global earn rate (precedence product → group → category).
+//   LoyaltyAccount   — per-customer wallet header (lifetime counters only).
+//   LoyaltyLot       — one row per EARN (or positive admin grant). Validity is
+//                      derived live from earnedAt; redemption consumes lots
+//                      oldest-first (FIFO) among those still inside the window.
+//   LoyaltyLedger    — immutable audit trail of every points movement.
+
+enum LoyaltyReason {
+  EARN_SALE       // points accrued on a POS sale (net goods value)
+  REDEEM_SALE     // points spent as a discount on a POS sale
+  REVERSAL_RETURN // claw-back of earn / restore of redeem on a SALE_RETURN
+  ADMIN_ADJUST    // manual correction by a staff member with loyalty:manage
+}
+
+enum LoyaltyRuleScope {
+  CATEGORY
+  GROUP
+  PRODUCT
+}
+
+model LoyaltyConfig {
+  id                     Int      @id @default(1) // singleton — always row id=1
+  enabled                Boolean  @default(true)
+  /// ₹ of net sale value that earns 1 point at the global (fallback) rate.
+  globalEarnRatePer      Decimal  @default(100) @db.Decimal(14, 2)
+  /// ₹ value of 1 point on redemption.
+  redeemValue            Decimal  @default(1) @db.Decimal(14, 2)
+  /// Points life in months — drives LoyaltyLot.expiresAt.
+  expiryMonths           Int      @default(12)
+  /// Optional guardrails (null = no limit).
+  minRedeemPoints        Int?
+  maxRedeemPctOfBill      Decimal? @db.Decimal(5, 2)
+  /// Dedicated expense ledger redemption posts to (Dr on a sale).
+  redeemExpenseAccountId Int?
+  redeemExpenseAccount   Account? @relation("LoyaltyRedeemLedger", fields: [redeemExpenseAccountId], references: [id])
+  updatedAt              DateTime @updatedAt
+}
+
+model LoyaltyEarnRule {
+  id         Int              @id @default(autoincrement())
+  scope      LoyaltyRuleScope
+  categoryId Int?
+  groupId    Int?
+  productId  Int?
+  /// Multiplier on the global earn rate. 0 = no earn (e.g. loss-making items),
+  /// 2 = double. Resolution precedence: product → group → category → global(1).
+  multiplier Decimal          @default(1.0) @db.Decimal(6, 3)
+  enabled    Boolean          @default(true)
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  category InvCategory?     @relation("InvCategoryLoyaltyRules", fields: [categoryId], references: [id], onDelete: Cascade)
+  group    InvProductGroup? @relation("InvProductGroupLoyaltyRules", fields: [groupId], references: [id], onDelete: Cascade)
+  product  InvProduct?      @relation("InvProductLoyaltyRules", fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([scope, categoryId, groupId, productId])
+  @@index([scope])
+}
+
+model LoyaltyAccount {
+  id            Int      @id @default(autoincrement())
+  accountId     Int      @unique
+  account       Account  @relation("AccountLoyalty", fields: [accountId], references: [id])
+  /// Lifetime counters only (display). The spendable BALANCE is computed live
+  /// from in-window lots — never cached, so a config change is reflected at once.
+  totalEarned   Int      @default(0)
+  totalRedeemed Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  lots   LoyaltyLot[]
+  ledger LoyaltyLedger[]
+
+  @@index([accountId])
+}
+
+model LoyaltyLot {
+  id              Int            @id @default(autoincrement())
+  accountId       Int
+  loyaltyAccount  LoyaltyAccount @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+  /// The earning sale (null for admin grants / restored-on-return lots).
+  voucherId       Int?
+  voucher         InvVoucher?    @relation("InvVoucherLoyaltyLots", fields: [voucherId], references: [id])
+  pointsEarned    Int
+  pointsRemaining Int
+  /// Validity is derived: the lot is live while earnedAt > now − expiryMonths.
+  earnedAt        DateTime       @default(now())
+  createdAt       DateTime       @default(now())
+
+  @@index([accountId, earnedAt]) // FIFO consumption among in-window lots
+  @@index([voucherId])
+}
+
+model LoyaltyLedger {
+  id             Int            @id @default(autoincrement())
+  accountId      Int
+  loyaltyAccount LoyaltyAccount @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+  voucherId      Int?
+  voucher        InvVoucher?    @relation("InvVoucherLoyaltyLedger", fields: [voucherId], references: [id])
+  /// Signed: +earn/restore, −redeem/clawback/expire.
+  delta          Int
+  reason         LoyaltyReason
+  /// Running cached balance after this row (audit / replay).
+  balanceAfter   Int
+  note           String?
+  createdById    Int
+  createdBy      User           @relation("LoyaltyLedgerCreatedBy", fields: [createdById], references: [id])
+  createdAt      DateTime       @default(now())
+
+  @@index([accountId, createdAt])
+  @@index([voucherId])
+}

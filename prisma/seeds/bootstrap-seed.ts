@@ -224,6 +224,9 @@ const PERMISSIONS = [
     { id: "accountancy:delete:own",  label: "Delete accountancy (own)",           module: "accountancy", description: "Delete own accountancy entries (subject to per-operation guards)." },
     { id: "accountancy:delete:br",   label: "Delete accountancy (branch)",        module: "accountancy", description: "Delete branch-scoped accountancy entries." },
     { id: "accountancy:delete:org",  label: "Delete accountancy (organisation)",  module: "accountancy", description: "Delete any accountancy entry organisation-wide." },
+
+    // loyalty — earn/redeem wallet config + manual adjustments
+    { id: "loyalty:manage", label: "Manage loyalty", module: "loyalty", description: "Edit loyalty earn/redeem rates and earn rules, and post manual point adjustments." },
 ] as const;
 
 const ROLE_PERMISSIONS: Record<string, string[]> = {
@@ -916,6 +919,10 @@ async function main() {
     await upsertLedger("Electricity Charges",     "Indirect Expenses", "DEBIT");
     await upsertLedger("Telephone / Internet",    "Indirect Expenses", "DEBIT");
     await upsertLedger("Discount Allowed",        "Indirect Expenses", "DEBIT");
+    // Dedicated expense ledger for loyalty-point redemptions (kept separate from
+    // "Discount Allowed" so the P&L breaks out the cost of the loyalty programme).
+    // Redemption posts here as a negative InvVoucherCharge on the POS sale.
+    await upsertLedger("Loyalty Points Redeemed",  "Indirect Expenses", "DEBIT");
     await upsertLedger("Bad Debts",               "Indirect Expenses", "DEBIT");
     await upsertLedger("Bank Charges",            "Indirect Expenses", "DEBIT");
     await upsertLedger("Audit Fees",              "Indirect Expenses", "DEBIT");
@@ -1200,6 +1207,22 @@ async function main() {
         update: orgDefaultsData,
     });
     console.log(`      ✓ OrgDefaults singleton seeded (GST 18%, UNIT, TAXABLE, ₹, credit=0 days, ${DEFAULT_BARCODE_BANDS.length} barcode bands, ${DEFAULT_CASH_DENOMINATIONS.length} denominations)\n`);
+
+    // ── LoyaltyConfig singleton (id=1) ─────────────────────────────────
+    // Defaults: 1 pt per ₹100 net goods, 1 pt = ₹1, 12-month expiry. Rates
+    // are create-only so admin edits via /office/customer-retention/loyalty
+    // survive a reseed. redeemExpenseAccountId is backfilled (even on update)
+    // to the seeded "Loyalty Points Redeemed" ledger so GL routing is always wired.
+    const loyaltyRedeemLedger = await prisma.account.findFirst({
+        where: { name: { equals: "Loyalty Points Redeemed", mode: "insensitive" }, personId: null, companyId: null },
+        select: { id: true },
+    });
+    await prisma.loyaltyConfig.upsert({
+        where:  { id: 1 },
+        create: { id: 1, enabled: true, globalEarnRatePer: 100, redeemValue: 1, expiryMonths: 12, redeemExpenseAccountId: loyaltyRedeemLedger?.id ?? null },
+        update: { redeemExpenseAccountId: loyaltyRedeemLedger?.id ?? null },
+    });
+    console.log(`      ✓ LoyaltyConfig singleton seeded (1 pt/₹100, 1 pt = ₹1, 12-mo expiry, redeem ledger #${loyaltyRedeemLedger?.id ?? "—"})\n`);
 
     // ── Section 12: VoucherSeries ──────────────────────────────────────
     console.log("[12/16] VoucherSeries (all GL + inventory series)");

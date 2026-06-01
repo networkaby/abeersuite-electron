@@ -45,6 +45,13 @@ type Snapshot = {
     turnover: { lifetime: number; last12Months: number; invoiceCount: number };
     discountPct: number;
     loyaltyPoints: number;
+    loyaltyRates: {
+        enabled: boolean;
+        globalEarnRatePer: number;
+        redeemValue: number;
+        minRedeemPoints: number | null;
+        maxRedeemPctOfBill: number | null;
+    } | null;
     customerLevel: "Bronze" | "Silver" | "Gold" | "Platinum";
     creditLimit: number | null;    // deny-by-default: 0 = no credit, >0 = cap (server maps legacy NULL→0)
     balanceDue: number;
@@ -112,6 +119,10 @@ function parseAmt(s: string): number {
     const n = Number(s);
     return Number.isFinite(n) ? n : 0;
 }
+// Whole-number sanitiser for the loyalty redeem-points input (no decimals).
+function digitsInt(s: string): string {
+    return s.replace(/[^\d]/g, "");
+}
 
 type ChargeRow = { id: string; accountId: number | null; description: string; amount: string };
 const newChargeRow = (): ChargeRow => ({
@@ -163,6 +174,8 @@ export default function PosScreen() {
     // panel above the Total row so the default cart screen stays clean.
     const [adjustmentsOpen, setAdjustmentsOpen] = useState(false);
     const [shippingAmtStr, setShippingAmtStr] = useState("");
+    // Loyalty points the cashier is redeeming on this bill (whole-number string).
+    const [redeemPointsStr, setRedeemPointsStr] = useState("");
     const [roundOffStr, setRoundOffStr] = useState("");
     // Vyapar-style auto round-off: POS auto-derives the round-off to land Total
     // on a whole rupee. Flips to true the moment the cashier types into the
@@ -331,7 +344,27 @@ export default function PosScreen() {
     const discountPct = snapshot?.discountPct ?? 0;
     const discountAmount = (subtotal * discountPct) / 100;
     const shippingAmt = Math.max(0, parseAmt(shippingAmtStr));
-    const chargesNet = charges.reduce((s, c) => s + parseAmt(c.amount), 0);
+    const manualChargesNet = charges.reduce((s, c) => s + parseAmt(c.amount), 0);
+
+    // ── Loyalty redemption (mirrors the server) ───────────────────────────────
+    // Redemption rides a negative charge to the dedicated "Loyalty Points
+    // Redeemed" ledger, so it folds into chargesNet here exactly as the server
+    // folds it into calcVoucherTotals. We clamp to balance + bill caps client-
+    // side so we only ever send the route a value it will accept (it rejects
+    // out-of-range redemptions with a 422).
+    const rates = snapshot?.loyaltyRates ?? null;
+    const loyaltyBalance = snapshot?.loyaltyPoints ?? 0;
+    const goodsValue = Math.max(0, subtotal - discountAmount);   // post-tier, pre-GST reducible base
+    const minRedeemPts = rates?.minRedeemPoints ?? 0;
+    const pctCapRupees = rates?.maxRedeemPctOfBill != null ? (goodsValue * rates.maxRedeemPctOfBill) / 100 : Infinity;
+    const maxRedeemableRupees = Math.min(goodsValue, pctCapRupees);
+    const requestedPts = rates?.enabled ? parseInt(digitsInt(redeemPointsStr) || "0", 10) : 0;
+    const maxRedeemablePts = rates && rates.redeemValue > 0 ? Math.floor(maxRedeemableRupees / rates.redeemValue) : 0;
+    const cappedPts = Math.min(requestedPts, loyaltyBalance, maxRedeemablePts);
+    const redeemPts = cappedPts >= minRedeemPts ? cappedPts : 0;
+    const redemptionRupees = rates ? redeemPts * rates.redeemValue : 0;
+
+    const chargesNet = manualChargesNet - redemptionRupees;
     // Auto round-off: figure out the round-off that lands Total on a whole
     // rupee by computing the pre-round total first, then deriving the delta.
     // If the cashier has manually typed a value, that override wins.
@@ -552,11 +585,11 @@ export default function PosScreen() {
             }
 
             const validCharges = charges.filter((c) => c.accountId !== null && Math.abs(parseAmt(c.amount)) >= 0.005);
-            const { data } = await axios.post<{ voucherId: number; voucherRef: string }>("/api/pos/sale", {
+            const { data } = await axios.post<{ voucherId: number; voucherRef: string; pointsEarned: number; pointsRedeemed: number; loyaltyBalance: number }>("/api/pos/sale", {
                 accountId: snapshot.account.id,
                 issueDate: today,
                 dueDate: due.toISOString().slice(0, 10),
-                notes: `POS sale (discount ${discountPct}%) | Payments: ${splitSummary}${tail}`,
+                notes: `POS sale (discount ${discountPct}%${redeemPts > 0 ? `, ${redeemPts} pts redeemed` : ""}) | Payments: ${splitSummary}${tail}`,
                 lines: cart.map((l) => ({
                     productId: l.productId,
                     description: `${l.sku} — ${l.name}${l.description ? ` · ${l.description}` : ""}`,
@@ -567,13 +600,18 @@ export default function PosScreen() {
                 payments: paymentsList,
                 shippingAmt,
                 roundOff,
+                discountAmt: discountAmount,   // tier discount → "Discount Allowed"
+                redeemPoints: redeemPts,        // loyalty redemption → server recomputes ₹
                 charges: validCharges.map((c) => ({
                     accountId:   c.accountId as number,
                     description: c.description.trim() || undefined,
                     amount:      parseAmt(c.amount),
                 })),
             });
-            toast.success(`Invoice ${data.voucherRef} · ${fmtINR(total)}`);
+            const ptsMsg = data.pointsEarned > 0 ? ` · +${data.pointsEarned} pts (bal ${data.loyaltyBalance})`
+                         : data.pointsRedeemed > 0 ? ` · ${data.pointsRedeemed} pts redeemed (bal ${data.loyaltyBalance})`
+                         : "";
+            toast.success(`Invoice ${data.voucherRef} · ${fmtINR(total)}${ptsMsg}`);
             // Show "Thank You ₹X" on the customer display and hold it so the
             // coordinator doesn't immediately overwrite it as state resets.
             void qrDisplay.thankyou({ amount: total });
@@ -583,6 +621,7 @@ export default function PosScreen() {
             setPay({ cashTendered: 0, cashReturn: 0, upi: 0 });
             setExtras([]);
             setShippingAmtStr("");
+            setRedeemPointsStr("");
             setRoundOffStr("");
             setRoundOffManuallyEdited(false);
             setCharges([]);
@@ -1001,7 +1040,25 @@ export default function PosScreen() {
                                 informational — cashiers and printed receipts show the breakdown
                                 but the math has already happened in the per-line inclusive price. */}
                             <Row label="Subtotal" value={fmtINR(subtotal + tax)} />
-                            {discountPct > 0 && <Row label={`Loyalty discount (${discountPct}%)`} value={`− ${fmtINR(discountAmount)}`} highlight />}
+                            {discountPct > 0 && <Row label={`Tier discount (${discountPct}%)`} value={`− ${fmtINR(discountAmount)}`} highlight />}
+                            {rates?.enabled && loyaltyBalance > 0 && (
+                                <div className="grid grid-cols-[1fr_auto] items-center gap-2">
+                                    <Label htmlFor="pos-redeem" className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                                        <Award size={12} /> Redeem points
+                                        <span className="text-[10px] opacity-70">({loyaltyBalance} avail · {fmtINR(rates.redeemValue)}/pt)</span>
+                                    </Label>
+                                    <Input
+                                        id="pos-redeem"
+                                        type="text"
+                                        inputMode="numeric"
+                                        value={redeemPointsStr}
+                                        onChange={(e) => setRedeemPointsStr(digitsInt(e.target.value))}
+                                        placeholder="0"
+                                        className="h-7 w-28 text-right text-xs"
+                                    />
+                                </div>
+                            )}
+                            {redemptionRupees > 0.005 && <Row label={`Points redeemed (${redeemPts} pts)`} value={`− ${fmtINR(redemptionRupees)}`} highlight />}
                             {tax > 0.005 && (
                                 <div className="flex items-center justify-between text-[11px] text-muted-foreground">
                                     <span>Tax (incl.)</span>
@@ -1472,7 +1529,7 @@ function CustomerPanel({ snapshot }: { snapshot: Snapshot }) {
             <div className="grid grid-cols-2 gap-2">
                 <Stat icon={<TrendingUp size={14} />} label="Lifetime turnover" value={fmtINR(snapshot.turnover.lifetime)} sub={`${snapshot.turnover.invoiceCount} invoices`} />
                 <Stat icon={<TrendingUp size={14} />} label="Last 12 mo" value={fmtINR(snapshot.turnover.last12Months)} />
-                <Stat icon={<Award size={14} />} label="Loyalty points" value={String(snapshot.loyaltyPoints)} sub={snapshot.discountPct > 0 ? `${snapshot.discountPct}% discount tier` : "No tier yet"} />
+                <Stat icon={<Award size={14} />} label="Loyalty points" value={String(snapshot.loyaltyPoints)} sub={snapshot.loyaltyRates?.enabled ? `worth ${fmtINR(snapshot.loyaltyPoints * snapshot.loyaltyRates.redeemValue)} · 1 pt / ₹${snapshot.loyaltyRates.globalEarnRatePer}` : snapshot.discountPct > 0 ? `${snapshot.discountPct}% discount tier` : "No tier yet"} />
                 <Stat icon={<Clock size={14} />} label="Last visit" value={since(snapshot.lastVisitAt)} />
             </div>
 
