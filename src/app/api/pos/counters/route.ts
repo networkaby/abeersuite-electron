@@ -70,6 +70,7 @@ export async function GET(req: NextRequest) {
                 walletAccount:       c.walletAccount,       walletLabel:       c.walletLabel,
                 chequeAccount:       c.chequeAccount,       chequeLabel:       c.chequeLabel,
                 bankTransferAccount: c.bankTransferAccount, bankTransferLabel: c.bankTransferLabel,
+                allowedExpenseAccountIds: c.allowedExpenseAccountIds,
                 totalShifts: c._count.shifts,
                 activeShift: c.shifts[0] ?? null,
             })));

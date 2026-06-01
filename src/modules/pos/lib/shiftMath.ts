@@ -17,11 +17,14 @@ type Tx = Prisma.TransactionClient | PrismaClient;
 // (expense via Cash Short).
 
 export function computeExpectedCash(
-    openingFloatPaise: bigint,
-    cashSalesPaise:    bigint,
-    dropsPaise:        bigint,
+    openingFloatPaise:  bigint,
+    cashSalesPaise:     bigint,
+    dropsPaise:         bigint,
+    expendituresPaise:  bigint = BigInt(0),
 ): bigint {
-    return openingFloatPaise + cashSalesPaise - dropsPaise;
+    // Drops leave the drawer for the safe; expenditures leave it for an expense.
+    // Both reduce the cash the cashier should physically count.
+    return openingFloatPaise + cashSalesPaise - dropsPaise - expendituresPaise;
 }
 
 export function computeVariance(

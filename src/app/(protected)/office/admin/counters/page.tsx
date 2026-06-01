@@ -39,6 +39,7 @@ type Counter = {
     walletAccount:       MappedAccount; walletLabel:       string | null;
     chequeAccount:       MappedAccount; chequeLabel:       string | null;
     bankTransferAccount: MappedAccount; bankTransferLabel: string | null;
+    allowedExpenseAccountIds: number[];
     totalShifts: number;
     activeShift: { id: number; status: string; user: { name: string } } | null;
 };
@@ -63,6 +64,7 @@ type EditForm = {
     walletAccountId:       number | null; walletLabel:       string;
     chequeAccountId:       number | null; chequeLabel:       string;
     bankTransferAccountId: number | null; bankTransferLabel: string;
+    allowedExpenseAccountIds: number[];
 };
 const EMPTY_EDIT: EditForm = {
     name: "",
@@ -71,12 +73,14 @@ const EMPTY_EDIT: EditForm = {
     walletAccountId: null, walletLabel: "",
     chequeAccountId: null, chequeLabel: "",
     bankTransferAccountId: null, bankTransferLabel: "",
+    allowedExpenseAccountIds: [],
 };
 
 export default function CountersAdminPage() {
     const [counters, setCounters] = useState<Counter[]>([]);
     const [branches, setBranches] = useState<Branch[]>([]);
     const [glAccounts, setGlAccounts] = useState<GlAccount[]>([]);
+    const [expenseAccounts, setExpenseAccounts] = useState<GlAccount[]>([]);
     const [loading, setLoading]   = useState(true);
     const [addingNew, setAddingNew] = useState(false);
     const [editId, setEditId]     = useState<number | null>(null);
@@ -98,6 +102,15 @@ export default function CountersAdminPage() {
         }
     };
 
+    const loadExpenseAccounts = async () => {
+        try {
+            const { data } = await axios.get<GlAccount[]>("/api/accountancy/gl-accounts?type=EXPENSE");
+            setExpenseAccounts(data);
+        } catch {
+            setExpenseAccounts([]);
+        }
+    };
+
     const load = async () => {
         setLoading(true);
         try {
@@ -113,7 +126,7 @@ export default function CountersAdminPage() {
             setLoading(false);
         }
     };
-    useEffect(() => { void load(); void loadGlAccounts(); }, []);
+    useEffect(() => { void load(); void loadGlAccounts(); void loadExpenseAccounts(); }, []);
 
     const startAdd = () => {
         setForm({ ...EMPTY_FORM, branchId: branches[0]?.id ?? "" });
@@ -128,6 +141,7 @@ export default function CountersAdminPage() {
             walletAccountId:       c.walletAccount?.id       ?? null, walletLabel:       c.walletLabel       ?? "",
             chequeAccountId:       c.chequeAccount?.id       ?? null, chequeLabel:       c.chequeLabel       ?? "",
             bankTransferAccountId: c.bankTransferAccount?.id ?? null, bankTransferLabel: c.bankTransferLabel ?? "",
+            allowedExpenseAccountIds: Array.isArray(c.allowedExpenseAccountIds) ? c.allowedExpenseAccountIds : [],
         });
         setEditId(c.id);
         setAddingNew(false);
@@ -165,6 +179,7 @@ export default function CountersAdminPage() {
                 walletAccountId:       editForm.walletAccountId,       walletLabel:       editForm.walletLabel.trim()       || null,
                 chequeAccountId:       editForm.chequeAccountId,       chequeLabel:       editForm.chequeLabel.trim()       || null,
                 bankTransferAccountId: editForm.bankTransferAccountId, bankTransferLabel: editForm.bankTransferLabel.trim() || null,
+                allowedExpenseAccountIds: editForm.allowedExpenseAccountIds,
             });
             toast.success("Counter updated");
             cancel();
@@ -330,6 +345,44 @@ export default function CountersAdminPage() {
                                                             );
                                                         })}
                                                     </div>
+                                                </div>
+
+                                                {/* Allowed expenditure ledgers (Exp button). The cashier can
+                                                    only spend the drawer to these EXPENSE ledgers. Leave all
+                                                    unticked = no restriction (every expense ledger allowed). */}
+                                                <div className="space-y-2 pt-2 border-t border-border">
+                                                    <p className="text-xs font-semibold text-muted-foreground">Expenditure ledgers allowed (Exp button)</p>
+                                                    <p className="text-[11px] text-muted-foreground">
+                                                        Which expense ledgers the cashier may spend the drawer to (tea, sundry donation…).
+                                                        Leave all unticked to allow every expense ledger.
+                                                    </p>
+                                                    <div className="flex flex-wrap gap-1.5">
+                                                        {expenseAccounts.map((a) => {
+                                                            const on = editForm.allowedExpenseAccountIds.includes(a.id);
+                                                            return (
+                                                                <button
+                                                                    key={a.id}
+                                                                    type="button"
+                                                                    onClick={() => setEditForm((f) => ({
+                                                                        ...f,
+                                                                        allowedExpenseAccountIds: on
+                                                                            ? f.allowedExpenseAccountIds.filter((x) => x !== a.id)
+                                                                            : [...f.allowedExpenseAccountIds, a.id],
+                                                                    }))}
+                                                                    className={`rounded-md border px-2 py-1 text-xs transition-colors ${
+                                                                        on ? "border-primary bg-primary/10 text-foreground" : "border-border text-muted-foreground hover:bg-muted"
+                                                                    }`}
+                                                                >
+                                                                    {a.name}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                    <p className="text-[10px] text-muted-foreground">
+                                                        {editForm.allowedExpenseAccountIds.length === 0
+                                                            ? "All expense ledgers allowed."
+                                                            : `${editForm.allowedExpenseAccountIds.length} ledger(s) allowed.`}
+                                                    </p>
                                                 </div>
 
                                                 <div className="flex gap-2">

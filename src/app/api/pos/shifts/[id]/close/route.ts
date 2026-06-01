@@ -57,6 +57,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 },
                 branch: { select: { id: true, name: true, vaultAccountId: true } },
                 drops:  { select: { amountPaise: true } },
+                expenditures: { select: { amountPaise: true } },
             },
         });
         if (!shift) return NextResponse.json({ error: "Shift not found" }, { status: 404 });
@@ -81,9 +82,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             ? BigInt(data.carryOverNextPaise)
             : BigInt(0);
 
-        const declaredPaise = BigInt(data.declaredCashPaise);
-        // How much actually sweeps to vault = declared minus the carry-over left behind.
-        const rawToVault = declaredPaise - carryOverPaise;
+        const declaredPaise     = BigInt(data.declaredCashPaise);
+        const dropsPaise        = sumPaise(shift.drops);
+        const expendituresPaise = sumPaise(shift.expenditures);
+        // Sweep BOTH the counted drawer surplus AND the cash dropped to the safe
+        // this shift — both physically leave the counter for the vault, so the
+        // till GL closes at exactly the carry-over. (Drops were log-only until
+        // now; without this the dropped cash stays stranded in the till GL.)
+        //   toVault = declared + drops − carryOver
+        const rawToVault = declaredPaise + dropsPaise - carryOverPaise;
         const toVaultPaise = rawToVault > BigInt(0) ? rawToVault : BigInt(0);
 
         if (toVaultPaise > BigInt(0) && !shift.branch.vaultAccountId) {
@@ -96,8 +103,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             tillAccountId: shift.counter.tillAccountId,
             openedAt:      shift.openedAt,
         });
-        const dropsPaise    = sumPaise(shift.drops);
-        const expectedPaise = computeExpectedCash(shift.openingFloatPaise, cashSalesPaise, dropsPaise);
+        const expectedPaise = computeExpectedCash(shift.openingFloatPaise, cashSalesPaise, dropsPaise, expendituresPaise);
         const variancePaise = computeVariance(declaredPaise, expectedPaise);
 
         // Variance ledgers.
@@ -230,6 +236,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             toVaultPaise:        result.toVaultPaise?.toString()       ?? null,
             cashSalesPaise:      cashSalesPaise.toString(),
             dropsPaise:          dropsPaise.toString(),
+            expendituresPaise:   expendituresPaise.toString(),
             counter: {
                 id:   result.counter.id,
                 name: result.counter.name,

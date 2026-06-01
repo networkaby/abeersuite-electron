@@ -53,6 +53,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
                     orderBy: { droppedAt: "desc" },
                     include: { droppedBy: { select: { id: true, name: true } } },
                 },
+                expenditures: {
+                    orderBy: { createdAt: "desc" },
+                    select:  { id: true, amountPaise: true, description: true, voucherId: true, createdAt: true },
+                },
             },
         });
         if (!shift) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -73,7 +77,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
             openedAt:      shift.openedAt,
             closedAt:      shift.closedAt,
         });
-        const dropsPaise = sumPaise(shift.drops);
+        const dropsPaise        = sumPaise(shift.drops);
+        const expendituresPaise = sumPaise(shift.expenditures);
 
         // Per-method tally of everything collected this shift (cash + digital).
         const tenderBreakdown = await buildShiftTenderBreakdown(prisma, {
@@ -95,8 +100,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
             toVaultPaise:        shift.toVaultPaise?.toString()       ?? null,
             cashSalesPaise:      cashSalesPaise.toString(),
             dropsPaise:          dropsPaise.toString(),
-            runningExpectedPaise: (shift.openingFloatPaise + cashSalesPaise - dropsPaise).toString(),
+            expendituresPaise:   expendituresPaise.toString(),
+            runningExpectedPaise: (shift.openingFloatPaise + cashSalesPaise - dropsPaise - expendituresPaise).toString(),
             drops: shift.drops.map((d) => ({ ...d, amountPaise: d.amountPaise.toString() })),
+            expenditures: shift.expenditures.map((e) => ({ ...e, amountPaise: e.amountPaise.toString() })),
             handover: shift.handover ? {
                 ...shift.handover,
                 declaredByAPaise: shift.handover.declaredByAPaise.toString(),

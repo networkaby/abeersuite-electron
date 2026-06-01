@@ -47,7 +47,7 @@ const ADMIN_EMAIL = "admin@networkservice.in";
 
 // Phase 1 — pure-transaction tables (CASCADE handles cross-FK)
 const TRANSACTION_TABLES = [
-    "pos_handovers", "pos_cash_drops", "pos_shifts",
+    "pos_handovers", "pos_cash_drops", "pos_expenditures", "pos_shifts",
     "JournalLine", "JournalEntry", "JournalEntryAudit",
     "VoucherAllocation", "VoucherLine", "Voucher", "VoucherAudit",
     // Invoice / InvoiceLine / InvoiceAudit / Payment / PaymentAudit tables

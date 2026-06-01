@@ -52,6 +52,11 @@ model PosCounter {
   bankTransferAccountId Int?
   bankTransferAccount   Account? @relation("CounterBankTransfer", fields: [bankTransferAccountId], references: [id])
   bankTransferLabel     String?
+  // POS Expenditure (Exp button) — which EXPENSE-group ledgers this counter may
+  // spend to. Empty array = no restriction (all expense ledgers allowed). When
+  // non-empty, only these account ids appear in the Exp dialog and the API
+  // rejects anything else. Shape: number[] (Account ids).
+  allowedExpenseAccountIds Json @default("[]")
   isActive      Boolean    @default(true)
   shifts        PosShift[]
 
@@ -111,8 +116,9 @@ model PosShift {
   // If this shift was opened via handover acceptance, link back.
   receivedHandover   PosHandover? @relation("HandoverToShift")
 
-  notes String?
-  drops PosCashDrop[]
+  notes        String?
+  drops        PosCashDrop[]
+  expenditures PosExpenditure[]
 
   @@index([userId, status])
   @@index([branchId, openedAt])
@@ -142,6 +148,29 @@ model PosCashDrop {
 
   @@index([shiftId, droppedAt])
   @@map("pos_cash_drops")
+}
+
+// ── Mid-shift counter expenditure ─────────────────────────────────────────────
+// Small cash expense paid OUT OF the counter drawer (tea, sundry donation,
+// etc.). Unlike a cash DROP (log-only — cash stays in custody), this is real
+// money leaving the business, so it posts a PAYMENT voucher
+// (Dr <expense ledger> / Cr counter till) and reduces the expected drawer at
+// shift close. `voucherId` links the posted PV; `expenseAccountId` is the GL
+// expense ledger (an EXPENSE-group account). Plain int FKs to keep the change
+// local to this model — joins are done explicitly where a name is needed.
+model PosExpenditure {
+  id               Int      @id @default(autoincrement())
+  shiftId          Int
+  shift            PosShift @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  amountPaise      BigInt
+  description      String
+  expenseAccountId Int
+  voucherId        Int?     @unique
+  createdById      Int
+  createdAt        DateTime @default(now())
+
+  @@index([shiftId, createdAt])
+  @@map("pos_expenditures")
 }
 
 // ── POS Handover (two-step cashier-to-cashier) ───────────────────────────────

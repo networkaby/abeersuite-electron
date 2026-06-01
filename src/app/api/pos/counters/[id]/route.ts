@@ -23,6 +23,12 @@ const updateSchema = z.object({
     walletAccountId:       accountIdOrClear, walletLabel:       labelOrClear,
     chequeAccountId:       accountIdOrClear, chequeLabel:       labelOrClear,
     bankTransferAccountId: accountIdOrClear, bankTransferLabel: labelOrClear,
+    // Allowed POS-expenditure ledgers (EXPENSE group). Empty = no restriction.
+    // Deduped on save.
+    allowedExpenseAccountIds: z.array(z.number().int().positive())
+        .max(50)
+        .transform((arr) => [...new Set(arr)])
+        .optional(),
 });
 
 // Helper: pull only the non-undefined mapping fields off the parsed body.
@@ -67,6 +73,20 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             }
         }
 
+        // Validate allowed-expenditure ledgers are real EXPENSE-group accounts.
+        if (data.allowedExpenseAccountIds && data.allowedExpenseAccountIds.length > 0) {
+            const accs = await prisma.account.findMany({
+                where:  { id: { in: data.allowedExpenseAccountIds } },
+                select: { id: true, name: true, group: { select: { type: true } } },
+            });
+            const byId = new Map(accs.map((a) => [a.id, a]));
+            for (const aid of data.allowedExpenseAccountIds) {
+                const a = byId.get(aid);
+                if (!a)                          return NextResponse.json({ error: `Account ${aid} not found` }, { status: 400 });
+                if (a.group?.type !== "EXPENSE") return NextResponse.json({ error: `"${a.name}" is not an expense ledger.` }, { status: 400 });
+            }
+        }
+
         // If renaming, ensure no other counter in the same branch has that name.
         if (data.name && data.name !== existing.name) {
             const dup = await prisma.posCounter.findFirst({ where: { branchId: existing.branchId, name: data.name, NOT: { id } } });
@@ -103,6 +123,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 data: {
                     ...(data.name     !== undefined && { name: data.name }),
                     ...(data.isActive !== undefined && { isActive: data.isActive }),
+                    ...(data.allowedExpenseAccountIds !== undefined && { allowedExpenseAccountIds: data.allowedExpenseAccountIds }),
                     ...mapUpdates,
                     ...labelUpdates,
                 },
@@ -134,6 +155,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             walletAccount:       updated.walletAccount,       walletLabel:       updated.walletLabel,
             chequeAccount:       updated.chequeAccount,       chequeLabel:       updated.chequeLabel,
             bankTransferAccount: updated.bankTransferAccount, bankTransferLabel: updated.bankTransferLabel,
+            allowedExpenseAccountIds: updated.allowedExpenseAccountIds,
         });
     } catch (e) {
         return handleApiError(e, "Failed to update counter");

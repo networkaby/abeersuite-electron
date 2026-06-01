@@ -9,7 +9,7 @@ import {
     ShoppingCart, Plus, Minus, Trash2, ArrowLeft, ExternalLink,
     Banknote, Wallet, CreditCard, Smartphone, Building2, FileText, UserPlus,
     MapPin, Star, Sparkles, AlertCircle, TrendingDown, Tag,
-    ReceiptIndianRupee, Check, RotateCcw, ChevronDown, ChevronRight,
+    ReceiptIndianRupee, Check, RotateCcw, ChevronDown, ChevronRight, HelpCircle,
 } from "lucide-react";
 import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/components/GlAccountCombobox";
 import { calcVoucherTotals, calcLineTotals } from "@/modules/inventory/lib/stock";
@@ -33,6 +33,7 @@ import { ActiveShiftBar, type ActiveShift } from "@/modules/pos/components/Activ
 import { ShiftOpenDialog, type OpenedShift } from "@/modules/pos/components/ShiftOpenDialog";
 import { HandoverAcceptDialog, type PendingHandover } from "@/modules/pos/components/HandoverAcceptDialog";
 import { PosReturnDialog } from "@/modules/pos/components/PosReturnDialog";
+import { PosExpenditureDialog } from "@/modules/pos/components/PosExpenditureDialog";
 import { qrDisplay } from "@/modules/pos/lib/qrDisplay";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -183,6 +184,7 @@ export default function PosScreen() {
     const [shiftLoaded, setShiftLoaded]           = useState(false);
     const [shiftOpenDialogOpen, setShiftOpenDialogOpen] = useState(false);
     const [returnDialogOpen, setReturnDialogOpen]       = useState(false);
+    const [expenditureDialogOpen, setExpenditureDialogOpen] = useState(false);
 
     const refreshActiveShift = useCallback(() => {
         axios.get<ActiveShift | null>("/api/pos/shifts/current")
@@ -799,6 +801,26 @@ export default function PosScreen() {
                 >
                     <RotateCcw size={14} /> Return
                 </Button>
+                {/* Exp — opens an expenditure voucher (payment-voucher variant) that
+                    only permits payment to the counter's configured account
+                    (office/admin/counters). UI only for now — handler is a placeholder. */}
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => activeShift ? setExpenditureDialogOpen(true) : toast.error("Open a shift first to record an expenditure")}
+                    title="Record a counter expenditure (tea, sundry donation…) — posts a payment voucher from the counter's till"
+                >
+                    <Banknote size={14} /> Exp
+                </Button>
+                {/* Help — UI only for now. */}
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => toast.info("POS help — coming soon")}
+                    title="POS help & keyboard shortcuts"
+                >
+                    <HelpCircle size={14} /> Help
+                </Button>
             </header>
 
             {/* Sale Return dialog */}
@@ -807,6 +829,17 @@ export default function PosScreen() {
                 onOpenChange={setReturnDialogOpen}
                 onDone={() => { /* no cart refresh needed — return is a standalone action */ }}
             />
+
+            {/* Counter expenditure dialog — needs an open shift (till to pay from) */}
+            {activeShift && (
+                <PosExpenditureDialog
+                    open={expenditureDialogOpen}
+                    onOpenChange={setExpenditureDialogOpen}
+                    shiftId={activeShift.id}
+                    counterName={activeShift.counter.tillAccount.name}
+                    onDone={refreshActiveShift}
+                />
+            )}
 
             {/* Main grid */}
             <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[1fr_360px]">

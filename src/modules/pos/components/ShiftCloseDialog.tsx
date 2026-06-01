@@ -28,6 +28,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { fmt } from "@/utils/constants";
+import { getOrgDefaults } from "@/shared/lib/orgDefaults";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -39,6 +40,7 @@ type ShiftDetail = {
     openingFloatPaise: string;
     cashSalesPaise: string;
     dropsPaise: string;
+    expendituresPaise: string;
     runningExpectedPaise: string;
     tenderBreakdown?: TenderRow[];
     counter: { id: number; name: string; tillAccount: { name: string } };
@@ -53,6 +55,7 @@ type ClosedReport = {
     openingFloatPaise:   string;
     cashSalesPaise:      string;
     dropsPaise:          string;
+    expendituresPaise:   string | null;
     expectedCashPaise:   string | null;
     declaredCashPaise:   string | null;
     variancePaise:       string | null;
@@ -67,6 +70,11 @@ type ClosedReport = {
 
 type Candidate = { id: number; name: string; email: string };
 type Mode = "vault" | "handover";
+
+// Fallback note/coin denominations (high → low) used until the org's configured
+// list loads. The live list is OrgDefaults.cashDenominationsJson (country-specific,
+// edited in Settings → Org Defaults).
+const DEFAULT_DENOMS = [2000, 500, 200, 100, 50, 20, 10, 5, 2, 1];
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -87,6 +95,21 @@ export function ShiftCloseDialog({
     const [notes, setNotes]       = useState("");
     const [submitting, setSubmitting] = useState(false);
 
+    // Denomination counter — count of notes/coins per denomination. The summed
+    // value drives the physical count (declared) so the cashier doesn't add by
+    // hand. Editing the Physical count field directly still overrides it.
+    // denomList is the org's configured denominations (loaded on open).
+    const [denomList, setDenomList] = useState<number[]>(DEFAULT_DENOMS);
+    const [denoms, setDenoms] = useState<Record<number, string>>({});
+    const denomTotal = denomList.reduce((s, d) => s + d * (parseInt(denoms[d] || "0", 10) || 0), 0);
+    const setDenom = (d: number, raw: string) => {
+        const v = raw.replace(/[^\d]/g, "");
+        const next = { ...denoms, [d]: v };
+        setDenoms(next);
+        const total = denomList.reduce((s, dd) => s + dd * (parseInt(next[dd] || "0", 10) || 0), 0);
+        setDeclared(total ? total.toFixed(2) : "");
+    };
+
     // Vault mode — carry-over
     const [carryOver, setCarryOver] = useState("");
 
@@ -105,6 +128,12 @@ export function ShiftCloseDialog({
         setMode("vault");
         setSelectedUserId(null);
         setReport(null);
+        setDenoms({});
+        // Load the org's configured cash denominations (country-specific). Falls
+        // back to DEFAULT_DENOMS if unset or the call fails.
+        getOrgDefaults()
+            .then((od) => setDenomList(od.cashDenominationsJson?.length ? od.cashDenominationsJson : DEFAULT_DENOMS))
+            .catch(() => setDenomList(DEFAULT_DENOMS));
         axios.get<ShiftDetail>(`/api/pos/shifts/${shiftId}`)
             .then((r) => {
                 setDetail(r.data);
@@ -126,10 +155,14 @@ export function ShiftCloseDialog({
     }, [mode, detail]);
 
     const expected     = detail ? Number(detail.runningExpectedPaise) / 100 : 0;
+    const dropsNum     = detail ? Number(detail.dropsPaise) / 100 : 0;
     const tenderTotal  = (detail?.tenderBreakdown ?? []).reduce((s, t) => s + Number(t.amountPaise) / 100, 0);
     const declaredNum  = parseFloat(declared) || 0;
     const carryOverNum = parseFloat(carryOver) || 0;
-    const toVault      = Math.max(0, declaredNum - carryOverNum);
+    // Sweep the drawer surplus PLUS the cash dropped to the safe — both leave the
+    // counter for the vault, so the till closes at the carry-over. Mirrors the
+    // server (close route): toVault = declared + drops − carryOver.
+    const toVault      = Math.max(0, declaredNum + dropsNum - carryOverNum);
     const variance     = +(declaredNum - expected).toFixed(2);
 
     const submitVault = async () => {
@@ -207,7 +240,13 @@ export function ShiftCloseDialog({
     // ── Render ────────────────────────────────────────────────────────────────
     return (
         <Dialog open={open} onOpenChange={(v) => { if (!submitting) onOpenChange(v); }}>
-            <DialogContent className="sm:max-w-lg flex flex-col max-h-[90vh]">
+            <DialogContent
+                className="flex flex-col w-[96vw] max-w-[96vw] sm:max-w-[96vw] h-[94vh] max-h-[94vh]"
+                // Closing a shift posts GL — don't let a stray click/Escape abort
+                // it. Only the explicit Cancel / Done / ✕ buttons dismiss it.
+                onInteractOutside={(e) => e.preventDefault()}
+                onEscapeKeyDown={(e) => e.preventDefault()}
+            >
 
                 {/* ── Report view (post-close) ── */}
                 {report ? (
@@ -270,11 +309,21 @@ export function ShiftCloseDialog({
                                     </button>
                                 </div>
 
+                                <div className="grid gap-5 md:grid-cols-2">
+                                {/* ── Left: denomination counter ── */}
+                                <DenominationCounter denoms={denoms} onChange={setDenom} total={denomTotal} list={denomList} />
+
+                                {/* ── Right: reconciliation summary + inputs ── */}
+                                <div className="space-y-4">
+
                                 {/* Expected breakdown */}
                                 <div className="rounded-md border border-border bg-muted/40 p-3 text-sm space-y-1.5">
                                     <Row label="Opening float"   value={fmt(Number(detail.openingFloatPaise) / 100)} />
                                     <Row label="Cash sales"      value={`+ ${fmt(Number(detail.cashSalesPaise) / 100)}`} />
                                     <Row label="Dropped to safe" value={`− ${fmt(Number(detail.dropsPaise) / 100)}`} />
+                                    {Number(detail.expendituresPaise) > 0 && (
+                                        <Row label="Expenditures" value={`− ${fmt(Number(detail.expendituresPaise) / 100)}`} />
+                                    )}
                                     <div className="border-t border-border pt-1.5 flex justify-between font-semibold">
                                         <span>Expected in drawer</span>
                                         <span className="font-mono">₹{fmt(expected)}</span>
@@ -309,6 +358,9 @@ export function ShiftCloseDialog({
                                         placeholder={expected.toFixed(2)}
                                         autoFocus
                                     />
+                                    <p className="text-xs text-muted-foreground">
+                                        Auto-fills from the denomination count — edit to override.
+                                    </p>
                                     {declared && <VarianceChip variance={variance} />}
                                 </div>
 
@@ -332,7 +384,8 @@ export function ShiftCloseDialog({
                                         {declared && (
                                             <div className="rounded-md bg-primary/5 border border-primary/30 px-3 py-2 text-xs text-muted-foreground">
                                                 Posts Contra: <span className="font-medium text-foreground">{detail.counter.tillAccount.name}</span> → <span className="font-medium text-foreground">Vault</span> for{" "}
-                                                <span className="font-mono font-semibold text-foreground">₹{fmt(toVault)}</span>.
+                                                <span className="font-mono font-semibold text-foreground">₹{fmt(toVault)}</span>
+                                                {dropsNum > 0 && <> (incl. <span className="font-mono font-semibold text-foreground">₹{fmt(dropsNum)}</span> dropped to safe)</>}.
                                                 Counter keeps <span className="font-mono font-semibold text-foreground">₹{fmt(carryOverNum)}</span> overnight.
                                             </div>
                                         )}
@@ -390,6 +443,8 @@ export function ShiftCloseDialog({
                                         placeholder="e.g. Safe drop already done"
                                     />
                                 </div>
+                                </div>{/* ── end right column ── */}
+                                </div>{/* ── end two-column grid ── */}
                             </div>
                         )}
 
@@ -431,6 +486,7 @@ const CloseReport = forwardRef<HTMLDivElement, { report: ClosedReport }>(
         const opening  = Number(report.openingFloatPaise)  / 100;
         const sales    = Number(report.cashSalesPaise)     / 100;
         const drops    = Number(report.dropsPaise)         / 100;
+        const expenditures = Number(report.expendituresPaise ?? 0) / 100;
         const expected = Number(report.expectedCashPaise)  / 100;
         const declared = Number(report.declaredCashPaise)  / 100;
         const variance = Number(report.variancePaise)      / 100;
@@ -461,6 +517,7 @@ const CloseReport = forwardRef<HTMLDivElement, { report: ClosedReport }>(
                     <ReportRow label="Opening float"    value={`₹${fmt(opening)}`} />
                     <ReportRow label="Cash sales"       value={`+ ₹${fmt(sales)}`} />
                     <ReportRow label="Dropped to safe"  value={`− ₹${fmt(drops)}`} />
+                    {expenditures > 0 && <ReportRow label="Expenditures" value={`− ₹${fmt(expenditures)}`} />}
                     <div className="border-t border-border pt-1.5">
                         <ReportRow label="Expected in drawer" value={`₹${fmt(expected)}`} bold />
                         <ReportRow label="Physical count"     value={`₹${fmt(declared)}`} bold />
@@ -530,6 +587,55 @@ function Row({ label, value }: { label: string; value: string }) {
         <div className="flex justify-between text-muted-foreground">
             <span>{label}</span>
             <span className="font-mono text-foreground">₹{value}</span>
+        </div>
+    );
+}
+
+// Note/coin tally — counts per denomination, summed into the physical count.
+// `list` is the org's configured denominations (high → low).
+function DenominationCounter({
+    denoms, onChange, total, list,
+}: {
+    denoms: Record<number, string>;
+    onChange: (denom: number, value: string) => void;
+    total: number;
+    list: number[];
+}) {
+    return (
+        <div className="rounded-md border border-border p-3 self-start">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                Count by denomination
+            </p>
+            <div className="grid grid-cols-[1fr_5rem_6rem] gap-x-2 gap-y-1 items-center text-[11px] text-muted-foreground px-1 mb-1">
+                <span>Denomination</span>
+                <span className="text-right">Count</span>
+                <span className="text-right">Amount</span>
+            </div>
+            <div className="space-y-1">
+                {list.map((d) => {
+                    const count = parseInt(denoms[d] || "0", 10) || 0;
+                    return (
+                        <div key={d} className="grid grid-cols-[1fr_5rem_6rem] gap-x-2 items-center">
+                            <span className="font-mono text-sm">₹{d.toLocaleString("en-IN")}</span>
+                            <Input
+                                type="text"
+                                inputMode="numeric"
+                                value={denoms[d] ?? ""}
+                                onChange={(e) => onChange(d, e.target.value)}
+                                placeholder="0"
+                                className="h-8 text-right font-mono"
+                            />
+                            <span className="text-right font-mono text-sm text-muted-foreground">
+                                {count > 0 ? `₹${fmt(d * count)}` : "—"}
+                            </span>
+                        </div>
+                    );
+                })}
+            </div>
+            <div className="border-t border-border mt-2 pt-2 flex justify-between font-semibold text-sm">
+                <span>Counted total</span>
+                <span className="font-mono">₹{fmt(total)}</span>
+            </div>
         </div>
     );
 }
