@@ -3,12 +3,13 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
@@ -107,17 +108,21 @@ export function LoyaltyEarnRules({
     }
 
     return (
-        <div className="max-w-3xl space-y-4 rounded-lg border border-border p-4">
-            <div>
-                <Label className="text-sm font-medium">Earn-rate overrides</Label>
-                <p className="text-xs text-muted-foreground">
-                    Multiplier on the global earn rate, resolved per line: product → group → category → global (1×).
-                    Set loss-making items to 0× so they earn nothing.
-                </p>
-            </div>
+        <Card>
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-md bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-400"><Layers size={15} /></span>
+                    Earn-rate overrides
+                </CardTitle>
+                <CardDescription>
+                    A multiplier on the global rate, resolved per line: product → group → category → global (1×).
+                    Set loss-making items to <span className="font-medium">0×</span> so they earn nothing.
+                </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
 
             {/* Add row */}
-            <div className="flex flex-wrap items-end gap-2 rounded-md bg-muted/30 p-3">
+            <div className="flex flex-wrap items-end gap-2 rounded-md border border-border/60 bg-muted/30 p-3">
                 <div className="space-y-1">
                     <Label className="text-[11px] text-muted-foreground">Scope</Label>
                     <Select value={scope} onValueChange={(v) => { setScope(v as Scope); setTargetId(""); }}>
@@ -151,7 +156,9 @@ export function LoyaltyEarnRules({
             {loading ? (
                 <p className="text-sm text-muted-foreground">Loading…</p>
             ) : rules.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No overrides — everything earns at the global rate.</p>
+                <div className="rounded-md border border-dashed border-border/70 py-8 text-center text-sm text-muted-foreground">
+                    No overrides yet — everything earns at the global rate.
+                </div>
             ) : (
                 <Table>
                     <TableHeader>
@@ -191,6 +198,7 @@ export function LoyaltyEarnRules({
                     </TableBody>
                 </Table>
             )}
-        </div>
+            </CardContent>
+        </Card>
     );
 }

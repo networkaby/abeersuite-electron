@@ -3,11 +3,12 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Save } from "lucide-react";
+import { Save, Coins, Ticket } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 
 interface LoyaltyConfig {
     id: number;
@@ -24,10 +25,27 @@ interface LoyaltyConfig {
 
 const dec = (s: string): string => s.replace(/[^\d.]/g, "").replace(/(\..*)\./g, "$1");
 const int = (s: string): string => s.replace(/\D/g, "");
+const optNum = (v: string | number | null): string => (v == null ? "" : String(v));
 
-// Optional ₹/int field: "" ⇄ null.
-function optNum(v: string | number | null): string {
-    return v == null ? "" : String(v);
+/// Small field wrapper — label, control, optional helper text.
+function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+    return (
+        <div className="space-y-1.5">
+            <Label className="text-xs font-medium text-muted-foreground">{label}</Label>
+            {children}
+            {hint && <p className="text-[11px] leading-snug text-muted-foreground">{hint}</p>}
+        </div>
+    );
+}
+
+/// ₹-prefixed text input.
+function RupeeInput({ value, onChange, placeholder, className = "w-32" }: { value: string; onChange: (v: string) => void; placeholder?: string; className?: string }) {
+    return (
+        <div className={`relative ${className}`}>
+            <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">₹</span>
+            <Input inputMode="decimal" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="pl-6 text-right" />
+        </div>
+    );
 }
 
 export function LoyaltyConfigForm() {
@@ -51,19 +69,18 @@ export function LoyaltyConfigForm() {
         if (!draft) return;
         setSaving(true);
         try {
-            const nullableNum = (v: string | number | null) => (v == null || v === "" ? null : Number(v));
-            const payload = {
+            const nn = (v: string | number | null) => (v == null || v === "" ? null : Number(v));
+            const { data } = await axios.patch<LoyaltyConfig>("/api/loyalty/config", {
                 enabled:               draft.enabled,
                 globalEarnRatePer:     Number(draft.globalEarnRatePer) || 0,
                 redeemValue:           Number(draft.redeemValue) || 0,
                 expiryEnabled:         draft.expiryEnabled,
                 expiryDays:            Number(draft.expiryDays) || 1,
-                minEarnInvoiceValue:   nullableNum(draft.minEarnInvoiceValue),
-                minRedeemInvoiceValue: nullableNum(draft.minRedeemInvoiceValue),
+                minEarnInvoiceValue:   nn(draft.minEarnInvoiceValue),
+                minRedeemInvoiceValue: nn(draft.minRedeemInvoiceValue),
                 minRedeemPoints:       draft.minRedeemPoints == null ? null : Number(draft.minRedeemPoints),
-                maxRedeemPctOfBill:    nullableNum(draft.maxRedeemPctOfBill),
-            };
-            const { data } = await axios.patch<LoyaltyConfig>("/api/loyalty/config", payload);
+                maxRedeemPctOfBill:    nn(draft.maxRedeemPctOfBill),
+            });
             setDraft(data);
             toast.success("Loyalty settings saved");
         } catch {
@@ -73,71 +90,93 @@ export function LoyaltyConfigForm() {
         }
     }
 
-    if (loading || !draft) return <p className="text-sm text-muted-foreground">Loading…</p>;
+    if (loading || !draft) {
+        return <div className="h-40 animate-pulse rounded-xl border border-border bg-muted/30" />;
+    }
 
     return (
-        <div className="max-w-xl space-y-6 rounded-lg border border-border p-4">
-            <div className="flex items-center justify-between">
-                <div>
-                    <Label className="text-sm font-medium">Loyalty programme</Label>
-                    <p className="text-xs text-muted-foreground">When off, no points are earned or redeemable at POS.</p>
-                </div>
-                <Switch checked={draft.enabled} onCheckedChange={(v) => set("enabled", v)} />
-            </div>
-
-            {/* ── Reward Setup (earn) ─────────────────────────────────────── */}
-            <div className="space-y-3 border-t border-border pt-4">
-                <h3 className="text-sm font-semibold">Reward Setup</h3>
-                <div className="space-y-1">
-                    <Label htmlFor="earn" className="text-xs text-muted-foreground">Loyalty point conversion — ₹ per 1 point</Label>
-                    <Input id="earn" inputMode="decimal" value={String(draft.globalEarnRatePer)} onChange={(e) => set("globalEarnRatePer", dec(e.target.value))} />
-                    <p className="text-[11px] text-muted-foreground">Award 1 point for every ₹{String(draft.globalEarnRatePer || 0)} of net goods (per category/group/product multipliers below).</p>
-                </div>
-                <div className="space-y-1">
-                    <Label htmlFor="minearn" className="text-xs text-muted-foreground">Minimum invoice value to earn (optional)</Label>
-                    <Input id="minearn" inputMode="decimal" value={optNum(draft.minEarnInvoiceValue)} onChange={(e) => set("minEarnInvoiceValue", dec(e.target.value) || null)} placeholder="no minimum" />
-                    <p className="text-[11px] text-muted-foreground">Sales below this value earn no points.</p>
-                </div>
-                <div className="flex items-center justify-between">
-                    <Label className="text-xs text-muted-foreground">Set point expiry</Label>
-                    <Switch checked={draft.expiryEnabled} onCheckedChange={(v) => set("expiryEnabled", v)} />
-                </div>
-                {draft.expiryEnabled && (
-                    <div className="space-y-1">
-                        <Label htmlFor="expdays" className="text-xs text-muted-foreground">Points expire after — days</Label>
-                        <Input id="expdays" inputMode="numeric" value={String(draft.expiryDays)} onChange={(e) => set("expiryDays", Number(int(e.target.value) || "0"))} />
-                        <p className="text-[11px] text-muted-foreground">Validity is dynamic: raising this revives recently-lapsed points; lowering it drops older ones.</p>
+        <div className="space-y-4">
+            {/* Programme master toggle */}
+            <Card>
+                <CardContent className="flex items-center justify-between gap-4 p-4">
+                    <div>
+                        <p className="text-sm font-medium">Loyalty program</p>
+                        <p className="text-xs text-muted-foreground">When off, no points are earned or redeemable at POS.</p>
                     </div>
-                )}
+                    <Switch checked={draft.enabled} onCheckedChange={(v) => set("enabled", v)} />
+                </CardContent>
+            </Card>
+
+            <div className="grid gap-4 md:grid-cols-2">
+                {/* ── Reward Setup ────────────────────────────────────────── */}
+                <Card className={draft.enabled ? "" : "opacity-60"}>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2 text-base">
+                            <span className="flex h-7 w-7 items-center justify-center rounded-md bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400"><Coins size={15} /></span>
+                            Reward Setup
+                        </CardTitle>
+                        <CardDescription>How customers earn points.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <Field label="Loyalty point conversion" hint="Per category/group/product multipliers can override this rate.">
+                            <div className="flex items-center gap-2">
+                                <RupeeInput value={String(draft.globalEarnRatePer)} onChange={(v) => set("globalEarnRatePer", dec(v))} />
+                                <span className="text-sm text-muted-foreground">= 1 point</span>
+                            </div>
+                        </Field>
+                        <Field label="Minimum invoice value to earn" hint="Sales below this earn no points. Blank = no minimum.">
+                            <RupeeInput value={optNum(draft.minEarnInvoiceValue)} onChange={(v) => set("minEarnInvoiceValue", dec(v) || null)} placeholder="0.00" />
+                        </Field>
+                        <div className="flex items-center justify-between rounded-md border border-border/60 bg-muted/30 px-3 py-2">
+                            <span className="text-xs font-medium text-muted-foreground">Set point expiry</span>
+                            <Switch checked={draft.expiryEnabled} onCheckedChange={(v) => set("expiryEnabled", v)} />
+                        </div>
+                        {draft.expiryEnabled && (
+                            <Field label="Points expire after" hint="Dynamic: raising this revives recently-lapsed points; lowering it drops older ones.">
+                                <div className="flex items-center gap-2">
+                                    <Input inputMode="numeric" value={String(draft.expiryDays)} onChange={(e) => set("expiryDays", Number(int(e.target.value) || "0"))} className="w-28 text-right" />
+                                    <span className="text-sm text-muted-foreground">days</span>
+                                </div>
+                            </Field>
+                        )}
+                    </CardContent>
+                </Card>
+
+                {/* ── Redeem Setup ────────────────────────────────────────── */}
+                <Card className={draft.enabled ? "" : "opacity-60"}>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2 text-base">
+                            <span className="flex h-7 w-7 items-center justify-center rounded-md bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400"><Ticket size={15} /></span>
+                            Redeem Setup
+                        </CardTitle>
+                        <CardDescription>How points convert to a discount.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <Field label="Redemption value" hint="The bill discount each point is worth.">
+                            <div className="flex items-center gap-2">
+                                <span className="text-sm text-muted-foreground">1 point =</span>
+                                <RupeeInput value={String(draft.redeemValue)} onChange={(v) => set("redeemValue", dec(v))} />
+                            </div>
+                        </Field>
+                        <Field label="Maximum % of invoice value" hint="Caps the loyalty discount at this share of the bill. Blank = no cap.">
+                            <div className="flex items-center gap-2">
+                                <Input inputMode="decimal" value={optNum(draft.maxRedeemPctOfBill)} onChange={(e) => set("maxRedeemPctOfBill", dec(e.target.value) || null)} placeholder="0" className="w-24 text-right" />
+                                <span className="text-sm text-muted-foreground">%</span>
+                            </div>
+                        </Field>
+                        <Field label="Minimum invoice value to redeem" hint="Invoices below this can't redeem points. Blank = no minimum.">
+                            <RupeeInput value={optNum(draft.minRedeemInvoiceValue)} onChange={(v) => set("minRedeemInvoiceValue", dec(v) || null)} placeholder="0.00" />
+                        </Field>
+                        <Field label="Minimum points to redeem" hint="Blank = none.">
+                            <Input inputMode="numeric" value={draft.minRedeemPoints == null ? "" : String(draft.minRedeemPoints)} onChange={(e) => { const v = int(e.target.value); set("minRedeemPoints", v === "" ? null : Number(v)); }} placeholder="0" className="w-28 text-right" />
+                        </Field>
+                    </CardContent>
+                </Card>
             </div>
 
-            {/* ── Redeem Setup ────────────────────────────────────────────── */}
-            <div className="space-y-3 border-t border-border pt-4">
-                <h3 className="text-sm font-semibold">Redeem Setup</h3>
-                <div className="space-y-1">
-                    <Label htmlFor="redeem" className="text-xs text-muted-foreground">Redemption value — ₹ per 1 point</Label>
-                    <Input id="redeem" inputMode="decimal" value={String(draft.redeemValue)} onChange={(e) => set("redeemValue", dec(e.target.value))} />
-                    <p className="text-[11px] text-muted-foreground">Each point gives the customer ₹{String(draft.redeemValue || 0)} discount.</p>
-                </div>
-                <div className="space-y-1">
-                    <Label htmlFor="maxpct" className="text-xs text-muted-foreground">Maximum % of invoice value (optional)</Label>
-                    <Input id="maxpct" inputMode="decimal" value={optNum(draft.maxRedeemPctOfBill)} onChange={(e) => set("maxRedeemPctOfBill", dec(e.target.value) || null)} placeholder="no cap" />
-                    <p className="text-[11px] text-muted-foreground">Caps the loyalty discount at this % of the bill.</p>
-                </div>
-                <div className="space-y-1">
-                    <Label htmlFor="minredeeminv" className="text-xs text-muted-foreground">Minimum invoice value to redeem (optional)</Label>
-                    <Input id="minredeeminv" inputMode="decimal" value={optNum(draft.minRedeemInvoiceValue)} onChange={(e) => set("minRedeemInvoiceValue", dec(e.target.value) || null)} placeholder="no minimum" />
-                    <p className="text-[11px] text-muted-foreground">Invoices below this value can't redeem points.</p>
-                </div>
-                <div className="space-y-1">
-                    <Label htmlFor="minredeempts" className="text-xs text-muted-foreground">Minimum points to redeem (optional)</Label>
-                    <Input id="minredeempts" inputMode="numeric" value={draft.minRedeemPoints == null ? "" : String(draft.minRedeemPoints)} onChange={(e) => { const v = int(e.target.value); set("minRedeemPoints", v === "" ? null : Number(v)); }} placeholder="none" />
-                </div>
-            </div>
-
-            <div className="flex justify-end border-t border-border pt-4">
+            <div className="flex justify-end">
                 <Button onClick={save} disabled={saving} size="sm">
-                    <Save size={14} className="mr-1" /> {saving ? "Saving…" : "Save settings"}
+                    <Save size={14} className="mr-1.5" /> {saving ? "Saving…" : "Save settings"}
                 </Button>
             </div>
         </div>
