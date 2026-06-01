@@ -15,6 +15,7 @@ import {
     buildRulesIndex,
     clampRedemption,
     applyLoyaltyForSale,
+    liveBalance,
     type EarnLine,
     type TaxonomyMaps,
 } from "@/modules/loyalty/lib";
@@ -176,10 +177,10 @@ export async function POST(req: Request) {
     });
     const loyaltyRates = ratesFromConfig(loyaltyConfig);
     const loyaltyEnabled = isIdentified && loyaltyRates.enabled;
-    const loyaltyWallet = loyaltyEnabled
-        ? await prisma.loyaltyAccount.findUnique({ where: { accountId: customerAccount.id }, select: { pointsBalance: true } })
-        : null;
-    const loyaltyBalance = loyaltyWallet?.pointsBalance ?? 0;
+    // Live, dynamic balance — Σ in-window lots (respects the current expiry window).
+    const loyaltyBalance = loyaltyEnabled
+        ? await liveBalance(prisma, customerAccount.id, loyaltyRates)
+        : 0;
 
     // ── Validate line items + payment totals ──────────────────────────────
     const computedLines = body.lines.map((l) => {
@@ -208,11 +209,17 @@ export async function POST(req: Request) {
     const goodsValue = body.lines.reduce((s, l) => s + l.quantity * l.unitPrice, 0);
     const tierDiscount = Math.min(Math.max(0, body.discountAmt), goodsValue);
 
+    // Pre-redemption invoice value — drives the min-invoice-to-earn and
+    // min-invoice-to-redeem floors (the bill the customer would pay before any
+    // loyalty redemption is applied).
+    const manualChargesNet = body.charges.reduce((s, c) => s + c.amount, 0);
+    const invoiceValueGross = goodsValue + taxAmount + body.shippingAmt - tierDiscount + body.roundOff + manualChargesNet;
+
     // Server owns the redemption ₹ value — never trust the client. Clamp against
-    // the live balance and the post-tier goods value.
+    // the live balance, the post-tier goods value, and the min-redeem-invoice floor.
     const requestedRedeem = loyaltyEnabled ? body.redeemPoints : 0;
     const redeemBase = Math.max(0, goodsValue - tierDiscount);
-    const redemption = clampRedemption(requestedRedeem, loyaltyBalance, redeemBase, loyaltyRates);
+    const redemption = clampRedemption(requestedRedeem, loyaltyBalance, redeemBase, invoiceValueGross, loyaltyRates);
     if (requestedRedeem > 0 && redemption.points === 0 && redemption.reason) {
         return NextResponse.json({ error: redemption.reason, code: "LOYALTY_REDEEM_REJECTED" }, { status: 422 });
     }
@@ -454,6 +461,7 @@ export async function POST(req: Request) {
                     earnLines,
                     combinedDiscount: tierDiscount + redemptionRupees,
                     redeemPoints,
+                    invoiceValue:     invoiceValueGross,
                     rates:            loyaltyRates,
                     rulesIndex,
                     taxonomyMaps,

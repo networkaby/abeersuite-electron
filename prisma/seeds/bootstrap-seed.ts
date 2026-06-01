@@ -1219,10 +1219,10 @@ async function main() {
     });
     await prisma.loyaltyConfig.upsert({
         where:  { id: 1 },
-        create: { id: 1, enabled: true, globalEarnRatePer: 100, redeemValue: 1, expiryMonths: 12, redeemExpenseAccountId: loyaltyRedeemLedger?.id ?? null },
+        create: { id: 1, enabled: true, globalEarnRatePer: 100, redeemValue: 1, expiryEnabled: true, expiryDays: 365, redeemExpenseAccountId: loyaltyRedeemLedger?.id ?? null },
         update: { redeemExpenseAccountId: loyaltyRedeemLedger?.id ?? null },
     });
-    console.log(`      ✓ LoyaltyConfig singleton seeded (1 pt/₹100, 1 pt = ₹1, 12-mo expiry, redeem ledger #${loyaltyRedeemLedger?.id ?? "—"})\n`);
+    console.log(`      ✓ LoyaltyConfig singleton seeded (1 pt/₹100, 1 pt = ₹1, 365-day expiry, redeem ledger #${loyaltyRedeemLedger?.id ?? "—"})\n`);
 
     // ── Section 12: VoucherSeries ──────────────────────────────────────
     console.log("[12/16] VoucherSeries (all GL + inventory series)");

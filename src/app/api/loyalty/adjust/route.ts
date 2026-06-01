@@ -4,7 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { loyaltyAdjustSchema } from "@/shared/lib/schemas/loyaltySchemas";
-import { adjustPoints } from "@/modules/loyalty/lib";
+import { adjustPoints, ratesFromConfig } from "@/modules/loyalty/lib";
 
 // POST /api/loyalty/adjust — manual point grant / deduction by an admin.
 export async function POST(req: Request) {
@@ -29,11 +29,11 @@ export async function POST(req: Request) {
     try {
         const result = await prisma.$transaction((tx) =>
             adjustPoints(tx, {
-                accountId:    data.accountId,
-                delta:        data.delta,
-                note:         data.note ?? null,
-                createdById:  user!.id,
-                expiryMonths: cfg.expiryMonths,
+                accountId:   data.accountId,
+                delta:       data.delta,
+                note:        data.note ?? null,
+                createdById: user!.id,
+                rates:       ratesFromConfig(cfg),
             }),
         );
         return NextResponse.json(result);

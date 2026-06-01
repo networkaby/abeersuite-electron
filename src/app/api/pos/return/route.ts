@@ -32,7 +32,7 @@ import { invNextRef } from "@/modules/inventory/lib/stock";
 import { recordStockMovement } from "@/modules/inventory/lib/stockMovement";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import { postInvVoucherToGl } from "@/modules/accountancy/lib/postInvVoucher";
-import { reverseLoyaltyForReturn } from "@/modules/loyalty/lib";
+import { reverseLoyaltyForReturn, ratesFromConfig } from "@/modules/loyalty/lib";
 import * as Sentry from "@sentry/nextjs";
 
 const returnLineSchema = z.object({
@@ -142,8 +142,8 @@ export async function POST(req: Request) {
         // used to claw back earned / restore redeemed points proportionally.
         const originalGoods = original.lines.reduce((s, l) => s + Number(l.quantity) * Number(l.rate), 0);
         const returnFraction = originalGoods > 0 ? returnSubtotal / originalGoods : 1;
-        const loyaltyConfig = await prisma.loyaltyConfig.findUnique({ where: { id: 1 }, select: { expiryMonths: true } });
-        const loyaltyExpiryMonths = loyaltyConfig?.expiryMonths ?? 12;
+        const loyaltyConfig = await prisma.loyaltyConfig.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} });
+        const loyaltyRates = ratesFromConfig(loyaltyConfig);
 
         // ── Transaction ───────────────────────────────────────────────────────
         const result = await prisma.$transaction(async (tx) => {
@@ -258,7 +258,7 @@ export async function POST(req: Request) {
                 originalVoucherId: original.id,
                 returnVoucherId:   voucher.id,
                 returnFraction,
-                expiryMonths:      loyaltyExpiryMonths,
+                rates:             loyaltyRates,
                 createdById:       user!.id,
             });
 

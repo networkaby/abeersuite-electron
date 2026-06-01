@@ -3,12 +3,15 @@ import { z } from "zod";
 // LoyaltyConfig (singleton) — editable rates. redeemExpenseAccountId is wired by
 // the bootstrap seed and intentionally NOT editable through the API.
 export const loyaltyConfigUpdateSchema = z.object({
-    enabled:            z.boolean().optional(),
-    globalEarnRatePer:  z.number().positive().max(1_000_000).optional(),
-    redeemValue:        z.number().positive().max(1_000_000).optional(),
-    expiryMonths:       z.number().int().min(1).max(120).optional(),
-    minRedeemPoints:    z.number().int().min(0).nullable().optional(),
-    maxRedeemPctOfBill: z.number().min(0).max(100).nullable().optional(),
+    enabled:               z.boolean().optional(),
+    globalEarnRatePer:     z.number().positive().max(1_000_000).optional(),
+    redeemValue:           z.number().positive().max(1_000_000).optional(),
+    expiryEnabled:         z.boolean().optional(),
+    expiryDays:            z.number().int().min(1).max(36_500).optional(),
+    minEarnInvoiceValue:   z.number().min(0).nullable().optional(),
+    minRedeemInvoiceValue: z.number().min(0).nullable().optional(),
+    minRedeemPoints:       z.number().int().min(0).nullable().optional(),
+    maxRedeemPctOfBill:    z.number().min(0).max(100).nullable().optional(),
 });
 export type LoyaltyConfigUpdateInput = z.infer<typeof loyaltyConfigUpdateSchema>;
 

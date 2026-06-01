@@ -2,9 +2,11 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
+import { ratesFromConfig, liveBalance, expiryCutoff } from "@/modules/loyalty/lib";
 
-// GET /api/loyalty/[accountId] — wallet summary + active lots + recent history.
-// Read-only; the customer page that mounts <LoyaltyPanel> is already permission-gated.
+// GET /api/loyalty/[accountId] — wallet summary + active (in-window) lots + history.
+// Balance is computed LIVE under the current expiry window. Read-only; the customer
+// page that mounts <LoyaltyPanel> is already permission-gated.
 export async function GET(_req: Request, { params }: { params: Promise<{ accountId: string }> }) {
     const { response } = await requireAuth();
     if (response) return response;
@@ -13,12 +15,16 @@ export async function GET(_req: Request, { params }: { params: Promise<{ account
     if (!Number.isFinite(accountId)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
 
     try {
+        const config = await prisma.loyaltyConfig.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} });
+        const rates = ratesFromConfig(config);
+        const cutoff = expiryCutoff(new Date(), rates);
+
         const [wallet, lots, ledger] = await Promise.all([
             prisma.loyaltyAccount.findUnique({ where: { accountId } }),
             prisma.loyaltyLot.findMany({
-                where: { accountId, status: "ACTIVE", pointsRemaining: { gt: 0 } },
-                orderBy: { expiresAt: "asc" },
-                select: { id: true, pointsRemaining: true, pointsEarned: true, earnedAt: true, expiresAt: true },
+                where: { accountId, pointsRemaining: { gt: 0 }, ...(cutoff ? { earnedAt: { gt: cutoff } } : {}) },
+                orderBy: { earnedAt: "asc" },
+                select: { id: true, pointsRemaining: true, pointsEarned: true, earnedAt: true },
             }),
             prisma.loyaltyLedger.findMany({
                 where: { accountId },
@@ -31,12 +37,19 @@ export async function GET(_req: Request, { params }: { params: Promise<{ account
             }),
         ]);
 
+        const balance = await liveBalance(prisma, accountId, rates);
+        // Each in-window lot's display expiry = earnedAt + expiryDays (null if expiry off).
+        const lotsOut = lots.map((l) => ({
+            ...l,
+            expiresAt: rates.expiryEnabled ? new Date(new Date(l.earnedAt).getTime() + rates.expiryDays * 86_400_000) : null,
+        }));
+
         return NextResponse.json({
-            balance:       wallet?.pointsBalance ?? 0,
+            balance,
+            value:         balance * rates.redeemValue,   // memo ₹ worth of the balance
             totalEarned:   wallet?.totalEarned ?? 0,
             totalRedeemed: wallet?.totalRedeemed ?? 0,
-            totalExpired:  wallet?.totalExpired ?? 0,
-            lots,
+            lots: lotsOut,
             ledger,
         });
     } catch (e) {

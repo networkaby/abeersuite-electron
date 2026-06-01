@@ -4,6 +4,7 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { selectPrimaryPhone, selectPrimaryEmail } from "@/shared/lib/prisma/fragments";
 import { getLedgerOutstanding } from "@/modules/accountancy/lib/outstandings";
+import { ratesFromConfig, liveBalance } from "@/modules/loyalty/lib";
 
 // GET /api/pos/account-snapshot/[accountId]
 // Polymorphic POS "we know you" panel — works for either a Person account
@@ -104,7 +105,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
             deletedAt: null,
         };
 
-        const [lifetimeAgg, ytdAgg, latestVoucher, latestTicket, recentTickets, ledgerOutstanding, loyaltyWallet, loyaltyConfig] = await Promise.all([
+        const [lifetimeAgg, ytdAgg, latestVoucher, latestTicket, recentTickets, ledgerOutstanding, loyaltyConfig] = await Promise.all([
             prisma.invVoucher.aggregate({
                 where: baseWhere,
                 _sum: { totalAmount: true },
@@ -139,7 +140,6 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
             getLedgerOutstanding(accountId),
             // Real persisted loyalty balance + the rates the POS UI needs to
             // compute the ₹ value of a redemption live.
-            prisma.loyaltyAccount.findUnique({ where: { accountId }, select: { pointsBalance: true } }),
             prisma.loyaltyConfig.findUnique({ where: { id: 1 } }),
         ]);
 
@@ -148,17 +148,11 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
         const invoiceCount = lifetimeAgg?._count._all ?? 0;
 
         const discountPct = lifetimeTotal >= 200000 ? 8 : lifetimeTotal >= 50000 ? 5 : lifetimeTotal >= 10000 ? 2 : 0;
-        // Real persisted wallet balance (was a derived ⌊lifetime/100⌋ placeholder).
-        const loyaltyPoints = loyaltyWallet?.pointsBalance ?? 0;
-        const loyaltyRates = loyaltyConfig
-            ? {
-                  enabled:            loyaltyConfig.enabled,
-                  globalEarnRatePer:  Number(loyaltyConfig.globalEarnRatePer),
-                  redeemValue:        Number(loyaltyConfig.redeemValue),
-                  minRedeemPoints:    loyaltyConfig.minRedeemPoints,
-                  maxRedeemPctOfBill: loyaltyConfig.maxRedeemPctOfBill == null ? null : Number(loyaltyConfig.maxRedeemPctOfBill),
-              }
-            : null;
+        // Live, dynamic balance — Σ in-window lots under the current expiry window
+        // (was a derived ⌊lifetime/100⌋ placeholder). `loyaltyRates` carries the full
+        // rate set so the POS UI can enforce the redeem floors / show the ₹ value.
+        const loyaltyRates = loyaltyConfig ? ratesFromConfig(loyaltyConfig) : null;
+        const loyaltyPoints = loyaltyRates ? await liveBalance(prisma, accountId, loyaltyRates) : 0;
 
         const customerLevel = lifetimeTotal >= 200000 ? "Platinum"
                               : lifetimeTotal >= 50000  ? "Gold"

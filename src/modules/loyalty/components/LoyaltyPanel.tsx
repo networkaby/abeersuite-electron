@@ -13,19 +13,20 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 type LedgerRow = {
     id: number;
     delta: number;
-    reason: "EARN_SALE" | "REDEEM_SALE" | "REVERSAL_RETURN" | "ADMIN_ADJUST" | "EXPIRY";
+    reason: "EARN_SALE" | "REDEEM_SALE" | "REVERSAL_RETURN" | "ADMIN_ADJUST";
     balanceAfter: number;
     note: string | null;
     createdAt: string;
     voucher: { id: number; reference: string } | null;
 };
-type Lot = { id: number; pointsRemaining: number; pointsEarned: number; earnedAt: string; expiresAt: string };
-type Wallet = { balance: number; totalEarned: number; totalRedeemed: number; totalExpired: number; lots: Lot[]; ledger: LedgerRow[] };
+type Lot = { id: number; pointsRemaining: number; pointsEarned: number; earnedAt: string; expiresAt: string | null };
+type Wallet = { balance: number; value: number; totalEarned: number; totalRedeemed: number; lots: Lot[]; ledger: LedgerRow[] };
 
 const REASON_LABEL: Record<LedgerRow["reason"], string> = {
-    EARN_SALE: "Earned", REDEEM_SALE: "Redeemed", REVERSAL_RETURN: "Return reversal", ADMIN_ADJUST: "Adjustment", EXPIRY: "Expired",
+    EARN_SALE: "Earned", REDEEM_SALE: "Redeemed", REVERSAL_RETURN: "Return reversal", ADMIN_ADJUST: "Adjustment",
 };
 const fmtDate = (s: string) => new Date(s).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+const fmtINR = (n: number) => `₹${n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const digitsSigned = (s: string) => s.replace(/[^\d-]/g, "").replace(/(?!^)-/g, "");
 
 export function LoyaltyPanel({ accountId, canManage = false }: { accountId: number; canManage?: boolean }) {
@@ -73,9 +74,9 @@ export function LoyaltyPanel({ accountId, canManage = false }: { accountId: numb
                     <div className="flex items-center gap-1 text-xs text-muted-foreground"><Award size={14} /> Balance</div>
                     <div className="mt-1 text-2xl font-semibold tabular-nums">{wallet.balance}</div>
                 </CardContent></Card>
+                <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Worth (memo)</div><div className="mt-1 text-xl font-medium tabular-nums">{fmtINR(wallet.value)}</div></CardContent></Card>
                 <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Earned (lifetime)</div><div className="mt-1 text-xl font-medium tabular-nums">{wallet.totalEarned}</div></CardContent></Card>
                 <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Redeemed</div><div className="mt-1 text-xl font-medium tabular-nums">{wallet.totalRedeemed}</div></CardContent></Card>
-                <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Expired</div><div className="mt-1 text-xl font-medium tabular-nums">{wallet.totalExpired}</div></CardContent></Card>
             </div>
 
             {/* Admin adjust */}
@@ -103,7 +104,7 @@ export function LoyaltyPanel({ accountId, canManage = false }: { accountId: numb
                     <div className="flex flex-wrap gap-2">
                         {wallet.lots.map((l) => (
                             <Badge key={l.id} variant="outline" className="text-[11px]">
-                                {l.pointsRemaining} pts · expires {fmtDate(l.expiresAt)}
+                                {l.pointsRemaining} pts · {l.expiresAt ? `expires ${fmtDate(l.expiresAt)}` : "no expiry"}
                             </Badge>
                         ))}
                     </div>

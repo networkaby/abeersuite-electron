@@ -49,6 +49,10 @@ type Snapshot = {
         enabled: boolean;
         globalEarnRatePer: number;
         redeemValue: number;
+        expiryEnabled: boolean;
+        expiryDays: number;
+        minEarnInvoiceValue: number | null;
+        minRedeemInvoiceValue: number | null;
         minRedeemPoints: number | null;
         maxRedeemPctOfBill: number | null;
     } | null;
@@ -356,9 +360,12 @@ export default function PosScreen() {
     const loyaltyBalance = snapshot?.loyaltyPoints ?? 0;
     const goodsValue = Math.max(0, subtotal - discountAmount);   // post-tier, pre-GST reducible base
     const minRedeemPts = rates?.minRedeemPoints ?? 0;
+    // Pre-redemption bill — used to enforce the min-invoice-to-redeem floor.
+    const billBeforeRedemption = calcVoucherTotals(lineRows, shippingAmt, discountAmount, 0, manualChargesNet).totalAmount;
+    const redeemBlocked = rates?.minRedeemInvoiceValue != null && billBeforeRedemption < rates.minRedeemInvoiceValue;
     const pctCapRupees = rates?.maxRedeemPctOfBill != null ? (goodsValue * rates.maxRedeemPctOfBill) / 100 : Infinity;
     const maxRedeemableRupees = Math.min(goodsValue, pctCapRupees);
-    const requestedPts = rates?.enabled ? parseInt(digitsInt(redeemPointsStr) || "0", 10) : 0;
+    const requestedPts = rates?.enabled && !redeemBlocked ? parseInt(digitsInt(redeemPointsStr) || "0", 10) : 0;
     const maxRedeemablePts = rates && rates.redeemValue > 0 ? Math.floor(maxRedeemableRupees / rates.redeemValue) : 0;
     const cappedPts = Math.min(requestedPts, loyaltyBalance, maxRedeemablePts);
     const redeemPts = cappedPts >= minRedeemPts ? cappedPts : 0;
@@ -1045,15 +1052,20 @@ export default function PosScreen() {
                                 <div className="grid grid-cols-[1fr_auto] items-center gap-2">
                                     <Label htmlFor="pos-redeem" className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                                         <Award size={12} /> Redeem points
-                                        <span className="text-[10px] opacity-70">({loyaltyBalance} avail · {fmtINR(rates.redeemValue)}/pt)</span>
+                                        <span className="text-[10px] opacity-70">
+                                            {redeemBlocked
+                                                ? `(redeem from ${fmtINR(rates.minRedeemInvoiceValue ?? 0)})`
+                                                : `(${loyaltyBalance} avail · ${fmtINR(rates.redeemValue)}/pt)`}
+                                        </span>
                                     </Label>
                                     <Input
                                         id="pos-redeem"
                                         type="text"
                                         inputMode="numeric"
-                                        value={redeemPointsStr}
+                                        value={redeemBlocked ? "" : redeemPointsStr}
                                         onChange={(e) => setRedeemPointsStr(digitsInt(e.target.value))}
                                         placeholder="0"
+                                        disabled={redeemBlocked}
                                         className="h-7 w-28 text-right text-xs"
                                     />
                                 </div>

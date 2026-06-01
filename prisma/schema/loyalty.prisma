@@ -41,8 +41,14 @@ model LoyaltyConfig {
   globalEarnRatePer      Decimal  @default(100) @db.Decimal(14, 2)
   /// ₹ value of 1 point on redemption.
   redeemValue            Decimal  @default(1) @db.Decimal(14, 2)
-  /// Points life in months — drives LoyaltyLot.expiresAt.
-  expiryMonths           Int      @default(12)
+  /// Dynamic expiry window. A lot is live while earnedAt > now − expiryDays.
+  /// expiryEnabled=false → points never expire (no date filter).
+  expiryEnabled          Boolean  @default(true)
+  expiryDays             Int      @default(365)
+  /// Minimum invoice value (₹) a sale must reach to EARN any points (null = none).
+  minEarnInvoiceValue    Decimal? @db.Decimal(14, 2)
+  /// Minimum invoice value (₹) needed before points can be REDEEMED (null = none).
+  minRedeemInvoiceValue  Decimal? @db.Decimal(14, 2)
   /// Optional guardrails (null = no limit).
   minRedeemPoints        Int?
   maxRedeemPctOfBill      Decimal? @db.Decimal(5, 2)

@@ -6,6 +6,7 @@ export {
     pointsForBase,
     redeemValueOf,
     clampRedemption,
+    expiryCutoff,
 } from "./loyaltyMath";
 export type { LoyaltyRates, EarnRule, EarnLine, RulesIndex, TaxonomyMaps } from "./loyaltyMath";
 
@@ -13,6 +14,6 @@ export {
     applyLoyaltyForSale,
     reverseLoyaltyForReturn,
     adjustPoints,
-    expireLots,
+    liveBalance,
 } from "./applyLoyalty";
 export type { ApplySaleArgs, ReverseReturnArgs } from "./applyLoyalty";

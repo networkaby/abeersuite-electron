@@ -8,7 +8,13 @@ export type LoyaltyRates = {
     globalEarnRatePer: number;
     /// ₹ value of 1 point on redemption.
     redeemValue: number;
-    expiryMonths: number;
+    /// Dynamic expiry: a lot is live while earnedAt > now − expiryDays.
+    /// expiryEnabled=false → never expires (no date filter).
+    expiryEnabled: boolean;
+    expiryDays: number;
+    /// Minimum invoice value (₹) to earn / to redeem (null = no floor).
+    minEarnInvoiceValue: number | null;
+    minRedeemInvoiceValue: number | null;
     minRedeemPoints: number | null;
     maxRedeemPctOfBill: number | null;
 };
@@ -50,18 +56,34 @@ export function ratesFromConfig(cfg: {
     enabled: boolean;
     globalEarnRatePer: unknown;
     redeemValue: unknown;
-    expiryMonths: number;
+    expiryEnabled: boolean;
+    expiryDays: number;
+    minEarnInvoiceValue: unknown | null;
+    minRedeemInvoiceValue: unknown | null;
     minRedeemPoints: number | null;
     maxRedeemPctOfBill: unknown | null;
 }): LoyaltyRates {
+    const num = (v: unknown): number | null => (v == null ? null : Number(v));
     return {
         enabled: cfg.enabled,
         globalEarnRatePer: Number(cfg.globalEarnRatePer),
         redeemValue: Number(cfg.redeemValue),
-        expiryMonths: cfg.expiryMonths,
+        expiryEnabled: cfg.expiryEnabled,
+        expiryDays: cfg.expiryDays,
+        minEarnInvoiceValue: num(cfg.minEarnInvoiceValue),
+        minRedeemInvoiceValue: num(cfg.minRedeemInvoiceValue),
         minRedeemPoints: cfg.minRedeemPoints,
-        maxRedeemPctOfBill: cfg.maxRedeemPctOfBill == null ? null : Number(cfg.maxRedeemPctOfBill),
+        maxRedeemPctOfBill: num(cfg.maxRedeemPctOfBill),
     };
+}
+
+/// The earliest earnedAt still inside the validity window — or null when expiry
+/// is disabled (no date filter; all lots are live). Days-based.
+export function expiryCutoff(now: Date, rates: { expiryEnabled: boolean; expiryDays: number }): Date | null {
+    if (!rates.expiryEnabled || rates.expiryDays <= 0) return null;
+    const d = new Date(now);
+    d.setDate(d.getDate() - rates.expiryDays);
+    return d;
 }
 
 export function buildRulesIndex(rules: EarnRule[]): RulesIndex {
@@ -148,9 +170,13 @@ export function clampRedemption(
     requestedPoints: number,
     balance: number,
     billGoodsValue: number,
+    invoiceValue: number,
     rates: LoyaltyRates,
 ): { points: number; value: number; reason?: string } {
     if (!rates.enabled || requestedPoints <= 0) return { points: 0, value: 0 };
+    if (rates.minRedeemInvoiceValue != null && invoiceValue < rates.minRedeemInvoiceValue) {
+        return { points: 0, value: 0, reason: `Invoice must be at least ₹${rates.minRedeemInvoiceValue.toFixed(2)} to redeem points.` };
+    }
     if (requestedPoints > balance) {
         return { points: 0, value: 0, reason: `Cannot redeem ${requestedPoints} points — only ${balance} available.` };
     }
