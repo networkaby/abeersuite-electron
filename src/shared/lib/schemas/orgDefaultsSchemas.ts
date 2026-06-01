@@ -37,6 +37,12 @@ export const orgDefaultsUpdateSchema = z.object({
     defaultCurrencySymbol:      z.string().trim().min(1).max(8).optional(),
     /// Barcode price bands for Update & Print Labels — [{max, add, hint}].
     barcodeBandsJson:           z.array(barcodeBandSchema).max(32).optional(),
+    /// Cash denominations for the POS shift-close counter. Positive integers;
+    /// deduped and sorted high → low so the counter always renders top-down.
+    cashDenominationsJson:      z.array(z.number().int().positive())
+        .max(40)
+        .transform((arr) => [...new Set(arr)].sort((a, b) => b - a))
+        .optional(),
 });
 
 export type OrgDefaultsUpdateInput = z.infer<typeof orgDefaultsUpdateSchema>;

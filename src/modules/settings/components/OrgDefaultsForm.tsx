@@ -47,9 +47,13 @@ interface OrgDefaults {
     defaultPurchaseCreditPeriod: number | null;
     defaultCurrencySymbol: string;
     barcodeBandsJson: BarcodeBand[];
+    cashDenominationsJson: number[];
 }
 
 const digitsOnly = (s: string): string => s.replace(/\D/g, "");
+
+// Fallback shown if the row has none; also the "Reset to defaults" target.
+const DEFAULT_CASH_DENOMS = [2000, 500, 200, 100, 50, 20, 10, 5, 2, 1];
 
 const TAXABILITY_OPTIONS = [
     { value: "TAXABLE", label: "Taxable" },
@@ -86,6 +90,9 @@ export function OrgDefaultsForm({ units }: { units: InvUnit[] }) {
                     barcodeBandsJson: Array.isArray(defaultsRes.data.barcodeBandsJson)
                         ? defaultsRes.data.barcodeBandsJson
                         : [],
+                    cashDenominationsJson: Array.isArray(defaultsRes.data.cashDenominationsJson) && defaultsRes.data.cashDenominationsJson.length
+                        ? defaultsRes.data.cashDenominationsJson
+                        : DEFAULT_CASH_DENOMS,
                 };
                 setData(od);
                 setDraft(od);
@@ -113,6 +120,20 @@ export function OrgDefaultsForm({ units }: { units: InvUnit[] }) {
     const removeBand = (i: number) =>
         setDraft((d) => d && { ...d, barcodeBandsJson: (d.barcodeBandsJson ?? []).filter((_, idx) => idx !== i) });
 
+    // ── Cash denomination editor helpers ──────────────────────────────────────
+    const denoms = draft?.cashDenominationsJson ?? [];
+    const [newDenom, setNewDenom] = useState("");
+    const addDenom = () => {
+        const v = Number(digitsOnly(newDenom));
+        if (!v || denoms.includes(v)) { setNewDenom(""); return; }
+        setDraft((d) => d && { ...d, cashDenominationsJson: [...(d.cashDenominationsJson ?? []), v].sort((a, b) => b - a) });
+        setNewDenom("");
+    };
+    const removeDenom = (val: number) =>
+        setDraft((d) => d && { ...d, cashDenominationsJson: (d.cashDenominationsJson ?? []).filter((x) => x !== val) });
+    const resetDenoms = () =>
+        setDraft((d) => d && { ...d, cashDenominationsJson: [...DEFAULT_CASH_DENOMS] });
+
     async function handleSave() {
         if (!draft) return;
         setSaving(true);
@@ -130,6 +151,8 @@ export function OrgDefaultsForm({ units }: { units: InvUnit[] }) {
                 barcodeBandsJson: [...(draft.barcodeBandsJson ?? [])]
                     .filter((b) => b.max > 0)
                     .sort((a, b) => a.max - b.max),
+                // Server dedupes + sorts high → low; send as-is.
+                cashDenominationsJson: draft.cashDenominationsJson ?? [],
             };
             const { data: saved } = await axios.patch<OrgDefaults>("/api/settings/org-defaults", payload);
             setData(saved);
@@ -384,6 +407,58 @@ export function OrgDefaultsForm({ units }: { units: InvUnit[] }) {
                     <p className="text-[10px] text-muted-foreground">
                         Bands are sorted by Max on save; the first band whose Max ≥ the Sale Price applies.
                     </p>
+                </div>
+            </section>
+
+            {/* Cash denominations (POS shift-close counter) */}
+            <section className="rounded-lg border bg-card p-4 space-y-4">
+                <div>
+                    <h2 className="text-sm font-semibold">Cash denominations</h2>
+                    <p className="text-xs text-muted-foreground">
+                        Note &amp; coin values shown in the <span className="font-medium">POS shift-close</span> counter,
+                        high → low. Remove the ones your currency doesn&apos;t use, or add new ones.
+                    </p>
+                </div>
+
+                <div className="space-y-3">
+                    {denoms.length === 0 ? (
+                        <p className="text-xs italic text-muted-foreground">
+                            No denominations — the close counter falls back to manual entry. Add one or reset to defaults.
+                        </p>
+                    ) : (
+                        <div className="flex flex-wrap gap-2">
+                            {denoms.map((v) => (
+                                <span key={v} className="inline-flex items-center gap-1.5 rounded-md border bg-background px-2 py-1 font-mono text-sm">
+                                    {draft.defaultCurrencySymbol}{v.toLocaleString("en-IN")}
+                                    <button
+                                        type="button"
+                                        aria-label={`Remove ${v}`}
+                                        onClick={() => removeDenom(v)}
+                                        className="text-muted-foreground transition-colors hover:text-destructive"
+                                    >
+                                        <Trash2 className="size-3.5" />
+                                    </button>
+                                </span>
+                            ))}
+                        </div>
+                    )}
+
+                    <div className="flex items-center gap-2">
+                        <Input
+                            inputMode="numeric"
+                            className="h-8 w-40 font-mono text-sm"
+                            placeholder="Add denomination"
+                            value={newDenom}
+                            onChange={(e) => setNewDenom(digitsOnly(e.target.value))}
+                            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addDenom(); } }}
+                        />
+                        <Button type="button" variant="outline" size="sm" className="h-8" onClick={addDenom}>
+                            <Plus className="size-4" /> Add
+                        </Button>
+                        <Button type="button" variant="ghost" size="sm" className="ml-auto h-8 text-muted-foreground" onClick={resetDenoms}>
+                            Reset to defaults
+                        </Button>
+                    </div>
                 </div>
             </section>
 

@@ -1188,14 +1188,18 @@ async function main() {
         { max: 10000, add: 200, hint: 8 },
         { max: 99999, add: 500, hint: 9 },
     ];
+    // Default cash denominations (POS shift-close counter), high → low. Indian
+    // notes + coins. Create-only so admin edits via Settings survive a reseed.
+    const DEFAULT_CASH_DENOMINATIONS = [2000, 500, 200, 100, 50, 20, 10, 5, 2, 1];
     await prisma.orgDefaults.upsert({
         where:  { id: 1 },
-        // Scalars in `orgDefaultsData` re-seed to baseline; barcodeBandsJson is
-        // create-only so admin customisation is preserved across reseeds.
-        create: { id: 1, ...orgDefaultsData, barcodeBandsJson: DEFAULT_BARCODE_BANDS },
+        // Scalars in `orgDefaultsData` re-seed to baseline; barcodeBandsJson and
+        // cashDenominationsJson are create-only so admin customisation is
+        // preserved across reseeds.
+        create: { id: 1, ...orgDefaultsData, barcodeBandsJson: DEFAULT_BARCODE_BANDS, cashDenominationsJson: DEFAULT_CASH_DENOMINATIONS },
         update: orgDefaultsData,
     });
-    console.log(`      ✓ OrgDefaults singleton seeded (GST 18%, UNIT, TAXABLE, ₹, credit=0 days, ${DEFAULT_BARCODE_BANDS.length} barcode bands)\n`);
+    console.log(`      ✓ OrgDefaults singleton seeded (GST 18%, UNIT, TAXABLE, ₹, credit=0 days, ${DEFAULT_BARCODE_BANDS.length} barcode bands, ${DEFAULT_CASH_DENOMINATIONS.length} denominations)\n`);
 
     // ── Section 12: VoucherSeries ──────────────────────────────────────
     console.log("[12/16] VoucherSeries (all GL + inventory series)");

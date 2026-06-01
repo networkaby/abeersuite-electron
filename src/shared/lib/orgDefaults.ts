@@ -10,6 +10,8 @@ export interface OrgDefaultsData {
     defaultSaleCreditPeriod: number | null;
     defaultPurchaseCreditPeriod: number | null;
     defaultCurrencySymbol: string;
+    /// Cash note/coin denominations for the POS shift-close counter, high → low.
+    cashDenominationsJson: number[];
 }
 
 // Module-level cache — populated once per browser session on first call.

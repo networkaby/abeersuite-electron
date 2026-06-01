@@ -127,6 +127,12 @@ model OrgDefaults {
   // Seeded create-only so admin edits survive reseed.
   barcodeBandsJson Json @default("[]")
 
+  // Cash note/coin denominations for the POS shift-close counter, high → low.
+  // Country-specific (some denominations don't exist everywhere) — admin edits
+  // them in Settings. Seeded create-only so edits survive reseed. Shape:
+  // number[] e.g. [2000, 500, 200, 100, 50, 20, 10, 5, 2, 1].
+  cashDenominationsJson Json @default("[2000, 500, 200, 100, 50, 20, 10, 5, 2, 1]")
+
   updatedAt DateTime @updatedAt
 }
 
