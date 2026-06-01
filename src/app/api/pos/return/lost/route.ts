@@ -139,21 +139,27 @@ export async function POST(req: Request) {
                     refVoucherId:   null,
                     deliveryMode:   "COUNTER",
                     placeOfSupply:  sellerStateCode,
-                    subtotal,
+                    // TAX-INCLUSIVE subtotal (goods + tax) — the GL bridge
+                    // derives pure goods as `subtotal − taxAmount`. A goods-only
+                    // subtotal here would leave the JE short by the GST amount.
+                    subtotal:       subtotal + taxAmt,
                     taxAmount:      taxAmt,
                     totalAmount:    total,
                     createdById:    user!.id,
                     lines: {
                         create: data.lines.map((l) => {
-                            const p = productById.get(l.productId)!;
+                            const p       = productById.get(l.productId)!;
+                            const goods   = l.qty * l.unitPrice;
+                            const lineTax = (goods * l.taxRate) / 100;
                             return {
                                 productId:   l.productId,
                                 description: `${p.sku} — ${p.name}`,
                                 quantity:    l.qty,
                                 rate:        l.unitPrice,
                                 taxRate:     l.taxRate,
-                                taxAmount:   (l.qty * l.unitPrice * l.taxRate) / 100,
-                                amount:      l.qty * l.unitPrice,
+                                taxAmount:   lineTax,
+                                // Tax-inclusive line amount — matches SALE/POS.
+                                amount:      goods + lineTax,
                             };
                         }),
                     },

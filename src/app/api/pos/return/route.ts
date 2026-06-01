@@ -160,20 +160,34 @@ export async function POST(req: Request) {
                     refVoucherId:   original.id,
                     deliveryMode:   "COUNTER",
                     placeOfSupply:  sellerStateCode,
-                    subtotal:       returnSubtotal,
+                    // `subtotal` is TAX-INCLUSIVE (goods + tax), matching the
+                    // SALE/POS convention from calcVoucherTotals. The GL bridge
+                    // derives pure goods as `subtotal − taxAmount`; passing a
+                    // goods-only subtotal here makes it double-subtract the tax
+                    // and the JE comes out short by exactly the GST amount.
+                    subtotal:       returnSubtotal + returnTaxAmount,
                     taxAmount:      returnTaxAmount,
                     totalAmount:    returnTotal,
                     createdById:    user!.id,
                     lines: {
-                        create: stockLines.map(({ voucherLine, qty }) => ({
-                            productId:   voucherLine.productId!,
-                            description: voucherLine.description,
-                            quantity:    qty,
-                            rate:        Number(voucherLine.rate),
-                            taxRate:     Number(voucherLine.taxRate ?? 0),
-                            taxAmount:   (qty * Number(voucherLine.rate) * Number(voucherLine.taxRate ?? 0)) / 100,
-                            amount:      qty * Number(voucherLine.rate),
-                        })),
+                        create: stockLines.map(({ voucherLine, qty }) => {
+                            const rate    = Number(voucherLine.rate);
+                            const taxRate = Number(voucherLine.taxRate ?? 0);
+                            const goods   = qty * rate;
+                            const lineTax = (goods * taxRate) / 100;
+                            return {
+                                productId:   voucherLine.productId!,
+                                description: voucherLine.description,
+                                quantity:    qty,
+                                rate,
+                                taxRate,
+                                taxAmount:   lineTax,
+                                // Tax-inclusive line amount — same convention as
+                                // SALE/POS lines (stock valuation uses qty×rate
+                                // directly, see recordStockMovement below).
+                                amount:      goods + lineTax,
+                            };
+                        }),
                     },
                     tenders: {
                         create: [{
