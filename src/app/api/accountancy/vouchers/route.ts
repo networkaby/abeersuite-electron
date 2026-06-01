@@ -56,7 +56,27 @@ export async function GET(req: Request) {
                 _count:       { select: { lines: true } },
             },
         });
-        return NextResponse.json(vouchers);
+
+        // Voucher has no branch column — branch lives on the JE lines
+        // (JournalLine.branchId, stamped on POST). Surface a single branch per
+        // voucher (the first line carrying one) so branch-aware views like the
+        // Day Book can show it. Most office/legacy GL vouchers have none → null.
+        const jeIds = vouchers.map((v) => v.journalEntryId).filter((x): x is number => x != null);
+        const branchLines = jeIds.length
+            ? await prisma.journalLine.findMany({
+                where:    { journalEntryId: { in: jeIds }, branchId: { not: null } },
+                distinct: ["journalEntryId"],
+                select:   { journalEntryId: true, branch: { select: { id: true, name: true } } },
+            })
+            : [];
+        const branchByJe = new Map(branchLines.map((l) => [l.journalEntryId, l.branch]));
+
+        return NextResponse.json(
+            vouchers.map((v) => ({
+                ...v,
+                branch: v.journalEntryId != null ? (branchByJe.get(v.journalEntryId) ?? null) : null,
+            })),
+        );
     } catch (e) {
         return handleApiError(e, "Failed to fetch vouchers");
     }

@@ -41,7 +41,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     try {
         const shift = await prisma.posShift.findUnique({
             where:  { id: shiftId },
-            select: { id: true, userId: true, status: true, counter: { select: { tillAccountId: true, name: true, allowedExpenseAccountIds: true } } },
+            select: { id: true, userId: true, status: true, branchId: true, counter: { select: { tillAccountId: true, name: true, allowedExpenseAccountIds: true } } },
         });
         if (!shift) return NextResponse.json({ error: "Shift not found" }, { status: 404 });
         if (shift.status !== "OPEN") {
@@ -108,7 +108,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                     status:      "POSTED",
                     postedAt:    new Date(),
                     createdById: user!.id,
-                    lines: { create: lines.map((l) => ({ accountId: l.accountId, type: l.type, amount: l.amount, description: l.description })) },
+                    lines: { create: lines.map((l) => ({ accountId: l.accountId, type: l.type, amount: l.amount, description: l.description, branchId: shift.branchId })) },
                 },
                 select: { id: true },
             });

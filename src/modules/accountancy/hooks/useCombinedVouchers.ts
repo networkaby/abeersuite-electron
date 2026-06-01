@@ -21,8 +21,9 @@ export type CombinedRow = {
     kind:        string;
     reference:   string;
     date:        string;
-    /** Branch the voucher was recorded in. Only `inv`-source rows carry this;
-     *  `gl`/`je` rows are org-level and have no branch concept. */
+    /** Branch the voucher was recorded in. `inv` rows always carry it; `gl` rows
+     *  carry it when their JE lines are branch-stamped (POS receipts/expenditures);
+     *  office/legacy `gl` and all `je` rows are org-level (null). */
     branchId?:   string | null;
     branchName?: string | null;
     party:       string | null;
@@ -85,6 +86,9 @@ type RawGl = {
     deletedAt?: string | null; cancelledAt?: string | null;
     createdAt: string;
     createdBy?: { name: string } | null;
+    // Branch derived from the voucher's JE lines (POS receipts/expenditures
+    // stamp the counter's branch; office/legacy GL vouchers have none).
+    branch?: { id: string; name: string } | null;
 };
 type RawJe = {
     id: number | string; reference: string; date: string;
@@ -150,6 +154,8 @@ export function useCombinedVouchers(options: UseCombinedVouchersOptions = {}) {
                     kind:        v.type,
                     reference:   v.reference,
                     date:        v.date,
+                    branchId:    v.branch?.id   ?? null,
+                    branchName:  v.branch?.name ?? null,
                     party:       v.partyAccount?.name ?? null,
                     partyAccountId: v.partyAccount?.id ?? null,
                     partyKind:     v.partyAccount?.personId != null ? "person"

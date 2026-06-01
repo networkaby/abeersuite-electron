@@ -33,6 +33,8 @@ export type PostReceiptVoucherArgs = {
     date:              Date;
     userId:            number;
     narration?:        string;
+    /** Branch context stamped on the journal lines (branch-scoped GL reports). */
+    branchId?:         string;
     /**
      * When set, a VoucherAllocation row links this receipt to the originating
      * InvVoucher's journal entry — Receivables nets the amount out automatically.
@@ -107,12 +109,14 @@ export async function postReceiptVoucher(
                         type:        "DEBIT" as const,
                         amount:      t.amount,
                         description: t.description ?? null,
+                        branchId:    args.branchId ?? null,
                     })),
                     {
                         accountId:   args.customerAccountId,
                         type:        "CREDIT" as const,
                         amount:      total,
                         description: args.narration ?? null,
+                        branchId:    args.branchId ?? null,
                     },
                 ],
             },

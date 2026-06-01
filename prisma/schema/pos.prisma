@@ -119,6 +119,7 @@ model PosShift {
   notes        String?
   drops        PosCashDrop[]
   expenditures PosExpenditure[]
+  receipts     PosReceipt[]
 
   @@index([userId, status])
   @@index([branchId, openedAt])
@@ -171,6 +172,27 @@ model PosExpenditure {
 
   @@index([shiftId, createdAt])
   @@map("pos_expenditures")
+}
+
+// ── Mid-shift counter receipt ─────────────────────────────────────────────────
+// Cash collected from a party at the counter (the POS "Rcv" flow) — a customer
+// clears credit or pays an advance. Posts a RECEIPT voucher (Dr counter till /
+// Cr party AR); this row links that voucher to the shift for audit (which
+// receipts a cashier took on which shift). The cash is already folded into the
+// shift's cash sales via sumShiftCashSalesPaise, so this row is log/audit only.
+model PosReceipt {
+  id           Int      @id @default(autoincrement())
+  shiftId      Int
+  shift        PosShift @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  amountPaise  BigInt
+  accountId    Int      // party AR ledger credited
+  note         String?
+  voucherId    Int?     @unique
+  createdById  Int
+  createdAt    DateTime @default(now())
+
+  @@index([shiftId, createdAt])
+  @@map("pos_receipts")
 }
 
 // ── POS Handover (two-step cashier-to-cashier) ───────────────────────────────

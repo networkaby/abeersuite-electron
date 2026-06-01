@@ -35,6 +35,12 @@ type ApiResponse = {
     items: PosSale[];
 };
 
+// Counter cash movements (Rcv receipts in / Exp expenditures out).
+type CashMove = {
+    id: string; kind: "IN" | "OUT"; reference: string; date: string;
+    amount: string; party: string; note: string | null; counter: string; cashier: string;
+};
+
 const PAY_COLORS: Record<string, string> = {
     CASH:           "bg-green-50 text-green-700",
     BANK_TRANSFER:  "bg-blue-50 text-blue-700",
@@ -51,6 +57,19 @@ export function PosSalesRegister() {
     const [q, setQ]               = useState("");
     const [page, setPage]         = useState(1);
     const limit                   = 50;
+
+    const [tab, setTab]                 = useState<"sales" | "cash">("sales");
+    const [moves, setMoves]             = useState<CashMove[]>([]);
+    const [movesLoading, setMovesLoading] = useState(false);
+
+    useEffect(() => {
+        if (tab !== "cash") return;
+        setMovesLoading(true);
+        axios.get<{ items: CashMove[] }>("/api/pos/cash-movements?limit=100")
+            .then((r) => setMoves(r.data.items))
+            .catch(() => toast.error("Failed to load cash movements"))
+            .finally(() => setMovesLoading(false));
+    }, [tab]);
 
     const load = useCallback(async (search: string, pg: number) => {
         setLoading(true);
@@ -94,6 +113,22 @@ export function PosSalesRegister() {
                 </Button>
             </div>
 
+            {/* ── Tabs ── */}
+            <div className="flex gap-1 border-b border-border">
+                {([["sales", "Sales"], ["cash", "Cash In / Out"]] as const).map(([k, label]) => (
+                    <button
+                        key={k}
+                        type="button"
+                        onClick={() => setTab(k)}
+                        className={`-mb-px border-b-2 px-3 py-1.5 text-sm transition-colors ${tab === k ? "border-primary font-medium text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+                    >
+                        {label}
+                    </button>
+                ))}
+            </div>
+
+            {tab === "sales" ? (
+            <>
             {/* ── Search ── */}
             <div className="relative max-w-sm">
                 <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -205,6 +240,57 @@ export function PosSalesRegister() {
                 <RotateCcw size={11} className="inline mr-1" />
                 To process a return, open the POS Register and click the <strong>Return</strong> button in the top bar.
             </p>
+            </>
+            ) : (
+                movesLoading ? (
+                    <div className="flex justify-center py-12"><Loader2 size={24} className="animate-spin text-muted-foreground" /></div>
+                ) : moves.length === 0 ? (
+                    <div className="flex flex-col items-center gap-3 py-16 text-muted-foreground text-sm">
+                        <Monitor size={32} className="opacity-30" />
+                        <p>No counter receipts or expenditures yet.</p>
+                    </div>
+                ) : (
+                    <div className="overflow-hidden rounded-lg border border-border">
+                        <table className="w-full text-sm">
+                            <thead className="bg-muted/50 text-xs text-muted-foreground">
+                                <tr>
+                                    <th className="px-4 py-2.5 text-left font-medium">Type</th>
+                                    <th className="px-4 py-2.5 text-left font-medium">Reference</th>
+                                    <th className="px-4 py-2.5 text-left font-medium">Date</th>
+                                    <th className="px-4 py-2.5 text-left font-medium">Party / Ledger</th>
+                                    <th className="px-4 py-2.5 text-left font-medium">Counter</th>
+                                    <th className="px-4 py-2.5 text-left font-medium">Cashier</th>
+                                    <th className="px-4 py-2.5 text-right font-medium">Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-border">
+                                {moves.map((m) => (
+                                    <tr key={m.id} className="transition-colors hover:bg-muted/30">
+                                        <td className="px-4 py-2.5">
+                                            <Badge variant="secondary" className={`text-[10px] font-medium ${m.kind === "IN" ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
+                                                {m.kind === "IN" ? "Receipt" : "Expense"}
+                                            </Badge>
+                                        </td>
+                                        <td className="px-4 py-2.5"><span className="font-mono text-xs font-medium">{m.reference}</span></td>
+                                        <td className="whitespace-nowrap px-4 py-2.5 text-muted-foreground">
+                                            {new Date(m.date).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+                                        </td>
+                                        <td className="px-4 py-2.5">
+                                            {m.party}
+                                            {m.note && <p className="max-w-[180px] truncate text-[11px] text-muted-foreground">{m.note}</p>}
+                                        </td>
+                                        <td className="px-4 py-2.5 text-muted-foreground">{m.counter}</td>
+                                        <td className="px-4 py-2.5 text-muted-foreground">{m.cashier}</td>
+                                        <td className={`px-4 py-2.5 text-right font-mono font-semibold ${m.kind === "IN" ? "text-green-700" : "text-red-700"}`}>
+                                            {m.kind === "IN" ? "+" : "−"}₹{fmt(Number(m.amount))}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )
+            )}
         </div>
     );
 }

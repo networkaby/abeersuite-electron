@@ -105,7 +105,9 @@ export default function DayBookPage() {
                 const isInv = inventoryOnly && INV_SET.has(r.kind);
                 if (!isOpt && !isInv) return false;
             }
-            if (filters.branchFilter !== "__all__" && r.source === "inv" && r.branchId !== filters.branchFilter) return false;
+            // Filter any row that carries a branch (inv always; gl POS receipts/
+            // expenditures now do too). Org-level vouchers (null branch) always show.
+            if (filters.branchFilter !== "__all__" && r.branchId != null && r.branchId !== filters.branchFilter) return false;
             if (q && !r.reference.toLowerCase().includes(q)
                   && !(r.narration ?? "").toLowerCase().includes(q)
                   && !(r.party     ?? "").toLowerCase().includes(q)) return false;

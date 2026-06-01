@@ -37,7 +37,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     try {
         const shift = await prisma.posShift.findUnique({
             where:  { id: shiftId },
-            select: { id: true, userId: true, status: true, counter: { select: { tillAccountId: true, name: true } } },
+            select: { id: true, userId: true, status: true, branchId: true, counter: { select: { tillAccountId: true, name: true } } },
         });
         if (!shift) return NextResponse.json({ error: "Shift not found" }, { status: 404 });
         if (shift.status !== "OPEN") {
@@ -55,13 +55,28 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         if (!party) return NextResponse.json({ error: "Party account not found" }, { status: 404 });
 
         const rupees = data.amountPaise / 100;
-        const result = await prisma.$transaction((tx) => postReceiptVoucher(tx, {
-            customerAccountId: party.id,
-            tenders: [{ accountId: shift.counter.tillAccountId, amount: rupees, description: `Cash at ${shift.counter.name}` }],
-            date:      new Date(),
-            userId:    user!.id,
-            narration: data.note ? `POS receipt — ${data.note}` : `POS receipt from ${party.name}`,
-        }));
+        const result = await prisma.$transaction(async (tx) => {
+            const r = await postReceiptVoucher(tx, {
+                customerAccountId: party.id,
+                tenders:   [{ accountId: shift.counter.tillAccountId, amount: rupees, description: `Cash at ${shift.counter.name}` }],
+                date:      new Date(),
+                userId:    user!.id,
+                branchId:  shift.branchId,
+                narration: data.note ? `POS receipt — ${data.note}` : `POS receipt from ${party.name}`,
+            });
+            // Audit link: tie this receipt to the shift (which receipts on which shift).
+            await tx.posReceipt.create({
+                data: {
+                    shiftId,
+                    amountPaise: BigInt(data.amountPaise),
+                    accountId:   party.id,
+                    note:        data.note ?? null,
+                    voucherId:   r.voucherId,
+                    createdById: user!.id,
+                },
+            });
+            return r;
+        });
 
         return NextResponse.json(
             { voucherId: result.voucherId, voucherRef: result.voucherRef, amountPaise: String(data.amountPaise) },
