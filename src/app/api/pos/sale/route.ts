@@ -376,6 +376,16 @@ export async function POST(req: Request) {
                 invoiceId:      voucher.id,
                 invoiceNumber:  voucher.reference,
             };
+        }, {
+            // POS does voucher + GL post + per-line stock movement in ONE
+            // interactive transaction. Each line costs ~3 sequential DB
+            // round-trips (ledger insert + product-stock update + per-branch
+            // upsert), so a large cart (10+ items) blows past Prisma's 5s
+            // default and the transaction expires mid-sale ("query cannot be
+            // executed on an expired transaction"). Match the office voucher
+            // post route's window so big carts settle reliably.
+            timeout: 30_000,
+            maxWait: 10_000,
         });
 
         const touchedProductIds = body.lines.map((l) => l.productId);

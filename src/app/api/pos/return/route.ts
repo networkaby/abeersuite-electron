@@ -252,6 +252,13 @@ export async function POST(req: Request) {
                 returnInvoiceId: voucher.id,
                 returnNumber:    voucher.reference,
             };
+        }, {
+            // Voucher + GL post + per-line stock-IN in one interactive
+            // transaction; each line is ~3 sequential round-trips. A large
+            // multi-line return would expire Prisma's 5s default — match the
+            // POS sale / office post window. See /api/pos/sale.
+            timeout: 30_000,
+            maxWait: 10_000,
         });
 
         const touchedProductIds = returnLines
