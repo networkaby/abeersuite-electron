@@ -130,13 +130,14 @@ GL entry: Dr Cash Short / Cr Counter 1 (counter's account, not personal).
 Accountability: `/office/pos/shifts` shows variance on A's shift row — who was on when, at which counter.
 
 ### Sale return flow
-Three lookup tiers — all routed through the same `PosReturnDialog`:
+Two lookup tiers — both routed through the same `PosReturnDialog`:
 
 | Tier | Who | Entry point |
 |---|---|---|
 | By invoice # | Cashier (`pos:shift:open`) | Types the invoice number |
 | By customer | Cashier (`pos:shift:open`) | `PartySearchAndCreate` → `/api/pos/return/search?customerId=N` |
-| Lost invoice | Manager (`pos:shift:manage`) | `PartySearchAndCreate` + free-form product lines + mandatory reason |
+
+The manager-only **lost-invoice** tier (`POST /api/pos/return/lost`) is no longer surfaced in the dialog UI (removed 2026-06-01) — the endpoint still exists for programmatic/API use but has no UI entry point.
 
 GL for all tiers:
 - **CASH refund**: `Dr Sales Revenue / Cr Counter Till` — requires OPEN shift; cash leaves the till.
@@ -161,7 +162,7 @@ POS sale = a single `InvVoucher type=POS` with one `InvVoucherTender` row per te
 | `postContra(tx, { date, narration, lines, userId })` | `src/modules/accountancy/lib/postContra.ts` | Atomic Contra voucher + JE + balance deltas. Used for vault top-up + vault sweep. |
 | `postInvVoucherToGl(tx, { voucherId, voucher, userId })` | `src/modules/accountancy/lib/postInvVoucher.ts` | Single GL bridge for every trading voucher (SALE / POS / PURCHASE / SALE_RETURN / PURCHASE_RETURN). Reads `voucher.tenders[]` + `voucher.charges[]`. |
 | `computeExpectedCash`, `computeVariance`, `sumPaise`, `sumShiftCashSalesPaise` | `src/modules/pos/lib/shiftMath.ts` | BigInt paise arithmetic for shift close. `sumShiftCashSalesPaise` sums BOTH POS tender rows on the till AND office RECEIPT voucher lines in the shift window. |
-| `PosReturnDialog` | `src/modules/pos/components/PosReturnDialog.tsx` | Three-tab sale return dialog (by invoice #, by customer, lost invoice). Mount inside `PosScreen`; pass `open`, `onOpenChange`, `onDone`. |
+| `PosReturnDialog` | `src/modules/pos/components/PosReturnDialog.tsx` | Two-tab sale return dialog (by invoice #, by customer). Mount inside `PosScreen`; pass `open`, `onOpenChange`, `onDone`. |
 
 ## Seeds
 - **Bootstrap** (`bootstrap-seed.ts`) — creates `Cash – Vault – <Branch>` + `Cash – Counter 1 – <Branch>` accounts and one `PosCounter` row per branch. Default float ₹2,000.
@@ -189,3 +190,5 @@ POS sale = a single `InvVoucher type=POS` with one `InvVoucherTender` row per te
 - Exchange as one atomic transaction (currently: issue credit note, then start new sale that draws down the advance).
 
 _Last updated: 2026-05-24 — **Per-counter custom payment-method labels.** Added 5 sibling `*Label String?` columns on `PosCounter` (`upiLabel` / `cardLabel` / etc.); operator can rename each accepted method per counter (e.g. "PhonePe UPI" → Razorpay A/c). Empty = use built-in label. Surfaced in `/office/admin/counters` edit form (label input next to each account picker), the read-only badge summary, and the POS checkout dialog (fixed UPI row + extras dropdown options). Earlier today: **Per-counter payment-method ledger mapping.** `PosCounter` gained 5 nullable columns (`upi/card/wallet/cheque/bankTransfer AccountId`) so each counter decides which non-cash methods it accepts and which GL ledger each one settles to. `/office/admin/counters` edit form gained a "Payment options accepted at this counter" section with one `GlAccountCombobox` per method (inline ledger create supported). POS checkout dialog now hides any method that's not mapped; client no longer sends `accountId` on payment lines; `POST /api/pos/sale` is the sole router (422 `PAYMENT_METHOD_NOT_MAPPED` for unmapped methods). The legacy `defaultBankAccountId` fallback in PosScreen is gone. `/api/pos/shifts/current` payload extended with `counter.{upi,card,wallet,cheque,bankTransfer}Account` so the checkout dialog can read them on shift load. Previously today: POS sale collapsed to a single InvVoucher (type=POS) carrying its own tender rows; the separate Receipt voucher + VoucherAllocation detour is gone. `postPosReceiptJe` helper deleted; all GL posting now goes through `postInvVoucherToGl`. Same Day Book shape per sale (Sale row + per-tender Dr lines on the same JE), but one fewer voucher per cash POS. Sale-return refund target moved from `paymentMode`/`paymentAccountId` columns onto a `InvVoucherTender` row whose accountId is till (CASH) or customer AR (CREDIT)._
+
+_Last updated: 2026-06-01 — **Removed the lost-invoice tab from `PosReturnDialog`.** The manager-only "Lost invoice" return mode is no longer shown in the dialog (now a two-tab dialog: by invoice #, by customer). The backend `POST /api/pos/return/lost` endpoint is unchanged and still posts the same SALE_RETURN GL/stock — it simply has no UI entry point anymore._

@@ -1,21 +1,16 @@
 "use client";
 
 // ── PosReturnDialog ───────────────────────────────────────────────────────────
-// Three-mode return flow:
+// Two-mode return flow:
 //   Tab 1 — By invoice #  : cashier types INV-xxx → picks invoice → line-picker
 //   Tab 2 — By customer   : PartySearchAndCreate picks debtor → list their PAID
 //                           invoices → pick one → same line-picker
-//   Tab 3 — Lost invoice  : manager-only (pos:shift:manage).  PartySearchAndCreate
-//                           picks debtor → free-form product + qty + price → reason
-//                           required → POST /api/pos/return/lost
 
-import { useState, useMemo } from "react";
-import { useSession } from "next-auth/react";
+import { useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import {
-    Search, Loader2, RotateCcw, Banknote, CreditCard, Check, Minus, Plus,
-    User, Package, X, AlertTriangle,
+    Search, Loader2, RotateCcw, Banknote, CreditCard, Check, Minus, Plus, User,
 } from "lucide-react";
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
@@ -56,23 +51,7 @@ type FoundInvoice = {
 
 type ReturnMode = "CASH" | "CREDIT";
 type Selection = Record<number, number>;   // invoiceLineId → return qty
-type Tab = "invoice" | "customer" | "lost";
-
-type ProductOption = {
-    id: number; sku: string; name: string;
-    /// Materialized effective sale price (paise) from products/lookup.
-    effectiveSalePricePaise?: number | null;
-};
-
-type LostLine = {
-    key:       string;   // unique React key
-    productId: number;
-    sku:       string;
-    name:      string;
-    qty:       number;
-    unitPrice: number;
-    taxRate:   number;
-};
+type Tab = "invoice" | "customer";
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -156,11 +135,6 @@ export function PosReturnDialog({
     onOpenChange:  (open: boolean) => void;
     onDone:        () => void;
 }) {
-    // ── Permission gate ───────────────────────────────────────────────────────
-    const { data: session } = useSession();
-    const perms = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
-    const isManager = perms.includes("pos:shift:manage");
-
     const [tab, setTab] = useState<Tab>("invoice");
 
     // ── Tab 1 & 2 — shared state ──────────────────────────────────────────────
@@ -176,23 +150,12 @@ export function PosReturnDialog({
     // ── Tab 2 — customer picker ───────────────────────────────────────────────
     const [pickedCustomer, setPickedCustomer] = useState<PickedParty | null>(null);
 
-    // ── Tab 3 — lost invoice ──────────────────────────────────────────────────
-    const [lostCustomer, setLostCustomer]       = useState<PickedParty | null>(null);
-    const [allProducts, setAllProducts]         = useState<ProductOption[]>([]);
-    const [prodQuery, setProdQuery]             = useState("");
-    const [lostLines, setLostLines]             = useState<LostLine[]>([]);
-    const [reason, setReason]                   = useState("");
-    const [lostMode, setLostMode]               = useState<ReturnMode>("CASH");
-    const [lostSubmitting, setLostSubmitting]   = useState(false);
-
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     const reset = () => {
         setQuery(""); setResults([]); setSelected(null);
         setSelection({}); setMode("CASH"); setNotes("");
         setPickedCustomer(null);
-        setLostCustomer(null); setProdQuery(""); setLostLines([]);
-        setReason(""); setLostMode("CASH");
     };
 
     // ── Tab 1: invoice number search ──────────────────────────────────────────
@@ -288,111 +251,17 @@ export function PosReturnDialog({
         }
     };
 
-    // ── Tab 3: product search ─────────────────────────────────────────────────
-
-    const loadProducts = async () => {
-        if (allProducts.length > 0) return;
-        try {
-            const { data } = await axios.get<ProductOption[]>("/api/inventory/products/lookup");
-            setAllProducts(data);
-        } catch {
-            /* non-fatal */
-        }
-    };
-
-    const filteredProds = useMemo(() => {
-        const q = prodQuery.trim().toLowerCase();
-        if (!q) return [] as ProductOption[];
-        return allProducts
-            .filter((p) => p.sku.toLowerCase().includes(q) || p.name.toLowerCase().includes(q))
-            .slice(0, 6);
-    }, [allProducts, prodQuery]);
-
-    const addLostLine = (prod: ProductOption) => {
-        const unitPrice = prod.effectiveSalePricePaise ? prod.effectiveSalePricePaise / 100 : 0;
-        setLostLines((prev) => [
-            ...prev,
-            {
-                key:       `${prod.id}-${Date.now()}`,
-                productId: prod.id,
-                sku:       prod.sku,
-                name:      prod.name,
-                qty:       1,
-                unitPrice,
-                taxRate:   0,
-            },
-        ]);
-        setProdQuery("");
-    };
-
-    const updateLostLine = (key: string, field: "qty" | "unitPrice" | "taxRate", value: number) => {
-        setLostLines((prev) =>
-            prev.map((l) => l.key === key ? { ...l, [field]: value } : l)
-        );
-    };
-
-    const removeLostLine = (key: string) => {
-        setLostLines((prev) => prev.filter((l) => l.key !== key));
-    };
-
-    const lostTotal = lostLines.reduce(
-        (s, l) => s + l.qty * l.unitPrice * (1 + l.taxRate / 100), 0
-    );
-
-    // ── Tab 3: submit lost-invoice return ─────────────────────────────────────
-
-    const handleLostSubmit = async () => {
-        if (!lostCustomer?.accountId) { toast.error("Pick a customer first"); return; }
-        if (lostLines.length === 0)   { toast.error("Add at least one product"); return; }
-        if (reason.trim().length < 5) { toast.error("Reason must be at least 5 characters"); return; }
-        if (lostTotal <= 0)           { toast.error("Return total must be > 0"); return; }
-        setLostSubmitting(true);
-        try {
-            const { data } = await axios.post<{
-                returnNumber:    string;
-                journalEntryRef: string;
-                returnTotal:     number;
-            }>("/api/pos/return/lost", {
-                customerAccountId: lostCustomer.accountId,
-                lines: lostLines.map((l) => ({
-                    productId: l.productId,
-                    qty:       l.qty,
-                    unitPrice: l.unitPrice,
-                    taxRate:   l.taxRate,
-                })),
-                refundMode: lostMode,
-                reason:     reason.trim(),
-            });
-            toast.success(
-                `Lost-invoice return ${data.returnNumber} · ₹${fmt(data.returnTotal)} — ` +
-                (lostMode === "CASH" ? "cash refunded from till" : "credit note issued") +
-                ` · JE ${data.journalEntryRef}`
-            );
-            onDone();
-            onOpenChange(false);
-            reset();
-        } catch (e: unknown) {
-            const msg = axios.isAxiosError(e)
-                ? (e.response?.data as { error?: string })?.error
-                : undefined;
-            toast.error(msg ?? "Failed to process lost-invoice return");
-        } finally {
-            setLostSubmitting(false);
-        }
-    };
-
     // ── Tab switch ────────────────────────────────────────────────────────────
 
     const switchTab = (t: Tab) => {
         setTab(t);
         setQuery(""); setResults([]); setSelected(null); setSelection({}); setNotes("");
         setPickedCustomer(null);
-        if (t === "lost") void loadProducts();
     };
 
     // ── Render ────────────────────────────────────────────────────────────────
 
-    const busy = submitting || lostSubmitting;
+    const busy = submitting;
 
     return (
         <Dialog
@@ -431,19 +300,6 @@ export function PosReturnDialog({
                     >
                         <User size={12} /> By customer
                     </button>
-                    {isManager && (
-                        <button
-                            type="button"
-                            onClick={() => switchTab("lost")}
-                            className={`flex-1 flex items-center justify-center gap-1.5 py-2 border-l border-border transition-colors ${
-                                tab === "lost"
-                                    ? "bg-amber-600 text-white"
-                                    : "hover:bg-muted text-amber-700 dark:text-amber-400"
-                            }`}
-                        >
-                            <AlertTriangle size={12} /> Lost invoice
-                        </button>
-                    )}
                 </div>
 
                 {/* ── Body ── */}
@@ -511,7 +367,7 @@ export function PosReturnDialog({
                     )}
 
                     {/* ════ Shared step 2: line-picker (Tab 1 + Tab 2) ════ */}
-                    {(tab === "invoice" || tab === "customer") && selected && (
+                    {selected && (
                         <div className="space-y-3">
                             {/* Invoice header */}
                             <div className="flex items-center justify-between rounded-md border border-border bg-muted/40 px-3 py-2 text-sm">
@@ -600,178 +456,6 @@ export function PosReturnDialog({
                             </div>
                         </div>
                     )}
-
-                    {/* ════ Tab 3: lost invoice (manager only) ════ */}
-                    {tab === "lost" && (
-                        <div className="space-y-3">
-                            <div className="flex items-center gap-2 rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700/50 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
-                                <AlertTriangle size={13} className="shrink-0" />
-                                Manager mode — no original invoice. Customer must be registered. Reason is required.
-                            </div>
-
-                            {/* Customer */}
-                            {!lostCustomer ? (
-                                <div className="space-y-1">
-                                    <Label className="text-xs">Customer</Label>
-                                    <PartySearchAndCreate
-                                        onPicked={(p) => {
-                                            if (!p.accountId) {
-                                                toast.error("Customer has no billing account linked.");
-                                                return;
-                                            }
-                                            setLostCustomer(p);
-                                        }}
-                                        partyGroup="Sundry Debtors"
-                                        placeholder="Search customer…"
-                                    />
-                                </div>
-                            ) : (
-                                <div className="flex items-center justify-between rounded-md border border-border bg-muted/40 px-3 py-2 text-sm">
-                                    <span className="font-medium">{lostCustomer.name}</span>
-                                    <button
-                                        type="button"
-                                        onClick={() => { setLostCustomer(null); setLostLines([]); }}
-                                        className="text-xs text-muted-foreground hover:text-foreground underline"
-                                    >
-                                        change
-                                    </button>
-                                </div>
-                            )}
-
-                            {lostCustomer && (
-                                <>
-                                    {/* Product picker */}
-                                    <div className="space-y-1.5">
-                                        <Label className="text-xs">Products being returned</Label>
-                                        <div className="relative">
-                                            <Package
-                                                size={13}
-                                                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-                                            />
-                                            <Input
-                                                className="pl-8 text-sm"
-                                                placeholder="Type SKU or name to add a product…"
-                                                value={prodQuery}
-                                                onChange={(e) => setProdQuery(e.target.value)}
-                                            />
-                                            {filteredProds.length > 0 && (
-                                                <ul className="absolute left-0 right-0 top-full z-20 mt-1 max-h-44 overflow-y-auto rounded-md border border-border bg-popover shadow-lg">
-                                                    {filteredProds.map((p) => (
-                                                        <li key={p.id}>
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => addLostLine(p)}
-                                                                className="flex w-full items-center justify-between px-3 py-1.5 text-left text-sm hover:bg-muted"
-                                                            >
-                                                                <span className="font-mono text-xs text-muted-foreground shrink-0">
-                                                                    {p.sku}
-                                                                </span>
-                                                                <span className="flex-1 px-3 truncate">{p.name}</span>
-                                                                <span className="text-xs text-muted-foreground shrink-0">
-                                                                    {p.effectiveSalePricePaise
-                                                                        ? `₹${(p.effectiveSalePricePaise / 100).toLocaleString("en-IN")}`
-                                                                        : "—"}
-                                                                </span>
-                                                                <Plus size={13} className="ml-2 text-muted-foreground shrink-0" />
-                                                            </button>
-                                                        </li>
-                                                    ))}
-                                                </ul>
-                                            )}
-                                        </div>
-
-                                        {/* Lost lines table */}
-                                        {lostLines.length > 0 && (
-                                            <div className="space-y-1.5 mt-1">
-                                                {lostLines.map((l) => (
-                                                    <div
-                                                        key={l.key}
-                                                        className="grid grid-cols-[1fr_60px_80px_56px_auto] items-end gap-1.5 rounded-md border border-border px-2 py-1.5"
-                                                    >
-                                                        <div className="min-w-0">
-                                                            <p className="text-[10px] text-muted-foreground font-mono">{l.sku}</p>
-                                                            <p className="text-xs truncate">{l.name}</p>
-                                                        </div>
-                                                        <div>
-                                                            <Label className="text-[10px] text-muted-foreground">Qty</Label>
-                                                            <Input
-                                                                type="text"
-                                                                inputMode="decimal"
-                                                                className="h-7 text-xs px-1.5"
-                                                                value={l.qty}
-                                                                onChange={(e) =>
-                                                                    updateLostLine(l.key, "qty", Math.max(0.01, Number(e.target.value)))
-                                                                }
-                                                            />
-                                                        </div>
-                                                        <div>
-                                                            <Label className="text-[10px] text-muted-foreground">Unit ₹</Label>
-                                                            <Input
-                                                                type="text"
-                                                                inputMode="decimal"
-                                                                className="h-7 text-xs px-1.5"
-                                                                value={l.unitPrice}
-                                                                onChange={(e) =>
-                                                                    updateLostLine(l.key, "unitPrice", Math.max(0, Number(e.target.value)))
-                                                                }
-                                                            />
-                                                        </div>
-                                                        <div>
-                                                            <Label className="text-[10px] text-muted-foreground">Tax %</Label>
-                                                            <Input
-                                                                type="text"
-                                                                inputMode="decimal"
-                                                                className="h-7 text-xs px-1.5"
-                                                                value={l.taxRate}
-                                                                onChange={(e) =>
-                                                                    updateLostLine(l.key, "taxRate", Math.max(0, Number(e.target.value)))
-                                                                }
-                                                            />
-                                                        </div>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => removeLostLine(l.key)}
-                                                            className="mb-0.5 text-muted-foreground hover:text-destructive transition-colors"
-                                                        >
-                                                            <X size={13} />
-                                                        </button>
-                                                    </div>
-                                                ))}
-
-                                                {lostTotal > 0 && (
-                                                    <div className="flex justify-between rounded-md bg-muted/40 border border-border px-3 py-1.5 text-sm font-semibold">
-                                                        <span>Return total</span>
-                                                        <span className="font-mono text-red-700 dark:text-red-400">
-                                                            − ₹{fmt(lostTotal)}
-                                                        </span>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    <RefundModeToggle mode={lostMode} onMode={setLostMode} />
-
-                                    {/* Reason (required) */}
-                                    <div className="space-y-1.5">
-                                        <Label htmlFor="lost-reason" className="text-xs">
-                                            Reason <span className="text-destructive">*</span>
-                                        </Label>
-                                        <Textarea
-                                            id="lost-reason"
-                                            rows={2}
-                                            value={reason}
-                                            onChange={(e) => setReason(e.target.value)}
-                                            placeholder="e.g. Lost bill — item defective, returned after 30 days"
-                                        />
-                                        {reason.trim().length > 0 && reason.trim().length < 5 && (
-                                            <p className="text-xs text-destructive">At least 5 characters required.</p>
-                                        )}
-                                    </div>
-                                </>
-                            )}
-                        </div>
-                    )}
                 </div>
 
                 {/* ── Footer ── */}
@@ -784,8 +468,7 @@ export function PosReturnDialog({
                         Cancel
                     </Button>
 
-                    {/* Normal return (Tab 1 + Tab 2) */}
-                    {(tab === "invoice" || tab === "customer") && selected && (
+                    {selected && (
                         <Button
                             onClick={handleSubmit}
                             disabled={submitting || selectedLines.length === 0 || returnTotal <= 0}
@@ -795,26 +478,6 @@ export function PosReturnDialog({
                                 ? <Loader2 size={14} className="animate-spin" />
                                 : <Check size={14} />}
                             Confirm return · ₹{fmt(returnTotal)}
-                        </Button>
-                    )}
-
-                    {/* Lost-invoice return (Tab 3) */}
-                    {tab === "lost" && (
-                        <Button
-                            onClick={handleLostSubmit}
-                            disabled={
-                                lostSubmitting ||
-                                !lostCustomer?.accountId ||
-                                lostLines.length === 0 ||
-                                lostTotal <= 0 ||
-                                reason.trim().length < 5
-                            }
-                            className="bg-amber-600 hover:bg-amber-700 text-white"
-                        >
-                            {lostSubmitting
-                                ? <Loader2 size={14} className="animate-spin" />
-                                : <Check size={14} />}
-                            Confirm lost return · ₹{fmt(lostTotal)}
                         </Button>
                     )}
                 </DialogFooter>
