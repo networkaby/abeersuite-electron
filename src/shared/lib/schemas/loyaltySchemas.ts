@@ -4,6 +4,8 @@ import { z } from "zod";
 // the bootstrap seed and intentionally NOT editable through the API.
 export const loyaltyConfigUpdateSchema = z.object({
     enabled:               z.boolean().optional(),
+    earnEnabled:           z.boolean().optional(),
+    redeemEnabled:         z.boolean().optional(),
     globalEarnRatePer:     z.number().positive().max(1_000_000).optional(),
     redeemValue:           z.number().positive().max(1_000_000).optional(),
     expiryEnabled:         z.boolean().optional(),

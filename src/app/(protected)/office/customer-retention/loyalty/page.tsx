@@ -66,7 +66,9 @@ export default async function LoyaltyHubPage() {
                                 {config.enabled ? <><BadgeCheck size={18} /> Active</> : <><BadgeX size={18} /> Off</>}
                             </div>
                             <p className="mt-0.5 text-[11px] text-muted-foreground">
-                                {rates.expiryEnabled ? `points expire after ${rates.expiryDays} days` : "points never expire"}
+                                {config.enabled
+                                    ? `earning ${config.earnEnabled ? "on" : "off"} · redeeming ${config.redeemEnabled ? "on" : "off"} · ${rates.expiryEnabled ? `expiry ${rates.expiryDays}d` : "no expiry"}`
+                                    : "earning & redeeming paused"}
                             </p>
                         </CardContent>
                     </Card>

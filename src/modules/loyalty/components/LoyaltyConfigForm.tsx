@@ -13,6 +13,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 interface LoyaltyConfig {
     id: number;
     enabled: boolean;
+    earnEnabled: boolean;
+    redeemEnabled: boolean;
     globalEarnRatePer: string | number;
     redeemValue: string | number;
     expiryEnabled: boolean;
@@ -48,21 +50,38 @@ function RupeeInput({ value, onChange, placeholder, className = "w-32" }: { valu
     );
 }
 
+/// Points-per-₹1 (what the user types) ↔ ₹-per-point (what we store).
+const ptsToRedeemValue = (pts: number): number => (pts > 0 ? Number((1 / pts).toFixed(2)) : 0);
+const redeemValueToPts = (rv: string | number): string => {
+    const v = Number(rv);
+    return v > 0 ? String(Number((1 / v).toFixed(2))) : "";
+};
+
 export function LoyaltyConfigForm() {
     const [draft, setDraft] = useState<LoyaltyConfig | null>(null);
+    const [redeemPtsStr, setRedeemPtsStr] = useState(""); // points needed for ₹1 off (reciprocal of redeemValue)
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
 
     useEffect(() => {
         axios
             .get<LoyaltyConfig>("/api/loyalty/config")
-            .then((r) => setDraft(r.data))
+            .then((r) => {
+                setDraft(r.data);
+                setRedeemPtsStr(redeemValueToPts(r.data.redeemValue));
+            })
             .catch(() => toast.error("Failed to load loyalty config"))
             .finally(() => setLoading(false));
     }, []);
 
     function set<K extends keyof LoyaltyConfig>(key: K, value: LoyaltyConfig[K]) {
         setDraft((d) => d && { ...d, [key]: value });
+    }
+
+    function onRedeemPtsChange(raw: string) {
+        const s = dec(raw);
+        setRedeemPtsStr(s);
+        set("redeemValue", ptsToRedeemValue(Number(s)));
     }
 
     async function save() {
@@ -72,6 +91,8 @@ export function LoyaltyConfigForm() {
             const nn = (v: string | number | null) => (v == null || v === "" ? null : Number(v));
             const { data } = await axios.patch<LoyaltyConfig>("/api/loyalty/config", {
                 enabled:               draft.enabled,
+                earnEnabled:           draft.earnEnabled,
+                redeemEnabled:         draft.redeemEnabled,
                 globalEarnRatePer:     Number(draft.globalEarnRatePer) || 0,
                 redeemValue:           Number(draft.redeemValue) || 0,
                 expiryEnabled:         draft.expiryEnabled,
@@ -82,6 +103,7 @@ export function LoyaltyConfigForm() {
                 maxRedeemPctOfBill:    nn(draft.maxRedeemPctOfBill),
             });
             setDraft(data);
+            setRedeemPtsStr(redeemValueToPts(data.redeemValue));
             toast.success("Loyalty settings saved");
         } catch {
             toast.error("Failed to save loyalty settings");
@@ -109,13 +131,19 @@ export function LoyaltyConfigForm() {
 
             <div className="grid gap-4 md:grid-cols-2">
                 {/* ── Reward Setup ────────────────────────────────────────── */}
-                <Card className={draft.enabled ? "" : "opacity-60"}>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2 text-base">
-                            <span className="flex h-7 w-7 items-center justify-center rounded-md bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400"><Coins size={15} /></span>
-                            Reward Setup
-                        </CardTitle>
-                        <CardDescription>How customers earn points.</CardDescription>
+                <Card className={draft.enabled && draft.earnEnabled ? "" : "opacity-60"}>
+                    <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
+                        <div className="space-y-1.5">
+                            <CardTitle className="flex items-center gap-2 text-base">
+                                <span className="flex h-7 w-7 items-center justify-center rounded-md bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400"><Coins size={15} /></span>
+                                Reward Setup
+                            </CardTitle>
+                            <CardDescription>How customers earn points.</CardDescription>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-1.5">
+                            <span className="text-[11px] font-medium text-muted-foreground">{draft.earnEnabled ? "Earning on" : "Earning off"}</span>
+                            <Switch checked={draft.earnEnabled} disabled={!draft.enabled} onCheckedChange={(v) => set("earnEnabled", v)} />
+                        </div>
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <Field label="Loyalty point conversion" hint="Per category/group/product multipliers can override this rate.">
@@ -143,19 +171,25 @@ export function LoyaltyConfigForm() {
                 </Card>
 
                 {/* ── Redeem Setup ────────────────────────────────────────── */}
-                <Card className={draft.enabled ? "" : "opacity-60"}>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2 text-base">
-                            <span className="flex h-7 w-7 items-center justify-center rounded-md bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400"><Ticket size={15} /></span>
-                            Redeem Setup
-                        </CardTitle>
-                        <CardDescription>How points convert to a discount.</CardDescription>
+                <Card className={draft.enabled && draft.redeemEnabled ? "" : "opacity-60"}>
+                    <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
+                        <div className="space-y-1.5">
+                            <CardTitle className="flex items-center gap-2 text-base">
+                                <span className="flex h-7 w-7 items-center justify-center rounded-md bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400"><Ticket size={15} /></span>
+                                Redeem Setup
+                            </CardTitle>
+                            <CardDescription>How points convert to a discount.</CardDescription>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-1.5">
+                            <span className="text-[11px] font-medium text-muted-foreground">{draft.redeemEnabled ? "Redeeming on" : "Redeeming off"}</span>
+                            <Switch checked={draft.redeemEnabled} disabled={!draft.enabled} onCheckedChange={(v) => set("redeemEnabled", v)} />
+                        </div>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                        <Field label="Redemption value" hint="The bill discount each point is worth.">
+                        <Field label="Redemption value" hint="Points a customer spends for ₹1 off the bill.">
                             <div className="flex items-center gap-2">
-                                <span className="text-sm text-muted-foreground">1 point =</span>
-                                <RupeeInput value={String(draft.redeemValue)} onChange={(v) => set("redeemValue", dec(v))} />
+                                <Input inputMode="decimal" value={redeemPtsStr} onChange={(e) => onRedeemPtsChange(e.target.value)} className="w-28 text-right" />
+                                <span className="text-sm text-muted-foreground">points = ₹1</span>
                             </div>
                         </Field>
                         <Field label="Maximum % of invoice value" hint="Caps the loyalty discount at this share of the bill. Blank = no cap.">

@@ -44,6 +44,7 @@ import { TransactionsTable, type CustomerTransactions } from "@/modules/customer
 import CustomerLinkPanel from "@/modules/customer/components/CustomerLinkPanel";
 import CustomerEmergencyPasswordResetCard from "@/modules/customer/components/CustomerEmergencyPasswordResetCard";
 import PersonProfileEdit from "@/modules/customer/components/PersonProfileEdit";
+import { LoyaltyPanel } from "@/modules/loyalty/components/LoyaltyPanel";
 
 interface CustomerListItem {
     id: number;
@@ -68,7 +69,7 @@ interface CustomerDetail {
     emails: { id: number; email: string; label: string | null; isPrimary: boolean }[];
 }
 
-type Tab = "transactions" | "profile" | "tickets" | "devices" | "companies";
+type Tab = "transactions" | "profile" | "tickets" | "devices" | "companies" | "loyalty";
 
 export default function CustomersPage() {
     const { data: session } = useSession();
@@ -88,6 +89,7 @@ export default function CustomersPage() {
 
     const perms = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
     const canManageUsers = perms.includes(PERMISSIONS.USERS_MANAGE) || perms.includes(PERMISSIONS.ADMIN_BYPASS);
+    const canManageLoyalty = perms.includes(PERMISSIONS.LOYALTY_MANAGE) || perms.includes(PERMISSIONS.ADMIN_BYPASS);
 
     const router = useRouter();
 
@@ -307,7 +309,7 @@ export default function CustomersPage() {
                         {/* ── Tabs ── */}
                         <div className="border-b bg-card px-6">
                             <div className="flex gap-2 py-2">
-                                {(["transactions", "profile", "tickets", "devices", "companies"] as Tab[]).map((item) => (
+                                {(["transactions", "profile", "tickets", "devices", "companies", "loyalty"] as Tab[]).map((item) => (
                                     <Button
                                         key={item}
                                         type="button"
@@ -418,6 +420,11 @@ export default function CustomersPage() {
                                     initialLinks={detail.companies}
                                     onLinked={handleLinked}
                                 />
+                            )}
+
+                            {/* Loyalty */}
+                            {tab === "loyalty" && (
+                                <LoyaltyPanel accountId={detail.accountId} canManage={canManageLoyalty} />
                             )}
 
                             {/* Transactions */}

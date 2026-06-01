@@ -4,6 +4,9 @@
 
 export type LoyaltyRates = {
     enabled: boolean;
+    /// Independent gates (each only applies while `enabled`): earning / redemption.
+    earnEnabled: boolean;
+    redeemEnabled: boolean;
     /// ₹ of net goods value that earns 1 point at the global rate.
     globalEarnRatePer: number;
     /// ₹ value of 1 point on redemption.
@@ -54,6 +57,8 @@ export type TaxonomyMaps = {
 /// Build a LoyaltyConfig-shaped rates object from raw Decimal/number inputs.
 export function ratesFromConfig(cfg: {
     enabled: boolean;
+    earnEnabled: boolean;
+    redeemEnabled: boolean;
     globalEarnRatePer: unknown;
     redeemValue: unknown;
     expiryEnabled: boolean;
@@ -66,6 +71,8 @@ export function ratesFromConfig(cfg: {
     const num = (v: unknown): number | null => (v == null ? null : Number(v));
     return {
         enabled: cfg.enabled,
+        earnEnabled: cfg.earnEnabled,
+        redeemEnabled: cfg.redeemEnabled,
         globalEarnRatePer: Number(cfg.globalEarnRatePer),
         redeemValue: Number(cfg.redeemValue),
         expiryEnabled: cfg.expiryEnabled,
@@ -152,7 +159,7 @@ export function earnableBaseForCart(
 
 /// Whole points earned on an effective base. Floors — never awards partial points.
 export function pointsForBase(base: number, rates: LoyaltyRates): number {
-    if (!rates.enabled || rates.globalEarnRatePer <= 0 || base <= 0) return 0;
+    if (!rates.enabled || !rates.earnEnabled || rates.globalEarnRatePer <= 0 || base <= 0) return 0;
     return Math.floor(base / rates.globalEarnRatePer);
 }
 
@@ -173,7 +180,7 @@ export function clampRedemption(
     invoiceValue: number,
     rates: LoyaltyRates,
 ): { points: number; value: number; reason?: string } {
-    if (!rates.enabled || requestedPoints <= 0) return { points: 0, value: 0 };
+    if (!rates.enabled || !rates.redeemEnabled || requestedPoints <= 0) return { points: 0, value: 0 };
     if (rates.minRedeemInvoiceValue != null && invoiceValue < rates.minRedeemInvoiceValue) {
         return { points: 0, value: 0, reason: `Invoice must be at least ₹${rates.minRedeemInvoiceValue.toFixed(2)} to redeem points.` };
     }

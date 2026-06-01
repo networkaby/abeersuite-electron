@@ -36,7 +36,11 @@ enum LoyaltyRuleScope {
 
 model LoyaltyConfig {
   id                     Int      @id @default(1) // singleton — always row id=1
-  enabled                Boolean  @default(true)
+  enabled                Boolean  @default(true) // master kill-switch for the whole programme
+  /// Independent gates: earning and redemption can each be paused while the
+  /// programme stays on. Effective: earn = enabled && earnEnabled, redeem = enabled && redeemEnabled.
+  earnEnabled            Boolean  @default(true)
+  redeemEnabled          Boolean  @default(true)
   /// ₹ of net sale value that earns 1 point at the global (fallback) rate.
   globalEarnRatePer      Decimal  @default(100) @db.Decimal(14, 2)
   /// ₹ value of 1 point on redemption.

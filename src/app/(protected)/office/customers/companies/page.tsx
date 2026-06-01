@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useSession } from "next-auth/react";
 import axios from "axios";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -10,6 +11,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDate } from "@/shared/lib/format/formatDate";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { initials } from "@/modules/customer/lib/initials";
 import { phoneError, emailError } from "@/shared/components/PartySearchAndCreate";
 import type { CustomerDevice } from "@/modules/customer/lib/customerTypes";
@@ -40,6 +42,7 @@ import { EntityListPanel } from "@/shared/components/EntityListPanel";
 import { TransactionsTable, type CustomerTransactions } from "@/modules/customer/components/TransactionsTable";
 import CompanyLinkPanel from "@/modules/customer/components/CompanyLinkPanel";
 import CompanyProfileEdit from "@/modules/customer/components/CompanyProfileEdit";
+import { LoyaltyPanel } from "@/modules/loyalty/components/LoyaltyPanel";
 
 interface CompanyListItem {
     id: number;
@@ -67,10 +70,13 @@ interface CompanyDetail {
     } | null;
 }
 
-type Tab = "transactions" | "profile" | "contacts" | "devices";
+type Tab = "transactions" | "profile" | "contacts" | "devices" | "loyalty";
 
 export default function CompaniesPage() {
     const router = useRouter();
+    const { data: session } = useSession();
+    const perms = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
+    const canManageLoyalty = perms.includes(PERMISSIONS.LOYALTY_MANAGE) || perms.includes(PERMISSIONS.ADMIN_BYPASS);
     const [companies, setCompanies] = useState<CompanyListItem[]>([]);
     const [search, setSearch] = useState("");
     const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -297,7 +303,7 @@ export default function CompaniesPage() {
                             {/* ── Tabs ── */}
                             <div className="border-b bg-card px-6">
                                 <div className="flex gap-2 py-2">
-                                    {(["transactions", "profile", "contacts", "devices"] as Tab[]).map((item) => (
+                                    {(["transactions", "profile", "contacts", "devices", "loyalty"] as Tab[]).map((item) => (
                                         <Button
                                             key={item}
                                             type="button"
@@ -387,6 +393,11 @@ export default function CompaniesPage() {
                                             </CardContent>
                                         </Card>
                                     )
+                                )}
+
+                                {/* Loyalty */}
+                                {tab === "loyalty" && (
+                                    <LoyaltyPanel accountId={detail.accountId} canManage={canManageLoyalty} />
                                 )}
 
                                 {/* Transactions */}

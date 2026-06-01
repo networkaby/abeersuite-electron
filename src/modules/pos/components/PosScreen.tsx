@@ -47,6 +47,8 @@ type Snapshot = {
     loyaltyPoints: number;
     loyaltyRates: {
         enabled: boolean;
+        earnEnabled: boolean;
+        redeemEnabled: boolean;
         globalEarnRatePer: number;
         redeemValue: number;
         expiryEnabled: boolean;
@@ -357,6 +359,8 @@ export default function PosScreen() {
     // side so we only ever send the route a value it will accept (it rejects
     // out-of-range redemptions with a 422).
     const rates = snapshot?.loyaltyRates ?? null;
+    // Redemption is live only while the programme AND its redeem gate are on.
+    const canRedeem = !!rates?.enabled && !!rates?.redeemEnabled;
     const loyaltyBalance = snapshot?.loyaltyPoints ?? 0;
     const goodsValue = Math.max(0, subtotal - discountAmount);   // post-tier, pre-GST reducible base
     const minRedeemPts = rates?.minRedeemPoints ?? 0;
@@ -365,7 +369,7 @@ export default function PosScreen() {
     const redeemBlocked = rates?.minRedeemInvoiceValue != null && billBeforeRedemption < rates.minRedeemInvoiceValue;
     const pctCapRupees = rates?.maxRedeemPctOfBill != null ? (goodsValue * rates.maxRedeemPctOfBill) / 100 : Infinity;
     const maxRedeemableRupees = Math.min(goodsValue, pctCapRupees);
-    const requestedPts = rates?.enabled && !redeemBlocked ? parseInt(digitsInt(redeemPointsStr) || "0", 10) : 0;
+    const requestedPts = canRedeem && !redeemBlocked ? parseInt(digitsInt(redeemPointsStr) || "0", 10) : 0;
     const maxRedeemablePts = rates && rates.redeemValue > 0 ? Math.floor(maxRedeemableRupees / rates.redeemValue) : 0;
     const cappedPts = Math.min(requestedPts, loyaltyBalance, maxRedeemablePts);
     const redeemPts = cappedPts >= minRedeemPts ? cappedPts : 0;
@@ -1048,7 +1052,7 @@ export default function PosScreen() {
                                 but the math has already happened in the per-line inclusive price. */}
                             <Row label="Subtotal" value={fmtINR(subtotal + tax)} />
                             {discountPct > 0 && <Row label={`Tier discount (${discountPct}%)`} value={`− ${fmtINR(discountAmount)}`} highlight />}
-                            {rates?.enabled && loyaltyBalance > 0 && (
+                            {canRedeem && loyaltyBalance > 0 && (
                                 <div className="grid grid-cols-[1fr_auto] items-center gap-2">
                                     <Label htmlFor="pos-redeem" className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                                         <Award size={12} /> Redeem points
