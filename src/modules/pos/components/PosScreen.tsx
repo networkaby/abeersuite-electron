@@ -9,7 +9,7 @@ import {
     ShoppingCart, Plus, Minus, Trash2, ArrowLeft, ExternalLink,
     Banknote, Wallet, CreditCard, Smartphone, Building2, FileText, UserPlus,
     MapPin, Star, Sparkles, AlertCircle, TrendingDown, Tag,
-    ReceiptIndianRupee, Check, RotateCcw, ChevronDown, ChevronRight, HelpCircle,
+    ReceiptIndianRupee, Check, RotateCcw, ChevronDown, ChevronRight, HelpCircle, HandCoins,
 } from "lucide-react";
 import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/components/GlAccountCombobox";
 import { calcVoucherTotals, calcLineTotals } from "@/modules/inventory/lib/stock";
@@ -34,6 +34,7 @@ import { ShiftOpenDialog, type OpenedShift } from "@/modules/pos/components/Shif
 import { HandoverAcceptDialog, type PendingHandover } from "@/modules/pos/components/HandoverAcceptDialog";
 import { PosReturnDialog } from "@/modules/pos/components/PosReturnDialog";
 import { PosExpenditureDialog } from "@/modules/pos/components/PosExpenditureDialog";
+import { PosReceiptDialog } from "@/modules/pos/components/PosReceiptDialog";
 import { qrDisplay } from "@/modules/pos/lib/qrDisplay";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -185,6 +186,7 @@ export default function PosScreen() {
     const [shiftOpenDialogOpen, setShiftOpenDialogOpen] = useState(false);
     const [returnDialogOpen, setReturnDialogOpen]       = useState(false);
     const [expenditureDialogOpen, setExpenditureDialogOpen] = useState(false);
+    const [receiptDialogOpen, setReceiptDialogOpen]         = useState(false);
 
     const refreshActiveShift = useCallback(() => {
         axios.get<ActiveShift | null>("/api/pos/shifts/current")
@@ -812,6 +814,15 @@ export default function PosScreen() {
                 >
                     <Banknote size={14} /> Exp
                 </Button>
+                {/* Rcv — collect a cash payment from a party into the counter till */}
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => activeShift ? setReceiptDialogOpen(true) : toast.error("Open a shift first to collect a payment")}
+                    title="Collect a payment from a customer into this counter's till — posts a receipt voucher"
+                >
+                    <HandCoins size={14} /> Rcv
+                </Button>
                 {/* Help — UI only for now. */}
                 <Button
                     variant="outline"
@@ -835,6 +846,17 @@ export default function PosScreen() {
                 <PosExpenditureDialog
                     open={expenditureDialogOpen}
                     onOpenChange={setExpenditureDialogOpen}
+                    shiftId={activeShift.id}
+                    counterName={activeShift.counter.tillAccount.name}
+                    onDone={refreshActiveShift}
+                />
+            )}
+
+            {/* Receipt dialog — collect a party payment into the counter till */}
+            {activeShift && (
+                <PosReceiptDialog
+                    open={receiptDialogOpen}
+                    onOpenChange={setReceiptDialogOpen}
                     shiftId={activeShift.id}
                     counterName={activeShift.counter.tillAccount.name}
                     onDone={refreshActiveShift}

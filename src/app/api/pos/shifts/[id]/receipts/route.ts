@@ -1,0 +1,73 @@
+// POST /api/pos/shifts/[id]/receipts
+//
+// Collect a cash payment from a party (customer) at the counter — e.g. a
+// customer clears their outstanding credit, or pays an advance. Posts a RECEIPT
+// voucher (Dr counter till / Cr party AR) via postReceiptVoucher. The till debit
+// falls inside the shift window, so sumShiftCashSalesPaise already folds it into
+// the expected drawer at shift close — no separate bookkeeping needed here.
+//
+// Funding destination is always the shift's counter till (cash into the drawer),
+// mirroring the per-counter routing at /office/admin/counters.
+
+import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { requirePermission } from "@/shared/lib/auth/permissions";
+import { validateRequest, handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { postReceiptVoucher } from "@/modules/accountancy/lib/postReceiptVoucher";
+
+const receiptSchema = z.object({
+    amountPaise: z.number().int().positive(),
+    accountId:   z.number().int().positive(),   // party AR ledger to credit
+    note:        z.string().trim().max(200).optional(),
+});
+
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+    const { user, response } = await requirePermission(PERMISSIONS.POS_SHIFT_DROP);
+    if (response) return response;
+
+    const { id: idStr } = await params;
+    const shiftId = Number(idStr);
+    if (!Number.isFinite(shiftId)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+
+    const { data, error } = await validateRequest(req, receiptSchema);
+    if (error) return error;
+
+    try {
+        const shift = await prisma.posShift.findUnique({
+            where:  { id: shiftId },
+            select: { id: true, userId: true, status: true, counter: { select: { tillAccountId: true, name: true } } },
+        });
+        if (!shift) return NextResponse.json({ error: "Shift not found" }, { status: 404 });
+        if (shift.status !== "OPEN") {
+            return NextResponse.json({ error: "Cannot record a receipt on a closed shift" }, { status: 409 });
+        }
+        const canManage = user!.permissions.includes(PERMISSIONS.POS_SHIFT_MANAGE) || user!.permissions.includes(PERMISSIONS.ADMIN_BYPASS);
+        if (shift.userId !== user!.id && !canManage) {
+            return NextResponse.json({ error: "Not your shift" }, { status: 403 });
+        }
+
+        const party = await prisma.account.findUnique({
+            where:  { id: data.accountId },
+            select: { id: true, name: true },
+        });
+        if (!party) return NextResponse.json({ error: "Party account not found" }, { status: 404 });
+
+        const rupees = data.amountPaise / 100;
+        const result = await prisma.$transaction((tx) => postReceiptVoucher(tx, {
+            customerAccountId: party.id,
+            tenders: [{ accountId: shift.counter.tillAccountId, amount: rupees, description: `Cash at ${shift.counter.name}` }],
+            date:      new Date(),
+            userId:    user!.id,
+            narration: data.note ? `POS receipt — ${data.note}` : `POS receipt from ${party.name}`,
+        }));
+
+        return NextResponse.json(
+            { voucherRef: result.voucherRef, amountPaise: String(data.amountPaise) },
+            { status: 201 },
+        );
+    } catch (e) {
+        return handleApiError(e, "Failed to record receipt");
+    }
+}
