@@ -137,11 +137,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 },
                 select: { id: true },
             });
-            return { expId: exp.id, voucherRef: voucher.reference };
+            return { expId: exp.id, voucherId: voucher.id, voucherRef: voucher.reference };
         });
 
         return NextResponse.json(
-            { id: created.expId, voucherRef: created.voucherRef, amountPaise: String(data.amountPaise) },
+            { id: created.expId, voucherId: created.voucherId, voucherRef: created.voucherRef, amountPaise: String(data.amountPaise) },
             { status: 201 },
         );
     } catch (e) {

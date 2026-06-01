@@ -64,7 +64,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         }));
 
         return NextResponse.json(
-            { voucherRef: result.voucherRef, amountPaise: String(data.amountPaise) },
+            { voucherId: result.voucherId, voucherRef: result.voucherRef, amountPaise: String(data.amountPaise) },
             { status: 201 },
         );
     } catch (e) {

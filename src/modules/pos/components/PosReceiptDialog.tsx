@@ -53,12 +53,14 @@ export function PosReceiptDialog({
         if (rupees <= 0)   { toast.error("Amount must be positive"); return; }
         setSubmitting(true);
         try {
-            const { data } = await axios.post<{ voucherRef: string }>(`/api/pos/shifts/${shiftId}/receipts`, {
+            const { data } = await axios.post<{ voucherId: number; voucherRef: string }>(`/api/pos/shifts/${shiftId}/receipts`, {
                 accountId:   party.accountId,
                 amountPaise: Math.round(rupees * 100),
                 note:        note.trim() || undefined,
             });
             toast.success(`Receipt ${data.voucherRef} · ₹${rupees.toFixed(2)} from ${party.name}`);
+            // Open the printable receipt (auto-prints on load) in a new tab.
+            window.open(`/receipt/payment/${data.voucherId}`, "_blank", "noopener");
             onDone();
             onOpenChange(false);
         } catch (e: unknown) {

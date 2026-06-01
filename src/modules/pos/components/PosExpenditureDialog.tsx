@@ -51,12 +51,14 @@ export function PosExpenditureDialog({
         if (!expenseAccountId)      { toast.error("Pick an expense account"); return; }
         setSubmitting(true);
         try {
-            const { data } = await axios.post<{ voucherRef: string }>(`/api/pos/shifts/${shiftId}/expenditures`, {
+            const { data } = await axios.post<{ voucherId: number; voucherRef: string }>(`/api/pos/shifts/${shiftId}/expenditures`, {
                 amountPaise:      Math.round(rupees * 100),
                 description:      description.trim(),
                 expenseAccountId,
             });
             toast.success(`Expenditure ${data.voucherRef} · ₹${rupees.toFixed(2)}`);
+            // Open the printable payment voucher (auto-prints on load) in a new tab.
+            window.open(`/receipt/payment/${data.voucherId}`, "_blank", "noopener");
             onDone();
             onOpenChange(false);
         } catch (e: unknown) {
