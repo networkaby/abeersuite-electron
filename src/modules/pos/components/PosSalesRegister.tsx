@@ -8,11 +8,12 @@ import { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import {
-    Search, Loader2, Monitor, RotateCcw, ExternalLink,
+    Search, Loader2, Monitor, RotateCcw, ExternalLink, Printer,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { fmt } from "@/utils/constants";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -41,6 +42,17 @@ type CashMove = {
     amount: string; party: string; note: string | null; counter: string; cashier: string;
 };
 
+// Counter till cash book (ledger with running balance).
+type CounterOpt = { id: number; name: string; tillAccount: { name: string } };
+type LedgerRow  = {
+    id: number; date: string; reference: string; particulars: string;
+    debit: number | null; credit: number | null; balance: number; printUrl: string | null;
+};
+type LedgerData = {
+    counter: { id: number; name: string; tillAccountName: string };
+    openingBalance: number; closingBalance: number; rows: LedgerRow[];
+};
+
 const PAY_COLORS: Record<string, string> = {
     CASH:           "bg-green-50 text-green-700",
     BANK_TRANSFER:  "bg-blue-50 text-blue-700",
@@ -58,7 +70,7 @@ export function PosSalesRegister() {
     const [page, setPage]         = useState(1);
     const limit                   = 50;
 
-    const [tab, setTab]                 = useState<"sales" | "cash">("sales");
+    const [tab, setTab]                 = useState<"sales" | "cash" | "ledger">("sales");
     const [moves, setMoves]             = useState<CashMove[]>([]);
     const [movesLoading, setMovesLoading] = useState(false);
 
@@ -70,6 +82,31 @@ export function PosSalesRegister() {
             .catch(() => toast.error("Failed to load cash movements"))
             .finally(() => setMovesLoading(false));
     }, [tab]);
+
+    // ── Till cash book (ledger) ──────────────────────────────────────────────
+    const todayISO = new Date().toISOString().slice(0, 10);
+    const [counters, setCounters]   = useState<CounterOpt[]>([]);
+    const [counterId, setCounterId] = useState<number | null>(null);
+    const [from, setFrom]           = useState(todayISO);
+    const [to, setTo]               = useState(todayISO);
+    const [ledger, setLedger]       = useState<LedgerData | null>(null);
+    const [ledgerLoading, setLedgerLoading] = useState(false);
+
+    useEffect(() => {
+        if (tab !== "ledger" || counters.length) return;
+        axios.get<CounterOpt[]>("/api/pos/counters?scope=all")
+            .then((r) => { setCounters(r.data); if (r.data[0]) setCounterId(r.data[0].id); })
+            .catch(() => toast.error("Failed to load counters"));
+    }, [tab, counters.length]);
+
+    useEffect(() => {
+        if (tab !== "ledger" || counterId == null) return;
+        setLedgerLoading(true);
+        axios.get<LedgerData>(`/api/pos/till-ledger?counterId=${counterId}&from=${from}&to=${to}`)
+            .then((r) => setLedger(r.data))
+            .catch(() => toast.error("Failed to load till ledger"))
+            .finally(() => setLedgerLoading(false));
+    }, [tab, counterId, from, to]);
 
     const load = useCallback(async (search: string, pg: number) => {
         setLoading(true);
@@ -115,7 +152,7 @@ export function PosSalesRegister() {
 
             {/* ── Tabs ── */}
             <div className="flex gap-1 border-b border-border">
-                {([["sales", "Sales"], ["cash", "Cash In / Out"]] as const).map(([k, label]) => (
+                {([["sales", "Sales"], ["cash", "Cash In / Out"], ["ledger", "Cash Book"]] as const).map(([k, label]) => (
                     <button
                         key={k}
                         type="button"
@@ -127,7 +164,7 @@ export function PosSalesRegister() {
                 ))}
             </div>
 
-            {tab === "sales" ? (
+            {tab === "sales" && (
             <>
             {/* ── Search ── */}
             <div className="relative max-w-sm">
@@ -241,7 +278,9 @@ export function PosSalesRegister() {
                 To process a return, open the POS Register and click the <strong>Return</strong> button in the top bar.
             </p>
             </>
-            ) : (
+            )}
+
+            {tab === "cash" && (
                 movesLoading ? (
                     <div className="flex justify-center py-12"><Loader2 size={24} className="animate-spin text-muted-foreground" /></div>
                 ) : moves.length === 0 ? (
@@ -290,6 +329,92 @@ export function PosSalesRegister() {
                         </table>
                     </div>
                 )
+            )}
+
+            {tab === "ledger" && (
+                <div className="space-y-3">
+                    {/* Controls: counter + date range (defaults to today) */}
+                    <div className="flex flex-wrap items-end gap-3">
+                        <div>
+                            <label className="mb-1 block text-xs text-muted-foreground">Counter</label>
+                            <select
+                                value={counterId ?? ""}
+                                onChange={(e) => setCounterId(Number(e.target.value))}
+                                className="h-9 rounded-md border border-input bg-transparent px-2 text-sm"
+                            >
+                                {counters.map((c) => (
+                                    <option key={c.id} value={c.id}>{c.name} — {c.tillAccount.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="mb-1 block text-xs text-muted-foreground">From</label>
+                            <TallyDateInput value={from} onValueChange={setFrom} className="h-9 w-36" />
+                        </div>
+                        <div>
+                            <label className="mb-1 block text-xs text-muted-foreground">To</label>
+                            <TallyDateInput value={to} onValueChange={setTo} className="h-9 w-36" />
+                        </div>
+                        <Button variant="outline" size="sm" className="h-9" onClick={() => { setFrom(todayISO); setTo(todayISO); }}>
+                            Today
+                        </Button>
+                    </div>
+
+                    {ledgerLoading ? (
+                        <div className="flex justify-center py-12"><Loader2 size={24} className="animate-spin text-muted-foreground" /></div>
+                    ) : !ledger ? (
+                        <p className="py-8 text-center text-sm text-muted-foreground">Pick a counter to view its cash book.</p>
+                    ) : (
+                        <div className="overflow-hidden rounded-lg border border-border">
+                            <table className="w-full text-sm">
+                                <thead className="bg-muted/50 text-xs text-muted-foreground">
+                                    <tr>
+                                        <th className="px-4 py-2.5 text-left font-medium">Date</th>
+                                        <th className="px-4 py-2.5 text-left font-medium">Particulars</th>
+                                        <th className="px-4 py-2.5 text-left font-medium">Voucher</th>
+                                        <th className="px-4 py-2.5 text-right font-medium">In</th>
+                                        <th className="px-4 py-2.5 text-right font-medium">Out</th>
+                                        <th className="px-4 py-2.5 text-right font-medium">Balance</th>
+                                        <th className="px-4 py-2.5" />
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-border">
+                                    <tr className="bg-muted/30 font-medium">
+                                        <td className="px-4 py-2" colSpan={5}>Opening balance</td>
+                                        <td className="px-4 py-2 text-right font-mono">₹{fmt(ledger.openingBalance)}</td>
+                                        <td />
+                                    </tr>
+                                    {ledger.rows.length === 0 ? (
+                                        <tr><td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">No cash movements in this period.</td></tr>
+                                    ) : ledger.rows.map((r) => (
+                                        <tr key={r.id} className="transition-colors hover:bg-muted/30">
+                                            <td className="whitespace-nowrap px-4 py-2.5 text-muted-foreground">
+                                                {new Date(r.date).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}
+                                            </td>
+                                            <td className="px-4 py-2.5">{r.particulars}</td>
+                                            <td className="px-4 py-2.5"><span className="font-mono text-xs">{r.reference}</span></td>
+                                            <td className="px-4 py-2.5 text-right font-mono text-green-700">{r.debit != null ? fmt(r.debit) : ""}</td>
+                                            <td className="px-4 py-2.5 text-right font-mono text-red-700">{r.credit != null ? fmt(r.credit) : ""}</td>
+                                            <td className="px-4 py-2.5 text-right font-mono">{fmt(r.balance)}</td>
+                                            <td className="px-4 py-2.5 text-right">
+                                                {r.printUrl && (
+                                                    <a href={r.printUrl} target="_blank" rel="noopener noreferrer" title="Reprint receipt" className="inline-flex text-muted-foreground hover:text-foreground">
+                                                        <Printer size={14} />
+                                                    </a>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    <tr className="border-t-2 border-border bg-muted/30 font-semibold">
+                                        <td className="px-4 py-2" colSpan={5}>Closing balance</td>
+                                        <td className="px-4 py-2 text-right font-mono">₹{fmt(ledger.closingBalance)}</td>
+                                        <td />
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
             )}
         </div>
     );
