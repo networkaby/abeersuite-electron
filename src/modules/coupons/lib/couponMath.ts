@@ -27,6 +27,12 @@ export interface CouponContext {
     percentOff: number | null;
     maxDiscountAmt: number | null;
     flatAmt: number | null;
+    freeProductId: number | null;
+    freeQty: number | null;
+    freeDiscountPct: number | null;
+    buyProductId: number | null;
+    buyQty: number | null;
+    getQty: number | null;
     startsAt: Date | null;
     endsAt: Date | null;
     minBillValue: number | null;
@@ -130,7 +136,18 @@ export function computeCouponDiscount(c: CouponContext, input: EvalInput): EvalR
             raw = Math.min(c.flatAmt, elig);
             break;
         }
-        case "FREE_ITEM":
+        case "FREE_ITEM": {
+            // Discount a specific item already in the cart by freeDiscountPct
+            // (100 = free) for up to freeQty units. Rides the same whole-bill
+            // negative-charge path — no extra cart line is added.
+            if (c.freeProductId == null) return { ok: false, reason: "Coupon misconfigured (no item)" };
+            const line = input.lines.find((l) => l.productId === c.freeProductId);
+            if (!line) return { ok: false, reason: "Add the offer item to the cart" };
+            const qty = Math.min(c.freeQty ?? 1, line.qty);
+            const pctOff = c.freeDiscountPct ?? 100;
+            raw = qty * line.unitPrice * (pctOff / 100);
+            break;
+        }
         case "BOGO":
             return { ok: false, reason: "This coupon type is not available yet" };
     }

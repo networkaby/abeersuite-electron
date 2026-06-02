@@ -10,6 +10,11 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/shared/components/SearchableSelect";
+
+export interface CategoryOpt { id: number; name: string }
+export interface ProductOpt { id: number; sku: string; name: string }
+export interface CouponRule { kind: "INCLUDE" | "EXCLUDE"; productId: number | null; categoryId: number | null }
 
 export interface Coupon {
     id: number;
@@ -22,6 +27,10 @@ export interface Coupon {
     percentOff: string | number | null;
     maxDiscountAmt: string | number | null;
     flatAmt: string | number | null;
+    freeProductId: number | null;
+    freeQty: string | number | null;
+    freeDiscountPct: string | number | null;
+    rules?: CouponRule[];
     startsAt: string | null;
     endsAt: string | null;
     minBillValue: string | number | null;
@@ -45,11 +54,13 @@ const fromDateInput = (d: string): string | null => (d.trim() === "" ? null : ne
 
 interface Props {
     initial?: Coupon;
+    categories: CategoryOpt[];
+    products: ProductOpt[];
     onSaved: () => void;
     onCancel: () => void;
 }
 
-export function CouponForm({ initial, onSaved, onCancel }: Props) {
+export function CouponForm({ initial, categories, products, onSaved, onCancel }: Props) {
     const editing = !!initial;
     const [code, setCode] = useState(str(initial?.code));
     const [name, setName] = useState(initial?.name ?? "");
@@ -60,6 +71,10 @@ export function CouponForm({ initial, onSaved, onCancel }: Props) {
     const [percentOff, setPercentOff] = useState(str(initial?.percentOff));
     const [maxDiscountAmt, setMaxDiscountAmt] = useState(str(initial?.maxDiscountAmt));
     const [flatAmt, setFlatAmt] = useState(str(initial?.flatAmt));
+    const [freeProductId, setFreeProductId] = useState<number | null>(initial?.freeProductId ?? null);
+    const [freeQty, setFreeQty] = useState(str(initial?.freeQty ?? (initial ? null : "1")));
+    const [freeDiscountPct, setFreeDiscountPct] = useState(str(initial?.freeDiscountPct ?? (initial ? null : "100")));
+    const [rules, setRules] = useState<CouponRule[]>(initial?.rules ?? []);
     const [startsAt, setStartsAt] = useState(toDateInput(initial?.startsAt ?? null));
     const [endsAt, setEndsAt] = useState(toDateInput(initial?.endsAt ?? null));
     const [minBillValue, setMinBillValue] = useState(str(initial?.minBillValue));
@@ -75,6 +90,7 @@ export function CouponForm({ initial, onSaved, onCancel }: Props) {
         if (applyMode === "CODE" && !code.trim()) return toast.error("Code-entry coupons need a code");
         if (type === "PERCENT" && optNum(percentOff) == null) return toast.error("Enter a % off");
         if (type === "FLAT" && optNum(flatAmt) == null) return toast.error("Enter a flat ₹ amount");
+        if (type === "FREE_ITEM" && freeProductId == null) return toast.error("Pick the offer item");
 
         const payload = {
             code: applyMode === "AUTO" ? null : code.trim().toUpperCase(),
@@ -84,6 +100,10 @@ export function CouponForm({ initial, onSaved, onCancel }: Props) {
             percentOff: type === "PERCENT" ? optNum(percentOff) : null,
             maxDiscountAmt: type === "PERCENT" ? optNum(maxDiscountAmt) : null,
             flatAmt: type === "FLAT" ? optNum(flatAmt) : null,
+            freeProductId: type === "FREE_ITEM" ? freeProductId : null,
+            freeQty: type === "FREE_ITEM" ? optNum(freeQty) : null,
+            freeDiscountPct: type === "FREE_ITEM" ? optNum(freeDiscountPct) : null,
+            rules: rules.filter((r) => r.productId != null || r.categoryId != null),
             startsAt: fromDateInput(startsAt),
             endsAt: fromDateInput(endsAt),
             minBillValue: optNum(minBillValue),
@@ -155,7 +175,7 @@ export function CouponForm({ initial, onSaved, onCancel }: Props) {
                         <SelectContent>
                             <SelectItem value="PERCENT">% off</SelectItem>
                             <SelectItem value="FLAT">Flat ₹ off</SelectItem>
-                            <SelectItem value="FREE_ITEM" disabled>Free item (soon)</SelectItem>
+                            <SelectItem value="FREE_ITEM">Free / discounted item</SelectItem>
                             <SelectItem value="BOGO" disabled>Buy X get Y (soon)</SelectItem>
                         </SelectContent>
                     </Select>
@@ -175,7 +195,29 @@ export function CouponForm({ initial, onSaved, onCancel }: Props) {
                         <RupeeInput value={flatAmt} onChange={(v) => setFlatAmt(dec(v))} placeholder="200" />
                     </Field>
                 )}
+                {type === "FREE_ITEM" && (
+                    <>
+                        <Field label="Offer item (must be in cart)">
+                            <SearchableSelect<number>
+                                value={freeProductId}
+                                options={products.map((p) => ({ value: p.id, label: `${p.sku} — ${p.name}`, leaf: p.name }))}
+                                onChange={setFreeProductId}
+                                placeholder="— pick item —"
+                                triggerClassName="h-9"
+                            />
+                        </Field>
+                        <Field label="Free qty">
+                            <Input inputMode="decimal" value={freeQty} onChange={(e) => setFreeQty(dec(e.target.value))} placeholder="1" className="h-9 text-right" />
+                        </Field>
+                        <Field label="Discount % on it (100 = free)">
+                            <Input inputMode="decimal" value={freeDiscountPct} onChange={(e) => setFreeDiscountPct(dec(e.target.value))} placeholder="100" className="h-9 text-right" />
+                        </Field>
+                    </>
+                )}
             </div>
+
+            {/* Item rules (optional) — limit the coupon to / exclude specific products or categories */}
+            <RuleEditor rules={rules} setRules={setRules} categories={categories} products={products} />
 
             {/* Constraints */}
             <div className="grid gap-3 sm:grid-cols-3">
@@ -216,6 +258,65 @@ export function CouponForm({ initial, onSaved, onCancel }: Props) {
                 <Button size="sm" variant="ghost" onClick={onCancel}>Cancel</Button>
                 <Button size="sm" onClick={save} disabled={saving}><Save size={14} className="mr-1" /> {editing ? "Save" : "Create"}</Button>
             </div>
+        </div>
+    );
+}
+
+function RuleEditor({ rules, setRules, categories, products }: {
+    rules: CouponRule[];
+    setRules: (r: CouponRule[]) => void;
+    categories: CategoryOpt[];
+    products: ProductOpt[];
+}) {
+    const [kind, setKind] = useState<"INCLUDE" | "EXCLUDE">("INCLUDE");
+    const catName = (id: number) => categories.find((c) => c.id === id)?.name ?? `cat #${id}`;
+    const prodName = (id: number) => { const p = products.find((x) => x.id === id); return p ? `${p.sku} — ${p.name}` : `#${id}`; };
+    const add = (rule: CouponRule) => setRules([...rules, rule]);
+    return (
+        <div className="space-y-2 rounded-md border border-border/60 p-3">
+            <div className="flex items-center justify-between">
+                <span className="text-[11px] font-medium text-muted-foreground">Item rules (optional)</span>
+                <span className="text-[10px] text-muted-foreground">no rules = applies to the whole bill</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+                <Select value={kind} onValueChange={(v) => setKind(v as "INCLUDE" | "EXCLUDE")}>
+                    <SelectTrigger className="h-8 w-28 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="INCLUDE">Only on</SelectItem>
+                        <SelectItem value="EXCLUDE">Exclude</SelectItem>
+                    </SelectContent>
+                </Select>
+                <div className="w-48">
+                    <SearchableSelect<number>
+                        value={null}
+                        options={products.map((p) => ({ value: p.id, label: `${p.sku} — ${p.name}`, leaf: p.name }))}
+                        onChange={(v) => { if (v != null) add({ kind, productId: v, categoryId: null }); }}
+                        placeholder="+ product"
+                        clearable={false}
+                        triggerClassName="h-8 text-xs"
+                    />
+                </div>
+                <div className="w-44">
+                    <SearchableSelect<number>
+                        value={null}
+                        options={categories.map((c) => ({ value: c.id, label: c.name }))}
+                        onChange={(v) => { if (v != null) add({ kind, productId: null, categoryId: v }); }}
+                        placeholder="+ category"
+                        clearable={false}
+                        triggerClassName="h-8 text-xs"
+                    />
+                </div>
+            </div>
+            {rules.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                    {rules.map((r, i) => (
+                        <span key={i} className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] ${r.kind === "INCLUDE" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300" : "bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300"}`}>
+                            {r.kind === "INCLUDE" ? "only" : "excl"} · {r.productId != null ? prodName(r.productId) : catName(r.categoryId!)}
+                            <button type="button" onClick={() => setRules(rules.filter((_, j) => j !== i))} className="opacity-70 hover:opacity-100"><X size={11} /></button>
+                        </span>
+                    ))}
+                </div>
+            )}
         </div>
     );
 }

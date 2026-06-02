@@ -40,9 +40,15 @@ export async function POST(req: Request) {
         const tierRupees = data.tierRupees ?? 0;
         const loyaltyRupees = data.loyaltyRupees ?? 0;
 
+        // Resolve each line's taxonomy server-side (the POS client doesn't send it)
+        // so include/exclude category rules evaluate IDENTICALLY here and in /sale.
+        const productIds = [...new Set(data.lines.map((l) => l.productId))];
+        const products = await prisma.invProduct.findMany({ where: { id: { in: productIds } }, select: { id: true, groupId: true, categoryId: true } });
+        const taxById = new Map(products.map((p) => [p.id, p]));
+
         const input: EvalInput = {
             accountId: data.accountId ?? null,
-            lines: data.lines.map((l) => ({ productId: l.productId, groupId: l.groupId ?? null, categoryId: l.categoryId ?? null, qty: l.qty, unitPrice: l.unitPrice })),
+            lines: data.lines.map((l) => ({ productId: l.productId, groupId: taxById.get(l.productId)?.groupId ?? null, categoryId: taxById.get(l.productId)?.categoryId ?? null, qty: l.qty, unitPrice: l.unitPrice })),
             goodsValue,
             // Coupon-alone ceiling; finalizeCouponAmount applies the stacking-aware ceiling.
             billBeforeCoupon: goodsValue,

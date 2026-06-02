@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { CouponForm, type Coupon } from "./CouponForm";
+import { CouponForm, type Coupon, type CategoryOpt, type ProductOpt } from "./CouponForm";
 
 const typeLabel: Record<Coupon["type"], string> = { PERCENT: "% off", FLAT: "Flat ₹", FREE_ITEM: "Free item", BOGO: "Buy X get Y" };
 const channelTone: Record<Coupon["channels"], string> = {
@@ -23,7 +23,7 @@ function valueSummary(c: Coupon): string {
     return typeLabel[c.type];
 }
 
-export function CouponList() {
+export function CouponList({ categories, products }: { categories: CategoryOpt[]; products: ProductOpt[] }) {
     const [coupons, setCoupons] = useState<Coupon[]>([]);
     const [loading, setLoading] = useState(true);
     const [adding, setAdding] = useState(false);
@@ -69,7 +69,7 @@ export function CouponList() {
                 )}
             </CardHeader>
             <CardContent className="space-y-3">
-                {adding && <CouponForm onSaved={() => { setAdding(false); load(); }} onCancel={() => setAdding(false)} />}
+                {adding && <CouponForm categories={categories} products={products} onSaved={() => { setAdding(false); load(); }} onCancel={() => setAdding(false)} />}
 
                 {loading ? (
                     <p className="text-sm text-muted-foreground">Loading…</p>
@@ -82,7 +82,7 @@ export function CouponList() {
                         {coupons.map((c) => (
                             editId === c.id ? (
                                 <li key={c.id} className="p-3">
-                                    <CouponForm initial={c} onSaved={() => { setEditId(null); load(); }} onCancel={() => setEditId(null)} />
+                                    <CouponForm initial={c} categories={categories} products={products} onSaved={() => { setEditId(null); load(); }} onCancel={() => setEditId(null)} />
                                 </li>
                             ) : (
                                 <li key={c.id} className={`flex flex-wrap items-center gap-3 px-3 py-2.5 ${c.isActive ? "" : "opacity-50"}`}>

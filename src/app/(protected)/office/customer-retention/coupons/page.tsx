@@ -1,11 +1,17 @@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { TicketPercent } from "lucide-react";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { CouponList } from "@/modules/coupons/components/CouponList";
 import { CouponConfigCard } from "@/modules/coupons/components/CouponConfigCard";
 
 export const metadata = { title: "Coupons & Gift Cards" };
 
-export default function CouponsPage() {
+export default async function CouponsPage() {
+    const [categories, products] = await Promise.all([
+        prisma.invCategory.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+        prisma.invProduct.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, take: 2000, select: { id: true, sku: true, name: true } }),
+    ]);
+
     return (
         <ScrollArea className="h-full" type="always">
             <div className="mx-auto max-w-3xl space-y-6 px-6 pt-4 pb-10">
@@ -16,12 +22,12 @@ export default function CouponsPage() {
                     <div>
                         <h1 className="text-xl font-semibold leading-tight">Coupons &amp; Gift Cards</h1>
                         <p className="text-sm text-muted-foreground">
-                            Run promotions across POS and the online shop. % off, flat ₹, with validity, usage limits, and stacking control.
+                            Run promotions across POS and the online shop. % off, flat ₹, free item — with validity, usage limits, auto-apply, and stacking control.
                         </p>
                     </div>
                 </div>
                 <CouponConfigCard />
-                <CouponList />
+                <CouponList categories={categories} products={products} />
             </div>
         </ScrollArea>
     );

@@ -200,7 +200,10 @@ export default function PosScreen() {
     // Coupon — code entry; the server validates + owns the ₹ value, returned here
     // so the displayed total matches what /api/pos/sale will post.
     const [couponCodeStr, setCouponCodeStr] = useState("");
-    const [appliedCoupon, setAppliedCoupon] = useState<{ couponId: number; code: string | null; name: string; rupees: number; droppedTier: boolean; blockedLoyalty: boolean } | null>(null);
+    type CouponHit = { couponId: number; code: string | null; name: string; rupees: number; droppedTier: boolean; blockedLoyalty: boolean };
+    const [appliedCoupon, setAppliedCoupon] = useState<CouponHit | null>(null);
+    // Best auto-apply offer (no code) — used only when no manual coupon is applied.
+    const [autoCoupon, setAutoCoupon] = useState<CouponHit | null>(null);
     const [couponBusy, setCouponBusy] = useState(false);
     const [roundOffStr, setRoundOffStr] = useState("");
     // Vyapar-style auto round-off: POS auto-derives the round-off to land Total
@@ -415,9 +418,11 @@ export default function PosScreen() {
     // A non-stackable coupon DROPS the tier discount + BLOCKS loyalty redemption;
     // the validate route already told us which, so mirror it in the bill so the
     // client total matches what /api/pos/sale will post.
-    const couponRupees = appliedCoupon?.rupees ?? 0;
-    const couponDroppedTier = !!appliedCoupon?.droppedTier;
-    const couponBlockedLoyalty = !!appliedCoupon?.blockedLoyalty;
+    // Manual coupon wins; otherwise the best auto-apply offer (if any).
+    const effectiveCoupon = appliedCoupon ?? autoCoupon;
+    const couponRupees = effectiveCoupon?.rupees ?? 0;
+    const couponDroppedTier = !!effectiveCoupon?.droppedTier;
+    const couponBlockedLoyalty = !!effectiveCoupon?.blockedLoyalty;
     const effDiscountAmount = couponDroppedTier ? 0 : discountAmount;
     const effRedemptionRupees = couponBlockedLoyalty ? 0 : redemptionRupees;
     const effRedeemPts = couponBlockedLoyalty ? 0 : redeemPts;
@@ -452,25 +457,27 @@ export default function PosScreen() {
         [cart, discountAmount, redemptionRupees],
     );
     const appliedCode = appliedCoupon?.code ?? null;
-    async function validateCoupon(code: string) {
+    type ValidateResp = { ok: boolean; reason?: string; couponId: number; code: string | null; name: string; discountRupees: number; droppedTier: boolean; blockedLoyalty: boolean };
+    async function runValidate(opts: { code?: string; autoApply?: boolean }): Promise<ValidateResp | null> {
         if (!snapshot?.account) return null;
-        const { data } = await axios.post<{ ok: boolean; reason?: string; couponId: number; code: string | null; name: string; discountRupees: number; droppedTier: boolean; blockedLoyalty: boolean }>(
-            "/api/pos/coupon-validate",
-            {
-                accountId: snapshot.account.id,
-                code,
-                isNewCustomer: snapshot.turnover.invoiceCount === 0,
-                tierRupees: discountAmount,
-                loyaltyRupees: redemptionRupees,
-                lines: cart.map((l) => ({ productId: l.productId, qty: l.qty, unitPrice: l.unitPrice })),
-            },
-        );
+        const { data } = await axios.post<ValidateResp>("/api/pos/coupon-validate", {
+            accountId: snapshot.account.id,
+            code: opts.code,
+            autoApply: opts.autoApply,
+            isNewCustomer: snapshot.turnover.invoiceCount === 0,
+            tierRupees: discountAmount,
+            loyaltyRupees: redemptionRupees,
+            lines: cart.map((l) => ({ productId: l.productId, qty: l.qty, unitPrice: l.unitPrice })),
+        });
         return data;
     }
+    const hit = (d: ValidateResp): CouponHit => ({ couponId: d.couponId, code: d.code, name: d.name, rupees: d.discountRupees, droppedTier: d.droppedTier, blockedLoyalty: d.blockedLoyalty });
+
+    // Re-validate the applied manual coupon when the cart / tier / loyalty change.
     useEffect(() => {
         if (!appliedCode || !snapshot?.account) return;
         let cancelled = false;
-        validateCoupon(appliedCode)
+        runValidate({ code: appliedCode })
             .then((data) => {
                 if (cancelled || !data) return;
                 if (data.ok) setAppliedCoupon((prev) => (prev ? { ...prev, rupees: data.discountRupees, droppedTier: data.droppedTier, blockedLoyalty: data.blockedLoyalty } : prev));
@@ -481,14 +488,26 @@ export default function PosScreen() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [couponSig, appliedCode, snapshot?.account?.id]);
 
+    // Auto-apply: when there's no manual coupon, surface the best eligible AUTO
+    // offer. The server re-applies it at checkout via the autoApply flag.
+    useEffect(() => {
+        if (appliedCode || !snapshot?.account || cart.length === 0) { setAutoCoupon(null); return; }
+        let cancelled = false;
+        runValidate({ autoApply: true })
+            .then((data) => { if (!cancelled) setAutoCoupon(data?.ok ? hit(data) : null); })
+            .catch(() => { if (!cancelled) setAutoCoupon(null); });
+        return () => { cancelled = true; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [couponSig, appliedCode, snapshot?.account?.id, cart.length]);
+
     async function applyCoupon() {
         const code = couponCodeStr.trim().toUpperCase();
         if (!code || !snapshot?.account) return;
         setCouponBusy(true);
         try {
-            const data = await validateCoupon(code);
+            const data = await runValidate({ code });
             if (data?.ok) {
-                setAppliedCoupon({ couponId: data.couponId, code: data.code, name: data.name, rupees: data.discountRupees, droppedTier: data.droppedTier, blockedLoyalty: data.blockedLoyalty });
+                setAppliedCoupon(hit(data));
                 toast.success(`Coupon ${data.code ?? data.name} applied · − ${fmtINR(data.discountRupees)}`);
             } else {
                 setAppliedCoupon(null);
@@ -724,6 +743,7 @@ export default function PosScreen() {
                 discountAmt: discountAmount,   // tier discount → server drops it if a non-stackable coupon applies
                 redeemPoints: effRedeemPts,     // 0 when a non-stackable coupon blocks loyalty
                 couponCode: appliedCoupon?.code ?? undefined, // server re-resolves + owns the ₹ value
+                autoApply: !appliedCoupon && !!autoCoupon,     // let the server pick the best auto offer
                 charges: validCharges.map((c) => ({
                     accountId: c.accountId as number,
                     description: c.description.trim() || undefined,
@@ -749,6 +769,7 @@ export default function PosScreen() {
             setRedeemOn(false);
             setCouponCodeStr("");
             setAppliedCoupon(null);
+            setAutoCoupon(null);
             setRoundOffStr("");
             setRoundOffManuallyEdited(false);
             setCharges([]);
@@ -1363,7 +1384,12 @@ export default function PosScreen() {
                                             </Button>
                                         </div>
                                     ) : (
-                                        <div className="flex items-center gap-1.5">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            {autoCoupon && (
+                                                <span className="inline-flex items-center gap-1 rounded bg-emerald-100 px-1.5 py-0.5 text-[11px] text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
+                                                    <Sparkles size={11} /> Auto offer{autoCoupon.code ? ` ${autoCoupon.code}` : ""} · − {fmtINR(autoCoupon.rupees)}
+                                                </span>
+                                            )}
                                             <Input
                                                 value={couponCodeStr}
                                                 onChange={(e) => setCouponCodeStr(e.target.value.toUpperCase())}
