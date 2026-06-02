@@ -5,6 +5,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { LoyaltyConfigForm } from "@/modules/loyalty/components/LoyaltyConfigForm";
 import { LoyaltyEarnRules } from "@/modules/loyalty/components/LoyaltyEarnRules";
 import { LoyaltyMilestones } from "@/modules/loyalty/components/LoyaltyMilestones";
+import { LoyaltyTiers } from "@/modules/loyalty/components/LoyaltyTiers";
 import { ratesFromConfig, expiryCutoff } from "@/modules/loyalty/lib";
 
 export const metadata = { title: "Loyalty" };
@@ -77,6 +78,7 @@ export default async function LoyaltyHubPage() {
 
                 <LoyaltyConfigForm />
                 <LoyaltyEarnRules categories={categories} groups={groups} products={products} />
+                <LoyaltyTiers />
                 <LoyaltyMilestones />
             </div>
         </ScrollArea>

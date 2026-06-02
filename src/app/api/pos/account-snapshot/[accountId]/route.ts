@@ -105,7 +105,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
             deletedAt: null,
         };
 
-        const [lifetimeAgg, ytdAgg, latestVoucher, latestTicket, recentTickets, ledgerOutstanding, loyaltyConfig] = await Promise.all([
+        const [lifetimeAgg, ytdAgg, latestVoucher, latestTicket, recentTickets, ledgerOutstanding, loyaltyConfig, loyaltyTiers] = await Promise.all([
             prisma.invVoucher.aggregate({
                 where: baseWhere,
                 _sum: { totalAmount: true },
@@ -141,23 +141,30 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
             // Real persisted loyalty balance + the rates the POS UI needs to
             // compute the ₹ value of a redemption live.
             prisma.loyaltyConfig.findUnique({ where: { id: 1 } }),
+            // Spend-tier auto-discount table (admin-editable; see /office/customer-retention/loyalty).
+            prisma.loyaltyTier.findMany({ orderBy: { minSpend: "desc" } }),
         ]);
 
         const lifetimeTotal = Number(lifetimeAgg?._sum.totalAmount ?? 0);
         const ytdTotal = Number(ytdAgg?._sum.totalAmount ?? 0);
         const invoiceCount = lifetimeAgg?._count._all ?? 0;
 
-        const discountPct = lifetimeTotal >= 200000 ? 8 : lifetimeTotal >= 50000 ? 5 : lifetimeTotal >= 10000 ? 2 : 0;
+        // Resolve the customer's spend tier from the admin-editable LoyaltyTier
+        // table (rows are pre-sorted minSpend desc — first one the lifetime clears
+        // wins). Falls back to the legacy hardcoded ladder if the table is empty.
+        const matchedTier = loyaltyTiers.find((t) => lifetimeTotal >= Number(t.minSpend));
+        const discountPct = matchedTier
+            ? Number(matchedTier.discountPct)
+            : (lifetimeTotal >= 200000 ? 8 : lifetimeTotal >= 50000 ? 5 : lifetimeTotal >= 10000 ? 2 : 0);
         // Live, dynamic balance — Σ in-window lots under the current expiry window
         // (was a derived ⌊lifetime/100⌋ placeholder). `loyaltyRates` carries the full
         // rate set so the POS UI can enforce the redeem floors / show the ₹ value.
         const loyaltyRates = loyaltyConfig ? ratesFromConfig(loyaltyConfig) : null;
         const loyaltyPoints = loyaltyRates ? await liveBalance(prisma, accountId, loyaltyRates) : 0;
 
-        const customerLevel = lifetimeTotal >= 200000 ? "Platinum"
-                              : lifetimeTotal >= 50000  ? "Gold"
-                              : lifetimeTotal >= 10000  ? "Silver"
-                                                        : "Bronze";
+        const customerLevel = (matchedTier?.name
+            ?? (lifetimeTotal >= 200000 ? "Platinum" : lifetimeTotal >= 50000 ? "Gold" : lifetimeTotal >= 10000 ? "Silver" : "Bronze")
+        ) as "Bronze" | "Silver" | "Gold" | "Platinum";
 
         // Deny-by-default (matches checkCreditLimit): NULL is treated as 0.
         //   0    = no credit facility (must pay in full)
