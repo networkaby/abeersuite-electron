@@ -15,6 +15,7 @@ export default function PricingStrategyLayout({ children }: { children: React.Re
         <div className="flex h-full w-full flex-col">
             <PathBreadcrumb
                 root={{ href: "/office/pricing-strategy", label: "Pricing Strategy" }}
+                escapeBack
                 labels={{
                     "items": "Items",
                     "strategies": "Strategies",
