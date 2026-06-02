@@ -72,6 +72,10 @@ model LoyaltyEarnRule {
   /// Multiplier on the global earn rate. 0 = no earn (e.g. loss-making items),
   /// 2 = double. Resolution precedence: product → group → category → global(1).
   multiplier Decimal          @default(1.0) @db.Decimal(6, 3)
+  /// Max % of THIS item's value payable with points (null = inherit the global
+  /// LoyaltyConfig.maxRedeemPctOfBill; 0 = points can't be redeemed against it).
+  /// Same resolution precedence as `multiplier`: product → group → category → global.
+  redeemCapPct Decimal?        @db.Decimal(5, 2)
   enabled    Boolean          @default(true)
   createdAt  DateTime         @default(now())
   updatedAt  DateTime         @updatedAt

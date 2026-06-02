@@ -3,6 +3,8 @@ export {
     buildRulesIndex,
     resolveEarnMultiplier,
     earnableBaseForCart,
+    resolveRedeemCapPct,
+    redeemableBaseForCart,
     pointsForBase,
     redeemValueOf,
     clampRedemption,

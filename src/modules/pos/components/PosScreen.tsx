@@ -81,6 +81,9 @@ type ProductOption = {
     /// Null = no rate found anywhere in the chain (line stays untaxed).
     taxRate?: number | null;
     hsnCode?: string | null;
+    /// Loyalty redeem-cap override (% of this item's value redeemable with points).
+    /// null = inherit the global cap. Snapshotted onto the cart line at add time.
+    redeemCapPct?: number | null;
     unit?: { code: string };
     warrantyTerm?: { name: string; durationDays: number | null } | null;
 };
@@ -92,6 +95,9 @@ type CartLine = {
     taxRate: number;
     mrpPaise?: number | null;
     warrantyLabel?: string | null;
+    /// Loyalty redeem-cap override (% redeemable with points; null = global cap).
+    /// Snapshotted so the redeem ceiling matches the server's at checkout.
+    redeemCapPct?: number | null;
 };
 
 // Extras = Card / Cheque / Bank Transfer / Wallet (Cash / UPI / Credit are fixed rows)
@@ -367,8 +373,19 @@ export default function PosScreen() {
     // Pre-redemption bill — used to enforce the min-invoice-to-redeem floor.
     const billBeforeRedemption = calcVoucherTotals(lineRows, shippingAmt, discountAmount, 0, manualChargesNet).totalAmount;
     const redeemBlocked = rates?.minRedeemInvoiceValue != null && billBeforeRedemption < rates.minRedeemInvoiceValue;
-    const pctCapRupees = rates?.maxRedeemPctOfBill != null ? (goodsValue * rates.maxRedeemPctOfBill) / 100 : Infinity;
-    const maxRedeemableRupees = Math.min(goodsValue, pctCapRupees);
+    // Cart-aware redeem ceiling — Σ (line net × that item's redeem cap %), with the
+    // global cap as the per-line default (null → 100%). Mirrors the server's
+    // redeemableBaseForCart so the bill total + payment check always agree.
+    const globalCapPct = rates?.maxRedeemPctOfBill ?? null;
+    const cartGoods = cart.reduce((s, l) => s + l.qty * l.unitPrice, 0);
+    const maxRedeemableRupees = cartGoods <= 0 ? 0 : cart.reduce((acc, l) => {
+        const lineGoods = l.qty * l.unitPrice;
+        const allocated = discountAmount * (lineGoods / cartGoods);
+        const net = Math.max(0, lineGoods - allocated);
+        const cap = l.redeemCapPct ?? globalCapPct;
+        const frac = cap == null ? 1 : Math.max(0, Math.min(100, cap)) / 100;
+        return acc + net * frac;
+    }, 0);
     const requestedPts = canRedeem && !redeemBlocked ? parseInt(digitsInt(redeemPointsStr) || "0", 10) : 0;
     const maxRedeemablePts = rates && rates.redeemValue > 0 ? Math.floor(maxRedeemableRupees / rates.redeemValue) : 0;
     const cappedPts = Math.min(requestedPts, loyaltyBalance, maxRedeemablePts);
@@ -476,6 +493,7 @@ export default function PosScreen() {
                 taxRate: p.taxRate ?? 0,
                 mrpPaise: p.mrpPaise ?? null,
                 warrantyLabel,
+                redeemCapPct: p.redeemCapPct ?? null,
             }];
         });
         setProductQuery("");

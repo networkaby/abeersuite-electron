@@ -13,6 +13,7 @@ import { checkCreditLimit, CreditLimitError } from "@/shared/lib/accountancy/che
 import {
     ratesFromConfig,
     buildRulesIndex,
+    redeemableBaseForCart,
     clampRedemption,
     applyLoyaltyForSale,
     applyMilestones,
@@ -223,11 +224,42 @@ export async function POST(req: Request) {
     const manualChargesNet = body.charges.reduce((s, c) => s + c.amount, 0);
     const invoiceValueGross = goodsValue + taxAmount + body.shippingAmt - tierDiscount + body.roundOff + manualChargesNet;
 
-    // Server owns the redemption ₹ value — never trust the client. Clamp against
-    // the live balance, the post-tier goods value, and the min-redeem-invoice floor.
+    // ── Pre-load loyalty earn context (reads, outside the tx) ──────────────
+    // Resolves each line's taxonomy + the earn-rule index (earn multiplier AND
+    // redeem-cap %) + group/category parent chains so both the per-line
+    // multiplier and the cart-aware redeem ceiling (product → group → category →
+    // global) can be computed. Skipped for walk-in / disabled — no extra queries.
+    let earnLines: EarnLine[] = [];
+    let rulesIndex = buildRulesIndex([]);
+    let taxonomyMaps: TaxonomyMaps = { groupParent: new Map(), categoryParent: new Map() };
+    if (loyaltyEnabled) {
+        const productIds = [...new Set(body.lines.map((l) => l.productId))];
+        const [products, groups, categories, rules] = await Promise.all([
+            prisma.invProduct.findMany({ where: { id: { in: productIds } }, select: { id: true, groupId: true, categoryId: true } }),
+            prisma.invProductGroup.findMany({ select: { id: true, parentId: true } }),
+            prisma.invCategory.findMany({ select: { id: true, parentId: true } }),
+            prisma.loyaltyEarnRule.findMany({ where: { enabled: true }, select: { scope: true, categoryId: true, groupId: true, productId: true, multiplier: true, redeemCapPct: true, enabled: true } }),
+        ]);
+        const taxById = new Map(products.map((p) => [p.id, p]));
+        earnLines = body.lines.map((l) => {
+            const p = taxById.get(l.productId);
+            return { productId: l.productId, groupId: p?.groupId ?? null, categoryId: p?.categoryId ?? null, goods: l.quantity * l.unitPrice };
+        });
+        rulesIndex = buildRulesIndex(rules.map((r) => ({ ...r, multiplier: Number(r.multiplier), redeemCapPct: r.redeemCapPct == null ? null : Number(r.redeemCapPct) })));
+        taxonomyMaps = {
+            groupParent: new Map(groups.map((g) => [g.id, g.parentId])),
+            categoryParent: new Map(categories.map((c) => [c.id, c.parentId])),
+        };
+    }
+
+    // Server owns the redemption ₹ value — never trust the client. The ceiling is
+    // cart-aware: Σ (line net × that item's redeem cap %), folding in the global
+    // cap as the per-line default. Clamp against balance, that ceiling, and floors.
     const requestedRedeem = loyaltyEnabled ? body.redeemPoints : 0;
-    const redeemBase = Math.max(0, goodsValue - tierDiscount);
-    const redemption = clampRedemption(requestedRedeem, loyaltyBalance, redeemBase, invoiceValueGross, loyaltyRates);
+    const redeemCeiling = loyaltyEnabled
+        ? redeemableBaseForCart(earnLines, tierDiscount, rulesIndex, taxonomyMaps, loyaltyRates.maxRedeemPctOfBill)
+        : 0;
+    const redemption = clampRedemption(requestedRedeem, loyaltyBalance, redeemCeiling, invoiceValueGross, loyaltyRates);
     if (requestedRedeem > 0 && redemption.points === 0 && redemption.reason) {
         return NextResponse.json({ error: redemption.reason, code: "LOYALTY_REDEEM_REJECTED" }, { status: 422 });
     }
@@ -297,34 +329,6 @@ export async function POST(req: Request) {
         select: { gstStateCode: true },
     });
     const sellerStateCode = (posBranch?.gstStateCode || "").trim() || null;
-
-    // ── Pre-load loyalty earn context (reads, outside the tx) ──────────────
-    // Resolves each line's taxonomy + the earn-rule index + group/category
-    // parent chains so the per-line multiplier (product → group → category →
-    // global) can be computed during the atomic post. Skipped entirely for
-    // walk-in / disabled so a normal anonymous sale does no extra queries.
-    let earnLines: EarnLine[] = [];
-    let rulesIndex = buildRulesIndex([]);
-    let taxonomyMaps: TaxonomyMaps = { groupParent: new Map(), categoryParent: new Map() };
-    if (loyaltyEnabled) {
-        const productIds = [...new Set(body.lines.map((l) => l.productId))];
-        const [products, groups, categories, rules] = await Promise.all([
-            prisma.invProduct.findMany({ where: { id: { in: productIds } }, select: { id: true, groupId: true, categoryId: true } }),
-            prisma.invProductGroup.findMany({ select: { id: true, parentId: true } }),
-            prisma.invCategory.findMany({ select: { id: true, parentId: true } }),
-            prisma.loyaltyEarnRule.findMany({ where: { enabled: true }, select: { scope: true, categoryId: true, groupId: true, productId: true, multiplier: true, enabled: true } }),
-        ]);
-        const taxById = new Map(products.map((p) => [p.id, p]));
-        earnLines = body.lines.map((l) => {
-            const p = taxById.get(l.productId);
-            return { productId: l.productId, groupId: p?.groupId ?? null, categoryId: p?.categoryId ?? null, goods: l.quantity * l.unitPrice };
-        });
-        rulesIndex = buildRulesIndex(rules.map((r) => ({ ...r, multiplier: Number(r.multiplier) })));
-        taxonomyMaps = {
-            groupParent: new Map(groups.map((g) => [g.id, g.parentId])),
-            categoryParent: new Map(categories.map((c) => [c.id, c.parentId])),
-        };
-    }
 
     try {
         const result = await prisma.$transaction(async (tx) => {

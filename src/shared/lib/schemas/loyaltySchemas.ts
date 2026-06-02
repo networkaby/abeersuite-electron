@@ -26,6 +26,7 @@ export const loyaltyEarnRuleSchema = z
         groupId:    z.number().int().positive().nullable().optional(),
         productId:  z.number().int().positive().nullable().optional(),
         multiplier: z.number().min(0).max(100),
+        redeemCapPct: z.number().min(0).max(100).nullable().optional(),
         enabled:    z.boolean().optional(),
     })
     .refine(
@@ -39,8 +40,9 @@ export type LoyaltyEarnRuleInput = z.infer<typeof loyaltyEarnRuleSchema>;
 
 // Partial update for an existing rule (only the multiplier / enabled flag).
 export const loyaltyEarnRuleUpdateSchema = z.object({
-    multiplier: z.number().min(0).max(100).optional(),
-    enabled:    z.boolean().optional(),
+    multiplier:   z.number().min(0).max(100).optional(),
+    redeemCapPct: z.number().min(0).max(100).nullable().optional(),
+    enabled:      z.boolean().optional(),
 });
 export type LoyaltyEarnRuleUpdateInput = z.infer<typeof loyaltyEarnRuleUpdateSchema>;
 

@@ -32,7 +32,7 @@ export default async function LoyaltyHubPage() {
         <ScrollArea className="h-full" type="always">
             <div className="mx-auto max-w-5xl space-y-6 px-6 pt-4 pb-10">
                 {/* Header */}
-                <div className="flex items-center gap-3">
+                {/* <div className="flex items-center gap-3">
                     <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
                         <Gift size={22} />
                     </div>
@@ -42,7 +42,7 @@ export default async function LoyaltyHubPage() {
                             Customers earn points at POS and redeem them as a bill discount. Earning is off-book; redemption posts to the dedicated &ldquo;Loyalty Points Redeemed&rdquo; ledger.
                         </p>
                     </div>
-                </div>
+                </div> */}
 
                 {/* Stat strip */}
                 <div className="grid gap-3 sm:grid-cols-3">

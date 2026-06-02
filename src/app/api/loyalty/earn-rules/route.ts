@@ -43,6 +43,7 @@ export async function POST(req: Request) {
                 groupId:    data.groupId ?? null,
                 productId:  data.productId ?? null,
                 multiplier: data.multiplier,
+                redeemCapPct: data.redeemCapPct ?? null,
                 enabled:    data.enabled ?? true,
             },
             include: ruleInclude,

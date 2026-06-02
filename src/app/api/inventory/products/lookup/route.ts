@@ -3,6 +3,35 @@ import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { resolveProductTaxBatch } from "@/modules/inventory/lib/gstResolver";
 import { loadLastInwardCostMap } from "@/modules/inventory/lib/valuation";
+import { buildRulesIndex, resolveRedeemCapPct } from "@/modules/loyalty/lib";
+
+/// Per-product loyalty redeem-cap OVERRIDE (% of the item's value redeemable with
+/// points). Returns a Map<productId, number> holding only products an enabled
+/// LoyaltyEarnRule caps (via product / group / category); products with no rule
+/// are absent → POS falls back to the global cap. Returns an empty Map (and does
+/// no extra queries beyond the rule probe) when no redeem-cap rules exist.
+async function loadRedeemCapOverrides(products: { id: number; groupId: number | null; categoryId: number | null }[]): Promise<Map<number, number>> {
+    const out = new Map<number, number>();
+    const rules = await prisma.loyaltyEarnRule.findMany({
+        where: { enabled: true, redeemCapPct: { not: null } },
+        select: { scope: true, categoryId: true, groupId: true, productId: true, multiplier: true, redeemCapPct: true, enabled: true },
+    });
+    if (rules.length === 0) return out;
+    const [groups, categories] = await Promise.all([
+        prisma.invProductGroup.findMany({ select: { id: true, parentId: true } }),
+        prisma.invCategory.findMany({ select: { id: true, parentId: true } }),
+    ]);
+    const idx = buildRulesIndex(rules.map((r) => ({ ...r, multiplier: Number(r.multiplier), redeemCapPct: r.redeemCapPct == null ? null : Number(r.redeemCapPct) })));
+    const maps = {
+        groupParent: new Map(groups.map((g) => [g.id, g.parentId])),
+        categoryParent: new Map(categories.map((c) => [c.id, c.parentId])),
+    };
+    for (const p of products) {
+        const cap = resolveRedeemCapPct({ productId: p.id, groupId: p.groupId, categoryId: p.categoryId }, idx, maps, null);
+        if (cap != null) out.set(p.id, cap);
+    }
+    return out;
+}
 
 /**
  * GET /api/inventory/products/lookup
@@ -51,6 +80,8 @@ export async function GET(req: NextRequest) {
                 effectiveSalePricePaise: true,
                 mrpPaise:          true,
                 barcode1:          true,
+                groupId:           true,
+                categoryId:        true,
                 unit:         { select: { code: true } },
                 brand:        { select: { name: true } },
                 warrantyTerm: { select: { name: true, durationDays: true } },
@@ -60,6 +91,7 @@ export async function GET(req: NextRequest) {
         const { products: taxByProduct } = await resolveProductTaxBatch({ productIds: [product.id] });
         const resolved = taxByProduct.get(product.id);
         const lastInward = await loadLastInwardCostMap([{ id: product.id, stock: product.stock }]);
+        const capMap = await loadRedeemCapOverrides([{ id: product.id, groupId: product.groupId, categoryId: product.categoryId }]);
         return NextResponse.json({
             ...product,
             // The response already carries `effectiveSalePricePaise` (selected +
@@ -70,6 +102,7 @@ export async function GET(req: NextRequest) {
             taxRate: resolved?.gstRate ?? null,
             hsnCode: resolved?.hsnCode ?? null,
             lastPurchasePaise: lastInward.get(product.id) ?? null,
+            redeemCapPct: capMap.get(product.id) ?? null,
         });
     }
 
@@ -85,6 +118,8 @@ export async function GET(req: NextRequest) {
             effectiveSalePricePaise: true,
             mrpPaise:          true,
             barcode1:          true,
+            groupId:           true,
+            categoryId:        true,
             unit:         { select: { code: true } },
             brand:        { select: { name: true } },
             warrantyTerm: { select: { name: true, durationDays: true } },
@@ -106,6 +141,10 @@ export async function GET(req: NextRequest) {
         products.map((p) => ({ id: p.id, stock: p.stock })),
     );
 
+    // Loyalty redeem-cap overrides (empty unless cap rules exist) so the POS can
+    // size the redeemable amount per cart consistently with the server.
+    const capMap = await loadRedeemCapOverrides(products.map((p) => ({ id: p.id, groupId: p.groupId, categoryId: p.categoryId })));
+
     const enriched = products.map((p) => {
         const r = taxByProduct.get(p.id);
         return {
@@ -118,6 +157,7 @@ export async function GET(req: NextRequest) {
             taxRate: r?.gstRate ?? null,
             hsnCode: r?.hsnCode ?? null,
             lastPurchasePaise: lastInward.get(p.id) ?? null,
+            redeemCapPct: capMap.get(p.id) ?? null,
         };
     });
 

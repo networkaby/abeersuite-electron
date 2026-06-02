@@ -22,6 +22,7 @@ interface EarnRule {
     groupId: number | null;
     productId: number | null;
     multiplier: string | number;
+    redeemCapPct: string | number | null;
     enabled: boolean;
     category: { id: number; name: string } | null;
     group: { id: number; name: string } | null;
@@ -45,6 +46,7 @@ export function LoyaltyEarnRules({
     const [scope, setScope] = useState<Scope>("CATEGORY");
     const [targetId, setTargetId] = useState<string>("");
     const [multiplier, setMultiplier] = useState("1");
+    const [redeemCap, setRedeemCap] = useState(""); // blank = inherit global cap
     const [adding, setAdding] = useState(false);
 
     function load() {
@@ -69,11 +71,13 @@ export function LoyaltyEarnRules({
                 groupId:    scope === "GROUP" ? id : null,
                 productId:  scope === "PRODUCT" ? id : null,
                 multiplier: Number(multiplier) || 0,
+                redeemCapPct: redeemCap.trim() === "" ? null : Number(redeemCap),
             };
             await axios.post("/api/loyalty/earn-rules", body);
-            toast.success("Earn rule added");
+            toast.success("Rule added");
             setTargetId("");
             setMultiplier("1");
+            setRedeemCap("");
             setShowAdd(false);
             load();
         } catch (e) {
@@ -84,7 +88,7 @@ export function LoyaltyEarnRules({
         }
     }
 
-    async function patchRule(id: number, patch: { multiplier?: number; enabled?: boolean }) {
+    async function patchRule(id: number, patch: { multiplier?: number; enabled?: boolean; redeemCapPct?: number | null }) {
         try {
             await axios.patch(`/api/loyalty/earn-rules/${id}`, patch);
             load();
@@ -120,11 +124,12 @@ export function LoyaltyEarnRules({
                 <div className="space-y-1.5">
                     <CardTitle className="flex items-center gap-2 text-base">
                         <span className="flex h-7 w-7 items-center justify-center rounded-md bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-400"><Layers size={15} /></span>
-                        Item-wise earn rates
+                        Item-wise rates
                     </CardTitle>
                     <CardDescription>
-                        A multiplier on the global rate, resolved per line: product → group → category → global (1×).
-                        Set loss-making items to <span className="font-medium">0×</span> so they earn nothing.
+                        Per item (product → group → category → global): an <span className="font-medium">earn ×</span>
+                        and a <span className="font-medium">redeem cap %</span> (max of the item payable with points).
+                        0× = earns nothing; 0% = points can&rsquo;t be spent on it; blank cap = global default.
                     </CardDescription>
                 </div>
                 {!showAdd && (
@@ -168,15 +173,24 @@ export function LoyaltyEarnRules({
                             </Select>
                         </div>
                     </div>
-                    <div className="flex items-end justify-between gap-2">
-                        <div className="space-y-1">
-                            <Label className="text-[11px] text-muted-foreground">Multiplier</Label>
-                            <div className="flex items-center gap-1.5">
-                                <Input value={multiplier} onChange={(e) => setMultiplier(dec(e.target.value))} className="h-9 w-24 text-right" />
-                                <span className="text-sm text-muted-foreground">× global</span>
+                    <div className="flex flex-wrap items-end justify-between gap-3">
+                        <div className="flex flex-wrap items-end gap-4">
+                            <div className="space-y-1">
+                                <Label className="text-[11px] text-muted-foreground">Earn multiplier</Label>
+                                <div className="flex items-center gap-1.5">
+                                    <Input value={multiplier} onChange={(e) => setMultiplier(dec(e.target.value))} className="h-9 w-20 text-right" />
+                                    <span className="text-sm text-muted-foreground">× global</span>
+                                </div>
+                            </div>
+                            <div className="space-y-1">
+                                <Label className="text-[11px] text-muted-foreground">Redeem cap</Label>
+                                <div className="flex items-center gap-1.5">
+                                    <Input value={redeemCap} onChange={(e) => setRedeemCap(dec(e.target.value))} placeholder="global" className="h-9 w-20 text-right" />
+                                    <span className="text-sm text-muted-foreground">%</span>
+                                </div>
                             </div>
                         </div>
-                        <Button size="sm" onClick={add} disabled={adding}><Plus size={14} className="mr-1" /> Add override</Button>
+                        <Button size="sm" onClick={add} disabled={adding}><Plus size={14} className="mr-1" /> Add rule</Button>
                     </div>
                 </div>
             )}
@@ -194,16 +208,30 @@ export function LoyaltyEarnRules({
                         <li key={r.id} className={`flex items-center gap-3 px-3 py-2.5 ${r.enabled ? "" : "opacity-50"}`}>
                             <Badge variant="secondary" className={`shrink-0 text-[10px] ${scopeStyle[r.scope]}`}>{r.scope}</Badge>
                             <span className="min-w-0 flex-1 truncate text-sm" title={targetLabel(r)}>{targetLabel(r)}</span>
-                            <div className="flex shrink-0 items-center gap-1">
+                            <div className="flex shrink-0 items-center gap-1" title="Earn multiplier">
                                 <Input
                                     defaultValue={String(Number(r.multiplier))}
                                     onBlur={(e) => {
                                         const v = Number(dec(e.target.value));
                                         if (Number.isFinite(v) && v !== Number(r.multiplier)) patchRule(r.id, { multiplier: v });
                                     }}
-                                    className="h-8 w-16 text-right text-xs"
+                                    className="h-8 w-14 text-right text-xs"
                                 />
                                 <span className="text-xs text-muted-foreground">×</span>
+                            </div>
+                            <div className="flex shrink-0 items-center gap-1" title="Redeem cap (% redeemable with points; blank = global)">
+                                <Input
+                                    defaultValue={r.redeemCapPct == null ? "" : String(Number(r.redeemCapPct))}
+                                    placeholder="global"
+                                    onBlur={(e) => {
+                                        const raw = dec(e.target.value).trim();
+                                        const next = raw === "" ? null : Number(raw);
+                                        const cur = r.redeemCapPct == null ? null : Number(r.redeemCapPct);
+                                        if (next !== cur) patchRule(r.id, { redeemCapPct: next });
+                                    }}
+                                    className="h-8 w-16 text-right text-xs"
+                                />
+                                <span className="text-xs text-muted-foreground">%</span>
                             </div>
                             <Switch className="shrink-0" checked={r.enabled} onCheckedChange={(v) => patchRule(r.id, { enabled: v })} />
                             <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => remove(r.id)}>

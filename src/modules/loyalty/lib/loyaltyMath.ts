@@ -22,13 +22,16 @@ export type LoyaltyRates = {
     maxRedeemPctOfBill: number | null;
 };
 
-/// A loyalty earn-rule row, narrowed to the fields the resolver needs.
+/// A loyalty earn-rule row, narrowed to the fields the resolver needs. Each row
+/// can carry an earn `multiplier` and/or a `redeemCapPct` (max % of the item's
+/// value payable with points; null = inherit the global cap).
 export type EarnRule = {
     scope: "CATEGORY" | "GROUP" | "PRODUCT";
     categoryId: number | null;
     groupId: number | null;
     productId: number | null;
     multiplier: number;
+    redeemCapPct: number | null;
     enabled: boolean;
 };
 
@@ -45,6 +48,10 @@ export type RulesIndex = {
     byProduct: Map<number, number>;
     byGroup: Map<number, number>;
     byCategory: Map<number, number>;
+    /// Redeem-cap % maps — populated only from rules whose redeemCapPct is set.
+    capByProduct: Map<number, number>;
+    capByGroup: Map<number, number>;
+    capByCategory: Map<number, number>;
 };
 
 /// Parent chains for the group + category trees, so the resolver can walk
@@ -94,13 +101,24 @@ export function expiryCutoff(now: Date, rates: { expiryEnabled: boolean; expiryD
 }
 
 export function buildRulesIndex(rules: EarnRule[]): RulesIndex {
-    const idx: RulesIndex = { byProduct: new Map(), byGroup: new Map(), byCategory: new Map() };
+    const idx: RulesIndex = {
+        byProduct: new Map(), byGroup: new Map(), byCategory: new Map(),
+        capByProduct: new Map(), capByGroup: new Map(), capByCategory: new Map(),
+    };
     for (const r of rules) {
         if (!r.enabled) continue;
         const m = Number(r.multiplier);
-        if (r.scope === "PRODUCT" && r.productId != null) idx.byProduct.set(r.productId, m);
-        else if (r.scope === "GROUP" && r.groupId != null) idx.byGroup.set(r.groupId, m);
-        else if (r.scope === "CATEGORY" && r.categoryId != null) idx.byCategory.set(r.categoryId, m);
+        const cap = r.redeemCapPct == null ? null : Number(r.redeemCapPct);
+        if (r.scope === "PRODUCT" && r.productId != null) {
+            idx.byProduct.set(r.productId, m);
+            if (cap != null) idx.capByProduct.set(r.productId, cap);
+        } else if (r.scope === "GROUP" && r.groupId != null) {
+            idx.byGroup.set(r.groupId, m);
+            if (cap != null) idx.capByGroup.set(r.groupId, cap);
+        } else if (r.scope === "CATEGORY" && r.categoryId != null) {
+            idx.byCategory.set(r.categoryId, m);
+            if (cap != null) idx.capByCategory.set(r.categoryId, cap);
+        }
     }
     return idx;
 }
@@ -157,6 +175,65 @@ export function earnableBaseForCart(
     return base;
 }
 
+/// Resolve a line's redeem cap % with the same precedence as the earn multiplier
+/// (product → group chain → category chain). Falls back to the global cap
+/// (`maxRedeemPctOfBill`); returns null only when neither a rule nor a global cap
+/// applies — i.e. uncapped (the whole line value is redeemable).
+export function resolveRedeemCapPct(
+    line: { productId: number; groupId: number | null; categoryId: number | null },
+    idx: RulesIndex,
+    maps: TaxonomyMaps,
+    globalCapPct: number | null,
+): number | null {
+    const pr = idx.capByProduct.get(line.productId);
+    if (pr !== undefined) return pr;
+
+    let g = line.groupId;
+    const seenG = new Set<number>();
+    while (g != null && !seenG.has(g)) {
+        seenG.add(g);
+        const c = idx.capByGroup.get(g);
+        if (c !== undefined) return c;
+        g = maps.groupParent.get(g) ?? null;
+    }
+
+    let c = line.categoryId;
+    const seenC = new Set<number>();
+    while (c != null && !seenC.has(c)) {
+        seenC.add(c);
+        const cap = idx.capByCategory.get(c);
+        if (cap !== undefined) return cap;
+        c = maps.categoryParent.get(c) ?? null;
+    }
+
+    return globalCapPct;
+}
+
+/// Maximum ₹ of a cart that may be paid with points — the cart-aware redemption
+/// ceiling. The tier discount is allocated across lines proportional to goods,
+/// then each line's net is scaled by its resolved redeem cap % (null = 100%).
+/// Σ of those line allowances is the ceiling (≤ post-tier goods value).
+export function redeemableBaseForCart(
+    lines: EarnLine[],
+    tierDiscount: number,
+    idx: RulesIndex,
+    maps: TaxonomyMaps,
+    globalCapPct: number | null,
+): number {
+    const totalGoods = lines.reduce((s, l) => s + l.goods, 0);
+    if (totalGoods <= 0) return 0;
+    const discount = Math.max(0, tierDiscount);
+    let ceiling = 0;
+    for (const l of lines) {
+        const allocated = discount * (l.goods / totalGoods);
+        const net = Math.max(0, l.goods - allocated);
+        const cap = resolveRedeemCapPct(l, idx, maps, globalCapPct);
+        const fraction = cap == null ? 1 : Math.max(0, Math.min(100, cap)) / 100;
+        ceiling += net * fraction;
+    }
+    return ceiling;
+}
+
 /// Whole points earned on an effective base. Floors — never awards partial points.
 export function pointsForBase(base: number, rates: LoyaltyRates): number {
     if (!rates.enabled || !rates.earnEnabled || rates.globalEarnRatePer <= 0 || base <= 0) return 0;
@@ -170,13 +247,14 @@ export function redeemValueOf(points: number, rates: LoyaltyRates): number {
 }
 
 /// Server-authoritative redemption clamp. Returns the points actually allowed +
-/// their ₹ value, or a `reason` when the request is rejected. `billGoodsValue`
-/// is the reducible base (post-tier-discount, pre-GST goods) the redemption
-/// cannot exceed.
+/// their ₹ value, or a `reason` when the request is rejected. `redeemCeiling` is
+/// the cart-aware ₹ cap from `redeemableBaseForCart` (it already folds in both the
+/// per-item redeem caps and the global cap as the default), so it is the single
+/// ₹ ceiling the redemption must not exceed.
 export function clampRedemption(
     requestedPoints: number,
     balance: number,
-    billGoodsValue: number,
+    redeemCeiling: number,
     invoiceValue: number,
     rates: LoyaltyRates,
 ): { points: number; value: number; reason?: string } {
@@ -191,12 +269,9 @@ export function clampRedemption(
         return { points: 0, value: 0, reason: `Minimum ${rates.minRedeemPoints} points required to redeem.` };
     }
     const value = redeemValueOf(requestedPoints, rates);
-    const pctCap = rates.maxRedeemPctOfBill != null
-        ? (billGoodsValue * rates.maxRedeemPctOfBill) / 100
-        : Number.POSITIVE_INFINITY;
-    const cap = Math.min(billGoodsValue, pctCap);
+    const cap = Math.max(0, redeemCeiling);
     if (value > cap + 0.005) {
-        return { points: 0, value: 0, reason: `Redemption (₹${value.toFixed(2)}) exceeds the allowed cap of ₹${cap.toFixed(2)} for this bill.` };
+        return { points: 0, value: 0, reason: `Redemption (₹${value.toFixed(2)}) exceeds the ₹${cap.toFixed(2)} redeemable on this cart (some items cap or block points).` };
     }
     return { points: requestedPoints, value };
 }
