@@ -205,6 +205,10 @@ export default function PosScreen() {
     // Best auto-apply offer (no code) — used only when no manual coupon is applied.
     const [autoCoupon, setAutoCoupon] = useState<CouponHit | null>(null);
     const [couponBusy, setCouponBusy] = useState(false);
+    // Gift card redeemed as a payment tender (reduces cash/UPI due, not a discount).
+    const [giftCardCodeStr, setGiftCardCodeStr] = useState("");
+    const [giftCard, setGiftCard] = useState<{ id: number; code: string; balance: number } | null>(null);
+    const [gcBusy, setGcBusy] = useState(false);
     const [roundOffStr, setRoundOffStr] = useState("");
     // Vyapar-style auto round-off: POS auto-derives the round-off to land Total
     // on a whole rupee. Flips to true the moment the cashier types into the
@@ -447,6 +451,27 @@ export default function PosScreen() {
         roundOff,
         chargesNet,
     );
+
+    // Gift card is a TENDER, not a discount — it doesn't change `total`, it covers
+    // part of it. The cashier collects `payableTotal` in cash/UPI; the server draws
+    // the same min(balance, total) from the card and posts it as a Dr-Liability tender.
+    const giftCardApplied = giftCard ? Math.min(giftCard.balance, total) : 0;
+    const payableTotal = Math.max(0, +(total - giftCardApplied).toFixed(2));
+
+    async function applyGiftCard() {
+        const code = giftCardCodeStr.trim();
+        if (!code) return;
+        setGcBusy(true);
+        try {
+            const { data } = await axios.post<{ ok: boolean; reason?: string; id: number; code: string; balance: number }>("/api/pos/gift-card-lookup", { code });
+            if (data.ok) { setGiftCard({ id: data.id, code: data.code, balance: data.balance }); toast.success(`Gift card ${data.code} · ${fmtINR(data.balance)} available`); }
+            else { setGiftCard(null); toast.error(data.reason ?? "Gift card not usable"); }
+        } catch {
+            toast.error("Gift-card lookup failed");
+        } finally {
+            setGcBusy(false);
+        }
+    }
 
     // ── Coupon apply + auto-revalidation ──────────────────────────────────────
     // The server owns the ₹ value. We re-validate whenever the cart / tier /
@@ -708,7 +733,7 @@ export default function PosScreen() {
             // accommodate by requiring AT LEAST 1 — see toast above on no
             // cash/upi. If everything is on credit the route is technically
             // not a POS sale yet; surface a clear error.
-            if (paymentsList.length === 0) {
+            if (paymentsList.length === 0 && payableTotal > 0.005) {
                 toast.error("POS sale needs at least one paid line (cash, UPI, or other). Use 'Save as credit invoice' for fully-on-credit sales.");
                 setSubmitting(false);
                 return;
@@ -718,7 +743,8 @@ export default function PosScreen() {
             // now, only allow full-paid POS sales. Mixed-pay sales should go
             // through the TradingVoucherPage (credit-mode) instead.
             const collectedFromPayments = paymentsList.reduce((s, p) => s + p.amount, 0);
-            if (Math.abs(collectedFromPayments - total) > 0.01) {
+            // Cash/UPI must cover the bill MINUS the gift-card tender (server adds it back).
+            if (Math.abs(collectedFromPayments - payableTotal) > 0.01) {
                 toast.error("POS sale must be fully paid. Use 'Save & Print' on /sale for partial / credit sales.");
                 setSubmitting(false);
                 return;
@@ -744,6 +770,7 @@ export default function PosScreen() {
                 redeemPoints: effRedeemPts,     // 0 when a non-stackable coupon blocks loyalty
                 couponCode: appliedCoupon?.code ?? undefined, // server re-resolves + owns the ₹ value
                 autoApply: !appliedCoupon && !!autoCoupon,     // let the server pick the best auto offer
+                giftCardCode: giftCard?.code ?? undefined,     // server draws min(balance, total) as a tender
                 charges: validCharges.map((c) => ({
                     accountId: c.accountId as number,
                     description: c.description.trim() || undefined,
@@ -771,6 +798,8 @@ export default function PosScreen() {
             setCouponCodeStr("");
             setAppliedCoupon(null);
             setAutoCoupon(null);
+            setGiftCardCodeStr("");
+            setGiftCard(null);
             setRoundOffStr("");
             setRoundOffManuallyEdited(false);
             setCharges([]);
@@ -819,8 +848,8 @@ export default function PosScreen() {
     const cashNet = Math.max(0, pay.cashTendered - pay.cashReturn);
     const extrasSum = extras.reduce((s, e) => s + e.amount, 0);
     const collected = cashNet + pay.upi + extrasSum;
-    const onCredit = Math.max(0, total - collected);
-    const overpaid = Math.max(0, collected - total);
+    const onCredit = Math.max(0, payableTotal - collected);
+    const overpaid = Math.max(0, collected - payableTotal);
     const balanceDue = snapshot?.balanceDue ?? 0;
     const arrearPaid = Math.min(overpaid, balanceDue);
     const advanceTaken = Math.max(0, overpaid - balanceDue);
@@ -848,9 +877,9 @@ export default function PosScreen() {
                 });
             } else if (checkoutOpen && (cashNet > 0 || extrasSum > 0)) {
                 void qrDisplay.payment({
-                    total,
+                    total: payableTotal,
                     cashPaid: cashNet,
-                    balance: Math.max(0, total - collected),
+                    balance: Math.max(0, payableTotal - collected),
                 });
             } else if (cart.length > 0) {
                 void qrDisplay.cart({
@@ -1406,6 +1435,46 @@ export default function PosScreen() {
                                 </div>
                             )}
 
+                            {/* ── Gift card (payment tender) ─────────────────────
+                                Draws min(balance, bill) toward the total; the cashier
+                                collects the remaining "Pay" amount in cash/UPI. */}
+                            {snapshot && (
+                                <div className="flex items-center gap-2 text-xs">
+                                    <CreditCard size={12} className="shrink-0 text-muted-foreground" />
+                                    {giftCard ? (
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <span className="rounded bg-teal-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-teal-700 dark:bg-teal-500/15 dark:text-teal-300">
+                                                {giftCard.code}
+                                            </span>
+                                            <span className="font-medium tabular-nums text-emerald-600 dark:text-emerald-400">− {fmtINR(giftCardApplied)}</span>
+                                            <span className="text-[10px] text-muted-foreground">bal {fmtINR(Math.max(0, giftCard.balance - giftCardApplied))} after</span>
+                                            <Button size="icon" variant="ghost" className="h-5 w-5" onClick={() => { setGiftCard(null); setGiftCardCodeStr(""); }}>
+                                                <X size={12} />
+                                            </Button>
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center gap-1.5">
+                                            <Input
+                                                value={giftCardCodeStr}
+                                                onChange={(e) => setGiftCardCodeStr(e.target.value.toUpperCase())}
+                                                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void applyGiftCard(); } }}
+                                                placeholder="Gift card code"
+                                                className="h-7 w-36 font-mono text-xs"
+                                            />
+                                            <Button size="sm" variant="outline" className="h-7" disabled={gcBusy || !giftCardCodeStr.trim()} onClick={() => void applyGiftCard()}>
+                                                Redeem
+                                            </Button>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                            {giftCardApplied > 0.005 && (
+                                <div className="flex items-center justify-between text-xs font-medium">
+                                    <span className="text-muted-foreground">Pay (after gift card)</span>
+                                    <span className="tabular-nums">{fmtINR(payableTotal)}</span>
+                                </div>
+                            )}
+
                             {/* ── Collapsible Adjustments panel ────────────────
                                 Shipping + Round-off + Charges. Mirrors office
                                 SALE (TradingVoucherPage). Hidden by default —
@@ -1580,6 +1649,13 @@ export default function PosScreen() {
                             </div>
                         </div>
 
+                        {giftCardApplied > 0.005 && (
+                            <div className="flex items-center justify-between rounded-md border border-teal-200 bg-teal-50 px-3 py-2 text-sm dark:border-teal-500/30 dark:bg-teal-500/10">
+                                <span className="flex items-center gap-1.5 text-teal-700 dark:text-teal-300"><CreditCard size={14} /> Gift card {giftCard?.code} − {fmtINR(giftCardApplied)}</span>
+                                <span className="font-semibold tabular-nums">Pay {fmtINR(payableTotal)}</span>
+                            </div>
+                        )}
+
                         {/* Credit limit warning — shown when on-credit portion would breach the limit */}
                         {creditLimitBreached && (
                             <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
@@ -1614,7 +1690,7 @@ export default function PosScreen() {
                                                 type="button"
                                                 title="Fill remaining amount in cash"
                                                 onClick={() => {
-                                                    const remaining = Math.max(0, +(total - pay.upi - extrasSum).toFixed(2));
+                                                    const remaining = Math.max(0, +(payableTotal - pay.upi - extrasSum).toFixed(2));
                                                     setPay((s) => ({ ...s, cashTendered: remaining, cashReturn: 0 }));
                                                     setTimeout(() => cashTenderedRef.current?.select(), 0);
                                                 }}
@@ -1658,7 +1734,7 @@ export default function PosScreen() {
                                                     type="button"
                                                     title={`Fill remaining amount in ${upiLabel}`}
                                                     onClick={() => {
-                                                        const remaining = Math.max(0, +(total - cashNet - extrasSum).toFixed(2));
+                                                        const remaining = Math.max(0, +(payableTotal - cashNet - extrasSum).toFixed(2));
                                                         setPay((s) => ({ ...s, upi: remaining }));
                                                         setTimeout(() => upiAmountRef.current?.select(), 0);
                                                     }}
