@@ -1082,8 +1082,8 @@ export default function PosScreen() {
                                 />
                             )}
                             {canRedeem && loyaltyBalance > 0 && (
-                                <div className="grid grid-cols-[1fr_auto] items-center gap-2">
-                                    <Label htmlFor="pos-redeem-tick" className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                                    <Label htmlFor="pos-redeem-tick" className="inline-flex items-center gap-1.5">
                                         <Checkbox
                                             id="pos-redeem-tick"
                                             checked={redeemOn}
@@ -1091,16 +1091,12 @@ export default function PosScreen() {
                                             onCheckedChange={(v) => {
                                                 const on = v === true;
                                                 setRedeemOn(on);
-                                                // Tick → apply the max redeemable straightaway (editable below).
-                                                setRedeemPointsStr(on ? String(maxRedeemablePts) : "");
+                                                // Tick → apply the most the customer can actually redeem:
+                                                // the smaller of their balance and the cart's cap (editable).
+                                                setRedeemPointsStr(on ? String(Math.min(maxRedeemablePts, loyaltyBalance)) : "");
                                             }}
                                         />
                                         <Award size={12} /> Redeem points
-                                        <span className="text-[10px] opacity-70">
-                                            {redeemBlocked
-                                                ? `(redeem from ${fmtINR(rates.minRedeemInvoiceValue ?? 0)})`
-                                                : `(${loyaltyBalance} avail · ${fmtINR(rates.redeemValue)}/pt)`}
-                                        </span>
                                     </Label>
                                     {redeemOn && !redeemBlocked && (
                                         <Input
@@ -1110,9 +1106,14 @@ export default function PosScreen() {
                                             value={redeemPointsStr}
                                             onChange={(e) => setRedeemPointsStr(digitsInt(e.target.value))}
                                             placeholder="0"
-                                            className="h-7 w-28 text-right text-xs"
+                                            className="h-7 w-20 text-right text-xs"
                                         />
                                     )}
+                                    <span className="text-[10px] opacity-70">
+                                        {redeemBlocked
+                                            ? `(redeem from ${fmtINR(rates.minRedeemInvoiceValue ?? 0)})`
+                                            : `(${loyaltyBalance} avail · ${fmtINR(rates.redeemValue)}/pt)`}
+                                    </span>
                                 </div>
                             )}
                             {redemptionRupees > 0.005 && <Row label={`Points redeemed (${redeemPts} pts)`} value={`− ${fmtINR(redemptionRupees)}`} highlight />}
