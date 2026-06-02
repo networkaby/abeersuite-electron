@@ -3,13 +3,15 @@ import { TicketPercent } from "lucide-react";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { CouponList } from "@/modules/coupons/components/CouponList";
 import { CouponConfigCard } from "@/modules/coupons/components/CouponConfigCard";
+import { getOrganisation } from "@/shared/lib/org/getOrganisation";
 
 export const metadata = { title: "Coupons" };
 
 export default async function CouponsPage() {
-    const [categories, products] = await Promise.all([
+    const [categories, products, org] = await Promise.all([
         prisma.invCategory.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
         prisma.invProduct.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, take: 2000, select: { id: true, sku: true, name: true } }),
+        getOrganisation(),
     ]);
 
     return (
@@ -27,7 +29,7 @@ export default async function CouponsPage() {
                     </div>
                 </div>
                 <CouponConfigCard />
-                <CouponList categories={categories} products={products} />
+                <CouponList categories={categories} products={products} brandName={org.brandName} />
             </div>
         </ScrollArea>
     );
