@@ -26,6 +26,8 @@ import {
     selectCouponForCart,
     finalizeCouponAmount,
     recordCouponRedemption,
+    lookupActiveGiftCard,
+    redeemGiftCard,
     type CartLineLite,
     type EvalInput,
 } from "@/modules/coupons/lib";
@@ -100,6 +102,8 @@ const createSchema = z.object({
     couponCode: z.string().trim().max(40).optional(),
     // When true (and no code), the server auto-applies the best eligible offer.
     autoApply: z.boolean().default(false),
+    // Gift-card code to redeem as a payment tender (server owns the ₹ drawn).
+    giftCardCode: z.string().trim().max(40).optional(),
 });
 
 class GlPostFailedError extends Error {
@@ -374,7 +378,28 @@ export async function POST(req: Request) {
         chargesNet,              // includes the negative loyalty + coupon charges
     );
 
-    const paymentTotal = body.payments.reduce((s, p) => s + p.amount, 0);
+    // ── Gift card (payment tender, NOT a discount) ─────────────────────────
+    // Server owns the ₹ drawn: min(balance, bill). It posts Dr "Gift Card
+    // Liability" via the existing tender path (postInvVoucherToGl untouched).
+    let giftCardRedeem = 0;
+    let giftCardId: number | null = null;
+    let giftCardLiabilityAccountId: number | null = null;
+    if (body.giftCardCode) {
+        const couponConfig = await prisma.couponConfig.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} });
+        giftCardLiabilityAccountId = couponConfig.giftCardLiabilityAccountId;
+        const gc = await lookupActiveGiftCard(prisma, body.giftCardCode, new Date());
+        if (!gc || gc.status !== "ACTIVE" || gc.balance <= 0) {
+            return NextResponse.json({ error: gc ? `Gift card is ${gc.status.toLowerCase()}` : "Gift card not found", code: "GIFT_CARD_REJECTED" }, { status: 422 });
+        }
+        if (giftCardLiabilityAccountId == null) {
+            return NextResponse.json({ error: "Gift Card Liability ledger not configured. Re-run the bootstrap seed.", code: "GIFT_CARD_LEDGER_MISSING" }, { status: 422 });
+        }
+        giftCardRedeem = Math.min(gc.balance, totalAmount);
+        giftCardId = gc.id;
+    }
+
+    // Cash/UPI/etc. payments + the gift-card tender must equal the bill total.
+    const paymentTotal = body.payments.reduce((s, p) => s + p.amount, 0) + giftCardRedeem;
     if (Math.abs(paymentTotal - totalAmount) > 0.01) {
         return NextResponse.json(
             { error: `Payment total (₹${paymentTotal.toFixed(2)}) does not match invoice total (₹${totalAmount.toFixed(2)}).` },
@@ -438,6 +463,11 @@ export async function POST(req: Request) {
                     method:    p.method,
                     reference: p.reference ?? null,
                 })),
+                // Gift-card tender — Dr "Gift Card Liability" (bypasses counterMethodMap;
+                // its ledger is the liability, not the counter wallet).
+                ...(giftCardRedeem > 0.005 && giftCardLiabilityAccountId != null
+                    ? [{ accountId: giftCardLiabilityAccountId, amount: giftCardRedeem, method: "OTHER" as const, reference: `Gift card ${body.giftCardCode}` }]
+                    : []),
                 ...(arRemainder > 0.005
                     ? [{ accountId: customerAccount.id, amount: arRemainder, method: null as null, reference: null as null }]
                     : []),
@@ -559,6 +589,11 @@ export async function POST(req: Request) {
                 });
             }
 
+            // Gift card: draw down the balance (the GL leg was the tender above).
+            if (giftCardId != null && giftCardRedeem > 0) {
+                await redeemGiftCard(tx, { giftCardId, amount: giftCardRedeem, voucherId: voucher.id, createdById: user!.id });
+            }
+
             // ── 3b. Loyalty: redeem (consume oldest lots) + earn (new lot) ─
             // Identified customers only. Runs inside the tx so points move
             // atomically with the sale; a GL failure above already rolled back.
@@ -630,6 +665,7 @@ export async function POST(req: Request) {
                 // Coupon outcome — surfaced on the POS success toast.
                 couponDiscount: couponRupees,
                 couponCode:     couponRupees > 0 ? (body.couponCode ?? "auto") : null,
+                giftCardRedeemed: giftCardRedeem,
                 // Back-compat aliases — PosScreen still reads these names.
                 invoiceId:      voucher.id,
                 invoiceNumber:  voucher.reference,

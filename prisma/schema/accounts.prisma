@@ -81,6 +81,7 @@ model Account {
   couponRedemptions        CouponRedemption[] @relation("AccountCouponRedemptions")
   couponExpenseConfigs     CouponConfig[]     @relation("CouponExpenseLedger")
   giftCardLiabilityConfigs CouponConfig[]     @relation("GiftCardLiabilityLedger")
+  giftCards                GiftCard[]         @relation("AccountGiftCards")
 
   @@index([isActive])
   @@index([personId])

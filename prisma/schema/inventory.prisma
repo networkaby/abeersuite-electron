@@ -421,6 +421,7 @@ model InvVoucher {
   loyaltyLedger LoyaltyLedger[]         @relation("InvVoucherLoyaltyLedger")
   loyaltyMilestoneAwards LoyaltyMilestoneAward[] @relation("InvVoucherLoyaltyMilestoneAwards")
   couponRedemptions      CouponRedemption[]      @relation("InvVoucherCouponRedemptions")
+  giftCardTxns           GiftCardTxn[]           @relation("InvVoucherGiftCardTxns")
   createdAt    DateTime                @default(now())
   updatedAt    DateTime                @updatedAt
 

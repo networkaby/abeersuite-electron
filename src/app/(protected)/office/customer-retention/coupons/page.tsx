@@ -3,6 +3,7 @@ import { TicketPercent } from "lucide-react";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { CouponList } from "@/modules/coupons/components/CouponList";
 import { CouponConfigCard } from "@/modules/coupons/components/CouponConfigCard";
+import { GiftCards } from "@/modules/coupons/components/GiftCards";
 
 export const metadata = { title: "Coupons & Gift Cards" };
 
@@ -28,6 +29,7 @@ export default async function CouponsPage() {
                 </div>
                 <CouponConfigCard />
                 <CouponList categories={categories} products={products} />
+                <GiftCards />
             </div>
         </ScrollArea>
     );

@@ -39,6 +39,20 @@ enum CouponEligibility {
   RETURNING  // existing customers only
 }
 
+enum GiftCardStatus {
+  ACTIVE
+  REDEEMED // balance hit 0
+  EXPIRED
+  VOID     // cancelled by admin (liability reversed)
+}
+
+enum GiftCardTxnType {
+  ISSUE  // +balance, Cr Gift Card Liability
+  REDEEM // −balance, Dr Gift Card Liability (POS tender)
+  REFUND // +balance restored on a return
+  ADJUST // manual admin correction / void
+}
+
 model Coupon {
   id          Int             @id @default(autoincrement())
   /// Redemption code. null for AUTO coupons (no code to type). Unique among
@@ -138,6 +152,49 @@ model CouponRedemption {
 
   @@index([couponId])
   @@index([accountId])
+  @@index([voucherId])
+}
+
+/// Prepaid gift card / store credit. Issuing credits "Gift Card Liability"
+/// (Cr) against cash; redeeming draws it down (Dr) as a POS payment tender —
+/// NOT a discount. Balance is the source of truth; GiftCardTxn is the audit log.
+model GiftCard {
+  id             Int            @id @default(autoincrement())
+  code           String         @unique
+  initialValue   Decimal        @db.Decimal(14, 2)
+  balance        Decimal        @db.Decimal(14, 2)
+  status         GiftCardStatus @default(ACTIVE)
+  expiresAt      DateTime?
+  /// Optional named holder (a customer account).
+  ownerAccountId Int?
+  ownerAccount   Account?       @relation("AccountGiftCards", fields: [ownerAccountId], references: [id], onDelete: SetNull)
+  createdById    Int
+  createdBy      User           @relation("GiftCardCreatedBy", fields: [createdById], references: [id])
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  txns GiftCardTxn[]
+
+  @@index([status])
+  @@index([ownerAccountId])
+}
+
+model GiftCardTxn {
+  id           Int             @id @default(autoincrement())
+  giftCardId   Int
+  giftCard     GiftCard        @relation(fields: [giftCardId], references: [id], onDelete: Cascade)
+  type         GiftCardTxnType
+  /// Signed against balance: +ISSUE/+REFUND, −REDEEM.
+  amount       Decimal         @db.Decimal(14, 2)
+  /// The POS sale that redeemed (or the return that refunded), for audit.
+  voucherId    Int?
+  voucher      InvVoucher?     @relation("InvVoucherGiftCardTxns", fields: [voucherId], references: [id])
+  balanceAfter Decimal         @db.Decimal(14, 2)
+  createdById  Int
+  createdBy    User            @relation("GiftCardTxnCreatedBy", fields: [createdById], references: [id])
+  createdAt    DateTime        @default(now())
+
+  @@index([giftCardId])
   @@index([voucherId])
 }
 
