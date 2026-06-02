@@ -725,7 +725,7 @@ export default function PosScreen() {
             }
 
             const validCharges = charges.filter((c) => c.accountId !== null && Math.abs(parseAmt(c.amount)) >= 0.005);
-            const { data } = await axios.post<{ voucherId: number; voucherRef: string; pointsEarned: number; pointsRedeemed: number; milestoneBonus: number; loyaltyBalance: number; couponDiscount: number; couponCode: string | null }>("/api/pos/sale", {
+            const { data } = await axios.post<{ voucherId: number; voucherRef: string; pointsEarned: number; pointsRedeemed: number; milestoneBonus: number; milestoneCoupons: string[]; loyaltyBalance: number; couponDiscount: number; couponCode: string | null }>("/api/pos/sale", {
                 accountId: snapshot.account.id,
                 issueDate: today,
                 dueDate: due.toISOString().slice(0, 10),
@@ -755,7 +755,8 @@ export default function PosScreen() {
                     : "";
             const bonusMsg = data.milestoneBonus > 0 ? ` 🏆 +${data.milestoneBonus} milestone bonus!` : "";
             const couponMsg = data.couponDiscount > 0 ? ` · coupon − ${fmtINR(data.couponDiscount)}` : "";
-            toast.success(`Invoice ${data.voucherRef} · ${fmtINR(total)}${couponMsg}${ptsMsg}${bonusMsg}`);
+            const gcCouponMsg = data.milestoneCoupons?.length ? ` 🎟 coupon ${data.milestoneCoupons.join(", ")} issued!` : "";
+            toast.success(`Invoice ${data.voucherRef} · ${fmtINR(total)}${couponMsg}${ptsMsg}${bonusMsg}${gcCouponMsg}`);
             // Show "Thank You ₹X" on the customer display and hold it so the
             // coordinator doesn't immediately overwrite it as state resets.
             void qrDisplay.thankyou({ amount: total });

@@ -102,6 +102,11 @@ model Coupon {
   /// Bind a coupon to one customer account (customer-specific / milestone-issued).
   ownerAccountId   Int?
   ownerAccount     Account? @relation("CouponOwner", fields: [ownerAccountId], references: [id], onDelete: SetNull)
+  /// Set on a LIVE coupon instance auto-issued when a loyalty milestone was crossed.
+  issuedByMilestoneId Int?
+  issuedByMilestone   LoyaltyMilestone?  @relation("MilestoneIssuedCoupons", fields: [issuedByMilestoneId], references: [id], onDelete: SetNull)
+  /// Back-rel: milestones that use THIS coupon as their issue template.
+  milestoneTemplates  LoyaltyMilestone[] @relation("MilestoneCouponTemplate")
 
   isActive    Boolean  @default(true)
   createdById Int
@@ -115,6 +120,7 @@ model Coupon {
   @@index([applyMode, isActive])
   @@index([channels, isActive])
   @@index([ownerAccountId])
+  @@index([issuedByMilestoneId])
 }
 
 /// Product / category include + exclude lists for a coupon. One table, a `kind`

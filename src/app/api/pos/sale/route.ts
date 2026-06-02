@@ -203,7 +203,7 @@ export async function POST(req: Request) {
     // Empty → the milestone award step is skipped entirely below.
     const milestoneTiers: MilestoneTier[] = loyaltyEnabled
         ? (await prisma.loyaltyMilestone.findMany({ where: { enabled: true }, orderBy: { threshold: "asc" } }))
-            .map((m) => ({ id: m.id, threshold: Number(m.threshold), bonusPoints: m.bonusPoints, label: m.label }))
+            .map((m) => ({ id: m.id, threshold: Number(m.threshold), bonusPoints: m.bonusPoints, label: m.label, issuesCouponTemplateId: m.issuesCouponTemplateId }))
         : [];
 
     // ── Validate line items + payment totals ──────────────────────────────
@@ -599,6 +599,7 @@ export async function POST(req: Request) {
             // atomically with the sale; a GL failure above already rolled back.
             let loyaltyResult = { pointsEarned: 0, pointsRedeemed: 0, newBalance: loyaltyBalance };
             let milestoneBonus = 0;
+            let milestoneCoupons: string[] = [];
             if (loyaltyEnabled) {
                 loyaltyResult = await applyLoyaltyForSale(tx, {
                     accountId:        customerAccount.id,
@@ -631,6 +632,7 @@ export async function POST(req: Request) {
                         createdById:   user!.id,
                     });
                     milestoneBonus = ms.awarded.reduce((s, a) => s + a.points, 0);
+                    milestoneCoupons = ms.issuedCouponCodes;
                     if (ms.awarded.length > 0) loyaltyResult.newBalance = ms.newBalance;
                 }
             }
@@ -661,6 +663,7 @@ export async function POST(req: Request) {
                 pointsEarned:   loyaltyResult.pointsEarned,
                 pointsRedeemed: loyaltyResult.pointsRedeemed,
                 milestoneBonus,
+                milestoneCoupons,
                 loyaltyBalance: loyaltyResult.newBalance,
                 // Coupon outcome — surfaced on the POS success toast.
                 couponDiscount: couponRupees,

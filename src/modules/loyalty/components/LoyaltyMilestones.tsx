@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface Milestone {
     id: number;
@@ -16,8 +17,11 @@ interface Milestone {
     bonusPoints: number;
     label: string | null;
     enabled: boolean;
+    issuesCouponTemplateId: number | null;
     _count?: { awards: number };
 }
+
+interface CouponOpt { id: number; name: string; code: string | null }
 
 const dec = (s: string): string => s.replace(/[^\d.]/g, "").replace(/(\..*)\./g, "$1");
 const int = (s: string): string => s.replace(/\D/g, "");
@@ -30,6 +34,8 @@ export function LoyaltyMilestones() {
     const [threshold, setThreshold] = useState("");
     const [bonus, setBonus] = useState("");
     const [label, setLabel] = useState("");
+    const [couponTemplateId, setCouponTemplateId] = useState<string>("none");
+    const [coupons, setCoupons] = useState<CouponOpt[]>([]);
     const [adding, setAdding] = useState(false);
 
     function load() {
@@ -40,20 +46,26 @@ export function LoyaltyMilestones() {
             .finally(() => setLoading(false));
     }
     useEffect(load, []);
+    useEffect(() => {
+        axios.get<CouponOpt[]>("/api/coupons").then((r) => setCoupons(r.data)).catch(() => { /* optional */ });
+    }, []);
 
     async function add() {
         const t = Number(threshold);
-        const b = Number(bonus);
-        if (!(t > 0) || !(b > 0)) return toast.error("Enter a spend threshold and bonus points");
+        const b = Number(bonus || "0");
+        const couponId = couponTemplateId === "none" ? null : Number(couponTemplateId);
+        if (!(t > 0)) return toast.error("Enter a spend threshold");
+        if (!(b > 0) && couponId == null) return toast.error("Set bonus points and/or a coupon to issue");
         setAdding(true);
         try {
             await axios.post("/api/loyalty/milestones", {
                 threshold: t,
                 bonusPoints: b,
                 label: label.trim() || null,
+                issuesCouponTemplateId: couponId,
             });
             toast.success("Milestone added");
-            setThreshold(""); setBonus(""); setLabel(""); setShowAdd(false);
+            setThreshold(""); setBonus(""); setLabel(""); setCouponTemplateId("none"); setShowAdd(false);
             load();
         } catch (e) {
             const msg = axios.isAxiosError(e) ? (e.response?.data?.error ?? "Failed to add milestone") : "Failed to add milestone";
@@ -125,6 +137,19 @@ export function LoyaltyMilestones() {
                             <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Gold reward" className="h-9" />
                         </div>
                     </div>
+                    <div className="space-y-1">
+                        <Label className="text-[11px] text-muted-foreground">Also issue a coupon (optional)</Label>
+                        <Select value={couponTemplateId} onValueChange={setCouponTemplateId}>
+                            <SelectTrigger className="h-9"><SelectValue placeholder="— no coupon —" /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="none">— no coupon —</SelectItem>
+                                {coupons.map((c) => (
+                                    <SelectItem key={c.id} value={String(c.id)}>{c.code ? `${c.code} · ` : ""}{c.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <p className="text-[10px] text-muted-foreground">Crossing the tier auto-issues a unique single-use copy of this coupon to the customer. Set bonus points to 0 for a coupon-only milestone.</p>
+                    </div>
                     <div className="flex justify-end">
                         <Button size="sm" onClick={add} disabled={adding}><Plus size={14} className="mr-1" /> Add milestone</Button>
                     </div>
@@ -144,7 +169,10 @@ export function LoyaltyMilestones() {
                             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-400"><Gift size={15} /></span>
                             <div className="min-w-0 flex-1">
                                 <div className="truncate text-sm font-medium">
-                                    {fmtINR(Number(t.threshold))} <span className="text-muted-foreground">→</span> +{t.bonusPoints.toLocaleString("en-IN")} pts
+                                    {fmtINR(Number(t.threshold))} <span className="text-muted-foreground">→</span>{" "}
+                                    {t.bonusPoints > 0 ? `+${t.bonusPoints.toLocaleString("en-IN")} pts` : ""}
+                                    {t.bonusPoints > 0 && t.issuesCouponTemplateId != null ? " + " : ""}
+                                    {t.issuesCouponTemplateId != null ? "🎟 coupon" : ""}
                                 </div>
                                 <div className="truncate text-[11px] text-muted-foreground">
                                     {t.label ? `${t.label} · ` : ""}{t._count?.awards ?? 0} awarded

@@ -9,6 +9,7 @@
 // LoyaltyAccount row only holds lifetime counters.
 
 import type { Prisma, PrismaClient } from "@/generated/prisma/client";
+import { issueMilestoneCoupon } from "@/modules/coupons/lib";
 import {
     earnableBaseForCart,
     pointsForBase,
@@ -262,7 +263,7 @@ export async function reverseLoyaltyForReturn(
 }
 
 /// A milestone tier, narrowed to what the awarder needs.
-export type MilestoneTier = { id: number; threshold: number; bonusPoints: number; label: string | null };
+export type MilestoneTier = { id: number; threshold: number; bonusPoints: number; label: string | null; issuesCouponTemplateId: number | null };
 
 export type AwardMilestonesArgs = {
     accountId: number;
@@ -282,9 +283,10 @@ export type AwardMilestonesArgs = {
 export async function applyMilestones(
     tx: Tx,
     args: AwardMilestonesArgs,
-): Promise<{ awarded: { milestoneId: number; points: number; label: string | null }[]; newBalance: number }> {
-    const crossed = args.milestones.filter((m) => args.lifetimeSpend >= m.threshold && m.bonusPoints > 0);
-    if (crossed.length === 0) return { awarded: [], newBalance: await liveBalance(tx, args.accountId, args.rates) };
+): Promise<{ awarded: { milestoneId: number; points: number; label: string | null }[]; newBalance: number; issuedCouponCodes: string[] }> {
+    // A milestone qualifies if it grants points OR issues a coupon.
+    const crossed = args.milestones.filter((m) => args.lifetimeSpend >= m.threshold && (m.bonusPoints > 0 || m.issuesCouponTemplateId != null));
+    if (crossed.length === 0) return { awarded: [], newBalance: await liveBalance(tx, args.accountId, args.rates), issuedCouponCodes: [] };
 
     await ensureAccount(tx, args.accountId);
     const ids = crossed.map((m) => m.id);
@@ -296,6 +298,7 @@ export async function applyMilestones(
     const pending = crossed.filter((m) => !alreadyAwarded.has(m.id));
 
     const awarded: { milestoneId: number; points: number; label: string | null }[] = [];
+    const issuedCouponCodes: string[] = [];
     let newBalance: number | null = null;
 
     for (const m of pending) {
@@ -303,22 +306,29 @@ export async function applyMilestones(
         await tx.loyaltyMilestoneAward.create({
             data: { accountId: args.accountId, milestoneId: m.id, voucherId: args.voucherId, pointsGranted: m.bonusPoints },
         });
-        await addLot(tx, { accountId: args.accountId, voucherId: args.voucherId, points: m.bonusPoints, earnedAt: new Date() });
-        newBalance = await postMovement(tx, {
-            accountId: args.accountId,
-            voucherId: args.voucherId,
-            delta: m.bonusPoints,
-            reason: "MILESTONE_BONUS",
-            note: m.label ? `Milestone reward: ${m.label}` : `Milestone reward (₹${m.threshold.toFixed(0)} lifetime)`,
-            createdById: args.createdById,
-            counters: { totalEarned: { increment: m.bonusPoints } },
-            rates: args.rates,
-        });
-        awarded.push({ milestoneId: m.id, points: m.bonusPoints, label: m.label });
+        if (m.bonusPoints > 0) {
+            await addLot(tx, { accountId: args.accountId, voucherId: args.voucherId, points: m.bonusPoints, earnedAt: new Date() });
+            newBalance = await postMovement(tx, {
+                accountId: args.accountId,
+                voucherId: args.voucherId,
+                delta: m.bonusPoints,
+                reason: "MILESTONE_BONUS",
+                note: m.label ? `Milestone reward: ${m.label}` : `Milestone reward (₹${m.threshold.toFixed(0)} lifetime)`,
+                createdById: args.createdById,
+                counters: { totalEarned: { increment: m.bonusPoints } },
+                rates: args.rates,
+            });
+            awarded.push({ milestoneId: m.id, points: m.bonusPoints, label: m.label });
+        }
+        // Auto-issue a single-use coupon cloned from the milestone's template.
+        if (m.issuesCouponTemplateId != null) {
+            const code = await issueMilestoneCoupon(tx, { templateId: m.issuesCouponTemplateId, accountId: args.accountId, milestoneId: m.id, createdById: args.createdById });
+            if (code) issuedCouponCodes.push(code);
+        }
     }
 
     if (newBalance === null) newBalance = await liveBalance(tx, args.accountId, args.rates);
-    return { awarded, newBalance };
+    return { awarded, newBalance, issuedCouponCodes };
 }
 
 /// Manual admin adjustment. Positive → new lot; negative → consume in-window FIFO

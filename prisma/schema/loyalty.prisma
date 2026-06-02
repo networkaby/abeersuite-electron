@@ -97,10 +97,15 @@ model LoyaltyMilestone {
   /// Optional admin label shown in the hub + on the customer's ledger.
   label       String?
   enabled     Boolean  @default(true)
+  /// When set, crossing this milestone auto-issues a unique single-use coupon
+  /// (cloned from this inactive template) to the customer at POS checkout.
+  issuesCouponTemplateId Int?
+  issuesCouponTemplate   Coupon? @relation("MilestoneCouponTemplate", fields: [issuesCouponTemplateId], references: [id], onDelete: SetNull)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  awards LoyaltyMilestoneAward[]
+  awards        LoyaltyMilestoneAward[]
+  issuedCoupons Coupon[]               @relation("MilestoneIssuedCoupons")
 
   @@index([enabled])
 }

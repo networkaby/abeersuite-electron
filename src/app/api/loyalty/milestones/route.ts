@@ -36,6 +36,7 @@ export async function POST(req: Request) {
                 bonusPoints: data.bonusPoints,
                 label:       data.label ?? null,
                 enabled:     data.enabled ?? true,
+                issuesCouponTemplateId: data.issuesCouponTemplateId ?? null,
             },
             include: { _count: { select: { awards: true } } },
         });

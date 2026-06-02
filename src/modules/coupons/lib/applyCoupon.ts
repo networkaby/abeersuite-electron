@@ -5,6 +5,7 @@
 // `selectCouponForCart` is the single entry point shared by /api/pos/sale and
 // /api/pos/coupon-validate, so the validated ₹ and the posted ₹ are identical.
 
+import { randomUUID } from "crypto";
 import type { Prisma, PrismaClient } from "@/generated/prisma/client";
 import {
     checkCouponEligibility,
@@ -136,6 +137,32 @@ export async function recordCouponRedemption(
     await tx.couponRedemption.create({
         data: { couponId: args.couponId, accountId: args.accountId, voucherId: args.voucherId, amount: args.amount, channel: args.channel },
     });
+}
+
+/// Clone an inactive template coupon into a LIVE, single-use, owner-bound coupon
+/// when a loyalty milestone is crossed. Returns the generated code (or null if the
+/// template is missing). Runs inside the sale tx.
+export async function issueMilestoneCoupon(
+    tx: Tx,
+    args: { templateId: number; accountId: number; milestoneId: number; createdById: number },
+): Promise<string | null> {
+    const t = await tx.coupon.findUnique({ where: { id: args.templateId }, include: { rules: true } });
+    if (!t) return null;
+    const code = `MS-${randomUUID().replace(/-/g, "").slice(0, 8).toUpperCase()}`;
+    await tx.coupon.create({
+        data: {
+            code, name: t.name, description: t.description, type: t.type, channels: t.channels, applyMode: "CODE",
+            percentOff: t.percentOff, maxDiscountAmt: t.maxDiscountAmt, flatAmt: t.flatAmt,
+            freeProductId: t.freeProductId, freeQty: t.freeQty, freeDiscountPct: t.freeDiscountPct,
+            buyProductId: t.buyProductId, buyQty: t.buyQty, getQty: t.getQty,
+            startsAt: t.startsAt, endsAt: t.endsAt, minBillValue: t.minBillValue,
+            eligibility: t.eligibility, stackable: t.stackable,
+            ownerAccountId: args.accountId, singleUse: true, totalUsageLimit: 1,
+            issuedByMilestoneId: args.milestoneId, isActive: true, createdById: args.createdById,
+            rules: t.rules.length ? { create: t.rules.map((r) => ({ kind: r.kind, productId: r.productId, categoryId: r.categoryId })) } : undefined,
+        },
+    });
+    return code;
 }
 
 /// Free the usage slot(s) on a FULL return (returnFraction ≥ 1). Partial returns
