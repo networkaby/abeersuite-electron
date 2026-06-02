@@ -76,6 +76,11 @@ model Account {
   loyalty                LoyaltyAccount?         @relation("AccountLoyalty")
   loyaltyRedeemConfig    LoyaltyConfig[]         @relation("LoyaltyRedeemLedger")
   loyaltyMilestoneAwards LoyaltyMilestoneAward[] @relation("AccountLoyaltyMilestoneAwards")
+  // Coupon reverse rels
+  couponsOwned             Coupon[]           @relation("CouponOwner")
+  couponRedemptions        CouponRedemption[] @relation("AccountCouponRedemptions")
+  couponExpenseConfigs     CouponConfig[]     @relation("CouponExpenseLedger")
+  giftCardLiabilityConfigs CouponConfig[]     @relation("GiftCardLiabilityLedger")
 
   @@index([isActive])
   @@index([personId])

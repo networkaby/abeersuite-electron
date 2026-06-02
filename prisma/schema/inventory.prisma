@@ -41,6 +41,7 @@ model InvCategory {
   products         InvProduct[]
   attributeMasters InvAttributeMaster[]
   loyaltyEarnRules LoyaltyEarnRule[]    @relation("InvCategoryLoyaltyRules")
+  couponRules      CouponProductRule[]  @relation("CouponRuleCategory")
 
   @@index([parentId])
 }
@@ -283,6 +284,9 @@ model InvProduct {
   bomOutputs   InvBom[]           @relation("BomOutput")
   bomConsume   InvBomLine[]       @relation("BomConsume")
   loyaltyEarnRules LoyaltyEarnRule[]  @relation("InvProductLoyaltyRules")
+  couponFreeProducts Coupon[]            @relation("CouponFreeProduct")
+  couponBuyProducts  Coupon[]            @relation("CouponBuyProduct")
+  couponRules        CouponProductRule[] @relation("CouponRuleProduct")
 
   @@index([unitId])
   @@index([categoryId])
@@ -416,6 +420,7 @@ model InvVoucher {
   loyaltyLots   LoyaltyLot[]            @relation("InvVoucherLoyaltyLots")
   loyaltyLedger LoyaltyLedger[]         @relation("InvVoucherLoyaltyLedger")
   loyaltyMilestoneAwards LoyaltyMilestoneAward[] @relation("InvVoucherLoyaltyMilestoneAwards")
+  couponRedemptions      CouponRedemption[]      @relation("InvVoucherCouponRedemptions")
   createdAt    DateTime                @default(now())
   updatedAt    DateTime                @updatedAt
 

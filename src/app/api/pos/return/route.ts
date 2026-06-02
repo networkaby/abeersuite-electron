@@ -33,6 +33,7 @@ import { recordStockMovement } from "@/modules/inventory/lib/stockMovement";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import { postInvVoucherToGl } from "@/modules/accountancy/lib/postInvVoucher";
 import { reverseLoyaltyForReturn, ratesFromConfig } from "@/modules/loyalty/lib";
+import { reverseCouponRedemption } from "@/modules/coupons/lib";
 import * as Sentry from "@sentry/nextjs";
 
 const returnLineSchema = z.object({
@@ -262,6 +263,14 @@ export async function POST(req: Request) {
                 createdById:       user!.id,
             });
 
+            // 2c. Coupon reversal — free the usage slot on a FULL return so the
+            // coupon can be used again. Non-GL (the credit note already reverses
+            // goods + tax). Partial returns keep the coupon "used".
+            const couponReversal = await reverseCouponRedemption(tx, {
+                originalVoucherId: original.id,
+                returnFraction,
+            });
+
             // 3. Stock IN for each returned product.
             for (const { voucherLine, qty } of stockLines) {
                 const productId = voucherLine.productId!;
@@ -285,6 +294,7 @@ export async function POST(req: Request) {
                 returnTotal,
                 pointsClawedBack: loyalty?.pointsClawedBack ?? 0,
                 pointsRestored:   loyalty?.pointsRestored ?? 0,
+                couponsReversed:  couponReversal.reversed,
                 // Back-compat aliases for the dialog
                 returnInvoiceId: voucher.id,
                 returnNumber:    voucher.reference,

@@ -84,6 +84,9 @@ export const PERMISSIONS = {
     // Loyalty — earn/redeem wallet config + manual adjustments
     LOYALTY_MANAGE:                     "loyalty:manage",
 
+    // Coupons — promotions + gift-card management
+    COUPONS_MANAGE:                     "coupons:manage",
+
     // Inventory
     INVENTORY_MANAGE:                   "inventory:manage",
     INVENTORY_VIEW_BR:                  "inventory:view:branch",

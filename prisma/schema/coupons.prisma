@@ -1,0 +1,158 @@
+// ── Coupons / Promotions (unified POS + shop) ───────────────────────────────
+//
+// A real, admin-managed promotions engine that supersedes the ecommerce-only
+// ShopCoupon (kept intact until the Phase-5 fold-in). Works at the POS and the
+// online shop via the per-coupon `channels` flag.
+//
+// GL treatment mirrors loyalty redemption: a coupon discount is a server-resolved
+// ₹ value posted as a NEGATIVE InvVoucherCharge to a dedicated "Coupon Discounts"
+// expense ledger (see /api/pos/sale). The protected postInvVoucherToGl is never
+// touched. Gift cards (Phase 4) are different — redemption is a payment TENDER
+// drawing down a "Gift Card Liability" ledger, not a discount.
+//
+// Phasing: Phase 1 implements PERCENT + FLAT with code entry, the full constraint
+// set, and stacking. FREE_ITEM / BOGO mechanic fields exist on the model (so no
+// future migration) but their discount logic lands in Phases 2-3. Gift cards and
+// milestone-issued coupons are Phases 4-5.
+
+enum CouponType {
+  PERCENT   // % off the eligible subtotal, optionally capped at maxDiscountAmt
+  FLAT      // flat ₹ off the bill
+  FREE_ITEM // free / discounted specific item (Phase 2)
+  BOGO      // buy X get Y (Phase 3)
+}
+
+enum CouponChannel {
+  POS  // in-store POS only
+  SHOP // online shop only
+  BOTH // valid in both channels
+}
+
+enum CouponApplyMode {
+  CODE // customer/cashier enters a code
+  AUTO // fires automatically when conditions are met (Phase 2)
+}
+
+enum CouponEligibility {
+  ANY        // any customer
+  NEW        // first-time buyers only (lifetime invoice count = 0)
+  RETURNING  // existing customers only
+}
+
+model Coupon {
+  id          Int             @id @default(autoincrement())
+  /// Redemption code. null for AUTO coupons (no code to type). Unique among
+  /// non-null codes (Postgres allows multiple nulls).
+  code        String?         @unique
+  name        String          // admin label
+  description String?
+  type        CouponType
+  channels    CouponChannel   @default(BOTH)
+  applyMode   CouponApplyMode @default(CODE)
+
+  // ── Mechanic values (only the fields relevant to `type` are populated) ──
+  /// PERCENT: % off the eligible subtotal.
+  percentOff      Decimal? @db.Decimal(5, 2)
+  /// PERCENT: max ₹ discount cap (null = uncapped).
+  maxDiscountAmt  Decimal? @db.Decimal(14, 2)
+  /// FLAT: flat ₹ off.
+  flatAmt         Decimal? @db.Decimal(14, 2)
+  /// FREE_ITEM / BOGO "get" product + qty + discount (100 = free). (Phases 2-3)
+  freeProductId   Int?
+  freeProduct     InvProduct? @relation("CouponFreeProduct", fields: [freeProductId], references: [id], onDelete: SetNull)
+  freeQty         Decimal? @db.Decimal(10, 3)
+  freeDiscountPct Decimal? @db.Decimal(5, 2)
+  /// BOGO "buy" product (null = any) + thresholds. (Phase 3)
+  buyProductId    Int?
+  buyProduct      InvProduct? @relation("CouponBuyProduct", fields: [buyProductId], references: [id], onDelete: SetNull)
+  buyQty          Decimal? @db.Decimal(10, 3)
+  getQty          Decimal? @db.Decimal(10, 3)
+
+  // ── Constraints ──
+  startsAt         DateTime?
+  endsAt           DateTime?
+  minBillValue     Decimal? @db.Decimal(14, 2)
+  /// Max ₹ a single redemption can take (independent of percent cap; null = none).
+  totalUsageLimit  Int?     // N across all customers (null = unlimited)
+  perCustomerLimit Int?     // per-account cap (null = unlimited)
+  singleUse        Boolean  @default(false) // unique one-time code (≡ totalUsageLimit 1)
+  eligibility      CouponEligibility @default(ANY)
+
+  // ── Stacking ──
+  /// OFF = coupon is the ONLY discount on the bill (replaces spend-tier discount
+  /// and blocks loyalty redemption). ON = stacks with tier + loyalty (still
+  /// subject to the global CouponConfig.maxTotalDiscountPct guard).
+  stackable        Boolean  @default(false)
+
+  // ── Targeting ──
+  /// Bind a coupon to one customer account (customer-specific / milestone-issued).
+  ownerAccountId   Int?
+  ownerAccount     Account? @relation("CouponOwner", fields: [ownerAccountId], references: [id], onDelete: SetNull)
+
+  isActive    Boolean  @default(true)
+  createdById Int
+  createdBy   User     @relation("CouponCreatedBy", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  rules       CouponProductRule[]
+  redemptions CouponRedemption[]
+
+  @@index([applyMode, isActive])
+  @@index([channels, isActive])
+  @@index([ownerAccountId])
+}
+
+/// Product / category include + exclude lists for a coupon. One table, a `kind`
+/// discriminator ("INCLUDE" | "EXCLUDE") — Prisma can't dual-relate the same FK.
+/// Queryable (vs JSON) so the admin form reuses SearchableSelect + we can index.
+model CouponProductRule {
+  id         Int          @id @default(autoincrement())
+  couponId   Int
+  coupon     Coupon       @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  kind       String       // "INCLUDE" | "EXCLUDE"
+  productId  Int?
+  product    InvProduct?  @relation("CouponRuleProduct", fields: [productId], references: [id], onDelete: Cascade)
+  categoryId Int?
+  category   InvCategory? @relation("CouponRuleCategory", fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@index([couponId, kind])
+}
+
+/// Immutable log of every coupon redemption — powers usage-limit enforcement and
+/// return reversal. A reversed row (reversedAt set) frees the usage slot.
+model CouponRedemption {
+  id         Int           @id @default(autoincrement())
+  couponId   Int
+  coupon     Coupon        @relation(fields: [couponId], references: [id])
+  accountId  Int?
+  account    Account?      @relation("AccountCouponRedemptions", fields: [accountId], references: [id])
+  voucherId  Int?
+  voucher    InvVoucher?   @relation("InvVoucherCouponRedemptions", fields: [voucherId], references: [id])
+  /// ₹ discount actually applied at this redemption.
+  amount     Decimal       @db.Decimal(14, 2)
+  channel    CouponChannel
+  /// Set when reversed on a full return — frees the usage slot for re-use.
+  reversedAt DateTime?
+  redeemedAt DateTime      @default(now())
+
+  @@index([couponId])
+  @@index([accountId])
+  @@index([voucherId])
+}
+
+/// Singleton (id=1) — global stacking guard + dedicated GL ledger wiring.
+/// Mirrors LoyaltyConfig; survives hard-clean.
+model CouponConfig {
+  id                         Int      @id @default(1)
+  /// Max total discount as % of the bill across coupon + tier + loyalty combined
+  /// (null = no global guard). The coupon portion is clamped last.
+  maxTotalDiscountPct        Decimal? @db.Decimal(5, 2)
+  /// Dedicated expense ledger coupon discounts post to (Dr on a sale).
+  couponExpenseAccountId     Int?
+  couponExpenseAccount       Account? @relation("CouponExpenseLedger", fields: [couponExpenseAccountId], references: [id])
+  /// Liability ledger gift cards draw down (Phase 4).
+  giftCardLiabilityAccountId Int?
+  giftCardLiabilityAccount   Account? @relation("GiftCardLiabilityLedger", fields: [giftCardLiabilityAccountId], references: [id])
+  updatedAt                  DateTime @updatedAt
+}

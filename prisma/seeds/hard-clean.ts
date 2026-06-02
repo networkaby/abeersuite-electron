@@ -58,6 +58,10 @@ const TRANSACTION_TABLES = [
     // LoyaltyMilestone config and the "Loyalty Points Redeemed" GL ledger are NOT
     // listed — they survive a hard-clean like other bootstrap/admin config).
     "LoyaltyMilestoneAward", "LoyaltyLedger", "LoyaltyLot", "LoyaltyAccount",
+    // Coupon/gift-card transactional logs only (the Coupon + CouponProductRule +
+    // CouponConfig masters and "Coupon Discounts" / "Gift Card Liability" ledgers
+    // are NOT listed — they survive a hard-clean like other admin config).
+    "CouponRedemption",
     "TicketLog", "TicketParticipant", "Ticket", "Device",
     "CrmLead", "WallPost",
     "ChatMessage", "ChatRoomMember", "ChatRoom",

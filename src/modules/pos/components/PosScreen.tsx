@@ -197,6 +197,11 @@ export default function PosScreen() {
     // Loyalty points the cashier is redeeming on this bill (whole-number string).
     const [redeemPointsStr, setRedeemPointsStr] = useState("");
     const [redeemOn, setRedeemOn] = useState(false); // tick to apply loyalty redemption
+    // Coupon — code entry; the server validates + owns the ₹ value, returned here
+    // so the displayed total matches what /api/pos/sale will post.
+    const [couponCodeStr, setCouponCodeStr] = useState("");
+    const [appliedCoupon, setAppliedCoupon] = useState<{ couponId: number; code: string | null; name: string; rupees: number; droppedTier: boolean; blockedLoyalty: boolean } | null>(null);
+    const [couponBusy, setCouponBusy] = useState(false);
     const [roundOffStr, setRoundOffStr] = useState("");
     // Vyapar-style auto round-off: POS auto-derives the round-off to land Total
     // on a whole rupee. Flips to true the moment the cashier types into the
@@ -406,13 +411,26 @@ export default function PosScreen() {
     const redemptionRupees = rates ? redeemPts * rates.redeemValue : 0;
     // Combined customer-facing discount (tier + loyalty redemption) — shown as a
     // single "Total discount" line under Subtotal; the chips below break it down.
-    const totalDiscount = discountAmount + redemptionRupees;
+    // ── Coupon (server-validated) ──────────────────────────────────────────────
+    // A non-stackable coupon DROPS the tier discount + BLOCKS loyalty redemption;
+    // the validate route already told us which, so mirror it in the bill so the
+    // client total matches what /api/pos/sale will post.
+    const couponRupees = appliedCoupon?.rupees ?? 0;
+    const couponDroppedTier = !!appliedCoupon?.droppedTier;
+    const couponBlockedLoyalty = !!appliedCoupon?.blockedLoyalty;
+    const effDiscountAmount = couponDroppedTier ? 0 : discountAmount;
+    const effRedemptionRupees = couponBlockedLoyalty ? 0 : redemptionRupees;
+    const effRedeemPts = couponBlockedLoyalty ? 0 : redeemPts;
 
-    const chargesNet = manualChargesNet - redemptionRupees;
+    const totalDiscount = effDiscountAmount + effRedemptionRupees + couponRupees;
+
+    // Loyalty redemption + coupon both ride chargesNet as negative charges, exactly
+    // as the server folds them into calcVoucherTotals.
+    const chargesNet = manualChargesNet - effRedemptionRupees - couponRupees;
     // Auto round-off: figure out the round-off that lands Total on a whole
     // rupee by computing the pre-round total first, then deriving the delta.
     // If the cashier has manually typed a value, that override wins.
-    const naturalTotal = calcVoucherTotals(lineRows, shippingAmt, discountAmount, 0, chargesNet).totalAmount;
+    const naturalTotal = calcVoucherTotals(lineRows, shippingAmt, effDiscountAmount, 0, chargesNet).totalAmount;
     const autoRoundOff = Math.round(naturalTotal) - naturalTotal;
     const roundOff = roundOffManuallyEdited ? parseAmt(roundOffStr) : autoRoundOff;
     // Single source of truth — matches /api/inventory/vouchers SALE math via
@@ -420,10 +438,68 @@ export default function PosScreen() {
     const { totalAmount: total } = calcVoucherTotals(
         lineRows,                  // each row's `amount` is tax-inclusive
         shippingAmt,
-        discountAmount,
+        effDiscountAmount,
         roundOff,
         chargesNet,
     );
+
+    // ── Coupon apply + auto-revalidation ──────────────────────────────────────
+    // The server owns the ₹ value. We re-validate whenever the cart / tier /
+    // loyalty inputs change so the stored amount never goes stale (checkout
+    // re-validates too — the server is the final authority).
+    const couponSig = useMemo(
+        () => `${cart.map((l) => `${l.productId}:${l.qty}:${l.unitPrice}`).join("|")}#${discountAmount}#${redemptionRupees}`,
+        [cart, discountAmount, redemptionRupees],
+    );
+    const appliedCode = appliedCoupon?.code ?? null;
+    async function validateCoupon(code: string) {
+        if (!snapshot?.account) return null;
+        const { data } = await axios.post<{ ok: boolean; reason?: string; couponId: number; code: string | null; name: string; discountRupees: number; droppedTier: boolean; blockedLoyalty: boolean }>(
+            "/api/pos/coupon-validate",
+            {
+                accountId: snapshot.account.id,
+                code,
+                isNewCustomer: snapshot.turnover.invoiceCount === 0,
+                tierRupees: discountAmount,
+                loyaltyRupees: redemptionRupees,
+                lines: cart.map((l) => ({ productId: l.productId, qty: l.qty, unitPrice: l.unitPrice })),
+            },
+        );
+        return data;
+    }
+    useEffect(() => {
+        if (!appliedCode || !snapshot?.account) return;
+        let cancelled = false;
+        validateCoupon(appliedCode)
+            .then((data) => {
+                if (cancelled || !data) return;
+                if (data.ok) setAppliedCoupon((prev) => (prev ? { ...prev, rupees: data.discountRupees, droppedTier: data.droppedTier, blockedLoyalty: data.blockedLoyalty } : prev));
+                else { setAppliedCoupon(null); toast.message("Coupon removed — no longer applies to this cart"); }
+            })
+            .catch(() => { /* keep prior value; checkout re-validates */ });
+        return () => { cancelled = true; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [couponSig, appliedCode, snapshot?.account?.id]);
+
+    async function applyCoupon() {
+        const code = couponCodeStr.trim().toUpperCase();
+        if (!code || !snapshot?.account) return;
+        setCouponBusy(true);
+        try {
+            const data = await validateCoupon(code);
+            if (data?.ok) {
+                setAppliedCoupon({ couponId: data.couponId, code: data.code, name: data.name, rupees: data.discountRupees, droppedTier: data.droppedTier, blockedLoyalty: data.blockedLoyalty });
+                toast.success(`Coupon ${data.code ?? data.name} applied · − ${fmtINR(data.discountRupees)}`);
+            } else {
+                setAppliedCoupon(null);
+                toast.error(data?.reason ?? "Coupon not applicable");
+            }
+        } catch {
+            toast.error("Coupon check failed");
+        } finally {
+            setCouponBusy(false);
+        }
+    }
 
     // ── Actions ─────────────────────────────────────────────────────────────
 
@@ -630,11 +706,11 @@ export default function PosScreen() {
             }
 
             const validCharges = charges.filter((c) => c.accountId !== null && Math.abs(parseAmt(c.amount)) >= 0.005);
-            const { data } = await axios.post<{ voucherId: number; voucherRef: string; pointsEarned: number; pointsRedeemed: number; milestoneBonus: number; loyaltyBalance: number }>("/api/pos/sale", {
+            const { data } = await axios.post<{ voucherId: number; voucherRef: string; pointsEarned: number; pointsRedeemed: number; milestoneBonus: number; loyaltyBalance: number; couponDiscount: number; couponCode: string | null }>("/api/pos/sale", {
                 accountId: snapshot.account.id,
                 issueDate: today,
                 dueDate: due.toISOString().slice(0, 10),
-                notes: `POS sale (discount ${discountPct}%${redeemPts > 0 ? `, ${redeemPts} pts redeemed` : ""}) | Payments: ${splitSummary}${tail}`,
+                notes: `POS sale (discount ${discountPct}%${effRedeemPts > 0 ? `, ${effRedeemPts} pts redeemed` : ""}${appliedCoupon ? `, coupon ${appliedCoupon.code ?? appliedCoupon.name}` : ""}) | Payments: ${splitSummary}${tail}`,
                 lines: cart.map((l) => ({
                     productId: l.productId,
                     description: `${l.sku} — ${l.name}${l.description ? ` · ${l.description}` : ""}`,
@@ -645,8 +721,9 @@ export default function PosScreen() {
                 payments: paymentsList,
                 shippingAmt,
                 roundOff,
-                discountAmt: discountAmount,   // tier discount → "Discount Allowed"
-                redeemPoints: redeemPts,        // loyalty redemption → server recomputes ₹
+                discountAmt: discountAmount,   // tier discount → server drops it if a non-stackable coupon applies
+                redeemPoints: effRedeemPts,     // 0 when a non-stackable coupon blocks loyalty
+                couponCode: appliedCoupon?.code ?? undefined, // server re-resolves + owns the ₹ value
                 charges: validCharges.map((c) => ({
                     accountId: c.accountId as number,
                     description: c.description.trim() || undefined,
@@ -657,7 +734,8 @@ export default function PosScreen() {
                 : data.pointsRedeemed > 0 ? ` · ${data.pointsRedeemed} pts redeemed (bal ${data.loyaltyBalance})`
                     : "";
             const bonusMsg = data.milestoneBonus > 0 ? ` 🏆 +${data.milestoneBonus} milestone bonus!` : "";
-            toast.success(`Invoice ${data.voucherRef} · ${fmtINR(total)}${ptsMsg}${bonusMsg}`);
+            const couponMsg = data.couponDiscount > 0 ? ` · coupon − ${fmtINR(data.couponDiscount)}` : "";
+            toast.success(`Invoice ${data.voucherRef} · ${fmtINR(total)}${couponMsg}${ptsMsg}${bonusMsg}`);
             // Show "Thank You ₹X" on the customer display and hold it so the
             // coordinator doesn't immediately overwrite it as state resets.
             void qrDisplay.thankyou({ amount: total });
@@ -669,6 +747,8 @@ export default function PosScreen() {
             setShippingAmtStr("");
             setRedeemPointsStr("");
             setRedeemOn(false);
+            setCouponCodeStr("");
+            setAppliedCoupon(null);
             setRoundOffStr("");
             setRoundOffManuallyEdited(false);
             setCharges([]);
@@ -1184,10 +1264,12 @@ export default function PosScreen() {
                                 // Tier discount — automatic, display-only
                                 if (discountPct > 0) {
                                     chips.push(
-                                        <span key="tier" className="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
+                                        <span key="tier" className={`inline-flex items-center gap-1.5 ${couponDroppedTier ? "text-muted-foreground line-through opacity-60" : "text-emerald-600 dark:text-emerald-400"}`}>
                                             <span
                                                 className="cursor-help underline decoration-dotted underline-offset-2"
-                                                title={`Automatic ${snapshot?.customerLevel || "spend"}-tier discount from lifetime spend, applied on pre-GST goods. Configured under Customer Tiers; separate from loyalty points.`}
+                                                title={couponDroppedTier
+                                                    ? "Tier discount is replaced by the applied non-stackable coupon."
+                                                    : `Automatic ${snapshot?.customerLevel || "spend"}-tier discount from lifetime spend, applied on pre-GST goods. Configured under Customer Tiers; separate from loyalty points.`}
                                             >
                                                 Tier discount ({snapshot?.customerLevel ? `${snapshot.customerLevel} ` : ""}{discountPct}%)
                                             </span>
@@ -1204,8 +1286,8 @@ export default function PosScreen() {
                                             <Label htmlFor="pos-redeem-tick" className="inline-flex items-center h-5 gap-1.5">
                                                 <Checkbox
                                                     id="pos-redeem-tick"
-                                                    checked={redeemOn}
-                                                    disabled={redeemBlocked}
+                                                    checked={redeemOn && !couponBlockedLoyalty}
+                                                    disabled={redeemBlocked || couponBlockedLoyalty}
                                                     onCheckedChange={(v) => {
                                                         const on = v === true;
                                                         setRedeemOn(on);
@@ -1216,7 +1298,7 @@ export default function PosScreen() {
                                                 />
                                                 <Award size={12} /> Redeem points
                                             </Label>
-                                            {redeemOn && !redeemBlocked && (
+                                            {redeemOn && !redeemBlocked && !couponBlockedLoyalty && (
                                                 <Input
                                                     id="pos-redeem"
                                                     type="text"
@@ -1228,12 +1310,14 @@ export default function PosScreen() {
                                                 />
                                             )}
                                             <span className="text-[10px] opacity-70">
-                                                {redeemBlocked
-                                                    ? `(redeem from ${fmtINR(rates.minRedeemInvoiceValue ?? 0)})`
-                                                    : `(${loyaltyBalance} avail · ${fmtINR(rates.redeemValue)}/pt)`}
+                                                {couponBlockedLoyalty
+                                                    ? "(blocked by coupon)"
+                                                    : redeemBlocked
+                                                        ? `(redeem from ${fmtINR(rates.minRedeemInvoiceValue ?? 0)})`
+                                                        : `(${loyaltyBalance} avail · ${fmtINR(rates.redeemValue)}/pt)`}
                                             </span>
-                                            {redemptionRupees > 0.005 && (
-                                                <span className="font-medium tabular-nums text-emerald-600 dark:text-emerald-400">− {fmtINR(redemptionRupees)}</span>
+                                            {effRedemptionRupees > 0.005 && (
+                                                <span className="font-medium tabular-nums text-emerald-600 dark:text-emerald-400">− {fmtINR(effRedemptionRupees)}</span>
                                             )}
                                         </span>,
                                     );
@@ -1258,6 +1342,42 @@ export default function PosScreen() {
                                     </div>
                                 );
                             })()}
+
+                            {/* ── Coupon ────────────────────────────────────────
+                                Code entry; the server validates + owns the ₹ value.
+                                A non-stackable coupon replaces the tier discount and
+                                blocks loyalty (shown struck-through above). */}
+                            {snapshot && (
+                                <div className="flex items-center gap-2 text-xs">
+                                    <Tag size={12} className="shrink-0 text-muted-foreground" />
+                                    {appliedCoupon ? (
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <span className="rounded bg-rose-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-rose-700 dark:bg-rose-500/15 dark:text-rose-300">
+                                                {appliedCoupon.code ?? "AUTO"}
+                                            </span>
+                                            <span className="font-medium tabular-nums text-emerald-600 dark:text-emerald-400">− {fmtINR(couponRupees)}</span>
+                                            {couponDroppedTier && <span className="text-[10px] text-amber-600 dark:text-amber-400">replaces tier</span>}
+                                            {couponBlockedLoyalty && <span className="text-[10px] text-amber-600 dark:text-amber-400">blocks loyalty</span>}
+                                            <Button size="icon" variant="ghost" className="h-5 w-5" onClick={() => { setAppliedCoupon(null); setCouponCodeStr(""); }}>
+                                                <X size={12} />
+                                            </Button>
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center gap-1.5">
+                                            <Input
+                                                value={couponCodeStr}
+                                                onChange={(e) => setCouponCodeStr(e.target.value.toUpperCase())}
+                                                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void applyCoupon(); } }}
+                                                placeholder="Coupon code"
+                                                className="h-7 w-36 font-mono text-xs"
+                                            />
+                                            <Button size="sm" variant="outline" className="h-7" disabled={couponBusy || !couponCodeStr.trim()} onClick={() => void applyCoupon()}>
+                                                Apply
+                                            </Button>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
 
                             {/* ── Collapsible Adjustments panel ────────────────
                                 Shipping + Round-off + Charges. Mirrors office

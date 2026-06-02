@@ -227,6 +227,9 @@ const PERMISSIONS = [
 
     // loyalty — earn/redeem wallet config + manual adjustments
     { id: "loyalty:manage", label: "Manage loyalty", module: "loyalty", description: "Edit loyalty earn/redeem rates and earn rules, and post manual point adjustments." },
+
+    // coupons — promotions + gift-card management
+    { id: "coupons:manage", label: "Manage coupons", module: "coupons", description: "Create and manage coupons, promotions, and gift cards." },
 ] as const;
 
 const ROLE_PERMISSIONS: Record<string, string[]> = {
@@ -923,6 +926,13 @@ async function main() {
     // "Discount Allowed" so the P&L breaks out the cost of the loyalty programme).
     // Redemption posts here as a negative InvVoucherCharge on the POS sale.
     await upsertLedger("Loyalty Points Redeemed",  "Indirect Expenses", "DEBIT");
+    // Dedicated expense ledger for coupon/promo discounts (kept separate from
+    // "Discount Allowed" + "Loyalty Points Redeemed" so the P&L breaks out the
+    // cost of each promotion channel). Posts as a negative InvVoucherCharge.
+    await upsertLedger("Coupon Discounts",         "Indirect Expenses", "DEBIT");
+    // Gift-card prepaid liability (Phase 4): issuing a gift card credits this;
+    // redeeming one debits it via a payment tender on the POS sale.
+    await upsertLedger("Gift Card Liability",      "Current Liabilities", "CREDIT");
     await upsertLedger("Bad Debts",               "Indirect Expenses", "DEBIT");
     await upsertLedger("Bank Charges",            "Indirect Expenses", "DEBIT");
     await upsertLedger("Audit Fees",              "Indirect Expenses", "DEBIT");
@@ -1223,6 +1233,21 @@ async function main() {
         update: { redeemExpenseAccountId: loyaltyRedeemLedger?.id ?? null },
     });
     console.log(`      ✓ LoyaltyConfig singleton seeded (1 pt/₹100, 1 pt = ₹1, 365-day expiry, redeem ledger #${loyaltyRedeemLedger?.id ?? "—"})\n`);
+
+    // ── CouponConfig singleton (id=1) ──────────────────────────────────
+    // Global stacking guard (create-only so admin edits survive) + dedicated
+    // GL ledgers, backfilled (even on update) to the seeded "Coupon Discounts"
+    // and "Gift Card Liability" ledgers so GL routing is always wired.
+    const [couponExpenseLedger, giftCardLiabilityLedger] = await Promise.all([
+        prisma.account.findFirst({ where: { name: { equals: "Coupon Discounts", mode: "insensitive" }, personId: null, companyId: null }, select: { id: true } }),
+        prisma.account.findFirst({ where: { name: { equals: "Gift Card Liability", mode: "insensitive" }, personId: null, companyId: null }, select: { id: true } }),
+    ]);
+    await prisma.couponConfig.upsert({
+        where:  { id: 1 },
+        create: { id: 1, maxTotalDiscountPct: null, couponExpenseAccountId: couponExpenseLedger?.id ?? null, giftCardLiabilityAccountId: giftCardLiabilityLedger?.id ?? null },
+        update: { couponExpenseAccountId: couponExpenseLedger?.id ?? null, giftCardLiabilityAccountId: giftCardLiabilityLedger?.id ?? null },
+    });
+    console.log(`      ✓ CouponConfig singleton seeded (coupon ledger #${couponExpenseLedger?.id ?? "—"}, gift-card liability #${giftCardLiabilityLedger?.id ?? "—"})\n`);
 
     // Spend-tier auto-discounts — admin-owned (rename / add / remove / toggle), so
     // only seed the starter set when the table is empty; never clobber admin edits.

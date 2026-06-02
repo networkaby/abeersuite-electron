@@ -22,6 +22,13 @@ import {
     type TaxonomyMaps,
     type MilestoneTier,
 } from "@/modules/loyalty/lib";
+import {
+    selectCouponForCart,
+    finalizeCouponAmount,
+    recordCouponRedemption,
+    type CartLineLite,
+    type EvalInput,
+} from "@/modules/coupons/lib";
 // Note: branch context comes from the cashier's active shift, NOT from the
 // session cookie. This allows multiple browsers / users to bill in parallel
 // from different counters without their active-branch cookie interfering.
@@ -89,6 +96,10 @@ const createSchema = z.object({
     // Loyalty points the customer wants to burn. The server is authoritative for
     // the ₹ value (recomputed from LoyaltyConfig) and validates against balance.
     redeemPoints: z.number().int().min(0).default(0),
+    // Coupon code the cashier entered (server resolves the ₹ value + validity).
+    couponCode: z.string().trim().max(40).optional(),
+    // When true (and no code), the server auto-applies the best eligible offer.
+    autoApply: z.boolean().default(false),
 });
 
 class GlPostFailedError extends Error {
@@ -272,21 +283,95 @@ export async function POST(req: Request) {
         );
     }
 
+    // ── Coupon / promotion ─────────────────────────────────────────────────
+    // The server resolves the code (or best AUTO offer) and OWNS the ₹ value. A
+    // coupon discount rides the SAME negative-charge path as loyalty redemption,
+    // to a dedicated "Coupon Discounts" ledger (postInvVoucherToGl untouched).
+    // Stacking: a non-stackable coupon is the ONLY discount — it drops the spend-
+    // tier discount and blocks loyalty redemption (reject so the cashier sees why).
+    let couponRupees = 0;
+    let couponId: number | null = null;
+    let couponExpenseAccountId: number | null = null;
+    let effectiveTierDiscount = tierDiscount;
+    if (body.couponCode || body.autoApply) {
+        const couponConfig = await prisma.couponConfig.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} });
+        couponExpenseAccountId = couponConfig.couponExpenseAccountId;
+        // First-time buyer = no prior POSTED SALE/POS voucher (identified only).
+        const isNewCustomer = isIdentified
+            ? (await prisma.invVoucher.count({ where: { accountId: customerAccount.id, type: { in: ["SALE", "POS"] }, status: "POSTED", deletedAt: null } })) === 0
+            : false;
+        // Coupon eligibility needs each line's taxonomy (include/exclude rules).
+        // Reuse the loyalty earn lines when present; else load just for the coupon.
+        let couponLines: CartLineLite[];
+        if (earnLines.length) {
+            couponLines = earnLines.map((e) => ({ productId: e.productId, groupId: e.groupId, categoryId: e.categoryId, qty: 1, unitPrice: e.goods }));
+        } else {
+            const productIds = [...new Set(body.lines.map((l) => l.productId))];
+            const products = await prisma.invProduct.findMany({ where: { id: { in: productIds } }, select: { id: true, groupId: true, categoryId: true } });
+            const taxById = new Map(products.map((p) => [p.id, p]));
+            couponLines = body.lines.map((l) => ({ productId: l.productId, groupId: taxById.get(l.productId)?.groupId ?? null, categoryId: taxById.get(l.productId)?.categoryId ?? null, qty: l.quantity, unitPrice: l.unitPrice }));
+        }
+        const couponInput: EvalInput = {
+            accountId: isIdentified ? customerAccount.id : null,
+            lines: couponLines,
+            goodsValue,
+            billBeforeCoupon: goodsValue,
+            isNewCustomer,
+            now: new Date(),
+        };
+        const selected = await selectCouponForCart(prisma, { code: body.couponCode, autoApply: body.autoApply, channel: "POS", input: couponInput });
+        if (selected.kind === "error") {
+            return NextResponse.json({ error: selected.reason, code: "COUPON_REJECTED" }, { status: 422 });
+        }
+        if (selected.kind === "ok") {
+            if (!selected.coupon.stackable && redeemPoints > 0) {
+                return NextResponse.json(
+                    { error: "This coupon can't be combined with loyalty points. Remove the points to use it.", code: "COUPON_BLOCKS_LOYALTY" },
+                    { status: 422 },
+                );
+            }
+            const fin = finalizeCouponAmount({
+                selectedDiscount:    selected.discountRupees,
+                tierRupees:          tierDiscount,
+                loyaltyRupees:       redemptionRupees,
+                goodsValue,
+                couponStackable:     selected.coupon.stackable,
+                maxTotalDiscountPct: couponConfig.maxTotalDiscountPct != null ? Number(couponConfig.maxTotalDiscountPct) : null,
+            });
+            couponRupees = fin.couponRupees;
+            couponId = selected.coupon.id;
+            effectiveTierDiscount = fin.effTier; // 0 when the coupon isn't stackable
+            if (couponRupees > 0 && couponExpenseAccountId == null) {
+                return NextResponse.json(
+                    { error: "Coupon ledger is not configured. Re-run the bootstrap seed.", code: "COUPON_LEDGER_MISSING" },
+                    { status: 422 },
+                );
+            }
+        }
+    }
+    const couponCharge = couponRupees > 0 && couponExpenseAccountId != null
+        ? { accountId: couponExpenseAccountId, description: `Coupon: ${body.couponCode ?? "auto"}`, amount: -couponRupees }
+        : null;
+
     // Loyalty redemption as a negative charge row on the dedicated ledger. Posts
     // Dr "Loyalty Points Redeemed" via postInvVoucherToGl's charge handling and
     // lowers the bill via chargesNet — no change to the protected GL math.
     const loyaltyCharge = redemptionRupees > 0 && loyaltyConfig.redeemExpenseAccountId != null
         ? { accountId: loyaltyConfig.redeemExpenseAccountId, description: `Loyalty: ${redeemPoints} pts redeemed`, amount: -redemptionRupees }
         : null;
-    const allCharges = loyaltyCharge ? [...body.charges, loyaltyCharge] : body.charges;
+    const allCharges = [
+        ...body.charges,
+        ...(loyaltyCharge ? [loyaltyCharge] : []),
+        ...(couponCharge ? [couponCharge] : []),
+    ];
 
     const chargesNet = allCharges.reduce((s, c) => s + c.amount, 0);
     const { subtotal, totalAmount } = calcVoucherTotals(
         computedLines,
         body.shippingAmt,
-        tierDiscount,   // voucher-level tier discount
+        effectiveTierDiscount,   // tier discount (0 when a non-stackable coupon replaces it)
         body.roundOff,
-        chargesNet,     // includes the negative loyalty-redemption charge
+        chargesNet,              // includes the negative loyalty + coupon charges
     );
 
     const paymentTotal = body.payments.reduce((s, p) => s + p.amount, 0);
@@ -373,7 +458,7 @@ export async function POST(req: Request) {
                     deliveryMode:   "COUNTER",
                     placeOfSupply:  sellerStateCode,
                     shippingAmt:    body.shippingAmt,
-                    discountAmt:    tierDiscount,
+                    discountAmt:    effectiveTierDiscount,
                     roundOff:       body.roundOff,
                     subtotal,
                     taxAmount,
@@ -462,6 +547,18 @@ export async function POST(req: Request) {
                 data:  { journalEntryId: gl.journalEntryId },
             });
 
+            // ── 3a. Coupon: log the redemption (enforces usage limits + powers
+            // return reversal). Non-GL — the discount already posted as a charge.
+            if (couponId != null && couponRupees > 0) {
+                await recordCouponRedemption(tx, {
+                    couponId,
+                    accountId: isIdentified ? customerAccount.id : null,
+                    voucherId: voucher.id,
+                    amount:    couponRupees,
+                    channel:   "POS",
+                });
+            }
+
             // ── 3b. Loyalty: redeem (consume oldest lots) + earn (new lot) ─
             // Identified customers only. Runs inside the tx so points move
             // atomically with the sale; a GL failure above already rolled back.
@@ -472,7 +569,7 @@ export async function POST(req: Request) {
                     accountId:        customerAccount.id,
                     voucherId:        voucher.id,
                     earnLines,
-                    combinedDiscount: tierDiscount + redemptionRupees,
+                    combinedDiscount: effectiveTierDiscount + redemptionRupees + couponRupees,
                     redeemPoints,
                     invoiceValue:     invoiceValueGross,
                     rates:            loyaltyRates,
@@ -530,6 +627,9 @@ export async function POST(req: Request) {
                 pointsRedeemed: loyaltyResult.pointsRedeemed,
                 milestoneBonus,
                 loyaltyBalance: loyaltyResult.newBalance,
+                // Coupon outcome — surfaced on the POS success toast.
+                couponDiscount: couponRupees,
+                couponCode:     couponRupees > 0 ? (body.couponCode ?? "auto") : null,
                 // Back-compat aliases — PosScreen still reads these names.
                 invoiceId:      voucher.id,
                 invoiceNumber:  voucher.reference,
