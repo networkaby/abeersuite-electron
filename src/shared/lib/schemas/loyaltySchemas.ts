@@ -44,6 +44,23 @@ export const loyaltyEarnRuleUpdateSchema = z.object({
 });
 export type LoyaltyEarnRuleUpdateInput = z.infer<typeof loyaltyEarnRuleUpdateSchema>;
 
+// LoyaltyMilestone — a lifetime-spend tier that grants one-time bonus points.
+export const loyaltyMilestoneSchema = z.object({
+    threshold:   z.number().positive().max(100_000_000),
+    bonusPoints: z.number().int().positive().max(10_000_000),
+    label:       z.string().trim().max(120).nullable().optional(),
+    enabled:     z.boolean().optional(),
+});
+export type LoyaltyMilestoneInput = z.infer<typeof loyaltyMilestoneSchema>;
+
+export const loyaltyMilestoneUpdateSchema = z.object({
+    threshold:   z.number().positive().max(100_000_000).optional(),
+    bonusPoints: z.number().int().positive().max(10_000_000).optional(),
+    label:       z.string().trim().max(120).nullable().optional(),
+    enabled:     z.boolean().optional(),
+});
+export type LoyaltyMilestoneUpdateInput = z.infer<typeof loyaltyMilestoneUpdateSchema>;
+
 // Manual admin adjustment of a customer's points balance.
 export const loyaltyAdjustSchema = z.object({
     accountId: z.number().int().positive(),

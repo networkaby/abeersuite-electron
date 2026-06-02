@@ -80,7 +80,7 @@ async function postMovement(
         accountId: number;
         voucherId: number | null;
         delta: number;
-        reason: "EARN_SALE" | "REDEEM_SALE" | "REVERSAL_RETURN" | "ADMIN_ADJUST";
+        reason: "EARN_SALE" | "REDEEM_SALE" | "REVERSAL_RETURN" | "ADMIN_ADJUST" | "MILESTONE_BONUS";
         note?: string | null;
         createdById: number;
         counters?: Prisma.LoyaltyAccountUpdateInput;
@@ -259,6 +259,66 @@ export async function reverseLoyaltyForReturn(
 
     if (newBalance === null) newBalance = await liveBalance(tx, args.accountId, args.rates);
     return { pointsClawedBack, pointsRestored, newBalance };
+}
+
+/// A milestone tier, narrowed to what the awarder needs.
+export type MilestoneTier = { id: number; threshold: number; bonusPoints: number; label: string | null };
+
+export type AwardMilestonesArgs = {
+    accountId: number;
+    /// Lifetime spend (₹) AFTER the current sale — computed by the caller inside the tx.
+    lifetimeSpend: number;
+    voucherId: number | null;
+    /// Enabled milestone tiers (any order); already filtered to enabled.
+    milestones: MilestoneTier[];
+    rates: LoyaltyRates;
+    createdById: number;
+};
+
+/// Award any milestone tiers the customer has now crossed but not yet received.
+/// One-time per tier (guarded by the LoyaltyMilestoneAward unique). Each award
+/// grants bonus points as a fresh lot + a MILESTONE_BONUS ledger row. Off-book,
+/// like ordinary earning. Returns the tiers awarded on this call.
+export async function applyMilestones(
+    tx: Tx,
+    args: AwardMilestonesArgs,
+): Promise<{ awarded: { milestoneId: number; points: number; label: string | null }[]; newBalance: number }> {
+    const crossed = args.milestones.filter((m) => args.lifetimeSpend >= m.threshold && m.bonusPoints > 0);
+    if (crossed.length === 0) return { awarded: [], newBalance: await liveBalance(tx, args.accountId, args.rates) };
+
+    await ensureAccount(tx, args.accountId);
+    const ids = crossed.map((m) => m.id);
+    const existing = await tx.loyaltyMilestoneAward.findMany({
+        where: { accountId: args.accountId, milestoneId: { in: ids } },
+        select: { milestoneId: true },
+    });
+    const alreadyAwarded = new Set(existing.map((e) => e.milestoneId));
+    const pending = crossed.filter((m) => !alreadyAwarded.has(m.id));
+
+    const awarded: { milestoneId: number; points: number; label: string | null }[] = [];
+    let newBalance: number | null = null;
+
+    for (const m of pending) {
+        // Unique [accountId, milestoneId] is the real guard against double-award.
+        await tx.loyaltyMilestoneAward.create({
+            data: { accountId: args.accountId, milestoneId: m.id, voucherId: args.voucherId, pointsGranted: m.bonusPoints },
+        });
+        await addLot(tx, { accountId: args.accountId, voucherId: args.voucherId, points: m.bonusPoints, earnedAt: new Date() });
+        newBalance = await postMovement(tx, {
+            accountId: args.accountId,
+            voucherId: args.voucherId,
+            delta: m.bonusPoints,
+            reason: "MILESTONE_BONUS",
+            note: m.label ? `Milestone reward: ${m.label}` : `Milestone reward (₹${m.threshold.toFixed(0)} lifetime)`,
+            createdById: args.createdById,
+            counters: { totalEarned: { increment: m.bonusPoints } },
+            rates: args.rates,
+        });
+        awarded.push({ milestoneId: m.id, points: m.bonusPoints, label: m.label });
+    }
+
+    if (newBalance === null) newBalance = await liveBalance(tx, args.accountId, args.rates);
+    return { awarded, newBalance };
 }
 
 /// Manual admin adjustment. Positive → new lot; negative → consume in-window FIFO

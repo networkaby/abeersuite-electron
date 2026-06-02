@@ -596,7 +596,7 @@ export default function PosScreen() {
             }
 
             const validCharges = charges.filter((c) => c.accountId !== null && Math.abs(parseAmt(c.amount)) >= 0.005);
-            const { data } = await axios.post<{ voucherId: number; voucherRef: string; pointsEarned: number; pointsRedeemed: number; loyaltyBalance: number }>("/api/pos/sale", {
+            const { data } = await axios.post<{ voucherId: number; voucherRef: string; pointsEarned: number; pointsRedeemed: number; milestoneBonus: number; loyaltyBalance: number }>("/api/pos/sale", {
                 accountId: snapshot.account.id,
                 issueDate: today,
                 dueDate: due.toISOString().slice(0, 10),
@@ -622,7 +622,8 @@ export default function PosScreen() {
             const ptsMsg = data.pointsEarned > 0 ? ` · +${data.pointsEarned} pts (bal ${data.loyaltyBalance})`
                          : data.pointsRedeemed > 0 ? ` · ${data.pointsRedeemed} pts redeemed (bal ${data.loyaltyBalance})`
                          : "";
-            toast.success(`Invoice ${data.voucherRef} · ${fmtINR(total)}${ptsMsg}`);
+            const bonusMsg = data.milestoneBonus > 0 ? ` 🏆 +${data.milestoneBonus} milestone bonus!` : "";
+            toast.success(`Invoice ${data.voucherRef} · ${fmtINR(total)}${ptsMsg}${bonusMsg}`);
             // Show "Thank You ₹X" on the customer display and hold it so the
             // coordinator doesn't immediately overwrite it as state resets.
             void qrDisplay.thankyou({ amount: total });

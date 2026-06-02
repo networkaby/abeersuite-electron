@@ -75,6 +75,7 @@ model Account {
   // Loyalty reverse rels
   loyalty                LoyaltyAccount?         @relation("AccountLoyalty")
   loyaltyRedeemConfig    LoyaltyConfig[]         @relation("LoyaltyRedeemLedger")
+  loyaltyMilestoneAwards LoyaltyMilestoneAward[] @relation("AccountLoyaltyMilestoneAwards")
 
   @@index([isActive])
   @@index([personId])

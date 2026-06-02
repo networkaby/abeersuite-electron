@@ -13,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 type LedgerRow = {
     id: number;
     delta: number;
-    reason: "EARN_SALE" | "REDEEM_SALE" | "REVERSAL_RETURN" | "ADMIN_ADJUST";
+    reason: "EARN_SALE" | "REDEEM_SALE" | "REVERSAL_RETURN" | "ADMIN_ADJUST" | "MILESTONE_BONUS";
     balanceAfter: number;
     note: string | null;
     createdAt: string;
@@ -23,7 +23,7 @@ type Lot = { id: number; pointsRemaining: number; pointsEarned: number; earnedAt
 type Wallet = { balance: number; value: number; totalEarned: number; totalRedeemed: number; lots: Lot[]; ledger: LedgerRow[] };
 
 const REASON_LABEL: Record<LedgerRow["reason"], string> = {
-    EARN_SALE: "Earned", REDEEM_SALE: "Redeemed", REVERSAL_RETURN: "Return reversal", ADMIN_ADJUST: "Adjustment",
+    EARN_SALE: "Earned", REDEEM_SALE: "Redeemed", REVERSAL_RETURN: "Return reversal", ADMIN_ADJUST: "Adjustment", MILESTONE_BONUS: "Milestone bonus",
 };
 const fmtDate = (s: string) => new Date(s).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 const fmtINR = (n: number) => `₹${n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;

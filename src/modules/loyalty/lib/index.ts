@@ -14,6 +14,7 @@ export {
     applyLoyaltyForSale,
     reverseLoyaltyForReturn,
     adjustPoints,
+    applyMilestones,
     liveBalance,
 } from "./applyLoyalty";
-export type { ApplySaleArgs, ReverseReturnArgs } from "./applyLoyalty";
+export type { ApplySaleArgs, ReverseReturnArgs, MilestoneTier, AwardMilestonesArgs } from "./applyLoyalty";

@@ -54,10 +54,10 @@ const TRANSACTION_TABLES = [
     // were dropped on 2026-05-24 (Invoice → InvVoucher consolidation, Layer 5b).
     "InvStockLedger", "InvVoucherExpenseLine", "InvVoucherLine", "InvVoucher", "InvVoucherAudit",
     "ShopOrderLine", "ShopOrder",
-    // Loyalty wallet movement tables (the LoyaltyConfig + LoyaltyEarnRule config
-    // and the "Loyalty Points Redeemed" GL ledger are NOT listed — they survive a
-    // hard-clean like other bootstrap/admin config).
-    "LoyaltyLedger", "LoyaltyLot", "LoyaltyAccount",
+    // Loyalty wallet movement tables (the LoyaltyConfig + LoyaltyEarnRule +
+    // LoyaltyMilestone config and the "Loyalty Points Redeemed" GL ledger are NOT
+    // listed — they survive a hard-clean like other bootstrap/admin config).
+    "LoyaltyMilestoneAward", "LoyaltyLedger", "LoyaltyLot", "LoyaltyAccount",
     "TicketLog", "TicketParticipant", "Ticket", "Device",
     "CrmLead", "WallPost",
     "ChatMessage", "ChatRoomMember", "ChatRoom",

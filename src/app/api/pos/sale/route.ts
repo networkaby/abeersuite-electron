@@ -15,9 +15,11 @@ import {
     buildRulesIndex,
     clampRedemption,
     applyLoyaltyForSale,
+    applyMilestones,
     liveBalance,
     type EarnLine,
     type TaxonomyMaps,
+    type MilestoneTier,
 } from "@/modules/loyalty/lib";
 // Note: branch context comes from the cashier's active shift, NOT from the
 // session cookie. This allows multiple browsers / users to bill in parallel
@@ -181,6 +183,12 @@ export async function POST(req: Request) {
     const loyaltyBalance = loyaltyEnabled
         ? await liveBalance(prisma, customerAccount.id, loyaltyRates)
         : 0;
+    // Enabled milestone tiers (only loaded when loyalty is live for this customer).
+    // Empty → the milestone award step is skipped entirely below.
+    const milestoneTiers: MilestoneTier[] = loyaltyEnabled
+        ? (await prisma.loyaltyMilestone.findMany({ where: { enabled: true }, orderBy: { threshold: "asc" } }))
+            .map((m) => ({ id: m.id, threshold: Number(m.threshold), bonusPoints: m.bonusPoints, label: m.label }))
+        : [];
 
     // ── Validate line items + payment totals ──────────────────────────────
     const computedLines = body.lines.map((l) => {
@@ -454,6 +462,7 @@ export async function POST(req: Request) {
             // Identified customers only. Runs inside the tx so points move
             // atomically with the sale; a GL failure above already rolled back.
             let loyaltyResult = { pointsEarned: 0, pointsRedeemed: 0, newBalance: loyaltyBalance };
+            let milestoneBonus = 0;
             if (loyaltyEnabled) {
                 loyaltyResult = await applyLoyaltyForSale(tx, {
                     accountId:        customerAccount.id,
@@ -467,6 +476,27 @@ export async function POST(req: Request) {
                     taxonomyMaps,
                     createdById:      user!.id,
                 });
+
+                // ── Milestone bonus points: award any lifetime-spend tier the
+                // customer has now crossed (one-time per tier). Lifetime spend is
+                // aggregated inside the tx so it includes the just-posted sale.
+                if (milestoneTiers.length > 0) {
+                    const spendAgg = await tx.invVoucher.aggregate({
+                        where: { accountId: customerAccount.id, type: { in: ["SALE", "POS"] }, status: "POSTED", deletedAt: null },
+                        _sum: { totalAmount: true },
+                    });
+                    const lifetimeSpend = Number(spendAgg._sum.totalAmount ?? 0);
+                    const ms = await applyMilestones(tx, {
+                        accountId:     customerAccount.id,
+                        lifetimeSpend,
+                        voucherId:     voucher.id,
+                        milestones:    milestoneTiers,
+                        rates:         loyaltyRates,
+                        createdById:   user!.id,
+                    });
+                    milestoneBonus = ms.awarded.reduce((s, a) => s + a.points, 0);
+                    if (ms.awarded.length > 0) loyaltyResult.newBalance = ms.newBalance;
+                }
             }
 
             // ── 4. Stock ledger + per-branch + org-wide stock decrement ───
@@ -494,6 +524,7 @@ export async function POST(req: Request) {
                 // Loyalty outcome — surfaced on the POS success toast.
                 pointsEarned:   loyaltyResult.pointsEarned,
                 pointsRedeemed: loyaltyResult.pointsRedeemed,
+                milestoneBonus,
                 loyaltyBalance: loyaltyResult.newBalance,
                 // Back-compat aliases — PosScreen still reads these names.
                 invoiceId:      voucher.id,

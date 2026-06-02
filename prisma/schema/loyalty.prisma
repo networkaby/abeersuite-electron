@@ -26,6 +26,7 @@ enum LoyaltyReason {
   REDEEM_SALE     // points spent as a discount on a POS sale
   REVERSAL_RETURN // claw-back of earn / restore of redeem on a SALE_RETURN
   ADMIN_ADJUST    // manual correction by a staff member with loyalty:manage
+  MILESTONE_BONUS // one-time bonus points for crossing a lifetime-spend milestone
 }
 
 enum LoyaltyRuleScope {
@@ -81,6 +82,39 @@ model LoyaltyEarnRule {
 
   @@unique([scope, categoryId, groupId, productId])
   @@index([scope])
+}
+
+model LoyaltyMilestone {
+  id          Int      @id @default(autoincrement())
+  /// Lifetime spend (₹, Σ POSTED SALE/POS vouchers) the customer must reach.
+  threshold   Decimal  @db.Decimal(14, 2)
+  /// One-time bonus points granted the first time the threshold is crossed.
+  bonusPoints Int
+  /// Optional admin label shown in the hub + on the customer's ledger.
+  label       String?
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  awards LoyaltyMilestoneAward[]
+
+  @@index([enabled])
+}
+
+model LoyaltyMilestoneAward {
+  id            Int              @id @default(autoincrement())
+  accountId     Int
+  account       Account          @relation("AccountLoyaltyMilestoneAwards", fields: [accountId], references: [id], onDelete: Cascade)
+  milestoneId   Int
+  milestone     LoyaltyMilestone @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
+  /// The sale at which the milestone was crossed (audit; null if admin-triggered).
+  voucherId     Int?
+  voucher       InvVoucher?      @relation("InvVoucherLoyaltyMilestoneAwards", fields: [voucherId], references: [id])
+  pointsGranted Int
+  awardedAt     DateTime         @default(now())
+
+  @@unique([accountId, milestoneId]) // each milestone awarded at most once per customer
+  @@index([accountId])
 }
 
 model LoyaltyAccount {
