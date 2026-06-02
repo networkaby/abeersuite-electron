@@ -214,16 +214,16 @@ export default function PosScreen() {
     //   2. GET /api/pos/shifts/pending-handover
     //      → found           : show HandoverAcceptDialog (B accepts A's handover)
     //      → null            : show ShiftOpenDialog (fresh start)
-    const [activeShift, setActiveShift]           = useState<ActiveShift | null>(null);
-    const [pendingHandover, setPendingHandover]   = useState<PendingHandover | null>(null);
-    const [shiftLoaded, setShiftLoaded]           = useState(false);
+    const [activeShift, setActiveShift] = useState<ActiveShift | null>(null);
+    const [pendingHandover, setPendingHandover] = useState<PendingHandover | null>(null);
+    const [shiftLoaded, setShiftLoaded] = useState(false);
     const [shiftOpenDialogOpen, setShiftOpenDialogOpen] = useState(false);
-    const [returnDialogOpen, setReturnDialogOpen]       = useState(false);
+    const [returnDialogOpen, setReturnDialogOpen] = useState(false);
     const [expenditureDialogOpen, setExpenditureDialogOpen] = useState(false);
-    const [receiptDialogOpen, setReceiptDialogOpen]         = useState(false);
+    const [receiptDialogOpen, setReceiptDialogOpen] = useState(false);
     // Shift drop / close — launched from the header ⋮ menu now that the
     // full-width shift bar is hidden on the billing screen.
-    const [shiftDropOpen, setShiftDropOpen]   = useState(false);
+    const [shiftDropOpen, setShiftDropOpen] = useState(false);
     const [shiftCloseOpen, setShiftCloseOpen] = useState(false);
 
     const refreshActiveShift = useCallback(() => {
@@ -259,10 +259,10 @@ export default function PosScreen() {
     const counterMethods = useMemo(() => {
         const c = activeShift?.counter;
         return {
-            upi:          c?.upiAccount          ?? null,
-            card:         c?.cardAccount         ?? null,
-            wallet:       c?.walletAccount       ?? null,
-            cheque:       c?.chequeAccount       ?? null,
+            upi: c?.upiAccount ?? null,
+            card: c?.cardAccount ?? null,
+            wallet: c?.walletAccount ?? null,
+            cheque: c?.chequeAccount ?? null,
             bankTransfer: c?.bankTransferAccount ?? null,
         };
     }, [activeShift]);
@@ -273,19 +273,19 @@ export default function PosScreen() {
     // cashier sees the operator's wording in the picker.
     const allowedExtras = useMemo(() => EXTRA_METHODS
         .filter((m) => {
-            if (m.value === "CARD")          return counterMethods.card          != null;
-            if (m.value === "WALLET")        return counterMethods.wallet        != null;
-            if (m.value === "CHEQUE")        return counterMethods.cheque        != null;
-            if (m.value === "BANK_TRANSFER") return counterMethods.bankTransfer  != null;
+            if (m.value === "CARD") return counterMethods.card != null;
+            if (m.value === "WALLET") return counterMethods.wallet != null;
+            if (m.value === "CHEQUE") return counterMethods.cheque != null;
+            if (m.value === "BANK_TRANSFER") return counterMethods.bankTransfer != null;
             return false;
         })
         .map((m) => {
             const c = activeShift?.counter;
             const override =
-                m.value === "CARD"          ? c?.cardLabel :
-                m.value === "WALLET"        ? c?.walletLabel :
-                m.value === "CHEQUE"        ? c?.chequeLabel :
-                m.value === "BANK_TRANSFER" ? c?.bankTransferLabel : null;
+                m.value === "CARD" ? c?.cardLabel :
+                    m.value === "WALLET" ? c?.walletLabel :
+                        m.value === "CHEQUE" ? c?.chequeLabel :
+                            m.value === "BANK_TRANSFER" ? c?.bankTransferLabel : null;
             const trimmed = override?.trim();
             return trimmed ? { ...m, label: trimmed } : m;
         }), [counterMethods, activeShift]);
@@ -356,16 +356,16 @@ export default function PosScreen() {
     // today (only voucher-level loyalty %) so discountPct/Amt are 0 here.
     const lineRows = cart.map((l) => {
         const { taxAmount, amount } = calcLineTotals({
-            quantity:    l.qty,
-            rate:        l.unitPrice,
+            quantity: l.qty,
+            rate: l.unitPrice,
             discountPct: 0,
             discountAmt: 0,
-            taxRate:     l.taxRate,
+            taxRate: l.taxRate,
         });
         return { amount, taxAmount, gross: l.qty * l.unitPrice };
     });
     const subtotal = lineRows.reduce((s, l) => s + l.gross, 0);   // pre-tax goods value
-    const tax      = lineRows.reduce((s, l) => s + l.taxAmount, 0);
+    const tax = lineRows.reduce((s, l) => s + l.taxAmount, 0);
     const discountPct = snapshot?.discountPct ?? 0;
     const discountAmount = (subtotal * discountPct) / 100;
     const shippingAmt = Math.max(0, parseAmt(shippingAmtStr));
@@ -599,8 +599,8 @@ export default function PosScreen() {
             // maps to schema's OTHER enum.
             type PayLine = { method: "CASH" | "MOBILE_PAYMENT" | "BANK_TRANSFER" | "CARD" | "CHEQUE" | "OTHER"; amount: number; reference?: string };
             const paymentsList: PayLine[] = [];
-            if (cashNet > 0)  paymentsList.push({ method: "CASH",           amount: cashNet });
-            if (pay.upi > 0)  paymentsList.push({ method: "MOBILE_PAYMENT", amount: pay.upi });
+            if (cashNet > 0) paymentsList.push({ method: "CASH", amount: cashNet });
+            if (pay.upi > 0) paymentsList.push({ method: "MOBILE_PAYMENT", amount: pay.upi });
             for (const e of extras) {
                 if (e.amount <= 0) continue;
                 const method = e.method === "WALLET" ? "OTHER" : e.method;
@@ -648,14 +648,14 @@ export default function PosScreen() {
                 discountAmt: discountAmount,   // tier discount → "Discount Allowed"
                 redeemPoints: redeemPts,        // loyalty redemption → server recomputes ₹
                 charges: validCharges.map((c) => ({
-                    accountId:   c.accountId as number,
+                    accountId: c.accountId as number,
                     description: c.description.trim() || undefined,
-                    amount:      parseAmt(c.amount),
+                    amount: parseAmt(c.amount),
                 })),
             });
             const ptsMsg = data.pointsEarned > 0 ? ` · +${data.pointsEarned} pts (bal ${data.loyaltyBalance})`
-                         : data.pointsRedeemed > 0 ? ` · ${data.pointsRedeemed} pts redeemed (bal ${data.loyaltyBalance})`
-                         : "";
+                : data.pointsRedeemed > 0 ? ` · ${data.pointsRedeemed} pts redeemed (bal ${data.loyaltyBalance})`
+                    : "";
             const bonusMsg = data.milestoneBonus > 0 ? ` 🏆 +${data.milestoneBonus} milestone bonus!` : "";
             toast.success(`Invoice ${data.voucherRef} · ${fmtINR(total)}${ptsMsg}${bonusMsg}`);
             // Show "Thank You ₹X" on the customer display and hold it so the
@@ -679,25 +679,25 @@ export default function PosScreen() {
                     .then((r) => r.ok).catch(() => false);
                 if (relayAvailable) {
                     fetch("http://localhost:9191/print/pos", {
-                        method:  "POST",
+                        method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({
-                            invoiceNumber:  data.voucherRef,
-                            date:           today,
-                            customerName:   snapshot?.party.name ?? "Walk-in",
+                            invoiceNumber: data.voucherRef,
+                            date: today,
+                            customerName: snapshot?.party.name ?? "Walk-in",
                             lines: cart.map((l) => ({
-                                name:      l.name,
-                                qty:       l.qty,
+                                name: l.name,
+                                qty: l.qty,
                                 unitPrice: l.unitPrice,
-                                amount:    l.qty * l.unitPrice,
+                                amount: l.qty * l.unitPrice,
                             })),
                             subtotal,
                             discountPct,
                             discountAmount,
                             tax,
                             total,
-                            cashPaid:   cashNet,
-                            upiPaid:    pay.upi,
+                            cashPaid: cashNet,
+                            upiPaid: pay.upi,
                             extrasPaid: extras.map((e) => ({ method: e.method, amount: e.amount, reference: e.reference })),
                         }),
                     }).catch(() => toast.error("Thermal print failed"));
@@ -741,30 +741,30 @@ export default function PosScreen() {
         const timer = setTimeout(() => {
             if (checkoutOpen && pay.upi > 0) {
                 void qrDisplay.upi({
-                    amount:  pay.upi,
+                    amount: pay.upi,
                     caption: `Pay ₹${pay.upi.toFixed(2)} via UPI`,
                 });
             } else if (checkoutOpen && (cashNet > 0 || extrasSum > 0)) {
                 void qrDisplay.payment({
                     total,
                     cashPaid: cashNet,
-                    balance:  Math.max(0, total - collected),
+                    balance: Math.max(0, total - collected),
                 });
             } else if (cart.length > 0) {
                 void qrDisplay.cart({
-                    items:    cart.map((l) => ({ name: l.name, qty: l.qty, price: l.unitPrice })),
+                    items: cart.map((l) => ({ name: l.name, qty: l.qty, price: l.unitPrice })),
                     subtotal,
                     discount: discountAmount,
                     total,
                 });
             } else if (snapshot) {
                 void qrDisplay.customer({
-                    name:          snapshot.party.name,
-                    level:         snapshot.customerLevel,
+                    name: snapshot.party.name,
+                    level: snapshot.customerLevel,
                     loyaltyPoints: snapshot.loyaltyPoints,
-                    lastVisitAt:   snapshot.lastVisitAt,
-                    discountPct:   snapshot.discountPct,
-                    balanceDue:    snapshot.balanceDue,
+                    lastVisitAt: snapshot.lastVisitAt,
+                    discountPct: snapshot.discountPct,
+                    balanceDue: snapshot.balanceDue,
                 });
             } else {
                 void qrDisplay.idle();
@@ -781,10 +781,10 @@ export default function PosScreen() {
     // Credit-limit guard — true when the on-credit portion of this sale would
     // push the customer's outstanding balance past their credit limit.
     const creditLimitBreached: boolean = (() => {
-        if (onCredit <= 0)                          return false; // fully paid, no AR impact
+        if (onCredit <= 0) return false; // fully paid, no AR impact
         const limit = snapshot?.creditLimit ?? null;
-        if (limit === null)                         return false; // unlimited account
-        if (limit === 0)                            return true;  // zero-credit account
+        if (limit === null) return false; // unlimited account
+        if (limit === 0) return true;  // zero-credit account
         return (balanceDue + onCredit) > limit;
     })();
 
@@ -1028,14 +1028,14 @@ export default function PosScreen() {
                     <div className="shrink-0 border-b border-border p-4">
                         <div className="flex items-center gap-3">
                             <div className="relative flex-1">
-                                <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
+                                <Search className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
                                 <Input
                                     ref={productSearchRef}
                                     value={productQuery}
                                     onChange={(e) => { setProductQuery(e.target.value); setProductHighlight(0); }}
                                     onKeyDown={onProductKeyDown}
                                     placeholder="Scan / type · ↑↓ to highlight · ↵ to add"
-                                    className="pl-9"
+                                    className="h-11 rounded-lg pl-11 text-base shadow-sm focus-visible:ring-2"
                                 />
                                 {filteredProducts.length > 0 && (
                                     <ul className="absolute left-0 right-0 top-full z-10 mt-1 max-h-72 overflow-y-auto rounded-md border border-border bg-popover shadow-lg">
@@ -1068,8 +1068,12 @@ export default function PosScreen() {
                     <div className="flex min-h-0 flex-1 flex-col">
                         <div className="flex-1 overflow-y-auto">
                             {cart.length === 0 ? (
-                                <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                                    No items yet — search above to add.
+                                <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
+                                    <div className="rounded-full bg-muted p-3 text-muted-foreground">
+                                        <ShoppingCart size={24} className="opacity-70" />
+                                    </div>
+                                    <p className="text-sm font-medium text-foreground/80">Cart is empty</p>
+                                    <p className="text-xs text-muted-foreground">Scan a barcode or search above to add items.</p>
                                 </div>
                             ) : (
                                 <ul className="divide-y divide-border">
@@ -1197,7 +1201,7 @@ export default function PosScreen() {
                                 if (canRedeem && loyaltyBalance > 0) {
                                     chips.push(
                                         <span key="redeem" className="inline-flex items-center gap-1.5 text-muted-foreground">
-                                            <Label htmlFor="pos-redeem-tick" className="inline-flex items-center gap-1.5">
+                                            <Label htmlFor="pos-redeem-tick" className="inline-flex items-center h-5 gap-1.5">
                                                 <Checkbox
                                                     id="pos-redeem-tick"
                                                     checked={redeemOn}
@@ -1220,7 +1224,7 @@ export default function PosScreen() {
                                                     value={redeemPointsStr}
                                                     onChange={(e) => setRedeemPointsStr(digitsInt(e.target.value))}
                                                     placeholder="0"
-                                                    className="h-7 w-20 text-right text-xs"
+                                                    className="h-5 w-20 text-right text-xs"
                                                 />
                                             )}
                                             <span className="text-[10px] opacity-70">
@@ -1371,12 +1375,17 @@ export default function PosScreen() {
                                 );
                             })()}
 
-                            <div className="flex items-center justify-between border-t border-border pt-2 text-lg font-semibold">
-                                <span>Total</span>
-                                <span>{fmtINR(total)}</span>
+                            <div className="flex items-baseline justify-between border-t border-border pt-2.5">
+                                <div className="flex items-baseline gap-2">
+                                    <span className="text-base font-semibold">Total</span>
+                                    {cart.length > 0 && (
+                                        <span className="text-[11px] text-muted-foreground">{cart.length} item{cart.length > 1 ? "s" : ""}</span>
+                                    )}
+                                </div>
+                                <span className="text-xl font-bold tabular-nums">{fmtINR(total)}</span>
                             </div>
-                            <Button onClick={openCheckout} disabled={cart.length === 0 || !snapshot?.account} className="w-full" size="lg">
-                                <ReceiptIndianRupee size={16} /> Checkout
+                            <Button onClick={openCheckout} disabled={cart.length === 0 || !snapshot?.account} className="h-12 w-full text-base" size="lg">
+                                <ReceiptIndianRupee size={18} /> Checkout
                                 <span className="ml-2 rounded border border-primary-foreground/30 px-1.5 py-px text-[10px] opacity-80">Ctrl ↵</span>
                             </Button>
                         </div>
@@ -1386,9 +1395,12 @@ export default function PosScreen() {
                 {/* Right column — customer "we know you" panel */}
                 <aside className="flex min-h-0 flex-col overflow-y-auto bg-muted/30 p-4">
                     {!snapshot ? (
-                        <div className="flex h-full flex-col items-center justify-center text-center text-sm text-muted-foreground">
-                            <User size={32} className="mb-2 opacity-40" />
-                            <p>Search and pick a customer to see their profile here.</p>
+                        <div className="flex h-full flex-col items-center justify-center px-6 text-center text-muted-foreground">
+                            <div className="mb-2 rounded-full bg-muted p-3">
+                                <User size={24} className="opacity-50" />
+                            </div>
+                            <p className="text-sm font-medium text-foreground/80">No customer selected</p>
+                            <p className="mt-0.5 text-xs">Search by name, phone or email above — or add a walk-in to see their dues, loyalty &amp; offers.</p>
                         </div>
                     ) : loadingSnapshot ? (
                         <div className="text-sm text-muted-foreground">Loading…</div>
@@ -1429,8 +1441,8 @@ export default function PosScreen() {
                                     {snapshot?.creditLimit === 0
                                         ? "No credit facility — this account must be paid in full."
                                         : `Credit limit ₹${snapshot!.creditLimit!.toLocaleString("en-IN")} exceeded. ` +
-                                          `Outstanding ₹${balanceDue.toLocaleString("en-IN")}, ` +
-                                          `this sale adds ₹${onCredit.toLocaleString("en-IN")} on credit.`
+                                        `Outstanding ₹${balanceDue.toLocaleString("en-IN")}, ` +
+                                        `this sale adds ₹${onCredit.toLocaleString("en-IN")} on credit.`
                                     }
                                 </span>
                             </div>
@@ -1677,35 +1689,45 @@ function CustomerPanel({ snapshot }: { snapshot: Snapshot }) {
                 snapshot.customerLevel === "Silver" ? "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300" :
                     "bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300";
     return (
-        <div className="space-y-4">
+        <div className="space-y-3">
+            {/* Identity */}
             <div>
                 <div className="flex items-center gap-2">
                     {c.kind === "company" ? <Building2 size={16} className="shrink-0 text-muted-foreground" /> : <User size={16} className="shrink-0 text-muted-foreground" />}
-                    <h2 className="truncate text-lg font-semibold">{c.name}</h2>
+                    <h2 className="truncate text-base font-semibold">{c.name}</h2>
                     {snapshot.customerLevel && <Badge className={`text-[10px] ${levelColor}`}>{snapshot.customerLevel}</Badge>}
                 </div>
-                <div className="mt-1 space-y-0.5 text-xs text-muted-foreground">
-                    {c.phone && <div className="flex items-center gap-1.5"><Phone size={11} /> {c.phone}</div>}
-                    {c.email && <div className="flex items-center gap-1.5"><Mail size={11} /> {c.email}</div>}
-                    {c.address && <div className="flex items-start gap-1.5"><MapPin size={11} className="mt-0.5 shrink-0" /> <span className="whitespace-pre-line">{c.address}</span></div>}
-                    {c.gstin && <div className="font-mono">GSTIN {c.gstin}</div>}
+                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
+                    {c.phone && <span className="inline-flex items-center gap-1"><Phone size={11} /> {c.phone}</span>}
+                    {c.email && <span className="inline-flex items-center gap-1"><Mail size={11} /> {c.email}</span>}
+                    {c.gstin && <span className="font-mono">GSTIN {c.gstin}</span>}
+                    {c.address && <span className="inline-flex basis-full items-start gap-1"><MapPin size={11} className="mt-0.5 shrink-0" /> <span className="whitespace-pre-line">{c.address}</span></span>}
                 </div>
             </div>
 
-            {/* Money row — Available credit, Due, Overdue */}
-            <div className="grid grid-cols-3 gap-2">
+            {/* Money — credit / due / overdue (risk-at-a-glance) */}
+            <div className="grid grid-cols-3 gap-1.5">
                 <Stat
                     icon={<CreditCard size={14} />}
                     label="Avail. credit"
                     value={snapshot.availableCredit != null ? fmtINR(snapshot.availableCredit) : "Unlimited"}
                     sub={snapshot.creditLimit != null ? `limit ${fmtINR(snapshot.creditLimit)}` : "no limit set"}
                 />
-                <Stat
-                    icon={<TrendingDown size={14} />}
-                    label="Due"
-                    value={fmtINR(snapshot.balanceDue)}
-                    sub={snapshot.balanceDue > 0 ? "outstanding" : "clean"}
-                />
+                {/* Due — sign-aware: flips to "Advance" (green) when the ledger is
+                    in credit, so it absorbs the old separate ledger-balance row. */}
+                {(() => {
+                    const bal = snapshot.account ? snapshot.account.balance : snapshot.balanceDue;
+                    const credit = bal < 0;
+                    return (
+                        <Stat
+                            icon={credit ? <Wallet size={14} /> : <TrendingDown size={14} />}
+                            label={credit ? "Advance" : "Due"}
+                            value={fmtINR(credit ? Math.abs(bal) : snapshot.balanceDue)}
+                            sub={credit ? "in their favour" : snapshot.balanceDue > 0 ? "outstanding" : "clean"}
+                            valueClass={credit ? "text-emerald-600 dark:text-emerald-400" : undefined}
+                        />
+                    );
+                })()}
                 <Stat
                     icon={<AlertCircle size={14} />}
                     label="Overdue"
@@ -1714,16 +1736,45 @@ function CustomerPanel({ snapshot }: { snapshot: Snapshot }) {
                 />
             </div>
 
-            {/* Lifetime + visits row */}
-            <div className="grid grid-cols-2 gap-2">
+            {/* Offers & cross-sell — pulled up and highlighted so the cashier
+                pitches before checkout. Empty state nudges an add-on/AMC sale. */}
+            {snapshot.personalizedOffers.length > 0 ? (
+                <div className="rounded-lg border border-emerald-300/50 bg-gradient-to-br from-emerald-500/10 to-transparent p-2.5">
+                    <div className="mb-1.5 flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
+                        <Sparkles size={12} /> Offers to pitch
+                    </div>
+                    <ul className="space-y-1.5">
+                        {snapshot.personalizedOffers.map((o) => (
+                            <li key={o.id} className="flex items-center justify-between gap-2 rounded-md border border-emerald-300/40 bg-card px-2.5 py-1.5 text-xs">
+                                <span className="truncate">{o.label}</span>
+                                <Badge variant="secondary" className="shrink-0 text-[10px]">{o.tag}</Badge>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            ) : (
+                <div className="rounded-lg border border-dashed border-emerald-300/40 bg-emerald-500/5 p-2.5 text-[11px]">
+                    <div className="mb-0.5 flex items-center gap-1 font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
+                        <Sparkles size={11} /> Upsell &amp; cross-sell
+                    </div>
+                    <p className="text-muted-foreground">
+                        {snapshot.favouriteCategory
+                            ? <>No coupon yet — they favour <span className="font-medium text-foreground">{snapshot.favouriteCategory}</span>. Suggest an add-on, accessory, or AMC.</>
+                            : "No targeted offer yet — pitch an accessory, extended warranty, or AMC."}
+                    </p>
+                </div>
+            )}
+
+            {/* Value & loyalty */}
+            <div className="grid grid-cols-2 gap-1.5">
                 <Stat icon={<TrendingUp size={14} />} label="Lifetime turnover" value={fmtINR(snapshot.turnover.lifetime)} sub={`${snapshot.turnover.invoiceCount} invoices`} />
                 <Stat icon={<TrendingUp size={14} />} label="Last 12 mo" value={fmtINR(snapshot.turnover.last12Months)} />
                 <Stat icon={<Award size={14} />} label="Loyalty points" value={String(snapshot.loyaltyPoints)} sub={snapshot.loyaltyRates?.enabled ? `worth ${fmtINR(snapshot.loyaltyPoints * snapshot.loyaltyRates.redeemValue)} · 1 pt / ₹${snapshot.loyaltyRates.globalEarnRatePer}` : snapshot.discountPct > 0 ? `${snapshot.discountPct}% discount tier` : "No tier yet"} />
                 <Stat icon={<Clock size={14} />} label="Last visit" value={since(snapshot.lastVisitAt)} />
             </div>
 
-            {/* Performance row — rating + favourite category */}
-            <div className="grid grid-cols-2 gap-2">
+            {/* Rating + favourite category */}
+            <div className="grid grid-cols-2 gap-1.5">
                 <Stat
                     icon={<Star size={14} />}
                     label="Rating"
@@ -1732,49 +1783,15 @@ function CustomerPanel({ snapshot }: { snapshot: Snapshot }) {
                 />
                 <Stat
                     icon={<Tag size={14} />}
-                    label="Favourite category"
+                    label="Favourite"
                     value={snapshot.favouriteCategory ?? "—"}
-                    sub={snapshot.favouriteCategory == null ? "needs invoice→product link" : undefined}
+                    sub={snapshot.favouriteCategory == null ? "needs invoice link" : undefined}
                 />
             </div>
 
-            {/* Personalized offers / coupons */}
-            {snapshot.personalizedOffers.length > 0 ? (
-                <div>
-                    <div className="mb-1.5 flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                        <Sparkles size={11} /> Offers for {c.name}
-                    </div>
-                    <ul className="space-y-1.5">
-                        {snapshot.personalizedOffers.map((o) => (
-                            <li key={o.id} className="flex items-center justify-between rounded-md border border-emerald-300/40 bg-emerald-500/10 px-2.5 py-1.5 text-xs">
-                                <span>{o.label}</span>
-                                <Badge variant="secondary" className="text-[10px]">{o.tag}</Badge>
-                            </li>
-                        ))}
-                    </ul>
-                </div>
-            ) : (
-                <div className="rounded-md border border-dashed border-border p-2 text-[11px] text-muted-foreground">
-                    <div className="mb-0.5 flex items-center gap-1 font-semibold uppercase tracking-wider"><Sparkles size={10} /> Personalized offers</div>
-                    No offers linked yet — wire <code className="font-mono">/api/coupons</code> + segments to populate.
-                </div>
-            )}
-
-            {snapshot.account && snapshot.account.balance !== 0 && (
-                <div className="rounded-md border border-border bg-card p-3 text-sm">
-                    <div className="text-xs text-muted-foreground">Ledger balance</div>
-                    <div className={`text-lg font-semibold ${snapshot.account.balance > 0 ? "text-amber-600" : "text-emerald-600"}`}>
-                        {fmtINR(snapshot.account.balance)}
-                    </div>
-                    {snapshot.account.balance > 0 && (
-                        <div className="mt-1 text-xs text-amber-600">Outstanding — collect at this visit?</div>
-                    )}
-                </div>
-            )}
-
             {snapshot.recentTickets.length > 0 && (
                 <div>
-                    <div className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Recent tickets</div>
+                    <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Recent tickets</div>
                     <ul className="space-y-1.5">
                         {snapshot.recentTickets.map((t) => (
                             <li key={t.id} className="flex items-center justify-between rounded-md border border-border bg-card px-2.5 py-1.5 text-xs">
@@ -1788,7 +1805,7 @@ function CustomerPanel({ snapshot }: { snapshot: Snapshot }) {
             )}
 
             {snapshot.warrantiesEnding.length > 0 && (
-                <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs">
+                <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-2.5 text-xs">
                     <div className="mb-1 font-semibold text-amber-700">Warranties ending soon</div>
                     {snapshot.warrantiesEnding.map((w) => (
                         <div key={w.productName} className="flex items-center justify-between">
@@ -1802,14 +1819,14 @@ function CustomerPanel({ snapshot }: { snapshot: Snapshot }) {
     );
 }
 
-function Stat({ icon, label, value, sub }: { icon: React.ReactNode; label: string; value: string; sub?: string }) {
+function Stat({ icon, label, value, sub, valueClass }: { icon: React.ReactNode; label: string; value: string; sub?: string; valueClass?: string }) {
     return (
-        <div className="rounded-md border border-border bg-card p-3">
+        <div className="rounded-md border border-border bg-card px-2.5 py-1.5">
             <div className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground">
                 {icon} {label}
             </div>
-            <div className="mt-1 text-base font-semibold">{value}</div>
-            {sub && <div className="text-[11px] text-muted-foreground">{sub}</div>}
+            <div className={`mt-0.5 text-sm font-semibold leading-tight tabular-nums ${valueClass ?? ""}`}>{value}</div>
+            {sub && <div className="text-[10px] leading-tight text-muted-foreground">{sub}</div>}
         </div>
     );
 }
