@@ -15,6 +15,7 @@ import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/compone
 import { calcVoucherTotals, calcLineTotals } from "@/modules/inventory/lib/stock";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -188,6 +189,7 @@ export default function PosScreen() {
     const [shippingAmtStr, setShippingAmtStr] = useState("");
     // Loyalty points the cashier is redeeming on this bill (whole-number string).
     const [redeemPointsStr, setRedeemPointsStr] = useState("");
+    const [redeemOn, setRedeemOn] = useState(false); // tick to apply loyalty redemption
     const [roundOffStr, setRoundOffStr] = useState("");
     // Vyapar-style auto round-off: POS auto-derives the round-off to land Total
     // on a whole rupee. Flips to true the moment the cashier types into the
@@ -386,7 +388,7 @@ export default function PosScreen() {
         const frac = cap == null ? 1 : Math.max(0, Math.min(100, cap)) / 100;
         return acc + net * frac;
     }, 0);
-    const requestedPts = canRedeem && !redeemBlocked ? parseInt(digitsInt(redeemPointsStr) || "0", 10) : 0;
+    const requestedPts = canRedeem && redeemOn && !redeemBlocked ? parseInt(digitsInt(redeemPointsStr) || "0", 10) : 0;
     const maxRedeemablePts = rates && rates.redeemValue > 0 ? Math.floor(maxRedeemableRupees / rates.redeemValue) : 0;
     const cappedPts = Math.min(requestedPts, loyaltyBalance, maxRedeemablePts);
     const redeemPts = cappedPts >= minRedeemPts ? cappedPts : 0;
@@ -652,6 +654,7 @@ export default function PosScreen() {
             setExtras([]);
             setShippingAmtStr("");
             setRedeemPointsStr("");
+            setRedeemOn(false);
             setRoundOffStr("");
             setRoundOffManuallyEdited(false);
             setCharges([]);
@@ -1070,10 +1073,28 @@ export default function PosScreen() {
                                 informational — cashiers and printed receipts show the breakdown
                                 but the math has already happened in the per-line inclusive price. */}
                             <Row label="Subtotal" value={fmtINR(subtotal + tax)} />
-                            {discountPct > 0 && <Row label={`Tier discount (${discountPct}%)`} value={`− ${fmtINR(discountAmount)}`} highlight />}
+                            {discountPct > 0 && (
+                                <Row
+                                    label={`Tier discount (${snapshot?.customerLevel ?? ""} ${discountPct}%)`}
+                                    value={`− ${fmtINR(discountAmount)}`}
+                                    highlight
+                                    title={`Automatic ${snapshot?.customerLevel ?? ""}-tier discount from lifetime spend (Silver ₹10k=2%, Gold ₹50k=5%, Platinum ₹2L=8%). Applied on pre-GST goods; separate from loyalty points.`}
+                                />
+                            )}
                             {canRedeem && loyaltyBalance > 0 && (
                                 <div className="grid grid-cols-[1fr_auto] items-center gap-2">
-                                    <Label htmlFor="pos-redeem" className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                                    <Label htmlFor="pos-redeem-tick" className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                                        <Checkbox
+                                            id="pos-redeem-tick"
+                                            checked={redeemOn}
+                                            disabled={redeemBlocked}
+                                            onCheckedChange={(v) => {
+                                                const on = v === true;
+                                                setRedeemOn(on);
+                                                // Tick → apply the max redeemable straightaway (editable below).
+                                                setRedeemPointsStr(on ? String(maxRedeemablePts) : "");
+                                            }}
+                                        />
                                         <Award size={12} /> Redeem points
                                         <span className="text-[10px] opacity-70">
                                             {redeemBlocked
@@ -1081,16 +1102,17 @@ export default function PosScreen() {
                                                 : `(${loyaltyBalance} avail · ${fmtINR(rates.redeemValue)}/pt)`}
                                         </span>
                                     </Label>
-                                    <Input
-                                        id="pos-redeem"
-                                        type="text"
-                                        inputMode="numeric"
-                                        value={redeemBlocked ? "" : redeemPointsStr}
-                                        onChange={(e) => setRedeemPointsStr(digitsInt(e.target.value))}
-                                        placeholder="0"
-                                        disabled={redeemBlocked}
-                                        className="h-7 w-28 text-right text-xs"
-                                    />
+                                    {redeemOn && !redeemBlocked && (
+                                        <Input
+                                            id="pos-redeem"
+                                            type="text"
+                                            inputMode="numeric"
+                                            value={redeemPointsStr}
+                                            onChange={(e) => setRedeemPointsStr(digitsInt(e.target.value))}
+                                            placeholder="0"
+                                            className="h-7 w-28 text-right text-xs"
+                                        />
+                                    )}
                                 </div>
                             )}
                             {redemptionRupees > 0.005 && <Row label={`Points redeemed (${redeemPts} pts)`} value={`− ${fmtINR(redemptionRupees)}`} highlight />}
@@ -1506,10 +1528,10 @@ export default function PosScreen() {
 
 // ── Sub-components ───────────────────────────────────────────────────────────
 
-function Row({ label, value, muted, highlight }: { label: string; value: string; muted?: boolean; highlight?: boolean }) {
+function Row({ label, value, muted, highlight, title }: { label: string; value: string; muted?: boolean; highlight?: boolean; title?: string }) {
     return (
         <div className={`flex items-center justify-between text-sm ${muted ? "text-muted-foreground" : ""} ${highlight ? "text-emerald-600 dark:text-emerald-400" : ""}`}>
-            <span>{label}</span>
+            <span className={title ? "cursor-help underline decoration-dotted underline-offset-2" : ""} title={title}>{label}</span>
             <span className="font-medium">{value}</span>
         </div>
     );
