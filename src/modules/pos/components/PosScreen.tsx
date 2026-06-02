@@ -10,6 +10,7 @@ import {
     Banknote, Wallet, CreditCard, Smartphone, Building2, FileText, UserPlus,
     MapPin, Star, Sparkles, AlertCircle, TrendingDown, Tag,
     ReceiptIndianRupee, Check, RotateCcw, ChevronDown, ChevronRight, HelpCircle, HandCoins,
+    RefreshCw, Lock, ArrowRightLeft, Monitor, MoreVertical,
 } from "lucide-react";
 import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/components/GlAccountCombobox";
 import { calcVoucherTotals, calcLineTotals } from "@/modules/inventory/lib/stock";
@@ -26,6 +27,10 @@ import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
+    DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
+    DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import {
     PartySearchAndCreate,
     type PartySearchAndCreateHandle,
     type PickedParty,
@@ -33,6 +38,8 @@ import {
 import { ActiveShiftBar, type ActiveShift } from "@/modules/pos/components/ActiveShiftBar";
 import { ShiftOpenDialog, type OpenedShift } from "@/modules/pos/components/ShiftOpenDialog";
 import { HandoverAcceptDialog, type PendingHandover } from "@/modules/pos/components/HandoverAcceptDialog";
+import { CashDropDialog } from "@/modules/pos/components/CashDropDialog";
+import { ShiftCloseDialog } from "@/modules/pos/components/ShiftCloseDialog";
 import { PosReturnDialog } from "@/modules/pos/components/PosReturnDialog";
 import { PosExpenditureDialog } from "@/modules/pos/components/PosExpenditureDialog";
 import { PosReceiptDialog } from "@/modules/pos/components/PosReceiptDialog";
@@ -214,6 +221,10 @@ export default function PosScreen() {
     const [returnDialogOpen, setReturnDialogOpen]       = useState(false);
     const [expenditureDialogOpen, setExpenditureDialogOpen] = useState(false);
     const [receiptDialogOpen, setReceiptDialogOpen]         = useState(false);
+    // Shift drop / close — launched from the header ⋮ menu now that the
+    // full-width shift bar is hidden on the billing screen.
+    const [shiftDropOpen, setShiftDropOpen]   = useState(false);
+    const [shiftCloseOpen, setShiftCloseOpen] = useState(false);
 
     const refreshActiveShift = useCallback(() => {
         axios.get<ActiveShift | null>("/api/pos/shifts/current")
@@ -393,6 +404,9 @@ export default function PosScreen() {
     const cappedPts = Math.min(requestedPts, loyaltyBalance, maxRedeemablePts);
     const redeemPts = cappedPts >= minRedeemPts ? cappedPts : 0;
     const redemptionRupees = rates ? redeemPts * rates.redeemValue : 0;
+    // Combined customer-facing discount (tier + loyalty redemption) — shown as a
+    // single "Total discount" line under Subtotal; the chips below break it down.
+    const totalDiscount = discountAmount + redemptionRupees;
 
     const chargesNet = manualChargesNet - redemptionRupees;
     // Auto round-off: figure out the round-off that lands Total on a whole
@@ -776,25 +790,24 @@ export default function PosScreen() {
 
     // ── Render ──────────────────────────────────────────────────────────────
 
+    // Opened-at clock label for the header shift menu (mirrors ActiveShiftBar).
+    const shiftOpenedAt = activeShift
+        ? new Date(activeShift.openedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+        : "";
+
     return (
         <div className="flex h-full w-full flex-col">
-            {/* Active shift bar */}
-            {activeShift && (
+            {/* Awaiting-handover keeps the dedicated bar — its billing-disabled
+                messaging is safety-critical and must stay loud. A normal OPEN
+                shift no longer shows a full-width strip; its status + actions
+                live in the header ⋮ menu below, and the "no shift" state is
+                surfaced by the amber menu trigger. */}
+            {activeShift?.status === "AWAITING_HANDOVER" && (
                 <ActiveShiftBar
                     shift={activeShift}
                     onClosed={() => { setActiveShift(null); refreshActiveShift(); }}
                     onHandoverCancelled={refreshActiveShift}
                 />
-            )}
-            {/* No-shift warning — only when loaded + no active shift + no pending handover */}
-            {shiftLoaded && !activeShift && !pendingHandover && (
-                <div className="flex items-center gap-2 border-b border-amber-500/40 bg-amber-50 dark:bg-amber-950/30 px-4 py-2 text-xs">
-                    <span className="font-semibold text-amber-700 dark:text-amber-300">⚠ No shift open</span>
-                    <span className="text-muted-foreground">Open a shift before billing.</span>
-                    <Button size="sm" className="ml-auto h-7 text-xs" onClick={() => setShiftOpenDialogOpen(true)}>
-                        Open shift
-                    </Button>
-                </div>
             )}
 
             {/* ShiftOpenDialog — fresh start (no handover waiting) */}
@@ -904,6 +917,60 @@ export default function PosScreen() {
                 >
                     <HelpCircle size={14} /> Help
                 </Button>
+
+                {/* Shift status + actions — folds the old full-width shift bar into
+                    the header. Also carries the nav link to the /vouchers/pos register
+                    where the live shift overview lives. */}
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            title="Shift status & actions"
+                            className={activeShift ? "border-emerald-300/70" : "border-amber-300/70"}
+                        >
+                            <span className={`h-2 w-2 rounded-full ${!shiftLoaded ? "bg-muted-foreground/40" : activeShift ? "bg-emerald-500" : "bg-amber-500"}`} />
+                            {!shiftLoaded ? "Shift…" : activeShift ? `Shift #${activeShift.id}` : "No shift"}
+                            <MoreVertical size={13} className="opacity-60" />
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="text-xs">
+                        {activeShift?.status === "OPEN" ? (
+                            <>
+                                <DropdownMenuLabel className="font-normal text-muted-foreground">
+                                    {activeShift.counter.name} · since {shiftOpenedAt}
+                                </DropdownMenuLabel>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={refreshActiveShift}>
+                                    <RefreshCw size={12} /> Refresh
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setShiftDropOpen(true)}>
+                                    <Lock size={12} /> Drop to safe
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                    onClick={() => setShiftCloseOpen(true)}
+                                    className="text-amber-700 focus:text-amber-700 dark:text-amber-400"
+                                >
+                                    <ArrowRightLeft size={12} /> Close shift
+                                </DropdownMenuItem>
+                            </>
+                        ) : activeShift?.status === "AWAITING_HANDOVER" ? (
+                            <DropdownMenuLabel className="font-normal text-amber-700 dark:text-amber-400">
+                                Awaiting handover — see the bar above
+                            </DropdownMenuLabel>
+                        ) : (
+                            <DropdownMenuItem onClick={() => setShiftOpenDialogOpen(true)}>
+                                <Lock size={12} /> Open shift
+                            </DropdownMenuItem>
+                        )}
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem asChild>
+                            <Link href="/vouchers/pos">
+                                <Monitor size={12} /> POS sales register
+                            </Link>
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
             </header>
 
             {/* Sale Return dialog */}
@@ -935,48 +1002,70 @@ export default function PosScreen() {
                 />
             )}
 
+            {/* Shift drop / close — launched from the header ⋮ menu (OPEN shifts).
+                Awaiting-handover uses ActiveShiftBar's own copies instead. */}
+            {activeShift?.status === "OPEN" && (
+                <>
+                    <CashDropDialog
+                        open={shiftDropOpen}
+                        onOpenChange={setShiftDropOpen}
+                        shiftId={activeShift.id}
+                        onDropped={refreshActiveShift}
+                    />
+                    <ShiftCloseDialog
+                        open={shiftCloseOpen}
+                        onOpenChange={setShiftCloseOpen}
+                        shiftId={activeShift.id}
+                        onClosed={() => { setActiveShift(null); refreshActiveShift(); }}
+                    />
+                </>
+            )}
+
             {/* Main grid */}
             <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[1fr_360px]">
                 {/* Left column — product picker + cart */}
                 <main className="flex min-h-0 flex-col border-r border-border">
                     <div className="shrink-0 border-b border-border p-4">
-                        <div className="relative">
-                            <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
-                            <Input
-                                ref={productSearchRef}
-                                value={productQuery}
-                                onChange={(e) => { setProductQuery(e.target.value); setProductHighlight(0); }}
-                                onKeyDown={onProductKeyDown}
-                                placeholder="Scan / type · ↑↓ to highlight · ↵ to add"
-                                className="pl-9"
-                            />
-                            {filteredProducts.length > 0 && (
-                                <ul className="absolute left-0 right-0 top-full z-10 mt-1 max-h-72 overflow-y-auto rounded-md border border-border bg-popover shadow-lg">
-                                    {filteredProducts.map((p, i) => (
-                                        <li key={p.id}>
-                                            <button
-                                                type="button"
-                                                onClick={() => addToCart(p)}
-                                                onMouseEnter={() => setProductHighlight(i)}
-                                                className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm ${i === productHighlight ? "bg-muted" : "hover:bg-muted"}`}
-                                            >
-                                                <span className="font-mono text-xs text-muted-foreground">{p.sku}</span>
-                                                <span className="flex-1 px-3 truncate">{p.name}</span>
-                                                <span className="text-xs text-muted-foreground">{p.effectiveSalePricePaise ? `₹${(p.effectiveSalePricePaise / 100).toLocaleString("en-IN")}` : "—"}</span>
-                                                <Plus size={14} className="ml-2 text-muted-foreground" />
-                                            </button>
-                                        </li>
-                                    ))}
-                                </ul>
-                            )}
+                        <div className="flex items-center gap-3">
+                            <div className="relative flex-1">
+                                <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
+                                <Input
+                                    ref={productSearchRef}
+                                    value={productQuery}
+                                    onChange={(e) => { setProductQuery(e.target.value); setProductHighlight(0); }}
+                                    onKeyDown={onProductKeyDown}
+                                    placeholder="Scan / type · ↑↓ to highlight · ↵ to add"
+                                    className="pl-9"
+                                />
+                                {filteredProducts.length > 0 && (
+                                    <ul className="absolute left-0 right-0 top-full z-10 mt-1 max-h-72 overflow-y-auto rounded-md border border-border bg-popover shadow-lg">
+                                        {filteredProducts.map((p, i) => (
+                                            <li key={p.id}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => addToCart(p)}
+                                                    onMouseEnter={() => setProductHighlight(i)}
+                                                    className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm ${i === productHighlight ? "bg-muted" : "hover:bg-muted"}`}
+                                                >
+                                                    <span className="font-mono text-xs text-muted-foreground">{p.sku}</span>
+                                                    <span className="flex-1 px-3 truncate">{p.name}</span>
+                                                    <span className="text-xs text-muted-foreground">{p.effectiveSalePricePaise ? `₹${(p.effectiveSalePricePaise / 100).toLocaleString("en-IN")}` : "—"}</span>
+                                                    <Plus size={14} className="ml-2 text-muted-foreground" />
+                                                </button>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
+                            </div>
+                            {/* Cart count — relocated off its own strip onto the search row to save a row */}
+                            <div className="flex shrink-0 items-center gap-1.5 whitespace-nowrap text-sm font-medium text-muted-foreground">
+                                <ShoppingCart size={16} /> Cart ({cart.length})
+                            </div>
                         </div>
                     </div>
 
                     {/* Cart */}
                     <div className="flex min-h-0 flex-1 flex-col">
-                        <div className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-2 text-sm font-medium">
-                            <ShoppingCart size={14} /> Cart ({cart.length})
-                        </div>
                         <div className="flex-1 overflow-y-auto">
                             {cart.length === 0 ? (
                                 <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
@@ -1072,57 +1161,99 @@ export default function PosScreen() {
                                 Subtotal equals Total. The CGST/SGST split underneath is
                                 informational — cashiers and printed receipts show the breakdown
                                 but the math has already happened in the per-line inclusive price. */}
-                            <Row label="Subtotal" value={fmtINR(subtotal + tax)} />
-                            {discountPct > 0 && (
-                                <Row
-                                    label={`Tier discount (${snapshot?.customerLevel ? `${snapshot.customerLevel} ` : ""}${discountPct}%)`}
-                                    value={`− ${fmtINR(discountAmount)}`}
-                                    highlight
-                                    title={`Automatic ${snapshot?.customerLevel || "spend"}-tier discount from lifetime spend, applied on pre-GST goods. Configured under Customer Tiers; separate from loyalty points.`}
-                                />
-                            )}
-                            {canRedeem && loyaltyBalance > 0 && (
-                                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-                                    <Label htmlFor="pos-redeem-tick" className="inline-flex items-center gap-1.5">
-                                        <Checkbox
-                                            id="pos-redeem-tick"
-                                            checked={redeemOn}
-                                            disabled={redeemBlocked}
-                                            onCheckedChange={(v) => {
-                                                const on = v === true;
-                                                setRedeemOn(on);
-                                                // Tick → apply the most the customer can actually redeem:
-                                                // the smaller of their balance and the cart's cap (editable).
-                                                setRedeemPointsStr(on ? String(Math.min(maxRedeemablePts, loyaltyBalance)) : "");
-                                            }}
-                                        />
-                                        <Award size={12} /> Redeem points
-                                    </Label>
-                                    {redeemOn && !redeemBlocked && (
-                                        <Input
-                                            id="pos-redeem"
-                                            type="text"
-                                            inputMode="numeric"
-                                            value={redeemPointsStr}
-                                            onChange={(e) => setRedeemPointsStr(digitsInt(e.target.value))}
-                                            placeholder="0"
-                                            className="h-7 w-20 text-right text-xs"
-                                        />
-                                    )}
-                                    <span className="text-[10px] opacity-70">
-                                        {redeemBlocked
-                                            ? `(redeem from ${fmtINR(rates.minRedeemInvoiceValue ?? 0)})`
-                                            : `(${loyaltyBalance} avail · ${fmtINR(rates.redeemValue)}/pt)`}
+                            {/* Subtotal — the tax (incl.) SGST/CGST breakdown rides in the
+                                middle of this bar so it no longer needs its own row. */}
+                            <div className="flex items-center justify-between gap-3 text-sm">
+                                <span>Subtotal</span>
+                                {tax > 0.005 && (
+                                    <span className="text-[11px] font-normal tabular-nums text-muted-foreground">
+                                        incl. GST · SGST {fmtINR(tax / 2)} + CGST {fmtINR(tax / 2)} = {fmtINR(tax)}
                                     </span>
-                                </div>
-                            )}
-                            {redemptionRupees > 0.005 && <Row label={`Points redeemed (${redeemPts} pts)`} value={`− ${fmtINR(redemptionRupees)}`} highlight />}
-                            {tax > 0.005 && (
-                                <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                                    <span>Tax (incl.)</span>
-                                    <span className="tabular-nums">SGST {fmtINR(tax / 2)} + CGST {fmtINR(tax / 2)} = {fmtINR(tax)}</span>
-                                </div>
-                            )}
+                                )}
+                                <span className="font-medium">{fmtINR(subtotal + tax)}</span>
+                            </div>
+                            {/* Discounts — each kind is its own chip, joined by a "+" since
+                                they add up. One flex-wrap row; extra discount types wrap to
+                                the next line instead of each eating a full row. */}
+                            {(() => {
+                                const chips: React.ReactNode[] = [];
+                                // Tier discount — automatic, display-only
+                                if (discountPct > 0) {
+                                    chips.push(
+                                        <span key="tier" className="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
+                                            <span
+                                                className="cursor-help underline decoration-dotted underline-offset-2"
+                                                title={`Automatic ${snapshot?.customerLevel || "spend"}-tier discount from lifetime spend, applied on pre-GST goods. Configured under Customer Tiers; separate from loyalty points.`}
+                                            >
+                                                Tier discount ({snapshot?.customerLevel ? `${snapshot.customerLevel} ` : ""}{discountPct}%)
+                                            </span>
+                                            <span className="font-medium tabular-nums">− {fmtINR(discountAmount)}</span>
+                                        </span>,
+                                    );
+                                }
+                                // Loyalty redemption — interactive (tick + points input). The
+                                // resulting − ₹ rides inside this same chip, so it no longer
+                                // needs a separate "Points redeemed" row.
+                                if (canRedeem && loyaltyBalance > 0) {
+                                    chips.push(
+                                        <span key="redeem" className="inline-flex items-center gap-1.5 text-muted-foreground">
+                                            <Label htmlFor="pos-redeem-tick" className="inline-flex items-center gap-1.5">
+                                                <Checkbox
+                                                    id="pos-redeem-tick"
+                                                    checked={redeemOn}
+                                                    disabled={redeemBlocked}
+                                                    onCheckedChange={(v) => {
+                                                        const on = v === true;
+                                                        setRedeemOn(on);
+                                                        // Tick → apply the most the customer can actually redeem:
+                                                        // the smaller of their balance and the cart's cap (editable).
+                                                        setRedeemPointsStr(on ? String(Math.min(maxRedeemablePts, loyaltyBalance)) : "");
+                                                    }}
+                                                />
+                                                <Award size={12} /> Redeem points
+                                            </Label>
+                                            {redeemOn && !redeemBlocked && (
+                                                <Input
+                                                    id="pos-redeem"
+                                                    type="text"
+                                                    inputMode="numeric"
+                                                    value={redeemPointsStr}
+                                                    onChange={(e) => setRedeemPointsStr(digitsInt(e.target.value))}
+                                                    placeholder="0"
+                                                    className="h-7 w-20 text-right text-xs"
+                                                />
+                                            )}
+                                            <span className="text-[10px] opacity-70">
+                                                {redeemBlocked
+                                                    ? `(redeem from ${fmtINR(rates.minRedeemInvoiceValue ?? 0)})`
+                                                    : `(${loyaltyBalance} avail · ${fmtINR(rates.redeemValue)}/pt)`}
+                                            </span>
+                                            {redemptionRupees > 0.005 && (
+                                                <span className="font-medium tabular-nums text-emerald-600 dark:text-emerald-400">− {fmtINR(redemptionRupees)}</span>
+                                            )}
+                                        </span>,
+                                    );
+                                }
+                                if (chips.length === 0) return null;
+                                return (
+                                    <div className="flex items-start justify-between gap-3 text-xs">
+                                        {/* breakdown chips on the left, "+" between chips only */}
+                                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+                                            {chips.flatMap((chip, i) =>
+                                                i === 0
+                                                    ? [chip]
+                                                    : [<Plus key={`sep-${i}`} size={11} className="shrink-0 text-muted-foreground/40" />, chip],
+                                            )}
+                                        </div>
+                                        {/* combined total on the right of the SAME line */}
+                                        {totalDiscount > 0.005 && (
+                                            <span className="shrink-0 whitespace-nowrap font-medium tabular-nums text-emerald-600 dark:text-emerald-400">
+                                                Total discount − {fmtINR(totalDiscount)}
+                                            </span>
+                                        )}
+                                    </div>
+                                );
+                            })()}
 
                             {/* ── Collapsible Adjustments panel ────────────────
                                 Shipping + Round-off + Charges. Mirrors office

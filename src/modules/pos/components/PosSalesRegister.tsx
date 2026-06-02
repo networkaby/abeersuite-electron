@@ -8,13 +8,15 @@ import { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import {
-    Search, Loader2, Monitor, RotateCcw, ExternalLink, Printer,
+    Search, Loader2, Monitor, RotateCcw, ExternalLink, Printer, Plus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { fmt } from "@/utils/constants";
+import { ActiveShiftBar, type ActiveShift } from "@/modules/pos/components/ActiveShiftBar";
+import { ShiftOpenDialog, type OpenedShift } from "@/modules/pos/components/ShiftOpenDialog";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -69,6 +71,20 @@ export function PosSalesRegister() {
     const [q, setQ]               = useState("");
     const [page, setPage]         = useState(1);
     const limit                   = 50;
+
+    // ── Active POS shift — the full status/money bar lives on this overview
+    //    page (hidden on the billing screen to save space). Read + manage here.
+    const [activeShift, setActiveShift] = useState<ActiveShift | null>(null);
+    const [shiftLoaded, setShiftLoaded] = useState(false);
+    const [shiftOpenOpen, setShiftOpenOpen] = useState(false);
+
+    const refreshShift = useCallback(() => {
+        axios.get<ActiveShift | null>("/api/pos/shifts/current")
+            .then((r) => setActiveShift(r.data))
+            .catch(() => setActiveShift(null))
+            .finally(() => setShiftLoaded(true));
+    }, []);
+    useEffect(() => { refreshShift(); }, [refreshShift]);
 
     const [tab, setTab]                 = useState<"sales" | "cash" | "ledger">("sales");
     const [moves, setMoves]             = useState<CashMove[]>([]);
@@ -132,6 +148,43 @@ export function PosSalesRegister() {
 
     return (
         <div className="space-y-4">
+            {/* ── Live shift bar ── the full status/money strip belongs here on
+                the overview page; the billing screen (/vouchers/pos/new) keeps it
+                folded into a ⋮ menu to save space. */}
+            {activeShift ? (
+                <div className="overflow-hidden rounded-lg border border-border">
+                    <ActiveShiftBar
+                        shift={activeShift}
+                        onClosed={() => { setActiveShift(null); refreshShift(); }}
+                        onHandoverCancelled={refreshShift}
+                        rightSlot={
+                            <Button asChild size="sm" className="h-7 text-xs">
+                                <a href="/vouchers/pos/new"><Plus size={14} /> New Sale</a>
+                            </Button>
+                        }
+                    />
+                </div>
+            ) : shiftLoaded ? (
+                <div className="flex items-center gap-2 rounded-lg border border-amber-300/50 bg-amber-50 px-4 py-2 text-xs dark:bg-amber-950/30">
+                    <span className="font-semibold text-amber-700 dark:text-amber-300">⚠ No shift open</span>
+                    <span className="text-muted-foreground">Open a shift to start billing.</span>
+                    <div className="ml-auto flex items-center gap-1.5">
+                        <Button asChild size="sm" variant="outline" className="h-7 text-xs">
+                            <a href="/vouchers/pos/new"><Plus size={14} /> New Sale</a>
+                        </Button>
+                        <Button size="sm" className="h-7 text-xs" onClick={() => setShiftOpenOpen(true)}>
+                            Open shift
+                        </Button>
+                    </div>
+                </div>
+            ) : null}
+
+            <ShiftOpenDialog
+                open={shiftOpenOpen}
+                onOpenChange={setShiftOpenOpen}
+                onOpened={(_s: OpenedShift) => { setShiftOpenOpen(false); refreshShift(); }}
+            />
+
             {/* ── Header ── */}
             <div className="flex items-center justify-between">
                 <div>
@@ -143,11 +196,6 @@ export function PosSalesRegister() {
                         {total} sale{total !== 1 ? "s" : ""} recorded
                     </p>
                 </div>
-                <Button asChild size="sm">
-                    <a href="/vouchers/pos/new" target="_blank" rel="noopener noreferrer">
-                        <ExternalLink size={14} /> Open Register
-                    </a>
-                </Button>
             </div>
 
             {/* ── Tabs ── */}
@@ -194,9 +242,9 @@ export function PosSalesRegister() {
                 </div>
             ) : (
                 <>
-                    <div className="rounded-lg border border-border overflow-hidden">
+                    <div className="max-h-[65vh] overflow-y-auto rounded-lg border border-border">
                         <table className="w-full text-sm">
-                            <thead className="bg-muted/50 text-xs text-muted-foreground">
+                            <thead className="sticky top-0 z-10 bg-muted text-xs text-muted-foreground">
                                 <tr>
                                     <th className="px-4 py-2.5 text-left font-medium">Reference</th>
                                     <th className="px-4 py-2.5 text-left font-medium">Date</th>
@@ -289,9 +337,9 @@ export function PosSalesRegister() {
                         <p>No counter receipts or expenditures yet.</p>
                     </div>
                 ) : (
-                    <div className="overflow-hidden rounded-lg border border-border">
+                    <div className="max-h-[65vh] overflow-y-auto rounded-lg border border-border">
                         <table className="w-full text-sm">
-                            <thead className="bg-muted/50 text-xs text-muted-foreground">
+                            <thead className="sticky top-0 z-10 bg-muted text-xs text-muted-foreground">
                                 <tr>
                                     <th className="px-4 py-2.5 text-left font-medium">Type</th>
                                     <th className="px-4 py-2.5 text-left font-medium">Reference</th>
@@ -365,9 +413,9 @@ export function PosSalesRegister() {
                     ) : !ledger ? (
                         <p className="py-8 text-center text-sm text-muted-foreground">Pick a counter to view its cash book.</p>
                     ) : (
-                        <div className="overflow-hidden rounded-lg border border-border">
+                        <div className="max-h-[65vh] overflow-y-auto rounded-lg border border-border">
                             <table className="w-full text-sm">
-                                <thead className="bg-muted/50 text-xs text-muted-foreground">
+                                <thead className="sticky top-0 z-10 bg-muted text-xs text-muted-foreground">
                                     <tr>
                                         <th className="px-4 py-2.5 text-left font-medium">Date</th>
                                         <th className="px-4 py-2.5 text-left font-medium">Particulars</th>

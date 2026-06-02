@@ -5,7 +5,7 @@
 //   OPEN              → normal green bar with drop + close buttons.
 //   AWAITING_HANDOVER → amber bar; billing disabled; shows who B is + cancel.
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, type ReactNode } from "react";
 import axios from "axios";
 import { Clock, Monitor, Lock, ArrowRightLeft, RefreshCw, Users, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -48,11 +48,15 @@ type Summary = {
 };
 
 export function ActiveShiftBar({
-    shift, onClosed, onHandoverCancelled,
+    shift, onClosed, onHandoverCancelled, rightSlot,
 }: {
     shift: ActiveShift;
     onClosed: () => void;
     onHandoverCancelled?: () => void;
+    // Optional extra control rendered in the bar's right cluster (before the
+    // shift action buttons). Used on /vouchers/pos to host the "New Sale" CTA
+    // in the bar's empty space. Not shown in the awaiting-handover state.
+    rightSlot?: ReactNode;
 }) {
     const [summary, setSummary]   = useState<Summary | null>(null);
     const [dropOpen, setDropOpen] = useState(false);
@@ -148,6 +152,7 @@ export function ActiveShiftBar({
                 <span className="font-medium">In drawer ≈ <span className="font-mono">₹{fmt(expected)}</span></span>
 
                 <div className="ml-auto flex items-center gap-1.5">
+                    {rightSlot}
                     <Button size="sm" variant="ghost" onClick={refresh} className="h-7 px-2 text-xs">
                         <RefreshCw size={11} />
                     </Button>
