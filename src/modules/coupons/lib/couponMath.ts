@@ -148,8 +148,34 @@ export function computeCouponDiscount(c: CouponContext, input: EvalInput): EvalR
             raw = qty * line.unitPrice * (pctOff / 100);
             break;
         }
-        case "BOGO":
-            return { ok: false, reason: "This coupon type is not available yet" };
+        case "BOGO": {
+            // Buy X get Y. Get-item = freeProductId (or the buy item for same-item
+            // BOGO). The get units are discounted by freeDiscountPct (100 = free).
+            const buyQty = c.buyQty ?? 1;
+            const getQty = c.getQty ?? 1;
+            const getProductId = c.freeProductId ?? c.buyProductId;
+            if (getProductId == null) return { ok: false, reason: "Coupon misconfigured (no item)" };
+            const getLine = input.lines.find((l) => l.productId === getProductId);
+            if (!getLine) return { ok: false, reason: "Add the offer item to the cart" };
+            const pctOff = c.freeDiscountPct ?? 100;
+            const sameItem = c.buyProductId == null || c.freeProductId == null || c.freeProductId === c.buyProductId;
+            let freeUnits: number;
+            if (sameItem) {
+                // Group of (buyQty + getQty); every full group yields getQty free.
+                const units = c.buyProductId != null
+                    ? (input.lines.find((l) => l.productId === c.buyProductId)?.qty ?? 0)
+                    : input.lines.reduce((s, l) => s + l.qty, 0);
+                freeUnits = Math.floor(units / (buyQty + getQty)) * getQty;
+            } else {
+                // Cross-item: every buyQty of the buy item unlocks getQty of the get item.
+                const buyUnits = input.lines.find((l) => l.productId === c.buyProductId)?.qty ?? 0;
+                freeUnits = Math.floor(buyUnits / buyQty) * getQty;
+            }
+            freeUnits = Math.min(freeUnits, getLine.qty);
+            if (freeUnits <= 0) return { ok: false, reason: "Buy more to unlock the offer" };
+            raw = freeUnits * getLine.unitPrice * (pctOff / 100);
+            break;
+        }
     }
 
     // Never drive the bill to ≤ 0 (postInvVoucherToGl skips GL when total ≤ 0).

@@ -30,6 +30,9 @@ export interface Coupon {
     freeProductId: number | null;
     freeQty: string | number | null;
     freeDiscountPct: string | number | null;
+    buyProductId: number | null;
+    buyQty: string | number | null;
+    getQty: string | number | null;
     rules?: CouponRule[];
     startsAt: string | null;
     endsAt: string | null;
@@ -74,6 +77,9 @@ export function CouponForm({ initial, categories, products, onSaved, onCancel }:
     const [freeProductId, setFreeProductId] = useState<number | null>(initial?.freeProductId ?? null);
     const [freeQty, setFreeQty] = useState(str(initial?.freeQty ?? (initial ? null : "1")));
     const [freeDiscountPct, setFreeDiscountPct] = useState(str(initial?.freeDiscountPct ?? (initial ? null : "100")));
+    const [buyProductId, setBuyProductId] = useState<number | null>(initial?.buyProductId ?? null);
+    const [buyQty, setBuyQty] = useState(str(initial?.buyQty ?? (initial ? null : "1")));
+    const [getQty, setGetQty] = useState(str(initial?.getQty ?? (initial ? null : "1")));
     const [rules, setRules] = useState<CouponRule[]>(initial?.rules ?? []);
     const [startsAt, setStartsAt] = useState(toDateInput(initial?.startsAt ?? null));
     const [endsAt, setEndsAt] = useState(toDateInput(initial?.endsAt ?? null));
@@ -91,6 +97,7 @@ export function CouponForm({ initial, categories, products, onSaved, onCancel }:
         if (type === "PERCENT" && optNum(percentOff) == null) return toast.error("Enter a % off");
         if (type === "FLAT" && optNum(flatAmt) == null) return toast.error("Enter a flat ₹ amount");
         if (type === "FREE_ITEM" && freeProductId == null) return toast.error("Pick the offer item");
+        if (type === "BOGO" && freeProductId == null && buyProductId == null) return toast.error("Pick the buy and/or get item");
 
         const payload = {
             code: applyMode === "AUTO" ? null : code.trim().toUpperCase(),
@@ -100,9 +107,12 @@ export function CouponForm({ initial, categories, products, onSaved, onCancel }:
             percentOff: type === "PERCENT" ? optNum(percentOff) : null,
             maxDiscountAmt: type === "PERCENT" ? optNum(maxDiscountAmt) : null,
             flatAmt: type === "FLAT" ? optNum(flatAmt) : null,
-            freeProductId: type === "FREE_ITEM" ? freeProductId : null,
+            freeProductId: type === "FREE_ITEM" || type === "BOGO" ? freeProductId : null,
             freeQty: type === "FREE_ITEM" ? optNum(freeQty) : null,
-            freeDiscountPct: type === "FREE_ITEM" ? optNum(freeDiscountPct) : null,
+            freeDiscountPct: type === "FREE_ITEM" || type === "BOGO" ? optNum(freeDiscountPct) : null,
+            buyProductId: type === "BOGO" ? buyProductId : null,
+            buyQty: type === "BOGO" ? optNum(buyQty) : null,
+            getQty: type === "BOGO" ? optNum(getQty) : null,
             rules: rules.filter((r) => r.productId != null || r.categoryId != null),
             startsAt: fromDateInput(startsAt),
             endsAt: fromDateInput(endsAt),
@@ -176,7 +186,7 @@ export function CouponForm({ initial, categories, products, onSaved, onCancel }:
                             <SelectItem value="PERCENT">% off</SelectItem>
                             <SelectItem value="FLAT">Flat ₹ off</SelectItem>
                             <SelectItem value="FREE_ITEM">Free / discounted item</SelectItem>
-                            <SelectItem value="BOGO" disabled>Buy X get Y (soon)</SelectItem>
+                            <SelectItem value="BOGO">Buy X get Y</SelectItem>
                         </SelectContent>
                     </Select>
                 </Field>
@@ -210,6 +220,37 @@ export function CouponForm({ initial, categories, products, onSaved, onCancel }:
                             <Input inputMode="decimal" value={freeQty} onChange={(e) => setFreeQty(dec(e.target.value))} placeholder="1" className="h-9 text-right" />
                         </Field>
                         <Field label="Discount % on it (100 = free)">
+                            <Input inputMode="decimal" value={freeDiscountPct} onChange={(e) => setFreeDiscountPct(dec(e.target.value))} placeholder="100" className="h-9 text-right" />
+                        </Field>
+                    </>
+                )}
+                {type === "BOGO" && (
+                    <>
+                        <Field label="Buy item (blank = any)">
+                            <SearchableSelect<number>
+                                value={buyProductId}
+                                options={products.map((p) => ({ value: p.id, label: `${p.sku} — ${p.name}`, leaf: p.name }))}
+                                onChange={setBuyProductId}
+                                placeholder="— any item —"
+                                triggerClassName="h-9"
+                            />
+                        </Field>
+                        <Field label="Buy qty (X)">
+                            <Input inputMode="decimal" value={buyQty} onChange={(e) => setBuyQty(dec(e.target.value))} placeholder="1" className="h-9 text-right" />
+                        </Field>
+                        <Field label="Get qty (Y)">
+                            <Input inputMode="decimal" value={getQty} onChange={(e) => setGetQty(dec(e.target.value))} placeholder="1" className="h-9 text-right" />
+                        </Field>
+                        <Field label="Get item (blank = same as buy)">
+                            <SearchableSelect<number>
+                                value={freeProductId}
+                                options={products.map((p) => ({ value: p.id, label: `${p.sku} — ${p.name}`, leaf: p.name }))}
+                                onChange={setFreeProductId}
+                                placeholder="— same item —"
+                                triggerClassName="h-9"
+                            />
+                        </Field>
+                        <Field label="Discount % on get (100 = free)">
                             <Input inputMode="decimal" value={freeDiscountPct} onChange={(e) => setFreeDiscountPct(dec(e.target.value))} placeholder="100" className="h-9 text-right" />
                         </Field>
                     </>
