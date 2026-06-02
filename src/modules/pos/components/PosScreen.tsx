@@ -59,7 +59,7 @@ type Snapshot = {
         minRedeemPoints: number | null;
         maxRedeemPctOfBill: number | null;
     } | null;
-    customerLevel: "Bronze" | "Silver" | "Gold" | "Platinum";
+    customerLevel: string; // admin-defined spend-tier name ("" when no tier reached)
     creditLimit: number | null;    // deny-by-default: 0 = no credit, >0 = cap (server maps legacy NULL→0)
     balanceDue: number;
     balanceOverdue: number;
@@ -1075,10 +1075,10 @@ export default function PosScreen() {
                             <Row label="Subtotal" value={fmtINR(subtotal + tax)} />
                             {discountPct > 0 && (
                                 <Row
-                                    label={`Tier discount (${snapshot?.customerLevel ?? ""} ${discountPct}%)`}
+                                    label={`Tier discount (${snapshot?.customerLevel ? `${snapshot.customerLevel} ` : ""}${discountPct}%)`}
                                     value={`− ${fmtINR(discountAmount)}`}
                                     highlight
-                                    title={`Automatic ${snapshot?.customerLevel ?? ""}-tier discount from lifetime spend (Silver ₹10k=2%, Gold ₹50k=5%, Platinum ₹2L=8%). Applied on pre-GST goods; separate from loyalty points.`}
+                                    title={`Automatic ${snapshot?.customerLevel || "spend"}-tier discount from lifetime spend, applied on pre-GST goods. Configured under Customer Tiers; separate from loyalty points.`}
                                 />
                             )}
                             {canRedeem && loyaltyBalance > 0 && (
@@ -1551,7 +1551,7 @@ function CustomerPanel({ snapshot }: { snapshot: Snapshot }) {
                 <div className="flex items-center gap-2">
                     {c.kind === "company" ? <Building2 size={16} className="shrink-0 text-muted-foreground" /> : <User size={16} className="shrink-0 text-muted-foreground" />}
                     <h2 className="truncate text-lg font-semibold">{c.name}</h2>
-                    <Badge className={`text-[10px] ${levelColor}`}>{snapshot.customerLevel}</Badge>
+                    {snapshot.customerLevel && <Badge className={`text-[10px] ${levelColor}`}>{snapshot.customerLevel}</Badge>}
                 </div>
                 <div className="mt-1 space-y-0.5 text-xs text-muted-foreground">
                     {c.phone && <div className="flex items-center gap-1.5"><Phone size={11} /> {c.phone}</div>}

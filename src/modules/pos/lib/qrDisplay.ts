@@ -22,7 +22,9 @@ async function send(path: string, body: unknown): Promise<void> {
     }
 }
 
-export type CustomerLevel = "Bronze" | "Silver" | "Gold" | "Platinum";
+// Spend-tier name shown on the customer display. Admin-defined (see CustomerTier),
+// so any string — not a fixed Bronze/Silver/Gold/Platinum union.
+export type CustomerLevel = string;
 
 export interface QrCustomer {
     name:           string;

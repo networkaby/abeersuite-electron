@@ -63,13 +63,6 @@ export const loyaltyMilestoneUpdateSchema = z.object({
 });
 export type LoyaltyMilestoneUpdateInput = z.infer<typeof loyaltyMilestoneUpdateSchema>;
 
-// LoyaltyTier — spend-tier auto-discount (4 fixed rows; only threshold + % editable).
-export const loyaltyTierUpdateSchema = z.object({
-    minSpend:    z.number().min(0).max(100_000_000).optional(),
-    discountPct: z.number().min(0).max(100).optional(),
-});
-export type LoyaltyTierUpdateInput = z.infer<typeof loyaltyTierUpdateSchema>;
-
 // Manual admin adjustment of a customer's points balance.
 export const loyaltyAdjustSchema = z.object({
     accountId: z.number().int().positive(),

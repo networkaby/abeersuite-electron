@@ -82,3 +82,22 @@ model Account {
   @@index([companyId])
   @@index([groupId])
 }
+
+/// Spend-tier auto-discount — a percentage off driven by the customer's lifetime
+/// spend, surfaced on the POS snapshot. NOT loyalty-points related (it posts to
+/// "Discount Allowed"). Fully admin-managed: rename, add/remove, enable/disable,
+/// and edit the threshold + %. Configured at /office/customer-retention/customer-tiers.
+model CustomerTier {
+  id          Int      @id @default(autoincrement())
+  name        String   // display name + POS badge label (e.g. Bronze / Gold / VIP)
+  /// Lifetime spend (₹) required to reach this tier.
+  minSpend    Decimal  @db.Decimal(14, 2)
+  /// Automatic discount % applied on pre-GST goods at this tier.
+  discountPct Decimal  @db.Decimal(5, 2)
+  enabled     Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([enabled])
+}

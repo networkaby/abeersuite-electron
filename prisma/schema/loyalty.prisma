@@ -88,20 +88,6 @@ model LoyaltyEarnRule {
   @@index([scope])
 }
 
-/// Spend-tier auto-discount (Bronze/Silver/Gold/Platinum). NOT points-based — a
-/// percentage off driven purely by the customer's lifetime spend, surfaced on the
-/// POS snapshot. Four seeded rows; admins edit the threshold + % (not add/remove).
-model LoyaltyTier {
-  id          Int      @id @default(autoincrement())
-  name        String   @unique // Bronze / Silver / Gold / Platinum (display + badge key)
-  /// Lifetime spend (₹) required to reach this tier (Bronze = 0).
-  minSpend    Decimal  @db.Decimal(14, 2)
-  /// Automatic discount % applied on pre-GST goods at this tier.
-  discountPct Decimal  @db.Decimal(5, 2)
-  sortOrder   Int      @default(0)
-  updatedAt   DateTime @updatedAt
-}
-
 model LoyaltyMilestone {
   id          Int      @id @default(autoincrement())
   /// Lifetime spend (₹, Σ POSTED SALE/POS vouchers) the customer must reach.

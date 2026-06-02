@@ -1224,21 +1224,21 @@ async function main() {
     });
     console.log(`      ✓ LoyaltyConfig singleton seeded (1 pt/₹100, 1 pt = ₹1, 365-day expiry, redeem ledger #${loyaltyRedeemLedger?.id ?? "—"})\n`);
 
-    // Spend-tier auto-discounts (create-only thresholds/% so admin edits survive reseed).
-    const LOYALTY_TIERS = [
-        { name: "Bronze",   minSpend: 0,      discountPct: 0, sortOrder: 0 },
-        { name: "Silver",   minSpend: 10000,  discountPct: 2, sortOrder: 1 },
-        { name: "Gold",     minSpend: 50000,  discountPct: 5, sortOrder: 2 },
-        { name: "Platinum", minSpend: 200000, discountPct: 8, sortOrder: 3 },
-    ];
-    for (const t of LOYALTY_TIERS) {
-        await prisma.loyaltyTier.upsert({
-            where:  { name: t.name },
-            create: t,
-            update: { sortOrder: t.sortOrder }, // keep ordering correct; don't clobber edited thresholds/%
+    // Spend-tier auto-discounts — admin-owned (rename / add / remove / toggle), so
+    // only seed the starter set when the table is empty; never clobber admin edits.
+    if ((await prisma.customerTier.count()) === 0) {
+        await prisma.customerTier.createMany({
+            data: [
+                { name: "Bronze",   minSpend: 0,      discountPct: 0, sortOrder: 0 },
+                { name: "Silver",   minSpend: 10000,  discountPct: 2, sortOrder: 1 },
+                { name: "Gold",     minSpend: 50000,  discountPct: 5, sortOrder: 2 },
+                { name: "Platinum", minSpend: 200000, discountPct: 8, sortOrder: 3 },
+            ],
         });
+        console.log(`      ✓ CustomerTier starter rows seeded (Bronze/Silver/Gold/Platinum)\n`);
+    } else {
+        console.log(`      • CustomerTier rows already present — left untouched\n`);
     }
-    console.log(`      ✓ LoyaltyTier rows seeded (Bronze/Silver/Gold/Platinum)\n`);
 
     // ── Section 12: VoucherSeries ──────────────────────────────────────
     console.log("[12/16] VoucherSeries (all GL + inventory series)");

@@ -554,6 +554,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             // { label: "Overview", icon: ChartArea, href: "/office/roadmap/retention" },
             { label: "Coupon programs", icon: BadgePercent, href: "/office/roadmap/retention/coupons" },
             { label: "Loyalty", icon: Gift, href: "/office/customer-retention/loyalty", permission: "loyalty:manage" },
+            { label: "Spend Tiers", icon: BadgePercent, href: "/office/customer-retention/customer-tiers", permission: "customers:manage" },
             { label: "Campaigns", icon: Megaphone, href: "/office/roadmap/retention/campaigns" },
         ],
     },
