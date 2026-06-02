@@ -3,9 +3,8 @@ import { TicketPercent } from "lucide-react";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { CouponList } from "@/modules/coupons/components/CouponList";
 import { CouponConfigCard } from "@/modules/coupons/components/CouponConfigCard";
-import { GiftCards } from "@/modules/coupons/components/GiftCards";
 
-export const metadata = { title: "Coupons & Gift Cards" };
+export const metadata = { title: "Coupons" };
 
 export default async function CouponsPage() {
     const [categories, products] = await Promise.all([
@@ -21,7 +20,7 @@ export default async function CouponsPage() {
                         <TicketPercent size={22} />
                     </div>
                     <div>
-                        <h1 className="text-xl font-semibold leading-tight">Coupons &amp; Gift Cards</h1>
+                        <h1 className="text-xl font-semibold leading-tight">Coupons</h1>
                         <p className="text-sm text-muted-foreground">
                             Run promotions across POS and the online shop. % off, flat ₹, free item — with validity, usage limits, auto-apply, and stacking control.
                         </p>
@@ -29,7 +28,6 @@ export default async function CouponsPage() {
                 </div>
                 <CouponConfigCard />
                 <CouponList categories={categories} products={products} />
-                <GiftCards />
             </div>
         </ScrollArea>
     );

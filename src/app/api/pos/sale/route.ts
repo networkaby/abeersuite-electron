@@ -388,8 +388,9 @@ export async function POST(req: Request) {
         const couponConfig = await prisma.couponConfig.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} });
         giftCardLiabilityAccountId = couponConfig.giftCardLiabilityAccountId;
         const gc = await lookupActiveGiftCard(prisma, body.giftCardCode, new Date());
-        if (!gc || gc.status !== "ACTIVE" || gc.balance <= 0) {
-            return NextResponse.json({ error: gc ? `Gift card is ${gc.status.toLowerCase()}` : "Gift card not found", code: "GIFT_CARD_REJECTED" }, { status: 422 });
+        if (!gc || gc.status !== "ACTIVE" || gc.balance <= 0 || !gc.enabled) {
+            const reason = !gc ? "Gift card not found" : (!gc.enabled && gc.status === "ACTIVE") ? "Gift card is disabled" : `Gift card is ${gc.status.toLowerCase()}`;
+            return NextResponse.json({ error: reason, code: "GIFT_CARD_REJECTED" }, { status: 422 });
         }
         if (giftCardLiabilityAccountId == null) {
             return NextResponse.json({ error: "Gift Card Liability ledger not configured. Re-run the bootstrap seed.", code: "GIFT_CARD_LEDGER_MISSING" }, { status: 422 });

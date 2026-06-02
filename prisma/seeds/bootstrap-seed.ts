@@ -933,6 +933,9 @@ async function main() {
     // Gift-card prepaid liability (Phase 4): issuing a gift card credits this;
     // redeeming one debits it via a payment tender on the POS sale.
     await upsertLedger("Gift Card Liability",      "Current Liabilities", "CREDIT");
+    // Breakage income: when a gift card expires unredeemed, the leftover liability
+    // is recognised here (Dr Gift Card Liability / Cr this).
+    await upsertLedger("Gift Card Breakage",       "Indirect Incomes",  "CREDIT");
     await upsertLedger("Bad Debts",               "Indirect Expenses", "DEBIT");
     await upsertLedger("Bank Charges",            "Indirect Expenses", "DEBIT");
     await upsertLedger("Audit Fees",              "Indirect Expenses", "DEBIT");
@@ -1238,16 +1241,17 @@ async function main() {
     // Global stacking guard (create-only so admin edits survive) + dedicated
     // GL ledgers, backfilled (even on update) to the seeded "Coupon Discounts"
     // and "Gift Card Liability" ledgers so GL routing is always wired.
-    const [couponExpenseLedger, giftCardLiabilityLedger] = await Promise.all([
+    const [couponExpenseLedger, giftCardLiabilityLedger, giftCardBreakageLedger] = await Promise.all([
         prisma.account.findFirst({ where: { name: { equals: "Coupon Discounts", mode: "insensitive" }, personId: null, companyId: null }, select: { id: true } }),
         prisma.account.findFirst({ where: { name: { equals: "Gift Card Liability", mode: "insensitive" }, personId: null, companyId: null }, select: { id: true } }),
+        prisma.account.findFirst({ where: { name: { equals: "Gift Card Breakage", mode: "insensitive" }, personId: null, companyId: null }, select: { id: true } }),
     ]);
     await prisma.couponConfig.upsert({
         where:  { id: 1 },
-        create: { id: 1, maxTotalDiscountPct: null, couponExpenseAccountId: couponExpenseLedger?.id ?? null, giftCardLiabilityAccountId: giftCardLiabilityLedger?.id ?? null },
-        update: { couponExpenseAccountId: couponExpenseLedger?.id ?? null, giftCardLiabilityAccountId: giftCardLiabilityLedger?.id ?? null },
+        create: { id: 1, maxTotalDiscountPct: null, couponExpenseAccountId: couponExpenseLedger?.id ?? null, giftCardLiabilityAccountId: giftCardLiabilityLedger?.id ?? null, giftCardBreakageAccountId: giftCardBreakageLedger?.id ?? null },
+        update: { couponExpenseAccountId: couponExpenseLedger?.id ?? null, giftCardLiabilityAccountId: giftCardLiabilityLedger?.id ?? null, giftCardBreakageAccountId: giftCardBreakageLedger?.id ?? null },
     });
-    console.log(`      ✓ CouponConfig singleton seeded (coupon ledger #${couponExpenseLedger?.id ?? "—"}, gift-card liability #${giftCardLiabilityLedger?.id ?? "—"})\n`);
+    console.log(`      ✓ CouponConfig singleton seeded (coupon ledger #${couponExpenseLedger?.id ?? "—"}, gift-card liability #${giftCardLiabilityLedger?.id ?? "—"}, breakage #${giftCardBreakageLedger?.id ?? "—"})\n`);
 
     // Spend-tier auto-discounts — admin-owned (rename / add / remove / toggle), so
     // only seed the starter set when the table is empty; never clobber admin edits.

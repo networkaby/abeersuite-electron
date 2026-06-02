@@ -40,16 +40,18 @@ enum CouponEligibility {
 }
 
 enum GiftCardStatus {
-  ACTIVE
+  DRAFT    // generated in the UI, NOT yet sold — no GL posting; freely deletable
+  ACTIVE   // issued/sold — Gift Card Liability posted; redeemable
   REDEEMED // balance hit 0
-  EXPIRED
+  EXPIRED  // past expiry with balance left — recognised as breakage income
   VOID     // cancelled by admin (liability reversed)
 }
 
 enum GiftCardTxnType {
-  ISSUE  // +balance, Cr Gift Card Liability
+  ISSUE  // +balance, Cr Gift Card Liability (on sale)
   REDEEM // −balance, Dr Gift Card Liability (POS tender)
   REFUND // +balance restored on a return
+  EXPIRE // −balance, Dr Gift Card Liability / Cr "Gift Card Breakage" (income)
   ADJUST // manual admin correction / void
 }
 
@@ -161,16 +163,22 @@ model CouponRedemption {
   @@index([voucherId])
 }
 
-/// Prepaid gift card / store credit. Issuing credits "Gift Card Liability"
-/// (Cr) against cash; redeeming draws it down (Dr) as a POS payment tender —
-/// NOT a discount. Balance is the source of truth; GiftCardTxn is the audit log.
+/// Prepaid gift card / store credit. Lifecycle: DRAFT (generated in the UI, no
+/// GL) → ACTIVE (sold — Cr "Gift Card Liability" against cash) → REDEEMED (drawn
+/// down at POS, Dr Liability) or EXPIRED (breakage — Dr Liability / Cr income).
+/// Balance is the source of truth; GiftCardTxn is the audit log.
 model GiftCard {
   id             Int            @id @default(autoincrement())
   code           String         @unique
   initialValue   Decimal        @db.Decimal(14, 2)
   balance        Decimal        @db.Decimal(14, 2)
-  status         GiftCardStatus @default(ACTIVE)
+  status         GiftCardStatus @default(DRAFT)
+  /// Manual on/off restriction — NO GL effect. A disabled card can't be redeemed
+  /// at POS but keeps its liability + lifecycle; it simply waits until it expires.
+  enabled        Boolean        @default(true)
   expiresAt      DateTime?
+  /// Set when the card moves DRAFT → ACTIVE (the moment it was sold + posted).
+  issuedAt       DateTime?
   /// Optional named holder (a customer account).
   ownerAccountId Int?
   ownerAccount   Account?       @relation("AccountGiftCards", fields: [ownerAccountId], references: [id], onDelete: SetNull)
@@ -217,5 +225,8 @@ model CouponConfig {
   /// Liability ledger gift cards draw down (Phase 4).
   giftCardLiabilityAccountId Int?
   giftCardLiabilityAccount   Account? @relation("GiftCardLiabilityLedger", fields: [giftCardLiabilityAccountId], references: [id])
+  /// Income ledger unredeemed value posts to when a gift card expires (breakage).
+  giftCardBreakageAccountId  Int?
+  giftCardBreakageAccount    Account? @relation("GiftCardBreakageLedger", fields: [giftCardBreakageAccountId], references: [id])
   updatedAt                  DateTime @updatedAt
 }

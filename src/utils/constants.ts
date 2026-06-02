@@ -55,6 +55,7 @@ import {
     AlertTriangle,
     TicketPercent,
     Ticket,
+    CreditCard,
     Gift,
     Megaphone,
 } from "lucide-react";
@@ -553,7 +554,8 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         pathPrefixes: ["/office/roadmap/retention", "/office/customer-retention"],
         children: [
             // { label: "Overview", icon: ChartArea, href: "/office/roadmap/retention" },
-            { label: "Coupons & Gift Cards", icon: Ticket, href: "/office/customer-retention/coupons", permission: "coupons:manage" },
+            { label: "Coupons", icon: Ticket, href: "/office/customer-retention/coupons", permission: "coupons:manage" },
+            { label: "Gift Cards", icon: CreditCard, href: "/office/customer-retention/gift-cards", permission: "coupons:manage" },
             { label: "Loyalty", icon: Gift, href: "/office/customer-retention/loyalty", permission: "loyalty:manage" },
             { label: "Spend Tiers", icon: BadgePercent, href: "/office/customer-retention/customer-tiers", permission: "customers:manage" },
             { label: "Campaigns", icon: Megaphone, href: "/office/roadmap/retention/campaigns" },

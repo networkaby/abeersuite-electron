@@ -11,14 +11,16 @@ export interface GiftCardLite {
     code: string;
     balance: number;
     status: string;
+    enabled: boolean;
     expiresAt: Date | null;
 }
 
-/// Find a redeemable gift card by code: ACTIVE, not expired, positive balance.
+/// Find a redeemable gift card by code: ACTIVE, enabled, not expired, positive
+/// balance. `enabled` is surfaced so callers can reject a manually-disabled card.
 export async function lookupActiveGiftCard(tx: Tx, code: string, now: Date): Promise<GiftCardLite | null> {
     const gc = await tx.giftCard.findFirst({ where: { code: { equals: code.trim(), mode: "insensitive" } } });
     if (!gc) return null;
-    const lite: GiftCardLite = { id: gc.id, code: gc.code, balance: Number(gc.balance), status: gc.status, expiresAt: gc.expiresAt };
+    const lite: GiftCardLite = { id: gc.id, code: gc.code, balance: Number(gc.balance), status: gc.status, enabled: gc.enabled, expiresAt: gc.expiresAt };
     if (gc.status !== "ACTIVE") return lite;            // surfaced to the caller with status
     if (gc.expiresAt && gc.expiresAt < now) return { ...lite, status: "EXPIRED" };
     return lite;

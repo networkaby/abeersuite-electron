@@ -16,6 +16,7 @@ export async function POST(req: Request) {
         const gc = await lookupActiveGiftCard(prisma, data.code, new Date());
         if (!gc) return NextResponse.json({ ok: false, reason: "Gift card not found" });
         if (gc.status !== "ACTIVE") return NextResponse.json({ ok: false, reason: `Gift card is ${gc.status.toLowerCase()}` });
+        if (!gc.enabled) return NextResponse.json({ ok: false, reason: "Gift card is disabled" });
         if (gc.balance <= 0) return NextResponse.json({ ok: false, reason: "Gift card has no balance" });
         return NextResponse.json({ ok: true, id: gc.id, code: gc.code, balance: gc.balance });
     } catch (e) {
