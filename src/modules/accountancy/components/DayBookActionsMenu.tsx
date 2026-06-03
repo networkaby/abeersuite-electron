@@ -20,7 +20,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
-import { MoreVertical, Pencil, Ban, Trash2, Copy, Undo2, AlertTriangle } from "lucide-react";
+import { MoreVertical, Pencil, Ban, Trash2, Copy, Undo2, AlertTriangle, Printer, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -32,7 +32,7 @@ import {
     DropdownMenuItem, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import type { CombinedSource } from "@/modules/accountancy/hooks/useCombinedVouchers";
-import { apiBase, referenceHref } from "@/modules/accountancy/lib/voucherUrls";
+import { apiBase, referenceHref, receiptHref, type ReceiptVariant } from "@/modules/accountancy/lib/voucherUrls";
 import { stashDuplicate, todayLocalISO, type DuplicateLine } from "@/modules/accountancy/lib/duplicate";
 
 // ── Props ──────────────────────────────────────────────────────────────────
@@ -63,6 +63,11 @@ export function DayBookActionsMenu({
 
     const isDeleted = !!deletedAt;
     const base = apiBase(source, rawId);
+
+    // ── Print / PDF (opens a print tab; user picks printer or "Save as PDF") ──
+    const goPrint = (variant: ReceiptVariant) => {
+        window.open(receiptHref(source, rawId, kind, variant), "_blank", "noopener");
+    };
 
     // ── Edit ────────────────────────────────────────────────────────────────
     const goEdit = () => {
@@ -209,7 +214,18 @@ export function DayBookActionsMenu({
                         <MoreVertical className="size-4" />
                     </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-44">
+                <DropdownMenuContent align="end" className="w-48">
+                    {/* Print / PDF — available for every voucher kind & state */}
+                    <DropdownMenuItem onSelect={() => goPrint("thermal")} disabled={busy}>
+                        <Printer className="size-4" /> Print (thermal)
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => goPrint("pdf72")} disabled={busy}>
+                        <FileText className="size-4" /> PDF 72mm
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => goPrint("pdfA4")} disabled={busy}>
+                        <FileText className="size-4" /> PDF A4
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
                     {isDeleted ? (
                         <>
                             <DropdownMenuItem onSelect={() => void restore()} disabled={busy}>

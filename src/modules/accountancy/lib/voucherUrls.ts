@@ -33,6 +33,33 @@ export function referenceHref(
     }
 }
 
+/** Print variants offered by the register 3-dot menu. */
+export type ReceiptVariant = "thermal" | "pdf72" | "pdfA4";
+
+/**
+ * URL to open a voucher's printable receipt.
+ *
+ * `thermal` routes POS sales and GL receipts/payments to their dedicated relay
+ * pages (real thermal-bridge print, untouched); every other kind — and both PDF
+ * variants — go through the generic template-driven `/receipt/voucher` route.
+ * `pdf72` renders a 72mm-wide slip; `pdfA4` a full A4 page. Both auto-open the
+ * browser print dialog, where the user can pick a printer or "Save as PDF".
+ */
+export function receiptHref(
+    source: VoucherSource,
+    rawId: number,
+    kind: string,
+    variant: ReceiptVariant,
+): string {
+    if (variant === "thermal") {
+        if (source === "inv" && kind === "POS") return `/receipt/invoice/${rawId}?kind=POS`;
+        if (source === "gl" && (kind === "RECEIPT" || kind === "PAYMENT")) return `/receipt/payment/${rawId}`;
+        return `/receipt/voucher/${source}/${rawId}?paper=THERMAL_80MM`;
+    }
+    if (variant === "pdf72") return `/receipt/voucher/${source}/${rawId}?paper=THERMAL_80MM&width=72`;
+    return `/receipt/voucher/${source}/${rawId}?paper=A4`;
+}
+
 /** Base path for the per-source `/api/.../[id]` route. */
 export function apiBase(source: VoucherSource, rawId: number): string {
     switch (source) {
