@@ -244,10 +244,7 @@ export async function postInvVoucherToGl(tx: Tx, input: PostVoucherInput): Promi
     // points at the party's ledger. Every Dr/Cr counter line is backed
     // by an explicit InvVoucherTender row — no implicit math, no
     // partyType+partyId resolution fallback.
-    // |amount| > 0 so a NEGATIVE party tender survives — that's an OVERPAYMENT /
-    // advance: the excess credits the customer's ledger (opposite of the counter
-    // side). The loop below flips its Dr/Cr direction by sign.
-    const tenderRows = (voucher.tenders ?? []).filter((t) => Math.abs(toNumber(t.amount)) > 0.005);
+    const tenderRows = (voucher.tenders ?? []).filter((t) => toNumber(t.amount) > 0.005);
     if (tenderRows.length === 0) {
         return { journalEntryId: null, notes: [
             ...notes,
@@ -371,16 +368,12 @@ export async function postInvVoucherToGl(tx: Tx, input: PostVoucherInput): Promi
     const lines: JeLine[] = [];
     const extraLedgers: LedgerLite[] = [];
 
-    const oppositeOf = (side: typeof counterType) => (side === "DEBIT" ? "CREDIT" as const : "DEBIT" as const);
     for (const t of tenderRows) {
         const amt = toNumber(t.amount);
         lines.push({
             accountId:   t.accountId,
-            // Normal tender → counter side (Dr on sale). A NEGATIVE tender (party
-            // overpayment / advance) posts to the OPPOSITE side for |amount|, so
-            // the excess credits the customer's ledger and the JE stays balanced.
-            type:        amt >= 0 ? counterType : oppositeOf(counterType),
-            amount:      Math.abs(amt),
+            type:        counterType,
+            amount:      amt,
             description: voucher.partyName ?? voucher.description,
         });
         if (t.account) {

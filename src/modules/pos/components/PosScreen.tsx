@@ -765,14 +765,13 @@ export default function PosScreen() {
                 setSubmitting(false);
                 return;
             }
-            // POS must NOT be left part-paid (that's a credit sale → use /sale).
-            // OVERPAYMENT is allowed: the excess is recorded as a customer advance
-            // (server Cr's their ledger; postInvVoucherToGl keeps the JE balanced).
+            // POS sale is exact-pay. Underpay (credit) → use /sale; overpay
+            // (advance) → take it via the counter "Receive payment" (Rcv) flow,
+            // which posts a proper GST Receipt Voucher. So cash/UPI/etc. must equal
+            // the bill MINUS the gift-card tender (the server adds the gift card back).
             const collectedFromPayments = paymentsList.reduce((s, p) => s + p.amount, 0);
-            // Cash/UPI/etc. must at least cover the bill MINUS the gift-card tender
-            // (the server adds the gift card back). Anything over → advance.
-            if (collectedFromPayments < payableTotal - 0.01) {
-                toast.error("POS sale can't be left part-paid. Collect the full amount (extra becomes advance), or use 'Save & Print' on /sale for a credit sale.");
+            if (Math.abs(collectedFromPayments - payableTotal) > 0.01) {
+                toast.error("POS sale must be paid in full. Take any advance via 'Receive payment'; use 'Save & Print' on /sale for a credit sale.");
                 setSubmitting(false);
                 return;
             }

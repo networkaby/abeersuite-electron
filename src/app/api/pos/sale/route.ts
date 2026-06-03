@@ -410,14 +410,14 @@ export async function POST(req: Request) {
         giftCardId = gc.id;
     }
 
-    // Cash/UPI/etc. payments + the gift-card tender must at least COVER the bill.
-    // Overpayment is allowed — the excess posts as a customer advance (Cr their
-    // ledger; see the signed AR tender below). Underpayment is rejected: a
-    // part-paid / on-credit sale must go through /sale, not the counter.
+    // Cash/UPI/etc. payments + the gift-card tender must EQUAL the bill. The POS
+    // sale is exact-pay only: an on-credit (under) sale goes through /sale, and an
+    // ADVANCE (over) is taken via the counter "Receive payment" (Rcv) flow, which
+    // posts a proper GST Receipt Voucher (shifts/[id]/receipts → postReceiptVoucher).
     const paymentTotal = body.payments.reduce((s, p) => s + p.amount, 0) + giftCardRedeem;
-    if (paymentTotal < totalAmount - 0.01) {
+    if (Math.abs(paymentTotal - totalAmount) > 0.01) {
         return NextResponse.json(
-            { error: `Payment total (₹${paymentTotal.toFixed(2)}) is less than the invoice total (₹${totalAmount.toFixed(2)}). POS sales must be paid in full — use /sale for a credit sale.` },
+            { error: `Payment total (₹${paymentTotal.toFixed(2)}) does not match invoice total (₹${totalAmount.toFixed(2)}). Take any advance via "Receive payment"; use /sale for a credit sale.` },
             { status: 422 },
         );
     }
@@ -490,12 +490,9 @@ export async function POST(req: Request) {
                 ...(giftCardRedeem > 0.005 && giftCardLiabilityAccountId != null
                     ? [{ accountId: giftCardLiabilityAccountId, amount: giftCardRedeem, method: "OTHER" as const, reference: `Gift card ${body.giftCardCode}` }]
                     : []),
-                // Party-ledger leg for any imbalance between collected and the bill:
-                //   • arRemainder > 0 → UNDERPAY (on credit): Dr customer AR.
-                //   • arRemainder < 0 → OVERPAY (advance): Cr customer AR — the
-                //     excess sits in their favour (settles overdue first, then advance).
-                // postInvVoucherToGl flips Dr/Cr by the sign so the JE stays balanced.
-                ...(Math.abs(arRemainder) > 0.005
+                // AR leg for the unpaid portion (on-credit). POS enforces exact pay,
+                // so this is 0 today — kept as a forward-facing branch for partials.
+                ...(arRemainder > 0.005
                     ? [{ accountId: customerAccount.id, amount: arRemainder, method: null as null, reference: null as null }]
                     : []),
             ];
