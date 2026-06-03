@@ -110,15 +110,32 @@ export default function QrDisplaySettingsPage() {
         }
     };
 
+    // Mirrors the ladder payload a real sale pushes (see PosScreen `qrDisplay.cart`):
+    // per-item mrp/barcode, a named "Counter discount" pool, and a "You saved" hero.
+    // Legacy subtotal/discount/total are kept so an un-updated relay still renders.
     const testCart = () => runTest("Test cart", "/pos/cart", {
+        // Gross-at-tag (barcode) = 150×2 + 499 + 599 = 1398; discounts sum 280 →
+        // goods 1118; + Shipping 50 = total 1168; MRP total = 199×2 + 699 + 599 =
+        // 1696; saved = 1696 − 1168 = 528 (31%). Kept consistent so the demo reconciles.
         items: [
-            { name: "USB Cable",     qty: 2, price: 150 },
-            { name: "HDMI 4K 2m",    qty: 1, price: 499 },
-            { name: "Mouse Wireless", qty: 1, price: 599 },
+            { name: "USB Cable",      qty: 2, price: 120, mrp: 199, barcode: 150 },
+            { name: "HDMI 4K 2m",     qty: 1, price: 420, mrp: 699, barcode: 499 },
+            { name: "Mouse Wireless", qty: 1, price: 520, mrp: 899, barcode: 599 },
         ],
-        subtotal: 1397,
-        discount: 97,
-        total:    1300,
+        subtotal: 1398,
+        discount: 280,
+        total:    1168,
+        discounts: [
+            { label: "Counter discount",      amount: 169 },
+            { label: "Level Discount (Silver)", amount: 31 },
+            { label: "Loyalty (100 pts)",     amount: 50 },
+            { label: "Coupon SAVE10",         amount: 30 },
+        ],
+        charges: [
+            { label: "Shipping", amount: 50 },
+        ],
+        gst: 170.54, // CGST+SGST embedded in the 1118 goods @18%
+        savings: { amount: 528, pct: 31 },
     });
 
     const testUpi = () => {

@@ -20,6 +20,7 @@ export const voucherTemplateUpdateSchema = z.object({
     showGstin:      z.boolean().optional(),
     showPhone:      z.boolean().optional(),
     showTaxSummary: z.boolean().optional(),
+    showMrp:        z.boolean().optional(),
     showSignature:  z.boolean().optional(),
     showQrCode:     z.boolean().optional(),
 

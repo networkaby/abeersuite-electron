@@ -39,7 +39,14 @@ export interface QrCartItem {
     name:  string;
     qty:   number;
     price: number;
+    /// Per-unit MRP (rupees, tax-inclusive tag) — struck-through on the display.
+    mrp?:     number;
+    /// Per-unit barcode / printed tag price (rupees, tax-inclusive).
+    barcode?: number;
 }
+
+/// One named row of the customer-facing "Today's discount" pool.
+export interface QrDiscountRow { label: string; amount: number }
 
 export interface QrCart {
     items:     QrCartItem[];
@@ -47,6 +54,15 @@ export interface QrCart {
     discount?: number;
     total:     number;
     title?:    string;
+    /// "Today's discount" rows (counter discount + tier + loyalty + coupon). Additive
+    /// — the relay must be updated to render these; old relays ignore them.
+    discounts?: QrDiscountRow[];
+    /// Signed bill adjustments (shipping/round-off/manual). + adds, − reduces.
+    charges?:   QrDiscountRow[];
+    /// Combined GST embedded in the bill (CGST+SGST) — informational line.
+    gst?:       number;
+    /// "You saved ₹X (Y%)" hero — MRP total minus paid.
+    savings?:   { amount: number; pct: number };
 }
 
 export interface QrPayment {

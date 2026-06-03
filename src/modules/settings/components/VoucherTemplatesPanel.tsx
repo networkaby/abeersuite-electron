@@ -258,6 +258,7 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
                             <ToggleRow label="Phone"       on={current.showPhone}       onChange={(v) => setField("showPhone", v)} />
                             <ToggleRow label="GSTIN"       on={current.showGstin}       onChange={(v) => setField("showGstin", v)} />
                             <ToggleRow label="Tax summary" on={current.showTaxSummary}  onChange={(v) => setField("showTaxSummary", v)} />
+                            <ToggleRow label="MRP (struck)" on={current.showMrp}       onChange={(v) => setField("showMrp", v)} />
                             <ToggleRow label="Signature"   on={current.showSignature}   onChange={(v) => setField("showSignature", v)} />
                         </div>
                     </fieldset>

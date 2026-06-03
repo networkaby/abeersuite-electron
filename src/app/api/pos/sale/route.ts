@@ -6,6 +6,7 @@ import { invNextRef, calcVoucherTotals } from "@/modules/inventory/lib/stock";
 import { recordStockMovement } from "@/modules/inventory/lib/stockMovement";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import { postInvVoucherToGl } from "@/modules/accountancy/lib/postInvVoucher";
+import { getVoucherTemplate } from "@/shared/lib/print/voucherTemplate";
 import * as Sentry from "@sentry/nextjs";
 import { validateRequest } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -63,6 +64,9 @@ const lineSchema = z.object({
     quantity:    z.number().positive(),
     unitPrice:   z.number().min(0),
     taxRate:     z.number().min(0).max(100).default(0),
+    // Snapshots for the customer-facing "Today's discount" price ladder (paise).
+    mrpPaise:            z.number().int().nonnegative().nullish(),
+    savedSalePricePaise: z.number().int().nonnegative().nullish(),
 });
 
 const paymentSchema = z.object({
@@ -95,6 +99,10 @@ const createSchema = z.object({
     // discountAmt → "Discount Allowed" path. Client-supplied (cashier-trusted,
     // same as line prices). Server still validates payment total == bill total.
     discountAmt: z.number().min(0).default(0),
+    // Spend-tier % that produced discountAmt (e.g. 5 for Gold). Stored so the
+    // receipt can label the "Level Discount (Gold)" row by resolving the tier
+    // name from this %. 0 when no tier applied.
+    discountPct: z.number().min(0).max(100).default(0),
     // Loyalty points the customer wants to burn. The server is authoritative for
     // the ₹ value (recomputed from LoyaltyConfig) and validates against balance.
     redeemPoints: z.number().int().min(0).default(0),
@@ -218,6 +226,9 @@ export async function POST(req: Request) {
             taxRate:     l.taxRate,
             taxAmount:   lineTax,
             amount:      lineSubtotal + lineTax,
+            // Customer-facing ladder snapshots (paise) — display only.
+            mrpPaise:            l.mrpPaise ?? null,
+            savedSalePricePaise: l.savedSalePricePaise ?? null,
         };
     });
     // Shipping / round-off / charges parity with office SALE — same single
@@ -431,7 +442,14 @@ export async function POST(req: Request) {
     // Amount that will increase the customer's AR balance (onCredit portion).
     // Currently the route enforces paymentTotal === totalAmount so this is
     // always 0 — the check is a forward-compatibility guard for partial payments.
-    const onCredit = Math.max(0, totalAmount - paymentTotal);
+    // Round to paise: the inclusive-price + roundOff float math can leave a
+    // sub-paise residue (e.g. totalAmount = 960.0000000000004 vs a ₹960 payment).
+    // That crumb is not a real credit balance, but left unrounded it slips past
+    // the ±0.01 payment-match guard yet still trips checkCreditLimit's
+    // `additionalDebit > 0` test — wrongly rejecting a fully-paid sale to a
+    // zero-credit-limit customer with NO_CREDIT_ALLOWED. Matches the >0.005
+    // epsilon the AR-tender branch below already uses.
+    const onCredit = Math.max(0, Math.round((totalAmount - paymentTotal) * 100) / 100);
 
     // POS is always counter-pickup → place of supply = branch state regardless
     // of customer's address (CGST Act §10(1)(c)). Resolve once, outside tx.
@@ -490,6 +508,9 @@ export async function POST(req: Request) {
                     placeOfSupply:  sellerStateCode,
                     shippingAmt:    body.shippingAmt,
                     discountAmt:    effectiveTierDiscount,
+                    // Store the tier % only when the tier discount actually applied
+                    // (a non-stackable coupon can drop it → effectiveTierDiscount 0).
+                    discountPct:    effectiveTierDiscount > 0 ? body.discountPct : 0,
                     roundOff:       body.roundOff,
                     subtotal,
                     taxAmount,
@@ -504,6 +525,8 @@ export async function POST(req: Request) {
                             taxRate:     l.taxRate,
                             taxAmount:   l.taxAmount,
                             amount:      l.amount,
+                            mrpPaise:            l.mrpPaise,
+                            savedSalePricePaise: l.savedSalePricePaise,
                         })),
                     },
                     tenders: {
@@ -692,7 +715,12 @@ export async function POST(req: Request) {
             console.error("[price-recompute] failed for voucher", result.voucherId, err);
         });
 
-        return NextResponse.json(result, { status: 201 });
+        // Resolved POS print template — the cashier lacks `settings:manage`, so
+        // PosScreen can't fetch it directly. It rides the sale response and is
+        // forwarded to the thermal relay so the printed slip respects the admin's
+        // template and matches /receipt/invoice/[id]?kind=POS. Display-only.
+        const posTemplate = await getVoucherTemplate("POS");
+        return NextResponse.json({ ...result, posTemplate }, { status: 201 });
     } catch (err) {
         if (err instanceof CreditLimitError) {
             return NextResponse.json({ error: err.message, code: err.code }, { status: 422 });

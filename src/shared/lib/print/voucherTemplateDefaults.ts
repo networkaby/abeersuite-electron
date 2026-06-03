@@ -140,6 +140,7 @@ export interface VoucherTemplateDefaults {
     showGstin:      boolean;
     showPhone:      boolean;
     showTaxSummary: boolean;
+    showMrp:        boolean;
     showSignature:  boolean;
     showQrCode:     boolean;
     termsText:      string;
@@ -173,6 +174,7 @@ export function buildVoucherTemplateDefaults(kind: VoucherTemplateKind): Voucher
         showGstin:      true,
         showPhone:      true,
         showTaxSummary: !NO_TAX_SUMMARY.has(kind),
+        showMrp:        true,
         showSignature:  false,
         showQrCode:     false,
         termsText:      "",

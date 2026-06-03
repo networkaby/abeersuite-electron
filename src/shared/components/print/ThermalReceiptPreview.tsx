@@ -24,6 +24,26 @@ export interface ThermalReceiptLine {
     description: string;
     quantity:    number;
     amount:      number; // line total (post-tax inclusive or pre-tax, caller's choice)
+    /// Customer-ladder snapshots (tax-inclusive line totals, rupees). Optional —
+    /// when set, the A4 "C" density shows a struck MRP next to the line.
+    mrp?:        number | null;
+    barcode?:    number | null;
+}
+
+/// Customer-facing "Today's discount" ladder (display only). When present on the
+/// sample, the renderer shows Gross-at-tag → Today's discount → (HSN summary) →
+/// Total → "You saved ₹X (Y%)" INSTEAD of the legacy subtotal/tax/total block.
+export interface ReceiptDiscountRow { label: string; amount: number }
+export interface ReceiptHsnRow {
+    hsn: string; ratePct: number; taxable: number; cgst: number; sgst: number; total: number;
+}
+export interface ReceiptDiscounts {
+    grossAtTag:   number;             // Σ barcode/tag line totals
+    rows:         ReceiptDiscountRow[]; // priceBenefit + tier + loyalty + coupon (non-zero)
+    charges?:     ReceiptDiscountRow[]; // signed bill adjustments: shipping/round-off/manual
+    total:        number;             // Σ rows
+    savingsTotal: number;             // MRP total − paid
+    savingsPct:   number;
 }
 
 /**
@@ -49,6 +69,14 @@ export interface ThermalReceiptSample {
     notes:     string | null;
     /// Optional CGST/SGST/IGST breakdown — overrides the single Tax row.
     taxBreakdown?: ThermalTaxBreakdown | null;
+    /// Customer-facing price ladder (display only). When set, replaces the
+    /// legacy subtotal/tax/total block with the "Today's discount" presentation.
+    discounts?:  ReceiptDiscounts | null;
+    /// HSN/rate-wise net tax summary (paired with `discounts`). Gated by
+    /// `template.showTaxSummary` so it can be toggled off.
+    hsnSummary?: ReceiptHsnRow[] | null;
+    /// Buyer GSTIN — printed on the receipt for B2B tax invoices.
+    partyGstin?: string | null;
 }
 
 const fmtINR = (n: number) =>
@@ -159,6 +187,12 @@ function ReceiptBody({ template, sample }: BodyProps) {
                     <span>{sample.partyPhone}</span>
                 </div>
             )}
+            {sample.partyGstin && (
+                <div className="row">
+                    <span>GSTIN:</span>
+                    <span>{sample.partyGstin}</span>
+                </div>
+            )}
 
             <div className="hr" />
 
@@ -173,7 +207,12 @@ function ReceiptBody({ template, sample }: BodyProps) {
                 <tbody>
                     {sample.lines.map((l, i) => (
                         <tr key={i}>
-                            <td>{l.description}</td>
+                            <td>
+                                {l.description}
+                                {template.showMrp && sample.discounts && l.mrp != null && l.mrp > l.amount + 0.005 && (
+                                    <div className="small">MRP <s>{fmtINR(l.mrp)}</s></div>
+                                )}
+                            </td>
                             <td className="qty">{l.quantity}</td>
                             <td className="amt">{fmtINR(l.amount)}</td>
                         </tr>
@@ -181,29 +220,64 @@ function ReceiptBody({ template, sample }: BodyProps) {
                 </tbody>
             </table>
 
-            {template.showTaxSummary && sample.subtotal !== null && (
+            {sample.discounts ? (
+                /* ── "Today's discount" ladder (B density) ───────────────────
+                   Gross-at-tag → Today's discount → (HSN summary) → Total →
+                   "You saved". The per-item real price is never shown. */
                 <>
                     <div className="hr" />
-                    <div className="row"><span>Subtotal</span><span>{fmtINR(sample.subtotal)}</span></div>
-                    {sample.taxBreakdown ? (
-                        sample.taxBreakdown.kind === "INTRA" ? (
-                            <>
-                                <div className="row"><span>CGST</span><span>{fmtINR(sample.taxBreakdown.cgst)}</span></div>
-                                <div className="row"><span>SGST</span><span>{fmtINR(sample.taxBreakdown.sgst)}</span></div>
-                            </>
-                        ) : (
-                            <div className="row"><span>IGST</span><span>{fmtINR(sample.taxBreakdown.igst)}</span></div>
-                        )
-                    ) : sample.taxAmount !== null && sample.taxAmount > 0 && (
-                        <div className="row"><span>Tax</span><span>{fmtINR(sample.taxAmount)}</span></div>
+                    <div className="row"><span>Gross</span><span>{fmtINR(sample.discounts.grossAtTag)}</span></div>
+                    {sample.discounts.rows.map((d, i) => (
+                        <div key={i} className="row"><span>{d.label}</span><span>&minus; {fmtINR(d.amount)}</span></div>
+                    ))}
+                    {template.showTaxSummary && sample.hsnSummary && sample.hsnSummary.length > 0 && (() => {
+                        // Narrow slip: a single combined GST line (the per-HSN table
+                        // is an A4-only detail). IGST when inter-state, else CGST+SGST.
+                        const inter = sample.taxBreakdown?.kind === "INTER";
+                        const tax = sample.hsnSummary.reduce((s, h) => s + h.cgst + h.sgst, 0);
+                        return tax > 0.005 ? (
+                            <div className="row small"><span>{inter ? "GST (IGST)" : "GST (CGST+SGST)"}</span><span>{fmtINR(tax)}</span></div>
+                        ) : null;
+                    })()}
+                    {(sample.discounts.charges ?? []).map((c, i) => (
+                        <div key={`c${i}`} className="row"><span>{c.label}</span><span>{c.amount < 0 ? "−" : "+"} {fmtINR(Math.abs(c.amount))}</span></div>
+                    ))}
+                    <div className="hr" />
+                    <div className="row total"><span>Total</span><span>{fmtINR(sample.total ?? sample.discounts.grossAtTag - sample.discounts.total)}</span></div>
+                    {sample.discounts.savingsTotal > 0 && (
+                        <div className="row total" style={{ marginTop: 2 }}>
+                            <span>You saved</span>
+                            <span>{fmtINR(sample.discounts.savingsTotal)} ({sample.discounts.savingsPct}%)</span>
+                        </div>
                     )}
                 </>
-            )}
-
-            {sample.total !== null && (
+            ) : (
                 <>
-                    <div className="hr" />
-                    <div className="row total"><span>Total</span><span>{fmtINR(sample.total)}</span></div>
+                    {template.showTaxSummary && sample.subtotal !== null && (
+                        <>
+                            <div className="hr" />
+                            <div className="row"><span>Subtotal</span><span>{fmtINR(sample.subtotal)}</span></div>
+                            {sample.taxBreakdown ? (
+                                sample.taxBreakdown.kind === "INTRA" ? (
+                                    <>
+                                        <div className="row"><span>CGST</span><span>{fmtINR(sample.taxBreakdown.cgst)}</span></div>
+                                        <div className="row"><span>SGST</span><span>{fmtINR(sample.taxBreakdown.sgst)}</span></div>
+                                    </>
+                                ) : (
+                                    <div className="row"><span>IGST</span><span>{fmtINR(sample.taxBreakdown.igst)}</span></div>
+                                )
+                            ) : sample.taxAmount !== null && sample.taxAmount > 0 && (
+                                <div className="row"><span>Tax</span><span>{fmtINR(sample.taxAmount)}</span></div>
+                            )}
+                        </>
+                    )}
+
+                    {sample.total !== null && (
+                        <>
+                            <div className="hr" />
+                            <div className="row total"><span>Total</span><span>{fmtINR(sample.total)}</span></div>
+                        </>
+                    )}
                 </>
             )}
 

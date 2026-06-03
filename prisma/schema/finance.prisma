@@ -253,6 +253,7 @@ model VoucherPrintTemplate {
   showGstin      Boolean @default(true)
   showPhone      Boolean @default(true)
   showTaxSummary Boolean @default(true)
+  showMrp        Boolean @default(true) // struck-through MRP on the customer price ladder (POS/SALE)
   showSignature  Boolean @default(false)
   showQrCode     Boolean @default(false)
 

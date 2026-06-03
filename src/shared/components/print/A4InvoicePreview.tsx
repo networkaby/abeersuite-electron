@@ -139,6 +139,21 @@ function inlineA4Styles(scope: string): string {
             font-weight: 700;
             font-size: 13px;
         }
+        ${s}table.hsn {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            font-size: 10.5px;
+        }
+        ${s}table.hsn th, ${s}table.hsn td {
+            border: 1px solid #c8c8c8;
+            padding: 4px 6px;
+            text-align: center;
+        }
+        ${s}table.hsn th { background: #f4f4f4; font-weight: 600; }
+        ${s}table.hsn td.l { text-align: left; }
+        ${s}table.hsn td.num { text-align: right; font-variant-numeric: tabular-nums; }
+        ${s}table.hsn tr.tot td { font-weight: 700; background: #fafafa; }
         ${s}.words {
             margin-top: 8px;
             font-size: 11px;
@@ -257,6 +272,7 @@ function InvoiceBody({ template, sample }: InvoiceBodyProps) {
                         <th style={{ textAlign: "center" }}>#</th>
                         <th>Description</th>
                         <th style={{ textAlign: "right" }}>Qty</th>
+                        {sample.discounts && template.showMrp && <th style={{ textAlign: "right" }}>MRP</th>}
                         <th style={{ textAlign: "right" }}>Rate</th>
                         <th style={{ textAlign: "right" }}>Amount</th>
                     </tr>
@@ -269,6 +285,13 @@ function InvoiceBody({ template, sample }: InvoiceBodyProps) {
                                 <td className="sn">{i + 1}</td>
                                 <td>{l.description}</td>
                                 <td className="qty">{l.quantity}</td>
+                                {sample.discounts && template.showMrp && (
+                                    <td className="rate">
+                                        {l.mrp != null && l.mrp > l.amount + 0.005
+                                            ? <s style={{ color: "#888" }}>{fmtINR(l.mrp)}</s>
+                                            : "—"}
+                                    </td>
+                                )}
                                 <td className="rate">{fmtINR(rate)}</td>
                                 <td className="amt">{fmtINR(l.amount)}</td>
                             </tr>
@@ -278,7 +301,39 @@ function InvoiceBody({ template, sample }: InvoiceBodyProps) {
             </table>
 
             {/* 5 — Totals box */}
-            {(sample.subtotal !== null || sample.total !== null) && (
+            {sample.discounts ? (
+                /* ── "Today's discount" ladder (C density) ─────────────────── */
+                <div className="totals">
+                    <div className="totals-box">
+                        <div className="trow">
+                            <span className="muted">Gross</span>
+                            <span>{fmtINR(sample.discounts.grossAtTag)}</span>
+                        </div>
+                        {sample.discounts.rows.map((d, i) => (
+                            <div key={i} className="trow">
+                                <span className="muted">{d.label}</span>
+                                <span>&minus; {fmtINR(d.amount)}</span>
+                            </div>
+                        ))}
+                        {(sample.discounts.charges ?? []).map((c, i) => (
+                            <div key={`c${i}`} className="trow">
+                                <span className="muted">{c.label}</span>
+                                <span>{c.amount < 0 ? "−" : "+"} {fmtINR(Math.abs(c.amount))}</span>
+                            </div>
+                        ))}
+                        <div className="trow grand">
+                            <span>Total</span>
+                            <span>{fmtINR(sample.total ?? (sample.discounts.grossAtTag - sample.discounts.total))}</span>
+                        </div>
+                        {sample.discounts.savingsTotal > 0 && (
+                            <div className="trow grand" style={{ color: "#047857" }}>
+                                <span>You saved</span>
+                                <span>{fmtINR(sample.discounts.savingsTotal)} ({sample.discounts.savingsPct}%)</span>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            ) : (sample.subtotal !== null || sample.total !== null) && (
                 <div className="totals">
                     <div className="totals-box">
                         {template.showTaxSummary && sample.subtotal !== null && (
@@ -320,6 +375,67 @@ function InvoiceBody({ template, sample }: InvoiceBodyProps) {
                     </div>
                 </div>
             )}
+
+            {/* 5b — HSN/SAC-wise tax summary (separate table, toggleable) */}
+            {template.showTaxSummary && sample.hsnSummary && sample.hsnSummary.length > 0 && (() => {
+                const inter = sample.taxBreakdown?.kind === "INTER";
+                const num = (n: number) => n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                const sum = sample.hsnSummary.reduce(
+                    (a, h) => ({ taxable: a.taxable + h.taxable, cgst: a.cgst + h.cgst, sgst: a.sgst + h.sgst }),
+                    { taxable: 0, cgst: 0, sgst: 0 },
+                );
+                const totalTax = sum.cgst + sum.sgst;
+                return (
+                    <table className="hsn">
+                        <thead>
+                            <tr>
+                                <th rowSpan={2}>HSN/SAC</th>
+                                <th rowSpan={2}>Taxable Value</th>
+                                {inter ? (
+                                    <th colSpan={2}>IGST</th>
+                                ) : (
+                                    <>
+                                        <th colSpan={2}>Central Tax</th>
+                                        <th colSpan={2}>State Tax</th>
+                                    </>
+                                )}
+                                <th rowSpan={2}>Total Tax</th>
+                            </tr>
+                            <tr>
+                                <th>Rate</th><th>Amount</th>
+                                {!inter && <><th>Rate</th><th>Amount</th></>}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {sample.hsnSummary.map((h, i) => (
+                                <tr key={i}>
+                                    <td className="l">{h.hsn}</td>
+                                    <td className="num">{num(h.taxable)}</td>
+                                    {inter ? (
+                                        <><td>{h.ratePct}%</td><td className="num">{num(h.cgst + h.sgst)}</td></>
+                                    ) : (
+                                        <>
+                                            <td>{h.ratePct / 2}%</td><td className="num">{num(h.cgst)}</td>
+                                            <td>{h.ratePct / 2}%</td><td className="num">{num(h.sgst)}</td>
+                                        </>
+                                    )}
+                                    <td className="num">{num(h.cgst + h.sgst)}</td>
+                                </tr>
+                            ))}
+                            <tr className="tot">
+                                <td>Total</td>
+                                <td className="num">{num(sum.taxable)}</td>
+                                {inter ? (
+                                    <><td /><td className="num">{num(totalTax)}</td></>
+                                ) : (
+                                    <><td /><td className="num">{num(sum.cgst)}</td><td /><td className="num">{num(sum.sgst)}</td></>
+                                )}
+                                <td className="num">{num(totalTax)}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                );
+            })()}
 
             {/* 6 — Amount in words */}
             {sample.total !== null && (

@@ -35,6 +35,7 @@ export default async function VoucherTemplatesPreviewPage() {
             showGstin:      r.showGstin,
             showPhone:      r.showPhone,
             showTaxSummary: r.showTaxSummary,
+            showMrp:        r.showMrp,
             showSignature:  r.showSignature,
             showQrCode:     r.showQrCode,
             termsText:      r.termsText,

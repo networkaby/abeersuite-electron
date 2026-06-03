@@ -38,6 +38,7 @@ async function readVoucherTemplateRaw(kind: string): Promise<VoucherTemplateDefa
         showGstin:      row.showGstin,
         showPhone:      row.showPhone,
         showTaxSummary: row.showTaxSummary,
+        showMrp:        row.showMrp,
         showSignature:  row.showSignature,
         showQrCode:     row.showQrCode,
         termsText:      row.termsText,

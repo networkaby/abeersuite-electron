@@ -4,6 +4,7 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { resolveProductTaxBatch } from "@/modules/inventory/lib/gstResolver";
 import { loadLastInwardCostMap } from "@/modules/inventory/lib/valuation";
 import { buildRulesIndex, resolveRedeemCapPct } from "@/modules/loyalty/lib";
+import { barcodeTagPaise, normalizeBarcodeBands } from "@/shared/lib/pricing/barcodePrice";
 
 /// Per-product loyalty redeem-cap OVERRIDE (% of the item's value redeemable with
 /// points). Returns a Map<productId, number> holding only products an enabled
@@ -54,6 +55,13 @@ export async function GET(req: NextRequest) {
 
     const code = new URL(req.url).searchParams.get("code")?.trim();
 
+    // Printed-barcode bands (OrgDefaults.barcodeBandsJson) — used to DERIVE the
+    // tag price the customer sees on the shelf/receipt from each product's saved
+    // sale price + MRP. Same function the "Update & Print Labels" page uses, so
+    // shelf tag == receipt tag. Falls back to the seed defaults when unset.
+    const orgDefaults = await prisma.orgDefaults.findUnique({ where: { id: 1 }, select: { barcodeBandsJson: true } });
+    const barcodeBands = normalizeBarcodeBands(orgDefaults?.barcodeBandsJson);
+
     if (code) {
         const product = await prisma.invProduct.findFirst({
             where: {
@@ -79,6 +87,7 @@ export async function GET(req: NextRequest) {
                 lowStockThreshold: true,
                 effectiveSalePricePaise: true,
                 mrpPaise:          true,
+                savedSalePricePaise: true,
                 barcode1:          true,
                 groupId:           true,
                 categoryId:        true,
@@ -103,6 +112,9 @@ export async function GET(req: NextRequest) {
             hsnCode: resolved?.hsnCode ?? null,
             lastPurchasePaise: lastInward.get(product.id) ?? null,
             redeemCapPct: capMap.get(product.id) ?? null,
+            // Printed barcode tag (paise) derived from saved price + MRP — the
+            // public price snapshotted on POS lines for the customer ladder.
+            barcodePricePaise: barcodeTagPaise(product.savedSalePricePaise, product.mrpPaise, barcodeBands),
         });
     }
 
@@ -117,6 +129,7 @@ export async function GET(req: NextRequest) {
             lowStockThreshold: true,
             effectiveSalePricePaise: true,
             mrpPaise:          true,
+            savedSalePricePaise: true,
             barcode1:          true,
             groupId:           true,
             categoryId:        true,
@@ -158,6 +171,9 @@ export async function GET(req: NextRequest) {
             hsnCode: r?.hsnCode ?? null,
             lastPurchasePaise: lastInward.get(p.id) ?? null,
             redeemCapPct: capMap.get(p.id) ?? null,
+            // Printed barcode tag (paise) derived from saved price + MRP — the
+            // public price snapshotted on POS lines for the customer ladder.
+            barcodePricePaise: barcodeTagPaise(p.savedSalePricePaise, p.mrpPaise, barcodeBands),
         };
     });
 

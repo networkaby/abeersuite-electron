@@ -469,7 +469,16 @@ model InvVoucherLine {
   /// MRP (Maximum Retail Price) at the time of the transaction — paise.
   /// Populated on PURCHASE voucher lines by the form; used to update
   /// InvProduct.mrpPaise on POST so the product catalog stays current.
+  /// Also snapshotted on POS/SALE lines at sale time so the customer-facing
+  /// "Today's discount" price ladder can show MRP on a reprint.
   mrpPaise    Int?
+  /// Printed barcode TAG price at the time of the sale — paise. This is the
+  /// public, on-the-label price DERIVED from the product's saved sale price + MRP
+  /// via the org barcode bands (see src/shared/lib/pricing/barcodePrice.ts), NOT
+  /// the raw saved price. Snapshotted on POS/SALE lines so the computed customer
+  /// bill shows the barcode line + the "Counter discount" (barcode − effective)
+  /// without re-reading the product or re-deriving the tag (prices/bands drift).
+  savedSalePricePaise Int?
   discountPct Decimal    @default(0) @db.Decimal(5, 2)
   discountAmt Decimal    @default(0) @db.Decimal(14, 2)
   taxRate     Decimal    @default(0) @db.Decimal(5, 2)

@@ -34,6 +34,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
 import type { PricingItem } from "@/app/api/pricing-strategy/items/route";
+import { barcodePrice as barcodePriceCore, normalizeBarcodeBands, DEFAULT_BARCODE_BANDS, type BarcodeBand } from "@/shared/lib/pricing/barcodePrice";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -244,47 +245,21 @@ function todayISO(): string {
 // OrgDefaults.barcodeBandsJson; the in-code default below is the seed fallback
 // and is replaced at runtime by `setBarcodeBands()` once the config loads.
 
-type BarcodeBand = { max: number; add: number; hint: number };
-const DEFAULT_BARCODE_BANDS: BarcodeBand[] = [
-    { max: 50, add: 10, hint: 1 },
-    { max: 100, add: 20, hint: 2 },
-    { max: 300, add: 30, hint: 3 },
-    { max: 500, add: 50, hint: 5 },
-    { max: 2000, add: 100, hint: 6 },
-    { max: 5000, add: 150, hint: 7 },
-    { max: 10000, add: 200, hint: 8 },
-    { max: 99999, add: 500, hint: 9 },
-];
-// Module-level active bands — config for this single page; set once from
-// OrgDefaults on mount. Kept ascending-by-max so `find(price <= max)` works.
+// Bands + the barcode algorithm live in the shared helper (single source of
+// truth — the POS lookup API derives the same tag). This page keeps a thin
+// module-level "active bands" slot it sets once from OrgDefaults on mount, and a
+// local barcodePrice(price, mrp) that delegates with those bands so the many
+// call sites below stay unchanged.
 let ACTIVE_BARCODE_BANDS: BarcodeBand[] = DEFAULT_BARCODE_BANDS;
 function setBarcodeBands(bands: BarcodeBand[]) {
-    ACTIVE_BARCODE_BANDS = bands.length
-        ? [...bands].sort((a, b) => a.max - b.max)
-        : DEFAULT_BARCODE_BANDS;
+    ACTIVE_BARCODE_BANDS = normalizeBarcodeBands(bands);
 }
 
 function barcodePrice(
     price: number | null,
     mrp: number | null = null,
 ): { value: number | null; hint: string; capped: boolean } {
-    if (price == null || !isFinite(price) || price < 1) return { value: null, hint: "", capped: false };
-    const band = ACTIVE_BARCODE_BANDS.find((b) => price <= b.max);
-    let value = band ? Math.round((price + band.add) / 10) * 10 + band.hint : Math.round(price);
-    let hint = band ? String(band.hint) : "";
-    let capped = false;
-    if (mrp != null && mrp > 0 && value > mrp) {
-        const floored = Math.floor(mrp / 10) * 10;
-        if (floored >= price) {
-            value = floored;
-            hint = "0";
-        } else {
-            value = mrp;
-            hint = "m";
-        }
-        capped = true;
-    }
-    return { value, hint, capped };
+    return barcodePriceCore(price, mrp, ACTIVE_BARCODE_BANDS);
 }
 
 // ── Sort ──────────────────────────────────────────────────────────────────────
@@ -976,12 +951,14 @@ export default function GeneratePage() {
             .filter((r) => r.id > 0)
             .map((r) => {
                 const sp = numOrNull(r.salePrice);
-                const isSaved = r.saleSource === "SAVED" && sp != null;
-                const decided = isSaved ? profitOf(sp, r.costIncl, r.gst)?.amt ?? null : null;
+                // The saved Sale Price (barcode tag) persists whenever one is
+                // entered, regardless of which voice sells; a blank input clears it.
+                const hasSaved = sp != null;
+                const decided = hasSaved ? profitOf(sp, r.costIncl, r.gst)?.amt ?? null : null;
                 return {
                     id: r.id,
                     effectiveSalePriceSource: voiceToDb(r.saleSource),
-                    savedSalePricePaise: isSaved && sp != null ? Math.round(sp * 100) : null,
+                    savedSalePricePaise: hasSaved ? Math.round(sp * 100) : null,
                     savedProfitPaise: decided != null ? Math.round(decided * 100) : null,
                 };
             });
@@ -994,13 +971,13 @@ export default function GeneratePage() {
                 prev.map((r) => {
                     if (!isSaveTarget(r)) return r;
                     const sp = numOrNull(r.salePrice);
-                    const isSaved = r.saleSource === "SAVED" && sp != null;
-                    const decided = isSaved ? profitOf(sp, r.costIncl, r.gst)?.amt ?? null : null;
+                    const hasSaved = sp != null;
+                    const decided = hasSaved ? profitOf(sp, r.costIncl, r.gst)?.amt ?? null : null;
                     return {
                         ...r,
                         baseline: r.salePrice,
                         baseSource: r.saleSource,
-                        savedAt: isSaved ? today : "",
+                        savedAt: hasSaved ? today : "",
                         savedProfit: decided != null ? decided.toFixed(2) : "",
                     };
                 }),

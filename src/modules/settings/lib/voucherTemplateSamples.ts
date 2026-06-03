@@ -40,13 +40,39 @@ export function buildSampleForKind(kind: VoucherTemplateKind): ThermalReceiptSam
     switch (kind) {
         case "POS":
         case "SALE":
+            // Demonstrates the customer-facing "Today's discount" price ladder:
+            // per-line MRP/barcode + pooled discount + savings hero + HSN summary.
             return {
                 reference: kind === "POS" ? "POS/26-27/0042" : "SV/26-27/0017",
                 date: today,
-                partyName: "Walk-in", partyPhone: null,
-                lines: productLines, subtotal: 2694, taxAmount: 484.92, total: 3178.92,
+                partyName: kind === "SALE" ? "Acme Traders" : "Walk-in", partyPhone: null,
+                partyGstin: kind === "SALE" ? "18ABCDE1234F1Z5" : null,
+                lines: [
+                    { description: "Logitech B100 USB Mouse", quantity: 2, amount: 700,  mrp: 800,  barcode: 700 },
+                    { description: "HP Laptop 14s Charger",   quantity: 1, amount: 1600, mrp: 1800, barcode: 1600 },
+                    { description: "TP-Link Cat6 Cable 5m",   quantity: 3, amount: 700,  mrp: 800,  barcode: 700 },
+                ],
+                subtotal: 3000, taxAmount: 345.51, total: 2315,
                 notes: null,
                 taxBreakdown: intraBreakdown,
+                discounts: {
+                    grossAtTag: 3000,
+                    rows: [
+                        { label: "Counter discount",        amount: 300 },
+                        { label: "Level Discount (Gold)",   amount: 135 },
+                        { label: "Loyalty (100 pts)",       amount: 100 },
+                        { label: "Coupon SAVE10",           amount: 200 },
+                    ],
+                    charges: [
+                        { label: "Shipping", amount: 50 },
+                    ],
+                    total: 735,
+                    savingsTotal: 1135,
+                    savingsPct: 33,
+                },
+                hsnSummary: [
+                    { hsn: "8471", ratePct: 18, taxable: 1919.49, cgst: 172.76, sgst: 172.75, total: 2265 },
+                ],
             };
         case "PURCHASE":
             return {

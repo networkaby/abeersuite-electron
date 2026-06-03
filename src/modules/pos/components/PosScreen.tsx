@@ -44,6 +44,8 @@ import { PosReturnDialog } from "@/modules/pos/components/PosReturnDialog";
 import { PosExpenditureDialog } from "@/modules/pos/components/PosExpenditureDialog";
 import { PosReceiptDialog } from "@/modules/pos/components/PosReceiptDialog";
 import { qrDisplay } from "@/modules/pos/lib/qrDisplay";
+import { computePriceLadder } from "@/modules/pos/lib/priceLadder";
+import type { VoucherTemplateDefaults } from "@/shared/lib/print/voucherTemplateDefaults";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -85,6 +87,12 @@ type ProductOption = {
     /// Read straight from the products/lookup response (column of the same name).
     effectiveSalePricePaise?: number | null;
     mrpPaise?: number | null;
+    /// Printed barcode TAG price (paise) — DERIVED server-side from the saved
+    /// sale price + MRP via the same band function the "Update & Print Labels"
+    /// page uses, so the shelf tag == the receipt tag. Snapshotted onto the cart
+    /// line as the public price for the customer "Counter discount" ladder
+    /// (tag → effective). Falls back to the charged amount when absent.
+    barcodePricePaise?: number | null;
     /// Effective GST rate resolved by the cascade product → group → org-default.
     /// Null = no rate found anywhere in the chain (line stays untaxed).
     taxRate?: number | null;
@@ -102,6 +110,9 @@ type CartLine = {
     /// doesn't retroactively shift prices in an active sale.
     taxRate: number;
     mrpPaise?: number | null;
+    /// Barcode / printed tag price (paise) snapshotted at add-to-cart time — feeds
+    /// the customer-facing price ladder (barcode line + "price benefit").
+    barcodePaise?: number | null;
     warrantyLabel?: string | null;
     /// Loyalty redeem-cap override (% redeemable with points; null = global cap).
     /// Snapshotted so the redeem ceiling matches the server's at checkout.
@@ -458,6 +469,21 @@ export default function PosScreen() {
     const giftCardApplied = giftCard ? Math.min(giftCard.balance, total) : 0;
     const payableTotal = Math.max(0, +(total - giftCardApplied).toFixed(2));
 
+    // Bill-level adjustments shown on the customer ladder (print + display) so the
+    // breakdown reconciles: manual charges + shipping + round-off (signed). Loyalty
+    // /coupon are passed as their own discount fields, not here.
+    const posExtraCharges: { label: string; amount: number }[] = [
+        ...charges
+            .filter((c) => c.accountId !== null && Math.abs(parseAmt(c.amount)) >= 0.005)
+            .map((c) => ({ label: c.description?.trim() || "Charge", amount: parseAmt(c.amount) })),
+        ...(shippingAmt > 0.005 ? [{ label: "Shipping", amount: shippingAmt }] : []),
+        ...(Math.abs(roundOff) > 0.005 ? [{ label: "Round-off", amount: roundOff }] : []),
+    ];
+    // "Level Discount (Tier Name)" — the spend-tier row label.
+    const posTierLabel = effDiscountAmount > 0.005
+        ? `Level Discount${snapshot?.customerLevel ? ` (${snapshot.customerLevel})` : discountPct ? ` (${discountPct}%)` : ""}`
+        : undefined;
+
     async function applyGiftCard() {
         const code = giftCardCodeStr.trim();
         if (!code) return;
@@ -628,6 +654,7 @@ export default function PosScreen() {
                 qty: 1, unitPrice: defaultPrice, description: "",
                 taxRate: p.taxRate ?? 0,
                 mrpPaise: p.mrpPaise ?? null,
+                barcodePaise: p.barcodePricePaise ?? null,
                 warrantyLabel,
                 redeemCapPct: p.redeemCapPct ?? null,
             }];
@@ -751,7 +778,7 @@ export default function PosScreen() {
             }
 
             const validCharges = charges.filter((c) => c.accountId !== null && Math.abs(parseAmt(c.amount)) >= 0.005);
-            const { data } = await axios.post<{ voucherId: number; voucherRef: string; pointsEarned: number; pointsRedeemed: number; milestoneBonus: number; milestoneCoupons: string[]; loyaltyBalance: number; couponDiscount: number; couponCode: string | null }>("/api/pos/sale", {
+            const { data } = await axios.post<{ voucherId: number; voucherRef: string; pointsEarned: number; pointsRedeemed: number; milestoneBonus: number; milestoneCoupons: string[]; loyaltyBalance: number; couponDiscount: number; couponCode: string | null; posTemplate: VoucherTemplateDefaults }>("/api/pos/sale", {
                 accountId: snapshot.account.id,
                 issueDate: today,
                 dueDate: due.toISOString().slice(0, 10),
@@ -762,11 +789,15 @@ export default function PosScreen() {
                     quantity: l.qty,
                     unitPrice: l.unitPrice,
                     taxRate: l.taxRate,
+                    // Snapshots for the customer-facing "Today's discount" ladder.
+                    mrpPaise: l.mrpPaise ?? null,
+                    savedSalePricePaise: l.barcodePaise ?? null,
                 })),
                 payments: paymentsList,
                 shippingAmt,
                 roundOff,
                 discountAmt: discountAmount,   // tier discount → server drops it if a non-stackable coupon applies
+                discountPct: discountAmount > 0 ? discountPct : 0,  // tier % → stored so the receipt can name "Level Discount (Gold)"
                 redeemPoints: effRedeemPts,     // 0 when a non-stackable coupon blocks loyalty
                 couponCode: appliedCoupon?.code ?? undefined, // server re-resolves + owns the ₹ value
                 autoApply: !appliedCoupon && !!autoCoupon,     // let the server pick the best auto offer
@@ -809,6 +840,25 @@ export default function PosScreen() {
                 const relayAvailable = await fetch("http://localhost:9191/health", { signal: AbortSignal.timeout(1000) })
                     .then((r) => r.ok).catch(() => false);
                 if (relayAvailable) {
+                    // Customer "Today's discount" ladder for the thermal slip (B
+                    // density). Additive — the external relay renders these new
+                    // fields; older relays ignore them.
+                    const printLadder = computePriceLadder({
+                        lines: cart.map((l, i) => ({
+                            description: l.name,
+                            qty:         l.qty,
+                            mrpPaise:    l.mrpPaise,
+                            barcodePaise: l.barcodePaise,
+                            taxRatePct:  l.taxRate,
+                            taxAmount:   lineRows[i]?.taxAmount ?? 0,
+                            amount:      lineRows[i]?.amount ?? l.qty * l.unitPrice,
+                        })),
+                        tierDiscount:    effDiscountAmount,
+                        loyaltyDiscount: effRedemptionRupees,
+                        couponDiscount:  couponRupees,
+                        extraCharges:    posExtraCharges,
+                        total,
+                    }, { tier: posTierLabel });
                     fetch("http://localhost:9191/print/pos", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
@@ -816,12 +866,25 @@ export default function PosScreen() {
                             invoiceNumber: data.voucherRef,
                             date: today,
                             customerName: snapshot?.party.name ?? "Walk-in",
-                            lines: cart.map((l) => ({
-                                name: l.name,
-                                qty: l.qty,
-                                unitPrice: l.unitPrice,
-                                amount: l.qty * l.unitPrice,
-                            })),
+                            customerGstin: snapshot?.party.gstin ?? null,
+                            // Resolved POS print template → the relay renders the
+                            // header/address/toggles/terms/footer + ladder so the
+                            // printed slip matches /receipt/invoice/[id]?kind=POS.
+                            template: data.posTemplate,
+                            lines: cart.map((l, i) => {
+                                // Per-unit tag from the ladder (single source of truth) so the
+                                // MRP-fallback hides the real price even with no barcode. The
+                                // relay multiplies by qty to rebuild the line total.
+                                const ll = printLadder.lines[i];
+                                return {
+                                    name: l.name,
+                                    qty: l.qty,
+                                    unitPrice: l.unitPrice,
+                                    amount: l.qty * l.unitPrice,
+                                    mrp:     ll?.mrp != null && l.qty ? ll.mrp / l.qty : null,
+                                    barcode: ll?.barcode != null && l.qty ? ll.barcode / l.qty : null,
+                                };
+                            }),
                             subtotal,
                             discountPct,
                             discountAmount,
@@ -830,6 +893,12 @@ export default function PosScreen() {
                             cashPaid: cashNet,
                             upiPaid: pay.upi,
                             extrasPaid: extras.map((e) => ({ method: e.method, amount: e.amount, reference: e.reference })),
+                            // "Today's discount" ladder (additive).
+                            grossAtTag:  printLadder.barcodeTotal,
+                            discounts:   printLadder.discounts.map((d) => ({ label: d.label, amount: d.amount })),
+                            charges:     printLadder.charges.map((c) => ({ label: c.label, amount: c.amount })),
+                            savings:     printLadder.savingsTotal > 0 ? { amount: printLadder.savingsTotal, pct: printLadder.savingsPct } : null,
+                            hsnSummary:  printLadder.hsn,
                         }),
                     }).catch(() => toast.error("Thermal print failed"));
                 } else {
@@ -882,11 +951,44 @@ export default function PosScreen() {
                     balance: Math.max(0, payableTotal - collected),
                 });
             } else if (cart.length > 0) {
-                void qrDisplay.cart({
-                    items: cart.map((l) => ({ name: l.name, qty: l.qty, price: l.unitPrice })),
-                    subtotal,
-                    discount: discountAmount,
+                // Customer-facing price ladder — same computed view as the receipt.
+                const lr = cart.map((l) => calcLineTotals({ quantity: l.qty, rate: l.unitPrice, discountPct: 0, discountAmt: 0, taxRate: l.taxRate }));
+                const lad = computePriceLadder({
+                    lines: cart.map((l, i) => ({
+                        description: l.name,
+                        qty:         l.qty,
+                        mrpPaise:    l.mrpPaise,
+                        barcodePaise: l.barcodePaise,
+                        taxRatePct:  l.taxRate,
+                        taxAmount:   lr[i].taxAmount,
+                        amount:      lr[i].amount,
+                    })),
+                    tierDiscount:    effDiscountAmount,
+                    loyaltyDiscount: effRedemptionRupees,
+                    couponDiscount:  couponRupees,
+                    extraCharges:    posExtraCharges,
                     total,
+                }, { tier: posTierLabel });
+                void qrDisplay.cart({
+                    items: cart.map((l, i) => {
+                        // Per-unit tag from the ladder so the MRP-fallback hides the
+                        // real price on the display too. Relay multiplies by qty.
+                        const ll = lad.lines[i];
+                        return {
+                            name:    l.name,
+                            qty:     l.qty,
+                            price:   l.unitPrice,
+                            mrp:     ll?.mrp != null && l.qty ? ll.mrp / l.qty : undefined,
+                            barcode: ll?.barcode != null && l.qty ? ll.barcode / l.qty : undefined,
+                        };
+                    }),
+                    subtotal,
+                    discount: totalDiscount,
+                    total,
+                    discounts: lad.discounts.map((d) => ({ label: d.label, amount: d.amount })),
+                    charges:   lad.charges.map((c) => ({ label: c.label, amount: c.amount })),
+                    gst:       lad.taxTotal > 0 ? lad.taxTotal : undefined,
+                    savings:   lad.savingsTotal > 0 ? { amount: lad.savingsTotal, pct: lad.savingsPct } : undefined,
                 });
             } else if (snapshot) {
                 void qrDisplay.customer({
@@ -907,6 +1009,7 @@ export default function PosScreen() {
         displayHold, checkoutOpen, cart, snapshot,
         cashNet, pay.upi, extrasSum, collected,
         subtotal, discountAmount, total,
+        totalDiscount, effDiscountAmount, effRedemptionRupees, couponRupees,
     ]);
 
     // Credit-limit guard — true when the on-credit portion of this sale would
@@ -1261,23 +1364,11 @@ export default function PosScreen() {
                                                         price tag). Storage stays pre-tax — we back-calculate on
                                                         every edit so calcLineTotals keeps receiving an exclusive
                                                         rate. For tax-free items (taxRate=0) the two values match. */}
-                                                    {(() => {
-                                                        const factor = 1 + (l.taxRate ?? 0) / 100;
-                                                        const inclusive = l.unitPrice * factor;
-                                                        return (
-                                                            <Input
-                                                                value={inclusive ? inclusive.toFixed(2) : ""}
-                                                                onChange={(e) => {
-                                                                    const typed = Number(e.target.value) || 0;
-                                                                    setPrice(l.productId, typed / factor);
-                                                                }}
-                                                                onKeyDown={enterToNextProduct}
-                                                                placeholder="₹ price"
-                                                                className="h-8 text-right"
-                                                                inputMode="decimal"
-                                                            />
-                                                        );
-                                                    })()}
+                                                    <PriceInput
+                                                        inclusive={l.unitPrice * (1 + (l.taxRate ?? 0) / 100)}
+                                                        onCommit={(inc) => setPrice(l.productId, inc / (1 + (l.taxRate ?? 0) / 100))}
+                                                        onKeyDown={enterToNextProduct}
+                                                    />
                                                     <Button variant="ghost" size="icon-sm" onClick={() => setQty(l.productId, 0)} title="Remove">
                                                         <Trash2 size={12} className="text-destructive" />
                                                     </Button>
@@ -1322,7 +1413,7 @@ export default function PosScreen() {
                                                     ? "Tier discount is replaced by the applied non-stackable coupon."
                                                     : `Automatic ${snapshot?.customerLevel || "spend"}-tier discount from lifetime spend, applied on pre-GST goods. Configured under Customer Tiers; separate from loyalty points.`}
                                             >
-                                                Tier discount ({snapshot?.customerLevel ? `${snapshot.customerLevel} ` : ""}{discountPct}%)
+                                                Level Discount ({snapshot?.customerLevel ? `${snapshot.customerLevel} ` : ""}{discountPct}%)
                                             </span>
                                             <span className="font-medium tabular-nums">− {fmtINR(discountAmount)}</span>
                                         </span>,
@@ -2051,5 +2142,51 @@ function Stat({ icon, label, value, sub, valueClass }: { icon: React.ReactNode; 
             <div className={`mt-0.5 text-sm font-semibold leading-tight tabular-nums ${valueClass ?? ""}`}>{value}</div>
             {sub && <div className="text-[10px] leading-tight text-muted-foreground">{sub}</div>}
         </div>
+    );
+}
+
+// Tax-inclusive price cell. Holds a local DRAFT string so the cashier can type
+// freely (e.g. clear it, type "1", "15", "150.5") without the controlled value
+// snapping back to `toFixed(2)` on every keystroke. It commits the parsed amount
+// up on each change, but only re-syncs the formatted display from `inclusive`
+// when the field is NOT focused (external change / blur) — so typing is never
+// fought. Input stays type=text (digits + one dot sanitized) per the repo rule.
+function PriceInput({
+    inclusive,
+    onCommit,
+    onKeyDown,
+}: {
+    inclusive: number;
+    onCommit: (inclusive: number) => void;
+    onKeyDown?: (e: React.KeyboardEvent) => void;
+}) {
+    const fmt = (n: number) => (n ? n.toFixed(2) : "");
+    const [draft, setDraft] = useState(() => fmt(inclusive));
+    const focused = useRef(false);
+
+    // Keep the display in sync with external changes (qty/price reset, new line)
+    // but never while the cashier is mid-edit.
+    useEffect(() => {
+        if (!focused.current) setDraft(fmt(inclusive));
+    }, [inclusive]);
+
+    return (
+        <Input
+            value={draft}
+            inputMode="decimal"
+            placeholder="₹ price"
+            className="h-8 text-right"
+            onFocus={() => { focused.current = true; }}
+            onBlur={() => { focused.current = false; setDraft(fmt(inclusive)); }}
+            onKeyDown={onKeyDown}
+            onChange={(e) => {
+                // Allow digits + a single decimal point only.
+                let raw = e.target.value.replace(/[^\d.]/g, "");
+                const dot = raw.indexOf(".");
+                if (dot !== -1) raw = raw.slice(0, dot + 1) + raw.slice(dot + 1).replace(/\./g, "");
+                setDraft(raw);
+                onCommit(parseFloat(raw) || 0);
+            }}
+        />
     );
 }
