@@ -1370,7 +1370,7 @@ export default function PosScreen() {
                                             <li key={l.productId} className="px-4 py-2.5">
                                                 {/* Wide layout: name | warranty | note | mrp | qty | price | trash all on one line.
                                                     Narrow (<lg) stacks name above and the rest below. */}
-                                                <div className="grid items-center gap-2 lg:grid-cols-[minmax(180px,1.4fr)_70px_minmax(160px,1fr)_90px_auto_110px_auto]">
+                                                <div className="grid items-center gap-2 lg:grid-cols-[minmax(180px,1.4fr)_70px_minmax(160px,1fr)_130px_auto_110px_auto]">
                                                     <div className="min-w-0">
                                                         <div className="truncate text-sm font-medium">{l.name}</div>
                                                         <div className="font-mono text-[10px] text-muted-foreground">{l.sku}</div>
@@ -1389,13 +1389,15 @@ export default function PosScreen() {
                                                         placeholder="Note — colour, config…"
                                                         className="h-8 text-sm"
                                                     />
-                                                    <div className="hidden lg:flex flex-col items-end text-[10px] leading-tight text-muted-foreground">
-                                                        <span className="uppercase tracking-wider">MRP</span>
-                                                        {mrp != null
-                                                            ? <span className={mrp !== l.unitPrice ? "line-through" : ""}>{fmtINR(mrp)}</span>
-                                                            : <span>—</span>}
-                                                        <span className="mt-0.5 uppercase tracking-wider">Barcode</span>
-                                                        <span>{barcode != null ? fmtINR(barcode) : "—"}</span>
+                                                    <div className="hidden lg:flex flex-col items-end gap-0.5 text-[10px] leading-tight text-muted-foreground">
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span className="uppercase tracking-wider">MRP</span>
+                                                            <span className={mrp != null && mrp !== l.unitPrice ? "line-through" : ""}>{mrp != null ? fmtINR(mrp) : "—"}</span>
+                                                        </div>
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span className="uppercase tracking-wider">Barcode</span>
+                                                            <span>{barcode != null ? fmtINR(barcode) : "—"}</span>
+                                                        </div>
                                                     </div>
                                                     <div className="flex items-center gap-1">
                                                         <Button variant="ghost" size="icon-sm" onClick={() => setQty(l.productId, l.qty - 1)}><Minus size={12} /></Button>
