@@ -3,6 +3,7 @@
 // or "Sundry Creditors", collects open Invoice and Voucher rows, subtracts
 // allocations, and buckets the outstanding by age.
 
+import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 
@@ -315,6 +316,96 @@ async function loadOpenBills(
     }
 
     return bills;
+}
+
+// FIFO accessor for POS collect-on-the-go. Returns this customer's OPEN
+// sale-side bills (SALE / POS), oldest-first, each with the journalEntryId a
+// Receipt voucher allocates against. Self-contained and `tx`-aware so it can run
+// inside the sale transaction; mirrors `loadOpenBills`'s paid math exactly but
+// scoped to a single ledger and the SALE side only (no regression to the shared
+// report path). The shared `OutstandingBill` shape drops journalEntryId, which is
+// why FIFO needs its own accessor.
+export async function getOpenSaleBillsForFifo(
+    tx: Prisma.TransactionClient,
+    accountId: number,
+    asOf: Date = new Date(),
+): Promise<{ journalEntryId: number; outstanding: number; billDate: Date; ref: string }[]> {
+    const account = await tx.account.findUnique({
+        where:  { id: accountId },
+        select: { id: true, personId: true, companyId: true },
+    });
+    if (!account) return [];
+
+    // Same OR-match as loadOpenBills: modern rows carry accountId; legacy rows
+    // resolve via partyType+partyId against the identity maps.
+    const partyOr: Array<
+        | { accountId: { in: number[] } }
+        | { partyType: string; partyId: { in: number[] } }
+    > = [{ accountId: { in: [accountId] } }];
+    if (account.personId !== null) partyOr.push({ partyType: "customer", partyId: { in: [account.personId] } });
+    if (account.companyId !== null) partyOr.push({ partyType: "company", partyId: { in: [account.companyId] } });
+
+    const invVouchers = await tx.invVoucher.findMany({
+        where: {
+            type:      { in: ["SALE", "POS"] },
+            status:    "POSTED",
+            deletedAt: null,
+            date:      { lte: asOf },
+            OR:        partyOr,
+        },
+        select: {
+            id: true, type: true, reference: true, date: true,
+            totalAmount: true, accountId: true,
+            partyType: true, partyId: true, journalEntryId: true,
+        },
+    });
+
+    const jeIds = invVouchers
+        .map((v) => v.journalEntryId)
+        .filter((x): x is number => x !== null);
+    const invIdList = invVouchers.map((v) => v.id);
+
+    const [jeAllocs, tenderRows] = await Promise.all([
+        jeIds.length > 0
+            ? tx.voucherAllocation.findMany({
+                where:  { targetType: "JOURNAL_ENTRY", targetId: { in: jeIds } },
+                select: { targetId: true, amount: true },
+            })
+            : Promise.resolve([] as { targetId: number; amount: unknown }[]),
+        invIdList.length > 0
+            ? tx.invVoucherTender.findMany({
+                where:  { voucherId: { in: invIdList } },
+                select: { voucherId: true, accountId: true, amount: true },
+            })
+            : Promise.resolve([] as { voucherId: number; accountId: number; amount: unknown }[]),
+    ]);
+
+    const paidByJe = sumByTarget(jeAllocs);
+    const tendersByVoucher = new Map<number, { accountId: number; amount: number }[]>();
+    for (const t of tenderRows) {
+        const arr = tendersByVoucher.get(t.voucherId) ?? [];
+        arr.push({ accountId: t.accountId, amount: Number(t.amount) });
+        tendersByVoucher.set(t.voucherId, arr);
+    }
+
+    const out: { journalEntryId: number; outstanding: number; billDate: Date; ref: string }[] = [];
+    for (const v of invVouchers) {
+        if (v.journalEntryId === null) continue;
+        const resolved = v.accountId ?? accountId; // single-ledger scope — partyOr already matched
+        const total = Number(v.totalAmount);
+        const vTenders = tendersByVoucher.get(v.id) ?? [];
+        const paidAtSale = vTenders
+            .filter((t) => t.accountId !== resolved)
+            .reduce((s, t) => s + t.amount, 0);
+        const paid = paidAtSale + (paidByJe[v.journalEntryId] ?? 0);
+        const outstanding = total - paid;
+        if (outstanding > 0.005) {
+            out.push({ journalEntryId: v.journalEntryId, outstanding, billDate: v.date, ref: v.reference });
+        }
+    }
+    // Oldest-first → FIFO.
+    out.sort((a, b) => +a.billDate - +b.billDate);
+    return out;
 }
 
 function toOutstandingBill(raw: RawBill, asOf: Date): OutstandingBill | null {

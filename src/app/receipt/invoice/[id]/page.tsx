@@ -176,6 +176,10 @@ export default async function PosReceiptPage({
         )
         : null;
 
+    // NOTE: when this POS sale was overpaid, the money (tenders) + how it was
+    // applied (old dues / advance) live on the separate Receipt voucher (RV-…,
+    // printed via /receipt/payment/[id]) — NOT on this invoice. The invoice stays
+    // a clean record of the sale at the bill amount.
     const sample: ThermalReceiptSample = {
         reference:  voucher.reference,
         date:       voucher.date.toISOString().slice(0, 10),

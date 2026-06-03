@@ -32,6 +32,13 @@ export default async function PaymentReceiptPage({ params }: { params: Promise<{
 
     const debitLine  = voucher.lines.find((l) => l.type === "DEBIT");
     const creditLine = voucher.lines.find((l) => l.type === "CREDIT");
+    // Tender lines = the money side. RECEIPT: the debit ledgers (till / UPI / card
+    // the cash landed in). A POS "collect-on-the-go" surplus posts ONE receipt with
+    // several tenders, so list them all here — this voucher is where the tender
+    // breakdown lives (the sale invoice no longer repeats it).
+    const tenderLines = isReceipt
+        ? voucher.lines.filter((l) => l.type === "DEBIT")
+        : voucher.lines.filter((l) => l.type === "CREDIT");
 
     // RECEIPT: money INTO the debit (till), FROM the party (credit).
     // PAYMENT: money FOR the debit (expense), FROM the credit (till).
@@ -86,9 +93,19 @@ export default async function PaymentReceiptPage({ params }: { params: Promise<{
                 {isReceipt && partyPhone && (
                     <div className="row"><span className="muted">Phone</span><span className="v">{partyPhone}</span></div>
                 )}
-                {modeAccount && (
+                {isReceipt && tenderLines.length > 1 ? (
+                    <>
+                        <div className="row"><span className="muted">Tenders</span><span className="v" /></div>
+                        {tenderLines.map((l, i) => (
+                            <div className="row" key={i}>
+                                <span className="muted">· {l.account.name}</span>
+                                <span className="v">₹{fmtAmt(Number(l.amount))}</span>
+                            </div>
+                        ))}
+                    </>
+                ) : modeAccount ? (
                     <div className="row"><span className="muted">{isReceipt ? "Into" : "From"}</span><span className="v">{modeAccount}</span></div>
-                )}
+                ) : null}
                 {voucher.narration && (
                     <div className="row"><span className="muted">Note</span><span className="v">{voucher.narration}</span></div>
                 )}

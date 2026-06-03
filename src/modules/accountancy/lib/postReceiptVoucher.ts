@@ -41,13 +41,24 @@ export type PostReceiptVoucherArgs = {
      * Pass `InvVoucher.journalEntryId` for POS sales / office credit settlements.
      */
     allocateToJournalEntryId?: number;
+    /**
+     * Multi-bill allocation (FIFO collect-on-the-go): one VoucherAllocation per
+     * entry, tying parts of this receipt to several invoices' journal entries.
+     * Takes precedence over `allocateToJournalEntryId` when present. The sum is
+     * asserted ≤ the receipt total so a receipt can never allocate more than it
+     * received (an unallocated remainder simply stays as a customer advance).
+     */
+    allocations?: { journalEntryId: number; amount: number }[];
 };
 
 export type PostReceiptVoucherResult = {
     voucherId:      number;
     voucherRef:     string;
     journalEntryId: number;
+    /** First/only allocation id (back-compat with the single-target callers). */
     allocationId:   number | null;
+    /** All allocation ids created (multi-bill FIFO path). */
+    allocationIds:  number[];
 };
 
 export async function postReceiptVoucher(
@@ -165,29 +176,48 @@ export async function postReceiptVoucher(
         });
     }
 
-    // 4. Optional bill-wise allocation against the originating InvVoucher's JE.
-    let allocationId: number | null = null;
-    if (args.allocateToJournalEntryId != null) {
+    // 4. Bill-wise allocation against the originating InvVoucher JE(s).
+    //    `allocations` (multi-bill FIFO) wins; else the single-target shortcut;
+    //    else nothing (pure advance — the Cr to the customer stands as credit).
+    const allocationPlan: { journalEntryId: number; amount: number }[] =
+        args.allocations != null && args.allocations.length > 0
+            ? args.allocations.filter((a) => a.amount > 0.005)
+            : args.allocateToJournalEntryId != null
+                ? [{ journalEntryId: args.allocateToJournalEntryId, amount: total }]
+                : [];
+
+    // Never allocate more than the receipt actually received — an over-allocation
+    // would mis-state receivables; throwing here rolls back the whole transaction.
+    const allocSum = allocationPlan.reduce((s, a) => s + a.amount, 0);
+    if (allocSum > total + 0.01) {
+        throw new Error(
+            `Receipt allocation (₹${allocSum.toFixed(2)}) exceeds receipt total (₹${total.toFixed(2)}).`,
+        );
+    }
+
+    const allocationIds: number[] = [];
+    for (const a of allocationPlan) {
         const alloc = await tx.voucherAllocation.create({
             data: {
                 targetType:  "JOURNAL_ENTRY",
-                targetId:    args.allocateToJournalEntryId,
+                targetId:    a.journalEntryId,
                 sourceType:  "VOUCHER",
                 sourceId:    voucher.id,
-                amount:      total,
+                amount:      a.amount,
                 method:      "AGAINST_REF",
                 reference:   voucherRef,
                 createdById: args.userId,
             },
             select: { id: true },
         });
-        allocationId = alloc.id;
+        allocationIds.push(alloc.id);
     }
 
     return {
         voucherId:      voucher.id,
         voucherRef:     voucher.reference,
         journalEntryId: je.id,
-        allocationId,
+        allocationId:   allocationIds[0] ?? null,
+        allocationIds,
     };
 }

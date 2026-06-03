@@ -765,19 +765,19 @@ export default function PosScreen() {
                 setSubmitting(false);
                 return;
             }
-            // POS sale is exact-pay. Underpay (credit) → use /sale; overpay
-            // (advance) → take it via the counter "Receive payment" (Rcv) flow,
-            // which posts a proper GST Receipt Voucher. So cash/UPI/etc. must equal
-            // the bill MINUS the gift-card tender (the server adds the gift card back).
+            // Under-pay would be a credit sale — not allowed at POS (use /sale).
+            // Over-pay IS allowed when collecting surplus: the server books the
+            // extra as a separate Receipt voucher (clears oldest dues FIFO, any
+            // leftover = customer advance) so the bank/UPI statement matches 1:1.
             const collectedFromPayments = paymentsList.reduce((s, p) => s + p.amount, 0);
-            if (Math.abs(collectedFromPayments - payableTotal) > 0.01) {
-                toast.error("POS sale must be paid in full. Take any advance via 'Receive payment'; use 'Save & Print' on /sale for a credit sale.");
+            if (collectedFromPayments + 0.01 < payableTotal) {
+                toast.error("POS sale must be paid in full. Use 'Save & Print' on /sale for a credit sale.");
                 setSubmitting(false);
                 return;
             }
 
             const validCharges = charges.filter((c) => c.accountId !== null && Math.abs(parseAmt(c.amount)) >= 0.005);
-            const { data } = await axios.post<{ voucherId: number; voucherRef: string; pointsEarned: number; pointsRedeemed: number; milestoneBonus: number; milestoneCoupons: string[]; loyaltyBalance: number; couponDiscount: number; couponCode: string | null; posTemplate: VoucherTemplateDefaults }>("/api/pos/sale", {
+            const { data } = await axios.post<{ voucherId: number; voucherRef: string; pointsEarned: number; pointsRedeemed: number; milestoneBonus: number; milestoneCoupons: string[]; loyaltyBalance: number; couponDiscount: number; couponCode: string | null; posTemplate: VoucherTemplateDefaults; surplusCollected: number; arrearCleared: number; advanceCredited: number; receiptVoucherId: number | null; receiptVoucherRef: string | null }>("/api/pos/sale", {
                 accountId: snapshot.account.id,
                 issueDate: today,
                 dueDate: due.toISOString().slice(0, 10),
@@ -801,6 +801,7 @@ export default function PosScreen() {
                 couponCode: appliedCoupon?.code ?? undefined, // server re-resolves + owns the ₹ value
                 autoApply: !appliedCoupon && !!autoCoupon,     // let the server pick the best auto offer
                 giftCardCode: giftCard?.code ?? undefined,     // server draws min(balance, total) as a tender
+                collectSurplus: overpaid > 0.01,               // accept extra → Receipt voucher (clears dues FIFO, leftover = advance)
                 charges: validCharges.map((c) => ({
                     accountId: c.accountId as number,
                     description: c.description.trim() || undefined,
@@ -813,7 +814,14 @@ export default function PosScreen() {
             const bonusMsg = data.milestoneBonus > 0 ? ` 🏆 +${data.milestoneBonus} milestone bonus!` : "";
             const couponMsg = data.couponDiscount > 0 ? ` · coupon − ${fmtINR(data.couponDiscount)}` : "";
             const gcCouponMsg = data.milestoneCoupons?.length ? ` 🎟 coupon ${data.milestoneCoupons.join(", ")} issued!` : "";
-            toast.success(`Invoice ${data.voucherRef} · ${fmtINR(total)}${couponMsg}${ptsMsg}${bonusMsg}${gcCouponMsg}`);
+            let surplusMsg = "";
+            if (data.surplusCollected > 0) {
+                const parts: string[] = [];
+                if (data.arrearCleared > 0) parts.push(`cleared dues ${fmtINR(data.arrearCleared)}`);
+                if (data.advanceCredited > 0) parts.push(`advance ${fmtINR(data.advanceCredited)}`);
+                surplusMsg = ` · ${data.receiptVoucherRef ?? "Receipt"} +${fmtINR(data.surplusCollected)}${parts.length ? ` (${parts.join(", ")})` : ""}`;
+            }
+            toast.success(`Invoice ${data.voucherRef} · ${fmtINR(total)}${couponMsg}${ptsMsg}${bonusMsg}${gcCouponMsg}${surplusMsg}`);
             // Show "Thank You ₹X" on the customer display and hold it so the
             // coordinator doesn't immediately overwrite it as state resets.
             void qrDisplay.thankyou({ amount: total });
@@ -889,9 +897,13 @@ export default function PosScreen() {
                             discountAmount,
                             tax,
                             total,
-                            cashPaid: cashNet,
-                            upiPaid: pay.upi,
-                            extrasPaid: extras.map((e) => ({ method: e.method, amount: e.amount, reference: e.reference })),
+                            // Overpayment: the tenders live on the separate Receipt
+                            // voucher (RV-…), so the sale slip shows NO payment lines
+                            // (the sale is settled to the customer account). Exact-pay
+                            // sales keep the traditional cash/UPI breakdown.
+                            cashPaid:   overpaid > 0 ? 0 : cashNet,
+                            upiPaid:    overpaid > 0 ? 0 : pay.upi,
+                            extrasPaid: overpaid > 0 ? [] : extras.map((e) => ({ method: e.method, amount: e.amount, reference: e.reference })),
                             // "Today's discount" ladder (additive).
                             grossAtTag:  printLadder.barcodeTotal,
                             discounts:   printLadder.discounts.map((d) => ({ label: d.label, amount: d.amount })),
@@ -902,6 +914,13 @@ export default function PosScreen() {
                     }).catch(() => toast.error("Thermal print failed"));
                 } else {
                     window.open(`/receipt/invoice/${data.voucherId}?kind=POS&autoprint=1`, "_blank", "noopener");
+                }
+                // Overpayment booked a separate Receipt voucher (RV-…) for the
+                // extra (cleared old dues / advance). Print it too — it's a
+                // browser print (the thermal relay only renders the sale slip);
+                // /receipt/payment/[id] auto-prints on mount.
+                if (data.receiptVoucherId) {
+                    window.open(`/receipt/payment/${data.receiptVoucherId}`, "_blank", "noopener");
                 }
             }
         } catch (e: unknown) {
@@ -921,9 +940,8 @@ export default function PosScreen() {
     const balanceDue = snapshot?.balanceDue ?? 0;
     const arrearPaid = Math.min(overpaid, balanceDue);
     const advanceTaken = Math.max(0, overpaid - balanceDue);
-    // POS is exact-pay: Confirm is enabled only when cash/UPI/etc. equal the bill
-    // (minus any gift-card tender). Under = credit (→ /sale), over = advance (→ Rcv).
-    const payMismatch = Math.abs(collected - payableTotal) > 0.01;
+    // Confirm is blocked only on UNDER-payment (a credit sale → /sale). Exact pay
+    // is a normal sale; over-payment is collected as surplus (Receipt voucher).
 
     // ── QR display coordinator ──────────────────────────────────────────────
     // Single source of truth for what the customer-facing DQ11 shows. Priority:
@@ -1320,6 +1338,10 @@ export default function PosScreen() {
                                             if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); productSearchRef.current?.focus(); }
                                         };
                                         const mrp = l.mrpPaise ? l.mrpPaise / 100 : null;
+                                        // Printed barcode/tag price (read-only). Shown so the cashier
+                                        // sees the same figure the customer's print/display shows, and
+                                        // can spot products missing barcode/MRP data at a glance.
+                                        const barcode = l.barcodePaise ? l.barcodePaise / 100 : null;
                                         return (
                                             <li key={l.productId} className="px-4 py-2.5">
                                                 {/* Wide layout: name | warranty | note | mrp | qty | price | trash all on one line.
@@ -1344,12 +1366,12 @@ export default function PosScreen() {
                                                         className="h-8 text-sm"
                                                     />
                                                     <div className="hidden lg:flex flex-col items-end text-[10px] leading-tight text-muted-foreground">
-                                                        {mrp != null ? (
-                                                            <>
-                                                                <span className="uppercase tracking-wider">MRP</span>
-                                                                <span className={mrp !== l.unitPrice ? "line-through" : ""}>{fmtINR(mrp)}</span>
-                                                            </>
-                                                        ) : <span>—</span>}
+                                                        <span className="uppercase tracking-wider">MRP</span>
+                                                        {mrp != null
+                                                            ? <span className={mrp !== l.unitPrice ? "line-through" : ""}>{fmtINR(mrp)}</span>
+                                                            : <span>—</span>}
+                                                        <span className="mt-0.5 uppercase tracking-wider">Barcode</span>
+                                                        <span>{barcode != null ? fmtINR(barcode) : "—"}</span>
                                                     </div>
                                                     <div className="flex items-center gap-1">
                                                         <Button variant="ghost" size="icon-sm" onClick={() => setQty(l.productId, l.qty - 1)}><Minus size={12} /></Button>
@@ -1922,9 +1944,10 @@ export default function PosScreen() {
                                         <ReceiptIndianRupee size={16} /> {submitting ? "Saving…" : `Confirm · ${fmtINR(total)}`}
                                         <span className="ml-2 rounded border border-primary-foreground/30 px-1.5 py-px text-[10px] opacity-80">↵</span>
                                     </div>
-                                    {/* POS sales are exact-pay. Show existing dues for context and point
-                                        the cashier at "Receive payment" for collecting dues or advances
-                                        (that flow posts a proper GST Receipt Voucher). */}
+                                    {/* Overpayment is collected on Confirm: the extra clears the oldest
+                                        open bills first (FIFO), and any leftover becomes a customer
+                                        advance — booked as a separate GST Receipt voucher so the bank/UPI
+                                        statement matches 1:1. */}
                                     {(overpaid > 0 || balanceDue > 0) && (
                                         <div className="space-y-1 rounded-md border border-border bg-muted/30 p-2.5 text-xs">
                                             {balanceDue > 0 && (
@@ -1933,23 +1956,46 @@ export default function PosScreen() {
                                                     <span className="font-medium text-amber-600">{fmtINR(balanceDue)}</span>
                                                 </div>
                                             )}
-                                            <p className="text-[11px] leading-snug text-muted-foreground">
-                                                {overpaid > 0
-                                                    ? <>Collecting extra? POS sales are paid in full — take the <span className="font-medium text-foreground">advance</span> via <span className="font-medium text-foreground">Receive payment</span> (issues a Receipt Voucher).</>
-                                                    : <>Collect dues or take an advance via <span className="font-medium text-foreground">Receive payment</span>.</>}
-                                            </p>
+                                            {overpaid > 0 && (
+                                                <>
+                                                    <div className="flex items-center justify-between">
+                                                        <span className="text-muted-foreground">Extra collected</span>
+                                                        <span className="font-medium text-foreground">{fmtINR(overpaid)}</span>
+                                                    </div>
+                                                    {arrearPaid > 0 && (
+                                                        <div className="flex items-center justify-between">
+                                                            <span className="text-muted-foreground">→ Clears old dues</span>
+                                                            <span className="font-medium text-emerald-600">{fmtINR(arrearPaid)}</span>
+                                                        </div>
+                                                    )}
+                                                    {advanceTaken > 0 && (
+                                                        <div className="flex items-center justify-between">
+                                                            <span className="text-muted-foreground">→ Advance / credit</span>
+                                                            <span className="font-medium text-emerald-600">{fmtINR(advanceTaken)}</span>
+                                                        </div>
+                                                    )}
+                                                    <p className="text-[11px] leading-snug text-muted-foreground">
+                                                        Confirm issues a Receipt voucher for the extra. Needs an identified customer (not a walk-in).
+                                                    </p>
+                                                </>
+                                            )}
+                                            {overpaid <= 0 && balanceDue > 0 && (
+                                                <p className="text-[11px] leading-snug text-muted-foreground">
+                                                    Collect dues by tendering more than the bill — the extra clears the oldest bills first.
+                                                </p>
+                                            )}
                                         </div>
                                     )}
 
                                     {/* Inline confirm CTAs — final amount + actions sit close to the payment-line entry */}
                                     <div className="grid grid-cols-2 gap-2 pt-1">
-                                        <Button onClick={() => generateInvoice(false)} disabled={submitting || creditLimitBreached || payMismatch} size="lg" variant="outline"
-                                            title={payMismatch ? (overpaid > 0 ? "Collected more than the bill — take the extra as an advance via Receive payment" : "Collect the full bill amount to confirm") : undefined}>
-                                            <ReceiptIndianRupee size={16} /> {submitting ? "Saving…" : "Confirm"}
+                                        <Button onClick={() => generateInvoice(false)} disabled={submitting || creditLimitBreached || onCredit > 0.01} size="lg" variant="outline"
+                                            title={onCredit > 0.01 ? "Collect the full bill amount to confirm (under-payment → use /sale for credit)" : overpaid > 0 ? "Extra is collected as a Receipt voucher — clears old dues first, leftover becomes advance" : undefined}>
+                                            <ReceiptIndianRupee size={16} /> {submitting ? "Saving…" : (overpaid > 0 ? "Confirm + collect" : "Confirm")}
                                             <span className="ml-2 rounded border border-primary-foreground/30 px-1.5 py-px text-[10px] opacity-80">↵</span>
                                         </Button>
-                                        <Button onClick={() => generateInvoice(true)} disabled={submitting || creditLimitBreached || payMismatch} size="lg"
-                                            title={payMismatch ? (overpaid > 0 ? "Collected more than the bill — take the extra as an advance via Receive payment" : "Collect the full bill amount to confirm") : undefined}>
+                                        <Button onClick={() => generateInvoice(true)} disabled={submitting || creditLimitBreached || onCredit > 0.01} size="lg"
+                                            title={onCredit > 0.01 ? "Collect the full bill amount to confirm (under-payment → use /sale for credit)" : overpaid > 0 ? "Extra is collected as a Receipt voucher — clears old dues first, leftover becomes advance" : undefined}>
                                             <ReceiptIndianRupee size={16} /> {submitting ? "Saving…" : "Confirm + Print"}
                                             <span className="ml-2 rounded border border-border px-1.5 py-px text-[10px] opacity-80">Ctrl ↵</span>
                                         </Button>

@@ -6,6 +6,8 @@ import { invNextRef, calcVoucherTotals } from "@/modules/inventory/lib/stock";
 import { recordStockMovement } from "@/modules/inventory/lib/stockMovement";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import { postInvVoucherToGl } from "@/modules/accountancy/lib/postInvVoucher";
+import { postReceiptVoucher } from "@/modules/accountancy/lib/postReceiptVoucher";
+import { getOpenSaleBillsForFifo } from "@/modules/accountancy/lib/outstandings";
 import { getVoucherTemplate } from "@/shared/lib/print/voucherTemplate";
 import * as Sentry from "@sentry/nextjs";
 import { validateRequest } from "@/shared/lib/api";
@@ -112,6 +114,12 @@ const createSchema = z.object({
     autoApply: z.boolean().default(false),
     // Gift-card code to redeem as a payment tender (server owns the ₹ drawn).
     giftCardCode: z.string().trim().max(40).optional(),
+    // Collect-on-the-go: when true, the cashier is knowingly accepting MORE than
+    // the bill. The surplus settles the customer's oldest open bills (FIFO) and
+    // any leftover becomes a customer advance — booked as a separate Receipt
+    // voucher so the bank/UPI statement matches 1:1. Requires an identified
+    // customer; rejected alongside a gift-card redemption.
+    collectSurplus: z.boolean().default(false),
 });
 
 class GlPostFailedError extends Error {
@@ -410,16 +418,41 @@ export async function POST(req: Request) {
         giftCardId = gc.id;
     }
 
-    // Cash/UPI/etc. payments + the gift-card tender must EQUAL the bill. The POS
-    // sale is exact-pay only: an on-credit (under) sale goes through /sale, and an
-    // ADVANCE (over) is taken via the counter "Receive payment" (Rcv) flow, which
-    // posts a proper GST Receipt Voucher (shifts/[id]/receipts → postReceiptVoucher).
+    // Cash/UPI/etc. payments + the gift-card tender vs the bill. Three arms:
+    //   • exact (|surplus| ≤ 1p) → today's exact-pay sale, unchanged.
+    //   • under (surplus < 0)    → rejected; an on-credit sale goes through /sale.
+    //   • over  (surplus > 0)    → allowed ONLY with collectSurplus: the extra
+    //     settles the customer's oldest open bills (FIFO) + leftover advance, via
+    //     a separate Receipt voucher (so the bank/UPI statement matches 1:1).
+    const round2 = (n: number) => Math.round(n * 100) / 100;
     const paymentTotal = body.payments.reduce((s, p) => s + p.amount, 0) + giftCardRedeem;
-    if (Math.abs(paymentTotal - totalAmount) > 0.01) {
+    const surplus = round2(paymentTotal - totalAmount);
+    const collectingSurplus = surplus > 0.01;
+    if (surplus < -0.01) {
         return NextResponse.json(
-            { error: `Payment total (₹${paymentTotal.toFixed(2)}) does not match invoice total (₹${totalAmount.toFixed(2)}). Take any advance via "Receive payment"; use /sale for a credit sale.` },
+            { error: `Payment total (₹${paymentTotal.toFixed(2)}) is less than invoice total (₹${totalAmount.toFixed(2)}). Use /sale for a credit sale.` },
             { status: 422 },
         );
+    }
+    if (collectingSurplus) {
+        if (!body.collectSurplus) {
+            return NextResponse.json(
+                { error: `Payment total (₹${paymentTotal.toFixed(2)}) exceeds invoice total (₹${totalAmount.toFixed(2)}). Set collectSurplus to take the extra as advance / collect old dues, or return the change.`, code: "SURPLUS_NOT_CONFIRMED" },
+                { status: 422 },
+            );
+        }
+        if (!isIdentified) {
+            return NextResponse.json(
+                { error: "Overpayment can only be kept against an identified customer. Attach a customer, or return the cash.", code: "SURPLUS_NEEDS_CUSTOMER" },
+                { status: 422 },
+            );
+        }
+        if (giftCardRedeem > 0.005) {
+            return NextResponse.json(
+                { error: "Can't combine a gift-card redemption with an overpayment. Settle the bill on the gift card alone, or drop the gift card.", code: "SURPLUS_WITH_GIFTCARD" },
+                { status: 422 },
+            );
+        }
     }
 
     // Resolve each payment line's settlement ledger via the counter's mapping.
@@ -478,24 +511,30 @@ export async function POST(req: Request) {
             // is always 0 and no AR tender is needed. Kept as a future-
             // facing branch in case partial POS sales get enabled.
             const arRemainder = totalAmount - paymentTotal;
-            const tenderPayload = [
-                ...resolvedPayments.map((p) => ({
-                    accountId: p.accountId,
-                    amount:    p.amount,
-                    method:    p.method,
-                    reference: p.reference ?? null,
-                })),
-                // Gift-card tender — Dr "Gift Card Liability" (bypasses counterMethodMap;
-                // its ledger is the liability, not the counter wallet).
-                ...(giftCardRedeem > 0.005 && giftCardLiabilityAccountId != null
-                    ? [{ accountId: giftCardLiabilityAccountId, amount: giftCardRedeem, method: "OTHER" as const, reference: `Gift card ${body.giftCardCode}` }]
-                    : []),
-                // AR leg for the unpaid portion (on-credit). POS enforces exact pay,
-                // so this is 0 today — kept as a forward-facing branch for partials.
-                ...(arRemainder > 0.005
-                    ? [{ accountId: customerAccount.id, amount: arRemainder, method: null as null, reference: null as null }]
-                    : []),
-            ];
+            // Under surplus the sale is settled FROM the customer ledger: a single
+            // AR tender for the exact bill (Dr Customer / Cr Sales+GST). The actual
+            // money — cash/UPI/card — rides the Receipt voucher below at its real
+            // ledger, so the bank/UPI statement still matches one voucher 1:1.
+            const tenderPayload = collectingSurplus
+                ? [{ accountId: customerAccount.id, amount: totalAmount, method: null as null, reference: null as null }]
+                : [
+                    ...resolvedPayments.map((p) => ({
+                        accountId: p.accountId,
+                        amount:    p.amount,
+                        method:    p.method,
+                        reference: p.reference ?? null,
+                    })),
+                    // Gift-card tender — Dr "Gift Card Liability" (bypasses counterMethodMap;
+                    // its ledger is the liability, not the counter wallet).
+                    ...(giftCardRedeem > 0.005 && giftCardLiabilityAccountId != null
+                        ? [{ accountId: giftCardLiabilityAccountId, amount: giftCardRedeem, method: "OTHER" as const, reference: `Gift card ${body.giftCardCode}` }]
+                        : []),
+                    // AR leg for the unpaid portion (on-credit). POS enforces exact pay,
+                    // so this is 0 today — kept as a forward-facing branch for partials.
+                    ...(arRemainder > 0.005
+                        ? [{ accountId: customerAccount.id, amount: arRemainder, method: null as null, reference: null as null }]
+                        : []),
+                ];
             const voucher = await tx.invVoucher.create({
                 data: {
                     type:           "POS",
@@ -683,11 +722,79 @@ export async function POST(req: Request) {
                 });
             }
 
+            // ── 5. Surplus (collect-on-the-go) ────────────────────────────
+            // The customer paid MORE than the bill. Book the FULL inflow as ONE
+            // Receipt voucher at its real tender ledger(s) — so UPI/bank reconciles
+            // 1:1 with the statement — then allocate FIFO: this sale's JE first
+            // (closes the AR tender above), then the oldest open bills; any leftover
+            // stays as a customer advance (the unallocated Cr to the customer).
+            let surplusCollected = 0;
+            let arrearCleared    = 0;
+            let advanceCredited  = 0;
+            let receiptVoucherId:  number | null = null;
+            let receiptVoucherRef: string | null = null;
+            if (collectingSurplus) {
+                surplusCollected = surplus;
+                const allocations: { journalEntryId: number; amount: number }[] = [
+                    { journalEntryId: gl.journalEntryId, amount: totalAmount },
+                ];
+                let remaining = surplus;
+                for (const b of await getOpenSaleBillsForFifo(tx, customerAccount.id)) {
+                    if (remaining <= 0.005) break;
+                    if (b.journalEntryId === gl.journalEntryId) continue; // the sale just posted
+                    const take = Math.min(remaining, b.outstanding);
+                    if (take > 0.005) {
+                        allocations.push({ journalEntryId: b.journalEntryId, amount: round2(take) });
+                        remaining = round2(remaining - take);
+                    }
+                }
+                arrearCleared   = round2(surplus - remaining);
+                advanceCredited = round2(remaining);
+
+                // Receipt tenders mirror the counter method→ledger map (cash→till,
+                // UPI→upi, …); full inflow, carrying the UTR/reference.
+                const receiptTenders = resolvedPayments.map((p) => ({
+                    accountId:   p.accountId,
+                    amount:      p.amount,
+                    description: `${METHOD_LABEL[p.method]}${p.reference ? ` ref ${p.reference}` : ""}`,
+                }));
+                const narration = `POS surplus on ${voucher.reference} — arrear ₹${arrearCleared.toFixed(2)}, advance ₹${advanceCredited.toFixed(2)}`;
+                const receipt = await postReceiptVoucher(tx, {
+                    customerAccountId: customerAccount.id,
+                    tenders:           receiptTenders,
+                    date:              new Date(body.issueDate),
+                    userId:            user!.id,
+                    branchId:          activeBranchId,
+                    narration,
+                    allocations,
+                });
+                receiptVoucherId  = receipt.voucherId;
+                receiptVoucherRef = receipt.voucherRef;
+
+                // Audit row tying the receipt to the shift (mirrors shifts/[id]/receipts).
+                await tx.posReceipt.create({
+                    data: {
+                        shiftId:     shift.id,
+                        amountPaise: BigInt(Math.round(paymentTotal * 100)),
+                        accountId:   customerAccount.id,
+                        note:        narration,
+                        voucherId:   receipt.voucherId,
+                        createdById: user!.id,
+                    },
+                });
+            }
+
             return {
                 voucherId:      voucher.id,
                 voucherRef:     voucher.reference,
                 journalEntryId: gl.journalEntryId,
                 shiftId:        shift.id,
+                // Surplus outcome — surfaced on the POS success toast + print.
+                surplusCollected,
+                arrearCleared,
+                advanceCredited,
+                receiptVoucherId,
+                receiptVoucherRef,
                 // Loyalty outcome — surfaced on the POS success toast.
                 pointsEarned:   loyaltyResult.pointsEarned,
                 pointsRedeemed: loyaltyResult.pointsRedeemed,
