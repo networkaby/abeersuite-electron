@@ -921,6 +921,9 @@ export default function PosScreen() {
     const balanceDue = snapshot?.balanceDue ?? 0;
     const arrearPaid = Math.min(overpaid, balanceDue);
     const advanceTaken = Math.max(0, overpaid - balanceDue);
+    // POS is exact-pay: Confirm is enabled only when cash/UPI/etc. equal the bill
+    // (minus any gift-card tender). Under = credit (→ /sale), over = advance (→ Rcv).
+    const payMismatch = Math.abs(collected - payableTotal) > 0.01;
 
     // ── QR display coordinator ──────────────────────────────────────────────
     // Single source of truth for what the customer-facing DQ11 shows. Priority:
@@ -1940,18 +1943,13 @@ export default function PosScreen() {
 
                                     {/* Inline confirm CTAs — final amount + actions sit close to the payment-line entry */}
                                     <div className="grid grid-cols-2 gap-2 pt-1">
-                                        <Button onClick={() => generateInvoice(false)} disabled={submitting || creditLimitBreached} size="lg" variant="outline">
-                                            {/* <Receipt size={16} /> {submitting
-                                                ? "Saving…"
-                                                : advanceTaken > 0 ? `Confirm · ${fmtINR(total)} + ${fmtINR(advanceTaken)} adv.`
-                                                    : arrearPaid > 0 ? `Confirm · ${fmtINR(total)} + ${fmtINR(arrearPaid)} arrear`
-                                                        : onCredit > 0 ? `Confirm · ${fmtINR(collected)} + ${fmtINR(onCredit)} credit`
-                                                            : `Confirm · ${fmtINR(total)}`}
-                                            <span className="ml-2 rounded border border-primary-foreground/30 px-1.5 py-px text-[10px] opacity-80">↵</span> */}
+                                        <Button onClick={() => generateInvoice(false)} disabled={submitting || creditLimitBreached || payMismatch} size="lg" variant="outline"
+                                            title={payMismatch ? (overpaid > 0 ? "Collected more than the bill — take the extra as an advance via Receive payment" : "Collect the full bill amount to confirm") : undefined}>
                                             <ReceiptIndianRupee size={16} /> {submitting ? "Saving…" : "Confirm"}
                                             <span className="ml-2 rounded border border-primary-foreground/30 px-1.5 py-px text-[10px] opacity-80">↵</span>
                                         </Button>
-                                        <Button onClick={() => generateInvoice(true)} disabled={submitting || creditLimitBreached} size="lg" >
+                                        <Button onClick={() => generateInvoice(true)} disabled={submitting || creditLimitBreached || payMismatch} size="lg"
+                                            title={payMismatch ? (overpaid > 0 ? "Collected more than the bill — take the extra as an advance via Receive payment" : "Collect the full bill amount to confirm") : undefined}>
                                             <ReceiptIndianRupee size={16} /> {submitting ? "Saving…" : "Confirm + Print"}
                                             <span className="ml-2 rounded border border-border px-1.5 py-px text-[10px] opacity-80">Ctrl ↵</span>
                                         </Button>
