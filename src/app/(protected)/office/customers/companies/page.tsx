@@ -42,6 +42,7 @@ import { EntityListPanel } from "@/shared/components/EntityListPanel";
 import { TransactionsTable, type CustomerTransactions } from "@/modules/customer/components/TransactionsTable";
 import CompanyLinkPanel from "@/modules/customer/components/CompanyLinkPanel";
 import CompanyProfileEdit from "@/modules/customer/components/CompanyProfileEdit";
+import AccountCreditLimitCard from "@/modules/customer/components/AccountCreditLimitCard";
 import { LoyaltyPanel } from "@/modules/loyalty/components/LoyaltyPanel";
 
 interface CompanyListItem {
@@ -55,6 +56,7 @@ interface CompanyListItem {
 interface CompanyDetail {
     id: number;
     accountId: number;
+    creditLimit: string | null;
     name: string;
     phone: string | null;
     email: string | null;
@@ -77,6 +79,7 @@ export default function CompaniesPage() {
     const { data: session } = useSession();
     const perms = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
     const canManageLoyalty = perms.includes(PERMISSIONS.LOYALTY_MANAGE) || perms.includes(PERMISSIONS.ADMIN_BYPASS);
+    const canEditCompany = perms.includes(PERMISSIONS.COMPANIES_EDIT_ORG) || perms.includes(PERMISSIONS.ADMIN_BYPASS);
     const [companies, setCompanies] = useState<CompanyListItem[]>([]);
     const [search, setSearch] = useState("");
     const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -334,6 +337,13 @@ export default function CompaniesPage() {
                                                 phones: detail.contactRows?.phones ?? [],
                                                 emails: detail.contactRows?.emails ?? [],
                                             }}
+                                            onSaved={refetchDetail}
+                                        />
+                                        <AccountCreditLimitCard
+                                            key={`cl-${selectedId}`}
+                                            accountId={detail.accountId}
+                                            initialLimit={detail.creditLimit}
+                                            canEdit={canEditCompany}
                                             onSaved={refetchDetail}
                                         />
                                         <DevicesMiniGrid devices={detail.devices} />

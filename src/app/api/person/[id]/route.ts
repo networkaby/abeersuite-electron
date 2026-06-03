@@ -71,6 +71,7 @@ export async function GET(
         phone: person.phones[0]?.phone ?? null,
         email: person.emails[0]?.email ?? null,
         accountId: person.account!.id,
+        creditLimit: person.account!.creditLimit,
         devices: person.account!.devices,
         companies: person.companies.map(link => ({
             ...link,

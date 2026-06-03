@@ -81,6 +81,7 @@ export async function GET(
     return NextResponse.json({
         ...company,
         accountId: company.account!.id,
+        creditLimit: company.account!.creditLimit,
         devices: company.account!.devices,
         customers: linkedCustomers,
         phone: contacts.phones[0]?.value ?? contacts.derivedPhones[0]?.value ?? null,

@@ -44,6 +44,7 @@ import { TransactionsTable, type CustomerTransactions } from "@/modules/customer
 import CustomerLinkPanel from "@/modules/customer/components/CustomerLinkPanel";
 import CustomerEmergencyPasswordResetCard from "@/modules/customer/components/CustomerEmergencyPasswordResetCard";
 import PersonProfileEdit from "@/modules/customer/components/PersonProfileEdit";
+import AccountCreditLimitCard from "@/modules/customer/components/AccountCreditLimitCard";
 import { LoyaltyPanel } from "@/modules/loyalty/components/LoyaltyPanel";
 
 interface CustomerListItem {
@@ -58,6 +59,7 @@ interface CustomerListItem {
 interface CustomerDetail {
     id: number;
     accountId: number;
+    creditLimit: string | null;
     name: string;
     phone: string | null;
     email: string | null;
@@ -90,6 +92,7 @@ export default function CustomersPage() {
     const perms = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
     const canManageUsers = perms.includes(PERMISSIONS.USERS_MANAGE) || perms.includes(PERMISSIONS.ADMIN_BYPASS);
     const canManageLoyalty = perms.includes(PERMISSIONS.LOYALTY_MANAGE) || perms.includes(PERMISSIONS.ADMIN_BYPASS);
+    const canEditCustomer = perms.includes(PERMISSIONS.CUSTOMERS_EDIT_ORG) || perms.includes(PERMISSIONS.ADMIN_BYPASS);
 
     const router = useRouter();
 
@@ -338,6 +341,13 @@ export default function CustomersPage() {
                                             phones: detail.phones ?? [],
                                             emails: detail.emails ?? [],
                                         }}
+                                        onSaved={refetchDetail}
+                                    />
+                                    <AccountCreditLimitCard
+                                        key={`cl-${selectedId}`}
+                                        accountId={detail.accountId}
+                                        initialLimit={detail.creditLimit}
+                                        canEdit={canEditCustomer}
                                         onSaved={refetchDetail}
                                     />
                                     <DevicesMiniGrid devices={detail.devices} />

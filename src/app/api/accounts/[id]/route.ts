@@ -1,9 +1,18 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/shared/lib/auth/permissions";
+import { requireAuth, hasPermission } from "@/shared/lib/auth/permissions";
 import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { z } from "zod";
+import { validateRequest, handleApiError } from "@/shared/lib/api";
 
 type Params = { params: Promise<{ id: string }> };
+
+// Only `creditLimit` is editable here for now. null = no credit (cash-only),
+// 0 behaves identically, a positive value grants that much credit headroom.
+const updateSchema = z.object({
+    creditLimit: z.number().min(0).nullable(),
+});
 
 // GET /api/accounts/[id] — single ledger account
 export async function GET(_: Request, { params }: Params) {
@@ -46,4 +55,50 @@ export async function GET(_: Request, { params }: Params) {
             phone: account.company.phones[0]?.phone ?? null,
         } : null,
     });
+}
+
+// PATCH /api/accounts/[id] — update the account's credit limit.
+// Gated by the edit permission for whichever party owns the account:
+// customers:edit:org for a person ledger, companies:edit:org for a company.
+export async function PATCH(req: Request, { params }: Params) {
+    const { user, response } = await requireAuth();
+    if (response) return response;
+
+    const { id } = await params;
+    const accountId = Number(id);
+
+    const account = await prisma.account.findUnique({
+        where: { id: accountId },
+        select: { id: true, personId: true, companyId: true },
+    });
+    if (!account) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    // A bare GL account (no party) has no customer-facing credit limit to set.
+    if (!account.personId && !account.companyId) {
+        return NextResponse.json(
+            { error: "Credit limit only applies to a customer or company ledger." },
+            { status: 400 },
+        );
+    }
+
+    const requiredPerm = account.companyId
+        ? PERMISSIONS.COMPANIES_EDIT_ORG
+        : PERMISSIONS.CUSTOMERS_EDIT_ORG;
+    if (!hasPermission(user, requiredPerm)) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const { data, error } = await validateRequest(req, updateSchema);
+    if (error) return error;
+
+    try {
+        const updated = await prisma.account.update({
+            where: { id: accountId },
+            data: { creditLimit: data.creditLimit },
+            select: { id: true, creditLimit: true },
+        });
+        return NextResponse.json(updated);
+    } catch (e) {
+        return handleApiError(e, "Failed to update credit limit");
+    }
 }
