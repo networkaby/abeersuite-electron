@@ -151,6 +151,12 @@ function findLinkPaths(text: string): string[] {
 // a current claim, and skip.
 const HISTORICAL_RE = /\b(removed|deleted|dropped|gone|no longer|never existed|legacy)\b/i;
 
+// Some referenced paths intentionally live OUTSIDE this repo (e.g. the thermal /
+// QR display relays in their own git repo). When the path is described as
+// external / out-of-repo / a separate repo, it's a deliberate reference, not a
+// broken path on disk — skip it.
+const EXTERNAL_RE = /\b(external|out-of-repo|out of repo|separate (?:git )?repo|not under this app|own (?:git )?repo)\b/i;
+
 const broken: { doc: string; refPath: string }[] = [];
 
 for (const docRel of docFiles) {
@@ -170,6 +176,7 @@ for (const docRel of docFiles) {
             const abs = path.join(REPO, ref);
             if (existsSync(abs)) continue;
             if (HISTORICAL_RE.test(context)) continue;   // skip "X was removed" mentions
+            if (EXTERNAL_RE.test(context)) continue;     // skip intentional out-of-repo refs
             broken.push({ doc: docRel.replace(/\\/g, "/"), refPath: ref });
         }
     }
