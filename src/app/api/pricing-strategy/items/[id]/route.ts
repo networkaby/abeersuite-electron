@@ -4,6 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { pricingItemUpdateSchema } from "@/shared/lib/schemas/pricingSchemas";
+import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { response } = await requirePermission(PERMISSIONS.INVENTORY_MANAGE);
@@ -85,6 +86,16 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 openingValue:     true,
             },
         });
+        // Margin %, cost method and MRP all feed the materialized
+        // effectiveSalePricePaise (COMPUTED = cost × margin; STRATEGY = engine;
+        // both MRP-capped). Re-materialize now so POS/shop reflect the edit
+        // immediately instead of waiting for the next Save or voucher. Best-effort
+        // — never fail the save on a recompute error (it heals on the next voucher).
+        // priceOverridden / SAVED rows are skipped inside recompute.
+        try {
+            await recomputePricesForProducts([id]);
+        } catch { /* best-effort; price heals on next voucher */ }
+
         return NextResponse.json(row);
     } catch (e) {
         return handleApiError(e, "Failed to update pricing item");

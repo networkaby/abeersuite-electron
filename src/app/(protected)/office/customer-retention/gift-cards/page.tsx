@@ -10,7 +10,7 @@ export default async function GiftCardsPage() {
     return (
         <ScrollArea className="h-full" type="always">
             <div className="w-full space-y-6 px-6 pt-4 pb-10">
-                <div className="flex items-center gap-3">
+                {/* <div className="flex items-center gap-3">
                     <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-teal-100 text-teal-700 dark:bg-teal-500/15 dark:text-teal-400">
                         <CreditCard size={22} />
                     </div>
@@ -20,7 +20,7 @@ export default async function GiftCardsPage() {
                             Prepaid store credit. Issuing posts Dr Cash / Cr &ldquo;Gift Card Liability&rdquo;; redeeming at POS draws the liability down as a payment tender.
                         </p>
                     </div>
-                </div>
+                </div> */}
                 <GiftCards brandName={org.brandName} />
             </div>
         </ScrollArea>

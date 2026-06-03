@@ -8,12 +8,16 @@ import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recom
 
 // PUT /api/pricing-strategy/sale-price — bulk-freeze the saved Sale Price for
 // the rows ticked on Update & Print Labels.
-//   • effectiveSalePriceSource = SAVED → store savedSalePricePaise (MRP-capped) +
-//                            stamp salePriceFrozenAt + savedProfitPaise.
-//   • effectiveSalePriceSource = STRATEGY/COMPUTED → clear the frozen fields so the
-//                            live engine drives the price again.
-// After the write, recompute re-materializes effectiveSalePricePaise from the new
-// source immediately, so POS/shop sell the new price without waiting for a voucher.
+//   • A Sale Price was entered (savedSalePricePaise != null) → store it (MRP-capped)
+//                            + stamp salePriceFrozenAt + savedProfitPaise. This is
+//                            the printed barcode tag and persists INDEPENDENTLY of
+//                            the selling source — Strategy/Computed rows keep their
+//                            saved tag; only a blank Sale Price clears it.
+//   • Blank Sale Price (savedSalePricePaise == null) → clear the frozen fields.
+// `effectiveSalePriceSource` is written separately and only decides which voice POS
+// charges; it no longer wipes the saved tag. After the write, recompute
+// re-materializes effectiveSalePricePaise from the source immediately, so POS/shop
+// sell the new price without waiting for a voucher.
 // Gated by inventory:manage, like the rest of the pricing module.
 export async function PUT(req: Request) {
     const { response } = await requirePermission(PERMISSIONS.INVENTORY_MANAGE);
@@ -32,9 +36,12 @@ export async function PUT(req: Request) {
 
         const affected = data.items.filter((it) => mrpById.has(it.id)); // skip ids that don't exist
         const ops = affected.map((it) => {
-            const frozen = it.effectiveSalePriceSource === "SAVED" && it.savedSalePricePaise != null;
+            // The saved Sale Price (and its barcode tag) persists whenever one was
+            // entered, INDEPENDENT of the selling source — the source only controls
+            // which voice POS charges. A blank Sale Price (null) clears the tag.
+            const hasSaved = it.savedSalePricePaise != null;
             let price = it.savedSalePricePaise;
-            if (frozen && price != null) {
+            if (hasSaved && price != null) {
                 const mrp = mrpById.get(it.id);
                 if (mrp != null && mrp > 0 && price > mrp) price = mrp; // clamp to MRP
             }
@@ -42,9 +49,9 @@ export async function PUT(req: Request) {
                 where: { id: it.id },
                 data: {
                     effectiveSalePriceSource: it.effectiveSalePriceSource,
-                    savedSalePricePaise:      frozen ? price : null,
-                    salePriceFrozenAt:        frozen ? now : null,
-                    savedProfitPaise:         frozen ? it.savedProfitPaise : null,
+                    savedSalePricePaise:      hasSaved ? price : null,
+                    salePriceFrozenAt:        hasSaved ? now : null,
+                    savedProfitPaise:         hasSaved ? it.savedProfitPaise : null,
                 },
             });
         });

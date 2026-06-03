@@ -61,9 +61,11 @@ interface Props {
     products: ProductOpt[];
     onSaved: () => void;
     onCancel: () => void;
+    /// When rendered inside a dialog: drop the dashed card chrome + internal header.
+    embedded?: boolean;
 }
 
-export function CouponForm({ initial, categories, products, onSaved, onCancel }: Props) {
+export function CouponForm({ initial, categories, products, onSaved, onCancel, embedded }: Props) {
     const editing = !!initial;
     const [code, setCode] = useState(str(initial?.code));
     const [name, setName] = useState(initial?.name ?? "");
@@ -137,11 +139,13 @@ export function CouponForm({ initial, categories, products, onSaved, onCancel }:
     }
 
     return (
-        <div className="space-y-4 rounded-lg border border-dashed border-border/70 bg-muted/20 p-4">
-            <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">{editing ? `Edit ${initial!.code ?? initial!.name}` : "New coupon"}</span>
-                <Button size="icon" variant="ghost" className="h-6 w-6" onClick={onCancel}><X size={14} /></Button>
-            </div>
+        <div className={embedded ? "space-y-4" : "space-y-4 rounded-lg border border-dashed border-border/70 bg-muted/20 p-4"}>
+            {!embedded && (
+                <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">{editing ? `Edit ${initial!.code ?? initial!.name}` : "New coupon"}</span>
+                    <Button size="icon" variant="ghost" className="h-6 w-6" onClick={onCancel}><X size={14} /></Button>
+                </div>
+            )}
 
             {/* Identity */}
             <div className="grid gap-3 sm:grid-cols-2">
