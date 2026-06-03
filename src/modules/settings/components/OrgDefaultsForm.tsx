@@ -36,6 +36,12 @@ interface BarcodeBand {
     hint: number;
 }
 
+interface AccountGroupOpt {
+    id: number;
+    name: string;
+    type: string;
+}
+
 interface OrgDefaults {
     id: number;
     defaultUnitId: number | null;
@@ -48,6 +54,7 @@ interface OrgDefaults {
     defaultCurrencySymbol: string;
     barcodeBandsJson: BarcodeBand[];
     cashDenominationsJson: number[];
+    shippingPoolGroupId: number | null;
 }
 
 const digitsOnly = (s: string): string => s.replace(/\D/g, "");
@@ -76,6 +83,7 @@ export function OrgDefaultsForm({ units }: { units: InvUnit[] }) {
     const [data, setData] = useState<OrgDefaults | null>(null);
     const [draft, setDraft] = useState<OrgDefaults | null>(null);
     const [gstRates, setGstRates] = useState<GstRateOpt[]>([]);
+    const [accountGroups, setAccountGroups] = useState<AccountGroupOpt[]>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
 
@@ -83,8 +91,10 @@ export function OrgDefaultsForm({ units }: { units: InvUnit[] }) {
         Promise.all([
             axios.get<OrgDefaults>("/api/settings/org-defaults"),
             axios.get<GstRateOpt[]>("/api/inventory/gst-rates"),
+            axios.get<AccountGroupOpt[]>("/api/settings/account-groups").catch(() => ({ data: [] as AccountGroupOpt[] })),
         ])
-            .then(([defaultsRes, ratesRes]) => {
+            .then(([defaultsRes, ratesRes, groupsRes]) => {
+                setAccountGroups(groupsRes.data);
                 const od: OrgDefaults = {
                     ...defaultsRes.data,
                     barcodeBandsJson: Array.isArray(defaultsRes.data.barcodeBandsJson)
@@ -153,6 +163,7 @@ export function OrgDefaultsForm({ units }: { units: InvUnit[] }) {
                     .sort((a, b) => a.max - b.max),
                 // Server dedupes + sorts high → low; send as-is.
                 cashDenominationsJson: draft.cashDenominationsJson ?? [],
+                shippingPoolGroupId: draft.shippingPoolGroupId,
             };
             const { data: saved } = await axios.patch<OrgDefaults>("/api/settings/org-defaults", payload);
             setData(saved);
@@ -286,6 +297,41 @@ export function OrgDefaultsForm({ units }: { units: InvUnit[] }) {
                             ))}
                         </SelectContent>
                     </Select>
+                </div>
+            </section>
+
+            {/* Additional-cost (shipping/courier) pool group */}
+            <section className="rounded-lg border bg-card p-4 space-y-4">
+                <div>
+                    <h2 className="text-sm font-semibold">Additional-cost pool group</h2>
+                    <p className="text-xs text-muted-foreground">
+                        The account group whose posted debits feed the pricing
+                        <span className="font-medium"> Costing</span> page&apos;s &ldquo;waiting&rdquo; pool. Create a
+                        ledger per courier / counter under this group, then allocate each posted
+                        payment to products as a per-unit shipping cost (used for pricing &amp; margin
+                        only — it never posts to the books).
+                    </p>
+                </div>
+
+                <div className="max-w-[320px] space-y-1">
+                    <Label className="text-xs">Pool group</Label>
+                    <Select
+                        value={draft.shippingPoolGroupId != null ? String(draft.shippingPoolGroupId) : NONE}
+                        onValueChange={(v) => set("shippingPoolGroupId", v === NONE ? null : Number(v))}
+                    >
+                        <SelectTrigger className="h-9">
+                            <SelectValue placeholder="None — feature off" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value={NONE}>None — feature off</SelectItem>
+                            {accountGroups.map((g) => (
+                                <SelectItem key={g.id} value={String(g.id)}>
+                                    {g.name} <span className="text-muted-foreground">· {g.type}</span>
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <p className="text-[10px] text-muted-foreground">Typically an Expense group (e.g. &ldquo;Courier &amp; Shipping Cost Pool&rdquo;).</p>
                 </div>
             </section>
 

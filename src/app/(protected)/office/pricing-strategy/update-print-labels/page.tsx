@@ -112,7 +112,8 @@ type Row = {
     stock: string;          // current stock (qty) — for the "in stock only" toggle + Stock range
     lastSoldAt: string;     // ISO date of the last sale; "" = never sold (infinite age) — Days since last sale range
     method: CostCode;
-    costIncl: string;       // ₹ incl GST (resolvedCostPaise × (1+gst)), display + voice math. Read-only.
+    costIncl: string;       // ₹ incl GST of the LANDED cost ((resolvedCostPaise + additional) × (1+gst)) — display + voice math. Read-only.
+    additionalExcl: number; // per-unit shipping/courier surcharge (GST-excl paise) folded into costIncl. 0 = none.
     gst: string;            // GST % (resolved). Read-only.
     margin: string;         // % — drives the "Computed" voice. Editable → InvProduct.marginPercent.
     strategyMargin: string; // % — the matched strategy's applied markup (for the Margin range filter).
@@ -145,8 +146,14 @@ const voiceToDb = (s: SaleSource): "STRATEGY" | "COMPUTED" | "SAVED" => (s === "
 
 function itemToRow(it: PricingItem): Row {
     const gst = it.gstRatePct ?? 0;
+    // Landed cost basis = base resolved cost + per-unit additional (shipping)
+    // cost from the Costing page, both GST-exclusive. Folded in before the
+    // GST gross-up so the Computed voice + profit reflect true cost. The base
+    // stays available separately via `additionalExcl` for the breakdown display.
+    const additionalExcl = it.additionalCostPaise ?? 0;
+    const landedExclPaise = it.resolvedCostPaise != null ? it.resolvedCostPaise + additionalExcl : null;
     const costInclRupees =
-        it.resolvedCostPaise != null ? (it.resolvedCostPaise / 100) * (1 + gst / 100) : null;
+        landedExclPaise != null ? (landedExclPaise / 100) * (1 + gst / 100) : null;
     // Sale Price = the saved sale price ONLY (savedSalePricePaise). Blank when
     // nothing is set yet — never prefilled from another voice, because the
     // printed barcode is derived from this value and must reflect a real decision.
@@ -163,6 +170,7 @@ function itemToRow(it: PricingItem): Row {
         lastSoldAt: isoDaysAgo(it.daysSinceLastSale),
         method: codeFromEnum(it.effectiveCostMethod),
         costIncl: costInclRupees != null ? costInclRupees.toFixed(2) : "",
+        additionalExcl,
         gst: String(gst),
         margin: it.marginPercent != null ? String(it.marginPercent) : "",
         strategyMargin: String(it.appliedMarkupPct ?? 0),
@@ -507,6 +515,14 @@ const ProductRow = memo(function ProductRow({
                         <span className="text-xs font-mono text-muted-foreground">
                             {r.costIncl === "" ? "—" : `₹${r.costIncl}`}
                         </span>
+                        {r.additionalExcl > 0 ? (
+                            <span
+                                className="text-[10px] font-mono text-violet-700 dark:text-violet-300"
+                                title="Includes per-unit shipping/courier cost (GST-excl) from the Costing page"
+                            >
+                                incl +₹{(r.additionalExcl / 100).toFixed(2)} ship
+                            </span>
+                        ) : null}
                         <Select
                             value={r.method}
                             onValueChange={(v) => {
@@ -904,7 +920,7 @@ export default function GeneratePage() {
             const sale = p.salePrice != null ? String(p.salePrice) : "";
             const row: Row = {
                 id, name: p.name, sku: "", barcode: p.barcode || "", brand: "", category: "", group: "", stock: "0", lastSoldAt: "",
-                method: "WA", costIncl: p.costPrice != null ? String(p.costPrice) : "0", gst: "18",
+                method: "WA", costIncl: p.costPrice != null ? String(p.costPrice) : "0", additionalExcl: 0, gst: "18",
                 margin: "25", strategyMargin: "30", strategyPaise: null, salePrice: sale, baseline: sale,
                 mrp: p.mrp != null ? String(p.mrp) : "", saleSource: "SAVED", baseSource: "SAVED", savedAt: "", savedProfit: "",
             };

@@ -67,6 +67,10 @@ model JournalLine {
   branchId       String?
   branch         Branch?      @relation("JournalLineBranch", fields: [branchId], references: [id])
 
+  // Pricing-strategy additional-cost allocations that consume this posted debit.
+  // Read-only relative to the GL — never mutates JournalLine.
+  additionalCostAllocations AdditionalCostAllocation[]
+
   @@index([accountId])
   @@index([accountId, journalEntryId])
   @@index([branchId, accountId])

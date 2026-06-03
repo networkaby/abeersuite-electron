@@ -133,6 +133,15 @@ model OrgDefaults {
   // number[] e.g. [2000, 500, 200, 100, 50, 20, 10, 5, 2, 1].
   cashDenominationsJson Json @default("[2000, 500, 200, 100, 50, 20, 10, 5, 2, 1]")
 
+  // ── Additional-cost (shipping/courier) allocation pool ───────────────────
+  // The AccountGroup whose every POSTED debit feeds the pricing-strategy
+  // "waiting" pool on the Costing page. Admin nominates it (and creates a
+  // ledger per courier/counter under it). Decision-support only — the layer
+  // never posts to the GL. null = feature unconfigured. Admin-chosen, so
+  // bootstrap-seed leaves it untouched (defaults null, survives reseed).
+  shippingPoolGroupId Int?
+  shippingPoolGroup   AccountGroup? @relation("OrgShippingPoolGroup", fields: [shippingPoolGroupId], references: [id], onDelete: SetNull)
+
   updatedAt DateTime @updatedAt
 }
 

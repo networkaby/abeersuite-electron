@@ -4,10 +4,11 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { resolveCostBatch } from "@/modules/pricing-strategy/lib/resolveCost";
-import { loadStrategyPoints, additiveMarginPct, additivePrice } from "@/modules/pricing-strategy/lib/additiveMargin";
+import { loadStrategyPoints, additiveMarginPct, additivePriceWithSurcharge } from "@/modules/pricing-strategy/lib/additiveMargin";
 import { loadLastSaleAgeDays } from "@/modules/pricing-strategy/lib/matchStrategy";
 import { resolveProductTaxBatch } from "@/modules/inventory/lib/gstResolver";
 import { valueStockBatch } from "@/modules/inventory/lib/valuation";
+import { getCurrentAdditionalCostByProduct } from "@/modules/pricing-strategy/lib/costPool";
 
 export interface PricingItem {
     id:               number;
@@ -38,6 +39,10 @@ export interface PricingItem {
     /** Cost resolved under the product's saved costMethod (null = no data). */
     resolvedCostPaise:    number | null;
     resolvedCostFallback: string | null;
+    /** Per-unit additional cost (shipping/courier, GST-exclusive paise) from the
+     *  Costing page allocation layer. Kept SEPARATE from resolvedCostPaise — the
+     *  base cost stays pristine. 0 when nothing allocated. */
+    additionalCostPaise:  number;
     /** Computed sell price (additive-margin engine) — already capped at MRP. */
     computedPricePaise:   number | null;
     /** Pre-cap value from the cost×margin formula. Same as computedPricePaise when no cap fired. */
@@ -128,6 +133,12 @@ export async function GET(req: Request) {
             "LAST_INWARD",
         );
 
+        // Per-product additional cost (shipping/courier) from the Costing page.
+        // Decision-support only — never sourced from the GL.
+        const additionalCostByProduct = await getCurrentAdditionalCostByProduct(
+            products.map((p) => p.id),
+        );
+
         // Effective cost method per product: product.costMethod ?? OrgDefaults.valuationMethod.
         type EffectiveMethod = Exclude<typeof products[number]["costMethod"], null>;
         const effectiveMethodOf = (p: typeof products[number]): EffectiveMethod => p.costMethod ?? orgDefault;
@@ -156,8 +167,10 @@ export async function GET(req: Request) {
             const mc = lastInwardCosts.get(p.id);
             const lastInwardPaise = mc && mc.unitCost > 0 ? Math.round(mc.unitCost * 100) : null;
             // STRATEGY voice = the additive-margin engine (markup on cost).
+            // Additional cost (shipping) folds in BEFORE GST; base cost stays pristine.
             const margin = additiveMarginPct(p, points);
-            const priced = additivePrice(cost.paise, margin, p.mrpPaise, gstRatePct);
+            const additionalCostPaise = additionalCostByProduct.get(p.id) ?? 0;
+            const priced = additivePriceWithSurcharge(cost.paise, additionalCostPaise, margin, p.mrpPaise, gstRatePct);
             return {
                 id:                p.id,
                 sku:               p.sku,
@@ -180,6 +193,7 @@ export async function GET(req: Request) {
                 lastPurchasePaise: lastInwardPaise,
                 resolvedCostPaise:     cost.paise,
                 resolvedCostFallback:  cost.fallback,
+                additionalCostPaise,
                 computedPricePaise:    priced.pricePaise,
                 rawComputedPricePaise: priced.rawPricePaise,
                 cappedAtMrp:           priced.cappedAtMrp,

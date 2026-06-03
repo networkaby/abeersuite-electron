@@ -7,6 +7,7 @@ import { orgDefaultsUpdateSchema } from "@/shared/lib/schemas/orgDefaultsSchemas
 
 const orgDefaultsInclude = {
     defaultGstRate: { select: { id: true, rate: true, label: true } },
+    shippingPoolGroup: { select: { id: true, name: true } },
 } as const;
 
 // GET /api/settings/org-defaults — singleton; auto-creates row if missing.

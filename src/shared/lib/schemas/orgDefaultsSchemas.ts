@@ -34,6 +34,9 @@ export const orgDefaultsUpdateSchema = z.object({
     valuationMethod:            z.enum(VALUATION_METHOD).optional(),
     defaultSaleCreditPeriod:     z.number().int().min(0).nullable().optional(),
     defaultPurchaseCreditPeriod: z.number().int().min(0).nullable().optional(),
+    /// AccountGroup whose POSTED debits feed the pricing-strategy additional-cost
+    /// "waiting" pool (Costing page). Decision-support only — never posts to GL.
+    shippingPoolGroupId:        z.number().int().positive().nullable().optional(),
     defaultCurrencySymbol:      z.string().trim().min(1).max(8).optional(),
     /// Barcode price bands for Update & Print Labels — [{max, add, hint}].
     barcodeBandsJson:           z.array(barcodeBandSchema).max(32).optional(),

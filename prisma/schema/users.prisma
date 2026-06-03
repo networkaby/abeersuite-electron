@@ -64,6 +64,7 @@ model User {
   couponsCreated          Coupon[]            @relation("CouponCreatedBy")
   giftCardsCreated        GiftCard[]          @relation("GiftCardCreatedBy")
   giftCardTxnsCreated     GiftCardTxn[]       @relation("GiftCardTxnCreatedBy")
+  additionalCostAllocationsCreated AdditionalCostAllocation[] @relation("AdditionalCostAllocationCreatedBy")
 }
 
 // ── QuickNote — per-user scratch pad ──────────────────────────────────────

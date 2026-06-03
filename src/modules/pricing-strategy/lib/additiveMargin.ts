@@ -71,3 +71,20 @@ export function additivePrice(
     const capped   = cap != null && raw > cap;
     return { pricePaise: capped ? cap! : raw, rawPricePaise: raw, cappedAtMrp: capped };
 }
+
+/**
+ * `additivePrice` with the pricing-strategy "additional cost" surcharge folded in.
+ * The surcharge (shipping/courier, GST-EXCLUSIVE paise) is added to the base cost
+ * BEFORE the GST gross-up — this is the ONE documented home for that rule. The
+ * base resolved cost is never mutated; callers pass it and the surcharge separately.
+ */
+export function additivePriceWithSurcharge(
+    baseCostPaise: number | null,
+    additionalCostPaise: number,
+    marginPct: number,
+    mrpPaise: number | null = null,
+    gstRatePct: number = 0,
+): { pricePaise: number | null; rawPricePaise: number | null; cappedAtMrp: boolean } {
+    const effective = baseCostPaise == null ? null : baseCostPaise + additionalCostPaise;
+    return additivePrice(effective, marginPct, mrpPaise, gstRatePct);
+}

@@ -15,6 +15,9 @@ model AccountGroup {
   children AccountGroup[] @relation("GroupHierarchy")
   accounts Account[]
 
+  // Pricing-strategy additional-cost pool (OrgDefaults.shippingPoolGroupId).
+  orgShippingPoolDefaults OrgDefaults[] @relation("OrgShippingPoolGroup")
+
   @@index([parentId, sortOrder])
   @@index([type])
 }

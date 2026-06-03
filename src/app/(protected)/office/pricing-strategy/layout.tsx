@@ -1,11 +1,12 @@
 import Link from "next/link";
-import { ChartArea, Calculator, Boxes, AlertTriangle, Printer } from "lucide-react";
+import { ChartArea, Calculator, Boxes, AlertTriangle, Printer, Truck } from "lucide-react";
 import { PathBreadcrumb } from "@/shared/components/PathBreadcrumb";
 
 const NAV = [
     { label: "Overview", icon: ChartArea, href: "/office/pricing-strategy" },
     { label: "Strategies", icon: Calculator, href: "/office/pricing-strategy/strategies" },
     { label: "Items", icon: Boxes, href: "/office/pricing-strategy/items" },
+    { label: "Costing", icon: Truck, href: "/office/pricing-strategy/costing" },
     { label: "Needs attention", icon: AlertTriangle, href: "/office/pricing-strategy/needs-attention" },
     { label: "Update & print labels", icon: Printer, href: "/office/pricing-strategy/update-print-labels" },
 ];
@@ -19,6 +20,7 @@ export default function PricingStrategyLayout({ children }: { children: React.Re
                 labels={{
                     "items": "Items",
                     "strategies": "Strategies",
+                    "costing": "Costing",
                     "needs-attention": "Needs Attention",
                     "update-print-labels": "Update & Print Labels",
                 }}

@@ -65,6 +65,9 @@ type Item = {
     lastPurchasePaise:     number | null;
     resolvedCostPaise:     number | null;
     resolvedCostFallback:  string | null;
+    /** Per-unit additional cost (shipping/courier, GST-excl paise) from the Costing
+     *  page. Separate from resolvedCostPaise — base cost stays pristine. 0 = none. */
+    additionalCostPaise:   number;
     computedPricePaise:    number | null;
     rawComputedPricePaise: number | null;
     cappedAtMrp:           boolean;
@@ -149,8 +152,11 @@ function livePreview(item: Item, e: RowEdit): {
     usedCost:       number | null;
     dirty:          boolean;
 } {
-    // Cost is read-only in this UI (resolver-driven) — no typed override.
-    const cost: number | null = item.resolvedCostPaise;
+    // Cost is read-only in this UI (resolver-driven) — no typed override. The
+    // additional cost (shipping/courier) folds into the cost basis here, but the
+    // base resolvedCostPaise stays pristine (the Cost column shows it untouched).
+    const cost: number | null =
+        item.resolvedCostPaise == null ? null : item.resolvedCostPaise + item.additionalCostPaise;
     // Margin: typed value wins if numeric. Empty input means "no per-item
     // override" → use strategy's effective markup as visible in appliedMarkupPct.
     let markup: number = item.appliedMarkupPct;
@@ -214,7 +220,10 @@ const ItemRow = memo(function ItemRow({ item, edit, saving, onChange, onSave, on
         : item.resolvedCostPaise;
     const lp = livePreview(item, e);
     const effectivePricePaise = item.priceOverridden ? item.effectiveSalePricePaise : lp.pricePaise;
-    const costForProfit = item.resolvedCostPaise;
+    // True (landed) cost basis for profit = base + additional shipping cost.
+    const costForProfit = item.resolvedCostPaise == null
+        ? null
+        : item.resolvedCostPaise + item.additionalCostPaise;
     const profitPaise = effectivePricePaise != null && costForProfit != null
         ? effectivePricePaise - costForProfit
         : null;
@@ -259,6 +268,15 @@ const ItemRow = memo(function ItemRow({ item, edit, saving, onChange, onSave, on
                         {paise(item.resolvedCostPaise)} excl
                     </div>
                 ) : null}
+            </TableCell>
+            <TableCell className="text-right">
+                {item.additionalCostPaise > 0 ? (
+                    <span className="text-xs font-mono text-violet-700 dark:text-violet-300" title="Per-unit shipping/courier cost (GST-excl) from the Costing page">
+                        +{paise(item.additionalCostPaise)}
+                    </span>
+                ) : (
+                    <span className="text-xs text-muted-foreground">—</span>
+                )}
             </TableCell>
             <TableCell className="text-right">
                 <Input
@@ -631,6 +649,7 @@ export default function PricingItemsPage() {
                 <TableHead className="text-xs">Product</TableHead>
                 <TableHead className="text-xs">Cost method</TableHead>
                 <TableHead className="text-right text-xs">Cost (₹ incl GST)</TableHead>
+                <TableHead className="text-right text-xs">Add&apos;l cost (₹ excl)</TableHead>
                 <TableHead className="text-right text-xs">Margin %</TableHead>
                 <TableHead className="text-xs">Margin</TableHead>
                 <TableHead className="text-right text-xs">Computed (₹ incl GST)</TableHead>
@@ -800,9 +819,9 @@ export default function PricingItemsPage() {
                     </TableHeader>
                     <TableBody>
                         {loading ? (
-                            <TableLoadingRow colSpan={10} />
+                            <TableLoadingRow colSpan={11} />
                         ) : normalFiltered.length === 0 ? (
-                            <TableEmptyRow colSpan={10} message={
+                            <TableEmptyRow colSpan={11} message={
                                 items.length > 0 && attentionFiltered.length === items.length
                                     ? "All products need attention — see the banner above."
                                     : "No products match."
@@ -826,8 +845,9 @@ export default function PricingItemsPage() {
 
             <p className="flex-none text-[11px] text-muted-foreground leading-relaxed">
                 <strong>Cost</strong> is resolved per the row&apos;s cost method (opening + purchases) — read-only here; manual entry lives on the <em>Needs Attention</em> page.{" "}
-                <strong>Computed</strong> = (cost + flat) × (1 + markup%) × (1 + GST%), rounded, capped at MRP — shown GST-inclusive, with the exclusive value beneath.{" "}
-                <strong>Profit</strong> = price − cost (both excl-GST, so tax-adjusted).{" "}
+                <strong>Add&apos;l cost</strong> = per-unit shipping/courier surcharge (GST-excl) set on the <em>Costing</em> page; it folds into the cost basis for Computed &amp; Profit but the Cost column stays the pristine base.{" "}
+                <strong>Computed</strong> = (cost + add&apos;l) × (1 + markup%) × (1 + GST%), rounded, capped at MRP — shown GST-inclusive, with the exclusive value beneath.{" "}
+                <strong>Profit</strong> = price − (cost + add&apos;l) (both excl-GST, so tax-adjusted).{" "}
                 <strong>Manual price</strong> sets <code>effectiveSalePricePaise</code> directly and locks the row.
             </p>
 

@@ -53,6 +53,10 @@ const TRANSACTION_TABLES = [
     // Invoice / InvoiceLine / InvoiceAudit / Payment / PaymentAudit tables
     // were dropped on 2026-05-24 (Invoice → InvVoucher consolidation, Layer 5b).
     "InvStockLedger", "InvVoucherExpenseLine", "InvVoucherLine", "InvVoucher", "InvVoucherAudit",
+    // Pricing-strategy additional-cost pool draws — transaction/history data,
+    // not bootstrap config. FKs to JournalLine + InvProduct (both wiped here /
+    // phase 5), so truncate it in phase 1. Bootstrap seeds nothing into it.
+    "additional_cost_allocations",
     "ShopOrderLine", "ShopOrder",
     // Loyalty wallet movement tables (the LoyaltyConfig + LoyaltyEarnRule +
     // LoyaltyMilestone config and the "Loyalty Points Redeemed" GL ledger are NOT

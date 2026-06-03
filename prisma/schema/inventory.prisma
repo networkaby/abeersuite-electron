@@ -287,6 +287,7 @@ model InvProduct {
   couponFreeProducts Coupon[]            @relation("CouponFreeProduct")
   couponBuyProducts  Coupon[]            @relation("CouponBuyProduct")
   couponRules        CouponProductRule[] @relation("CouponRuleProduct")
+  additionalCostAllocations AdditionalCostAllocation[]
 
   @@index([unitId])
   @@index([categoryId])
@@ -422,6 +423,8 @@ model InvVoucher {
   loyaltyMilestoneAwards LoyaltyMilestoneAward[] @relation("InvVoucherLoyaltyMilestoneAwards")
   couponRedemptions      CouponRedemption[]      @relation("InvVoucherCouponRedemptions")
   giftCardTxns           GiftCardTxn[]           @relation("InvVoucherGiftCardTxns")
+  // Pricing-strategy additional-cost allocations sourced from this purchase/GRN.
+  additionalCostAllocations AdditionalCostAllocation[] @relation("AdditionalCostAllocationInvVoucher")
   createdAt    DateTime                @default(now())
   updatedAt    DateTime                @updatedAt
 
@@ -639,4 +642,47 @@ model StrategyPoint {
 
   @@unique([dimension, refKey])
   @@map("strategy_points")
+}
+
+// ── Additional cost allocation (pricing-strategy decision-support layer) ──────
+// Attributes already-booked shipping/courier expense to products for PRICING and
+// sale-margin display — WITHOUT ever posting to the GL. Each row draws a slice
+// from one specific POSTED debit (`sourceJournalLine`, a leaf ledger under
+// OrgDefaults.shippingPoolGroup). A single courier bill is split into:
+//   • ALLOCATION rows → a per-unit surcharge added to a product's pricing cost.
+//   • DISMISSAL rows  → written off as office expense (leaves the waiting list).
+// Per source entry: Σ(amountPaise) consumed; remaining = lineAmount − Σ.
+// Current per-product additional cost is DERIVED (latest-inward ALLOCATION's
+// perUnitPaise) — see getCurrentAdditionalCostByProduct in costPool.ts.
+// amountPaise / perUnitPaise are integer paise (GST-EXCLUSIVE), matching the
+// effectiveSalePricePaise / mrpPaise convention.
+model AdditionalCostAllocation {
+  id                  Int                          @id @default(autoincrement())
+  kind                AdditionalCostAllocationKind
+  // The specific POSTED debit this row consumes. Cascades if the journal line
+  // is ever hard-deleted; soft-cancelled entries are filtered out at read time.
+  sourceJournalLineId Int
+  sourceJournalLine   JournalLine                  @relation(fields: [sourceJournalLineId], references: [id], onDelete: Cascade)
+  amountPaise         Int
+  // ALLOCATION-only fields (null on DISMISSAL):
+  productId           Int?
+  product             InvProduct?                  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  perUnitPaise        Int?
+  quantity            Decimal?                     @db.Decimal(14, 3)
+  // The PURCHASE/GRN voucher this allocation was spread from (the "source
+  // inventory voucher"). Lets the history list group rows into a voucher-like
+  // document. Null for dismissals / ad-hoc rows.
+  sourceInvVoucherId  Int?
+  sourceInvVoucher    InvVoucher?                  @relation("AdditionalCostAllocationInvVoucher", fields: [sourceInvVoucherId], references: [id], onDelete: SetNull)
+  note                String?
+  date                DateTime                     @db.Date
+  createdById         Int
+  createdBy           User                         @relation("AdditionalCostAllocationCreatedBy", fields: [createdById], references: [id])
+  createdAt           DateTime                     @default(now())
+
+  @@index([sourceJournalLineId])
+  @@index([productId, createdAt])
+  @@index([sourceInvVoucherId])
+  @@index([kind])
+  @@map("additional_cost_allocations")
 }

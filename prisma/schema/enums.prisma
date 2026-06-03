@@ -214,6 +214,16 @@ enum EffectiveSalePriceSource {
   SAVED
 }
 
+// Kind of an AdditionalCostAllocation row — how a slice of a shipping/courier
+// pool entry is consumed.
+//   ALLOCATION — attributed to a product as a per-unit additional cost (pricing only).
+//   DISMISSAL  — written off as general office/courier expense, leaves the waiting list.
+// Decision-support only — neither kind posts to the GL.
+enum AdditionalCostAllocationKind {
+  ALLOCATION
+  DISMISSAL
+}
+
 // ── Ecommerce / Order enums ───────────────────────────────────────────────────
 
 enum OrderSource {
