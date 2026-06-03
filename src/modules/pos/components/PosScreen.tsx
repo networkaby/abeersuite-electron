@@ -912,15 +912,39 @@ export default function PosScreen() {
                             hsnSummary:  printLadder.hsn,
                         }),
                     }).catch(() => toast.error("Thermal print failed"));
+                    // Overpayment booked a separate Receipt voucher (RV-…). On a
+                    // relay setup it prints on the SAME thermal printer — the tender
+                    // breakdown lives here, not on the sale slip above.
+                    if (data.receiptVoucherId) {
+                        const rcvTenders: { label: string; amount: number }[] = [];
+                        if (cashNet > 0) rcvTenders.push({ label: "Cash", amount: cashNet });
+                        if (pay.upi > 0) rcvTenders.push({ label: "UPI", amount: pay.upi });
+                        for (const e of extras) {
+                            if (e.amount <= 0) continue;
+                            rcvTenders.push({ label: EXTRA_METHODS.find((m) => m.value === e.method)?.label ?? e.method, amount: e.amount });
+                        }
+                        fetch("http://localhost:9191/print/payment", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                                reference: data.receiptVoucherRef,
+                                date: today,
+                                party: snapshot?.party.name ?? null,
+                                tenders: rcvTenders,
+                                total: collected,
+                                arrear: data.arrearCleared,
+                                advance: data.advanceCredited,
+                                note: `Against ${data.voucherRef}`,
+                            }),
+                        }).catch(() => toast.error("Receipt voucher print failed"));
+                    }
                 } else {
                     window.open(`/receipt/invoice/${data.voucherId}?kind=POS&autoprint=1`, "_blank", "noopener");
-                }
-                // Overpayment booked a separate Receipt voucher (RV-…) for the
-                // extra (cleared old dues / advance). Print it too — it's a
-                // browser print (the thermal relay only renders the sale slip);
-                // /receipt/payment/[id] auto-prints on mount.
-                if (data.receiptVoucherId) {
-                    window.open(`/receipt/payment/${data.receiptVoucherId}`, "_blank", "noopener");
+                    // No relay → print the Receipt voucher in the browser too
+                    // (/receipt/payment/[id] auto-prints on mount).
+                    if (data.receiptVoucherId) {
+                        window.open(`/receipt/payment/${data.receiptVoucherId}`, "_blank", "noopener");
+                    }
                 }
             }
         } catch (e: unknown) {
