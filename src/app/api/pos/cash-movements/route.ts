@@ -39,6 +39,7 @@ export async function GET(req: NextRequest) {
         const items = [
             ...receipts.map((r) => ({
                 id:        `r-${r.id}`,
+                voucherId: r.voucherId ?? null,   // → /receipt/payment/[voucherId] reprint
                 kind:      "IN" as const,
                 reference: r.voucherId != null ? (refById.get(r.voucherId) ?? "—") : "—",
                 date:      r.createdAt.toISOString(),
@@ -50,6 +51,7 @@ export async function GET(req: NextRequest) {
             })),
             ...expenditures.map((e) => ({
                 id:        `e-${e.id}`,
+                voucherId: e.voucherId ?? null,   // → /receipt/payment/[voucherId] reprint
                 kind:      "OUT" as const,
                 reference: e.voucherId != null ? (refById.get(e.voucherId) ?? "—") : "—",
                 date:      e.createdAt.toISOString(),

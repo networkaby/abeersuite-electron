@@ -40,7 +40,7 @@ type ApiResponse = {
 
 // Counter cash movements (Rcv receipts in / Exp expenditures out).
 type CashMove = {
-    id: string; kind: "IN" | "OUT"; reference: string; date: string;
+    id: string; voucherId: number | null; kind: "IN" | "OUT"; reference: string; date: string;
     amount: string; party: string; note: string | null; counter: string; cashier: string;
 };
 
@@ -253,6 +253,7 @@ export function PosSalesRegister() {
                                     <th className="px-4 py-2.5 text-left font-medium">Payment</th>
                                     <th className="px-4 py-2.5 text-right font-medium">Items</th>
                                     <th className="px-4 py-2.5 text-right font-medium">Total</th>
+                                    <th className="px-4 py-2.5 text-right font-medium">Print</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-border">
@@ -288,6 +289,16 @@ export function PosSalesRegister() {
                                         </td>
                                         <td className="px-4 py-2.5 text-right font-semibold font-mono">
                                             ₹{fmt(Number(s.totalAmount))}
+                                        </td>
+                                        <td className="px-4 py-2.5 text-right">
+                                            <button
+                                                type="button"
+                                                title="Print receipt (thermal → browser fallback)"
+                                                onClick={() => window.open(`/receipt/invoice/${s.id}?kind=POS`, "_blank", "noopener")}
+                                                className="inline-flex text-muted-foreground hover:text-foreground"
+                                            >
+                                                <Printer size={14} />
+                                            </button>
                                         </td>
                                     </tr>
                                 ))}
@@ -348,6 +359,7 @@ export function PosSalesRegister() {
                                     <th className="px-4 py-2.5 text-left font-medium">Counter</th>
                                     <th className="px-4 py-2.5 text-left font-medium">Cashier</th>
                                     <th className="px-4 py-2.5 text-right font-medium">Amount</th>
+                                    <th className="px-4 py-2.5 text-right font-medium">Print</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-border">
@@ -370,6 +382,18 @@ export function PosSalesRegister() {
                                         <td className="px-4 py-2.5 text-muted-foreground">{m.cashier}</td>
                                         <td className={`px-4 py-2.5 text-right font-mono font-semibold ${m.kind === "IN" ? "text-green-700" : "text-red-700"}`}>
                                             {m.kind === "IN" ? "+" : "−"}₹{fmt(Number(m.amount))}
+                                        </td>
+                                        <td className="px-4 py-2.5 text-right">
+                                            {m.voucherId != null && (
+                                                <button
+                                                    type="button"
+                                                    title="Print voucher (thermal → browser fallback)"
+                                                    onClick={() => window.open(`/receipt/payment/${m.voucherId}`, "_blank", "noopener")}
+                                                    className="inline-flex text-muted-foreground hover:text-foreground"
+                                                >
+                                                    <Printer size={14} />
+                                                </button>
+                                            )}
                                         </td>
                                     </tr>
                                 ))}
@@ -446,7 +470,7 @@ export function PosSalesRegister() {
                                             <td className="px-4 py-2.5 text-right font-mono">{fmt(r.balance)}</td>
                                             <td className="px-4 py-2.5 text-right">
                                                 {r.printUrl && (
-                                                    <a href={r.printUrl} target="_blank" rel="noopener noreferrer" title="Reprint receipt" className="inline-flex text-muted-foreground hover:text-foreground">
+                                                    <a href={r.printUrl} target="_blank" rel="noopener noreferrer" title="Print (thermal → browser fallback)" className="inline-flex text-muted-foreground hover:text-foreground">
                                                         <Printer size={14} />
                                                     </a>
                                                 )}

@@ -1,6 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { notFound } from "next/navigation";
 import ReceiptButtons from "@/shared/components/ReceiptButtons";
+import ThermalAutoPrint from "@/modules/pos/components/ThermalAutoPrint";
 import ReceiptPreview from "@/shared/components/print/ReceiptPreview";
 import type { ThermalReceiptSample, ThermalTaxBreakdown } from "@/shared/components/print/ThermalReceiptPreview";
 import { getVoucherTemplate, resolvePaperFormat } from "@/shared/lib/print/voucherTemplate";
@@ -217,12 +218,48 @@ export default async function PosReceiptPage({
         hsnSummary: ladder?.hsn ?? null,
     };
 
+    // Relay payload for the thermal bridge (/print/pos) — same shape PosScreen
+    // sends at sale time, so a reprint matches the original slip. Only built for
+    // POS (the ladder surface); SALE invoices print in the browser.
+    const posRelayPayload = isSaleKind ? {
+        invoiceNumber:  voucher.reference,
+        date:           voucher.date.toISOString(),
+        customerName:   partyName,
+        customerGstin:  partyGstin,
+        template,
+        lines: voucher.lines.map((l, i) => {
+            const lad = ladder?.lines[i];
+            const qty = Number(l.quantity);
+            const rate = Number(l.rate);
+            return {
+                name:      lineName(l),
+                qty,
+                unitPrice: rate,
+                amount:    qty * rate,
+                mrp:       lad?.mrp != null && qty ? lad.mrp / qty : null,
+                barcode:   lad?.barcode != null && qty ? lad.barcode / qty : null,
+            };
+        }),
+        subtotal:       Number(voucher.subtotal),
+        discountPct:    Number(voucher.discountPct ?? 0),
+        discountAmount: Number(voucher.discountAmt ?? 0),
+        tax:            taxAmt,
+        total:          Number(voucher.totalAmount),
+        grossAtTag:     ladder?.barcodeTotal ?? null,
+        discounts:      ladder ? ladder.discounts.map((d) => ({ label: d.label, amount: d.amount })) : [],
+        charges:        ladder ? ladder.charges.map((c) => ({ label: c.label, amount: c.amount })) : [],
+        savings:        ladder && ladder.savingsTotal > 0 ? { amount: ladder.savingsTotal, pct: ladder.savingsPct } : null,
+        hsnSummary:     ladder?.hsn ?? null,
+    } : null;
+
     return (
         <ReceiptPreview
             format={format}
             template={template}
             sample={sample}
-            toolbar={<ReceiptButtons />}
+            toolbar={posRelayPayload
+                ? <ThermalAutoPrint endpoint="/print/pos" payload={posRelayPayload} />
+                : <ReceiptButtons />}
             docTitle={`Invoice ${voucher.reference}`}
         />
     );

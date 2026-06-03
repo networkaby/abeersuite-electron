@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { notFound } from "next/navigation";
-import ReceiptButtons from "@/shared/components/ReceiptButtons";
+import ThermalAutoPrint from "@/modules/pos/components/ThermalAutoPrint";
 import { getOrganisation } from "@/shared/lib/org/getOrganisation";
 import { formatDateTime } from "@/shared/lib/format/formatDate";
 
@@ -51,6 +51,20 @@ export default async function PaymentReceiptPage({ params }: { params: Promise<{
     const modeAccount  = isReceipt ? debitLine?.account.name : creditLine?.account.name;
     const fmtAmt = (n: number) => n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+    // Relay payload for the thermal bridge (/print/payment). Tender breakdown =
+    // the money-side ledgers; the narration carries any arrear/advance note.
+    const relayPayload = {
+        reference:  voucher.reference,
+        date:       voucher.date.toISOString(),
+        party:      counterparty,
+        tenders:    tenderLines.map((l) => ({ label: l.account.name, amount: Number(l.amount) })),
+        total,
+        note:       voucher.narration ?? null,
+        title:      isReceipt ? "PAYMENT RECEIPT" : "PAYMENT VOUCHER",
+        partyLabel: isReceipt ? "Received from" : "Paid for",
+        totalLabel: isReceipt ? "Received" : "Paid",
+    };
+
     return (
         <html>
             <head>
@@ -72,7 +86,7 @@ export default async function PaymentReceiptPage({ params }: { params: Promise<{
         `}</style>
             </head>
             <body>
-                <ReceiptButtons />
+                <ThermalAutoPrint endpoint="/print/payment" payload={relayPayload} />
 
                 <div className="center">
                     <div className="bold large">{org.brandName}</div>
