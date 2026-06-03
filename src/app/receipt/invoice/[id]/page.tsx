@@ -107,7 +107,12 @@ export default async function PosReceiptPage({
     // stays internal; the bill pools every reduction so a multi-item receipt
     // doesn't reveal it. Built only when there's actual ladder data, so plain
     // invoices and non-sale vouchers render exactly as before.
-    const isSaleKind = kind === "POS" || kind === "SALE";
+    //
+    // POS ONLY: the price-hiding ladder is a counter-receipt device. A formal
+    // SALE invoice (often B2B, with the buyer's GSTIN) must show the REAL
+    // per-line price + tax for the buyer's ITC — so SALE renders the normal
+    // invoice, not the ladder.
+    const isSaleKind = kind === "POS";
     const tierDiscount = Number(voucher.discountAmt ?? 0);
     let loyaltyDiscount = 0, couponDiscount = 0;
     let loyaltyLabel: string | undefined, couponLabel: string | undefined;

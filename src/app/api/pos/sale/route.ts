@@ -410,11 +410,14 @@ export async function POST(req: Request) {
         giftCardId = gc.id;
     }
 
-    // Cash/UPI/etc. payments + the gift-card tender must equal the bill total.
+    // Cash/UPI/etc. payments + the gift-card tender must at least COVER the bill.
+    // Overpayment is allowed — the excess posts as a customer advance (Cr their
+    // ledger; see the signed AR tender below). Underpayment is rejected: a
+    // part-paid / on-credit sale must go through /sale, not the counter.
     const paymentTotal = body.payments.reduce((s, p) => s + p.amount, 0) + giftCardRedeem;
-    if (Math.abs(paymentTotal - totalAmount) > 0.01) {
+    if (paymentTotal < totalAmount - 0.01) {
         return NextResponse.json(
-            { error: `Payment total (₹${paymentTotal.toFixed(2)}) does not match invoice total (₹${totalAmount.toFixed(2)}).` },
+            { error: `Payment total (₹${paymentTotal.toFixed(2)}) is less than the invoice total (₹${totalAmount.toFixed(2)}). POS sales must be paid in full — use /sale for a credit sale.` },
             { status: 422 },
         );
     }
@@ -487,7 +490,12 @@ export async function POST(req: Request) {
                 ...(giftCardRedeem > 0.005 && giftCardLiabilityAccountId != null
                     ? [{ accountId: giftCardLiabilityAccountId, amount: giftCardRedeem, method: "OTHER" as const, reference: `Gift card ${body.giftCardCode}` }]
                     : []),
-                ...(arRemainder > 0.005
+                // Party-ledger leg for any imbalance between collected and the bill:
+                //   • arRemainder > 0 → UNDERPAY (on credit): Dr customer AR.
+                //   • arRemainder < 0 → OVERPAY (advance): Cr customer AR — the
+                //     excess sits in their favour (settles overdue first, then advance).
+                // postInvVoucherToGl flips Dr/Cr by the sign so the JE stays balanced.
+                ...(Math.abs(arRemainder) > 0.005
                     ? [{ accountId: customerAccount.id, amount: arRemainder, method: null as null, reference: null as null }]
                     : []),
             ];

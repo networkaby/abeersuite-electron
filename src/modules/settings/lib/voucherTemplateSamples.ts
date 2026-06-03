@@ -38,15 +38,25 @@ export function buildSampleForKind(kind: VoucherTemplateKind): ThermalReceiptSam
     };
 
     switch (kind) {
-        case "POS":
         case "SALE":
-            // Demonstrates the customer-facing "Today's discount" price ladder:
-            // per-line MRP/barcode + pooled discount + savings hero + HSN summary.
+            // Formal TAX INVOICE — REAL per-line prices + tax. NOT the price-hiding
+            // ladder (that's POS-only): a SALE is often B2B, so the buyer needs the
+            // true line value + GSTIN for input-tax-credit.
             return {
-                reference: kind === "POS" ? "POS/26-27/0042" : "SV/26-27/0017",
-                date: today,
-                partyName: kind === "SALE" ? "Acme Traders" : "Walk-in", partyPhone: null,
-                partyGstin: kind === "SALE" ? "18ABCDE1234F1Z5" : null,
+                reference: "SV/26-27/0017", date: today,
+                partyName: "Acme Traders", partyPhone: null,
+                partyGstin: "18ABCDE1234F1Z5",
+                lines: productLines,
+                subtotal: 2694, taxAmount: 484.92, total: 3178.92,
+                notes: null,
+                taxBreakdown: intraBreakdown,
+            };
+        case "POS":
+            // Customer COUNTER RECEIPT — the price-hiding "Counter discount" ladder:
+            // per-line MRP/tag + pooled discounts + savings hero + HSN summary.
+            return {
+                reference: "POS/26-27/0042", date: today,
+                partyName: "Walk-in", partyPhone: null, partyGstin: null,
                 lines: [
                     { description: "Logitech B100 USB Mouse", quantity: 2, amount: 700,  mrp: 800,  barcode: 700 },
                     { description: "HP Laptop 14s Charger",   quantity: 1, amount: 1600, mrp: 1800, barcode: 1600 },

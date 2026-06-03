@@ -230,20 +230,20 @@ function ReceiptBody({ template, sample }: BodyProps) {
                     {sample.discounts.rows.map((d, i) => (
                         <div key={i} className="row"><span>{d.label}</span><span>&minus; {fmtINR(d.amount)}</span></div>
                     ))}
-                    {template.showTaxSummary && sample.hsnSummary && sample.hsnSummary.length > 0 && (() => {
-                        // Narrow slip: a single combined GST line (the per-HSN table
-                        // is an A4-only detail). IGST when inter-state, else CGST+SGST.
-                        const inter = sample.taxBreakdown?.kind === "INTER";
-                        const tax = sample.hsnSummary.reduce((s, h) => s + h.cgst + h.sgst, 0);
-                        return tax > 0.005 ? (
-                            <div className="row small"><span>{inter ? "GST (IGST)" : "GST (CGST+SGST)"}</span><span>{fmtINR(tax)}</span></div>
-                        ) : null;
-                    })()}
                     {(sample.discounts.charges ?? []).map((c, i) => (
                         <div key={`c${i}`} className="row"><span>{c.label}</span><span>{c.amount < 0 ? "−" : "+"} {fmtINR(Math.abs(c.amount))}</span></div>
                     ))}
                     <div className="hr" />
                     <div className="row total"><span>Total</span><span>{fmtINR(sample.total ?? sample.discounts.grossAtTag - sample.discounts.total)}</span></div>
+                    {/* GST is INCLUDED in the inclusive line amounts above — shown as a
+                        note on the total, not a column row (so the math reads correctly). */}
+                    {template.showTaxSummary && sample.hsnSummary && sample.hsnSummary.length > 0 && (() => {
+                        const inter = sample.taxBreakdown?.kind === "INTER";
+                        const tax = sample.hsnSummary.reduce((s, h) => s + h.cgst + h.sgst, 0);
+                        return tax > 0.005 ? (
+                            <div className="row small"><span>incl. {inter ? "GST (IGST)" : "GST (CGST+SGST)"}</span><span>{fmtINR(tax)}</span></div>
+                        ) : null;
+                    })()}
                     {sample.discounts.savingsTotal > 0 && (
                         <div className="row total" style={{ marginTop: 2 }}>
                             <span>You saved</span>

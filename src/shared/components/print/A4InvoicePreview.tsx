@@ -325,6 +325,15 @@ function InvoiceBody({ template, sample }: InvoiceBodyProps) {
                             <span>Total</span>
                             <span>{fmtINR(sample.total ?? (sample.discounts.grossAtTag - sample.discounts.total))}</span>
                         </div>
+                        {/* GST is included in the inclusive amounts above — note, not a row.
+                            The HSN/SAC table below gives the full rate-wise breakup. */}
+                        {template.showTaxSummary && sample.hsnSummary && sample.hsnSummary.length > 0 && (() => {
+                            const inter = sample.taxBreakdown?.kind === "INTER";
+                            const tax = sample.hsnSummary.reduce((s, h) => s + h.cgst + h.sgst, 0);
+                            return tax > 0.005 ? (
+                                <div className="trow"><span className="muted">incl. {inter ? "GST (IGST)" : "GST (CGST+SGST)"}</span><span>{fmtINR(tax)}</span></div>
+                            ) : null;
+                        })()}
                         {sample.discounts.savingsTotal > 0 && (
                             <div className="trow grand" style={{ color: "#047857" }}>
                                 <span>You saved</span>

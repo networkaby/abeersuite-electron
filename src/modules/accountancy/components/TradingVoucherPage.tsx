@@ -1607,7 +1607,11 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                 toast.success(copy.successDraftMsg);
             }
             if (andPrint) {
-                window.open(`/receipt/invoice/${savedId}?autoprint=1`, "_blank", "noopener");
+                // Pass the voucher's own kind so the receipt uses the CORRECT
+                // template (Purchase / Sale Return / Estimate …) — without it the
+                // route defaults to SALE and mis-renders every non-sale voucher
+                // (wrong header, and the POS/SALE customer ladder fires wrongly).
+                window.open(`/receipt/invoice/${savedId}?kind=${kind}&autoprint=1`, "_blank", "noopener");
             }
 
             if (isEditing) {

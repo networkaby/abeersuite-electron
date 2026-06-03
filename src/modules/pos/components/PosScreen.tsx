@@ -765,14 +765,14 @@ export default function PosScreen() {
                 setSubmitting(false);
                 return;
             }
-            // POS sale route now requires payments to TOTAL = invoice total.
-            // The on-credit portion (`onCredit`) breaks this invariant — for
-            // now, only allow full-paid POS sales. Mixed-pay sales should go
-            // through the TradingVoucherPage (credit-mode) instead.
+            // POS must NOT be left part-paid (that's a credit sale → use /sale).
+            // OVERPAYMENT is allowed: the excess is recorded as a customer advance
+            // (server Cr's their ledger; postInvVoucherToGl keeps the JE balanced).
             const collectedFromPayments = paymentsList.reduce((s, p) => s + p.amount, 0);
-            // Cash/UPI must cover the bill MINUS the gift-card tender (server adds it back).
-            if (Math.abs(collectedFromPayments - payableTotal) > 0.01) {
-                toast.error("POS sale must be fully paid. Use 'Save & Print' on /sale for partial / credit sales.");
+            // Cash/UPI/etc. must at least cover the bill MINUS the gift-card tender
+            // (the server adds the gift card back). Anything over → advance.
+            if (collectedFromPayments < payableTotal - 0.01) {
+                toast.error("POS sale can't be left part-paid. Collect the full amount (extra becomes advance), or use 'Save & Print' on /sale for a credit sale.");
                 setSubmitting(false);
                 return;
             }
