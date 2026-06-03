@@ -1916,15 +1916,12 @@ export default function PosScreen() {
                                             <Plus size={14} /> Add payment line
                                         </Button>
 
-                                        <ReceiptIndianRupee size={16} /> {submitting
-                                            ? "Saving…"
-                                            : advanceTaken > 0 ? `Confirm · ${fmtINR(total)} + ${fmtINR(advanceTaken)} adv.`
-                                                : arrearPaid > 0 ? `Confirm · ${fmtINR(total)} + ${fmtINR(arrearPaid)} arrear`
-                                                    : onCredit > 0 ? `Confirm · ${fmtINR(collected)} + ${fmtINR(onCredit)} credit`
-                                                        : `Confirm · ${fmtINR(total)}`}
+                                        <ReceiptIndianRupee size={16} /> {submitting ? "Saving…" : `Confirm · ${fmtINR(total)}`}
                                         <span className="ml-2 rounded border border-primary-foreground/30 px-1.5 py-px text-[10px] opacity-80">↵</span>
                                     </div>
-                                    {/* Arrear / advance breakdown — when collected > total or customer has dues */}
+                                    {/* POS sales are exact-pay. Show existing dues for context and point
+                                        the cashier at "Receive payment" for collecting dues or advances
+                                        (that flow posts a proper GST Receipt Voucher). */}
                                     {(overpaid > 0 || balanceDue > 0) && (
                                         <div className="space-y-1 rounded-md border border-border bg-muted/30 p-2.5 text-xs">
                                             {balanceDue > 0 && (
@@ -1933,18 +1930,11 @@ export default function PosScreen() {
                                                     <span className="font-medium text-amber-600">{fmtINR(balanceDue)}</span>
                                                 </div>
                                             )}
-                                            {arrearPaid > 0 && (
-                                                <div className="flex items-center justify-between">
-                                                    <span className="text-muted-foreground">Arrear cleared this visit</span>
-                                                    <span className="font-medium text-emerald-600">− {fmtINR(arrearPaid)}</span>
-                                                </div>
-                                            )}
-                                            {advanceTaken > 0 && (
-                                                <div className="flex items-center justify-between">
-                                                    <span className="text-muted-foreground">Advance from customer</span>
-                                                    <span className="font-medium text-emerald-700">+ {fmtINR(advanceTaken)}</span>
-                                                </div>
-                                            )}
+                                            <p className="text-[11px] leading-snug text-muted-foreground">
+                                                {overpaid > 0
+                                                    ? <>Collecting extra? POS sales are paid in full — take the <span className="font-medium text-foreground">advance</span> via <span className="font-medium text-foreground">Receive payment</span> (issues a Receipt Voucher).</>
+                                                    : <>Collect dues or take an advance via <span className="font-medium text-foreground">Receive payment</span>.</>}
+                                            </p>
                                         </div>
                                     )}
 
