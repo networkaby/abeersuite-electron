@@ -31,6 +31,7 @@ jobs:
       - name: Install PostgreSQL 17 client
         run: |
           set -euo pipefail
+          date +%s > "$RUNNER_TEMP/run_start" || true   # for duration in the Dropbox log
           # apt accepts the ASCII-armored key directly — avoids `gpg --dearmor`
           # which fails under sudo on the runner (cannot open /dev/tty).
           sudo install -d /usr/share/keyrings
@@ -78,3 +79,44 @@ jobs:
             --data-binary @backup.dump)
           echo "upload HTTP $HTTP"; cat resp.txt || true; echo
           test "$HTTP" -lt 400
+
+      - name: Append run to Dropbox log
+        if: always()
+        env:
+          STATUS: ${{ job.status }}
+        run: |
+          # Best-effort history line in Dropbox. Never fail the job over the log
+          # (no `set -e`), and always exit 0.
+          set -uo pipefail
+          ACCESS=$(curl -fsS https://api.dropbox.com/oauth2/token \
+            -d grant_type=refresh_token \
+            -d refresh_token="$DROPBOX_REFRESH_TOKEN" \
+            -u "$DROPBOX_APP_KEY:$DROPBOX_APP_SECRET" | jq -r .access_token) || true
+          if [ -z "${ACCESS:-}" ] || [ "$ACCESS" = "null" ]; then echo "log: token mint failed, skipping"; exit 0; fi
+
+          # Normalise folder: "" → app-folder root; otherwise ensure a leading "/".
+          FOLDER="${DROPBOX_FOLDER:-}"
+          if [ -n "$FOLDER" ] && [ "${FOLDER#/}" = "$FOLDER" ]; then FOLDER="/$FOLDER"; fi
+          LOG="${FOLDER%/}/backup-log.txt"
+
+          SIZE="-"; [ -f backup.dump ] && SIZE=$(ls -lh backup.dump | awk '{print $5}')
+          DUR="-"; START=$(cat "$RUNNER_TEMP/run_start" 2>/dev/null || echo "")
+          [ -n "$START" ] && { S=$(( $(date +%s) - START )); DUR=$(printf '%dm%02ds' $((S/60)) $((S%60))); }
+          LINE="$(date -u '+%Y-%m-%d %H:%M:%SZ')  BACKUP   ${FILE_NAME}   size=${SIZE}   dur=${DUR}   ${STATUS}"
+
+          # Download the current log (start fresh if it doesn't exist yet), append, re-upload.
+          HTTP=$(curl -sS -o prev-log.txt -w "%{http_code}" -X POST \
+            https://content.dropboxapi.com/2/files/download \
+            -H "Authorization: Bearer $ACCESS" \
+            -H "Dropbox-API-Arg: {\"path\":\"$LOG\"}" || echo 000)
+          [ "$HTTP" = "200" ] || : > prev-log.txt
+          printf '%s\n' "$LINE" >> prev-log.txt
+
+          curl -sS -o /dev/null -X POST \
+            https://content.dropboxapi.com/2/files/upload \
+            -H "Authorization: Bearer $ACCESS" \
+            -H "Dropbox-API-Arg: {\"path\":\"$LOG\",\"mode\":\"overwrite\",\"mute\":true}" \
+            -H "Content-Type: application/octet-stream" \
+            --data-binary @prev-log.txt || true
+          echo "log: appended -> $LINE"
+          exit 0
