@@ -44,8 +44,13 @@ jobs:
       - name: Run pg_dump
         run: |
           set -euo pipefail
+          # --schema=public dumps only the application data. Supabase's own
+          # schemas (auth, storage, extensions, graphql, ...) are owned by a
+          # superuser and cannot be restored as the "postgres" role — including
+          # them produces hundreds of harmless-but-fatal errors on restore.
           /usr/lib/postgresql/17/bin/pg_dump \
             --format=custom --no-owner --no-privileges \
+            --schema=public \
             --dbname "$DIRECT_DATABASE_URL" \
             -f backup.dump
           ls -lh backup.dump

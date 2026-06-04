@@ -64,8 +64,12 @@ jobs:
           # -j runs the data-load and index/constraint phases over several
           # parallel connections — the big win against the high round-trip
           # latency between the runner and the ap-south-1 database.
+          # --schema=public restores only the application data, skipping
+          # Supabase's superuser-owned system schemas (which the "postgres" role
+          # cannot recreate). Works whether the dump is public-only or full.
           /usr/lib/postgresql/17/bin/pg_restore \
             --clean --if-exists --no-owner --no-privileges \
+            --schema=public \
             --jobs=4 \
             --dbname "$DIRECT_DATABASE_URL" \
             restore.dump
