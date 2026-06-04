@@ -2,12 +2,13 @@
 // sources (inventory · GL · JE). Every register, the Day Book, and the
 // per-row action menus import from here so a URL fix lands in one place.
 //
-// The `editFormUrl` helper for inventory is re-exported from
-// `src/modules/inventory/components/VoucherActionsMenu.tsx` (since it owns
-// the inventory `EDIT_FORM_URLS` map). GL gets its own map here. JE is a
-// single canonical path.
+// The `editFormUrl` helper for inventory is imported from the pure
+// `src/modules/inventory/lib/voucherFormUrls.ts` module (NOT the "use client"
+// VoucherActionsMenu) so this file stays server-safe — it runs inside the
+// account-ledger report route. GL gets its own map here. JE is a single
+// canonical path.
 
-import { editFormUrl } from "@/modules/inventory/components/VoucherActionsMenu";
+import { editFormUrl } from "@/modules/inventory/lib/voucherFormUrls";
 
 export type VoucherSource = "inv" | "gl" | "je";
 
