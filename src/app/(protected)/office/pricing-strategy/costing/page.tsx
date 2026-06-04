@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import axios from "axios";
 import { toast } from "sonner";
-import { Truck, RefreshCw, Settings, AlertTriangle, PackagePlus, XCircle, ChevronRight, RotateCcw, ChevronUp, ChevronDown, ChevronsUpDown, Coins, Clock, ListChecks, Search, type LucideIcon } from "lucide-react";
+import { RefreshCw, Settings, AlertTriangle, PackagePlus, XCircle, ChevronRight, RotateCcw, ChevronUp, ChevronDown, ChevronsUpDown, Clock, ListChecks, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -17,9 +17,14 @@ import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
 import { TableEmptyRow, TableLoadingRow } from "@/shared/components/DataTableStates";
-import { TableScrollArea } from "@/shared/components/TableScrollArea";
 import { AllocateVoucherDialog } from "@/modules/pricing-strategy/components/AllocateVoucherDialog";
 import { AllocationDetailDialog, type AllocationDoc } from "@/modules/pricing-strategy/components/AllocationDetailDialog";
+
+// Sticky-header scroll frame: a plain overflow-auto div (NOT Radix ScrollArea —
+// the shadcn Table's own [data-slot=table-container] overflow breaks `sticky`
+// thead). Override its overflow-x so the column header stays put, body scrolls.
+const SCROLL_FRAME = "overflow-auto rounded-md border [&>[data-slot=table-container]]:overflow-x-visible";
+const STICKY_HEAD = "sticky top-0 z-20 bg-muted [&_th]:bg-muted [&_th]:shadow-[inset_0_-1px_0_var(--border)]";
 
 // ── Types (mirror the API DTOs) ───────────────────────────────────────────────
 interface PoolEntry {
@@ -350,51 +355,33 @@ export default function CostingPage() {
 
     return (
         <div className="flex h-full flex-col gap-3 px-2 pb-2">
-            {/* Header */}
-            <div className="flex flex-none flex-wrap items-start justify-between gap-3 pt-1">
-                <div className="flex items-start gap-3">
-                    <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                        <Truck className="size-5" aria-hidden />
-                    </span>
-                    <div>
-                        <h2 className="text-xl font-semibold tracking-tight">Costing</h2>
-                        {/* <p className="text-xs text-muted-foreground mt-0.5 max-w-2xl">
-                            Attribute already-booked shipping/courier expense to products as a per-unit cost —
-                            used for pricing &amp; margin only. Never posts to the books; the accounts stay untouched.
-                        </p> */}
-                    </div>
-                </div>
-                <Button type="button" variant="outline" size="sm" onClick={loadAll} disabled={loading}>
+            {/* Compact summary strip (title lives in the breadcrumb) */}
+            <div className="flex flex-none flex-wrap items-center gap-2 pt-1">
+                {pool?.configured ? (
+                    <>
+                        <StatBadge label="Pool" value={rupee(pool.poolTotalPaise)} />
+                        <StatBadge label="Allocated" value={rupee(pool.allocatedTotalPaise)} tone="violet" />
+                        <StatBadge label="Dismissed" value={rupee(pool.dismissedTotalPaise)} tone="muted" />
+                        <StatBadge label="Waiting" value={rupee(pool.waitingTotalPaise)} tone="amber" />
+                        <span className="truncate max-w-[260px] text-xs text-muted-foreground" title={pool.ledgers.map((l) => l.name).join(", ")}>
+                            · {pool.groupName ?? "—"}{pool.ledgers.length ? ` (${pool.ledgers.length} ledger${pool.ledgers.length === 1 ? "" : "s"})` : ""}
+                        </span>
+                    </>
+                ) : <span className="text-xs text-muted-foreground">Additional shipping/courier cost — pricing only, never posted to the books.</span>}
+                <Button type="button" variant="outline" size="sm" className="ml-auto h-8" onClick={loadAll} disabled={loading}>
                     <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} /> Reload
                 </Button>
             </div>
 
             {/* Unconfigured notice */}
             {!loading && pool && !pool.configured ? (
-                <div className="flex flex-none items-center gap-2 rounded-sm border border-amber-300 bg-amber-50/60 px-3 py-2 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-200">
+                <div className="flex flex-none items-center gap-2 rounded-md border border-amber-300 bg-amber-50/60 px-3 py-2 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-200">
                     <AlertTriangle className="size-4 shrink-0 text-amber-600" aria-hidden />
                     <span>No pool group configured. Pick an account group in</span>
                     <Link href="/office/settings/org-defaults" className="inline-flex items-center gap-1 font-medium underline">
                         <Settings className="size-3.5" /> Settings → Org Defaults
                     </Link>
                     <span>to start allocating courier costs.</span>
-                </div>
-            ) : null}
-
-            {/* Summary cards */}
-            {pool && pool.configured ? (
-                <div className="flex flex-none flex-wrap items-stretch gap-3">
-                    <SummaryStat label="Pool total" value={rupee(pool.poolTotalPaise)} icon={Coins} />
-                    <SummaryStat label="Allocated to products" value={rupee(pool.allocatedTotalPaise)} tone="violet" icon={PackagePlus} />
-                    <SummaryStat label="Dismissed (office)" value={rupee(pool.dismissedTotalPaise)} tone="muted" icon={XCircle} />
-                    <SummaryStat label="Waiting" value={rupee(pool.waitingTotalPaise)} tone="amber" icon={Clock} hint={`${pool.entries.length} entr${pool.entries.length === 1 ? "y" : "ies"}`} />
-                    <div className="flex min-w-[200px] flex-1 flex-col justify-center gap-0.5 rounded-md border bg-card px-3.5 py-2.5 text-xs">
-                        <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Pool group</span>
-                        <span className="font-medium text-foreground truncate" title={pool.groupName ?? ""}>{pool.groupName ?? "—"}</span>
-                        <span className="text-muted-foreground truncate" title={pool.ledgers.map((l) => l.name).join(", ")}>
-                            {pool.ledgers.length ? `${pool.ledgers.length} ledger${pool.ledgers.length === 1 ? "" : "s"}: ${pool.ledgers.map((l) => l.name).join(", ")}` : "no ledgers yet"}
-                        </span>
-                    </div>
                 </div>
             ) : null}
 
@@ -409,9 +396,9 @@ export default function CostingPage() {
                         </span>
                     ) : null}
                 </h3>
-                <TableScrollArea className="max-h-[34vh]">
+                <div className={`max-h-[34vh] ${SCROLL_FRAME}`}>
                     <Table>
-                        <TableHeader className="bg-muted sticky top-0 z-10 [&_th]:bg-muted">
+                        <TableHeader className={STICKY_HEAD}>
                             <TableRow>
                                 <TableHead className="text-xs">Date</TableHead>
                                 <TableHead className="text-xs">Ledger</TableHead>
@@ -460,7 +447,7 @@ export default function CostingPage() {
                             )}
                         </TableBody>
                     </Table>
-                </TableScrollArea>
+                </div>
             </div>
 
             {/* Allocation documents — voucher-like list, click a row to open its items */}
@@ -506,9 +493,9 @@ export default function CostingPage() {
                         ) : null}
                     </div>
                 </div>
-                <TableScrollArea>
+                <div className={`min-h-0 flex-1 ${SCROLL_FRAME}`}>
                     <Table>
-                        <TableHeader className="bg-muted sticky top-0 z-10 [&_th]:bg-muted">
+                        <TableHeader className={STICKY_HEAD}>
                             <TableRow>
                                 <SortTh label="Effective" k="date" />
                                 <SortTh label="Type" k="kind" />
@@ -542,7 +529,7 @@ export default function CostingPage() {
                             )}
                         </TableBody>
                     </Table>
-                </TableScrollArea>
+                </div>
                 {/* <p className="flex-none text-[11px] text-muted-foreground leading-relaxed mt-1">
                     Each row is one allocation/dismissal, listed like a voucher with its <strong>payment voucher</strong> (the
                     courier debit) and <strong>source inventory voucher</strong> (the purchase/GRN). <strong>Click a row</strong> to
@@ -614,28 +601,17 @@ export default function CostingPage() {
     );
 }
 
-function SummaryStat({ label, value, tone, icon: Icon, hint }: {
-    label: string; value: string; tone?: "violet" | "amber" | "muted";
-    icon?: LucideIcon; hint?: string;
-}) {
+// Compact inline stat pill for the summary strip.
+function StatBadge({ label, value, tone }: { label: string; value: string; tone?: "violet" | "amber" | "muted" }) {
     const valueClass =
         tone === "violet" ? "text-violet-700 dark:text-violet-300"
             : tone === "amber" ? "text-amber-700 dark:text-amber-300"
                 : tone === "muted" ? "text-muted-foreground"
                     : "text-foreground";
-    const accent =
-        tone === "violet" ? "bg-violet-500"
-            : tone === "amber" ? "bg-amber-500"
-                : tone === "muted" ? "bg-muted-foreground/40"
-                    : "bg-primary/50";
     return (
-        <div className="relative flex min-w-[150px] flex-1 flex-col gap-0.5 overflow-hidden rounded-md border bg-card px-3.5 py-2.5 shadow-sm">
-            <span className={`absolute inset-y-0 left-0 w-1 ${accent}`} aria-hidden />
-            <span className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                {Icon ? <Icon className="size-3.5" /> : null}{label}
-            </span>
-            <span className={`text-xl font-mono font-semibold leading-tight ${valueClass}`}>{value}</span>
-            {hint ? <span className="text-[10px] text-muted-foreground">{hint}</span> : null}
-        </div>
+        <span className="inline-flex items-center gap-1.5 rounded-md border bg-card px-2 py-1 text-xs">
+            <span className="text-muted-foreground">{label}</span>
+            <span className={`font-mono font-semibold ${valueClass}`}>{value}</span>
+        </span>
     );
 }
