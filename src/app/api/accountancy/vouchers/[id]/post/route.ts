@@ -65,7 +65,10 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
             });
 
             return tx.voucher.findUnique({ where: { id: voucher.id } });
-        });
+        // Per-line account.update + mirror-JE over the Supabase pooler can
+        // exceed the default 5s interactive-tx ceiling (P2028) on multi-line
+        // vouchers — match the 30s headroom used elsewhere.
+        }, { timeout: 30_000, maxWait: 10_000 });
 
         return NextResponse.json(posted);
     } catch (e) {

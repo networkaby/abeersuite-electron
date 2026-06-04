@@ -6,6 +6,10 @@ import { buildGroupTree, type GroupNode } from "@/modules/accountancy/lib/groupT
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
+// Heavy aggregation: two full-range GL aggregations (period start + end). Give
+// Vercel headroom past the default 10s function limit so large datasets don't 504.
+export const maxDuration = 60;
+
 // GET /api/accountancy/reports/fund-flow?from=YYYY-MM-DD&to=YYYY-MM-DD
 // Sources & application of funds, plus working-capital movement between
 // the start and end of the period. Mirrors Tally's MIS Fund Flow.

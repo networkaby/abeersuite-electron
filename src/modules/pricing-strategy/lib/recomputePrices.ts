@@ -136,7 +136,10 @@ export async function recomputePricesForProducts(
                 result.failed += 1;
             }
         }
-    });
+    // Per-product update loop is bounded-small on the post path (only the
+    // voucher's products) but unbounded on the bulk recompute path — over the
+    // Supabase pooler a large batch overruns the default 5s tx ceiling (P2028).
+    }, { timeout: 60_000, maxWait: 15_000 });
 
     return result;
 }

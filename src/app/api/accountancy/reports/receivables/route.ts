@@ -5,6 +5,10 @@ import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 
+// Heavy aggregation: account-hierarchy walk + unbounded open-bills scan per
+// debtor. Give Vercel headroom past the default 10s function limit.
+export const maxDuration = 60;
+
 // GET /api/accountancy/reports/receivables?asOf=YYYY-MM-DD
 // Aggregates open bills under "Sundry Debtors" group by party,
 // with ageing buckets (0-30 / 30-60 / 60-90 / 90+).

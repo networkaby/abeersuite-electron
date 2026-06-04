@@ -10,6 +10,11 @@ import { buildGroupTree, type GroupNode } from "@/modules/accountancy/lib/groupT
 import { getClosingStockValue } from "@/modules/accountancy/lib/closingStock";
 import { VALUATION_METHODS, type ValuationMethod } from "@/modules/inventory/lib/valuation";
 
+// Heavy aggregation: full-GL closing balances + a whole-inventory stock
+// valuation walk. Give Vercel headroom past the default 10s function limit so
+// large datasets don't 504.
+export const maxDuration = 60;
+
 // GET /api/accountancy/reports/balance-sheet?asOf=YYYY-MM-DD&valuationMethod=...
 //
 // `valuationMethod` overrides OrgDefaults.valuationMethod for this render.

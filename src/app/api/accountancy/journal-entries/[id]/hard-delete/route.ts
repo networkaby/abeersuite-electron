@@ -68,7 +68,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             await tx.journalEntry.delete({ where: { id: entry.id } });
 
             return created;
-        });
+        // Per-line reversal over the Supabase pooler can exceed the default
+        // 5s interactive-tx ceiling (P2028).
+        }, { timeout: 30_000, maxWait: 10_000 });
 
         return NextResponse.json({ ok: true, auditId: audit.id, reversedLedger: needsLedgerReversal });
     } catch (e) {

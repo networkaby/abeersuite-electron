@@ -40,7 +40,9 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                 where: { id: voucher.id },
                 data:  restoreFields(),
             });
-        });
+        // Per-line balance re-apply over the Supabase pooler can exceed the
+        // default 5s interactive-tx ceiling (P2028) — match 30s.
+        }, { timeout: 30_000, maxWait: 10_000 });
 
         const restored = await prisma.voucher.findUnique({ where: { id: Number(id) } });
         return NextResponse.json(restored);

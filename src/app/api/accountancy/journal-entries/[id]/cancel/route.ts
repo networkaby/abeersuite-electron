@@ -92,7 +92,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                     cancelledById: user!.id,
                 },
             });
-        });
+        // Per-line reversal + counter-JE over the Supabase pooler can exceed
+        // the default 5s interactive-tx ceiling (P2028).
+        }, { timeout: 30_000, maxWait: 10_000 });
 
         const cancelled = await prisma.journalEntry.findUnique({ where: { id: Number(id) } });
         return NextResponse.json(cancelled);

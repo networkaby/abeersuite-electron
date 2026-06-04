@@ -92,6 +92,43 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     }
 
     try {
+        // Resolve GST place-of-supply BEFORE opening the interactive transaction.
+        // These are read-only lookups (org singleton + party state) that don't
+        // depend on anything the tx writes, so they don't need to be inside it.
+        // Critically, getOrganisation() runs on the GLOBAL prisma pool — calling
+        // it inside the interactive tx grabs a SECOND pooled connection (pgbouncer
+        // contention) and adds round-trips to the tx's time budget, which is what
+        // helped push posting past the 5s ceiling (P2028). Hoisting shrinks the tx.
+        const isTradingVoucher = ["SALE", "PURCHASE", "SALE_RETURN", "PURCHASE_RETURN"].includes(voucher.type);
+        let sellerStateCode = "";
+        let buyerStateCode  = "";
+        if (isTradingVoucher) {
+            const org = await getOrganisation();
+            sellerStateCode = (voucher.branch?.gstStateCode || org.gstStateCode || "").trim();
+            buyerStateCode = (voucher.placeOfSupply ?? "").trim();
+            if (!buyerStateCode) {
+                // Live lookup against party — covers legacy rows where
+                // placeOfSupply was never set.
+                let party: { gstin: string | null; gstStateCode: string | null; shippingStateCode: string | null } | null = null;
+                if (voucher.partyType === "customer" && voucher.partyId) {
+                    party = await prisma.person.findUnique({
+                        where: { id: voucher.partyId },
+                        select: { gstin: true, gstStateCode: true, shippingStateCode: true },
+                    });
+                } else if (voucher.partyType === "company" && voucher.partyId) {
+                    party = await prisma.company.findUnique({
+                        where: { id: voucher.partyId },
+                        select: { gstin: true, gstStateCode: true, shippingStateCode: true },
+                    });
+                }
+                buyerStateCode = resolveBuyerStateCode(
+                    party,
+                    sellerStateCode,
+                    voucher.deliveryMode ?? "COUNTER",
+                );
+            }
+        }
+
         const { result, notes } = await prisma.$transaction(async (tx) => {
             // ── 1. Stock ledger + cached InvProduct.stock ─────────────────
             // Commitments (SO / PO) skip stock entirely. Trading vouchers
@@ -256,36 +293,9 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
             // Purchase Order) intentionally don't touch GL on POST.
             let journalEntryId: number | null = null;
             const postNotes: string[] = [];
-            if (["SALE", "PURCHASE", "SALE_RETURN", "PURCHASE_RETURN"].includes(voucher.type)) {
-                // Resolve seller / buyer state for the CGST/SGST vs IGST split.
-                // Prefer the placeOfSupply that was stamped at save time
-                // (immutable audit trail); otherwise resolve live from party +
-                // delivery mode + branch as a defensive fallback.
-                const org = await getOrganisation();
-                const sellerStateCode = (voucher.branch?.gstStateCode || org.gstStateCode || "").trim();
-                let buyerStateCode = (voucher.placeOfSupply ?? "").trim();
-                if (!buyerStateCode) {
-                    // Live lookup against party — covers legacy rows where
-                    // placeOfSupply was never set.
-                    let party: { gstin: string | null; gstStateCode: string | null; shippingStateCode: string | null } | null = null;
-                    if (voucher.partyType === "customer" && voucher.partyId) {
-                        party = await tx.person.findUnique({
-                            where: { id: voucher.partyId },
-                            select: { gstin: true, gstStateCode: true, shippingStateCode: true },
-                        });
-                    } else if (voucher.partyType === "company" && voucher.partyId) {
-                        party = await tx.company.findUnique({
-                            where: { id: voucher.partyId },
-                            select: { gstin: true, gstStateCode: true, shippingStateCode: true },
-                        });
-                    }
-                    buyerStateCode = resolveBuyerStateCode(
-                        party,
-                        sellerStateCode,
-                        voucher.deliveryMode ?? "COUNTER",
-                    );
-                }
-
+            if (isTradingVoucher) {
+                // sellerStateCode / buyerStateCode resolved before the tx opened
+                // (see hoisted block above) — the CGST/SGST vs IGST split inputs.
                 const out = await postInvVoucherToGl(tx, {
                     voucherId: voucher.id,
                     voucher: { ...voucher, sellerStateCode, buyerStateCode },

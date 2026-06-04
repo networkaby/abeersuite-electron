@@ -48,7 +48,9 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                 where: { id: Number(id) },
                 data: { status: "POSTED", postedAt: new Date() },
             });
-        });
+        // Per-line account.update over the Supabase pooler can exceed the
+        // default 5s interactive-tx ceiling (P2028) on multi-line entries.
+        }, { timeout: 30_000, maxWait: 10_000 });
 
         const posted = await prisma.journalEntry.findUnique({
             where: { id: Number(id) },

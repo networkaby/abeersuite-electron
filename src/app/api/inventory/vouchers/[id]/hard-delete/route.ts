@@ -87,7 +87,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
             await tx.invVoucher.delete({ where: { id: voucher.id } });
             return created;
-        });
+        // Reverse stock + GL over the Supabase pooler can exceed the default
+        // 5s interactive-tx ceiling (P2028) — match the 30s headroom used by
+        // the post/PATCH routes.
+        }, { timeout: 30_000, maxWait: 10_000 });
 
         return NextResponse.json({ ok: true, auditId: audit.id, reversedLedger: needsReversal });
     } catch (e) {

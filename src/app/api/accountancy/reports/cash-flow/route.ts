@@ -6,6 +6,10 @@ import { aggregateRange, loadNormalBalanceMap } from "@/modules/accountancy/lib/
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
+// Heavy aggregation: loads every JE touching Cash/Bank then walks lines. Give
+// Vercel headroom past the default 10s function limit so large datasets don't 504.
+export const maxDuration = 60;
+
 // GET /api/accountancy/reports/cash-flow?from=YYYY-MM-DD&to=YYYY-MM-DD
 // Aggregates cash inflows / outflows by the counter-side ledger of every
 // journal entry that touches a Cash-in-Hand or Bank Accounts ledger.

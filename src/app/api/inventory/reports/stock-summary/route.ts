@@ -7,6 +7,11 @@ import {
     type ValuationMethod,
 } from "@/modules/inventory/lib/valuation";
 
+// Heavy aggregation: all active products + a per-product inward-lot valuation
+// walk. Give Vercel headroom past the default 10s function limit so large
+// inventories don't 504.
+export const maxDuration = 60;
+
 // GET /api/inventory/reports/stock-summary?method=LAST_INWARD|WEIGHTED_AVG|SIMPLE_AVG|FIFO|MONTHLY_AVG&branchId=<id>
 //
 // Returns one row per active product with:

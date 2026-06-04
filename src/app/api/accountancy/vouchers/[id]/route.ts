@@ -183,7 +183,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                     totalAmount:    newTotalAmount,
                 },
             });
-        });
+        // Posted edit = reverse + per-new-line findUnique + re-apply + JE/voucher
+        // header updates; over the Supabase pooler this can exceed the default
+        // 5s interactive-tx ceiling (P2028).
+        }, { timeout: 30_000, maxWait: 10_000 });
 
         const updated = await prisma.voucher.findUnique({
             where: { id: voucherId },

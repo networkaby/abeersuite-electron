@@ -7,6 +7,11 @@ import { computeTradingStockAdjustment } from "@/modules/accountancy/lib/trading
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
+// Heavy aggregation: full-range GL groupBy + whole-inventory stock valuation.
+// Give Vercel headroom past the default 10s function limit so large datasets
+// don't 504.
+export const maxDuration = 60;
+
 // GET /api/accountancy/reports/profit-loss?from=YYYY-MM-DD&to=YYYY-MM-DD
 export async function GET(req: Request) {
     const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);

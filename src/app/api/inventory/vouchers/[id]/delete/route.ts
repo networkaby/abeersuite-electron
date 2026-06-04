@@ -123,7 +123,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 where: { id: Number(id) },
                 data: deleteFields(user!.id, data.reason),
             });
-        });
+        // Reverse stock + GL over the Supabase pooler can exceed the default
+        // 5s interactive-tx ceiling (P2028) — match the 30s headroom used by
+        // the post/PATCH routes.
+        }, { timeout: 30_000, maxWait: 10_000 });
 
         if (isPosted(voucher)) {
             const touchedProductIds = voucher.lines.map((l) => l.productId);

@@ -132,7 +132,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                     },
                 },
             });
-        });
+        // Posted edit = reverse + per-new-line findUnique + re-apply; over the
+        // Supabase pooler this can exceed the default 5s interactive-tx
+        // ceiling (P2028).
+        }, { timeout: 30_000, maxWait: 10_000 });
         return NextResponse.json(updated);
     } catch (e) {
         return handleApiError(e, "Failed to update journal entry");

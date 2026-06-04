@@ -7,6 +7,11 @@ import { parsePagination } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
+// Heavy aggregation: unbounded voucher pre-filter scan + paginated JE join.
+// Give Vercel headroom past the default 10s function limit so large datasets
+// don't 504.
+export const maxDuration = 60;
+
 // Surfaced kinds in the Day Book — the union of inventory-voucher origins
 // (Sale/POS/Purchase/Estimate/Sale Return/Purchase Return), GL voucher
 // types, and stand-alone JEs. POS is split out from Sale (post-2026-05-24)

@@ -78,7 +78,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 where: { id: voucher.id },
                 data:  cancelFields(user!.id, data.reason),
             });
-        });
+        // Per-line balance reversal + counter-JE over the Supabase pooler can
+        // exceed the default 5s interactive-tx ceiling (P2028) — match 30s.
+        }, { timeout: 30_000, maxWait: 10_000 });
 
         const cancelled = await prisma.voucher.findUnique({ where: { id: Number(id) } });
         return NextResponse.json(cancelled);

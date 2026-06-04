@@ -165,7 +165,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 where: { id: voucher.id },
                 data:  cancelFields(userId, reason.trim()),
             });
-        });
+        // Reverse stock (per-line) + GL reversal (per-JE-line account.update)
+        // is a long serial round-trip chain; over the Supabase pooler it
+        // overruns the default 5s interactive-tx ceiling (P2028). Match the
+        // 30s headroom used by the post/PATCH routes.
+        }, { timeout: 30_000, maxWait: 10_000 });
 
         const touchedProductIds = voucher.lines.map((l) => l.productId);
         await recomputePricesForProducts(touchedProductIds).catch((err: unknown) => {

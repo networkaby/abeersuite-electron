@@ -6,6 +6,10 @@ import { buildGroupTree } from "@/modules/accountancy/lib/groupTree";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
+// Heavy aggregation: full-range GL groupBy across every account. Give Vercel
+// headroom past the default 10s function limit so large datasets don't 504.
+export const maxDuration = 60;
+
 // GET /api/accountancy/reports/trial-balance?from=YYYY-MM-DD&to=YYYY-MM-DD
 //   (asOf is supported for backwards-compat: if no from/to, default range = FY → asOf)
 export async function GET(req: Request) {
