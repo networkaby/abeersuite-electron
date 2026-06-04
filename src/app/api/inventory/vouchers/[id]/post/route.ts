@@ -388,7 +388,12 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                 },
             });
             return { result: updated, notes: postNotes };
-        });
+        // Stock-ledger walk + GL post + N account-balance updates are all
+        // sequential round-trips; over the Supabase pooler this overruns the
+        // default 5s interactive-transaction ceiling (P2028) even though the
+        // work itself finishes in ~5s. Match the sibling PATCH route's 30s
+        // headroom (see vouchers/[id]/route.ts).
+        }, { timeout: 30_000, maxWait: 10_000 });
 
         // After-commit pricing recompute. Failure must NOT roll back the
         // voucher — log + Sentry-capture and continue.
