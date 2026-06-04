@@ -180,7 +180,9 @@
       "Bash(cd \"C:/Users/User/.claude/projects/D--our-own-website-service-mgmt-experiment/memory/\"; rm tally_module_status.md && echo \"deleted tally_module_status.md\"; ls -1 | grep -E \"tally|accountancy|seeds_arch\")",
       "Bash(echo \"exit=$?\")",
       "Bash(PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION=\"pnpm prisma db push --force-reset && pnpm prisma db seed is good\" pnpm prisma db push --accept-data-loss)",
-      "Bash(grep -E \"\\\\.\\(tsx?|jsx?\\)$\")"
+      "Bash(grep -E \"\\\\.\\(tsx?|jsx?\\)$\")",
+      "Bash(Get-ChildItem -Path \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\docs\" -Recurse -Filter \"*.md\")",
+      "Bash(Sort-Object FullName)"
     ]
   }
 }

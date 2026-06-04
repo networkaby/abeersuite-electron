@@ -578,7 +578,7 @@ const ProductRow = memo(function ProductRow({
 
             {show("sale") ? (
                 <TableCell className="p-1 text-right align-top">
-                    {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
+                    { }
                     <div className={voiceClass(r.saleSource === "SAVED")} onClick={() => onUpdate(r.id, { saleSource: "SAVED" })}>
                         {r.saleSource === "SAVED" ? SELLING_TAG : null}
                         <Input
@@ -766,7 +766,7 @@ export default function GeneratePage() {
         } catch { /* corrupt blob → ignore, fall back to defaults */ }
         setHydrated(true);
         // run once
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+         
     }, []);
     useEffect(() => {
         if (!hydrated) return;

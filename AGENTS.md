@@ -53,7 +53,9 @@ All seed scripts live in `prisma/seeds/`. Read [docs/seeds.md](docs/seeds.md) be
 
 When `hard-clean.ts` needs to remove rows from a new dummy-only table, extend its `TRANSACTION_TABLES` / `INVENTORY_MASTERS` / `DUMMY_CONFIG_TABLES` arrays in the same commit.
 
-**Hard-clean contract:** `hard-clean.ts` must NEVER delete data that `bootstrap-seed.ts` seeds. If a master table moves from a dummy seed into bootstrap (e.g. `InvUnit`, `InvBrand`), remove it from `INVENTORY_MASTERS` / `DUMMY_CONFIG_TABLES` in the same commit — bootstrap data must survive a hard-clean unchanged.
+**Hard-clean contract:** `hard-clean.ts` must NEVER delete data that `bootstrap-seed.ts` seeds. If a master table moves into bootstrap (e.g. `InvUnit`, `InvWarrantyTerm` — universal masters), remove it from `INVENTORY_MASTERS` / `DUMMY_CONFIG_TABLES` in the same commit — bootstrap data must survive a hard-clean unchanged. Conversely, if a master moves OUT of bootstrap into the trade-specific helper (`helper-inventory-masters.ts` — e.g. `InvBrand`, `InvCategory`, `InvProductGroup`), ADD it to `INVENTORY_MASTERS` so hard-clean wipes it (helper data is re-runnable, not bootstrap-guaranteed).
+
+**Universal vs trade-specific masters:** `bootstrap-seed.ts` seeds only masters common to every trade (units, GST slabs, warranty terms, chart of accounts, RBAC, workflow). Trade-specific reference data (brands, categories, HSN/GST product groups) lives in `helper-inventory-masters.ts` and is run separately via `pnpm seed:helper-inventory`. It is real production data, not demo — but a different trade would ship its own helper.
 
 ## 6. Status lives in one place
 

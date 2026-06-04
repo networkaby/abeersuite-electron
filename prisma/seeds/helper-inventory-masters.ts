@@ -1,23 +1,26 @@
-// DUMMY DATA — canonical Product Group tree for the CCTV / computer /
-// printer retail business. Two levels (parent → sub-group), each leaf
-// carries an HSN code + GST rate so the cascade resolves automatically
-// when InvProduct.gstRateId / hsnCode are left null.
+// HELPER SEED — trade-specific inventory reference data.
 //
-// Run: pnpm seed:dummy-groups   (idempotent via upsert-by-name)
+// These masters are SPECIFIC to a computer / CCTV / printer / networking
+// retail business. They are deliberately kept OUT of bootstrap-seed.ts
+// (which only seeds data universal to every trade — units, GST slabs,
+// warranty terms, chart of accounts, RBAC, workflow). A different trade
+// would ship its own helper instead of this one.
 //
-// Mental model:
-//   Group is the **tax / HSN spine** — products inherit GST rate + HSN
-//   code by walking up the parent chain to the highest-set value.
-//   Category (use-case axis) and Tags (collections) are separate
-//   classifiers and don't appear here. See AGENTS.md and the in-thread
-//   discussion for the wider mental model.
+// Seeds three masters, all idempotent (upsert-by-name):
+//   1. InvBrand        — ~60 brands (computers, storage, CCTV, networking…)
+//   2. InvCategory     — 7 use-case categories (Laptops, Desktops, …)
+//   3. InvProductGroup — HSN/GST tax-spine tree (parent → leaf, each leaf
+//                        carries an HSN code + GST slab so products inherit
+//                        tax classification by walking up the parent chain)
 //
-// Naming rule: every Group name is globally unique (the schema enforces
-// @@unique([name])). Sub-groups use descriptive names rather than short
-// labels like "Cameras" to avoid collisions across top-level groups.
+// Run: pnpm seed:helper-inventory   (after `pnpm prisma db seed`)
 //
-// Removed by `pnpm seed:hard-clean` (InvProductGroup is in the
-// INVENTORY_MASTERS list).
+// Removed by `pnpm seed:hard-clean` — all three live in the hard-clean
+// INVENTORY_MASTERS list, so a clean drops them and you re-run this helper.
+//
+// Sources:
+//   • Brands extracted from the real product catalog + popular Indian-market brands.
+//   • Group tree (HSN/GST) curated for this trade — see the mental model below.
 
 import { PrismaClient } from "../../src/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
@@ -32,11 +35,52 @@ const pool = new Pool({ connectionString: rawUrl, ssl: { rejectUnauthorized: fal
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
+// ════════════════════════════════════════════════════════════════════════════
+// 1 — Brands
+// ════════════════════════════════════════════════════════════════════════════
+const BRANDS = [
+    // Computers & Laptops
+    "Acer", "AMD", "Apple", "Asus", "Dell", "Gigabyte", "HP", "HCL",
+    "Intel", "Lenovo", "LG", "MSI", "Samsung", "Sony",
+    // Storage
+    "Corsair", "Crucial", "Kingston", "SanDisk", "Seagate", "Toshiba",
+    "Transcend", "WD",
+    // Printers & Consumables
+    "Brother", "Canon", "Epson", "Kyocera", "Lexmark", "Panasonic",
+    "Ricoh", "TVS", "Xerox",
+    // CCTV & Security
+    "Annke", "Axis", "Bosch", "CP Plus", "Dahua", "Ezviz", "Godrej",
+    "Hanwha", "Hikvision", "Honeywell", "Reolink", "Zicom",
+    // Networking
+    "Cisco", "D-Link", "Grandstream", "Netgear", "Tenda", "TP-Link", "Ubiquiti",
+    // Peripherals & Accessories
+    "APC", "Beetel", "Belkin", "Boat", "Hola", "iBall", "Intex",
+    "Logitech", "Luminous", "Microtek", "Nvidia", "Stanley", "Zebronics",
+];
+
+// ════════════════════════════════════════════════════════════════════════════
+// 2 — Categories (use-case axis — separate from the HSN/GST group spine)
+// ════════════════════════════════════════════════════════════════════════════
+const CATEGORIES = [
+    "Laptops", "Desktops", "Printers", "CCTV & Security",
+    "Components", "Monitors", "Networking",
+];
+
+// ════════════════════════════════════════════════════════════════════════════
+// 3 — Product Group tree (HSN/GST spine)
+// ════════════════════════════════════════════════════════════════════════════
+// Two levels (parent → sub-group). Each leaf carries an HSN code + GST rate so
+// the cascade resolves automatically when InvProduct.gstRateId / hsnCode are
+// left null — products inherit GST rate + HSN by walking up the parent chain
+// to the highest-set value. Category (use-case axis) and Tags (collections) are
+// separate classifiers and don't appear here.
+//
+// Naming rule: every Group name is globally unique (the schema enforces
+// @@unique([name])). Sub-groups use descriptive names rather than short labels
+// like "Cameras" to avoid collisions across top-level groups.
+
 type GstSlab = "0" | "5" | "12" | "18" | "28";
 
-/// Group tree spec. `hsn` and `gst` are optional — when omitted the
-/// resolver walks up the parent chain at read time, so a top-level group
-/// can set the default and leaves only override exceptions.
 type GroupSpec = {
     name: string;
     hsn?: string;
@@ -167,8 +211,8 @@ const TREE: GroupSpec[] = [
     },
 ];
 
-// Cache GstRate lookups by slab. Bootstrap seeds labels "GST 12%", "GST 18%",
-// "Nil (0%)" — see prisma/seeds/bootstrap-seed.ts section 8.
+// Bootstrap seeds labels "GST 12%", "GST 18%", "Nil (0%)" etc. — see
+// prisma/seeds/bootstrap-seed.ts section 8 (GST Rate master).
 const gstLabelBySlab: Record<GstSlab, string> = {
     "0":  "Nil (0%)",
     "5":  "GST 5%",
@@ -188,8 +232,8 @@ async function resolveGstRateId(slab: GstSlab | undefined): Promise<number | nul
     return row.id;
 }
 
-/** Upsert one node, returning its id. Sets parentId, gstRateId, hsnCode. */
-async function upsertNode(spec: GroupSpec, parentId: number | null, indent: string): Promise<number> {
+/** Upsert one group node, returning its id. Sets parentId, gstRateId, hsnCode. */
+async function upsertGroupNode(spec: GroupSpec, parentId: number | null, indent: string): Promise<number> {
     const gstRateId = await resolveGstRateId(spec.gst);
     const data = {
         name: spec.name,
@@ -210,31 +254,59 @@ async function upsertNode(spec: GroupSpec, parentId: number | null, indent: stri
     return created.id;
 }
 
-async function seedTree(nodes: GroupSpec[], parentId: number | null, depth: number): Promise<number> {
+async function seedGroupTree(nodes: GroupSpec[], parentId: number | null, depth: number): Promise<number> {
     let count = 0;
     for (const node of nodes) {
-        const id = await upsertNode(node, parentId, "  ".repeat(depth + 1));
+        const id = await upsertGroupNode(node, parentId, "  ".repeat(depth + 1));
         count++;
         if (node.children?.length) {
-            count += await seedTree(node.children, id, depth + 1);
+            count += await seedGroupTree(node.children, id, depth + 1);
         }
     }
     return count;
 }
 
 async function main(): Promise<void> {
-    console.log("Seeding Product Group tree (HSN/GST spine)…\n");
-    const total = await seedTree(TREE, null, 0);
-    console.log(`\nDone. ${total} groups upserted.`);
-    const counts = await prisma.invProductGroup.aggregate({ _count: true });
-    console.log(`Total InvProductGroup rows in DB: ${counts._count}.`);
-    await prisma.$disconnect();
-    await pool.end();
+    console.log("\n━━━ HELPER SEED — trade-specific inventory masters ━━━━━━━━━━━━━━━━━");
+
+    // ── Brands ──────────────────────────────────────────────────────────
+    const uniqueBrands = [...new Set(BRANDS)];
+    let brandsCreated = 0;
+    for (const name of uniqueBrands) {
+        const existing = await prisma.invBrand.findFirst({ where: { name } });
+        if (existing) {
+            await prisma.invBrand.update({ where: { id: existing.id }, data: { isActive: true } });
+        } else {
+            await prisma.invBrand.create({ data: { name, isActive: true } });
+            brandsCreated++;
+        }
+    }
+    console.log(`  ✓ Brands: ${uniqueBrands.length} total (${brandsCreated} new)`);
+
+    // ── Categories ──────────────────────────────────────────────────────
+    let catsCreated = 0;
+    for (const name of CATEGORIES) {
+        const existing = await prisma.invCategory.findFirst({ where: { name, parentId: null } });
+        if (existing) {
+            await prisma.invCategory.update({ where: { id: existing.id }, data: { isActive: true } });
+        } else {
+            await prisma.invCategory.create({ data: { name, isActive: true } });
+            catsCreated++;
+        }
+    }
+    console.log(`  ✓ Categories: ${CATEGORIES.length} total (${catsCreated} new)`);
+
+    // ── Product groups (HSN/GST spine) ──────────────────────────────────
+    console.log("  Seeding Product Group tree (HSN/GST spine)…");
+    const groupTotal = await seedGroupTree(TREE, null, 0);
+    console.log(`  ✓ Product groups: ${groupTotal} upserted`);
+
+    console.log("━━━ Done ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
 }
 
-main().catch(async (err) => {
-    console.error(err);
-    await prisma.$disconnect();
-    await pool.end();
-    process.exit(1);
-});
+main()
+    .catch((err) => { console.error(err); process.exit(1); })
+    .finally(async () => {
+        await prisma.$disconnect();
+        await pool.end();
+    });

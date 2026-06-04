@@ -212,12 +212,12 @@ prisma/
 ├─ schema/                           Split Prisma schema (see §6)
 ├─ prisma.config.ts                  Datasource + seed command
 └─ seeds/
-   ├─ bootstrap-seed.ts              Production seed (RBAC, statuses, COA, etc.)
+   ├─ bootstrap-seed.ts              Production seed (RBAC, statuses, COA, units, warranty, etc.)
+   ├─ helper-inventory-masters.ts    Trade-specific reference data (brands, categories, HSN/GST groups)
    ├─ dummy-*.ts                     Manual demo seeds
-   ├─ helper-brands.ts               Real reference data
    ├─ hard-clean.ts                  Reset to bootstrap state
-   ├─ backfill-multi-branch.ts
    ├─ purge-vouchers.ts
+   ├─ recompute-balances.ts          Recompute Account.balance drift
    └─ data/                          Fixture data
 ```
 

@@ -24,11 +24,20 @@
 //   • DB constraints: Phone/Email XOR ownership CHECK
 //   • Inventory Unit master: 13 common units (PCS, NOS, BOX, SET, MTR, ROLL,
 //     PKT, PAIR, KG, BAG, UNIT, REAM, DAY)
-//   • Inventory Brand master: ~60 brands (computers, CCTV, networking, etc.)
+//   • Inventory Warranty Term master: ~10 common terms (No Warranty, 7-day
+//     DOA, 6-month, 1/2/3/5-year) — universal across trades, so kept here.
 //
-// What this does NOT seed (run dummy-* seeds for those):
+// Universal-vs-trade-specific rule: bootstrap seeds only masters common to
+// EVERY trade (units, GST slabs, warranty terms, chart of accounts, RBAC,
+// workflow). Trade-specific masters (brands, categories, product groups /
+// HSN-GST spine) live in helper-inventory-masters.ts — a different trade
+// would ship its own helper instead.
+//
+// What this does NOT seed:
+//   • Brands + Categories + Product groups (HSN/GST) → helper-inventory-masters.ts
+//     (trade-specific reference data — run `pnpm seed:helper-inventory`)
 //   • Test users (tech, front, des) → dummy-users.ts
-//   • Demo products + InvCategory/etc → dummy-shop.ts
+//   • Demo products → dummy-shop.ts
 //   • InvAttributeMaster — seeded by dummy-shop.ts (global attrs + category-specific).
 //     Production users populate attribute masters via Configure → Attribute masters.
 //   • Test customers + companies → dummy-customers.ts
@@ -1152,36 +1161,36 @@ async function main() {
     const defaultUnit = await prisma.invUnit.findUnique({ where: { code: "UNIT" } });
     console.log(`      ✓ ${INV_UNITS.length} inventory units seeded\n`);
 
-    // ── Section 10: Inventory Brand master ─────────────────────────────
-    console.log("[10/11] Inventory Brand master");
-    const BRANDS = [
-        // Computers & Laptops
-        "Acer", "AMD", "Apple", "Asus", "Dell", "Gigabyte", "HP", "HCL",
-        "Intel", "Lenovo", "LG", "MSI", "Samsung", "Sony",
-        // Storage
-        "Corsair", "Crucial", "Kingston", "SanDisk", "Seagate", "Toshiba",
-        "Transcend", "WD",
-        // Printers & Consumables
-        "Brother", "Canon", "Epson", "Kyocera", "Lexmark", "Panasonic",
-        "Ricoh", "TVS", "Xerox",
-        // CCTV & Security
-        "Annke", "Axis", "Bosch", "CP Plus", "Dahua", "Ezviz", "Godrej",
-        "Hanwha", "Hikvision", "Honeywell", "Reolink", "Zicom",
-        // Networking
-        "Cisco", "D-Link", "Grandstream", "Netgear", "Tenda", "TP-Link", "Ubiquiti",
-        // Peripherals & Accessories
-        "APC", "Beetel", "Belkin", "Boat", "Hola", "iBall", "Intex",
-        "Logitech", "Luminous", "Microtek", "Nvidia", "Stanley", "Zebronics",
+    // ── Section 10: Inventory Warranty Term master ─────────────────────
+    // Universal across trades (every business sells things with some warranty
+    // window), so it lives in bootstrap — unlike brands / categories / product
+    // groups, which are trade-specific and live in helper-inventory-masters.ts.
+    // Duration is in days (0 = no fixed duration). InvWarrantyTerm.name is NOT
+    // unique in the schema, so we idempotently match on name.
+    console.log("[10/11] Inventory Warranty Term master");
+    const WARRANTY_TERMS = [
+        { name: "No Warranty",        durationDays: 0,    description: "Sold as-is — no warranty coverage." },
+        { name: "7-Day Replacement",  durationDays: 7,    description: "DOA / dead-on-arrival replacement window." },
+        { name: "15-Day Replacement", durationDays: 15,   description: "Short replacement window." },
+        { name: "1 Month",            durationDays: 30,   description: "30-day warranty." },
+        { name: "3 Months",           durationDays: 90,   description: "90-day warranty." },
+        { name: "6 Months",           durationDays: 180,  description: "6-month warranty." },
+        { name: "1 Year",             durationDays: 365,  description: "12-month manufacturer / seller warranty." },
+        { name: "2 Years",            durationDays: 730,  description: "24-month warranty." },
+        { name: "3 Years",            durationDays: 1095, description: "36-month warranty." },
+        { name: "5 Years",            durationDays: 1825, description: "60-month warranty." },
     ];
-    const uniqueBrands = [...new Set(BRANDS)];
-    for (const name of uniqueBrands) {
-        await prisma.invBrand.upsert({
-            where:  { name },
-            update: { isActive: true },
-            create: { name, isActive: true },
-        });
+    let warrantyCreated = 0;
+    for (const w of WARRANTY_TERMS) {
+        const existing = await prisma.invWarrantyTerm.findFirst({ where: { name: w.name } });
+        if (existing) {
+            await prisma.invWarrantyTerm.update({ where: { id: existing.id }, data: { durationDays: w.durationDays, description: w.description, isActive: true } });
+        } else {
+            await prisma.invWarrantyTerm.create({ data: { name: w.name, durationDays: w.durationDays, description: w.description, isActive: true } });
+            warrantyCreated++;
+        }
     }
-    console.log(`      ✓ ${uniqueBrands.length} brands seeded\n`);
+    console.log(`      ✓ ${WARRANTY_TERMS.length} warranty terms seeded (${warrantyCreated} new)\n`);
 
     // ── Section 11: Org Defaults singleton ────────────────────────────
     console.log("[11/11] Org Defaults (singleton, id=1)");

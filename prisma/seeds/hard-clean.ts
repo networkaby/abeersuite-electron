@@ -7,8 +7,8 @@
 //   • All non-admin Users (only admin@networkservice.in survives)
 //   • All Persons / Companies / Phones / Emails (test customers)
 //   • All party-linked Account rows (customer/company personal ledgers)
-//   • All InvProduct catalog + InvCategory/Group/WarrantyTerm
-//     (none of these are bootstrap data — they come from dummy-shop)
+//   • All InvProduct catalog + InvCategory/Group/Brand (trade-specific
+//     reference data — seeded by helper-inventory-masters.ts, not bootstrap)
 //   • InvAttributeMaster rows (category-specific attrs seeded by dummy-shop)
 //   • ServiceCenter, ShopCoupon, PortalCredentials
 //
@@ -22,8 +22,8 @@
 //     (user-set config — survives clean)
 //   • InvNamingConfig singleton (user-tuned name/slug template — survives;
 //     `pnpm prisma db seed` re-runs to restore defaults if needed)
-//   • InvUnit master (13 units — seeded by bootstrap, not dummy)
-//   • InvBrand master (~60 brands — seeded by bootstrap, not dummy)
+//   • InvUnit master (13 units — universal, seeded by bootstrap)
+//   • InvWarrantyTerm master (~10 terms — universal, seeded by bootstrap)
 //   • OrgDefaults singleton (GST rate, default unit, credit periods, currency)
 //   • Phone/Email XOR check constraint
 //   • CompanySettings + other org-level config tables
@@ -52,7 +52,7 @@ const TRANSACTION_TABLES = [
     "VoucherAllocation", "VoucherLine", "Voucher", "VoucherAudit",
     // Invoice / InvoiceLine / InvoiceAudit / Payment / PaymentAudit tables
     // were dropped on 2026-05-24 (Invoice → InvVoucher consolidation, Layer 5b).
-    "InvStockLedger", "InvVoucherExpenseLine", "InvVoucherLine", "InvVoucher", "InvVoucherAudit",
+    "InvStockLedger", "InvVoucherCharge", "InvVoucherLine", "InvVoucher", "InvVoucherAudit",
     // Pricing-strategy additional-cost pool draws — transaction/history data,
     // not bootstrap config. FKs to JournalLine + InvProduct (both wiped here /
     // phase 5), so truncate it in phase 1. Bootstrap seeds nothing into it.
@@ -74,19 +74,19 @@ const TRANSACTION_TABLES = [
     "PersonPortalCredential",
 ];
 
-// Phase 5 — inventory masters that are dummy-only.
-// NOTE: InvUnit + InvBrand are intentionally excluded — they are now seeded
-// by bootstrap-seed.ts (section 9 + 10) and must survive a hard-clean.
-// Same exclusion applies to pricing_strategies (section 16: default ORG
-// markup) — config table, never truncated. Users can drop extra rows
-// manually if they want a clean slate.
+// Phase 5 — inventory masters that are NOT bootstrap data.
+// NOTE: InvUnit + InvWarrantyTerm are intentionally excluded — they are
+// universal masters seeded by bootstrap-seed.ts (sections 9 + 10) and must
+// survive a hard-clean. InvBrand / InvCategory / InvProductGroup are
+// trade-specific reference data seeded by helper-inventory-masters.ts (NOT
+// bootstrap), so they are wiped here and restored by `pnpm seed:helper-inventory`.
 const INVENTORY_MASTERS = [
-    "InvStockLedger", "InvVoucherExpenseLine", "InvVoucherLine", "InvVoucher", "InvVoucherAudit",  // re-listed defensively
+    "InvStockLedger", "InvVoucherCharge", "InvVoucherLine", "InvVoucher", "InvVoucherAudit",  // re-listed defensively
     "InvBomLine", "InvBom",
     "inv_product_branches",
     "InvProduct",
     "InvAttributeMaster",
-    "InvCategory", "InvProductGroup", "InvWarrantyTerm",
+    "InvCategory", "InvProductGroup", "InvBrand",
 ];
 
 // Phase 6 — other dummy-only config tables
@@ -127,7 +127,7 @@ async function main(): Promise<void> {
     console.log(`      ✓ Deleted ${u.rowCount} user(s); ${ADMIN_EMAIL} preserved\n`);
 
     // ── Phase 5 — TRUNCATE inventory masters ───────────────────────────
-    console.log("[5/7] Wiping inventory masters (dummy data — InvUnit + InvBrand preserved)");
+    console.log("[5/7] Wiping inventory masters (trade-specific — InvUnit + InvWarrantyTerm preserved)");
     const invList = INVENTORY_MASTERS.map((t) => `"${t}"`).join(", ");
     await pool.query(`TRUNCATE TABLE ${invList} RESTART IDENTITY CASCADE`);
     for (const t of INVENTORY_MASTERS) console.log(`      ✓ ${t}`);
@@ -152,21 +152,21 @@ async function main(): Promise<void> {
     console.log(`      ✓ Removed legacy 'Difference in Opening Balances' ledger (${dop.rowCount})\n`);
 
     // ── Summary ────────────────────────────────────────────────────────
-    const k = await pool.query<{ users: string; roles: string; groups: string; accounts: string; pipelines: string; products: string; units: string; brands: string }>(`
+    const k = await pool.query<{ users: string; roles: string; groups: string; accounts: string; pipelines: string; products: string; units: string; warranty: string }>(`
         SELECT
-            (SELECT COUNT(*) FROM "User")         AS users,
-            (SELECT COUNT(*) FROM "Role")         AS roles,
-            (SELECT COUNT(*) FROM "AccountGroup") AS groups,
-            (SELECT COUNT(*) FROM "Account")      AS accounts,
-            (SELECT COUNT(*) FROM "Pipeline")     AS pipelines,
-            (SELECT COUNT(*) FROM "InvProduct")   AS products,
-            (SELECT COUNT(*) FROM "InvUnit")      AS units,
-            (SELECT COUNT(*) FROM "InvBrand")     AS brands
+            (SELECT COUNT(*) FROM "User")             AS users,
+            (SELECT COUNT(*) FROM "Role")             AS roles,
+            (SELECT COUNT(*) FROM "AccountGroup")     AS groups,
+            (SELECT COUNT(*) FROM "Account")          AS accounts,
+            (SELECT COUNT(*) FROM "Pipeline")         AS pipelines,
+            (SELECT COUNT(*) FROM "InvProduct")       AS products,
+            (SELECT COUNT(*) FROM "InvUnit")          AS units,
+            (SELECT COUNT(*) FROM "InvWarrantyTerm")  AS warranty
     `);
     const r = k.rows[0]!;
     console.log("Kept (bootstrap state):");
     console.log(`  users=${r.users}  roles=${r.roles}  account-groups=${r.groups}  accounts=${r.accounts}  pipelines=${r.pipelines}`);
-    console.log(`  products=${r.products}  units=${r.units}  brands=${r.brands}`);
+    console.log(`  products=${r.products}  units=${r.units}  warranty-terms=${r.warranty}`);
     console.log("\nDone. DB matches bootstrap-seed.ts state.");
     console.log("Run `pnpm seed:dummy-all` to repopulate demo data.\n");
 

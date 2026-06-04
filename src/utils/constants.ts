@@ -573,6 +573,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             // { label: "Overview", icon: ChartArea, href: "/office/pricing-strategy" },
             { label: "Strategies", icon: Calculator, href: "/office/pricing-strategy/strategies" },
             // { label: "Items", icon: Boxes, href: "/office/pricing-strategy/items" },
+            { label: "Costing", icon: Truck, href: "/office/pricing-strategy/costing" },
             { label: "Needs attention", icon: AlertTriangle, href: "/office/pricing-strategy/needs-attention" },
             { label: "Update & print labels", icon: Printer, href: "/office/pricing-strategy/update-print-labels" },
         ],

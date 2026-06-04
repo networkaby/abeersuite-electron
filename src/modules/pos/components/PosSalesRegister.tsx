@@ -5,6 +5,7 @@
 // Lives at /vouchers/pos — mirrors SalesRegister at /vouchers/sales.
 
 import { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
 import axios from "axios";
 import { toast } from "sonner";
 import {
@@ -159,7 +160,7 @@ export function PosSalesRegister() {
                         onHandoverCancelled={refreshShift}
                         rightSlot={
                             <Button asChild size="sm" className="h-7 text-xs">
-                                <a href="/vouchers/pos/new"><Plus size={14} /> New Sale</a>
+                                <Link href="/vouchers/pos/new"><Plus size={14} /> New Sale</Link>
                             </Button>
                         }
                     />
@@ -170,7 +171,7 @@ export function PosSalesRegister() {
                     <span className="text-muted-foreground">Open a shift to start billing.</span>
                     <div className="ml-auto flex items-center gap-1.5">
                         <Button asChild size="sm" variant="outline" className="h-7 text-xs">
-                            <a href="/vouchers/pos/new"><Plus size={14} /> New Sale</a>
+                            <Link href="/vouchers/pos/new"><Plus size={14} /> New Sale</Link>
                         </Button>
                         <Button size="sm" className="h-7 text-xs" onClick={() => setShiftOpenOpen(true)}>
                             Open shift

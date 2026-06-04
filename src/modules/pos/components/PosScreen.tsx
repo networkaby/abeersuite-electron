@@ -2221,13 +2221,16 @@ function PriceInput({
 }) {
     const fmt = (n: number) => (n ? n.toFixed(2) : "");
     const [draft, setDraft] = useState(() => fmt(inclusive));
-    const focused = useRef(false);
+    const [prevInclusive, setPrevInclusive] = useState(inclusive);
+    const [focused, setFocused] = useState(false);
 
     // Keep the display in sync with external changes (qty/price reset, new line)
-    // but never while the cashier is mid-edit.
-    useEffect(() => {
-        if (!focused.current) setDraft(fmt(inclusive));
-    }, [inclusive]);
+    // but never while the cashier is mid-edit. Adjusting state during render (vs.
+    // an effect) avoids the extra commit/cascading render and the set-state-in-effect rule.
+    if (inclusive !== prevInclusive) {
+        setPrevInclusive(inclusive);
+        if (!focused) setDraft(fmt(inclusive));
+    }
 
     return (
         <Input
@@ -2235,8 +2238,8 @@ function PriceInput({
             inputMode="decimal"
             placeholder="₹ price"
             className="h-8 text-right"
-            onFocus={() => { focused.current = true; }}
-            onBlur={() => { focused.current = false; setDraft(fmt(inclusive)); }}
+            onFocus={() => { setFocused(true); }}
+            onBlur={() => { setFocused(false); setDraft(fmt(inclusive)); }}
             onKeyDown={onKeyDown}
             onChange={(e) => {
                 // Allow digits + a single decimal point only.
