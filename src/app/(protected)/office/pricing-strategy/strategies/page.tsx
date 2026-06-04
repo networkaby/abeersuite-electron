@@ -52,11 +52,12 @@ import {
     type MatchConditionsValue,
     type ConditionProduct,
 } from "@/modules/pricing-strategy/components/MatchConditions";
+import { PaginationBar } from "@/shared/components/PaginationBar";
 import type { PricingItem } from "@/app/api/pricing-strategy/items/route";
 import type { StrategyPoints } from "@/shared/lib/schemas/pricingSchemas";
 
-// Cap the preview table so a large catalogue stays responsive.
-const PREVIEW_CAP = 300;
+// Default rows-per-page for the preview table (full list is paginated, not capped).
+const DEFAULT_PAGE_SIZE = 50;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -85,6 +86,20 @@ const rupee = (paise: number | null): string =>
 
 const nameOf = (list: Master[], id: number | null): string =>
     id == null ? "—" : list.find((m) => m.id === id)?.name ?? `#${id}`;
+
+// Min/max range filter over a points/margin value (blank bound = unbounded).
+type Range = { min: string; max: string };
+type RangeKey = "brand" | "category" | "group" | "product" | "margin";
+const emptyRange = (): Range => ({ min: "", max: "" });
+const emptyRanges = (): Record<RangeKey, Range> => ({
+    brand: emptyRange(), category: emptyRange(), group: emptyRange(), product: emptyRange(), margin: emptyRange(),
+});
+const rangeActive = (r: Range): boolean => r.min.trim() !== "" || r.max.trim() !== "";
+const inRange = (v: number, r: Range): boolean => {
+    const lo = r.min.trim() === "" ? -Infinity : num(r.min);
+    const hi = r.max.trim() === "" ? Infinity : num(r.max);
+    return v >= lo && v <= hi;
+};
 
 // Points state (string-keyed by master id).
 type Points = Record<string, string>;
@@ -184,7 +199,8 @@ function PointSection({
                                     inputMode="decimal"
                                     value={points[r.key] ?? ""}
                                     onChange={(e) => onChange(r.key, sanitize(e.target.value))}
-                                    placeholder="0"
+                                    onFocus={(e) => e.currentTarget.select()}
+                                    placeholder="–"
                                     className="h-6 w-10 text-right font-mono text-xs"
                                 />
                                 <span className="text-[10px] text-muted-foreground">pts</span>
@@ -230,6 +246,41 @@ function Breakdown({ pieces, margin }: { pieces: Piece[]; margin: number }) {
     );
 }
 
+// ── Range filter row ───────────────────────────────────────────────────────────
+
+function RangeRow({
+    label,
+    value,
+    onChange,
+}: {
+    label: string;
+    value: Range;
+    onChange: (v: Range) => void;
+}) {
+    return (
+        <div className="flex items-center gap-2">
+            <span className="w-24 shrink-0 text-xs text-muted-foreground">{label}</span>
+            <Input
+                inputMode="decimal"
+                value={value.min}
+                onChange={(e) => onChange({ ...value, min: sanitize(e.target.value) })}
+                onFocus={(e) => e.currentTarget.select()}
+                placeholder="min"
+                className="h-7 w-16 text-right font-mono text-xs"
+            />
+            <span className="text-xs text-muted-foreground">–</span>
+            <Input
+                inputMode="decimal"
+                value={value.max}
+                onChange={(e) => onChange({ ...value, max: sanitize(e.target.value) })}
+                onFocus={(e) => e.currentTarget.select()}
+                placeholder="max"
+                className="h-7 w-16 text-right font-mono text-xs"
+            />
+        </div>
+    );
+}
+
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function PricingStrategiesPage() {
@@ -241,14 +292,22 @@ export default function PricingStrategiesPage() {
     const [groups, setGroups] = useState<Master[]>([]);
     const [products, setProducts] = useState<Product[]>([]);
 
-    const [base, setBase] = useState("0");
+    const [base, setBase] = useState("");
     const [brandPts, setBrandPts] = useState<Points>({});
     const [catPts, setCatPts] = useState<Points>({});
     const [groupPts, setGroupPts] = useState<Points>({});
+    // Per-product additive override, keyed by product id (as string).
+    const [productPts, setProductPts] = useState<Points>({});
 
     const [query, setQuery] = useState("");
     const [filtersOpen, setFiltersOpen] = useState(false);
     const [conditions, setConditions] = useState<MatchConditionsValue>(() => emptyMatchConditions());
+    // Points / margin range filters (find products by their per-dimension points or total margin).
+    const [ptRanges, setPtRanges] = useState<Record<RangeKey, Range>>(() => emptyRanges());
+
+    // Pagination over the filtered preview rows.
+    const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
     // Vertical scrollbar width — the tbody is the only scroll region, so we
     // reserve a matching gutter on the header to keep the columns aligned.
@@ -291,10 +350,11 @@ export default function PricingStrategiesPage() {
                     })),
                 );
                 const p = pts.data;
-                setBase(String(p.base ?? 0));
+                setBase(p.base ? String(p.base) : "");
                 setBrandPts(numMapToStr(p.brand ?? {}));
                 setCatPts(numMapToStr(p.category ?? {}));
                 setGroupPts(numMapToStr(p.group ?? {}));
+                setProductPts(numMapToStr(p.product ?? {}));
             } catch {
                 if (alive) toast.error("Failed to load strategy data.");
             } finally {
@@ -313,6 +373,7 @@ export default function PricingStrategiesPage() {
                 { label: `brand · ${nameOf(brands, p.brandId)}`, pts: p.brandId != null ? num(brandPts[String(p.brandId)] ?? "") : 0 },
                 { label: `category · ${nameOf(categories, p.categoryId)}`, pts: p.categoryId != null ? num(catPts[String(p.categoryId)] ?? "") : 0 },
                 { label: `group · ${nameOf(groups, p.groupId)}`, pts: p.groupId != null ? num(groupPts[String(p.groupId)] ?? "") : 0 },
+                { label: "product (per-SKU override)", pts: num(productPts[String(p.id)] ?? "") },
             ];
             const margin = pieces.reduce((a, x) => a + x.pts, 0);
             // Cost + price are shown GST-INCLUSIVE: cost_incl = cost × (1 + gst/100),
@@ -324,7 +385,7 @@ export default function PricingStrategiesPage() {
             const profit = p.costPaise != null ? Math.round(p.costPaise * (margin / 100)) : null;
             return { p, pieces, margin, costIncl, price, profit };
         });
-    }, [products, brands, categories, groups, baseN, brandPts, catPts, groupPts]);
+    }, [products, brands, categories, groups, baseN, brandPts, catPts, groupPts, productPts]);
 
     // Active facet count for the Filter button badge.
     const filterCount =
@@ -332,12 +393,13 @@ export default function PricingStrategiesPage() {
         (conditions.groupIds.size > 0 ? 1 : 0) +
         (conditions.categoryIds.size > 0 ? 1 : 0) +
         (conditions.minCost.trim() || conditions.maxCost.trim() ? 1 : 0) +
-        (conditions.minStock.trim() || conditions.maxStock.trim() ? 1 : 0);
+        (conditions.minStock.trim() || conditions.maxStock.trim() ? 1 : 0) +
+        (Object.values(ptRanges).filter(rangeActive).length);
 
     // Product filter — text search AND the Match-conditions filter.
     const visible = useMemo(() => {
         const q = query.trim().toLowerCase();
-        return rows.filter(({ p }) => {
+        return rows.filter(({ p, pieces, margin }) => {
             const textOk =
                 !q ||
                 p.name.toLowerCase().includes(q) ||
@@ -346,6 +408,12 @@ export default function PricingStrategiesPage() {
                 nameOf(categories, p.categoryId).toLowerCase().includes(q) ||
                 nameOf(groups, p.groupId).toLowerCase().includes(q);
             if (!textOk) return false;
+            // Points / margin ranges. pieces = [base, brand, category, group, product].
+            if (!inRange(pieces[1].pts, ptRanges.brand)) return false;
+            if (!inRange(pieces[2].pts, ptRanges.category)) return false;
+            if (!inRange(pieces[3].pts, ptRanges.group)) return false;
+            if (!inRange(pieces[4].pts, ptRanges.product)) return false;
+            if (!inRange(margin, ptRanges.margin)) return false;
             const cp: ConditionProduct = {
                 brandId: p.brandId,
                 groupId: p.groupId,
@@ -357,10 +425,17 @@ export default function PricingStrategiesPage() {
             };
             return matchesConditions(cp, conditions);
         });
-    }, [rows, query, conditions, brands, categories, groups]);
+    }, [rows, query, conditions, ptRanges, brands, categories, groups]);
 
-    const capped = visible.slice(0, PREVIEW_CAP);
-    const truncated = visible.length > PREVIEW_CAP;
+    // Reset to page 1 whenever the filtered result set changes size (new search /
+    // filter), so the user never lands on an out-of-range page.
+    useEffect(() => {
+        setPage(1);
+    }, [visible.length, pageSize]);
+
+    const pageCount = Math.max(1, Math.ceil(visible.length / pageSize));
+    const safePage = Math.min(page, pageCount);
+    const pageRows = visible.slice((safePage - 1) * pageSize, safePage * pageSize);
 
     const stats = useMemo(() => {
         const ms = visible.map((r) => r.margin);
@@ -370,10 +445,11 @@ export default function PricingStrategiesPage() {
     }, [visible]);
 
     const reset = () => {
-        setBase("0");
+        setBase("");
         setBrandPts({});
         setCatPts({});
         setGroupPts({});
+        setProductPts({});
     };
 
     const save = async () => {
@@ -384,6 +460,7 @@ export default function PricingStrategiesPage() {
                 brand: strMapToNum(brandPts),
                 category: strMapToNum(catPts),
                 group: strMapToNum(groupPts),
+                product: strMapToNum(productPts),
                 stockBand: {},
                 ageBand: {},
                 moveBand: {},
@@ -427,7 +504,8 @@ export default function PricingStrategiesPage() {
                                     inputMode="decimal"
                                     value={base}
                                     onChange={(e) => setBase(sanitize(e.target.value))}
-                                    placeholder="0"
+                                    onFocus={(e) => e.currentTarget.select()}
+                                    placeholder="–"
                                     className="h-6 w-10 text-right font-mono text-xs"
                                 />
                                 <span className="text-[10px] text-muted-foreground">pts</span>
@@ -502,7 +580,10 @@ export default function PricingStrategiesPage() {
                                 {filterCount > 0 ? (
                                     <button
                                         type="button"
-                                        onClick={() => setConditions(emptyMatchConditions())}
+                                        onClick={() => {
+                                            setConditions(emptyMatchConditions());
+                                            setPtRanges(emptyRanges());
+                                        }}
                                         className="text-xs text-muted-foreground underline-offset-2 hover:underline"
                                     >
                                         Clear all ({filterCount})
@@ -518,6 +599,21 @@ export default function PricingStrategiesPage() {
                                     onChange={(patch) => setConditions((c) => ({ ...c, ...patch }))}
                                     showStaleDays={false}
                                 />
+                                <div className="space-y-2 border-t pt-3">
+                                    <span className="text-xs font-medium">Points &amp; margin ranges</span>
+                                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                                        <RangeRow label="Brand pts" value={ptRanges.brand}
+                                            onChange={(v) => setPtRanges((s) => ({ ...s, brand: v }))} />
+                                        <RangeRow label="Category pts" value={ptRanges.category}
+                                            onChange={(v) => setPtRanges((s) => ({ ...s, category: v }))} />
+                                        <RangeRow label="Group pts" value={ptRanges.group}
+                                            onChange={(v) => setPtRanges((s) => ({ ...s, group: v }))} />
+                                        <RangeRow label="Product pts" value={ptRanges.product}
+                                            onChange={(v) => setPtRanges((s) => ({ ...s, product: v }))} />
+                                        <RangeRow label="Total margin %" value={ptRanges.margin}
+                                            onChange={(v) => setPtRanges((s) => ({ ...s, margin: v }))} />
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     ) : null}
@@ -529,11 +625,12 @@ export default function PricingStrategiesPage() {
                         className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-sm border bg-card [&>div]:flex [&>div]:min-h-0 [&>div]:flex-1 [&>div]:flex-col [&>div]:overflow-hidden"
                         style={{ "--sbw": `${scrollbarW}px` } as React.CSSProperties}
                     >
-                        <Table className="flex min-h-0 flex-1 flex-col [&_thead]:block [&_thead]:shrink-0 [&_thead]:pr-[var(--sbw)] [&_tbody]:block [&_tbody]:min-h-0 [&_tbody]:flex-1 [&_tbody]:overflow-y-auto [&_tbody]:[scrollbar-gutter:stable] [&_tr]:grid [&_tr]:grid-cols-[minmax(0,1fr)_160px_72px_96px_96px_96px] [&_thead_tr]:items-center [&_tbody_tr]:items-start [&_th]:px-3 [&_th]:py-2 [&_th]:whitespace-normal [&_td]:px-3 [&_td]:py-2">
+                        <Table className="flex min-h-0 flex-1 flex-col [&_thead]:block [&_thead]:shrink-0 [&_thead]:pr-[var(--sbw)] [&_tbody]:block [&_tbody]:min-h-0 [&_tbody]:flex-1 [&_tbody]:overflow-y-auto [&_tbody]:[scrollbar-gutter:stable] [&_tr]:grid [&_tr]:grid-cols-[minmax(0,1fr)_160px_84px_72px_96px_96px_96px] [&_thead_tr]:items-center [&_tbody_tr]:items-start [&_th]:px-3 [&_th]:py-2 [&_th]:whitespace-normal [&_td]:px-3 [&_td]:py-2">
                             <TableHeader className="bg-muted [&_tr]:border-b [&_th]:shadow-[inset_0_-1px_0_var(--border)]">
                                 <TableRow>
                                     <TableHead className="text-xs">Product</TableHead>
                                     <TableHead className="text-xs">Points breakdown</TableHead>
+                                    <TableHead className="text-right text-xs">Product pts</TableHead>
                                     <TableHead className="text-right text-xs">Margin %</TableHead>
                                     <TableHead className="text-right text-xs">Cost</TableHead>
                                     <TableHead className="text-right text-xs">Price</TableHead>
@@ -549,10 +646,24 @@ export default function PricingStrategiesPage() {
                                         </TableCell>
                                     </TableRow>
                                 ) : null}
-                                {capped.map(({ p, pieces, margin, costIncl, price, profit }) => (
+                                {pageRows.map(({ p, pieces, margin, costIncl, price, profit }) => (
                                     <TableRow key={p.id}>
                                         <TableCell className="whitespace-normal break-words text-sm font-medium leading-snug">{p.name}</TableCell>
                                         <TableCell className="whitespace-normal"><Breakdown pieces={pieces} margin={margin} /></TableCell>
+                                        <TableCell className="flex items-center justify-end gap-1">
+                                            <Input
+                                                inputMode="decimal"
+                                                value={productPts[String(p.id)] ?? ""}
+                                                onChange={(e) =>
+                                                    setProductPts((s) => ({ ...s, [String(p.id)]: sanitize(e.target.value) }))
+                                                }
+                                                onFocus={(e) => e.currentTarget.select()}
+                                                placeholder="–"
+                                                title="Per-SKU points — added to the brand/category/group sum (negative lowers price)"
+                                                className="h-6 w-12 text-right font-mono text-xs"
+                                            />
+                                            <span className="text-[10px] text-muted-foreground">pts</span>
+                                        </TableCell>
                                         <TableCell className={`text-right font-mono text-xs font-semibold ${margin < 0 ? "text-red-600" : ""}`}>
                                             {margin.toFixed(1)}%
                                         </TableCell>
@@ -571,13 +682,14 @@ export default function PricingStrategiesPage() {
 
                         </Table>
                     </div>
-                    {/* 
-                    <p className="text-[11px] leading-relaxed text-muted-foreground">
-                        {truncated ? `Showing first ${PREVIEW_CAP} of ${visible.length} matched products. ` : null}
-                        Hover a number in the breakdown to see which dimension it came from. Cost is the
-                        resolved cost basis; price = cost × (1 + margin%). Click <strong>Save</strong> to
-                        store the points.
-                    </p> */}
+                    <PaginationBar
+                        total={visible.length}
+                        page={safePage}
+                        pageSize={pageSize}
+                        onPageChange={setPage}
+                        onPageSizeChange={setPageSize}
+                        unitLabel="product"
+                    />
                 </div>
             </div>
         </div>

@@ -1,8 +1,10 @@
 // The single pricing engine: additive-margin "strategy points".
 //
 // A product's margin% is the SUM of the points for the dimensions it falls under:
-//   margin% = base + brand[brandId] + category[categoryId] + group[groupId]
-// (a missing point row contributes 0). The sell price is a markup on cost,
+//   margin% = base + brand[brandId] + category[categoryId] + group[groupId] + product[id]
+// (a missing point row contributes 0). The per-product point is an additive
+// override — a single SKU can be pulled down (negative) or pushed up (positive)
+// while still riding any future brand/category/group changes. The sell price is a markup on cost,
 // GST-inclusive, MRP-capped — IDENTICAL to the /office/pricing-strategy/strategies
 // preview, so the preview and what actually sells always agree:
 //   cost_incl = round(cost × (1 + gst/100))
@@ -21,12 +23,13 @@ export interface StrategyPointsResolved {
     brand: Record<string, number>;
     category: Record<string, number>;
     group: Record<string, number>;
+    product: Record<string, number>;
 }
 
 /** Load the single org-wide additive-margin point set, grouped by dimension. */
 export async function loadStrategyPoints(): Promise<StrategyPointsResolved> {
     const rows = await prisma.strategyPoint.findMany();
-    const out: StrategyPointsResolved = { base: 0, brand: {}, category: {}, group: {} };
+    const out: StrategyPointsResolved = { base: 0, brand: {}, category: {}, group: {}, product: {} };
     for (const r of rows) {
         const v = Number(r.points);
         switch (r.dimension) {
@@ -34,6 +37,7 @@ export async function loadStrategyPoints(): Promise<StrategyPointsResolved> {
             case "BRAND":    out.brand[r.refKey] = v; break;
             case "CATEGORY": out.category[r.refKey] = v; break;
             case "GROUP":    out.group[r.refKey] = v; break;
+            case "PRODUCT":  out.product[r.refKey] = v; break;
             // STOCK_BAND / AGE_BAND / MOVE_BAND — reserved, contribute 0 for now.
             default: break;
         }
@@ -41,15 +45,16 @@ export async function loadStrategyPoints(): Promise<StrategyPointsResolved> {
     return out;
 }
 
-/** Sum the points that apply to a product: base + its brand + category + group. */
+/** Sum the points that apply to a product: base + its brand + category + group + per-product. */
 export function additiveMarginPct(
-    p: { brandId: number | null; categoryId: number | null; groupId: number | null },
+    p: { id?: number; brandId: number | null; categoryId: number | null; groupId: number | null },
     points: StrategyPointsResolved,
 ): number {
     let m = points.base;
     if (p.brandId    != null) m += points.brand[String(p.brandId)]       ?? 0;
     if (p.categoryId != null) m += points.category[String(p.categoryId)] ?? 0;
     if (p.groupId    != null) m += points.group[String(p.groupId)]       ?? 0;
+    if (p.id         != null) m += points.product[String(p.id)]          ?? 0;
     return m;
 }
 

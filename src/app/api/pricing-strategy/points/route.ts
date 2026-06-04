@@ -11,7 +11,7 @@ import { strategyPointsSaveSchema, type StrategyPoints } from "@/shared/lib/sche
 // Gated by inventory:manage, like the rest of the pricing module.
 
 const emptyPoints = (): StrategyPoints => ({
-    base: 0, brand: {}, category: {}, group: {}, stockBand: {}, ageBand: {}, moveBand: {},
+    base: 0, brand: {}, category: {}, group: {}, product: {}, stockBand: {}, ageBand: {}, moveBand: {},
 });
 
 export async function GET() {
@@ -27,6 +27,7 @@ export async function GET() {
                 case "BRAND":      out.brand[r.refKey] = v; break;
                 case "CATEGORY":   out.category[r.refKey] = v; break;
                 case "GROUP":      out.group[r.refKey] = v; break;
+                case "PRODUCT":    out.product[r.refKey] = v; break;
                 case "STOCK_BAND": out.stockBand[r.refKey] = v; break;
                 case "AGE_BAND":   out.ageBand[r.refKey] = v; break;
                 case "MOVE_BAND":  out.moveBand[r.refKey] = v; break;
@@ -45,9 +46,9 @@ export async function PUT(req: Request) {
         const { data, error } = await validateRequest(req, strategyPointsSaveSchema);
         if (error) return error;
 
-        const entries: { dimension: "BASE" | "BRAND" | "CATEGORY" | "GROUP" | "STOCK_BAND" | "AGE_BAND" | "MOVE_BAND"; refKey: string; points: number }[] = [];
+        const entries: { dimension: "BASE" | "BRAND" | "CATEGORY" | "GROUP" | "PRODUCT" | "STOCK_BAND" | "AGE_BAND" | "MOVE_BAND"; refKey: string; points: number }[] = [];
         if (data.base !== 0) entries.push({ dimension: "BASE", refKey: "", points: data.base });
-        const add = (dimension: "BRAND" | "CATEGORY" | "GROUP" | "STOCK_BAND" | "AGE_BAND" | "MOVE_BAND", map: Record<string, number>) => {
+        const add = (dimension: "BRAND" | "CATEGORY" | "GROUP" | "PRODUCT" | "STOCK_BAND" | "AGE_BAND" | "MOVE_BAND", map: Record<string, number>) => {
             for (const [refKey, points] of Object.entries(map)) {
                 if (points !== 0 && refKey.trim() !== "") entries.push({ dimension, refKey, points });
             }
@@ -55,6 +56,7 @@ export async function PUT(req: Request) {
         add("BRAND", data.brand);
         add("CATEGORY", data.category);
         add("GROUP", data.group);
+        add("PRODUCT", data.product);
         add("STOCK_BAND", data.stockBand);
         add("AGE_BAND", data.ageBand);
         add("MOVE_BAND", data.moveBand);

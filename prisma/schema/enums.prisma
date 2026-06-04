@@ -197,6 +197,7 @@ enum StrategyPointDimension {
   BRAND
   CATEGORY
   GROUP
+  PRODUCT
   STOCK_BAND
   AGE_BAND
   MOVE_BAND
