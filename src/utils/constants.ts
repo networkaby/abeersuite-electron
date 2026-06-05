@@ -532,13 +532,16 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         label: "Administration",
         icon: Settings,
         key: "administration",
-        dashboardHref: "/office/roadmap/administration",
-        pathPrefixes: ["/office/roadmap/administration"],
+        permission: "administration:tasks:view",
+        dashboardHref: "/office/administration",
+        pathPrefixes: ["/office/administration"],
+        createActions: [
+            { label: "New Task +", subtitle: "Add an internal work item", icon: ListChecks, variant: "default", href: "/office/administration?new=1", permission: "administration:tasks:manage" },
+        ],
         children: [
-            // { label: "Overview", icon: ChartArea, href: "/office/roadmap/administration" },
-            { label: "Audit log", icon: ScrollText, href: "/office/roadmap/administration/audit" },
-            { label: "Policies", icon: ShieldCheck, href: "/office/roadmap/administration/policies" },
-            { label: "Integrations", icon: Plug, href: "/office/roadmap/administration/integrations" },
+            { label: "Work Board", icon: ListChecks, href: "/office/administration", permission: "administration:tasks:view" },
+            // Roadmap placeholders — not yet built:
+
         ],
     },
 

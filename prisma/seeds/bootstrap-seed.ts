@@ -241,6 +241,10 @@ const PERMISSIONS = [
 
     // ecommerce — online storefront catalog & orders
     { id: "ecommerce:manage", label: "Manage ecommerce catalog & orders", module: "ecommerce", description: "Create shop products and view customer orders." },
+
+    // administration — internal work board (pipeline-based todos on the P4 pipeline)
+    { id: "administration:tasks:view",   label: "View internal work board",   module: "administration", description: "View the Administration work board and its tasks, and add comments." },
+    { id: "administration:tasks:manage", label: "Manage internal work board", module: "administration", description: "Create, edit, assign, move, and delete tasks on the Administration work board." },
 ] as const;
 
 const ROLE_PERMISSIONS: Record<string, string[]> = {
@@ -270,6 +274,7 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
         "pos:shift:view:org", "pos:shift:manage",
         "accountancy:create:own", "accountancy:view:br", "accountancy:view:org", "accountancy:edit:br",
         "crm:view", "crm:manage",
+        "administration:tasks:view", "administration:tasks:manage",
     ],
 
     // R2 — Service Engineer: repair & diagnostics workflow.

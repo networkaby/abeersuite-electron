@@ -69,6 +69,7 @@ const TRANSACTION_TABLES = [
     // must be wiped too or they'd orphan after a clean.
     "CouponRedemption", "GiftCardTxn", "GiftCard",
     "TicketLog", "TicketParticipant", "Ticket", "Device",
+    "TaskComment", "Task",
     "CrmLead", "WallPost",
     "ChatMessage", "ChatRoomMember", "ChatRoom",
     "PersonPortalCredential",

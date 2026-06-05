@@ -16,6 +16,7 @@ model Pipeline {
   tickets     Ticket[]
   crmLeads    CrmLead[]
   shopOrders  ShopOrder[]
+  tasks       Task[]
 }
 
 model TicketStatus {
@@ -37,6 +38,7 @@ model TicketStatus {
   logs            TicketLog[]
   crmLeads        CrmLead[]
   shopOrders      ShopOrder[]
+  tasks           Task[]
 }
 
 model TicketSubStatus {

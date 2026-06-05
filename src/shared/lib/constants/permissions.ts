@@ -148,6 +148,10 @@ export const PERMISSIONS = {
     USERS_DELETE_ORG:                   "users:delete:org",
     USERS_MANAGE:                       "users:manage",
 
+    // Administration — internal work board (pipeline-based todos)
+    ADMINISTRATION_TASKS_VIEW:          "administration:tasks:view",
+    ADMINISTRATION_TASKS_MANAGE:        "administration:tasks:manage",
+
     // Warranty
     WARRANTY_CONVERT:                   "warranty:convert",
 

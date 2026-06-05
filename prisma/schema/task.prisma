@@ -1,0 +1,52 @@
+// ── Task — generic pipeline-based work item ───────────────────────────────────
+// A clean, device-free work item that rides the shared Pipeline / TicketStatus
+// infrastructure (like CrmLead / ShopOrder). First consumer: the Administration
+// "internal work board" on the P4 (internal-management) pipeline. Designed to be
+// reused by other modules later — the pipeline a task belongs to encodes its
+// domain; `category` allows light tagging.
+
+model Task {
+  id          String    @id @default(cuid())
+  title       String
+  description String?
+  category    String? // light tag, e.g. "HR", "Finance"
+  priority    Priority  @default(MEDIUM) // enum defined in tickets.prisma
+  pipelineId  String // FK Pipeline (Administration board defaults to P4)
+  status      String // FK TicketStatus — a stage of that pipeline
+  assigneeId  Int? // single owner
+  createdById Int
+  dueDate     DateTime?
+  completedAt DateTime?
+  order       Int       @default(0) // ordering within a column
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  pipeline     Pipeline     @relation(fields: [pipelineId], references: [id])
+  ticketStatus TicketStatus @relation(fields: [status], references: [id])
+  assignee     User?        @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  createdBy    User         @relation("TaskCreatedBy", fields: [createdById], references: [id])
+  comments     TaskComment[]
+
+  @@index([pipelineId, status])
+  @@index([assigneeId])
+  @@index([status])
+}
+
+model TaskComment {
+  id        Int             @id @default(autoincrement())
+  taskId    String
+  userId    Int
+  body      String
+  kind      TaskCommentKind @default(COMMENT) // COMMENT | SYSTEM (status / assignee change log)
+  createdAt DateTime        @default(now())
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation("TaskCommentUser", fields: [userId], references: [id])
+
+  @@index([taskId])
+}
+
+enum TaskCommentKind {
+  COMMENT
+  SYSTEM
+}
