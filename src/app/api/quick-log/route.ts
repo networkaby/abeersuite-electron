@@ -2,7 +2,7 @@
  * POST /api/quick-log
  *
  * Universal quick-intake endpoint — available to every authenticated staff
- * member (no extra permission required). Logs a new CrmLead into any pipeline:
+ * member (no extra permission required). Logs a new Deal into any pipeline:
  *
  *   pipelineId = "P6" → Sales query   (CRM)
  *   pipelineId = "P2" → Customer problem (Helpdesk / Customer Support)
@@ -67,7 +67,7 @@ export async function POST(req: Request) {
         if (!ok) return NextResponse.json({ error: "Company not found" }, { status: 400 });
     }
 
-    const lead = await prisma.crmLead.create({
+    const lead = await prisma.deal.create({
         data: {
             pipelineId,
             status: entryStatus.id,

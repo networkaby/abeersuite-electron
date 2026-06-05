@@ -70,7 +70,7 @@ const TRANSACTION_TABLES = [
     "CouponRedemption", "GiftCardTxn", "GiftCard",
     "TicketLog", "TicketParticipant", "Ticket", "Device",
     "TaskComment", "Task",
-    "CrmLeadActivity", "CrmLead", "WallPost",
+    "DealActivity", "Deal", "WallPost",
     "ChatMessage", "ChatRoomMember", "ChatRoom",
     "PersonPortalCredential",
 ];

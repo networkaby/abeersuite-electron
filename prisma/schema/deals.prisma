@@ -1,0 +1,73 @@
+// ── Deals (revenue pipeline — HubSpot "Deals"; device-less; stages = TicketStatus on P6) ─
+// A deal is a sales opportunity owned by a Position (seat) — the current holder
+// is resolved live via UserPosition, so deals transfer automatically on staff
+// change — and the actor of an action is a frozen JSON snapshot (ActorSnapshot),
+// not a User FK. Associates to a contact (Person/Company).
+
+model Deal {
+  id          Int      @id @default(autoincrement())
+  pipelineId  String // P6 "deals"
+  status      String // TicketStatus stage (S35 Lead … S41 Lost)
+  title       String
+
+  // Contact + association (link to an existing customer ledger, HubSpot-style)
+  contactName String?
+  phone       String?
+  email       String?
+  companyName String?
+  personId    Int?
+  companyId   Int?
+
+  // Deal
+  valuePaise     Int?
+  source         String?
+  priority       Priority  @default(MEDIUM) // enum from tickets.prisma
+  nextFollowUpAt DateTime? // card follow-up; overdue highlighted
+  closedAt       DateTime? // set on a terminal stage (Won / Lost)
+  lostReason     String?
+  order          Int       @default(0) // ordering within a kanban column
+
+  // Ownership = seat, not user; actor = frozen JSON snapshot
+  assignedPositionId String?
+  createdBy          Json   @default("{}") // ActorSnapshot
+
+  notes     String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  pipeline         Pipeline       @relation(fields: [pipelineId], references: [id])
+  ticketStatus     TicketStatus   @relation(fields: [status], references: [id])
+  person           Person?        @relation(fields: [personId], references: [id])
+  company          Company?       @relation(fields: [companyId], references: [id])
+  assignedPosition Position?      @relation("DealPosition", fields: [assignedPositionId], references: [id])
+  activities       DealActivity[]
+
+  @@index([pipelineId, status])
+  @@index([assignedPositionId])
+  @@index([createdAt])
+}
+
+// HubSpot-style record timeline: notes, logged calls/meetings, follow-up tasks,
+// and auto SYSTEM entries (stage / owner change).
+model DealActivity {
+  id        Int              @id @default(autoincrement())
+  dealId    Int
+  author    Json             @default("{}") // ActorSnapshot
+  kind      DealActivityKind @default(NOTE)
+  body      String
+  dueAt     DateTime? // TASK follow-ups
+  doneAt    DateTime? // TASK completed
+  createdAt DateTime         @default(now())
+
+  deal Deal @relation(fields: [dealId], references: [id], onDelete: Cascade)
+
+  @@index([dealId])
+}
+
+enum DealActivityKind {
+  NOTE
+  CALL
+  MEETING
+  TASK
+  SYSTEM
+}

@@ -5,8 +5,8 @@ import { Prisma } from "@/generated/prisma/client";
  * Frozen audit snapshot of *who* performed an action, stored as a JSON column
  * (NOT a User FK). Lets ownership ride a Position while the action history still
  * survives staff turnover / renames. Shared by the Administration work board
- * (`Task.createdBy` / `TaskComment.author`) and the CRM (`CrmLead.createdBy` /
- * `CrmLeadActivity.author`).
+ * (`Task.createdBy` / `TaskComment.author`) and the Deals module (`Deal.createdBy` /
+ * `DealActivity.author`).
  */
 export interface ActorSnapshot {
     userId: number;

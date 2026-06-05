@@ -40,7 +40,7 @@ export type ConvertPreview = {
     counts: {
         phones: number;
         emails: number;
-        crmLeads: number;
+        deals: number;
         personCompanyLinks: number;
         shopOrders: number;
         portalCredential: boolean;
@@ -57,7 +57,7 @@ export type ConvertResult = {
     droppedCounts: {
         phones: number;
         emails: number;
-        crmLeads: number;
+        deals: number;
         personCompanyLinks: number;
         shopOrders: number;
         portalCredential: number;
@@ -88,7 +88,7 @@ export async function previewConvert(
                 phones: { select: { id: true } },
                 emails: { select: { id: true } },
                 companies: { select: { id: true } },
-                crmLeads: { select: { id: true } },
+                deals: { select: { id: true } },
                 shopOrders: { select: { id: true, status: true } },
                 portalCredential: { select: { id: true } },
             },
@@ -118,7 +118,7 @@ export async function previewConvert(
             counts: {
                 phones: p.phones.length,
                 emails: p.emails.length,
-                crmLeads: p.crmLeads.length,
+                deals: p.deals.length,
                 personCompanyLinks: p.companies.length,
                 shopOrders: p.shopOrders.length,
                 portalCredential: p.portalCredential != null,
@@ -135,7 +135,7 @@ export async function previewConvert(
             phones: { select: { id: true } },
             emails: { select: { id: true } },
             persons: { select: { id: true } },
-            crmLeads: { select: { id: true } },
+            deals: { select: { id: true } },
         },
     });
     if (!c) {
@@ -157,7 +157,7 @@ export async function previewConvert(
         counts: {
             phones: c.phones.length,
             emails: c.emails.length,
-            crmLeads: c.crmLeads.length,
+            deals: c.deals.length,
             personCompanyLinks: c.persons.length,
             shopOrders: 0,
             portalCredential: false,
@@ -175,7 +175,7 @@ function emptyPreview(
     return {
         direction, sourceId, sourceName: name, accountId: null,
         mappableFields: [], lostFields: [],
-        counts: { phones: 0, emails: 0, crmLeads: 0, personCompanyLinks: 0, shopOrders: 0, portalCredential: false },
+        counts: { phones: 0, emails: 0, deals: 0, personCompanyLinks: 0, shopOrders: 0, portalCredential: false },
         blockers,
     };
 }
@@ -258,8 +258,8 @@ async function personToCompany(
             where: { personId: sourceId },
         });
 
-        // CrmLead already carries both personId and companyId nullable — flip.
-        const leadsMoved = await tx.crmLead.updateMany({
+        // Deal already carries both personId and companyId nullable — flip.
+        const leadsMoved = await tx.deal.updateMany({
             where: { personId: sourceId },
             data: { personId: null, companyId: newCompany.id },
         });
@@ -296,7 +296,7 @@ async function personToCompany(
             droppedCounts: {
                 phones: phonesMoved.count,
                 emails: emailsMoved.count,
-                crmLeads: leadsMoved.count,
+                deals: leadsMoved.count,
                 personCompanyLinks: linksDropped.count,
                 shopOrders: ordersDetached.count,
                 portalCredential: credDropped.count,
@@ -349,7 +349,7 @@ async function companyToPerson(sourceId: number): Promise<ConvertResult> {
             where: { companyId: sourceId },
         });
 
-        const leadsMoved = await tx.crmLead.updateMany({
+        const leadsMoved = await tx.deal.updateMany({
             where: { companyId: sourceId },
             data: { companyId: null, personId: newPerson.id },
         });
@@ -372,7 +372,7 @@ async function companyToPerson(sourceId: number): Promise<ConvertResult> {
             droppedCounts: {
                 phones: phonesMoved.count,
                 emails: emailsMoved.count,
-                crmLeads: leadsMoved.count,
+                deals: leadsMoved.count,
                 personCompanyLinks: linksDropped.count,
                 shopOrders: 0,
                 portalCredential: 0,
@@ -428,7 +428,7 @@ async function collectPersonRefs(personId: number) {
         prisma.phone.count({ where: { personId } }),
         prisma.email.count({ where: { personId } }),
         prisma.personCompany.count({ where: { personId } }),
-        prisma.crmLead.count({ where: { personId } }),
+        prisma.deal.count({ where: { personId } }),
         prisma.shopOrder.count({ where: { personId } }),
         prisma.personPortalCredential.count({ where: { personId } }),
     ]);
@@ -437,7 +437,7 @@ async function collectPersonRefs(personId: number) {
         { table: "Phone", count: phones },
         { table: "Email", count: emails },
         { table: "PersonCompany", count: links },
-        { table: "CrmLead", count: leads },
+        { table: "Deal", count: leads },
         { table: "ShopOrder", count: orders },
         { table: "PersonPortalCredential", count: cred },
     ].filter(r => r.count > 0);
@@ -449,14 +449,14 @@ async function collectCompanyRefs(companyId: number) {
         prisma.phone.count({ where: { companyId } }),
         prisma.email.count({ where: { companyId } }),
         prisma.personCompany.count({ where: { companyId } }),
-        prisma.crmLead.count({ where: { companyId } }),
+        prisma.deal.count({ where: { companyId } }),
     ]);
     return [
         { table: "Account", count: account },
         { table: "Phone", count: phones },
         { table: "Email", count: emails },
         { table: "PersonCompany", count: links },
-        { table: "CrmLead", count: leads },
+        { table: "Deal", count: leads },
     ].filter(r => r.count > 0);
 }
 
@@ -578,11 +578,11 @@ export type MergePreview = {
         devices: number;
         shopOrders: number;
     };
-    /** Party FK references that will move from loser → winner (Phone, Email, CrmLead, links). */
+    /** Party FK references that will move from loser → winner (Phone, Email, Deal, links). */
     partyRefs: {
         phones: number;
         emails: number;
-        crmLeads: number;
+        deals: number;
         personCompanyLinks: number;
         shopOrdersPersonId: number;
         portalCredential: boolean;
@@ -599,7 +599,7 @@ export type MergeResult = {
     movedCounts: MergePreview["accountRefs"] & {
         phones: number;
         emails: number;
-        crmLeads: number;
+        deals: number;
         personCompanyLinks: number;
         portalCredentialDropped: number;
     };
@@ -718,7 +718,7 @@ export async function previewMerge(
         prisma.phone.count({ where: partyWhere }),
         prisma.email.count({ where: partyWhere }),
         prisma.personCompany.count({ where: linkWhere }),
-        prisma.crmLead.count({ where: leadWhere }),
+        prisma.deal.count({ where: leadWhere }),
     ]);
     const shopOrdersPerson = kind === "person"
         ? await prisma.shopOrder.count({ where: { personId: loserId } })
@@ -735,7 +735,7 @@ export async function previewMerge(
     return {
         kind, winnerId, loserId, winnerName, loserName, winnerAccountId, loserAccountId,
         accountRefs,
-        partyRefs: { phones, emails, crmLeads: leads, personCompanyLinks: links, shopOrdersPersonId: shopOrdersPerson, portalCredential: portalCred },
+        partyRefs: { phones, emails, deals: leads, personCompanyLinks: links, shopOrdersPersonId: shopOrdersPerson, portalCredential: portalCred },
         blockers,
     };
 }
@@ -853,8 +853,8 @@ export async function mergeParty(
         });
         await dedupePersonCompanyLinks(tx);
 
-        // 5. CrmLead: re-point.
-        const leads = await tx.crmLead.updateMany({
+        // 5. Deal: re-point.
+        const leads = await tx.deal.updateMany({
             where: { [partyKey]: loserId },
             data: { [partyKey]: winnerId },
         });
@@ -908,7 +908,7 @@ export async function mergeParty(
                 shopOrders: so.count,
                 phones: phones.count,
                 emails: emails.count,
-                crmLeads: leads.count,
+                deals: leads.count,
                 personCompanyLinks: links.count,
                 portalCredentialDropped: credDropped,
             },

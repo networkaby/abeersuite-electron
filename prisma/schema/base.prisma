@@ -18,9 +18,17 @@ model Person {
   name          String
   address       String?
   agreedToTerms Boolean   @default(false)
-  agreedAt      DateTime?
   isActive      Boolean   @default(true)
+  agreedAt      DateTime?
   createdAt     DateTime  @default(now())
+
+  // ── CRM (contact lifecycle / ownership / tags) ───────────────────────────
+  /// HubSpot-style funnel stage for working a big contact list.
+  lifecycleStage  ContactLifecycle @default(LEAD)
+  /// Owning seat (Position); current holder resolved live via UserPosition.
+  ownerPositionId String?
+  /// Lightweight free-form tags for segmentation (filter with has/hasSome).
+  tags            String[]         @default([])
 
   // ── GST profile (optional; only meaningful for B2B parties) ──────────────
   /// 15-char GSTIN. Indian format: 2 digits state + 10 PAN + entity + Z + check
@@ -38,7 +46,8 @@ model Person {
   companies        PersonCompany[]
   portalCredential PersonPortalCredential?
   shopOrders       ShopOrder[]
-  crmLeads         CrmLead[]
+  deals            Deal[]
+  owner            Position?       @relation("PersonOwnerPosition", fields: [ownerPositionId], references: [id])
   phones           Phone[]
   emails           Email[]
 
@@ -70,6 +79,11 @@ model Company {
   isActive   Boolean  @default(true)
   createdAt  DateTime @default(now())
 
+  // ── CRM (contact lifecycle / ownership / tags) — see Person ──────────────
+  lifecycleStage  ContactLifecycle @default(LEAD)
+  ownerPositionId String?
+  tags            String[]         @default([])
+
   // ── GST profile ──────────────────────────────────────────────────────────
   /// 15-char GSTIN
   gstin        String?
@@ -85,7 +99,8 @@ model Company {
 
   account  Account? // enforced at app level; FK lives on Account.companyId
   persons  PersonCompany[]
-  crmLeads CrmLead[]
+  deals    Deal[]
+  owner    Position? @relation("CompanyOwnerPosition", fields: [ownerPositionId], references: [id])
   phones   Phone[]
   emails   Email[]
 
@@ -100,6 +115,14 @@ model Company {
   mergedIntoCompany   Company?  @relation("CompanyMergedInto", fields: [mergedIntoCompanyId], references: [id])
   mergedFromCompany   Company[] @relation("CompanyMergedInto")
   mergedAt            DateTime?
+}
+
+/// Contact funnel stage (HubSpot-style) — shared by Person & Company.
+enum ContactLifecycle {
+  LEAD
+  PROSPECT
+  CUSTOMER
+  INACTIVE
 }
 
 model PersonCompany {

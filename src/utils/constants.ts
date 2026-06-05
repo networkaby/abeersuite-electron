@@ -153,21 +153,19 @@ export const WORKSPACE_NAV: NavItem[] = [
 ];
 
 export const MODULE_SECTIONS: ModuleSection[] = [
-    // Customers
+    // Contacts (people + companies; CRM contact database)
     {
-        label: "Customers",
+        label: "Contacts",
         icon: Users,
         key: "customers",
-        // dashboardHref: "/office/customers",
-        dashboardHref: "/office/customers/all",
-        // pathPrefixes: ["/office/customers/person", "/office/customers/companies", "/office/customers/all", "/office/customers"],
+        dashboardHref: "/office/customers",
         pathPrefixes: ["/office/customers"],
         createActions: [
             { label: "Person +", subtitle: "Create a new person", icon: Users, variant: "default", action: "new-person", permission: "customers:view" },
             { label: "Companies +", subtitle: "Create a new company", icon: Building2, variant: "outline", action: "new-company", permission: "customers:view" },
         ],
         children: [
-            // { label: "All Customers", href: "/office/customers/all", icon: Users, permission: "customers:view" },
+            { label: "All Contacts", href: "/office/customers", icon: Users, permission: "customers:view" },
             { label: "Person", href: "/office/customers/person", icon: Users, permission: "customers:view" },
             { label: "Companies", href: "/office/customers/companies", icon: Building2, permission: "customers:view" },
         ],
@@ -410,13 +408,15 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         label: "CRM",
         icon: Network,
         key: "crm",
-        dashboardHref: "/office/crm",
+        permission: "deals:view",
+        dashboardHref: "/office/crm/deals",
         pathPrefixes: ["/office/crm"],
         createActions: [
-            { label: "New Lead +", subtitle: "Add a deal to the pipeline", icon: Network, variant: "default", href: "/office/crm?new=1", permission: "crm:manage" },
+            { label: "New Deal +", subtitle: "Add a deal to the pipeline", icon: Network, variant: "default", href: "/office/crm/deals?new=1", permission: "deals:manage" },
         ],
         children: [
-            { label: "Pipeline", icon: ClipboardList, href: "/office/crm", permission: "crm:view" },
+            { label: "Deals", icon: ClipboardList, href: "/office/crm/deals", permission: "deals:view" },
+            // Future under CRM: Contacts, Leads (lead-finding) — separate modules.
         ],
     },
 

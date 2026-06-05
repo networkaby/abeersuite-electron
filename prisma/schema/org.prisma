@@ -80,8 +80,11 @@ model Position {
   holders      UserPosition[]
   // Work-board tasks owned by this seat (Administration board, etc.)
   tasks        Task[]         @relation("TaskAssignedPosition")
-  // CRM leads/deals owned by this seat
-  crmLeads     CrmLead[]      @relation("CrmLeadPosition")
+  // Deals owned by this seat
+  deals        Deal[]         @relation("DealPosition")
+  // Contacts (CRM) owned by this seat
+  ownedPersons   Person[]     @relation("PersonOwnerPosition")
+  ownedCompanies Company[]    @relation("CompanyOwnerPosition")
 }
 
 model UserPosition {

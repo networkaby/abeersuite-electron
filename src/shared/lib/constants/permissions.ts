@@ -38,9 +38,9 @@ export const PERMISSIONS = {
     COMPANIES_DELETE_ORG:               "companies:delete:org",
     COMPANIES_MANAGE:                   "companies:manage",
 
-    // CRM
-    CRM_VIEW:                           "crm:view",
-    CRM_MANAGE:                         "crm:manage",
+    // Deals (sales pipeline)
+    DEALS_VIEW:                         "deals:view",
+    DEALS_MANAGE:                       "deals:manage",
 
     // Customers
     CUSTOMERS_VIEW:                     "customers:view",

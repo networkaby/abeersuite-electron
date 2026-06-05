@@ -205,8 +205,8 @@ export async function AdminBriefing() {
     try {
         [openRepair, openSupport, openInternal] = await Promise.all([
             prisma.ticket.count({ where: { pipelineId: "P1", ticketStatus: { isTerminal: false } } }),
-            prisma.crmLead.count({ where: { pipelineId: "P2" } }),
-            prisma.crmLead.count({ where: { pipelineId: "P4" } }),
+            prisma.deal.count({ where: { pipelineId: "P2" } }),
+            prisma.deal.count({ where: { pipelineId: "P4" } }),
         ]);
     } catch {
         // DB unavailable — show "—" so the page still loads without misleading zeros

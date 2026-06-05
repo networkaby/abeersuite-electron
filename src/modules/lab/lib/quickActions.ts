@@ -55,7 +55,7 @@ export function buildQuickActions(handlers: { onNewTicket: () => void }): QuickA
             hint: "Phone, WhatsApp or walk-in query",
             icon: MessageSquarePlus,
             accent: "bg-purple-500/10 text-purple-700 dark:text-purple-400",
-            href: "/office/crm/leads/new",
+            href: "/office/crm/deals?new=1",
         },
         {
             label: "Courier arrived (GRN)",

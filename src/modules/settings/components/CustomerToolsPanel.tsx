@@ -25,7 +25,7 @@ type Preview = {
     counts: {
         phones: number;
         emails: number;
-        crmLeads: number;
+        deals: number;
         personCompanyLinks: number;
         shopOrders: number;
         portalCredential: boolean;
@@ -66,7 +66,7 @@ type MergePreview = {
     partyRefs: {
         phones: number;
         emails: number;
-        crmLeads: number;
+        deals: number;
         personCompanyLinks: number;
         shopOrdersPersonId: number;
         portalCredential: boolean;
@@ -288,7 +288,7 @@ function ConvertSection() {
                             <ul className="mt-1 space-y-0.5">
                                 <li>Phones: <strong>{preview.counts.phones}</strong></li>
                                 <li>Emails: <strong>{preview.counts.emails}</strong></li>
-                                <li>CRM leads: <strong>{preview.counts.crmLeads}</strong> (re-pointed)</li>
+                                <li>Deals: <strong>{preview.counts.deals}</strong> (re-pointed)</li>
                                 <li>Shop orders (terminal): <strong>{preview.counts.shopOrders}</strong> (personId detached, accountId kept)</li>
                             </ul>
                         </div>
@@ -491,7 +491,7 @@ function MergeSection() {
                             <ul className="mt-1 space-y-0.5">
                                 <li>Phones: <strong>{preview.partyRefs.phones}</strong></li>
                                 <li>Emails: <strong>{preview.partyRefs.emails}</strong></li>
-                                <li>CRM leads: <strong>{preview.partyRefs.crmLeads}</strong></li>
+                                <li>Deals: <strong>{preview.partyRefs.deals}</strong></li>
                                 <li>PersonCompany links: <strong>{preview.partyRefs.personCompanyLinks}</strong></li>
                                 {kind === "person" ? (
                                     <li>Shop orders (personId): <strong>{preview.partyRefs.shopOrdersPersonId}</strong></li>

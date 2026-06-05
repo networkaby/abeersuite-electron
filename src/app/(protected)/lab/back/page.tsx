@@ -41,7 +41,7 @@ const CARDS: BackOfficeCard[] = [
     {
         title: "Customers (CRM)",
         description: "Persons, companies, leads, follow-ups",
-        href: "/office/crm",
+        href: "/office/crm/deals",
         icon: Users,
         accent: "bg-purple-500/10 text-purple-700 dark:text-purple-400",
     },

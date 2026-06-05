@@ -137,6 +137,32 @@ async function main() {
         console.log(`      + ${p.name} (${p.phone}, account creditLimit ${limitStr})`);
     }
 
+    // ── Synthetic bulk contacts — demonstrate the Contacts "big list" tooling
+    //    (pagination, lifecycle/tag/owner filters). 250 rows with a spread of
+    //    lifecycle stages + tags. Guarded so re-runs don't duplicate.
+    const SYNTH = 250;
+    const already = await pool.query<{ n: string }>(`SELECT count(*)::text AS n FROM "Person" WHERE name LIKE 'Demo Contact %'`);
+    if (Number(already.rows[0]?.n ?? "0") === 0) {
+        console.log(`[1b/3] Synthetic contacts (${SYNTH}) — for the big-list demo`);
+        await pool.query(
+            `INSERT INTO "Person" (name, "lifecycleStage", tags, "createdAt")
+             SELECT 'Demo Contact ' || g,
+                    (ARRAY['LEAD','PROSPECT','CUSTOMER','INACTIVE'])[1 + (g % 4)]::"ContactLifecycle",
+                    CASE WHEN g % 5 = 0 THEN ARRAY['vip']
+                         WHEN g % 5 = 1 THEN ARRAY['newsletter']
+                         WHEN g % 5 = 2 THEN ARRAY['wholesale']
+                         ELSE ARRAY[]::text[] END,
+                    NOW() - (g || ' minutes')::interval
+             FROM generate_series(1, ${SYNTH}) g`,
+        );
+        await pool.query(
+            `INSERT INTO "Phone" (phone, "personId", "isPrimary", "createdAt")
+             SELECT '9' || lpad((p.id)::text, 9, '0'), p.id, true, NOW()
+             FROM "Person" p WHERE p.name LIKE 'Demo Contact %'`,
+        );
+        console.log(`      + ${SYNTH} synthetic contacts with phones`);
+    }
+
     // ── Customer Companies (Sundry Debtors) ──────────────────────────────
     console.log(`\n[2/3] Customer Companies — Sundry Debtors (${COMPANIES.length})`);
     for (const c of COMPANIES) {

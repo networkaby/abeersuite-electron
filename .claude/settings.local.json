@@ -185,7 +185,11 @@
       "Bash(Sort-Object FullName)",
       "Bash(git ls-tree *)",
       "Bash(grep -oE '\\\\b__TRACKED_VAR__\\\\b' src/utils/constants.ts)",
-      "PowerShell(pnpm exec tsc --noEmit 2>&1 | Select-String -Pattern \"person/route|usePartySearch|buildCandidates|CandidateRow|UniversalHelperSearch|error TS\" | Select-Object -First 40; \"EXIT=$LASTEXITCODE\")"
+      "PowerShell(pnpm exec tsc --noEmit 2>&1 | Select-String -Pattern \"person/route|usePartySearch|buildCandidates|CandidateRow|UniversalHelperSearch|error TS\" | Select-Object -First 40; \"EXIT=$LASTEXITCODE\")",
+      "Bash(mkdir -p \"src/app/\\(protected\\)/office/crm\")",
+      "Bash(sed -i 's#/office/deals#/office/crm/deals#g' 'src/app/\\(protected\\)/office/crm/deals/page.tsx' 'src/app/\\(protected\\)/office/crm/deals/layout.tsx' src/modules/deals/components/DealsWorkspace.tsx src/modules/lab/lib/quickActions.ts 'src/app/\\(protected\\)/lab/back/page.tsx')",
+      "Bash(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/staff/login)",
+      "Bash(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/office/crm/deals)"
     ]
   }
 }

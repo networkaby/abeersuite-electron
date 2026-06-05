@@ -173,8 +173,8 @@ const PERMISSIONS = [
     { id: "inventory:manage", label: "Manage inventory masters", module: "admin", description: "Maintain units, categories, brands, warranty terms, and inventory product masters. Also gates pricing-strategy CRUD." },
 
     // crm
-    { id: "crm:view", label: "View CRM leads", module: "crm", description: "View the CRM leads list and lead details." },
-    { id: "crm:manage", label: "Manage CRM leads", module: "crm", description: "Create, edit, delete, and reassign CRM leads." },
+    { id: "deals:view", label: "View deals", module: "deals", description: "View the deals pipeline and deal details." },
+    { id: "deals:manage", label: "Manage deals", module: "deals", description: "Create, edit, delete, move, and reassign deals." },
 
     // finance — three-tier lifecycle on journal entries
     { id: "finance:journal:cancel", label: "Cancel journal entries", module: "finance", description: "Mark a POSTED journal entry as CANCELLED. The original keeps its reference number and stays visible in lists; a reversing entry is written for the audit trail." },
@@ -273,7 +273,7 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
         "pos:shift:open", "pos:shift:close", "pos:shift:drop",
         "pos:shift:view:org", "pos:shift:manage",
         "accountancy:create:own", "accountancy:view:br", "accountancy:view:org", "accountancy:edit:br",
-        "crm:view", "crm:manage",
+        "deals:view", "deals:manage",
         "administration:tasks:view", "administration:tasks:manage",
     ],
 
@@ -313,7 +313,7 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
         "tickets:create", "tickets:status:set", "tickets:substatus:set", "tickets:assign",
         "tickets:view:own", "tickets:view:branch",
         "assignments:view-team", "assignments:view:own",
-        "crm:view", "crm:manage",
+        "deals:view", "deals:manage",
         "ecommerce:manage",
         "inventory:view:branch",
         "pos:shift:open", "pos:shift:close", "pos:shift:drop", "pos:shift:view:branch",
@@ -324,7 +324,7 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
         "customers:view", "customers:manage", "companies:manage",
         "tickets:create", "tickets:status:set", "tickets:substatus:set", "tickets:assign",
         "assignments:view-team",
-        "crm:view", "crm:manage",
+        "deals:view", "deals:manage",
         "inventory:view:branch", "inventory:edit:branch",
         "pos:shift:open", "pos:shift:close", "pos:shift:drop", "pos:shift:view:branch",
     ],
@@ -439,8 +439,8 @@ const PIPELINES: PipelineSeed[] = [
         ],
     },
     {
-        id: "P6", name: "crm-leads", label: "CRM Leads",
-        description: "Sales-style leads without repair tickets; stages shared with pipeline settings",
+        id: "P6", name: "deals", label: "Deals",
+        description: "Sales deal pipeline (revenue opportunities); stages shared with pipeline settings",
         color: "bg-cyan-100 text-cyan-800", order: 6,
         statuses: [
             { id: "S35", label: "Lead", color: "bg-gray-100 text-gray-600", order: 1, isEntryPoint: true,  isTerminal: false, pipelineId: "P6" },
