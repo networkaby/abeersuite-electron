@@ -23,6 +23,7 @@ import CustomerContextPanel from "@/modules/lab/components/CustomerContextPanel"
 import QuickTicketDialog from "@/modules/lab/components/QuickTicketDialog";
 import RegisterCustomerDialog from "@/modules/lab/components/RegisterCustomerDialog";
 import CandidateRow from "@/modules/lab/components/CandidateRow";
+import QuickActionBar from "@/modules/lab/components/QuickActionBar";
 import {
     buildCandidates,
     toQueryTerms,
@@ -162,7 +163,9 @@ export default function UniversalHelperSearch() {
     const [query, setQuery] = useState("");
 
     // ── Data: customers (debounced) ───────────────────────────────────────
-    const { hits: peopleHits, loading: peopleLoading } = usePartySearch(query);
+    // `wide` so a query like "rosy delhi" can pair a name token (rosy) with an
+    // address token (delhi) — see buildCandidates for the per-term scoring.
+    const { hits: peopleHits, loading: peopleLoading } = usePartySearch(query, { wide: true });
 
     // ── Data: products (load once, filter in memory) ──────────────────────
     const [products, setProducts]         = useState<Product[]>([]);
@@ -249,7 +252,7 @@ export default function UniversalHelperSearch() {
 
     return (
         <section>
-            <div className="grid items-start gap-4 lg:grid-cols-[1fr_300px]">
+            <div className="grid items-start gap-4 lg:grid-cols-[1fr_300px_auto]">
 
                 {/* ── LEFT: search + results (always) ── */}
                 <div className="space-y-3">
@@ -426,6 +429,9 @@ export default function UniversalHelperSearch() {
                     )}
                     <QuickNoteBox />
                 </div>
+
+                {/* ── FAR RIGHT: slim quick-action toolbar (extra, after customer panel) ── */}
+                <QuickActionBar onNewTicket={() => setTicketOpen(true)} />
             </div>
 
             <QuickTicketDialog
@@ -441,6 +447,7 @@ export default function UniversalHelperSearch() {
             <RegisterCustomerDialog
                 open={registerOpen}
                 onOpenChange={setRegisterOpen}
+                initialQuery={query.trim()}
                 onRegistered={(party) => {
                     setPickedCandidate(partyHitToCandidate(party));
                 }}

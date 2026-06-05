@@ -39,9 +39,16 @@ export function usePartySearch(
          * suppliers). Defaults to no filter — returns both sides.
          */
         group?: "Sundry Debtors" | "Sundry Creditors";
+        /**
+         * Widen each token's match to also cover address + email (not just
+         * name + phone). Opt-in so POS / party pickers keep their strict search.
+         * Used by the Front Office helper so "rosy delhi" can pair a name token
+         * with an address token.
+         */
+        wide?: boolean;
     } = {},
 ): { hits: PartyHit[]; loading: boolean } {
-    const { enabled = true, debounceMs = 200, group } = opts;
+    const { enabled = true, debounceMs = 200, group, wide = false } = opts;
     const [hits, setHits] = useState<PartyHit[]>([]);
     const [loading, setLoading] = useState(false);
 
@@ -57,7 +64,8 @@ export function usePartySearch(
         const timer = setTimeout(() => {
             setLoading(true);
             const url = `/api/person?lookup=${encodeURIComponent(trimmed)}`
-                + (group ? `&group=${encodeURIComponent(group)}` : "");
+                + (group ? `&group=${encodeURIComponent(group)}` : "")
+                + (wide ? "&wide=1" : "");
             axios
                 .get<PartyHit[]>(url)
                 .then((res) => {
@@ -77,7 +85,7 @@ export function usePartySearch(
             cancelled = true;
             clearTimeout(timer);
         };
-    }, [query, enabled, debounceMs, group]);
+    }, [query, enabled, debounceMs, group, wide]);
 
     return { hits, loading };
 }

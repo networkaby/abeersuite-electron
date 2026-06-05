@@ -61,6 +61,57 @@ For the milestone log (M1–M26) prior to 2026-05-14, read `git log` or earlier 
 
 1. **Doc consistency sweep** — keep this file as the only source of status; resist re-adding "shipped" markers to module docs.
 2. **`/lab` decision** — promote to a real `/office` module, fold into existing nav, or delete. It currently lives undefined.
+3. **Universal Customer Finder** — build the multi-signal Front Office search: narrow to a customer by **any** clue — name / phone / email / address (✅ done) + product **bought / repaired / inquired / ordered online** + **month / last-active**. Move from client-side merge to one server-side `/api/customers/find` endpoint. Phased; next concrete step is **Phase B — products bought**. Full design, signal inventory, endpoint sketch, and gotchas in the **🧭 Design: Universal Customer Finder** section below.
+
+---
+
+## 🧭 Design: Universal Customer Finder (planned — 2026-06-05)
+
+**Goal.** On `/lab/front`, identify *which* customer staff mean from **any** shred of evidence — name, phone, email, address, a product they **bought / repaired / inquired about / ordered online**, or **when** they were active (a month / "last active"). Each clue narrows the list; every match shows *why* (evidence chip).
+
+**Current state (shipped).**
+- Identity: **name + phone** (`/api/person?lookup=`), and **email + address** via opt-in `wide=1` (2026-06-05). `wide` is opt-in so POS/QuickTicket/party pickers keep strict name+phone search.
+- Repairs: **device brand/model/type + problem text** — `/api/tickets` is loaded **once into the browser** and filtered client-side.
+- Scoring lives in `src/modules/lab/lib/buildCandidates.ts` (pure, framework-free): merges people-hits + tickets by `accountId`, scores by *how many distinct query terms have evidence*, emits typed `EvidenceTag`s rendered by `CandidateRow.tsx`.
+
+**Architecture decision.** The "load all rows into the browser and filter" trick works for 2 sources but will **not** scale to sales + leads + shop orders + date filtering. Move to **one server-side finder endpoint**; `buildCandidates` was written pure specifically so its merge/score logic can migrate server-side unchanged.
+
+```
+GET /api/customers/find?q=rosy+laptop&month=2026-05&group=Sundry+Debtors
+  → parallel server-side searches, each capped + term-filtered:
+      identity   name/phone/email/address        (Person, Company, Phone, Email)
+      repairs    device brand/model/problem       (Ticket → Device.accountId)
+      sales      product bought                    (InvVoucherLine → InvVoucher.accountId, type SALE/POS)
+      inquiries  interest/title/notes              (CrmLead → personId/companyId)
+      shop       online order items                (ShopOrderLine → ShopOrder.accountId|personId)
+  → merge by Account.id, score by terms-covered, optional date-window filter
+  → ranked candidates + typed evidence ("Bought: Asus laptop · May 2026")
+```
+
+**Signal inventory** (link path → customer · when):
+| Signal | Model (file) | Link to customer | When |
+|---|---|---|---|
+| Identity | `Person`/`Company`/`Phone`/`Email` (base.prisma) | self / `personId`/`companyId` → `Account` | `createdAt` |
+| Repairs | `Ticket`/`Device` (tickets.prisma) | `Device.accountId` | `Ticket.createdAt`, `receivedBackAt` |
+| Sales/POS/Estimate/Return | `InvVoucher`/`InvVoucherLine` (inventory.prisma) | `InvVoucher.accountId` | `InvVoucher.date` *(DB `date`, not DateTime)* |
+| Inquiries | `CrmLead` (crm.prisma) | `personId`/`companyId` | `createdAt`, `updatedAt` |
+| Online orders | `ShopOrder`/`ShopOrderLine` (shop.prisma) | `accountId` *or legacy* `personId` | `createdAt`, `paidAt`, `deliveredAt` |
+| Payments/receipts | `Voucher` (finance.prisma) | `partyAccountId` | `date` — low ID value; narration only |
+| Loyalty / coupons / gift cards | loyalty.prisma, coupons.prisma | `accountId` / `ownerAccountId` | various — low ID value; skip for finder |
+
+**Phased roadmap.**
+- **A — DONE (2026-06-05):** email + address matching (opt-in `wide=1`), new `email`/`address` evidence tags + chips.
+- **B — Products bought:** sales-history matching. New `{ kind: "purchase" }` evidence tag (product name · date). Smallest standalone step; can be a `/api/customers/find` v0 scoped to sales only, OR a temporary `/api/inventory/products/sold-by` lookup.
+- **C — Inquiries + online orders:** fold `CrmLead` (interest/title/notes) and `ShopOrderLine` (online purchases) into the finder. New `{ kind: "inquiry" }` / `{ kind: "order" }` tags.
+- **D — Time / "when":** month + last-active dimension. UX: a dedicated **month/date chip** (not a free-text token — "may" is ambiguous as a word) that filters every signal's date window; also sort candidates by *latest activity*. Surface "Last active: May 2026" on each row.
+- **E — Scale:** if volume warrants, a denormalized `CustomerActivityLog(accountId, signalType, signalId, date, summaryText, productSku)` (materialized view or sync job) so the finder is one indexed query instead of N parallel ones. Harmonize `InvVoucher.date` → indexed `DateTime` for range queries.
+
+**Gotchas to honor when building.**
+- Keep POS/party-picker search **strict** — only the finder opts into wide/multi-signal.
+- `InvVoucher.date` is a DB `date`, not `DateTime` — month-range filtering must account for that.
+- Never surface raw `GL-…` refs; resolve purchase evidence to the originating voucher number.
+- Branch scoping is not yet enforced on ticket/sale/customer queries (see item 6) — the finder should be ready to filter by `branchId` once that lands.
+- Sources to reference when implementing: `buildCandidates.ts`, `CandidateRow.tsx`, `usePartySearch.ts`, `/api/person/route.ts` (the `wide` pattern), `/api/inventory/vouchers`, `/api/tickets`, `/api/crm/leads`, `/api/shop/orders`.
 3. **POS follow-ups**: return receipt print page (`/receipt/return/[id]`); multi-partial-return guard (subtract prior returns from per-line cap); stuck-shift auto-close cron; per-row bank account picker for UPI/Card.
 4. **Outstandings — Pay Now / Receive Now action** — on `/office/accountancy/reports/ledger-outstandings/[id]` (and the Receivables/Payables bill-wise tabs), add a per-row "Receive Now" (debtors) / "Pay Now" (creditors) button that opens a pre-filled Receipt/Payment voucher with the bill auto-allocated. Saves the user from copy-pasting the bill ref + amount into a blank voucher.
 5. **Repair-side reporting** — tickets by status/pipeline, avg resolution, technician workload. Finance side is covered; repair side is bare.

@@ -27,6 +27,9 @@ interface RegisterCustomerDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onRegistered: (party: PartyHit) => void;
+    /** Text the user already typed in the helper search — pre-fills the box so
+     *  they don't retype before creating. */
+    initialQuery?: string;
 }
 
 /** Adapter — `PartySearchAndCreate` speaks PickedParty, the rest of /lab speaks PartyHit. */
@@ -44,6 +47,7 @@ export default function RegisterCustomerDialog({
     open,
     onOpenChange,
     onRegistered,
+    initialQuery = "",
 }: RegisterCustomerDialogProps) {
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -65,6 +69,7 @@ export default function RegisterCustomerDialog({
                 <div className="pt-1">
                     <PartySearchAndCreate
                         autoFocus
+                        initialQuery={initialQuery}
                         partyGroup="Sundry Debtors"
                         placeholder="Type a new customer's name or phone…"
                         onPicked={(p) => {

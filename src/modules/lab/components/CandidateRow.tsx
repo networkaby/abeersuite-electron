@@ -158,6 +158,36 @@ function EvidenceChip({
         );
     }
 
+    if (tag.kind === "email") {
+        return (
+            <span
+                className={cn(
+                    base,
+                    "bg-sky-500/10 text-sky-700 dark:text-sky-400",
+                )}
+                title={`Email contains "${tag.matchedTerm}"`}
+            >
+                <Mail size={9} />
+                {tag.matchedTerm}
+            </span>
+        );
+    }
+
+    if (tag.kind === "address") {
+        return (
+            <span
+                className={cn(
+                    base,
+                    "bg-teal-500/10 text-teal-700 dark:text-teal-400",
+                )}
+                title={`Address: ${tag.snippet}`}
+            >
+                <MapPin size={9} />
+                {tag.snippet}
+            </span>
+        );
+    }
+
     if (tag.kind === "device") {
         const label = [tag.brand, tag.model].filter(Boolean).join(" ") || "device";
         return (

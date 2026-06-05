@@ -183,7 +183,9 @@
       "Bash(grep -E \"\\\\.\\(tsx?|jsx?\\)$\")",
       "Bash(Get-ChildItem -Path \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\docs\" -Recurse -Filter \"*.md\")",
       "Bash(Sort-Object FullName)",
-      "Bash(git ls-tree *)"
+      "Bash(git ls-tree *)",
+      "Bash(grep -oE '\\\\b__TRACKED_VAR__\\\\b' src/utils/constants.ts)",
+      "PowerShell(pnpm exec tsc --noEmit 2>&1 | Select-String -Pattern \"person/route|usePartySearch|buildCandidates|CandidateRow|UniversalHelperSearch|error TS\" | Select-Object -First 40; \"EXIT=$LASTEXITCODE\")"
     ]
   }
 }

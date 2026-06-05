@@ -65,6 +65,13 @@ export type PartySearchAndCreateProps = {
     locked?: boolean;
     /** Auto-focus the input on mount. */
     autoFocus?: boolean;
+    /**
+     * Pre-fill the search box on mount. Lets a caller carry over text the user
+     * already typed elsewhere (e.g. Front Office searched, found nothing, and
+     * opened this widget to register) so they don't retype — the
+     * "New customer: …" row is immediately available, just like POS.
+     */
+    initialQuery?: string;
     /** Override the default placeholder. */
     placeholder?: string;
     /** Extra render slot inside the hit dropdown's footer (rarely used). */
@@ -158,11 +165,13 @@ export const PartySearchAndCreate = forwardRef<
     {
         onPicked, locked = false, autoFocus = false, placeholder, footerSlot, className,
         onDialogOpenChange, partyGroup = null, allowIncludeOther = false, allowCompanyCreate = true,
-        defaultToCompany = false,
+        defaultToCompany = false, initialQuery = "",
     },
     ref,
 ) {
-    const [query, setQuery] = useState("");
+    // Seed from initialQuery so callers can carry over text the user already
+    // typed. Radix unmounts dialog content on close, so a fresh mount re-seeds.
+    const [query, setQuery] = useState(initialQuery);
     const [highlightedHit, setHighlightedHit] = useState(0);
     const [includeOther, setIncludeOther] = useState(false);
     const [isFocused, setIsFocused] = useState(false);

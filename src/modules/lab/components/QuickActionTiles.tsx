@@ -1,85 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import {
-    Wrench,
-    ShoppingCart,
-    Truck,
-    MessageSquarePlus,
-    Package,
-    CreditCard,
-    Boxes,
-} from "lucide-react";
+import { buildQuickActions } from "@/modules/lab/lib/quickActions";
 
 interface QuickActionTilesProps {
     /** Called when the "New repair ticket" tile is clicked. */
     onNewTicket: () => void;
 }
 
-interface Tile {
-    label: string;
-    hint: string;
-    icon: React.ComponentType<{ size?: number; className?: string }>;
-    accent: string;
-    /** Either a navigation href OR a click handler (mutually exclusive). */
-    href?: string;
-    onClick?: () => void;
-    /** Stub tiles show a "soon" badge and don't navigate. */
-    soon?: boolean;
-}
-
 export default function QuickActionTiles({ onNewTicket }: QuickActionTilesProps) {
-    const tiles: Tile[] = [
-        {
-            label: "New repair ticket",
-            hint: "Customer dropped off a device",
-            icon: Wrench,
-            accent: "bg-orange-500/10 text-orange-700 dark:text-orange-400",
-            onClick: onNewTicket,
-        },
-        {
-            label: "New POS sale",
-            hint: "Counter sale to a walk-in",
-            icon: ShoppingCart,
-            accent: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-            href: "/vouchers/pos/new",
-        },
-        {
-            label: "New delivery order",
-            hint: "Send goods to a customer address",
-            icon: Truck,
-            accent: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
-            href: "/office/ecommerce",
-        },
-        {
-            label: "Log enquiry / lead",
-            hint: "Phone, WhatsApp or walk-in query",
-            icon: MessageSquarePlus,
-            accent: "bg-purple-500/10 text-purple-700 dark:text-purple-400",
-            href: "/office/crm/leads/new",
-        },
-        {
-            label: "Courier arrived (GRN)",
-            hint: "Receive a parcel from a supplier",
-            icon: Package,
-            accent: "bg-cyan-500/10 text-cyan-700 dark:text-cyan-400",
-            href: "/vouchers/grn/new",
-        },
-        {
-            label: "Pay a bill",
-            hint: "Electricity, rent, supplier payment",
-            icon: CreditCard,
-            accent: "bg-pink-500/10 text-pink-700 dark:text-pink-400",
-            href: "/vouchers/payments/new",
-        },
-        {
-            label: "Internal request",
-            hint: "Packaging, consumables, supplies",
-            icon: Boxes,
-            accent: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
-            soon: true,
-        },
-    ];
+    const tiles = buildQuickActions({ onNewTicket });
 
     return (
         <section>

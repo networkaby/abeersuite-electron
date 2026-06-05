@@ -21,6 +21,8 @@
 export type EvidenceTag =
     | { kind: "name";    matchedTerm: string }
     | { kind: "phone";   matchedTerm: string }
+    | { kind: "email";   matchedTerm: string }
+    | { kind: "address"; snippet: string }
     | { kind: "device";  brand: string; model: string; ticketId: string }
     | { kind: "problem"; snippet: string; ticketId: string };
 
@@ -121,8 +123,11 @@ export function buildCandidates(
             termsCovered: new Set<string>(),
         };
 
-        const nameLower  = p.name.toLowerCase();
-        const phonePlain = (p.phone ?? "").replace(/\D/g, "");
+        const nameLower    = p.name.toLowerCase();
+        const phonePlain   = (p.phone ?? "").replace(/\D/g, "");
+        const emailLower   = (p.email ?? "").toLowerCase();
+        const addressText  = p.address ?? "";
+        const addressLower = addressText.toLowerCase();
 
         for (const term of queryTerms) {
             if (candidate.termsCovered.has(term)) continue;
@@ -131,6 +136,15 @@ export function buildCandidates(
                 candidate.termsCovered.add(term);
             } else if (phonePlain.length > 0 && phonePlain.includes(term)) {
                 candidate.evidence.push({ kind: "phone", matchedTerm: term });
+                candidate.termsCovered.add(term);
+            } else if (emailLower.length > 0 && emailLower.includes(term)) {
+                candidate.evidence.push({ kind: "email", matchedTerm: term });
+                candidate.termsCovered.add(term);
+            } else if (addressLower.length > 0 && addressLower.includes(term)) {
+                candidate.evidence.push({
+                    kind: "address",
+                    snippet: snippetAround(addressText, addressLower, term),
+                });
                 candidate.termsCovered.add(term);
             }
         }

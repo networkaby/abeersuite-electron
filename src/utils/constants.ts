@@ -58,6 +58,7 @@ import {
     CreditCard,
     Gift,
     Megaphone,
+    Plug,
 } from "lucide-react";
 
 // Keys match the Priority enum: LOW | MEDIUM | HIGH | URGENT
@@ -236,18 +237,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
 
             { label: "Balance Sheet", icon: FolderTree, href: "/office/accountancy/reports/balance-sheet" },
             { label: "Profit & Loss A/c", icon: BookOpen, href: "/office/accountancy/reports/profit-loss" },
-            {
-                label: "GST Reports",
-                icon: BadgePercent,
-                href: "/office/accountancy/reports/gst",
-                children: [
-                    { label: "Outward Supplies", icon: ArrowUpRight, href: "/office/accountancy/reports/gst/outward-supplies" },
-                    { label: "Inward Supplies", icon: ArrowDownRight, href: "/office/accountancy/reports/gst/inward-supplies" },
-                    { label: "Net GST Liability", icon: FileText, href: "/office/accountancy/reports/gst/liability" },
-                    { label: "HSN Summary", icon: Hash, href: "/office/accountancy/reports/gst/hsn-summary" },
-                    { label: "Tax Classification", icon: Tags, href: "/office/accountancy/reports/gst/classification" },
-                ],
-            },
+            // GST Reports moved to the Compliance module (see below).
 
             // { label: "Estimates", icon: ScrollText, href: "/vouchers/estimates" },
 
@@ -414,6 +404,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
 
         ],
     },
+
     // CRM
     // {
     //     label: "CRM",
@@ -460,6 +451,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
     //         { label: "Payroll", icon: Wallet, href: "/office/roadmap/hrm/payroll" },
     //     ],
     // },
+
     // Delivery
     // {
     //     label: "Delivery",
@@ -474,6 +466,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
     //         { label: "Proof of delivery", icon: FileText, href: "/office/roadmap/delivery/pod" },
     //     ],
     // },
+
     // Field Service
     // {
     //     label: "Field Service",
@@ -488,6 +481,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
     //         { label: "Van stock", icon: Box, href: "/office/roadmap/field-service/van-stock" },
     //     ],
     // },
+
     // HelpDesk
     // {
     //     label: "HelpDesk",
@@ -502,6 +496,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
     //         { label: "SLAs", icon: Timer, href: "/office/roadmap/helpdesk/slas" },
     //     ],
     // },
+
     // Projects
     // {
     //     label: "Projects",
@@ -516,6 +511,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
     //         { label: "Time log", icon: ClipboardList, href: "/office/roadmap/projects/time" },
     //     ],
     // },
+
     // Intelligence
     // {
     //     label: "Intelligence",
@@ -530,20 +526,21 @@ export const MODULE_SECTIONS: ModuleSection[] = [
     //         { label: "Exports", icon: Download, href: "/office/roadmap/intelligence/exports" },
     //     ],
     // },
+
     // Administration
-    // {
-    //     label: "Administration",
-    //     icon: Settings,
-    //     key: "administration",
-    //     dashboardHref: "/office/roadmap/administration",
-    //     pathPrefixes: ["/office/roadmap/administration"],
-    //     children: [
-    //         // { label: "Overview", icon: ChartArea, href: "/office/roadmap/administration" },
-    //         { label: "Audit log", icon: ScrollText, href: "/office/roadmap/administration/audit" },
-    //         { label: "Policies", icon: ShieldCheck, href: "/office/roadmap/administration/policies" },
-    //         { label: "Integrations", icon: Plug, href: "/office/roadmap/administration/integrations" },
-    //     ],
-    // },
+    {
+        label: "Administration",
+        icon: Settings,
+        key: "administration",
+        dashboardHref: "/office/roadmap/administration",
+        pathPrefixes: ["/office/roadmap/administration"],
+        children: [
+            // { label: "Overview", icon: ChartArea, href: "/office/roadmap/administration" },
+            { label: "Audit log", icon: ScrollText, href: "/office/roadmap/administration/audit" },
+            { label: "Policies", icon: ShieldCheck, href: "/office/roadmap/administration/policies" },
+            { label: "Integrations", icon: Plug, href: "/office/roadmap/administration/integrations" },
+        ],
+    },
 
     // Retention
     {
@@ -578,20 +575,22 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Update & print labels", icon: Printer, href: "/office/pricing-strategy/update-print-labels" },
         ],
     },
-    // Complience
-    // {
-    //     label: "Complience",
-    //     icon: ClipboardList,
-    //     key: "complience",
-    //     dashboardHref: "/office/accountancy/reports/gst",
-    //     pathPrefixes: ["/office/complience"],
-    //     children: [
-    //         { label: "Net GST Liability", icon: ClipboardList, href: "/office/accountancy/reports/gst/liability" },
-    //         { label: "Outward Supplies", icon: ClipboardList, href: "/office/accountancy/reports/gst/outward-supplies" },
-    //         { label: "Inward Supplies", icon: ClipboardList, href: "/office/accountancy/reports/gst/inward-supplies" },
-    //         { label: "HSN Summary", icon: ClipboardList, href: "/office/accountancy/reports/gst/hsn-summary" },
-    //     ]
-    // },
+    // Compliance
+    {
+        label: "Compliance",
+        icon: BadgePercent,
+        key: "compliance",
+        permission: "accountancy:view:org",
+        dashboardHref: "/office/accountancy/reports/gst",
+        pathPrefixes: ["/office/accountancy/reports/gst"],
+        children: [
+            { label: "Outward Supplies", icon: ArrowUpRight, href: "/office/accountancy/reports/gst/outward-supplies" },
+            { label: "Inward Supplies", icon: ArrowDownRight, href: "/office/accountancy/reports/gst/inward-supplies" },
+            { label: "Net GST Liability", icon: FileText, href: "/office/accountancy/reports/gst/liability" },
+            { label: "HSN Summary", icon: Hash, href: "/office/accountancy/reports/gst/hsn-summary" },
+            { label: "Tax Classification", icon: Tags, href: "/office/accountancy/reports/gst/classification" },
+        ],
+    },
 ];
 
 export const ADMIN_NAV: SettingsNavItem[] = [

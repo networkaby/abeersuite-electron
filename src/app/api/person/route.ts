@@ -32,7 +32,11 @@ type LookupResult = {
     linkedCompanies: { id: number; name: string; accountId: number | null }[];
 };
 
-async function lookupAccounts(term: string, group?: string): Promise<LookupResult[]> {
+async function lookupAccounts(
+    term: string,
+    group?: string,
+    opts?: { wide?: boolean },
+): Promise<LookupResult[]> {
     // When `group` is set (e.g. "Sundry Debtors" / "Sundry Creditors") we
     // restrict the hits to parties whose ledger sits under that group. Lets
     // CN / Sale pick only customers, DN / Purchase pick only suppliers.
@@ -40,20 +44,30 @@ async function lookupAccounts(term: string, group?: string): Promise<LookupResul
         ? { account: { is: { group: { is: { name: group } } } } }
         : {};
 
+    // `wide` widens each token's match to address + email as well as name/phone.
+    // Opt-in only — POS / QuickTicket / party pickers stay strict (name + phone)
+    // so their results don't change. The Front Office helper search passes it so
+    // a query like "rosy delhi" can pair a name token with an address token.
+    const wide = opts?.wide ?? false;
+    const tokenOr = (t: string) => ({
+        OR: [
+            { name: { contains: t, mode: "insensitive" as const } },
+            { phones: { some: { phone: { contains: t } } } },
+            ...(wide
+                ? [
+                    { address: { contains: t, mode: "insensitive" as const } },
+                    { emails: { some: { email: { contains: t, mode: "insensitive" as const } } } },
+                  ]
+                : []),
+        ],
+    });
+
     // Split multi-word queries (e.g. "abeer 9954") into tokens and AND them —
-    // each token must match either the name or a phone number.
+    // each token must match name / phone (and, when `wide`, address / email).
     const tokens = term.trim().split(/\s+/).filter(Boolean);
     const tokenFilter = tokens.length <= 1
-        ? { OR: [
-            { name: { contains: term, mode: "insensitive" as const } },
-            { phones: { some: { phone: { contains: term } } } },
-          ] }
-        : { AND: tokens.map(t => ({
-            OR: [
-                { name: { contains: t, mode: "insensitive" as const } },
-                { phones: { some: { phone: { contains: t } } } },
-            ],
-          })) };
+        ? tokenOr(term)
+        : { AND: tokens.map(tokenOr) };
 
     const [persons, companies] = await Promise.all([
         prisma.person.findMany({
@@ -132,13 +146,15 @@ export async function GET(req: Request) {
     const q = searchParams.get("q")?.trim();
     const lookup = searchParams.get("lookup")?.trim();
     const group = searchParams.get("group")?.trim() || undefined;
+    // Opt-in: also search address + email per token (Front Office helper search).
+    const wide = searchParams.get("wide") === "1";
     const { take, page } = parsePagination(searchParams);
 
     try {
-        if (phone) return NextResponse.json(await lookupAccounts(phone, group));
+        if (phone) return NextResponse.json(await lookupAccounts(phone, group, { wide }));
         // lookup !== undefined means the param was explicitly passed (even if empty),
         // allowing ?lookup=&group=... to browse the full group list on focus.
-        if (lookup !== undefined) return NextResponse.json(await lookupAccounts(lookup, group));
+        if (lookup !== undefined) return NextResponse.json(await lookupAccounts(lookup, group, { wide }));
 
         const persons = await prisma.person.findMany({
             where: {
