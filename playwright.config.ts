@@ -17,6 +17,9 @@ const BASE_URL = process.env.E2E_BASE_URL || "http://localhost:3000";
 
 export default defineConfig({
     testDir: "./e2e",
+    // Fail fast if :3000 is serving a DIFFERENT project (reuseExistingServer
+    // would otherwise silently attach the whole suite to the wrong app).
+    globalSetup: "./e2e/global-setup.ts",
     // Single shared remote DB → run serially so mutation specs don't race.
     fullyParallel: false,
     workers: 1,

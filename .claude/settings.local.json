@@ -182,7 +182,8 @@
       "Bash(PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION=\"pnpm prisma db push --force-reset && pnpm prisma db seed is good\" pnpm prisma db push --accept-data-loss)",
       "Bash(grep -E \"\\\\.\\(tsx?|jsx?\\)$\")",
       "Bash(Get-ChildItem -Path \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\docs\" -Recurse -Filter \"*.md\")",
-      "Bash(Sort-Object FullName)"
+      "Bash(Sort-Object FullName)",
+      "Bash(git ls-tree *)"
     ]
   }
 }
