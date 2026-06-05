@@ -4,9 +4,22 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { createTaskSchema } from "@/shared/lib/schemas/taskSchema";
+import { buildTaskActor } from "@/modules/administration/lib/taskActor";
 
 /** Administration work board rides the seeded internal-management pipeline. */
 const ADMIN_PIPELINE_ID = "P4";
+
+/** Position the task is assigned to + its current live holders (resolved via
+ *  UserPosition), so the board can show who'll actually do the work. */
+const ASSIGNED_POSITION_SELECT = {
+    select: {
+        id: true,
+        title: true,
+        branch: { select: { name: true } },
+        department: { select: { name: true } },
+        holders: { select: { user: { select: { id: true, name: true, avatarUrl: true, role: true } } } },
+    },
+} as const;
 
 const TASK_SELECT = {
     id: true,
@@ -16,16 +29,15 @@ const TASK_SELECT = {
     priority: true,
     pipelineId: true,
     status: true,
-    assigneeId: true,
-    createdById: true,
+    assignedPositionId: true,
+    createdBy: true, // JSON actor snapshot
     dueDate: true,
     completedAt: true,
     order: true,
     createdAt: true,
     updatedAt: true,
     ticketStatus: { select: { id: true, label: true, color: true, order: true, isTerminal: true } },
-    assignee: { select: { id: true, name: true, avatarUrl: true, role: true } },
-    createdBy: { select: { id: true, name: true } },
+    assignedPosition: ASSIGNED_POSITION_SELECT,
     _count: { select: { comments: true } },
 } as const;
 
@@ -76,9 +88,9 @@ export async function POST(req: Request) {
                 priority: data.priority ?? "MEDIUM",
                 pipelineId,
                 status: entry.id,
-                assigneeId: data.assigneeId ?? null,
+                assignedPositionId: data.assignedPositionId ?? null,
                 dueDate: data.dueDate ? new Date(data.dueDate) : null,
-                createdById: user.id,
+                createdBy: await buildTaskActor(user.id),
             },
             select: TASK_SELECT,
         });

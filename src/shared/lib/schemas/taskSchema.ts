@@ -20,7 +20,8 @@ export const createTaskSchema = z.object({
     description: z.string().trim().max(5000).optional().nullable(),
     category: z.string().trim().max(60).optional().nullable(),
     priority: taskPrioritySchema.optional(),
-    assigneeId: z.coerce.number().int().positive().optional().nullable(),
+    // Ownership is a Position (seat) id, not a user. null = unassigned.
+    assignedPositionId: z.string().trim().min(1).optional().nullable(),
     dueDate: dueDateField,
     // Optional — defaults to the Administration pipeline (P4) server-side.
     pipelineId: z.string().trim().min(1).optional(),
@@ -32,7 +33,7 @@ export const updateTaskSchema = z
         description: z.string().trim().max(5000).optional().nullable(),
         category: z.string().trim().max(60).optional().nullable(),
         priority: taskPrioritySchema.optional(),
-        assigneeId: z.coerce.number().int().positive().optional().nullable(),
+        assignedPositionId: z.string().trim().min(1).optional().nullable(),
         dueDate: dueDateField.optional(),
         // Moving a card between kanban columns sets a new TicketStatus id.
         status: z.string().trim().min(1).optional(),

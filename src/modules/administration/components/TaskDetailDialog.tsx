@@ -101,6 +101,7 @@ export default function TaskDetailDialog({
     };
 
     const priority = task ? PRIORITY_META[task.priority] ?? PRIORITY_META.MEDIUM : null;
+    const holders = task?.assignedPosition?.holders.map((h) => h.user) ?? [];
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -127,18 +128,33 @@ export default function TaskDetailDialog({
                         )}
 
                         <div className="grid grid-cols-2 gap-3 text-sm">
-                            <div>
-                                <div className="text-xs text-muted-foreground">Assignee</div>
-                                {task.assignee ? (
-                                    <span className="mt-1 flex items-center gap-1.5">
-                                        <UserAvatar
-                                            name={task.assignee.name}
-                                            avatarUrl={task.assignee.avatarUrl}
-                                            role={task.assignee.role}
-                                            sizePx={20}
-                                        />
-                                        {task.assignee.name}
-                                    </span>
+                            <div className="col-span-2">
+                                <div className="text-xs text-muted-foreground">Assigned to (position)</div>
+                                {task.assignedPosition ? (
+                                    <div className="mt-1">
+                                        <div className="font-medium">{task.assignedPosition.title}</div>
+                                        <div className="text-xs text-muted-foreground">
+                                            {[task.assignedPosition.branch?.name, task.assignedPosition.department?.name]
+                                                .filter(Boolean)
+                                                .join(" · ") || "Org-wide"}
+                                        </div>
+                                        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                                            <span className="text-[11px] text-muted-foreground">Current holder:</span>
+                                            {holders.length === 0 ? (
+                                                <span className="text-xs italic text-muted-foreground">Vacant seat</span>
+                                            ) : (
+                                                holders.map((h) => (
+                                                    <span
+                                                        key={h.id}
+                                                        className="flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-xs"
+                                                    >
+                                                        <UserAvatar name={h.name} avatarUrl={h.avatarUrl} role={h.role} sizePx={16} />
+                                                        {h.name}
+                                                    </span>
+                                                ))
+                                            )}
+                                        </div>
+                                    </div>
                                 ) : (
                                     <span className="italic text-muted-foreground">Unassigned</span>
                                 )}
@@ -149,7 +165,10 @@ export default function TaskDetailDialog({
                             </div>
                             <div>
                                 <div className="text-xs text-muted-foreground">Created by</div>
-                                <div className="mt-1">{task.createdBy.name}</div>
+                                <div className="mt-1">
+                                    {task.createdBy.userName}
+                                    {task.createdBy.positionTitle ? ` · ${task.createdBy.positionTitle}` : ""}
+                                </div>
                             </div>
                             <div>
                                 <div className="text-xs text-muted-foreground">Stage</div>
@@ -193,19 +212,18 @@ export default function TaskDetailDialog({
                                 {task.comments.map((c) =>
                                     c.kind === "SYSTEM" ? (
                                         <div key={c.id} className="text-xs italic text-muted-foreground">
-                                            {c.user.name} · {c.body} · {formatDateTime(c.createdAt)}
+                                            {c.author.userName} · {c.body} · {formatDateTime(c.createdAt)}
                                         </div>
                                     ) : (
                                         <div key={c.id} className="flex gap-2">
                                             <UserAvatar
-                                                name={c.user.name}
-                                                avatarUrl={c.user.avatarUrl}
-                                                role={c.user.role}
+                                                name={c.author.userName}
+                                                avatarUrl={c.author.avatarUrl}
                                                 sizePx={24}
                                             />
                                             <div className="flex-1">
                                                 <div className="flex items-baseline gap-2">
-                                                    <span className="text-sm font-medium">{c.user.name}</span>
+                                                    <span className="text-sm font-medium">{c.author.userName}</span>
                                                     <span className="text-[11px] text-muted-foreground">
                                                         {formatDateTime(c.createdAt)}
                                                     </span>

@@ -13,35 +13,40 @@ model Task {
   priority    Priority  @default(MEDIUM) // enum defined in tickets.prisma
   pipelineId  String // FK Pipeline (Administration board defaults to P4)
   status      String // FK TicketStatus — a stage of that pipeline
-  assigneeId  Int? // single owner
-  createdById Int
+  // Ownership is the SEAT, not the person: a task is assigned to a Position.
+  // Whoever currently holds that position (UserPosition) is the effective
+  // owner, so when staff resign / transfer the new holder inherits open work.
+  assignedPositionId String?
+  // Actor audit snapshot (frozen at create time) — NOT a User FK, so history
+  // survives staff turnover. Shape: { userId, userName, avatarUrl, positionId,
+  // positionTitle }. See TaskActor in src/modules/administration/lib/types.ts.
+  createdBy   Json      @default("{}")
   dueDate     DateTime?
   completedAt DateTime?
   order       Int       @default(0) // ordering within a column
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  pipeline     Pipeline     @relation(fields: [pipelineId], references: [id])
-  ticketStatus TicketStatus @relation(fields: [status], references: [id])
-  assignee     User?        @relation("TaskAssignee", fields: [assigneeId], references: [id])
-  createdBy    User         @relation("TaskCreatedBy", fields: [createdById], references: [id])
-  comments     TaskComment[]
+  pipeline         Pipeline     @relation(fields: [pipelineId], references: [id])
+  ticketStatus     TicketStatus @relation(fields: [status], references: [id])
+  assignedPosition Position?    @relation("TaskAssignedPosition", fields: [assignedPositionId], references: [id])
+  comments         TaskComment[]
 
   @@index([pipelineId, status])
-  @@index([assigneeId])
+  @@index([assignedPositionId])
   @@index([status])
 }
 
 model TaskComment {
   id        Int             @id @default(autoincrement())
   taskId    String
-  userId    Int
+  // Actor audit snapshot — same shape as Task.createdBy. No User FK.
+  author    Json            @default("{}")
   body      String
-  kind      TaskCommentKind @default(COMMENT) // COMMENT | SYSTEM (status / assignee change log)
+  kind      TaskCommentKind @default(COMMENT) // COMMENT | SYSTEM (status / assignment change log)
   createdAt DateTime        @default(now())
 
   task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  user User @relation("TaskCommentUser", fields: [userId], references: [id])
 
   @@index([taskId])
 }

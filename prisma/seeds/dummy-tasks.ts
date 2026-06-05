@@ -37,23 +37,36 @@ async function main() {
 
     const admin = await prisma.user.findFirst({
         where: { email: "admin@networkservice.in" },
-        select: { id: true },
+        select: {
+            id: true,
+            name: true,
+            avatarUrl: true,
+            userPositions: { take: 1, select: { position: { select: { id: true, title: true } } } },
+        },
     });
     if (!admin) {
         console.error("✗ admin user not found — run `pnpm prisma db seed` first.");
         process.exit(1);
     }
 
-    // Spread assignees across any demo users that exist (optional).
-    const assignees = await prisma.user.findMany({
-        where: { email: { in: ["tech@networkservice.in", "front@networkservice.in", "des@networkservice.in"] } },
-        select: { id: true },
-    });
+    // Actor snapshot (frozen JSON, no User FK) — matches TaskActor in
+    // src/modules/administration/lib/types.ts.
+    const adminPos = admin.userPositions[0]?.position ?? null;
+    const createdBy = {
+        userId: admin.id,
+        userName: admin.name,
+        avatarUrl: admin.avatarUrl ?? null,
+        positionId: adminPos?.id ?? null,
+        positionTitle: adminPos?.title ?? null,
+    };
+
+    // Tasks are owned by Positions (seats). Spread across whatever seats exist.
+    const positions = await prisma.position.findMany({ select: { id: true }, orderBy: { title: "asc" } });
 
     console.log(`[1/1] Creating ${DEMO_TASKS.length} tasks on pipeline ${PIPELINE_ID}…`);
     let i = 0;
     for (const t of DEMO_TASKS) {
-        const assigneeId = assignees.length ? assignees[i % assignees.length].id : null;
+        const assignedPositionId = positions.length ? positions[i % positions.length].id : null;
         await prisma.task.create({
             data: {
                 title: t.title,
@@ -62,8 +75,8 @@ async function main() {
                 priority: t.priority,
                 pipelineId: PIPELINE_ID,
                 status: t.status,
-                assigneeId,
-                createdById: admin.id,
+                assignedPositionId,
+                createdBy,
                 completedAt: t.status === "S28" ? new Date() : null,
             },
         });

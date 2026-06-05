@@ -13,8 +13,9 @@ import {
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { TallyDateTimeInput } from "@/shared/components/TallyDateTimeInput";
 import { PRIORITY_META } from "@/utils/constants";
-import type { TaskDto, TaskPriority, TaskUserLite } from "../lib/types";
+import type { TaskDto, TaskPriority, TaskPositionOption } from "../lib/types";
 
 const PRIORITIES: TaskPriority[] = ["LOW", "MEDIUM", "HIGH", "URGENT"];
 const UNASSIGNED = "__none__";
@@ -30,13 +31,13 @@ function toLocalInput(iso: string | null): string {
 export default function TaskFormDialog({
     open,
     onOpenChange,
-    users,
+    positions,
     task,
     onSaved,
 }: {
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    users: TaskUserLite[];
+    positions: TaskPositionOption[];
     /** When set, the dialog edits this task; otherwise it creates a new one. */
     task?: TaskDto | null;
     onSaved: () => void;
@@ -46,7 +47,7 @@ export default function TaskFormDialog({
     const [description, setDescription] = useState("");
     const [category, setCategory] = useState("");
     const [priority, setPriority] = useState<TaskPriority>("MEDIUM");
-    const [assigneeId, setAssigneeId] = useState<string>(UNASSIGNED);
+    const [assignedPositionId, setAssignedPositionId] = useState<string>(UNASSIGNED);
     const [dueDate, setDueDate] = useState("");
     const [saving, setSaving] = useState(false);
 
@@ -57,7 +58,7 @@ export default function TaskFormDialog({
         setDescription(task?.description ?? "");
         setCategory(task?.category ?? "");
         setPriority(task?.priority ?? "MEDIUM");
-        setAssigneeId(task?.assigneeId ? String(task.assigneeId) : UNASSIGNED);
+        setAssignedPositionId(task?.assignedPositionId ?? UNASSIGNED);
         setDueDate(toLocalInput(task?.dueDate ?? null));
     }, [open, task]);
 
@@ -72,7 +73,7 @@ export default function TaskFormDialog({
             description: description.trim() || null,
             category: category.trim() || null,
             priority,
-            assigneeId: assigneeId === UNASSIGNED ? null : Number(assigneeId),
+            assignedPositionId: assignedPositionId === UNASSIGNED ? null : assignedPositionId,
             dueDate: dueDate || null,
         };
         try {
@@ -154,29 +155,25 @@ export default function TaskFormDialog({
 
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                            <Label>Assignee</Label>
-                            <Select value={assigneeId} onValueChange={setAssigneeId}>
+                            <Label>Assign to (position)</Label>
+                            <Select value={assignedPositionId} onValueChange={setAssignedPositionId}>
                                 <SelectTrigger>
                                     <SelectValue placeholder="Unassigned" />
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value={UNASSIGNED}>Unassigned</SelectItem>
-                                    {users.map((u) => (
-                                        <SelectItem key={u.id} value={String(u.id)}>
-                                            {u.name}
+                                    {positions.map((p) => (
+                                        <SelectItem key={p.id} value={p.id}>
+                                            {p.title}
+                                            {p.branchName ? ` · ${p.branchName}` : ""}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
                         </div>
                         <div className="space-y-2">
-                            <Label htmlFor="task-due">Due date</Label>
-                            <Input
-                                id="task-due"
-                                type="datetime-local"
-                                value={dueDate}
-                                onChange={(e) => setDueDate(e.target.value)}
-                            />
+                            <Label>Due date</Label>
+                            <TallyDateTimeInput value={dueDate} onValueChange={setDueDate} />
                         </div>
                     </div>
                 </div>

@@ -5,6 +5,7 @@ import { MessageSquare, CalendarClock } from "lucide-react";
 import UserAvatar from "@/shared/components/UserAvatar";
 import { PRIORITY_META } from "@/utils/constants";
 import { formatDate } from "@/shared/lib/format";
+import { useNow } from "@/shared/hooks";
 import type { TaskDto, TaskPriority } from "../lib/types";
 
 /** Left-edge accent per priority — quick visual scan down a column. */
@@ -28,8 +29,20 @@ export default function TaskCard({
 }) {
     const priority = PRIORITY_META[task.priority] ?? PRIORITY_META.MEDIUM;
     const accent = PRIORITY_ACCENT[task.priority] ?? PRIORITY_ACCENT.MEDIUM;
+    // "now" read in an effect (useNow) — calling Date.now() during render trips react-hooks/purity.
+    const now = useNow();
     const overdue =
-        task.dueDate && !task.completedAt && new Date(task.dueDate).getTime() < Date.now();
+        task.dueDate && !task.completedAt && new Date(task.dueDate).getTime() < now;
+
+    // Effective owner = whoever currently holds the assigned seat.
+    const holders = task.assignedPosition?.holders.map((h) => h.user) ?? [];
+    const holder = holders[0] ?? null;
+    const holderLabel =
+        holders.length === 0
+            ? "Vacant"
+            : holders.length === 1
+                ? holder!.name
+                : `${holder!.name} +${holders.length - 1}`;
 
     return (
         <button
@@ -53,16 +66,25 @@ export default function TaskCard({
             )}
 
             <div className="mt-3 flex items-center justify-between gap-2 text-xs text-muted-foreground">
-                <div className="flex items-center gap-2">
-                    {task.assignee ? (
-                        <span className="flex items-center gap-1.5">
-                            <UserAvatar
-                                name={task.assignee.name}
-                                avatarUrl={task.assignee.avatarUrl}
-                                role={task.assignee.role}
-                                sizePx={20}
-                            />
-                            <span className="max-w-[90px] truncate">{task.assignee.name}</span>
+                <div className="flex min-w-0 items-center gap-2">
+                    {task.assignedPosition ? (
+                        <span className="flex min-w-0 items-center gap-1.5">
+                            {holder && (
+                                <UserAvatar
+                                    name={holder.name}
+                                    avatarUrl={holder.avatarUrl}
+                                    role={holder.role}
+                                    sizePx={20}
+                                />
+                            )}
+                            <span className="flex min-w-0 flex-col leading-tight">
+                                <span className="max-w-[120px] truncate font-medium text-foreground/80">
+                                    {task.assignedPosition.title}
+                                </span>
+                                <span className={`max-w-[120px] truncate text-[10px] ${holders.length === 0 ? "italic" : ""}`}>
+                                    {holderLabel}
+                                </span>
+                            </span>
                         </span>
                     ) : (
                         <span className="italic">Unassigned</span>

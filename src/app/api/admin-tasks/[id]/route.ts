@@ -4,6 +4,17 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { updateTaskSchema } from "@/shared/lib/schemas/taskSchema";
+import { buildTaskActor } from "@/modules/administration/lib/taskActor";
+
+const ASSIGNED_POSITION_SELECT = {
+    select: {
+        id: true,
+        title: true,
+        branch: { select: { name: true } },
+        department: { select: { name: true } },
+        holders: { select: { user: { select: { id: true, name: true, avatarUrl: true, role: true } } } },
+    },
+} as const;
 
 const TASK_SELECT = {
     id: true,
@@ -13,16 +24,15 @@ const TASK_SELECT = {
     priority: true,
     pipelineId: true,
     status: true,
-    assigneeId: true,
-    createdById: true,
+    assignedPositionId: true,
+    createdBy: true, // JSON actor snapshot
     dueDate: true,
     completedAt: true,
     order: true,
     createdAt: true,
     updatedAt: true,
     ticketStatus: { select: { id: true, label: true, color: true, order: true, isTerminal: true } },
-    assignee: { select: { id: true, name: true, avatarUrl: true, role: true } },
-    createdBy: { select: { id: true, name: true } },
+    assignedPosition: ASSIGNED_POSITION_SELECT,
     comments: {
         orderBy: { createdAt: "asc" },
         select: {
@@ -30,7 +40,7 @@ const TASK_SELECT = {
             body: true,
             kind: true,
             createdAt: true,
-            user: { select: { id: true, name: true, avatarUrl: true, role: true } },
+            author: true, // JSON actor snapshot
         },
     },
     _count: { select: { comments: true } },
@@ -59,7 +69,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
         const existing = await prisma.task.findUnique({
             where: { id },
-            select: { id: true, pipelineId: true, status: true, assigneeId: true },
+            select: { id: true, pipelineId: true, status: true, assignedPositionId: true },
         });
         if (!existing) return NextResponse.json({ error: "Task not found" }, { status: 404 });
 
@@ -82,8 +92,22 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             statusChangeNote = `Moved to "${target.label}"`;
         }
 
-        const assigneeChanging =
-            data.assigneeId !== undefined && data.assigneeId !== existing.assigneeId;
+        const positionChanging =
+            data.assignedPositionId !== undefined &&
+            data.assignedPositionId !== existing.assignedPositionId;
+
+        // Resolve the target seat's title up-front for the SYSTEM activity note.
+        let newPositionTitle: string | null = null;
+        if (positionChanging && data.assignedPositionId) {
+            const pos = await prisma.position.findUnique({
+                where: { id: data.assignedPositionId },
+                select: { title: true },
+            });
+            if (!pos) {
+                return NextResponse.json({ error: "Assigned position not found" }, { status: 400 });
+            }
+            newPositionTitle = pos.title;
+        }
 
         const task = await prisma.task.update({
             where: { id },
@@ -92,7 +116,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 ...(data.description !== undefined ? { description: data.description ?? null } : {}),
                 ...(data.category !== undefined ? { category: data.category ?? null } : {}),
                 ...(data.priority !== undefined ? { priority: data.priority } : {}),
-                ...(data.assigneeId !== undefined ? { assigneeId: data.assigneeId ?? null } : {}),
+                ...(data.assignedPositionId !== undefined ? { assignedPositionId: data.assignedPositionId ?? null } : {}),
                 ...(data.dueDate !== undefined ? { dueDate: data.dueDate ? new Date(data.dueDate) : null } : {}),
                 ...(data.status !== undefined ? { status: data.status } : {}),
                 ...(completedAt !== undefined ? { completedAt } : {}),
@@ -103,16 +127,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         // Log status / assignment changes as SYSTEM activity entries.
         const systemNotes: string[] = [];
         if (statusChangeNote) systemNotes.push(statusChangeNote);
-        if (assigneeChanging) {
+        if (positionChanging) {
             systemNotes.push(
-                data.assigneeId
-                    ? `Assigned to ${task.assignee?.name ?? "user #" + data.assigneeId}`
+                data.assignedPositionId
+                    ? `Assigned to ${newPositionTitle}`
                     : "Unassigned",
             );
         }
         if (systemNotes.length > 0) {
+            const author = await buildTaskActor(user.id);
             await prisma.taskComment.createMany({
-                data: systemNotes.map((body) => ({ taskId: id, userId: user.id, body, kind: "SYSTEM" as const })),
+                data: systemNotes.map((body) => ({ taskId: id, author, body, kind: "SYSTEM" as const })),
             });
         }
 

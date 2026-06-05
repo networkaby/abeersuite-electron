@@ -78,6 +78,10 @@ model Position {
   children     Position[]     @relation("PositionHierarchy")
   roleTemplate Role?          @relation(fields: [roleTemplateId], references: [id])
   holders      UserPosition[]
+  // Work-board tasks owned by this seat (Administration board, etc.)
+  tasks        Task[]         @relation("TaskAssignedPosition")
+  // CRM leads/deals owned by this seat
+  crmLeads     CrmLead[]      @relation("CrmLeadPosition")
 }
 
 model UserPosition {

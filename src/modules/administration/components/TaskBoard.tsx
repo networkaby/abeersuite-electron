@@ -11,17 +11,18 @@ import { Label } from "@/components/ui/label";
 import TaskCard from "./TaskCard";
 import TaskFormDialog from "./TaskFormDialog";
 import TaskDetailDialog from "./TaskDetailDialog";
-import type { TaskDto, TaskStage, TaskUserLite } from "../lib/types";
+import type { TaskDto, TaskStage, TaskPositionOption } from "../lib/types";
 
 export default function TaskBoard({
     stages,
-    users,
-    currentUserId,
+    positions,
+    myPositionIds,
     canManage,
 }: {
     stages: TaskStage[];
-    users: TaskUserLite[];
-    currentUserId: number;
+    positions: TaskPositionOption[];
+    /** Positions the current user holds — drives the "My tasks" filter. */
+    myPositionIds: string[];
     canManage: boolean;
 }) {
     const router = useRouter();
@@ -63,7 +64,10 @@ export default function TaskBoard({
         }
     }, [searchParams, canManage, router]);
 
-    const visible = myTasksOnly ? tasks.filter((t) => t.assigneeId === currentUserId) : tasks;
+    const mySet = new Set(myPositionIds);
+    const visible = myTasksOnly
+        ? tasks.filter((t) => t.assignedPositionId !== null && mySet.has(t.assignedPositionId))
+        : tasks;
     const byStage = (stageId: string) => visible.filter((t) => t.status === stageId);
     const totalVisible = visible.length;
 
@@ -195,7 +199,7 @@ export default function TaskBoard({
             <TaskFormDialog
                 open={formOpen}
                 onOpenChange={setFormOpen}
-                users={users}
+                positions={positions}
                 task={editingTask}
                 onSaved={load}
             />

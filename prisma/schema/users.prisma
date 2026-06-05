@@ -51,8 +51,6 @@ model User {
   authoredPosts           WallPost[]          @relation("AuthoredPosts")
   userPositions           UserPosition[]
   userPermissions         UserPermission[]
-  crmLeadsOwned           CrmLead[]           @relation("CrmLeadOwner")
-  crmLeadsCreated         CrmLead[]           @relation("CrmLeadCreatedBy")
   // POS shift relations
   posShifts               PosShift[]          @relation("PosShiftUser")
   posShiftsOpenedBy       PosShift[]          @relation("PosShiftOpenedBy")
@@ -65,9 +63,6 @@ model User {
   giftCardsCreated        GiftCard[]          @relation("GiftCardCreatedBy")
   giftCardTxnsCreated     GiftCardTxn[]       @relation("GiftCardTxnCreatedBy")
   additionalCostAllocationsCreated AdditionalCostAllocation[] @relation("AdditionalCostAllocationCreatedBy")
-  tasksAssigned           Task[]              @relation("TaskAssignee")
-  tasksCreated            Task[]              @relation("TaskCreatedBy")
-  taskComments            TaskComment[]       @relation("TaskCommentUser")
 }
 
 // ── QuickNote — per-user scratch pad ──────────────────────────────────────
