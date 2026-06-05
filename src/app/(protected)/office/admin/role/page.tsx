@@ -5,8 +5,13 @@ import axios from "axios";
 import { toast } from "sonner";
 import {
     AlertTriangle,
+    BadgePercent,
+    Boxes,
+    Calculator,
     Check,
     ClipboardList,
+    Gift,
+    HeartHandshake,
     Lock,
     Plus,
     RotateCcw,
@@ -15,9 +20,12 @@ import {
     Settings,
     Shield,
     ShieldCheck,
+    ShoppingCart,
+    Store,
     Ticket,
     Trash2,
     Users,
+    Wallet,
     Wrench,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -129,9 +137,72 @@ const MODULE_META: Record<string, { label: string; description: string; icon: Re
         icon: <Settings size={13} />,
         chip: "bg-purple-50 border-purple-200 text-purple-700",
     },
+    accountancy: {
+        label: "Accountancy",
+        description: "Books, ledgers, and financial reports",
+        icon: <Calculator size={13} />,
+        chip: "bg-slate-50 border-slate-200 text-slate-700",
+    },
+    finance: {
+        label: "Finance",
+        description: "Voucher, invoice, journal, and payment lifecycle",
+        icon: <Wallet size={13} />,
+        chip: "bg-cyan-50 border-cyan-200 text-cyan-700",
+    },
+    inventory: {
+        label: "Inventory",
+        description: "Stock scopes and inventory voucher lifecycle",
+        icon: <Boxes size={13} />,
+        chip: "bg-amber-50 border-amber-200 text-amber-700",
+    },
+    pos: {
+        label: "Point of Sale",
+        description: "Shift, till, and handover controls",
+        icon: <ShoppingCart size={13} />,
+        chip: "bg-green-50 border-green-200 text-green-700",
+    },
+    loyalty: {
+        label: "Loyalty",
+        description: "Earn/redeem wallet config and adjustments",
+        icon: <HeartHandshake size={13} />,
+        chip: "bg-pink-50 border-pink-200 text-pink-700",
+    },
+    coupons: {
+        label: "Coupons",
+        description: "Promotions and gift-card management",
+        icon: <Gift size={13} />,
+        chip: "bg-rose-50 border-rose-200 text-rose-700",
+    },
+    crm: {
+        label: "CRM",
+        description: "Customer relationship and sales pipeline",
+        icon: <BadgePercent size={13} />,
+        chip: "bg-violet-50 border-violet-200 text-violet-700",
+    },
+    ecommerce: {
+        label: "E-commerce",
+        description: "Online storefront management",
+        icon: <Store size={13} />,
+        chip: "bg-teal-50 border-teal-200 text-teal-700",
+    },
 };
 
-const MODULE_ORDER = ["core", "customers", "tickets", "assignments", "service", "admin"];
+const MODULE_ORDER = [
+    "core",
+    "customers",
+    "tickets",
+    "assignments",
+    "service",
+    "admin",
+    "accountancy",
+    "finance",
+    "inventory",
+    "pos",
+    "loyalty",
+    "coupons",
+    "crm",
+    "ecommerce",
+];
 const NO_COPY_ROLE = "__none__";
 
 const MATRIX_COLUMN_GROUPS = [
@@ -361,6 +432,23 @@ const MATRIX_ROWS: {
             deleteOrg: "settings:pipelines",
         },
     },
+    {
+        key: "accountancy",
+        label: "Accountancy",
+        module: "accountancy",
+        cells: {
+            create: "accountancy:create:own",
+            viewOwn: "accountancy:view:own",
+            viewBranch: "accountancy:view:br",
+            viewOrg: "accountancy:view:org",
+            editOwn: "accountancy:edit:own",
+            editBranch: "accountancy:edit:br",
+            editOrg: "accountancy:edit:org",
+            deleteOwn: "accountancy:delete:own",
+            deleteBranch: "accountancy:delete:br",
+            deleteOrg: "accountancy:delete:org",
+        },
+    },
     // admin:bypass is intentionally removed from the matrix — it is a code-only
     // sentinel grantable only via the env super admin (.env). It must never appear
     // in the UI where it could be ticked by mistake.
@@ -461,6 +549,9 @@ export default function RolePage() {
         : allPerms;
 
     const matrixPermissions = filtered.filter((permission) => MATRIX_PERMISSION_IDS.has(permission.id));
+    const additionalPermissions = filtered.filter(
+        (permission) => !MATRIX_PERMISSION_IDS.has(permission.id) && permission.id !== "admin:bypass"
+    );
 
     const selectedCount = selected.size;
     const totalCount = allPerms.length;
@@ -702,6 +793,12 @@ export default function RolePage() {
                                             permissions={matrixPermissions}
                                             permissionById={permissionById}
                                             search={search}
+                                            selected={selected}
+                                            original={original}
+                                            onTogglePerm={togglePerm}
+                                        />
+                                        <AdditionalPermissions
+                                            permissions={additionalPermissions}
                                             selected={selected}
                                             original={original}
                                             onTogglePerm={togglePerm}
@@ -1215,6 +1312,94 @@ function PermissionMatrix({
                         ))}
                     </tbody>
                 </table>
+            </div>
+        </div>
+    );
+}
+
+function AdditionalPermissions({
+    permissions,
+    selected,
+    original,
+    onTogglePerm,
+}: {
+    permissions: Permission[];
+    selected: Set<string>;
+    original: Set<string>;
+    onTogglePerm: (id: string) => void;
+}) {
+    if (permissions.length === 0) return null;
+
+    const modules = [
+        ...MODULE_ORDER.filter((module) => permissions.some((permission) => permission.module === module)),
+        ...Array.from(new Set(permissions.map((permission) => permission.module)))
+            .filter((module) => !MODULE_ORDER.includes(module))
+            .sort(),
+    ];
+    const grouped = modules.map((module) => ({
+        module,
+        permissions: permissions.filter((permission) => permission.module === module),
+    }));
+
+    return (
+        <div className="overflow-hidden rounded-lg border border-border bg-card">
+            <div className="border-b border-border bg-muted/40 px-3 py-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Additional permissions
+                </p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                    Lifecycle, finance, POS, and module toggles not modelled by the CRUD matrix.
+                </p>
+            </div>
+            <div className="divide-y divide-border">
+                {grouped.map((group) => (
+                    <div key={group.module} className="px-3 py-2.5">
+                        <div className="mb-1.5 flex items-center gap-2">
+                            <span className="text-[11px] font-bold uppercase tracking-wider text-foreground">
+                                {MODULE_META[group.module]?.label ?? group.module}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground">
+                                {group.permissions.length} {group.permissions.length === 1 ? "permission" : "permissions"}
+                            </span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                            {group.permissions.map((permission) => {
+                                const isOn = selected.has(permission.id);
+                                const changed = selected.has(permission.id) !== original.has(permission.id);
+                                return (
+                                    <Button
+                                        key={permission.id}
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => onTogglePerm(permission.id)}
+                                        title={`${permission.label} (${permission.id})${permission.description ? `\n${permission.description}` : ""}`}
+                                        className={[
+                                            "h-auto items-start gap-1.5 rounded-md border px-2 py-1 text-left transition-colors",
+                                            isOn
+                                                ? "border-primary bg-primary/10 text-foreground hover:bg-primary/15"
+                                                : "border-border hover:border-primary/60 hover:bg-primary/5",
+                                            changed ? "ring-2 ring-primary/20" : "",
+                                        ].join(" ")}
+                                    >
+                                        <span
+                                            className={[
+                                                "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border",
+                                                isOn ? "border-primary bg-primary text-primary-foreground" : "border-border",
+                                            ].join(" ")}
+                                        >
+                                            {isOn && <Check size={10} strokeWidth={3} />}
+                                        </span>
+                                        <span className="flex flex-col">
+                                            <span className="text-[11px] font-medium leading-tight">{permission.label}</span>
+                                            <span className="text-[10px] leading-tight text-muted-foreground">{permission.id}</span>
+                                        </span>
+                                    </Button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                ))}
             </div>
         </div>
     );
