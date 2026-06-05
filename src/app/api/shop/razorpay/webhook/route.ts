@@ -1,10 +1,18 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { transitionShopOrderStatus } from "@/modules/ecommerce/lib/orderStatus";
-import { ShopOrderStatus } from "@/generated/prisma/enums";
 
 /**
- * Razorpay webhook stub — verify signature in production before trusting payload.
+ * Razorpay webhook — PARKED.
+ *
+ * TODO(payment-gateway): online payment is not live in the COD MVP. When a
+ * gateway is wired back in, this handler must (1) verify the webhook signature,
+ * then (2) advance the order on the sales-orders pipeline via
+ * `transitionOrderPipelineStatus`. It must NOT post to the GL — invoicing stays
+ * manual (the old crude `postSaleJournal` auto-JE was removed in the COD rebuild
+ * to avoid double-booking).
+ *
+ * For now it only records the payment id against a matching order so a future
+ * reconciliation pass can find it; it never changes order status.
  */
 export async function POST(req: Request) {
     try {
@@ -23,7 +31,7 @@ export async function POST(req: Request) {
 
         const row = await prisma.shopOrder.findFirst({
             where: { razorpayOrderId: rzOrderId },
-            select: { id: true, status: true },
+            select: { id: true },
         });
         if (!row) {
             return NextResponse.json({ ok: true, ignored: true });
@@ -34,28 +42,7 @@ export async function POST(req: Request) {
             data: { razorpayPaymentId: paymentId ?? null },
         });
 
-        if (row.status === ShopOrderStatus.PENDING_PAYMENT) {
-            const actor =
-                (await prisma.user.findFirst({
-                    where: { role: "R1" },
-                    orderBy: { id: "asc" },
-                    select: { id: true },
-                })) ?? (await prisma.user.findFirst({ orderBy: { id: "asc" }, select: { id: true } }));
-
-            if (actor) {
-                try {
-                    await transitionShopOrderStatus({
-                        orderId: row.id,
-                        to: ShopOrderStatus.PAID,
-                        actorUserId: actor.id,
-                    });
-                } catch {
-                    /* already PAID or invalid transition — ignore */
-                }
-            }
-        }
-
-        return NextResponse.json({ ok: true });
+        return NextResponse.json({ ok: true, parked: true });
     } catch (e) {
         console.error(e);
         return NextResponse.json({ ok: false }, { status: 500 });

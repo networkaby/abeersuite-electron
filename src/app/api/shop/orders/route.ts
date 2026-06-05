@@ -6,6 +6,9 @@ import { resolvePortalAccountContext } from "@/shared/lib/auth/portalAccountCont
 import { requirePortalCustomer } from "@/shared/lib/auth/portalAuthGuard";
 import { invProductDb } from "@/shared/types/inventoryTypes";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
+import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
+import { barcodeTagPaise } from "@/shared/lib/pricing/barcodePrice";
+import { getOrdersPipeline } from "@/modules/ecommerce/lib/ordersPipeline";
 
 const lineSchema = z.object({
     productId: z.coerce.number().int().positive(),
@@ -33,16 +36,25 @@ export async function POST(req: Request) {
         }
 
         const productIds = [...new Set(lines.map((l) => l.productId))];
-        const products = await invProductDb(prisma).findMany({
-            where: { id: { in: productIds }, isListedInShop: true, isActive: true },
-        });
+        const [products, bands, ordersPipeline] = await Promise.all([
+            invProductDb(prisma).findMany({
+                where: { id: { in: productIds }, isListedInShop: true, isActive: true },
+            }),
+            loadBarcodeBands(),
+            getOrdersPipeline(prisma),
+        ]);
         const byId = new Map(products.map((p) => [p.id, p]));
 
         let totalPaise = 0;
         const resolvedLines: { productId: number; quantity: number; unitPricePaise: number }[] = [];
         for (const l of lines) {
             const p = byId.get(l.productId);
-            if (!p || p.effectiveSalePricePaise == null) {
+            // Charge the barcode tag (what the storefront shows), falling back to
+            // the effective price when there's no saved sale price.
+            const unitPricePaise = p
+                ? barcodeTagPaise(p.savedSalePricePaise, p.mrpPaise, bands) ?? p.effectiveSalePricePaise
+                : null;
+            if (!p || unitPricePaise == null) {
                 return NextResponse.json({ error: `Unknown product ${l.productId}` }, { status: 400 });
             }
             if (p.stock !== null && p.stock < l.quantity) {
@@ -51,22 +63,29 @@ export async function POST(req: Request) {
                     { status: 400 }
                 );
             }
-            totalPaise += p.effectiveSalePricePaise * l.quantity;
+            totalPaise += unitPricePaise * l.quantity;
             resolvedLines.push({
                 productId: l.productId,
                 quantity: l.quantity,
-                unitPricePaise: p.effectiveSalePricePaise,
+                unitPricePaise,
             });
         }
+
+        // Place the order on the sales-orders pipeline (P7) at its entry stage —
+        // it becomes a ticket on the staff orders board.
+        const entryStatus = ordersPipeline?.statuses.find((s) => s.isEntryPoint);
 
         const order = await prisma.shopOrder.create({
             data: {
                 status: "PENDING_PAYMENT",
+                paymentMethod: "COD",
                 totalPaise,
                 personId: customerId,
                 accountId: context.active.accountId,
                 guestEmail: null,
                 guestPhone: null,
+                pipelineId: ordersPipeline?.id ?? null,
+                statusId: entryStatus?.id ?? null,
                 lines: {
                     create: resolvedLines.map((r) => ({
                         productId: r.productId,

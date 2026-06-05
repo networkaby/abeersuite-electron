@@ -1,159 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { ShopOrderStatus } from "@/generated/prisma/enums";
-import { balanceDelta, nextRefFromSeries } from "@/modules/accountancy/lib/balance";
-import { invNextRef } from "@/modules/inventory/lib/stock";
 import { createSystemInboxNotifications } from "@/modules/message/lib/inbox";
-import { canTransition, ORDER_STATUS_TRANSITIONS } from "@/modules/ecommerce/lib/orderStatusTransitions";
 import { CONFIRMED_STATUS_LABEL } from "@/modules/ecommerce/lib/ordersPipeline";
-import { selectPrimaryEmail } from "@/shared/lib/prisma/fragments";
-
-export { canTransition, ORDER_STATUS_TRANSITIONS };
-
-async function postSaleJournal(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    tx: any,
-    orderId: number,
-    totalPaise: number,
-    createdById: number,
-) {
-    const [bank, revenue] = await Promise.all([
-        tx.account.findFirst({ where: { code: "1010" } }),
-        tx.account.findFirst({ where: { code: "4150" } }),
-    ]);
-    if (!bank || !revenue) {
-        throw new Error('Required GL accounts missing — seed chart (codes "1010", "4150").');
-    }
-    const amount = totalPaise / 100;
-    if (amount <= 0) return null;
-
-    const reference = await nextRefFromSeries(tx, "GL_POSTING", createdById);
-    const lines = [
-        {
-            accountId: bank.id,
-            type: "DEBIT" as const,
-            amount,
-            description: `Shop order #${orderId} — payment received`,
-        },
-        {
-            accountId: revenue.id,
-            type: "CREDIT" as const,
-            amount,
-            description: `Shop order #${orderId} — shop sales revenue`,
-        },
-    ];
-
-    const je = await tx.journalEntry.create({
-        data: {
-            date: new Date(),
-            reference,
-            description: `E-commerce sale — order #${orderId}`,
-            status: "POSTED",
-            postedAt: new Date(),
-            createdById,
-            lines: { create: lines },
-        },
-    });
-
-    for (const line of lines) {
-        const acct = await tx.account.findUnique({ where: { id: line.accountId } });
-        if (!acct?.normalBalance) continue;
-        const delta = balanceDelta(acct.normalBalance, line.type, line.amount);
-        await tx.account.update({
-            where: { id: line.accountId },
-            data: { balance: { increment: delta } },
-        });
-    }
-
-    return je;
-}
-
-/**
- * Auto-create a DRAFT SALE InvVoucher when an order is Confirmed.
- * Links InvVoucher.shopOrderId → order.id and sets the account from
- * order.accountId. Replaces the legacy Invoice path that lived here
- * before the Invoice → InvVoucher consolidation (Layer 2e, 2026-05-24).
- *
- * Stays DRAFT until the operator POSTs it via the inventory voucher
- * lifecycle — `postInvVoucherToGl` then auto-creates the JE
- * (Dr Customer AR / Cr Shop Sales Revenue / Cr GST Output).
- */
-async function createOrderInvVoucher(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    tx: any,
-    order: {
-        id: number;
-        accountId: number | null;
-        branchId?: string | null;
-        totalPaise: number;
-        lines: { product: { id: number; name: string }; quantity: number; unitPricePaise: number }[];
-    },
-    createdById: number,
-    fallbackBranchId: string,
-): Promise<number | null> {
-    if (!order.accountId) return null;
-
-    const reference = await invNextRef(tx, "SALE");
-    const computedLines = order.lines.map((l) => {
-        const subtotal = l.quantity * (l.unitPricePaise / 100);
-        return {
-            productId:   l.product.id,
-            description: l.product.name,
-            quantity:    l.quantity,
-            rate:        l.unitPricePaise / 100,
-            taxRate:     0,
-            taxAmount:   0,
-            amount:      subtotal,
-        };
-    });
-    const subtotal = computedLines.reduce((s, l) => s + l.amount, 0);
-    const totalAmount = subtotal;
-
-    const today = new Date();
-
-    const voucher = await tx.invVoucher.create({
-        data: {
-            type:            "SALE",
-            reference,
-            branchId:        order.branchId ?? fallbackBranchId,
-            date:            today,
-            description:     `Shop order #${order.id}`,
-            status:          "DRAFT",
-            accountId:       order.accountId,
-            partyType:       "account",
-            partyId:         order.accountId,
-            shopOrderId:     order.id,
-            paymentMode:     "CREDIT",
-            deliveryMode:    "SHIPPED",   // ecommerce: courier dispatch, place of supply = customer's state
-            subtotal,
-            taxAmount:       0,
-            totalAmount,
-            amountReceived:  0,
-            creditPeriodDays: 30,
-            createdById,
-            lines: { create: computedLines },
-        },
-    });
-
-    return voucher.id;
-}
-
-/** Run after DB commit — inbox only. */
-export async function notifyStaffLowStock(productName: string, productId: number, stock: number) {
-    await createSystemInboxNotifications({
-        roleIds: ["R1", "R2"],
-        title: "Low stock alert",
-        body: `${productName} (#${productId}) is at ${stock} units.`,
-        link: `/office/ecommerce/products/${productId}`,
-    });
-}
-
-export type TransitionShopOrderInput = {
-    orderId: number;
-    to: ShopOrderStatus;
-    courier?: string | null;
-    trackingNumber?: string | null;
-    actorUserId: number;
-};
 
 export type TransitionOrderPipelineInput = {
     orderId: number;
@@ -164,72 +11,39 @@ export type TransitionOrderPipelineInput = {
     actorUserId: number;
 };
 
-/** Pipeline-based status transition for sales orders (P7). */
+/**
+ * Pure pipeline status move for a shop order (sales-orders / P7).
+ *
+ * Phase 1 (COD MVP): moving stages changes the order's `statusId` only — there is
+ * **NO** stock decrement and **NO** voucher / journal-entry creation. Invoice,
+ * delivery, GL posting and stock movement are all done **MANUALLY** by staff
+ * through the office Sale-voucher flow (which posts stock via `recordStockMovement`
+ * and GL via `postInvVoucherToGl`, with real GST, on post).
+ *
+ * This deliberately replaces the old auto path (a crude hardcoded JE on "Paid"
+ * plus a DRAFT SALE voucher on "Confirmed") that bypassed the stock ledger and
+ * could double-book the same sale.
+ */
 export async function transitionOrderPipelineStatus(input: TransitionOrderPipelineInput) {
     const { orderId, toStatusId, toStatusLabel, courier, trackingNumber, actorUserId } = input;
 
-    const result = await prisma.$transaction(async (tx) => {
-        const order = await tx.shopOrder.findUnique({
-            where: { id: orderId },
-            include: {
-                lines: { include: { product: true } },
-                account: true,
-                invVoucher: { select: { id: true } },
-            },
-        });
-        if (!order) throw new Error("Order not found");
+    const existing = await prisma.shopOrder.findUnique({
+        where: { id: orderId },
+        select: { id: true },
+    });
+    if (!existing) throw new Error("Order not found");
 
-        const lowStockHints: { name: string; id: number; stock: number }[] = [];
-
-        // Decrement stock on Confirmed (sale is committed at this point)
-        if (toStatusLabel === CONFIRMED_STATUS_LABEL) {
-            for (const line of order.lines) {
-                const p = line.product;
-                if (p.stock === null) continue;
-                if (p.stock < line.quantity) {
-                    throw new Error(`Insufficient stock for ${p.name} (need ${line.quantity}, have ${p.stock})`);
-                }
-                const nextStock = p.stock - line.quantity;
-                await tx.invProduct.update({
-                    where: { id: p.id },
-                    data: { stock: nextStock },
-                });
-                if (nextStock <= p.lowStockThreshold) {
-                    lowStockHints.push({ name: p.name, id: p.id, stock: nextStock });
-                }
-            }
-        }
-
-        const updated = await tx.shopOrder.update({
-            where: { id: orderId },
-            data: {
-                statusId: toStatusId,
-                ...(courier !== undefined ? { courier: courier ?? null } : {}),
-                ...(trackingNumber !== undefined ? { trackingNumber: trackingNumber ?? null } : {}),
-            },
-            include: {
-                lines: { include: { product: true } },
-                account: true,
-            },
-        });
-
-        // Auto-create DRAFT SALE InvVoucher when order is Confirmed.
-        // Branch context: order has no branch FK today, so we resolve the
-        // org's first active branch as a fallback. Operators retag in the
-        // voucher edit screen if a different branch should own the sale.
-        let invoiceId: number | null = null;
-        if (toStatusLabel === CONFIRMED_STATUS_LABEL && !order.invVoucher) {
-            const fallbackBranch = await tx.branch.findFirst({
-                where:  { isActive: true },
-                orderBy: { name: "asc" },
-                select: { id: true },
-            });
-            if (fallbackBranch) {
-                invoiceId = await createOrderInvVoucher(tx, order, actorUserId, fallbackBranch.id);
-            }
-        }
-
-        return { order: updated, lowStockHints, invoiceId };
+    const order = await prisma.shopOrder.update({
+        where: { id: orderId },
+        data: {
+            statusId: toStatusId,
+            ...(courier !== undefined ? { courier: courier ?? null } : {}),
+            ...(trackingNumber !== undefined ? { trackingNumber: trackingNumber ?? null } : {}),
+        },
+        include: {
+            lines: { include: { product: true } },
+            account: true,
+        },
     });
 
     const link = `/office/ecommerce/orders/${orderId}`;
@@ -238,164 +52,21 @@ export async function transitionOrderPipelineStatus(input: TransitionOrderPipeli
             roleIds: ["R1", "R2"],
             actorUserId,
             title: `Order #${orderId} confirmed`,
-            body: result.invoiceId
-                ? `Invoice auto-created (INV). Ready for packing.`
-                : `Order confirmed. Ready for packing.`,
+            body: "Order confirmed. Raise the invoice and arrange delivery.",
             link,
         });
     }
-    if (input.trackingNumber && toStatusLabel === "Dispatched") {
+    if (trackingNumber && toStatusLabel === "Dispatched") {
         await createSystemInboxNotifications({
             roleIds: ["R1", "R2"],
             actorUserId,
             title: `Order #${orderId} dispatched`,
-            body: input.trackingNumber
-                ? `Courier: ${input.courier ?? "—"} · Tracking: ${input.trackingNumber}`
-                : "Update tracking on the order detail page.",
+            body: `Courier: ${courier ?? "—"} · Tracking: ${trackingNumber}`,
             link,
         });
     }
 
-    for (const hint of result.lowStockHints) {
-        await notifyStaffLowStock(hint.name, hint.id, hint.stock);
-    }
-
-    return result;
-}
-
-export async function transitionShopOrderStatus(input: TransitionShopOrderInput) {
-    const { orderId, to, courier, trackingNumber, actorUserId } = input;
-
-    const result = await prisma.$transaction(async (tx) => {
-        const order = await tx.shopOrder.findUnique({
-            where: { id: orderId },
-            include: {
-                lines: { include: { product: true } },
-                person: {
-                    select: {
-                        id: true,
-                        name: true,
-                        emails: selectPrimaryEmail,
-                    },
-                },
-            },
-        });
-        if (!order) throw new Error("Order not found");
-
-        if (!canTransition(order.status, to)) {
-            throw new Error(`Cannot transition from ${order.status} to ${to}`);
-        }
-
-        const lowStockHints: { name: string; id: number; stock: number }[] = [];
-        const now = new Date();
-
-        // Stock: decrement when entering PAID (first time)
-        if (to === ShopOrderStatus.PAID && order.status !== ShopOrderStatus.PAID) {
-            for (const line of order.lines) {
-                const p = line.product;
-                if (p.stock === null) continue;
-                if (p.stock < line.quantity) {
-                    throw new Error(`Insufficient stock for ${p.name} (need ${line.quantity}, have ${p.stock})`);
-                }
-                const nextStock = p.stock - line.quantity;
-                await tx.invProduct.update({
-                    where: { id: p.id },
-                    data: { stock: nextStock },
-                });
-                if (nextStock <= p.lowStockThreshold) {
-                    lowStockHints.push({ name: p.name, id: p.id, stock: nextStock });
-                }
-            }
-        }
-
-        // Stock: restore on REFUNDED if was PAID+
-        if (to === ShopOrderStatus.REFUNDED && order.status !== ShopOrderStatus.REFUNDED) {
-            const hadPaid =
-                order.status === ShopOrderStatus.PAID ||
-                order.status === ShopOrderStatus.PACKED ||
-                order.status === ShopOrderStatus.SHIPPED ||
-                order.status === ShopOrderStatus.DELIVERED;
-            if (hadPaid) {
-                for (const line of order.lines) {
-                    const p = line.product;
-                    if (p.stock === null) continue;
-                    await tx.invProduct.update({
-                        where: { id: p.id },
-                        data: { stock: { increment: line.quantity } },
-                    });
-                }
-            }
-        }
-
-        const data = {
-            status: to,
-            ...(courier !== undefined ? { courier: courier ?? null } : {}),
-            ...(trackingNumber !== undefined ? { trackingNumber: trackingNumber ?? null } : {}),
-            ...(to === ShopOrderStatus.PAID ? { paidAt: order.paidAt ?? now } : {}),
-            ...(to === ShopOrderStatus.PACKED ? { packedAt: order.packedAt ?? now } : {}),
-            ...(to === ShopOrderStatus.SHIPPED ? { shippedAt: order.shippedAt ?? now } : {}),
-            ...(to === ShopOrderStatus.DELIVERED ? { deliveredAt: order.deliveredAt ?? now } : {}),
-            ...(to === ShopOrderStatus.REFUNDED ? { refundedAt: order.refundedAt ?? now } : {}),
-        };
-
-        const updated = await tx.shopOrder.update({
-            where: { id: orderId },
-            data,
-            include: {
-                lines: { include: { product: true } },
-                person: {
-                    select: {
-                        id: true,
-                        name: true,
-                        emails: selectPrimaryEmail,
-                    },
-                },
-            },
-        });
-
-        let journalId: number | null = null;
-        if (to === ShopOrderStatus.PAID && order.status !== ShopOrderStatus.PAID && !order.paidAt) {
-            const je = await postSaleJournal(tx, order.id, order.totalPaise, actorUserId);
-            journalId = je?.id ?? null;
-        }
-
-        return { order: updated, prevStatus: order.status, lowStockHints, journalId };
-    });
-
-    const link = `/office/ecommerce/orders/${orderId}`;
-    if (result.prevStatus === ShopOrderStatus.PENDING_PAYMENT && input.to === ShopOrderStatus.PAID) {
-        await createSystemInboxNotifications({
-            roleIds: ["R1", "R2"],
-            actorUserId,
-            title: `Order #${orderId} marked paid`,
-            body: `Total ${(result.order.totalPaise / 100).toFixed(2)} INR recorded.`,
-            link,
-        });
-    }
-    if (input.to === ShopOrderStatus.SHIPPED) {
-        await createSystemInboxNotifications({
-            roleIds: ["R1", "R2"],
-            actorUserId,
-            title: `Order #${orderId} shipped`,
-            body: input.trackingNumber
-                ? `Courier: ${input.courier ?? "—"} · Tracking: ${input.trackingNumber}`
-                : "Update tracking on the order detail page.",
-            link,
-        });
-    }
-    if (input.to === ShopOrderStatus.REFUNDED) {
-        await createSystemInboxNotifications({
-            roleIds: ["R1", "R2"],
-            actorUserId,
-            title: `Order #${orderId} refunded`,
-            body: "Inventory restored where stock is tracked.",
-            link,
-        });
-    }
-
-    for (const hint of result.lowStockHints) {
-        await notifyStaffLowStock(hint.name, hint.id, hint.stock);
-    }
-
-    return result;
+    // invoiceId kept in the return shape for the status route; always null now
+    // because invoicing is manual.
+    return { order, invoiceId: null as number | null };
 }

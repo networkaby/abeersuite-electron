@@ -305,7 +305,8 @@ export default function EcommerceOrderDetailPage() {
                             );
                         })() : (
                             <p className="text-sm text-muted-foreground">
-                                Invoice will be auto-created when the order is <span className="font-medium">Confirmed</span>.
+                                No invoice yet. Raise it <span className="font-medium">manually</span> from the
+                                Sales voucher screen, then link it to this order.
                             </p>
                         )}
                     </div>

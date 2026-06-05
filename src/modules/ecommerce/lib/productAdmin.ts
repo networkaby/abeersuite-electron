@@ -1,5 +1,6 @@
 import type { InvProductFull } from "@/shared/types/inventoryTypes";
 import { invProductToPublic, type ShopProductPublic } from "@/shared/lib/shop/productPublic";
+import { barcodeTagPaise, type BarcodeBand } from "@/shared/lib/pricing/barcodePrice";
 
 /** Admin shape — storefront fields + inventory + stock management. */
 export type ShopProductAdmin = ShopProductPublic & {
@@ -13,11 +14,25 @@ export type ShopProductAdmin = ShopProductPublic & {
     groupId: number | null;
     brandId: number | null;
     warrantyTermId: number | null;
+    /** Resolved brand / product-group display names (null when unset). */
+    brandName: string | null;
+    groupName: string | null;
+    // Display-only: the human saved sale price and the derived barcode tag price
+    // (what the storefront actually charges). The editable `pricePaise` above
+    // stays the effective/strategy price so the form round-trips it unchanged.
+    savedSalePricePaise: number | null;
+    barcodePricePaise: number | null;
 };
 
 export function invProductToAdmin(
-    p: InvProductFull & { category?: { name: string } | null }
+    p: InvProductFull & {
+        category?: { name: string } | null;
+        brand?: { name: string } | null;
+        group?: { name: string } | null;
+    },
+    bands?: BarcodeBand[]
 ): ShopProductAdmin {
+    // No bands → editable `pricePaise` keeps the effective price (round-trip safe).
     const pub = invProductToPublic(p);
     return {
         ...pub,
@@ -31,6 +46,10 @@ export function invProductToAdmin(
         groupId: p.groupId,
         brandId: p.brandId,
         warrantyTermId: p.warrantyTermId,
+        brandName: p.brand?.name ?? null,
+        groupName: p.group?.name ?? null,
+        savedSalePricePaise: p.savedSalePricePaise,
+        barcodePricePaise: bands ? barcodeTagPaise(p.savedSalePricePaise, p.mrpPaise, bands) : null,
     };
 }
 

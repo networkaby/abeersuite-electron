@@ -423,20 +423,20 @@ export const MODULE_SECTIONS: ModuleSection[] = [
 
 
     // E-Commerce
-    // {
-    //     label: "E-Commerce",
-    //     icon: ShoppingCart,
-    //     key: "e-commerce",
-    //     dashboardHref: "/office/ecommerce",
-    //     pathPrefixes: ["/office/ecommerce"],
-    //     children: [
-    //         // { label: "Dashboard", icon: ChartArea, href: "/office/ecommerce", permission: "ecommerce:manage" },
-    //         { label: "Orders", icon: ClipboardList, href: "/office/ecommerce/orders", permission: "ecommerce:manage" },
-    //         { label: "Products", icon: Box, href: "/office/ecommerce/products", permission: "ecommerce:manage" },
-    //         { label: "Categories", icon: Layers, href: "/office/ecommerce/categories", permission: "ecommerce:manage" },
-    //         { label: "Coupons", icon: BadgePercent, href: "/office/ecommerce/coupons", permission: "ecommerce:manage" },
-    //     ],
-    // },
+    {
+        label: "E-Commerce",
+        icon: ShoppingCart,
+        key: "e-commerce",
+        dashboardHref: "/office/ecommerce",
+        pathPrefixes: ["/office/ecommerce"],
+        children: [
+            // { label: "Dashboard", icon: ChartArea, href: "/office/ecommerce", permission: "ecommerce:manage" },
+            { label: "Orders", icon: ClipboardList, href: "/office/ecommerce/orders", permission: "ecommerce:manage" },
+            { label: "Products", icon: Box, href: "/office/ecommerce/products", permission: "ecommerce:manage" },
+            { label: "Categories", icon: Layers, href: "/office/ecommerce/categories", permission: "ecommerce:manage" },
+            { label: "Coupons", icon: BadgePercent, href: "/office/ecommerce/coupons", permission: "ecommerce:manage" },
+        ],
+    },
 
 
     // HRM

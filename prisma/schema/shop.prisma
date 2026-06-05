@@ -12,6 +12,14 @@ enum ShopOrderStatus {
   CANCELLED
 }
 
+// How the customer pays. COD is the only live method today; ONLINE (Razorpay &
+// future gateways) is parked — see TODO(payment-gateway). Defaulted so the column
+// is additive (plain `db push`, no reset).
+enum ShopPaymentMethod {
+  COD
+  ONLINE
+}
+
 model ShopCoupon {
   id         String    @id @default(cuid())
   code       String    @unique
@@ -30,6 +38,8 @@ model ShopOrder {
   // Legacy enum status — kept for Razorpay webhook compat; pipeline statusId is source of truth
   status            ShopOrderStatus @default(DRAFT)
   orderSource       OrderSource     @default(ONLINE)
+  // Payment method. COD = collect on delivery (the only live method); ONLINE parked.
+  paymentMethod     ShopPaymentMethod @default(COD)
   // Pipeline-based workflow (same pattern as CrmLead)
   pipelineId        String?
   statusId          String?

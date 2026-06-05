@@ -2,6 +2,8 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { invProductToAdmin } from "@/modules/ecommerce/lib/productAdmin";
+import { resolveShopListing } from "@/modules/ecommerce/lib/shopListing";
+import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
 import { invProductDb } from "@/shared/types/inventoryTypes";
 import { prismaUniqueError } from "@/shared/lib/api";
 import { z } from "zod";
@@ -37,7 +39,11 @@ const createSchema = z.object({
     isActive: z.boolean().optional(),
 });
 
-const productInclude = { category: { select: { name: true } } } as const;
+const productInclude = {
+    category: { select: { name: true } },
+    brand: { select: { name: true } },
+    group: { select: { name: true } },
+} as const;
 
 export async function GET(req: Request) {
     const { response } = await requirePermission(PERMISSIONS.ECOMMERCE_MANAGE);
@@ -46,6 +52,7 @@ export async function GET(req: Request) {
         const { searchParams } = new URL(req.url);
         const q = searchParams.get("q")?.trim();
         const shopCategory = searchParams.get("category")?.trim();
+        const bands = await loadBarcodeBands();
         const products = await invProductDb(prisma).findMany({
             where: {
                 ...(q ? {
@@ -60,7 +67,7 @@ export async function GET(req: Request) {
             include: productInclude,
             orderBy: [{ shopCategory: "asc" }, { id: "desc" }],
         });
-        return NextResponse.json(products.map(invProductToAdmin));
+        return NextResponse.json(products.map((p) => invProductToAdmin(p, bands)));
     } catch (e) {
         return handleApiError(e, "Failed to list products");
     }
@@ -79,6 +86,31 @@ export async function POST(req: Request) {
 
         const galleryJson = b.galleryUrls && b.galleryUrls.length > 0 ? b.galleryUrls : undefined;
         const specsJson = b.specs && Object.keys(b.specs).length > 0 ? b.specs : undefined;
+        const imageUrl = b.imageUrl && b.imageUrl !== "" ? b.imageUrl : galleryJson?.[0] ?? null;
+
+        // Auto-qualify / auto-slug. A new product has no saved sale price yet, so
+        // the qualification price falls back to the effective price (pricePaise).
+        const bands = await loadBarcodeBands();
+        const listing = resolveShopListing(
+            {
+                name: b.name,
+                sku,
+                imageUrl,
+                galleryUrls: galleryJson ?? [],
+                shopDescription: b.shopDescription ?? null,
+                savedSalePricePaise: null,
+                mrpPaise: b.mrpPaise ?? null,
+                effectiveSalePricePaise: b.pricePaise ?? null,
+                slug: b.slug?.trim() || null,
+            },
+            { explicitListed: b.isListedInShop, bands }
+        );
+        if (!listing.ok) {
+            return NextResponse.json(
+                { error: `Cannot list in shop — missing: ${listing.missing.join(", ")}` },
+                { status: 422 }
+            );
+        }
 
         const p = await invProductDb(prisma).create({
             data: {
@@ -89,7 +121,7 @@ export async function POST(req: Request) {
                 groupId: b.groupId ?? null,
                 brandId: b.brandId ?? null,
                 warrantyTermId: b.warrantyTermId ?? null,
-                slug: b.slug?.trim() || null,
+                slug: listing.slug,
                 shopSubheading: b.shopSubheading ?? null,
                 shopDescription: b.shopDescription ?? null,
                 shopCategory: b.shopCategory ?? null,
@@ -97,17 +129,17 @@ export async function POST(req: Request) {
                 effectiveSalePricePaise: b.pricePaise ?? null,
                 mrpPaise: b.mrpPaise ?? null,
                 shopBadge: b.shopBadge ?? null,
-                imageUrl: b.imageUrl && b.imageUrl !== "" ? b.imageUrl : galleryJson?.[0] ?? null,
+                imageUrl,
                 galleryJson: galleryJson ?? undefined,
                 specsJson: specsJson ?? undefined,
                 stock: b.stock === undefined ? null : b.stock,
                 lowStockThreshold: b.lowStockThreshold ?? 5,
-                isListedInShop: b.isListedInShop ?? false,
+                isListedInShop: listing.isListedInShop,
                 isActive: b.isActive ?? true,
             },
             include: productInclude,
         });
-        return NextResponse.json(invProductToAdmin(p), { status: 201 });
+        return NextResponse.json(invProductToAdmin(p, bands), { status: 201 });
     } catch (e: unknown) {
         const conflict = prismaUniqueError(e, "SKU or slug already exists");
         if (conflict) return conflict;

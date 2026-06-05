@@ -1,4 +1,5 @@
 import type { InvProductFull } from "@/shared/types/inventoryTypes";
+import { barcodeTagPaise, type BarcodeBand } from "@/shared/lib/pricing/barcodePrice";
 
 /** Serializable storefront shape (SSR → client, APIs). */
 export type ShopProductPublic = {
@@ -20,8 +21,19 @@ export function productPath(p: Pick<ShopProductPublic, "id" | "slug">): string {
     return `/shop/product/${p.slug ?? p.id}`;
 }
 
+/**
+ * Map an InvProduct to its storefront shape.
+ *
+ * When `bands` is supplied (the org's barcode bands), the displayed `pricePaise`
+ * is the **printed barcode tag price** derived from the saved sale price + MRP —
+ * so the shop price equals the shelf label and the POS receipt. It falls back to
+ * `effectiveSalePricePaise` when the product has no saved sale price. When
+ * `bands` is omitted the legacy behaviour (effectiveSalePricePaise) is kept, so
+ * existing non-storefront callers are unaffected.
+ */
 export function invProductToPublic(
-    p: InvProductFull & { category?: { name: string } | null }
+    p: InvProductFull & { category?: { name: string } | null },
+    bands?: BarcodeBand[]
 ): ShopProductPublic {
     const rawGal = p.galleryJson;
     let galleryUrls: string[] = [];
@@ -45,9 +57,13 @@ export function invProductToPublic(
         subheading: p.shopSubheading,
         description: p.shopDescription,
         category: p.shopCategory ?? p.category?.name ?? "Accessories",
-        // Boundary: expose the materialized effectiveSalePricePaise under the stable
-        // shop field name `pricePaise` so the storefront UI is unchanged.
-        pricePaise: p.effectiveSalePricePaise ?? 0,
+        // Shop price = printed barcode tag (shelf == shop == receipt) when bands are
+        // supplied, else the materialized effectiveSalePricePaise. Exposed under the
+        // stable shop field name `pricePaise` so the storefront UI is unchanged.
+        pricePaise:
+            (bands ? barcodeTagPaise(p.savedSalePricePaise, p.mrpPaise, bands) : null) ??
+            p.effectiveSalePricePaise ??
+            0,
         mrpPaise: p.mrpPaise,
         badge: p.shopBadge,
         imageUrl: p.imageUrl,

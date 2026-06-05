@@ -1,5 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { invProductToPublic as shopProductToPublic } from "@/shared/lib/shop/productPublic";
+import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
+import { shopQualification } from "@/modules/ecommerce/lib/shopQualification";
 import { invProductDb } from "@/shared/types/inventoryTypes";
 import ShopPageBanner from "@/modules/external/shop/ShopPageBanner";
 import TrustStrip from "@/modules/external/store/TrustStrip";
@@ -13,12 +15,15 @@ export default async function ShopCatalogPage({
 }) {
     const sp = await searchParams;
     const initialCategory = sp.category && sp.category !== "" ? sp.category : "all";
+    const bands = await loadBarcodeBands();
     const rows = await invProductDb(prisma).findMany({
         where: { isListedInShop: true, isActive: true },
         include: { category: { select: { name: true } } },
         orderBy: [{ shopCategory: "asc" }, { id: "asc" }],
     });
-    const products = rows.map(shopProductToPublic);
+    const products = rows
+        .map((p) => shopProductToPublic(p, bands))
+        .filter((p) => shopQualification(p).qualified);
     const cats = [...new Set(products.map((p) => p.category))];
 
     const categoryPills = cats

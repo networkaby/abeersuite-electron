@@ -11,6 +11,9 @@ import type { ShopProductAdmin } from "@/modules/ecommerce/lib/productAdmin";
 import type { ShopProductPublic } from "@/shared/lib/shop/productPublic";
 import ProductGalleryUploader from "@/modules/ecommerce/components/ProductGalleryUploader";
 import ProductCard from "@/modules/external/shop/ProductCard";
+import { shopQualification } from "@/modules/ecommerce/lib/shopQualification";
+import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
+import { Check, X } from "lucide-react";
 
 function rupeesFromPaise(p: number) {
     return (p / 100).toFixed(2);
@@ -75,6 +78,21 @@ export default function ProductForm({
         setIsActive(initial.isActive ?? true);
     }, [initial]);
 
+    // Shop price = the barcode tag the storefront actually charges (derived from
+    // the saved sale price, server-side), falling back to the editable effective
+    // price while there's no saved price. Used for the live preview + readiness.
+    const shopPricePaise = initial?.barcodePricePaise ?? (paiseFromRupeesInput(priceRupees) ?? 0);
+
+    const qualification = shopQualification({
+        pricePaise: shopPricePaise,
+        imageUrl: galleryUrls[0] ?? null,
+        galleryUrls,
+        description: description.trim() || null,
+    });
+    const qualified = qualification.qualified;
+    // A non-qualified product can never be listed; the switch is forced off.
+    const listedEffective = qualified && isListedInShop;
+
     const previewProduct: ShopProductAdmin = {
         id: initial?.id ?? 0,
         sku: sku.trim() || "SKU",
@@ -83,7 +101,7 @@ export default function ProductForm({
         subheading: subheading.trim() || null,
         description: description.trim() || null,
         category: shopCategory.trim() || "Accessories",
-        pricePaise: paiseFromRupeesInput(priceRupees) ?? 0,
+        pricePaise: shopPricePaise,
         mrpPaise: mrpRupees.trim() ? paiseFromRupeesInput(mrpRupees) : null,
         badge: badge.trim() || null,
         imageUrl: galleryUrls[0] ?? null,
@@ -91,13 +109,17 @@ export default function ProductForm({
         specs: Object.fromEntries(specPairs.filter((x) => x.k.trim()).map((x) => [x.k.trim(), x.v.trim()])),
         stock: stock.trim() === "" ? null : parseInt(stock, 10),
         lowStockThreshold: parseInt(lowStockThreshold, 10) || 5,
-        isListedInShop,
+        isListedInShop: listedEffective,
         isActive,
         unitId: initial?.unitId ?? 0,
         categoryId: initial?.categoryId ?? null,
         groupId: initial?.groupId ?? null,
         brandId: initial?.brandId ?? null,
         warrantyTermId: initial?.warrantyTermId ?? null,
+        brandName: initial?.brandName ?? null,
+        groupName: initial?.groupName ?? null,
+        savedSalePricePaise: initial?.savedSalePricePaise ?? null,
+        barcodePricePaise: initial?.barcodePricePaise ?? null,
     };
 
     const submit = async () => {
@@ -119,7 +141,8 @@ export default function ProductForm({
             specs,
             stock: stock.trim() === "" ? null : parseInt(stock, 10),
             lowStockThreshold: parseInt(lowStockThreshold, 10) || 5,
-            isListedInShop,
+            // Never send "listed" for a product that isn't shop-ready (server 422s).
+            isListedInShop: listedEffective,
             isActive,
             imageUrl: galleryUrls[0] ?? null,
         };
@@ -210,9 +233,41 @@ export default function ProductForm({
                         <Input value={lowStockThreshold} onChange={(e) => setLowStockThreshold(e.target.value)} inputMode="numeric" />
                     </div>
                 </div>
+                <div className="rounded-lg border border-border p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                        <Label className="text-sm font-medium">Shop readiness</Label>
+                        <span className={qualified ? "text-xs font-medium text-emerald-600" : "text-xs font-medium text-amber-600"}>
+                            {qualified ? "Qualified" : "Not ready"}
+                        </span>
+                    </div>
+                    <ul className="space-y-1">
+                        {qualification.checks.map((c) => (
+                            <li key={c.key} className="flex items-center gap-2 text-sm">
+                                {c.ok ? (
+                                    <Check className="size-4 text-emerald-600" />
+                                ) : (
+                                    <X className="size-4 text-muted-foreground" />
+                                )}
+                                <span className={c.ok ? "" : "text-muted-foreground"}>{c.label}</span>
+                            </li>
+                        ))}
+                    </ul>
+                    {initial?.barcodePricePaise != null ? (
+                        <p className="text-xs text-muted-foreground">
+                            Shop price (barcode): <span className="font-medium tabular-nums">{formatRupeesFromPaise(initial.barcodePricePaise)}</span> — derived from the saved sale price.
+                        </p>
+                    ) : null}
+                </div>
                 <div className="flex items-center gap-2">
-                    <Switch id="listed" checked={isListedInShop} onCheckedChange={setIsListedInShop} />
-                    <Label htmlFor="listed">Listed in shop</Label>
+                    <Switch
+                        id="listed"
+                        checked={listedEffective}
+                        disabled={!qualified}
+                        onCheckedChange={setIsListedInShop}
+                    />
+                    <Label htmlFor="listed" className={!qualified ? "text-muted-foreground" : ""}>
+                        Listed in shop {!qualified ? "(add the items above to enable)" : ""}
+                    </Label>
                 </div>
                 <div className="flex items-center gap-2">
                     <Switch id="active" checked={isActive} onCheckedChange={setIsActive} />

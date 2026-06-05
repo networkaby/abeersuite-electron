@@ -2,6 +2,8 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { invProductToAdmin } from "@/modules/ecommerce/lib/productAdmin";
+import { resolveShopListing } from "@/modules/ecommerce/lib/shopListing";
+import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
 import { invProductDb } from "@/shared/types/inventoryTypes";
 import { prismaUniqueError } from "@/shared/lib/api";
 import { z } from "zod";
@@ -35,7 +37,11 @@ const patchSchema = z.object({
     isActive: z.boolean().optional(),
 });
 
-const productInclude = { category: { select: { name: true } } } as const;
+const productInclude = {
+    category: { select: { name: true } },
+    brand: { select: { name: true } },
+    group: { select: { name: true } },
+} as const;
 
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
     const { response } = await requirePermission(PERMISSIONS.ECOMMERCE_MANAGE);
@@ -44,9 +50,10 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     const pid = parseInt(id, 10);
     if (!Number.isFinite(pid)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
     try {
+        const bands = await loadBarcodeBands();
         const p = await invProductDb(prisma).findUnique({ where: { id: pid }, include: productInclude });
         if (!p) return NextResponse.json({ error: "Not found" }, { status: 404 });
-        return NextResponse.json(invProductToAdmin(p));
+        return NextResponse.json(invProductToAdmin(p, bands));
     } catch (e) {
         return handleApiError(e, "Failed to load product");
     }
@@ -62,6 +69,16 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     if (error) return error;
     const b = data;
     try {
+        const existing = await prisma.invProduct.findUnique({
+            where: { id: pid },
+            select: {
+                name: true, sku: true, imageUrl: true, galleryJson: true,
+                shopDescription: true, savedSalePricePaise: true, mrpPaise: true,
+                effectiveSalePricePaise: true, slug: true,
+            },
+        });
+        if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
         const galleryJson =
             b.galleryUrls !== undefined
                 ? b.galleryUrls.length > 0 ? b.galleryUrls : undefined
@@ -79,7 +96,6 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
         if (b.groupId !== undefined) data.groupId = b.groupId;
         if (b.brandId !== undefined) data.brandId = b.brandId;
         if (b.warrantyTermId !== undefined) data.warrantyTermId = b.warrantyTermId;
-        if (b.slug !== undefined) data.slug = b.slug?.trim() || null;
         if (b.shopSubheading !== undefined) data.shopSubheading = b.shopSubheading;
         if (b.shopDescription !== undefined) data.shopDescription = b.shopDescription;
         if (b.shopCategory !== undefined) data.shopCategory = b.shopCategory;
@@ -92,15 +108,44 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
         if (specsJson !== undefined) data.specsJson = specsJson;
         if (b.stock !== undefined) data.stock = b.stock;
         if (b.lowStockThreshold !== undefined) data.lowStockThreshold = b.lowStockThreshold;
-        if (b.isListedInShop !== undefined) data.isListedInShop = b.isListedInShop;
         if (b.isActive !== undefined) data.isActive = b.isActive;
+
+        // Resolve listing + slug from the merged (request ∪ existing) state.
+        const existingGallery = Array.isArray(existing.galleryJson)
+            ? (existing.galleryJson as unknown[]).filter((x): x is string => typeof x === "string")
+            : [];
+        const bands = await loadBarcodeBands();
+        const listing = resolveShopListing(
+            {
+                name: (data.name as string | undefined) ?? existing.name,
+                sku: (data.sku as string | undefined) ?? existing.sku,
+                imageUrl: (data.imageUrl as string | null | undefined) ?? existing.imageUrl,
+                galleryUrls: b.galleryUrls !== undefined ? b.galleryUrls : existingGallery,
+                shopDescription:
+                    b.shopDescription !== undefined ? b.shopDescription ?? null : existing.shopDescription,
+                savedSalePricePaise: existing.savedSalePricePaise,
+                mrpPaise: b.mrpPaise !== undefined ? b.mrpPaise ?? null : existing.mrpPaise,
+                effectiveSalePricePaise:
+                    b.pricePaise !== undefined ? b.pricePaise ?? null : existing.effectiveSalePricePaise,
+                slug: b.slug !== undefined ? b.slug?.trim() || null : existing.slug,
+            },
+            { explicitListed: b.isListedInShop, bands }
+        );
+        if (!listing.ok) {
+            return NextResponse.json(
+                { error: `Cannot list in shop — missing: ${listing.missing.join(", ")}` },
+                { status: 422 }
+            );
+        }
+        data.isListedInShop = listing.isListedInShop;
+        data.slug = listing.slug;
 
         const p = await invProductDb(prisma).update({
             where: { id: pid },
             data,
             include: productInclude,
         });
-        return NextResponse.json(invProductToAdmin(p));
+        return NextResponse.json(invProductToAdmin(p, bands));
     } catch (e: unknown) {
         const conflict = prismaUniqueError(e, "SKU or slug already exists");
         if (conflict) return conflict;

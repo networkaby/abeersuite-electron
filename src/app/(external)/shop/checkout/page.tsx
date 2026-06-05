@@ -56,18 +56,15 @@ export default function ShopCheckoutPage() {
                 setLoading(false);
                 return;
             }
+            // Pay-on-Delivery: create the order (lands on the orders pipeline) and
+            // go straight to confirmation. Payment is collected on delivery.
+            // TODO(payment-gateway): branch to an online gateway when one is live.
             const { data: order } = await axios.post<{ id: number; totalPaise: number }>("/api/shop/orders", {
                 lines,
                 accountId: activeAccountId,
             });
-            const pay = await axios.post(`/api/shop/orders/${order.id}/razorpay`);
-            if (pay.data?.mock) {
-                clear();
-                router.push(`/shop/order/${order.id}?mock=1`);
-            } else {
-                clear();
-                router.push(`/shop/order/${order.id}`);
-            }
+            clear();
+            router.push(`/shop/order/${order.id}`);
         } catch (err: unknown) {
             const msg =
                 axios.isAxiosError(err) && err.response?.data && typeof err.response.data === "object"
@@ -94,7 +91,7 @@ export default function ShopCheckoutPage() {
         <main className="mx-auto max-w-6xl px-4 py-10 lg:py-14">
             <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground mb-2">
                 <ShieldCheck className="size-4 text-emerald-600" />
-                Secure checkout · Razorpay when keys are configured
+                Pay on delivery · no payment needed now
             </div>
             <h1 className="text-3xl font-bold tracking-tight">Checkout</h1>
 
@@ -189,11 +186,11 @@ export default function ShopCheckoutPage() {
                             onClick={() => void submit()}
                         >
                             <Lock className="size-4" />
-                            {loading ? "Placing order…" : "Place order"}
+                            {loading ? "Placing order…" : "Place COD order"}
                         </Button>
                         <p className="text-[11px] text-center text-muted-foreground leading-relaxed">
-                            By placing this order you agree to demo terms. No real charge unless Razorpay is configured;
-                            otherwise checkout completes as a mock payment.
+                            Pay on delivery — you’ll pay the courier when your order arrives. Online payment
+                            options are coming soon.
                         </p>
                     </CardFooter>
                 </Card>
