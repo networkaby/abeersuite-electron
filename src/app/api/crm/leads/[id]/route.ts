@@ -1,171 +1,145 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
-import { assertCrmStatus, getCrmPipeline } from "@/modules/customer/lib/crmPipeline";
-import { z } from "zod";
+import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
-import { validateRequest } from "@/shared/lib/api";
+import { updateLeadSchema } from "@/shared/lib/schemas/crmSchema";
+import { assertCrmStatus } from "@/modules/customer/lib/crmPipeline";
+import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
+import { LEAD_SELECT } from "../route";
 
-const leadInclude = {
-    ticketStatus: { select: { id: true, label: true, color: true, isTerminal: true } },
-    owner: { select: { id: true, name: true } },
-    person: { select: { id: true, name: true } },
-    company: { select: { id: true, name: true } },
-    createdBy: { select: { id: true, name: true } },
+const LEAD_DETAIL_SELECT = {
+    ...LEAD_SELECT,
+    notes: true,
+    activities: {
+        orderBy: { createdAt: "desc" },
+        select: { id: true, kind: true, body: true, dueAt: true, doneAt: true, createdAt: true, author: true },
+    },
 } as const;
 
-const patchLeadSchema = z
-    .object({
-        title: z.string().trim().min(1).max(500).optional(),
-        contactName: z.string().trim().max(200).optional().nullable(),
-        phone: z.string().trim().max(40).optional().nullable(),
-        email: z
-            .string()
-            .trim()
-            .max(320)
-            .optional()
-            .nullable()
-            .refine((v) => !v || v === "" || z.string().email().safeParse(v).success, "Invalid email"),
-        companyName: z.string().trim().max(200).optional().nullable(),
-        valuePaise: z.coerce.number().int().positive().optional().nullable(),
-        source: z.string().trim().max(80).optional().nullable(),
-        notes: z.string().trim().max(20000).optional().nullable(),
-        personId: z.coerce.number().int().positive().optional().nullable(),
-        companyId: z.coerce.number().int().positive().optional().nullable(),
-        ownerUserId: z.coerce.number().int().positive().optional().nullable(),
-        status: z.string().trim().min(1).optional(),
-    })
-    .superRefine((data, ctx) => {
-        if (data.personId != null && data.companyId != null) {
-            ctx.addIssue({
-                code: "custom",
-                message: "Link at most one of person or company",
-                path: ["personId"],
-            });
-        }
-    });
-
-function emptyToNull<T extends string | null | undefined>(v: T): string | null | undefined {
-    if (v === "") return null;
-    return v;
+function parseId(raw: string): number | null {
+    const n = Number(raw);
+    return Number.isInteger(n) && n > 0 ? n : null;
 }
 
-type Params = { params: Promise<{ id: string }> };
-
-export async function GET(_req: Request, { params }: Params) {
+export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { response } = await requirePermission(PERMISSIONS.CRM_VIEW);
     if (response) return response;
-
-    const id = Number((await params).id);
-    if (!Number.isFinite(id) || id < 1) {
-        return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+    const id = parseId((await params).id);
+    if (id === null) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+    try {
+        const lead = await prisma.crmLead.findUnique({ where: { id }, select: LEAD_DETAIL_SELECT });
+        if (!lead) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
+        return NextResponse.json(lead);
+    } catch (e) {
+        return handleApiError(e, "Failed to fetch lead");
     }
-
-    const pipeline = await getCrmPipeline(prisma);
-    if (!pipeline) {
-        return NextResponse.json({ error: "CRM pipeline not configured" }, { status: 503 });
-    }
-
-    const lead = await prisma.crmLead.findFirst({
-        where: { id, pipelineId: pipeline.id },
-        include: leadInclude,
-    });
-    if (!lead) return NextResponse.json({ error: "Not found" }, { status: 404 });
-
-    return NextResponse.json(lead);
 }
 
-export async function PATCH(req: Request, { params }: Params) {
-    const { response } = await requirePermission(PERMISSIONS.CRM_MANAGE);
+export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+    const { user, response } = await requirePermission(PERMISSIONS.CRM_MANAGE);
     if (response) return response;
+    const id = parseId((await params).id);
+    if (id === null) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+    try {
+        const { data, error } = await validateRequest(req, updateLeadSchema);
+        if (error) return error;
 
-    const id = Number((await params).id);
-    if (!Number.isFinite(id) || id < 1) {
-        return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+        const existing = await prisma.crmLead.findUnique({
+            where: { id },
+            select: { id: true, pipelineId: true, status: true, assignedPositionId: true },
+        });
+        if (!existing) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
+
+        // Stage change → validate target belongs to the CRM pipeline; stamp closedAt
+        // on a terminal stage (Won / Lost), clear it otherwise.
+        let completedChange: { closedAt: Date | null } | undefined;
+        let statusNote: string | undefined;
+        if (data.status && data.status !== existing.status) {
+            const check = await assertCrmStatus(prisma, existing.pipelineId, data.status);
+            if (!check.ok) return NextResponse.json({ error: check.message }, { status: 400 });
+            const target = await prisma.ticketStatus.findUnique({
+                where: { id: data.status },
+                select: { label: true, isTerminal: true },
+            });
+            completedChange = { closedAt: target?.isTerminal ? new Date() : null };
+            statusNote = `Moved to "${target?.label ?? data.status}"`;
+        }
+
+        // Position (owner) change → resolve target seat title for the activity note.
+        const positionChanging =
+            data.assignedPositionId !== undefined && data.assignedPositionId !== existing.assignedPositionId;
+        let newPositionTitle: string | null = null;
+        if (positionChanging && data.assignedPositionId) {
+            const pos = await prisma.position.findUnique({
+                where: { id: data.assignedPositionId },
+                select: { title: true },
+            });
+            if (!pos) return NextResponse.json({ error: "Assigned position not found" }, { status: 400 });
+            newPositionTitle = pos.title;
+        }
+
+        // Validate linked customer (if being set).
+        if (data.personId != null) {
+            const p = await prisma.person.findUnique({ where: { id: data.personId }, select: { id: true } });
+            if (!p) return NextResponse.json({ error: "Linked person not found" }, { status: 400 });
+        }
+        if (data.companyId != null) {
+            const c = await prisma.company.findUnique({ where: { id: data.companyId }, select: { id: true } });
+            if (!c) return NextResponse.json({ error: "Linked company not found" }, { status: 400 });
+        }
+
+        const lead = await prisma.crmLead.update({
+            where: { id },
+            data: {
+                ...(data.title !== undefined ? { title: data.title } : {}),
+                ...(data.contactName !== undefined ? { contactName: data.contactName ?? null } : {}),
+                ...(data.phone !== undefined ? { phone: data.phone ?? null } : {}),
+                ...(data.email !== undefined ? { email: data.email ?? null } : {}),
+                ...(data.companyName !== undefined ? { companyName: data.companyName ?? null } : {}),
+                ...(data.personId !== undefined ? { personId: data.personId ?? null } : {}),
+                ...(data.companyId !== undefined ? { companyId: data.companyId ?? null } : {}),
+                ...(data.valuePaise !== undefined ? { valuePaise: data.valuePaise ?? null } : {}),
+                ...(data.source !== undefined ? { source: data.source ?? null } : {}),
+                ...(data.priority !== undefined ? { priority: data.priority } : {}),
+                ...(data.assignedPositionId !== undefined ? { assignedPositionId: data.assignedPositionId ?? null } : {}),
+                ...(data.nextFollowUpAt !== undefined ? { nextFollowUpAt: data.nextFollowUpAt ? new Date(data.nextFollowUpAt) : null } : {}),
+                ...(data.lostReason !== undefined ? { lostReason: data.lostReason ?? null } : {}),
+                ...(data.notes !== undefined ? { notes: data.notes ?? null } : {}),
+                ...(data.status !== undefined ? { status: data.status } : {}),
+                ...(completedChange !== undefined ? completedChange : {}),
+            },
+            select: LEAD_SELECT,
+        });
+
+        // SYSTEM activity entries for stage / owner changes.
+        const notes: string[] = [];
+        if (statusNote) notes.push(statusNote);
+        if (positionChanging) notes.push(data.assignedPositionId ? `Assigned to ${newPositionTitle}` : "Unassigned");
+        if (notes.length > 0) {
+            const author = await buildActorSnapshot(user.id);
+            await prisma.crmLeadActivity.createMany({
+                data: notes.map((body) => ({ leadId: id, author, body, kind: "SYSTEM" as const })),
+            });
+        }
+
+        return NextResponse.json(lead);
+    } catch (e) {
+        return handleApiError(e, "Failed to update lead");
     }
-
-    const pipeline = await getCrmPipeline(prisma);
-    if (!pipeline) {
-        return NextResponse.json({ error: "CRM pipeline not configured" }, { status: 503 });
-    }
-
-    const existing = await prisma.crmLead.findFirst({
-        where: { id, pipelineId: pipeline.id },
-    });
-    if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
-
-    const { data, error } = await validateRequest(req, patchLeadSchema);
-    if (error) return error;
-
-    if (data.status != null) {
-        const check = await assertCrmStatus(prisma, pipeline.id, data.status);
-        if (!check.ok) return NextResponse.json({ error: check.message }, { status: 400 });
-    }
-
-    if (data.personId !== undefined && data.personId != null) {
-        const p = await prisma.person.findUnique({ where: { id: data.personId } });
-        if (!p) return NextResponse.json({ error: "Person not found" }, { status: 400 });
-    }
-    if (data.companyId !== undefined && data.companyId != null) {
-        const c = await prisma.company.findUnique({ where: { id: data.companyId } });
-        if (!c) return NextResponse.json({ error: "Company not found" }, { status: 400 });
-    }
-    if (data.ownerUserId !== undefined && data.ownerUserId != null) {
-        const u = await prisma.user.findUnique({ where: { id: data.ownerUserId } });
-        if (!u) return NextResponse.json({ error: "Owner user not found" }, { status: 400 });
-    }
-
-    const personId =
-        data.personId === undefined ? undefined : data.personId === null ? null : data.personId;
-    const companyId =
-        data.companyId === undefined ? undefined : data.companyId === null ? null : data.companyId;
-    if (personId != null && companyId != null) {
-        return NextResponse.json({ error: "Link at most one of person or company" }, { status: 400 });
-    }
-
-    const lead = await prisma.crmLead.update({
-        where: { id },
-        data: {
-            ...(data.title !== undefined ? { title: data.title } : {}),
-            ...(data.contactName !== undefined ? { contactName: emptyToNull(data.contactName) ?? null } : {}),
-            ...(data.phone !== undefined ? { phone: emptyToNull(data.phone) ?? null } : {}),
-            ...(data.email !== undefined ? { email: emptyToNull(data.email) ?? null } : {}),
-            ...(data.companyName !== undefined ? { companyName: emptyToNull(data.companyName) ?? null } : {}),
-            ...(data.valuePaise !== undefined ? { valuePaise: data.valuePaise } : {}),
-            ...(data.source !== undefined ? { source: emptyToNull(data.source) ?? null } : {}),
-            ...(data.notes !== undefined ? { notes: emptyToNull(data.notes) ?? null } : {}),
-            ...(data.personId !== undefined ? { personId } : {}),
-            ...(data.companyId !== undefined ? { companyId } : {}),
-            ...(data.ownerUserId !== undefined
-                ? { ownerUserId: data.ownerUserId === null ? null : data.ownerUserId }
-                : {}),
-            ...(data.status !== undefined ? { status: data.status } : {}),
-        },
-        include: leadInclude,
-    });
-
-    return NextResponse.json(lead);
 }
 
-export async function DELETE(_req: Request, { params }: Params) {
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { response } = await requirePermission(PERMISSIONS.CRM_MANAGE);
     if (response) return response;
-
-    const id = Number((await params).id);
-    if (!Number.isFinite(id) || id < 1) {
-        return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+    const id = parseId((await params).id);
+    if (id === null) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+    try {
+        const existing = await prisma.crmLead.findUnique({ where: { id }, select: { id: true } });
+        if (!existing) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
+        await prisma.crmLead.delete({ where: { id } });
+        return NextResponse.json({ ok: true });
+    } catch (e) {
+        return handleApiError(e, "Failed to delete lead");
     }
-
-    const pipeline = await getCrmPipeline(prisma);
-    if (!pipeline) {
-        return NextResponse.json({ error: "CRM pipeline not configured" }, { status: 503 });
-    }
-
-    const existing = await prisma.crmLead.findFirst({
-        where: { id, pipelineId: pipeline.id },
-    });
-    if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
-
-    await prisma.crmLead.delete({ where: { id } });
-    return NextResponse.json({ ok: true });
 }

@@ -18,6 +18,7 @@ import { z } from "zod";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { validateRequest } from "@/shared/lib/api";
+import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 
 // Allowed pipeline ids for quick-log
 const ALLOWED_PIPELINE_IDS = ["P2", "P4", "P6"] as const;
@@ -77,7 +78,7 @@ export async function POST(req: Request) {
             notes: notes || null,
             personId: personId ?? null,
             companyId: companyId ?? null,
-            createdById: user.id,
+            createdBy: await buildActorSnapshot(user.id),
         },
         select: {
             id: true,

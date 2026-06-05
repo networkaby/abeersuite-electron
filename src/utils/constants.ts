@@ -406,19 +406,22 @@ export const MODULE_SECTIONS: ModuleSection[] = [
     },
 
     // CRM
-    // {
-    //     label: "CRM",
-    //     icon: Network,
-    //     key: "crm",
-    //     dashboardHref: "/office/crm",
-    //     pathPrefixes: ["/office/crm"],
-    //     createActions: [
-    //         { label: "Lead +", subtitle: "Create a new lead", icon: Network, variant: "default", href: "/office/crm/leads/new", permission: "crm:manage" },
-    //     ],
-    //     children: [
-    //         { label: "Leads", icon: ClipboardList, href: "/office/crm/leads", permission: "crm:view" },
-    //     ],
-    // },
+    {
+        label: "CRM",
+        icon: Network,
+        key: "crm",
+        dashboardHref: "/office/crm",
+        pathPrefixes: ["/office/crm"],
+        createActions: [
+            { label: "New Lead +", subtitle: "Add a deal to the pipeline", icon: Network, variant: "default", href: "/office/crm?new=1", permission: "crm:manage" },
+        ],
+        children: [
+            { label: "Pipeline", icon: ClipboardList, href: "/office/crm", permission: "crm:view" },
+        ],
+    },
+
+
+
     // E-Commerce
     // {
     //     label: "E-Commerce",
