@@ -8,8 +8,6 @@
 - `/office/ecommerce/orders` — online orders dashboard.
 - `/office/ecommerce/orders/[id]` — order detail (links to the order's sale `InvVoucher` + `ShopOrder`).
 - `/office/ecommerce/products` — shop catalogue (subset of `InvProduct` where `isListedInShop = true`).
-- `/office/ecommerce/categories` — shop category management.
-- `/office/ecommerce/coupons` — discount codes.
 - `/office/settings/ecommerce` — shop settings (Publish rules + out-of-stock policy).
 - `/office/ecommerce/dashboard` — sales dashboard (revenue, top SKUs).
 
@@ -26,8 +24,6 @@
   - `/api/ecommerce/products`, `/api/ecommerce/products/[id]` — catalogue admin (uses unified `InvProduct`).
   - `/api/ecommerce/publish-rules` — GET/PUT the org's configurable shop publish rules.
   - `/api/ecommerce/stock-policy` — GET/PUT the org's out-of-stock policy (HIDE / NOTIFY / BACKORDER).
-  - `/api/ecommerce/categories` — shop categories.
-  - `/api/ecommerce/coupons`, `/api/ecommerce/coupons/[id]` — promotion codes.
 
 ## Permissions (gate keys)
 
@@ -37,7 +33,6 @@
 ## Prisma models
 
 - `ShopOrder` + `ShopOrderLine` (in `prisma/schema/shop.prisma`) — online orders. `ShopOrder.orderSource` distinguishes `online` / `phone` / `whatsapp` / `walkin`. `ShopOrder.paymentMethod` (`ShopPaymentMethod` enum, default `COD`; `ONLINE` parked). `pipelineId` + `statusId` are the **source of truth** for order state (the legacy `status` enum is vestigial). Line `unitPricePaise` snapshots the **barcode tag price** at order time. The sale `InvVoucher` is created manually by staff and back-links via `InvVoucher.shopOrderId`.
-- `ShopCoupon` (in `prisma/schema/shop.prisma`) — legacy discount codes (percent / fixed); superseded by the unified `Coupon` model (`prisma/schema/coupons.prisma`).
 - `InvVoucher` (in `prisma/schema/inventory.prisma`) — covers in-store (POS), wholesale (SALE), and `ShopOrder` confirmations (SALE with `shopOrderId` set). See [inventory.md](./inventory.md) for the full schema, including `InvVoucherTender` (settlement legs) and `InvVoucherCharge` (additional ledger rows).
 - `InvProduct` (in `prisma/schema/inventory.prisma`) — the single product source of truth for catalogue + warehouse + POS. The separate `ShopProduct` model was merged into `InvProduct` on 2026-05-04.
 
@@ -66,6 +61,7 @@
 - **Online accounting is manual** — placing/advancing an order books nothing. The old auto path (`createOrderInvVoucher` + crude `postSaleJournal` JE, hardcoded GL codes, no GST) was **removed** to avoid double-booking against the manual SALE voucher.
 - **Wholesale channel is planned but partial** — no dedicated UI yet. Use the SALE voucher form (`/vouchers/sale`) manually with the wholesale party's `Account` as the AR tender.
 - **Payment gateways parked** — COD is the only live method; Razorpay routes exist but are unused (TODO(payment-gateway)).
+- **Coupons & categories live elsewhere** — the ecommerce **Coupons** and **Categories** tabs/pages/APIs and the legacy `ShopCoupon` model were **removed** (2026-06-06). Promotions are managed in **Customer Retention** (unified `Coupon`, `coupons.prisma` / `/api/coupons`); product categories are the `InvCategory` master in **Inventory → Masters**. The E-Commerce module is now **Dashboard · Orders · Products**. _Gap:_ the unified `Coupon` is wired to POS but **not yet to the shop checkout** — codes don't apply online yet.
 
 ## Out of scope / deferred
 

@@ -1,8 +1,8 @@
 // ── Coupons / Promotions (unified POS + shop) ───────────────────────────────
 //
-// A real, admin-managed promotions engine that supersedes the ecommerce-only
-// ShopCoupon (kept intact until the Phase-5 fold-in). Works at the POS and the
-// online shop via the per-coupon `channels` flag.
+// A real, admin-managed promotions engine that supersedes (and replaced) the
+// ecommerce-only ShopCoupon, now removed. Works at the POS and the online shop
+// via the per-coupon `channels` flag.
 //
 // GL treatment mirrors loyalty redemption: a coupon discount is a server-resolved
 // ₹ value posted as a NEGATIVE InvVoucherCharge to a dedicated "Coupon Discounts"

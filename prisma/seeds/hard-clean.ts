@@ -10,7 +10,7 @@
 //   • All InvProduct catalog + InvCategory/Group/Brand (trade-specific
 //     reference data — seeded by helper-inventory-masters.ts, not bootstrap)
 //   • InvAttributeMaster rows (category-specific attrs seeded by dummy-shop)
-//   • ServiceCenter, ShopCoupon, PortalCredentials
+//   • ServiceCenter, PortalCredentials
 //
 // Preserves (everything bootstrap-seed.ts wrote, plus user-set config):
 //   • Admin user (admin@networkservice.in)
@@ -93,7 +93,6 @@ const INVENTORY_MASTERS = [
 // Phase 6 — other dummy-only config tables
 const DUMMY_CONFIG_TABLES = [
     "ServiceCenter",
-    "ShopCoupon",
 ];
 
 async function main(): Promise<void> {

@@ -40,7 +40,6 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
                         },
                     },
                 },
-                sourceCoupon: true,
                 lines: { include: { product: true } },
                 tickets: { select: { id: true, status: true, notes: true, createdAt: true } },
                 orderStatus: {

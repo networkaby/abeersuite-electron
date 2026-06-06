@@ -32,18 +32,8 @@ enum ShopOutOfStockPolicy {
   BACKORDER
 }
 
-model ShopCoupon {
-  id         String    @id @default(cuid())
-  code       String    @unique
-  percentOff Int?
-  flatPaise  Int?
-  isActive   Boolean   @default(true)
-  expiresAt  DateTime?
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-
-  orders ShopOrder[]
-}
+// (Removed legacy `ShopCoupon` model — superseded by the unified `Coupon`
+//  model in coupons.prisma, managed under Customer Retention.)
 
 model ShopOrder {
   id                Int             @id @default(autoincrement())
@@ -68,7 +58,6 @@ model ShopOrder {
   razorpayPaymentId String?
   courier           String?
   trackingNumber    String?
-  sourceCouponId    String?
   paidAt            DateTime?
   packedAt          DateTime?
   shippedAt         DateTime?
@@ -82,7 +71,6 @@ model ShopOrder {
   pipeline     Pipeline?       @relation(fields: [pipelineId], references: [id])
   orderStatus  TicketStatus?   @relation(fields: [statusId], references: [id])
   invVoucher   InvVoucher?     @relation("OrderInvVoucher")
-  sourceCoupon ShopCoupon?     @relation(fields: [sourceCouponId], references: [id])
   lines        ShopOrderLine[]
   tickets      Ticket[]
 
@@ -91,7 +79,6 @@ model ShopOrder {
   @@index([status])
   @@index([pipelineId])
   @@index([statusId])
-  @@index([sourceCouponId])
 }
 
 model ShopOrderLine {

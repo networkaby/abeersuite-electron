@@ -430,11 +430,10 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         dashboardHref: "/office/ecommerce",
         pathPrefixes: ["/office/ecommerce"],
         children: [
-            // { label: "Dashboard", icon: ChartArea, href: "/office/ecommerce", permission: "ecommerce:manage" },
+            // Dashboard is the module index (dashboardHref). Categories live in
+            // Inventory → Masters; coupons live in Customer Retention.
             { label: "Orders", icon: ClipboardList, href: "/office/ecommerce/orders", permission: "ecommerce:manage" },
             { label: "Products", icon: Box, href: "/office/ecommerce/products", permission: "ecommerce:manage" },
-            { label: "Categories", icon: Layers, href: "/office/ecommerce/categories", permission: "ecommerce:manage" },
-            { label: "Coupons", icon: BadgePercent, href: "/office/ecommerce/coupons", permission: "ecommerce:manage" },
         ],
     },
 
@@ -553,7 +552,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         label: "Retention",
         icon: TicketPercent,
         key: "retention",
-        dashboardHref: "/office/roadmap/retention",
+        dashboardHref: "/office/customer-retention",
         pathPrefixes: ["/office/roadmap/retention", "/office/customer-retention"],
         children: [
             // { label: "Overview", icon: ChartArea, href: "/office/roadmap/retention" },
@@ -561,7 +560,8 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Gift Cards", icon: CreditCard, href: "/office/customer-retention/gift-cards", permission: "coupons:manage" },
             { label: "Loyalty", icon: Gift, href: "/office/customer-retention/loyalty", permission: "loyalty:manage" },
             { label: "Spend Tiers", icon: BadgePercent, href: "/office/customer-retention/customer-tiers", permission: "customers:manage" },
-            { label: "Campaigns", icon: Megaphone, href: "/office/roadmap/retention/campaigns" },
+            // Campaigns page not built yet — was pointing at the non-existent /office/roadmap/retention/campaigns (404).
+            // { label: "Campaigns", icon: Megaphone, href: "/office/roadmap/retention/campaigns" },
         ],
     },
 

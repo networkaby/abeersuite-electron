@@ -8,8 +8,6 @@ const tabs = [
     { href: "/office/ecommerce", label: "Dashboard" },
     { href: "/office/ecommerce/orders", label: "Orders" },
     { href: "/office/ecommerce/products", label: "Products" },
-    { href: "/office/ecommerce/categories", label: "Categories" },
-    { href: "/office/ecommerce/coupons", label: "Coupons" },
 ] as const;
 
 export default function AdminTabsNav() {
