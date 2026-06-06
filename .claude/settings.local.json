@@ -192,7 +192,10 @@
       "Bash(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/office/crm/deals)",
       "Bash(cd /d \"D:\\\\our-own-website\\\\service-mgmt-experiment\")",
       "Bash(Get-ChildItem -Path src\\\\components -Directory)",
-      "PowerShell(Get-ChildItem -Path 'D:\\\\our-own-website\\\\service-mgmt-experiment\\\\src\\\\components' -Directory -ErrorAction SilentlyContinue | ForEach-Object { $_.Name })"
+      "PowerShell(Get-ChildItem -Path 'D:\\\\our-own-website\\\\service-mgmt-experiment\\\\src\\\\components' -Directory -ErrorAction SilentlyContinue | ForEach-Object { $_.Name })",
+      "Bash(grep -iE \"account-groups|masters/ledgers|masters\\\\\\\\\\\\\\\\ledgers|GroupCombobox\")",
+      "Bash(echo \"tsc exit: $?\")",
+      "Bash(echo \"exit: $?\")"
     ]
   }
 }

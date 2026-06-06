@@ -5,6 +5,9 @@
 // that maps to `null`. Type to filter by name. The dropdown is portaled to
 // document.body and anchored to the input's viewport rect so it isn't clipped
 // by parent containers with `overflow: hidden` (e.g. table cards).
+//
+// Pass `depth` on each option to render a "-" / "--" hierarchy marker (parent
+// groups at depth 0 get no marker).
 
 import { useEffect, useState, useCallback, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
@@ -14,6 +17,8 @@ export interface GroupOption {
     id: number;
     name: string;
     type?: string;
+    /** Nesting level — 0 = primary group (no marker), 1+ = "-" per step. */
+    depth?: number;
 }
 
 const NO_GROUP_LABEL = "No group";
@@ -172,7 +177,14 @@ export function GroupCombobox({
                                         {item.kind === "none" ? (
                                             <span className="italic text-muted-foreground">{NO_GROUP_LABEL}</span>
                                         ) : (
-                                            <span className="font-medium">{item.group.name}</span>
+                                            <span className="font-medium">
+                                                {(item.group.depth ?? 0) > 0 && (
+                                                    <span className="mr-1 font-mono text-muted-foreground">
+                                                        {"-".repeat(item.group.depth ?? 0)}
+                                                    </span>
+                                                )}
+                                                {item.group.name}
+                                            </span>
                                         )}
                                     </li>
                                 ))}

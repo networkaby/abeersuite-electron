@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { fmt } from "@/utils/constants";
 import { useEscapeBack } from "@/shared/hooks/useEscapeBack";
-import { GroupCombobox } from "./_components/GroupCombobox";
+import { GroupCombobox } from "@/modules/accountancy/components/GroupCombobox";
 
 type GroupType  = "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE";
 type NormalBalance = "DEBIT" | "CREDIT";
@@ -82,12 +82,19 @@ export default function GroupLedgersPage() {
 
     useEscapeBack();
 
-    // Load all groups for the edit dropdown (once)
+    // Load all groups once — both for the edit dropdown and to resolve this
+    // group's name/type. (Single light call; the balance-heavy `withLedgers`
+    // variant is only used by the Ledgers tree page.)
     useEffect(() => {
         axios.get<GroupNode[]>("/api/accountancy/account-groups")
-            .then((r) => setGroups(flatGroups(r.data)))
+            .then((r) => {
+                const all = flatGroups(r.data);
+                setGroups(all);
+                const g = all.find((x) => x.id === Number(id));
+                if (g) { setGroupName(g.name); setGroupType(g.type); }
+            })
             .catch(() => { /* silent */ });
-    }, []);
+    }, [id]);
 
     const load = useCallback((p: number, q: string) => {
         setLoading(true);
@@ -105,17 +112,6 @@ export default function GroupLedgersPage() {
             })
             .catch(() => toast.error("Failed to load accounts"))
             .finally(() => setLoading(false));
-    }, [id]);
-
-    // Load group name from the groups list
-    useEffect(() => {
-        axios.get<GroupNode[]>("/api/accountancy/account-groups")
-            .then((r) => {
-                const all = flatGroups(r.data);
-                const g = all.find((x) => x.id === Number(id));
-                if (g) { setGroupName(g.name); setGroupType(g.type); }
-            })
-            .catch(() => { /* silent */ });
     }, [id]);
 
     useEffect(() => { load(1, ""); }, [load]);

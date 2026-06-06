@@ -2,7 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
-import { aggregateRolledUpByGroup } from "@/modules/accountancy/lib/aggregateLedger";
+import { aggregateClosingAsOf, loadNormalBalanceMap } from "@/modules/accountancy/lib/aggregateLedger";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -13,6 +13,21 @@ const createSchema = z.object({
     parentId:  z.number().int().positive().nullish(),
     sortOrder: z.number().int().min(0).max(9999).optional(),
 });
+
+// A ledger account attached directly to a group, with its truth-path closing
+// balance. Inactive accounts are included (UI badges them) so the masters tree
+// is a complete picture of the chart of accounts.
+type LedgerRow = {
+    id: number;
+    name: string;
+    code: string | null;
+    normalBalance: "DEBIT" | "CREDIT" | null;
+    isActive: boolean;
+    personId: number | null;
+    companyId: number | null;
+    groupId: number | null;
+    balance: number;
+};
 
 type FlatGroup = {
     id: number;
@@ -25,11 +40,27 @@ type FlatGroup = {
     _count: { children: number; accounts: number };
 };
 
-type GroupNode = FlatGroup & { children: GroupNode[] };
+// `ledgers` is capped to this many per group for the inline tree. Identity-heavy
+// groups (Sundry Debtors/Creditors) can hold thousands of customer/company
+// ledgers — shipping & rendering all of them inline would bloat the payload and
+// jank the DOM. `ledgerTotal` carries the true count so the UI can offer a
+// "View all" link into the paginated, searchable drill-down page.
+const LEDGER_CAP = 50;
 
-function buildTree(flat: FlatGroup[]): GroupNode[] {
+type GroupNode = FlatGroup & {
+    children: GroupNode[];
+    ledgers: LedgerRow[];
+    ledgerTotal: number;
+};
+
+function buildTree(flat: FlatGroup[], ledgersByGroup: Map<number, LedgerRow[]>): GroupNode[] {
     const map = new Map<number, GroupNode>();
-    flat.forEach((g) => map.set(g.id, { ...g, children: [] }));
+    flat.forEach((g) => map.set(g.id, {
+        ...g,
+        children: [],
+        ledgers: ledgersByGroup.get(g.id) ?? [],
+        ledgerTotal: ledgersByGroup.get(g.id)?.length ?? 0,
+    }));
     const roots: GroupNode[] = [];
     flat.forEach((g) => {
         const node = map.get(g.id)!;
@@ -39,29 +70,84 @@ function buildTree(flat: FlatGroup[]): GroupNode[] {
             map.get(g.parentId)?.children.push(node);
         }
     });
+
+    // Roll up totalBalance bottom-up: own ledgers + every descendant group.
+    // Runs on the FULL ledger arrays (before the display cap) so totals stay
+    // exact. Equivalent to aggregateRolledUpByGroup since both sum the same
+    // per-account closings from aggregateClosingAsOf.
+    const rollup = (n: GroupNode): number => {
+        let sum = n.ledgers.reduce((s, l) => s + l.balance, 0);
+        for (const ch of n.children) sum += rollup(ch);
+        n.totalBalance = sum;
+        return sum;
+    };
+    roots.forEach(rollup);
+
+    // Cap the displayed ledger list per group (after rollup).
+    const cap = (n: GroupNode): void => {
+        if (n.ledgers.length > LEDGER_CAP) n.ledgers = n.ledgers.slice(0, LEDGER_CAP);
+        n.children.forEach(cap);
+    };
+    roots.forEach(cap);
     return roots;
 }
 
-// GET /api/accountancy/account-groups — returns full tree with totalBalance per group
-export async function GET() {
+// GET /api/accountancy/account-groups
+//
+// Default (lightweight): the group tree with `_count` only — used by group
+// management, opening balance, chart of accounts, and the ledger drill-down's
+// group picker. Cheap: two queries, no balance walk.
+//
+// ?withLedgers=1 (heavy): additionally attaches each group's rolled-up
+// `totalBalance` and its directly-attached ledger accounts (`ledgers`, capped
+// per group) so the masters Ledgers tree can render parent group › sub-group ›
+// ledger in one hierarchy. This runs a full per-account closing aggregation, so
+// it's gated to the one page that needs it — keeping the hot path off it avoids
+// starving the connection pool.
+export async function GET(req: Request) {
     const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
     if (response) return response;
+
+    const withLedgers = new URL(req.url).searchParams.get("withLedgers") === "1";
 
     try {
         const flat = await prisma.accountGroup.findMany({
             orderBy: [{ parentId: "asc" }, { sortOrder: "asc" }, { name: "asc" }],
             include: { _count: { select: { children: true, accounts: true } } },
         });
-
-        // totalBalance per group is the rolled-up closing of every account
-        // under it, derived from JournalLine (same path as the Balance Sheet).
-        const balanceMap = await aggregateRolledUpByGroup(flat.map((g) => g.id));
-
-        const flatWithBalance: FlatGroup[] = (flat as Omit<FlatGroup, "totalBalance">[]).map(
-            (g) => ({ ...g, totalBalance: balanceMap.get(g.id) ?? 0 })
+        const flatGroups = (flat as Omit<FlatGroup, "totalBalance">[]).map(
+            (g) => ({ ...g, totalBalance: 0 }),
         );
 
-        return NextResponse.json(buildTree(flatWithBalance));
+        if (!withLedgers) {
+            return NextResponse.json(buildTree(flatGroups, new Map()));
+        }
+
+        const [accounts, nbMap] = await Promise.all([
+            prisma.account.findMany({
+                where: { groupId: { not: null } },
+                orderBy: { name: "asc" },
+                select: {
+                    id: true, name: true, code: true, normalBalance: true,
+                    isActive: true, personId: true, companyId: true, groupId: true,
+                },
+            }),
+            loadNormalBalanceMap(),
+        ]);
+
+        // Per-account closing, derived from JournalLine (same path as the
+        // Balance Sheet) so group rollups agree with the reports.
+        const closingMap = await aggregateClosingAsOf(new Date(), nbMap);
+
+        const ledgersByGroup = new Map<number, LedgerRow[]>();
+        for (const a of accounts) {
+            if (a.groupId === null) continue;
+            const arr = ledgersByGroup.get(a.groupId) ?? [];
+            arr.push({ ...a, balance: closingMap.get(a.id) ?? 0 });
+            ledgersByGroup.set(a.groupId, arr);
+        }
+
+        return NextResponse.json(buildTree(flatGroups, ledgersByGroup));
     } catch (e) {
         return handleApiError(e, "Failed to fetch account groups");
     }

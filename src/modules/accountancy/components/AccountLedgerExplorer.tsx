@@ -33,6 +33,7 @@ import { BreadcrumbBar } from "@/shared/components/BreadcrumbBar";
 import { indianFiscalYearStart } from "@/modules/accountancy/lib/period";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import { BookPage } from "@/modules/accountancy/components/BookPage";
+import { CreateLedgerDialog } from "@/modules/accountancy/components/CreateLedgerDialog";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -114,8 +115,6 @@ export interface AccountLedgerExplorerProps {
     /** Restrict the account list to accounts whose group.name is in this list.
      *  Match is case-insensitive. Omit to show all GL accounts. */
     groupNames?: string[];
-    /** Href for the "Manage" button on the left panel. */
-    manageHref?: string;
     /** Empty-state copy when no accounts match the filter. */
     emptyMessage?: string;
     /** If provided, the right pane's empty state shows the matching BookPage
@@ -136,7 +135,6 @@ export function AccountLedgerExplorer({
     panelTitle,
     panelIcon = <BookOpen size={15} className="text-primary" />,
     groupNames,
-    manageHref = "/office/accountancy/masters/ledgers",
     emptyMessage,
     book,
 }: AccountLedgerExplorerProps) {
@@ -144,6 +142,7 @@ export function AccountLedgerExplorer({
     const params = useSearchParams();
 
     const [allAccounts, setAllAccounts] = useState<LedgerListItem[]>([]);
+    const [createOpen, setCreateOpen] = useState(false);
     const [search, setSearch] = useState("");
     const [selectedId, setSelectedId] = useState<number | null>(() => {
         const id = params.get("accountId");
@@ -154,12 +153,14 @@ export function AccountLedgerExplorer({
     const [from, setFrom] = useState(toIsoDate(indianFiscalYearStart()));
     const [to, setTo] = useState(toIsoDate(new Date()));
 
-    useEffect(() => {
-        axios
+    const reloadAccounts = useCallback(() => {
+        return axios
             .get<LedgerListItem[]>("/api/accountancy/ledgers?activeOnly=false")
             .then((r) => setAllAccounts(r.data))
             .catch(() => toast.error("Failed to load accounts"));
     }, []);
+
+    useEffect(() => { reloadAccounts(); }, [reloadAccounts]);
 
     // Apply group-name filter once at the source (so totals/search work on the
     // already-restricted set). Case-insensitive to tolerate seed casing drift.
@@ -264,8 +265,8 @@ export function AccountLedgerExplorer({
                     search={search}
                     onSearchChange={setSearch}
                     searchPlaceholder="Search name, code, or group…"
-                    onAdd={() => router.push(manageHref)}
-                    addLabel="Manage"
+                    onAdd={() => setCreateOpen(true)}
+                    addLabel="Create"
                     isEmpty={filtered.length === 0}
                     emptyMessage={search ? "No matches" : (emptyMessage ?? "No accounts")}
                 >
@@ -510,6 +511,16 @@ export function AccountLedgerExplorer({
                     )}
                 </section>
             </div>
+
+            {/* Create-ledger dialog (replaces the old "Manage" navigation) */}
+            <CreateLedgerDialog
+                open={createOpen}
+                onOpenChange={setCreateOpen}
+                onCreated={(acc) => {
+                    reloadAccounts();
+                    setSelectedId(acc.id);
+                }}
+            />
         </div>
     );
 }
