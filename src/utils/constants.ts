@@ -171,21 +171,21 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         ],
     },
     // Repair & Warranty
-    // {
-    //     label: "Repair & Warranty",
-    //     icon: Wrench,
-    //     key: "repair",
-    //     dashboardHref: "/office/repairing",
-    //     // pathPrefixes: ["/office/repairing/tickets", "/office/repairing/service-centers", "/office/repairing/dashboard"],
-    //     pathPrefixes: ["/office/repairing"],
-    //     createActions: [
-    //         { label: "Repair +", subtitle: "Open repair intake", icon: Wrench, variant: "default", action: "new-ticket", pipelineRef: "default" },
-    //     ],
-    //     children: [
-    //         { label: "All Repair", icon: ClipboardList, href: "/office/repairing/tickets", pipelineRef: "default" },
-    //         { label: "Service Centers", icon: Building2, href: "/office/repairing/service-centers", permission: "service-centers:view" },
-    //     ],
-    // },
+    {
+        label: "Repair & Warranty",
+        icon: Wrench,
+        key: "repair",
+        dashboardHref: "/office/repairing",
+        // pathPrefixes: ["/office/repairing/tickets", "/office/repairing/service-centers", "/office/repairing/dashboard"],
+        pathPrefixes: ["/office/repairing"],
+        createActions: [
+            { label: "Repair +", subtitle: "Open repair intake", icon: Wrench, variant: "default", action: "new-ticket", pipelineRef: "default" },
+        ],
+        children: [
+            { label: "All Repair", icon: ClipboardList, href: "/office/repairing/tickets", pipelineRef: "default" },
+            { label: "Service Centers", icon: Building2, href: "/office/repairing/service-centers", permission: "service-centers:view" },
+        ],
+    },
 
 
     // Accountancy
@@ -195,8 +195,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         key: "accountancy",
         permission: "accountancy:view:org",
         dashboardHref: "/office/accountancy",
-        // dashboardHref: "/office/accountancy/reports/day-book",
-        // pathPrefixes: ["/office/accountancy/account-groups", "/office/accountancy/ledgers", "/office/accountancy/sales", "/office/accountancy/purchases", "/office/accountancy/estimates", "/office/accountancy/payments", "/office/accountancy/receipts", "/office/accountancy/contras", "/office/accountancy/credit-notes", "/office/accountancy/debit-notes", "/office/accountancy/journal-entries", "/office/accountancy/invoices", "/office/accountancy/opening-balance", "/office/accountancy/reports"],
+
         pathPrefixes: ["/office/accountancy"],
         createActions: [
             { label: "POS", subtitle: "Open POS register", icon: Monitor, variant: "default", href: "/vouchers/pos/new", newTab: true, permission: "pos:shift:open" },
@@ -265,21 +264,6 @@ export const MODULE_SECTIONS: ModuleSection[] = [
 
             {
                 label: "Vouchers Register", icon: ClipboardList, href: "/office/accountancy/vouchers-registers/all", permission: "finance:voucher:create",
-                // children: [
-                //     { label: "All Vouchers", icon: ClipboardList, href: "/office/accountancy/vouchers-registers/all" },
-                //     { label: "Sales", icon: Receipt, href: "/office/accountancy/vouchers-registers/sales" },
-                //     { label: "Purchases", icon: ShoppingCart, href: "/office/accountancy/vouchers-registers/purchases" },
-                //     { label: "Sale Returns", icon: Receipt, href: "/office/accountancy/vouchers-registers/sale-returns" },
-                //     { label: "Purchase Returns", icon: ShoppingCart, href: "/office/accountancy/vouchers-registers/purchase-returns" },
-                //     { label: "Payments", icon: Wallet, href: "/office/accountancy/vouchers-registers/payments", permission: "finance:voucher:create" },
-                //     { label: "Receipts", icon: Wallet, href: "/office/accountancy/vouchers-registers/receipts", permission: "finance:voucher:create" },
-                //     { label: "Contras", icon: Wallet, href: "/office/accountancy/vouchers-registers/contras", permission: "finance:voucher:create" },
-                //     { label: "Credit Notes", icon: FileText, href: "/office/accountancy/vouchers-registers/credit-notes", permission: "finance:voucher:create" },
-                //     { label: "Debit Notes", icon: FileText, href: "/office/accountancy/vouchers-registers/debit-notes", permission: "finance:voucher:create" },
-                //     { label: "Journal Entries", icon: FileText, href: "/office/accountancy/vouchers-registers/journal-entries", permission: "finance:voucher:create" },
-                //     { label: "Estimates", icon: ScrollText, href: "/office/accountancy/vouchers-registers/estimates", permission: "finance:voucher:create" },
-                //     { label: "Goods Receipts", icon: PackageCheck, href: "/office/accountancy/vouchers-registers/goods-receipts", permission: "finance:voucher:create" },
-                // ]
 
             },
 
@@ -321,12 +305,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         dashboardHref: "/office/inventory",
         pathPrefixes: [
             "/office/inventory",
-            // "/vouchers/manufacturing-journals",
-            // "/vouchers/physical-stock",
-            // "/vouchers/branch-transfers",
-            // "/office/accountancy/vouchers-registers/manufacturing-journals",
-            // "/office/accountancy/vouchers-registers/physical-stock",
-            // "/office/accountancy/vouchers-registers/branch-transfers",
+
         ],
         createActions: [
             { label: "POS", subtitle: "Open POS register", icon: Monitor, variant: "default", href: "/vouchers/pos/new", newTab: true, permission: "pos:shift:open" },
@@ -354,22 +333,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
 
         ],
         children: [
-            // { label: "Overview", icon: ChartArea, href: "/office/inventory", permission: "inventory:manage" },
-            // { label: "Sales Orders", icon: ClipboardList, href: "/office/accountancy/vouchers-registers/sales-orders", permission: "inventory:manage" },
-            // { label: "Purchase Orders", icon: ClipboardList, href: "/office/accountancy/vouchers-registers/purchase-orders", permission: "inventory:manage" },
-            // { label: "GRN", icon: PackageCheck, href: "/office/accountancy/vouchers-registers/grn", permission: "inventory:manage" },
-            // { label: "Challans", icon: Truck, href: "/office/accountancy/vouchers-registers/challans", permission: "inventory:manage" },
-            // { label: "Manufacturing Journal", icon: Factory, href: "/office/accountancy/vouchers-registers/manufacturing-journals", permission: "inventory:manage" },
-            // { label: "Physical Stock", icon: ClipboardCheck, href: "/office/accountancy/vouchers-registers/physical-stock", permission: "inventory:manage" },
-            // { label: "Branch Transfer", icon: ArrowLeftRight, href: "/office/accountancy/vouchers-registers/branch-transfers", permission: "inventory:manage" },
-            // { label: "Rejections In", icon: PackageX, href: "/office/accountancy/vouchers-registers/rejections-in", permission: "inventory:manage" },
-            // { label: "Rejections Out", icon: PackageX, href: "/office/accountancy/vouchers-registers/rejections-out", permission: "inventory:manage" },
-            // { label: "Optional Vouchers", icon: ClipboardList, href: "/office/accountancy/reports/optional-vouchers", permission: "inventory:manage" },
-            // { label: "Units", icon: Ruler, href: "/office/inventory/units", permission: "inventory:manage" },
-            // { label: "Categories", icon: Layers, href: "/office/inventory/categories", permission: "inventory:manage" },
-            // { label: "Groups", icon: LayoutGrid, href: "/office/inventory/product-groups", permission: "inventory:manage" },
 
-            // { label: "Warranty terms", icon: ShieldCheck, href: "/office/inventory/warranty-terms", permission: "inventory:manage" },
             { label: "Products", icon: Box, href: "/office/inventory/products", permission: "inventory:manage" },
             // { label: "Stock Ledger", icon: BookOpen, href: "/office/inventory/stock-ledger", permission: "inventory:manage" },
             // { label: "Stock Summary", icon: BarChart3, href: "/office/inventory/stock-summary", permission: "inventory:manage" },
@@ -390,15 +354,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
                     { label: "BOMs", icon: Workflow, href: "/office/inventory/masters/boms", permission: "inventory:manage" },
                 ]
             },
-            // {
-            //     label: "Configure",
-            //     icon: ChartArea,
-            //     href: "/office/inventory/configuration",
-            //     permission: "finance:voucher:create",
-            //     children: [
 
-            //     ],
-            // },
 
         ],
     },

@@ -388,7 +388,7 @@ export default function StockSummaryPage() {
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                            {(["LAST_COST", "WEIGHTED_AVG", "FIFO", "LIFO"] as ValuationMethod[]).map((m) => (
+                            {(["LAST_INWARD", "WEIGHTED_AVG", "SIMPLE_AVG", "FIFO", "MONTHLY_AVG"] as ValuationMethod[]).map((m) => (
                                 <SelectItem key={m} value={m}>{METHOD_LABELS[m]}</SelectItem>
                             ))}
                         </SelectContent>
