@@ -45,7 +45,7 @@ type OrderDetail = {
         label: string;
         color: string;
         isTerminal: boolean;
-        toTransitions: { to: NextPipelineStatus }[];
+        fromTransitions: { to: NextPipelineStatus }[];
     } | null;
     totalPaise: number;
     shippingName: string | null;
@@ -150,7 +150,7 @@ export default function EcommerceOrderDetailPage() {
 
     // Next statuses for pipeline mode
     const nextStatuses: NextPipelineStatus[] | undefined = order.orderStatus
-        ? order.orderStatus.toTransitions.map((t) => t.to)
+        ? order.orderStatus.fromTransitions.map((t) => t.to)
         : undefined;
 
     return (

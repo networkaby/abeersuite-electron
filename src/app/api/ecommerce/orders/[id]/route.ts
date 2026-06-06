@@ -45,7 +45,11 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
                 tickets: { select: { id: true, status: true, notes: true, createdAt: true } },
                 orderStatus: {
                     include: {
-                        toTransitions: {
+                        // Next stages = OUTGOING transitions (this status is the source).
+                        // `fromTransitions[].to` is the destination — same convention the
+                        // repair-ticket + deals boards use. (`toTransitions` would be the
+                        // incoming edges, which are empty for the entry stage.)
+                        fromTransitions: {
                             include: { to: true },
                             orderBy: { to: { order: "asc" } },
                         },
