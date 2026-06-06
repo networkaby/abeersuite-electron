@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import axios from "axios";
 import Image from "next/image";
 import Link from "next/link";
@@ -69,6 +69,32 @@ type StatusFilter = "all" | "live" | "ready" | "needs";
 
 type ProductStatus = { kind: "live" | "ready" | "draft"; missing: string[] };
 
+// Persist the list view (page / filters / scroll) per browser tab so leaving for
+// a product's Edit page and coming back (Esc → router.back) returns to the same
+// place instead of resetting to page 1.
+const VIEW_KEY = "ecommerce-products-view-v1";
+type SavedView = {
+    page: number;
+    pageSize: number;
+    tab: TabKey;
+    query: string;
+    categoryFilter: string;
+    brandFilter: string;
+    groupFilter: string;
+    stockFilter: StockFilter;
+    statusFilter: StatusFilter;
+    activeFilter: ActiveFilter;
+    scrollTop: number;
+};
+function loadSavedView(): Partial<SavedView> {
+    if (typeof window === "undefined") return {};
+    try {
+        return JSON.parse(sessionStorage.getItem(VIEW_KEY) || "{}") as Partial<SavedView>;
+    } catch {
+        return {};
+    }
+}
+
 /** Per-row shop status, reusing the same qualification gate the server enforces. */
 function productStatus(p: ShopProductAdmin, rules: ShopPublishRules): ProductStatus {
     const shopPricePaise = p.barcodePricePaise ?? p.pricePaise;
@@ -111,12 +137,13 @@ function StatusBadge({ status }: { status: ProductStatus }) {
 }
 
 export default function EcommerceProductsPage() {
+    const saved = useRef(loadSavedView()).current;
     const [products, setProducts] = useState<ShopProductAdmin[]>([]);
     const [open, setOpen] = useState(false);
-    const [tab, setTab] = useState<TabKey>("all");
-    const [query, setQuery] = useState("");
-    const [page, setPage] = useState(1);
-    const [pageSize, setPageSize] = useState(PAGE_SIZE);
+    const [tab, setTab] = useState<TabKey>(saved.tab ?? "all");
+    const [query, setQuery] = useState(saved.query ?? "");
+    const [page, setPage] = useState(saved.page ?? 1);
+    const [pageSize, setPageSize] = useState(saved.pageSize ?? PAGE_SIZE);
     const [expanded, setExpanded] = useState<Set<number>>(new Set());
 
     // Owner-configured publish rules (edited in Shop settings). Used to compute
@@ -130,12 +157,12 @@ export default function EcommerceProductsPage() {
 
     // Filter panel
     const [showFilters, setShowFilters] = useState(false);
-    const [categoryFilter, setCategoryFilter] = useState("all");
-    const [brandFilter, setBrandFilter] = useState("all");
-    const [groupFilter, setGroupFilter] = useState("all");
-    const [stockFilter, setStockFilter] = useState<StockFilter>("all");
-    const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-    const [activeFilter, setActiveFilter] = useState<ActiveFilter>("all");
+    const [categoryFilter, setCategoryFilter] = useState(saved.categoryFilter ?? "all");
+    const [brandFilter, setBrandFilter] = useState(saved.brandFilter ?? "all");
+    const [groupFilter, setGroupFilter] = useState(saved.groupFilter ?? "all");
+    const [stockFilter, setStockFilter] = useState<StockFilter>(saved.stockFilter ?? "all");
+    const [statusFilter, setStatusFilter] = useState<StatusFilter>(saved.statusFilter ?? "all");
+    const [activeFilter, setActiveFilter] = useState<ActiveFilter>(saved.activeFilter ?? "all");
 
     const load = () => {
         axios
@@ -202,10 +229,65 @@ export default function EcommerceProductsPage() {
         });
     }, [products, tab, query, categoryFilter, brandFilter, groupFilter, stockFilter, statusFilter, activeFilter, rules]);
 
+    // Reset to page 1 when the filter actually changes — but NOT on the initial
+    // mount, so a restored page (from sessionStorage) survives. Compare filter
+    // VALUES (not a run counter) so React StrictMode's double-invoke in dev can't
+    // wrongly trigger the reset.
+    const filterSig = `${tab}|${query}|${categoryFilter}|${brandFilter}|${groupFilter}|${stockFilter}|${statusFilter}|${activeFilter}`;
+    const prevFilterSig = useRef(filterSig);
     useEffect(() => {
+        if (prevFilterSig.current === filterSig) return;
+        prevFilterSig.current = filterSig;
         setPage(1);
         setSelected(new Set()); // avoid acting on rows hidden by the new filter
-    }, [tab, query, categoryFilter, brandFilter, groupFilter, stockFilter, statusFilter, activeFilter]);
+    }, [filterSig]);
+
+    // Scrollable table ref + persisted view (page/filters/scroll) so back/Esc returns here.
+    const scrollRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        // Merge over the existing entry so we never clobber the saved scrollTop
+        // (which `persistScroll` owns) — important on the initial mount.
+        try {
+            const raw = sessionStorage.getItem(VIEW_KEY);
+            const prev = raw ? JSON.parse(raw) : {};
+            const view = {
+                ...prev,
+                page, pageSize, tab, query,
+                categoryFilter, brandFilter, groupFilter, stockFilter, statusFilter, activeFilter,
+            };
+            sessionStorage.setItem(VIEW_KEY, JSON.stringify(view));
+        } catch {
+            /* ignore quota / privacy-mode errors */
+        }
+    }, [page, pageSize, tab, query, categoryFilter, brandFilter, groupFilter, stockFilter, statusFilter, activeFilter]);
+
+    // Restore scroll position once the product rows have rendered.
+    const scrollRestored = useRef(false);
+    useEffect(() => {
+        if (scrollRestored.current || products.length === 0) return;
+        scrollRestored.current = true;
+        const top = saved.scrollTop ?? 0;
+        if (top > 0) requestAnimationFrame(() => {
+            if (scrollRef.current) scrollRef.current.scrollTop = top;
+        });
+    }, [products, saved.scrollTop]);
+
+    // Throttle scroll saves (onScroll fires rapidly) to ~once per 200ms.
+    const scrollSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const persistScroll = () => {
+        if (scrollSaveTimer.current) return;
+        scrollSaveTimer.current = setTimeout(() => {
+            scrollSaveTimer.current = null;
+            try {
+                const raw = sessionStorage.getItem(VIEW_KEY);
+                const view = raw ? JSON.parse(raw) : {};
+                view.scrollTop = scrollRef.current?.scrollTop ?? 0;
+                sessionStorage.setItem(VIEW_KEY, JSON.stringify(view));
+            } catch {
+                /* ignore */
+            }
+        }, 200);
+    };
 
     const pageRows = filtered.slice((page - 1) * pageSize, page * pageSize);
     const pageIds = pageRows.map((p) => p.id);
@@ -240,7 +322,7 @@ export default function EcommerceProductsPage() {
             if (action === "publish") {
                 toast.success(
                     `Published ${data.published}` +
-                        (data.skipped ? ` · ${data.skipped} skipped (didn’t meet publish rules)` : "")
+                    (data.skipped ? ` · ${data.skipped} skipped (didn’t meet publish rules)` : "")
                 );
             } else {
                 toast.success(`Removed ${data.unpublished} from shop`);
@@ -311,33 +393,7 @@ export default function EcommerceProductsPage() {
                         One catalogue across shop, POS and Sale vouchers. Publish a product once it’s shop-ready.
                     </p>
                 </div>
-                <div className="flex items-center gap-2">
-                    <Button type="button" variant="outline" className="gap-2" asChild>
-                        <Link href="/office/settings/ecommerce">
-                            <SlidersHorizontal className="size-4" />
-                            Publish rules
-                        </Link>
-                    </Button>
-                    <Dialog open={open} onOpenChange={setOpen}>
-                        <DialogTrigger asChild>
-                            <Button type="button">Add product</Button>
-                        </DialogTrigger>
-                        <DialogContent className="max-h-[90vh] w-full max-w-2xl overflow-y-auto">
-                            <DialogHeader>
-                                <DialogTitle>New product</DialogTitle>
-                            </DialogHeader>
-                            <div className="mt-4">
-                                <ProductForm
-                                    submitLabel="Create product"
-                                    onSaved={() => {
-                                        setOpen(false);
-                                        load();
-                                    }}
-                                />
-                            </div>
-                        </DialogContent>
-                    </Dialog>
-                </div>
+
             </div>
 
             {/* Tabs + search + filter button */}
@@ -348,17 +404,15 @@ export default function EcommerceProductsPage() {
                             key={t.key}
                             type="button"
                             onClick={() => setTab(t.key)}
-                            className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                                tab === t.key
+                            className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${tab === t.key
                                     ? "bg-background text-foreground shadow-sm"
                                     : "text-muted-foreground hover:text-foreground"
-                            }`}
+                                }`}
                         >
                             {t.label}
                             <span
-                                className={`rounded-full px-1.5 py-0.5 text-xs tabular-nums ${
-                                    tab === t.key ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
-                                }`}
+                                className={`rounded-full px-1.5 py-0.5 text-xs tabular-nums ${tab === t.key ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+                                    }`}
                             >
                                 {t.count}
                             </span>
@@ -366,6 +420,33 @@ export default function EcommerceProductsPage() {
                     ))}
                 </div>
                 <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2">
+                        <Button type="button" variant="outline" className="gap-2" asChild>
+                            <Link href="/office/settings/ecommerce">
+                                <SlidersHorizontal className="size-4" />
+                                Publish rules
+                            </Link>
+                        </Button>
+                        <Dialog open={open} onOpenChange={setOpen}>
+                            <DialogTrigger asChild>
+                                <Button type="button">Add product</Button>
+                            </DialogTrigger>
+                            <DialogContent className="max-h-[90vh] w-full max-w-2xl overflow-y-auto">
+                                <DialogHeader>
+                                    <DialogTitle>New product</DialogTitle>
+                                </DialogHeader>
+                                <div className="mt-4">
+                                    <ProductForm
+                                        submitLabel="Create product"
+                                        onSaved={() => {
+                                            setOpen(false);
+                                            load();
+                                        }}
+                                    />
+                                </div>
+                            </DialogContent>
+                        </Dialog>
+                    </div>
                     <div className="relative w-full sm:w-64">
                         <Search className="text-muted-foreground absolute left-2.5 top-1/2 size-4 -translate-y-1/2" />
                         <Input
@@ -463,7 +544,7 @@ export default function EcommerceProductsPage() {
             ) : null}
 
             {/* Scrollable table — fills remaining height, header pinned */}
-            <div className={SCROLL_FRAME}>
+            <div ref={scrollRef} onScroll={persistScroll} className={SCROLL_FRAME}>
                 <Table>
                     <TableHeader className={STICKY_HEAD}>
                         <TableRow>
@@ -591,8 +672,8 @@ export default function EcommerceProductsPage() {
                                                             status.kind === "live"
                                                                 ? "Live on storefront"
                                                                 : status.kind === "ready"
-                                                                  ? "Ready — click Publish to list it in the shop"
-                                                                  : `Needs ${status.missing.join(", ").toLowerCase()} — add it, or relax Publish rules`
+                                                                    ? "Ready — click Publish to list it in the shop"
+                                                                    : `Needs ${status.missing.join(", ").toLowerCase()} — add it, or relax Publish rules`
                                                         }
                                                     />
                                                     <div className="sm:col-span-2 lg:col-span-4">
@@ -620,10 +701,10 @@ export default function EcommerceProductsPage() {
                         {query.trim() || activeFilterCount > 0
                             ? "No products match your filters."
                             : tab === "published"
-                              ? "No products are published to the shop yet."
-                              : tab === "pending"
-                                ? "Nothing pending — every product is published."
-                                : "No products."}
+                                ? "No products are published to the shop yet."
+                                : tab === "pending"
+                                    ? "Nothing pending — every product is published."
+                                    : "No products."}
                     </p>
                 ) : null}
             </div>
