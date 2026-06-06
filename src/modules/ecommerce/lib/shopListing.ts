@@ -1,5 +1,10 @@
 import { barcodeTagPaise, type BarcodeBand } from "@/shared/lib/pricing/barcodePrice";
-import { shopQualification, slugifyProduct } from "@/modules/ecommerce/lib/shopQualification";
+import {
+    shopQualification,
+    slugifyProduct,
+    DEFAULT_SHOP_PUBLISH_RULES,
+    type ShopPublishRules,
+} from "@/modules/ecommerce/lib/shopQualification";
 
 /** Merged product fields (request ∪ existing row) needed to decide shop listing. */
 export type ShopListingInput = {
@@ -8,6 +13,7 @@ export type ShopListingInput = {
     imageUrl: string | null;
     galleryUrls: string[];
     shopDescription: string | null;
+    shopCategory: string | null;
     savedSalePricePaise: number | null;
     mrpPaise: number | null;
     effectiveSalePricePaise: number | null;
@@ -34,18 +40,23 @@ export type ShopListingDecision =
  */
 export function resolveShopListing(
     m: ShopListingInput,
-    opts: { explicitListed?: boolean; bands: BarcodeBand[] }
+    opts: { explicitListed?: boolean; bands: BarcodeBand[]; rules?: ShopPublishRules }
 ): ShopListingDecision {
     const shopPrice =
         barcodeTagPaise(m.savedSalePricePaise, m.mrpPaise, opts.bands) ??
         m.effectiveSalePricePaise ??
         0;
-    const q = shopQualification({
-        pricePaise: shopPrice,
-        imageUrl: m.imageUrl,
-        galleryUrls: m.galleryUrls,
-        description: m.shopDescription,
-    });
+    const q = shopQualification(
+        {
+            pricePaise: shopPrice,
+            imageUrl: m.imageUrl,
+            galleryUrls: m.galleryUrls,
+            description: m.shopDescription,
+            category: m.shopCategory,
+            mrpPaise: m.mrpPaise,
+        },
+        opts.rules ?? DEFAULT_SHOP_PUBLISH_RULES
+    );
 
     let isListedInShop: boolean;
     if (opts.explicitListed === undefined) {

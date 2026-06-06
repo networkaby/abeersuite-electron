@@ -43,8 +43,13 @@ export default function PortalAccountSwitcher() {
                     activeAccountId: response.data.active.accountId,
                 });
             })
-            .catch(() => {
-                if (!cancelled) {
+            .catch((error) => {
+                if (cancelled) return;
+                // 401/403 just means the visitor isn't signed in to the customer
+                // portal — not an error. The checkout shows a sign-in prompt and the
+                // profile list stays empty. Only surface genuine failures.
+                const status = axios.isAxiosError(error) ? error.response?.status : undefined;
+                if (status !== 401 && status !== 403) {
                     toast.error("Failed to load account profiles");
                 }
             })

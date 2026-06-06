@@ -17,6 +17,8 @@ export type ShopProductAdmin = ShopProductPublic & {
     /** Resolved brand / product-group display names (null when unset). */
     brandName: string | null;
     groupName: string | null;
+    /** Raw explicit storefront category (null when unset) — for the publish gate. */
+    shopCategory: string | null;
     // Display-only: the human saved sale price and the derived barcode tag price
     // (what the storefront actually charges). The editable `pricePaise` above
     // stays the effective/strategy price so the form round-trips it unchanged.
@@ -48,6 +50,7 @@ export function invProductToAdmin(
         warrantyTermId: p.warrantyTermId,
         brandName: p.brand?.name ?? null,
         groupName: p.group?.name ?? null,
+        shopCategory: p.shopCategory,
         savedSalePricePaise: p.savedSalePricePaise,
         barcodePricePaise: bands ? barcodeTagPaise(p.savedSalePricePaise, p.mrpPaise, bands) : null,
     };

@@ -149,6 +149,13 @@ model OrgDefaults {
   shippingPoolGroupId Int?
   shippingPoolGroup   AccountGroup? @relation("OrgShippingPoolGroup", fields: [shippingPoolGroupId], references: [id], onDelete: SetNull)
 
+  // Shop publish rules — which product fields are mandatory before a product can
+  // be listed in /shop. Owner-configurable (Products → Publish rules). null =
+  // the default gate (image + description + price). Shape: { image, description,
+  // price, category, mrp: boolean }. Admin-chosen, so bootstrap-seed leaves it
+  // untouched (survives reseed).
+  shopPublishRulesJson Json?
+
   updatedAt DateTime @updatedAt
 }
 

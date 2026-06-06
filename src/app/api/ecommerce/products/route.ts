@@ -4,6 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { invProductToAdmin } from "@/modules/ecommerce/lib/productAdmin";
 import { resolveShopListing } from "@/modules/ecommerce/lib/shopListing";
 import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
+import { loadShopPublishRules } from "@/shared/lib/shop/publishRules";
 import { invProductDb } from "@/shared/types/inventoryTypes";
 import { prismaUniqueError } from "@/shared/lib/api";
 import { z } from "zod";
@@ -90,7 +91,7 @@ export async function POST(req: Request) {
 
         // Auto-qualify / auto-slug. A new product has no saved sale price yet, so
         // the qualification price falls back to the effective price (pricePaise).
-        const bands = await loadBarcodeBands();
+        const [bands, rules] = await Promise.all([loadBarcodeBands(), loadShopPublishRules()]);
         const listing = resolveShopListing(
             {
                 name: b.name,
@@ -98,12 +99,13 @@ export async function POST(req: Request) {
                 imageUrl,
                 galleryUrls: galleryJson ?? [],
                 shopDescription: b.shopDescription ?? null,
+                shopCategory: b.shopCategory ?? null,
                 savedSalePricePaise: null,
                 mrpPaise: b.mrpPaise ?? null,
                 effectiveSalePricePaise: b.pricePaise ?? null,
                 slug: b.slug?.trim() || null,
             },
-            { explicitListed: b.isListedInShop, bands }
+            { explicitListed: b.isListedInShop, bands, rules }
         );
         if (!listing.ok) {
             return NextResponse.json(

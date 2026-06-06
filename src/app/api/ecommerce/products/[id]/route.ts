@@ -4,6 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { invProductToAdmin } from "@/modules/ecommerce/lib/productAdmin";
 import { resolveShopListing } from "@/modules/ecommerce/lib/shopListing";
 import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
+import { loadShopPublishRules } from "@/shared/lib/shop/publishRules";
 import { invProductDb } from "@/shared/types/inventoryTypes";
 import { prismaUniqueError } from "@/shared/lib/api";
 import { z } from "zod";
@@ -73,8 +74,8 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
             where: { id: pid },
             select: {
                 name: true, sku: true, imageUrl: true, galleryJson: true,
-                shopDescription: true, savedSalePricePaise: true, mrpPaise: true,
-                effectiveSalePricePaise: true, slug: true,
+                shopDescription: true, shopCategory: true, savedSalePricePaise: true,
+                mrpPaise: true, effectiveSalePricePaise: true, slug: true,
             },
         });
         if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -114,7 +115,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
         const existingGallery = Array.isArray(existing.galleryJson)
             ? (existing.galleryJson as unknown[]).filter((x): x is string => typeof x === "string")
             : [];
-        const bands = await loadBarcodeBands();
+        const [bands, rules] = await Promise.all([loadBarcodeBands(), loadShopPublishRules()]);
         const listing = resolveShopListing(
             {
                 name: (data.name as string | undefined) ?? existing.name,
@@ -123,13 +124,15 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
                 galleryUrls: b.galleryUrls !== undefined ? b.galleryUrls : existingGallery,
                 shopDescription:
                     b.shopDescription !== undefined ? b.shopDescription ?? null : existing.shopDescription,
+                shopCategory:
+                    b.shopCategory !== undefined ? b.shopCategory ?? null : existing.shopCategory,
                 savedSalePricePaise: existing.savedSalePricePaise,
                 mrpPaise: b.mrpPaise !== undefined ? b.mrpPaise ?? null : existing.mrpPaise,
                 effectiveSalePricePaise:
                     b.pricePaise !== undefined ? b.pricePaise ?? null : existing.effectiveSalePricePaise,
                 slug: b.slug !== undefined ? b.slug?.trim() || null : existing.slug,
             },
-            { explicitListed: b.isListedInShop, bands }
+            { explicitListed: b.isListedInShop, bands, rules }
         );
         if (!listing.ok) {
             return NextResponse.json(

@@ -11,7 +11,11 @@ import type { ShopProductAdmin } from "@/modules/ecommerce/lib/productAdmin";
 import type { ShopProductPublic } from "@/shared/lib/shop/productPublic";
 import ProductGalleryUploader from "@/modules/ecommerce/components/ProductGalleryUploader";
 import ProductCard from "@/modules/external/shop/ProductCard";
-import { shopQualification } from "@/modules/ecommerce/lib/shopQualification";
+import {
+    shopQualification,
+    DEFAULT_SHOP_PUBLISH_RULES,
+    type ShopPublishRules,
+} from "@/modules/ecommerce/lib/shopQualification";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { Check, X } from "lucide-react";
 
@@ -59,6 +63,16 @@ export default function ProductForm({
     const [isListedInShop, setIsListedInShop] = useState(initial?.isListedInShop ?? true);
     const [isActive, setIsActive] = useState(initial?.isActive ?? true);
     const [busy, setBusy] = useState(false);
+    // Owner-configured publish rules (which fields gate listing). Falls back to
+    // the default gate until loaded.
+    const [rules, setRules] = useState<ShopPublishRules>(DEFAULT_SHOP_PUBLISH_RULES);
+
+    useEffect(() => {
+        axios
+            .get<{ rules: ShopPublishRules }>("/api/ecommerce/publish-rules")
+            .then((r) => setRules(r.data.rules))
+            .catch(() => setRules(DEFAULT_SHOP_PUBLISH_RULES));
+    }, []);
 
     useEffect(() => {
         if (!initial) return;
@@ -83,12 +97,17 @@ export default function ProductForm({
     // price while there's no saved price. Used for the live preview + readiness.
     const shopPricePaise = initial?.barcodePricePaise ?? (paiseFromRupeesInput(priceRupees) ?? 0);
 
-    const qualification = shopQualification({
-        pricePaise: shopPricePaise,
-        imageUrl: galleryUrls[0] ?? null,
-        galleryUrls,
-        description: description.trim() || null,
-    });
+    const qualification = shopQualification(
+        {
+            pricePaise: shopPricePaise,
+            imageUrl: galleryUrls[0] ?? null,
+            galleryUrls,
+            description: description.trim() || null,
+            category: shopCategory.trim() || null,
+            mrpPaise: mrpRupees.trim() ? paiseFromRupeesInput(mrpRupees) : null,
+        },
+        rules
+    );
     const qualified = qualification.qualified;
     // A non-qualified product can never be listed; the switch is forced off.
     const listedEffective = qualified && isListedInShop;
@@ -118,6 +137,7 @@ export default function ProductForm({
         warrantyTermId: initial?.warrantyTermId ?? null,
         brandName: initial?.brandName ?? null,
         groupName: initial?.groupName ?? null,
+        shopCategory: shopCategory.trim() || null,
         savedSalePricePaise: initial?.savedSalePricePaise ?? null,
         barcodePricePaise: initial?.barcodePricePaise ?? null,
     };

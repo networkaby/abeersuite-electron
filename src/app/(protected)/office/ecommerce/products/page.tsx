@@ -5,13 +5,23 @@ import axios from "axios";
 import Image from "next/image";
 import Link from "next/link";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
+import { toast } from "sonner";
 import type { ShopProductAdmin } from "@/modules/ecommerce/lib/productAdmin";
-import { shopQualification } from "@/modules/ecommerce/lib/shopQualification";
+import {
+    shopQualification,
+    DEFAULT_SHOP_PUBLISH_RULES,
+    SHOP_REQUIREMENT_LABELS,
+    type ShopPublishRules,
+    type ShopRequirementKey,
+} from "@/modules/ecommerce/lib/shopQualification";
 import ProductForm from "@/modules/ecommerce/components/ProductForm";
 import { PaginationBar } from "@/shared/components/PaginationBar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
     Dialog,
     DialogContent,
@@ -42,6 +52,7 @@ import {
     Filter,
     ChevronRight,
     X,
+    SlidersHorizontal,
 } from "lucide-react";
 
 // Sticky-header scroll frame (costing-page pattern): a plain overflow-auto div,
@@ -52,7 +63,7 @@ const SCROLL_FRAME =
 const STICKY_HEAD =
     "sticky top-0 z-20 bg-muted/60 backdrop-blur [&_th]:bg-transparent [&_th]:shadow-[inset_0_-1px_0_var(--border)]";
 
-const COL_COUNT = 9;
+const COL_COUNT = 10;
 const PAGE_SIZE = 25;
 
 type TabKey = "all" | "published" | "pending";
@@ -63,14 +74,19 @@ type StatusFilter = "all" | "live" | "ready" | "needs";
 type ProductStatus = { kind: "live" | "ready" | "draft"; missing: string[] };
 
 /** Per-row shop status, reusing the same qualification gate the server enforces. */
-function productStatus(p: ShopProductAdmin): ProductStatus {
+function productStatus(p: ShopProductAdmin, rules: ShopPublishRules): ProductStatus {
     const shopPricePaise = p.barcodePricePaise ?? p.pricePaise;
-    const q = shopQualification({
-        pricePaise: shopPricePaise,
-        imageUrl: p.imageUrl,
-        galleryUrls: p.galleryUrls,
-        description: p.description,
-    });
+    const q = shopQualification(
+        {
+            pricePaise: shopPricePaise,
+            imageUrl: p.imageUrl,
+            galleryUrls: p.galleryUrls,
+            description: p.description,
+            category: p.shopCategory,
+            mrpPaise: p.mrpPaise,
+        },
+        rules
+    );
     if (p.isListedInShop && q.qualified) return { kind: "live", missing: [] };
     return { kind: q.qualified ? "ready" : "draft", missing: q.missing };
 }
@@ -106,6 +122,17 @@ export default function EcommerceProductsPage() {
     const [pageSize, setPageSize] = useState(PAGE_SIZE);
     const [expanded, setExpanded] = useState<Set<number>>(new Set());
 
+    // Owner-configured publish rules + the settings dialog.
+    const [rules, setRules] = useState<ShopPublishRules>(DEFAULT_SHOP_PUBLISH_RULES);
+    const [rulesOpen, setRulesOpen] = useState(false);
+    const [draftRules, setDraftRules] = useState<ShopPublishRules>(DEFAULT_SHOP_PUBLISH_RULES);
+    const [savingRules, setSavingRules] = useState(false);
+
+    // Multi-select + bulk publish/unpublish (declared up here so the page-select
+    // derivations below can read `selected` without a TDZ error).
+    const [selected, setSelected] = useState<Set<number>>(new Set());
+    const [bulkBusy, setBulkBusy] = useState(false);
+
     // Filter panel
     const [showFilters, setShowFilters] = useState(false);
     const [categoryFilter, setCategoryFilter] = useState("all");
@@ -124,7 +151,39 @@ export default function EcommerceProductsPage() {
 
     useEffect(() => {
         load();
+        axios
+            .get<{ rules: ShopPublishRules }>("/api/ecommerce/publish-rules")
+            .then((r) => setRules(r.data.rules))
+            .catch(() => setRules(DEFAULT_SHOP_PUBLISH_RULES));
     }, []);
+
+    const openRulesDialog = async () => {
+        // Always seed the dialog from the freshly-persisted rules so a stale
+        // page state can never overwrite the owner's saved choices on Save.
+        try {
+            const { data } = await axios.get<{ rules: ShopPublishRules }>("/api/ecommerce/publish-rules");
+            setRules(data.rules);
+            setDraftRules(data.rules);
+        } catch {
+            setDraftRules(rules);
+        }
+        setRulesOpen(true);
+    };
+
+    const saveRules = async () => {
+        setSavingRules(true);
+        try {
+            const { data } = await axios.put<{ rules: ShopPublishRules }>("/api/ecommerce/publish-rules", draftRules);
+            setRules(data.rules);
+            setRulesOpen(false);
+            toast.success("Publish rules saved");
+            load(); // statuses recompute against the new rules
+        } catch {
+            toast.error("Failed to save publish rules");
+        } finally {
+            setSavingRules(false);
+        }
+    };
 
     const categories = useMemo(
         () => [...new Set(products.map((p) => p.category).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
@@ -167,20 +226,91 @@ export default function EcommerceProductsPage() {
             if (activeFilter === "active" && !p.isActive) return false;
             if (activeFilter === "inactive" && p.isActive) return false;
             if (statusFilter !== "all") {
-                const k = productStatus(p).kind;
+                const k = productStatus(p, rules).kind;
                 if (statusFilter === "needs" ? k !== "draft" : k !== statusFilter) return false;
             }
             if (q && !`${p.name} ${p.sku} ${p.category} ${p.brandName ?? ""} ${p.groupName ?? ""}`.toLowerCase().includes(q))
                 return false;
             return true;
         });
-    }, [products, tab, query, categoryFilter, brandFilter, groupFilter, stockFilter, statusFilter, activeFilter]);
+    }, [products, tab, query, categoryFilter, brandFilter, groupFilter, stockFilter, statusFilter, activeFilter, rules]);
 
     useEffect(() => {
         setPage(1);
+        setSelected(new Set()); // avoid acting on rows hidden by the new filter
     }, [tab, query, categoryFilter, brandFilter, groupFilter, stockFilter, statusFilter, activeFilter]);
 
     const pageRows = filtered.slice((page - 1) * pageSize, page * pageSize);
+    const pageIds = pageRows.map((p) => p.id);
+    const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selected.has(id));
+    const togglePage = () =>
+        setSelected((prev) => {
+            const n = new Set(prev);
+            if (allPageSelected) pageIds.forEach((id) => n.delete(id));
+            else pageIds.forEach((id) => n.add(id));
+            return n;
+        });
+    const selectAllFiltered = () => setSelected(new Set(filtered.map((p) => p.id)));
+
+    // Bulk publish/unpublish handlers (state hoisted above).
+    const toggleOne = (id: number) =>
+        setSelected((prev) => {
+            const n = new Set(prev);
+            if (n.has(id)) n.delete(id);
+            else n.add(id);
+            return n;
+        });
+    const clearSelection = () => setSelected(new Set());
+    const runBulk = async (action: "publish" | "unpublish") => {
+        const ids = [...selected];
+        if (ids.length === 0) return;
+        setBulkBusy(true);
+        try {
+            const { data } = await axios.post<{ published: number; skipped: number; unpublished: number }>(
+                "/api/ecommerce/products/bulk",
+                { ids, action }
+            );
+            if (action === "publish") {
+                toast.success(
+                    `Published ${data.published}` +
+                        (data.skipped ? ` · ${data.skipped} skipped (didn’t meet publish rules)` : "")
+                );
+            } else {
+                toast.success(`Removed ${data.unpublished} from shop`);
+            }
+            clearSelection();
+            load();
+        } catch {
+            toast.error("Bulk update failed");
+        } finally {
+            setBulkBusy(false);
+        }
+    };
+
+    // One-click publish / unpublish straight from the row.
+    const [publishing, setPublishing] = useState<Set<number>>(new Set());
+    const togglePublish = async (p: ShopProductAdmin, next: boolean) => {
+        setPublishing((s) => new Set(s).add(p.id));
+        try {
+            const { data } = await axios.patch<ShopProductAdmin>(`/api/ecommerce/products/${p.id}`, {
+                isListedInShop: next,
+            });
+            setProducts((prev) => prev.map((x) => (x.id === p.id ? data : x)));
+            toast.success(next ? "Published to shop" : "Removed from shop");
+        } catch (e: unknown) {
+            const msg =
+                axios.isAxiosError(e) && e.response?.data && typeof e.response.data === "object"
+                    ? (e.response.data as { error?: string }).error
+                    : "Failed";
+            toast.error(msg ?? "Failed");
+        } finally {
+            setPublishing((s) => {
+                const n = new Set(s);
+                n.delete(p.id);
+                return n;
+            });
+        }
+    };
 
     const toggleExpand = (id: number) =>
         setExpanded((prev) => {
@@ -214,26 +344,67 @@ export default function EcommerceProductsPage() {
                         One catalogue across shop, POS and Sale vouchers. Publish a product once it’s shop-ready.
                     </p>
                 </div>
-                <Dialog open={open} onOpenChange={setOpen}>
-                    <DialogTrigger asChild>
-                        <Button type="button">Add product</Button>
-                    </DialogTrigger>
-                    <DialogContent className="max-h-[90vh] w-full max-w-2xl overflow-y-auto">
-                        <DialogHeader>
-                            <DialogTitle>New product</DialogTitle>
-                        </DialogHeader>
-                        <div className="mt-4">
-                            <ProductForm
-                                submitLabel="Create product"
-                                onSaved={() => {
-                                    setOpen(false);
-                                    load();
-                                }}
-                            />
-                        </div>
-                    </DialogContent>
-                </Dialog>
+                <div className="flex items-center gap-2">
+                    <Button type="button" variant="outline" className="gap-2" onClick={() => void openRulesDialog()}>
+                        <SlidersHorizontal className="size-4" />
+                        Publish rules
+                    </Button>
+                    <Dialog open={open} onOpenChange={setOpen}>
+                        <DialogTrigger asChild>
+                            <Button type="button">Add product</Button>
+                        </DialogTrigger>
+                        <DialogContent className="max-h-[90vh] w-full max-w-2xl overflow-y-auto">
+                            <DialogHeader>
+                                <DialogTitle>New product</DialogTitle>
+                            </DialogHeader>
+                            <div className="mt-4">
+                                <ProductForm
+                                    submitLabel="Create product"
+                                    onSaved={() => {
+                                        setOpen(false);
+                                        load();
+                                    }}
+                                />
+                            </div>
+                        </DialogContent>
+                    </Dialog>
+                </div>
             </div>
+
+            {/* Publish rules — owner decides which fields gate listing in the shop */}
+            <Dialog open={rulesOpen} onOpenChange={setRulesOpen}>
+                <DialogContent className="w-full max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Publish rules</DialogTitle>
+                    </DialogHeader>
+                    <p className="text-muted-foreground text-sm">
+                        Choose which fields a product must have before it can be listed in the shop. Products missing a
+                        required field show as <span className="font-medium">Needs info</span> and can’t be published.
+                    </p>
+                    <div className="mt-2 space-y-3">
+                        {(Object.keys(SHOP_REQUIREMENT_LABELS) as ShopRequirementKey[]).map((k) => (
+                            <div key={k} className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+                                <Label htmlFor={`rule-${k}`} className="font-normal">
+                                    {SHOP_REQUIREMENT_LABELS[k]}
+                                </Label>
+                                <Switch
+                                    id={`rule-${k}`}
+                                    checked={draftRules[k]}
+                                    onCheckedChange={(v) => setDraftRules((d) => ({ ...d, [k]: v }))}
+                                />
+                            </div>
+                        ))}
+                    </div>
+                    <div className="mt-4 flex justify-end gap-2">
+                        <Button type="button" variant="outline" onClick={() => setRulesOpen(false)} disabled={savingRules}>
+                            Cancel
+                        </Button>
+                        <Button type="button" onClick={() => void saveRules()} disabled={savingRules}>
+                            {savingRules ? "Saving…" : "Save rules"}
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
 
             {/* Tabs + search + filter button */}
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -336,11 +507,39 @@ export default function EcommerceProductsPage() {
                 </div>
             ) : null}
 
+            {/* Bulk action bar — appears when rows are selected */}
+            {selected.size > 0 ? (
+                <div className="border-primary/30 bg-primary/5 flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-sm">
+                    <span className="font-medium">{selected.size} selected</span>
+                    <Button size="sm" disabled={bulkBusy} onClick={() => void runBulk("publish")}>
+                        Publish
+                    </Button>
+                    <Button size="sm" variant="outline" disabled={bulkBusy} onClick={() => void runBulk("unpublish")}>
+                        Unpublish
+                    </Button>
+                    {allPageSelected && filtered.length > selected.size ? (
+                        <Button size="sm" variant="ghost" onClick={selectAllFiltered}>
+                            Select all {filtered.length}
+                        </Button>
+                    ) : null}
+                    <Button size="sm" variant="ghost" className="ml-auto" onClick={clearSelection}>
+                        Clear
+                    </Button>
+                </div>
+            ) : null}
+
             {/* Scrollable table — fills remaining height, header pinned */}
             <div className={SCROLL_FRAME}>
                 <Table>
                     <TableHeader className={STICKY_HEAD}>
                         <TableRow>
+                            <TableHead className="w-10">
+                                <Checkbox
+                                    checked={allPageSelected ? true : pageIds.some((id) => selected.has(id)) ? "indeterminate" : false}
+                                    onCheckedChange={togglePage}
+                                    aria-label="Select all on page"
+                                />
+                            </TableHead>
                             <TableHead className="w-8" />
                             <TableHead className="w-12" />
                             <TableHead>Name</TableHead>
@@ -349,12 +548,12 @@ export default function EcommerceProductsPage() {
                             <TableHead className="w-32">Shop status</TableHead>
                             <TableHead className="w-28 text-right">Shop price</TableHead>
                             <TableHead className="w-20 text-right">Stock</TableHead>
-                            <TableHead className="w-16" />
+                            <TableHead className="w-40" />
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {pageRows.map((p) => {
-                            const status = productStatus(p);
+                            const status = productStatus(p, rules);
                             const shopPricePaise = p.barcodePricePaise ?? p.pricePaise;
                             const img = p.galleryUrls[0] ?? p.imageUrl;
                             const isOpen = expanded.has(p.id);
@@ -365,6 +564,13 @@ export default function EcommerceProductsPage() {
                                         aria-expanded={isOpen}
                                         onClick={() => toggleExpand(p.id)}
                                     >
+                                        <TableCell onClick={(e) => e.stopPropagation()}>
+                                            <Checkbox
+                                                checked={selected.has(p.id)}
+                                                onCheckedChange={() => toggleOne(p.id)}
+                                                aria-label={`Select ${p.name}`}
+                                            />
+                                        </TableCell>
                                         <TableCell className="text-muted-foreground">
                                             <ChevronRight
                                                 className={`size-4 transition-transform ${isOpen ? "rotate-90" : ""}`}
@@ -400,9 +606,29 @@ export default function EcommerceProductsPage() {
                                             {p.stock === null ? "—" : p.stock}
                                         </TableCell>
                                         <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                                            <Button variant="outline" size="sm" asChild>
-                                                <Link href={`/office/ecommerce/products/${p.id}`}>Edit</Link>
-                                            </Button>
+                                            <div className="flex items-center justify-end gap-1.5">
+                                                {status.kind === "ready" ? (
+                                                    <Button
+                                                        size="sm"
+                                                        disabled={publishing.has(p.id)}
+                                                        onClick={() => void togglePublish(p, true)}
+                                                    >
+                                                        {publishing.has(p.id) ? "…" : "Publish"}
+                                                    </Button>
+                                                ) : status.kind === "live" ? (
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        disabled={publishing.has(p.id)}
+                                                        onClick={() => void togglePublish(p, false)}
+                                                    >
+                                                        {publishing.has(p.id) ? "…" : "Unpublish"}
+                                                    </Button>
+                                                ) : null}
+                                                <Button variant="ghost" size="sm" asChild>
+                                                    <Link href={`/office/ecommerce/products/${p.id}`}>Edit</Link>
+                                                </Button>
+                                            </div>
                                         </TableCell>
                                     </TableRow>
                                     {isOpen ? (
@@ -431,8 +657,8 @@ export default function EcommerceProductsPage() {
                                                             status.kind === "live"
                                                                 ? "Live on storefront"
                                                                 : status.kind === "ready"
-                                                                  ? "Ready — flip the listing switch to publish"
-                                                                  : `Needs ${status.missing.join(", ").toLowerCase()}`
+                                                                  ? "Ready — click Publish to list it in the shop"
+                                                                  : `Needs ${status.missing.join(", ").toLowerCase()} — add it, or relax Publish rules`
                                                         }
                                                     />
                                                     <div className="sm:col-span-2 lg:col-span-4">
