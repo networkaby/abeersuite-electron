@@ -2,14 +2,17 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
+import { parseRange } from "@/modules/accountancy/lib/period";
 
-// GET /api/person/[id]/transactions
+// GET /api/person/[id]/transactions?from=YYYY-MM-DD&to=YYYY-MM-DD
 //
 // Returns every InvVoucher that hits the given person's ledger account.
+// Optional from/to clamp the voucher date to a period (defaults to the
+// current Indian fiscal year, matching the account-ledger view).
 // Response shape kept as `{ invVouchers }` (the `invoices` array was
 // retired with the Invoice → InvVoucher consolidation on 2026-05-24).
 export async function GET(
-    _: Request,
+    request: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
     const { response } = await requireAuth();
@@ -17,6 +20,7 @@ export async function GET(
 
     const { id } = await params;
     const personId = Number(id);
+    const { from, to } = parseRange(new URL(request.url).searchParams);
 
     try {
         const account = await prisma.account.findFirst({
@@ -28,6 +32,7 @@ export async function GET(
             ? await prisma.invVoucher.findMany({
                 where: {
                     deletedAt: null,
+                    date: { gte: from, lte: to },
                     OR: [
                         { accountId: account.id },
                         // Legacy rows written before InvVoucher.accountId existed

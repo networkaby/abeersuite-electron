@@ -165,7 +165,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Companies +", subtitle: "Create a new company", icon: Building2, variant: "outline", action: "new-company", permission: "customers:view" },
         ],
         children: [
-            { label: "All Contacts", href: "/office/customers", icon: Users, permission: "customers:view" },
+            // { label: "All Contacts", href: "/office/customers", icon: Users, permission: "customers:view" },
             { label: "Person", href: "/office/customers/person", icon: Users, permission: "customers:view" },
             { label: "Companies", href: "/office/customers/companies", icon: Building2, permission: "customers:view" },
         ],

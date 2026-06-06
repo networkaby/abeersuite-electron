@@ -86,8 +86,8 @@ export function TransactionsTable({ invVouchers }: { invVouchers: TxInvVoucher[]
     const money = (n: number) => formatRupeesFromPaise(Math.round(n * 100));
 
     return (
-        <Card>
-            <CardContent className="px-0 pt-0">
+        <Card className="py-0 overflow-hidden">
+            <CardContent className="p-0">
                 <Table>
                     <TableHeader>
                         <TableRow>
