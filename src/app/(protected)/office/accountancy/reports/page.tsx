@@ -4,6 +4,7 @@ import Link from "next/link";
 import {
     BookOpen, BarChart2, ClipboardList, Calendar, Wallet, CreditCard, Coins, Landmark, Activity, PieChart, TrendingUp, GitBranch, Receipt,
 } from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 const REPORTS = [
     {
@@ -101,36 +102,38 @@ const REPORTS = [
 
 export default function ReportsMenuPage() {
     return (
-        <div className="max-w-5xl mx-auto space-y-6">
-            <div>
-                <h1 className="text-2xl font-bold text-foreground">Financial Reports</h1>
-                <p className="text-sm text-muted-foreground mt-0.5">
-                    Statutory and management reports — every row drills down to its source.
-                </p>
-            </div>
+        <ScrollArea className="h-full" type="always">
+            <div className="max-w-5xl mx-auto space-y-6 px-6 pt-3 pb-6">
+                <div>
+                    <h1 className="text-2xl font-bold text-foreground">Financial Reports</h1>
+                    <p className="text-sm text-muted-foreground mt-0.5">
+                        Statutory and management reports — every row drills down to its source.
+                    </p>
+                </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {REPORTS.map((r) => {
-                    const Icon = r.icon;
-                    return (
-                        <Link
-                            key={r.title}
-                            href={r.href}
-                            className={`group rounded-lg border border-border bg-gradient-to-br ${r.color} p-5 hover:shadow-md transition-shadow`}
-                        >
-                            <div className="flex items-start gap-3">
-                                <div className="rounded-md bg-background border border-border p-2.5">
-                                    <Icon size={20} />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {REPORTS.map((r) => {
+                        const Icon = r.icon;
+                        return (
+                            <Link
+                                key={r.title}
+                                href={r.href}
+                                className={`group rounded-lg border border-border bg-gradient-to-br ${r.color} p-5 hover:shadow-md transition-shadow`}
+                            >
+                                <div className="flex items-start gap-3">
+                                    <div className="rounded-md bg-background border border-border p-2.5">
+                                        <Icon size={20} />
+                                    </div>
+                                    <div className="flex-1">
+                                        <h3 className="font-semibold text-foreground group-hover:underline">{r.title}</h3>
+                                        <p className="text-xs text-muted-foreground mt-1">{r.description}</p>
+                                    </div>
                                 </div>
-                                <div className="flex-1">
-                                    <h3 className="font-semibold text-foreground group-hover:underline">{r.title}</h3>
-                                    <p className="text-xs text-muted-foreground mt-1">{r.description}</p>
-                                </div>
-                            </div>
-                        </Link>
-                    );
-                })}
+                            </Link>
+                        );
+                    })}
+                </div>
             </div>
-        </div>
+        </ScrollArea>
     );
 }

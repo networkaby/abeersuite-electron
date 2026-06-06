@@ -127,7 +127,7 @@ export function BookPage({
                         <Label>To</Label>
                         <TallyDateInput value={to} onValueChange={setTo} className="w-auto" />
                     </div>
-                    <Button onClick={load}>Run</Button>
+                    <Button onClick={load}>Refresh</Button>
                 </div>
             </div>
 

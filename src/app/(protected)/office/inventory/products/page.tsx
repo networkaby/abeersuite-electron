@@ -12,6 +12,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import Link from "next/link";
 import axios from "axios";
 import { toast } from "sonner";
 import {
@@ -46,6 +47,12 @@ import {
     type NamingMasters,
 } from "@/modules/inventory/lib/productName";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import {
+    Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList,
+    BreadcrumbPage, BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
+import { BreadcrumbBar } from "@/shared/components/BreadcrumbBar";
+import { useEscape } from "@/shared/hooks";
 
 type Opt = { id: number; name?: string; code?: string; label?: string };
 type GstRateOpt = { id: number; rate: string | number; label: string; isActive?: boolean };
@@ -468,8 +475,26 @@ export default function InventoryProductsPage() {
 
     const isEdit = mode === "edit";
 
+    useEscape(() => router.back());
+
     return (
-        <div className="flex h-full flex-col gap-4 overflow-hidden p-6">
+        <div className="flex h-full flex-col overflow-hidden">
+            <BreadcrumbBar>
+                <Breadcrumb>
+                    <BreadcrumbList>
+                        <BreadcrumbItem>
+                            <BreadcrumbLink asChild>
+                                <Link href="/office/inventory">Inventory</Link>
+                            </BreadcrumbLink>
+                        </BreadcrumbItem>
+                        <BreadcrumbSeparator />
+                        <BreadcrumbItem>
+                            <BreadcrumbPage>Products</BreadcrumbPage>
+                        </BreadcrumbItem>
+                    </BreadcrumbList>
+                </Breadcrumb>
+            </BreadcrumbBar>
+        <div className="flex flex-1 min-h-0 flex-col gap-4 overflow-hidden p-6">
             <div className="flex flex-none flex-wrap items-center justify-between gap-3">
                 <div>
                     <h2 className="text-xl font-semibold tracking-tight flex items-center gap-2">
@@ -913,6 +938,7 @@ export default function InventoryProductsPage() {
                     ) : null}
                 </div>
             </div>
+        </div>
         </div>
     );
 }

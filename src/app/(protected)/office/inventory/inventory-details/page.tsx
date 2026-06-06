@@ -9,7 +9,9 @@ import {
     BreadcrumbPage, BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { useEscape } from "@/shared/hooks";
-import { Box, Loader2, RefreshCw, AlertTriangle, Pencil } from "lucide-react";
+import { Box, Loader2, RefreshCw, AlertTriangle, Pencil, ChevronDown } from "lucide-react";
+import { useSession } from "next-auth/react";
+import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -125,6 +127,12 @@ export default function InventoryDetailsPage() {
     const [to, setTo] = useState(today());
     const [editOpen, setEditOpen] = useState(false);
     const [createOpen, setCreateOpen] = useState(false);
+    // "org" = total across all branches; branch id string = specific branch
+    const [stockScope, setStockScope] = useState<"org" | string>("org");
+
+    const { data: session } = useSession();
+    const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
+    const canViewOrg = hasPermissionWithScope(permissions, "inventory:view:org");
 
     const loadProducts = useCallback(() => {
         axios
@@ -154,6 +162,18 @@ export default function InventoryDetailsPage() {
         loadDetail(selectedId, from, to);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedId]);
+
+    // Reset scope when product changes: org users stay on "org", branch users
+    // default to their first branch entry (or "org" if no branchStocks).
+    useEffect(() => {
+        if (!detail) return;
+        const branches = detail.product.branchStocks ?? [];
+        if (!canViewOrg && branches.length > 0) {
+            setStockScope(branches[0].branch.id);
+        } else {
+            setStockScope("org");
+        }
+    }, [detail?.product.id, canViewOrg]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const handleRefresh = () => {
         if (selectedId) loadDetail(selectedId, from, to);
@@ -286,10 +306,30 @@ export default function InventoryDetailsPage() {
                                         )}
                                     </div>
                                 </div>
-                                <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>
-                                    <Pencil size={13} className="mr-1.5" />
-                                    Edit Product
-                                </Button>
+                                <div className="flex items-center gap-2">
+                                    {/* Branch / scope picker */}
+                                    {detail.product.branchStocks && detail.product.branchStocks.length > 0 && (
+                                        <div className="relative">
+                                            <select
+                                                value={stockScope}
+                                                onChange={(e) => setStockScope(e.target.value)}
+                                                className="h-8 appearance-none rounded-md border border-input bg-background pl-2.5 pr-6 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer"
+                                            >
+                                                {canViewOrg && <option value="org">All Branches</option>}
+                                                {detail.product.branchStocks.map((bs) => (
+                                                    <option key={bs.branch.id} value={bs.branch.id}>
+                                                        {bs.branch.name}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            <ChevronDown size={11} className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                                        </div>
+                                    )}
+                                    <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>
+                                        <Pencil size={13} className="mr-1.5" />
+                                        Edit Product
+                                    </Button>
+                                </div>
                             </div>
 
                             {/* 4-stat row */}
@@ -302,51 +342,30 @@ export default function InventoryDetailsPage() {
                                     label="Cost Price"
                                     value={detail.product.lastPurchasePaise != null ? fmt(detail.product.lastPurchasePaise / 100) : "—"}
                                 />
-                                <StatBox
-                                    label="Stock Qty"
-                                    value={`${detail.product.stock ?? 0} ${detail.product.unit.code}`}
-                                    alert={(detail.product.stock ?? 0) <= detail.product.lowStockThreshold}
-                                />
-                                <StatBox
-                                    label="Stock Value"
-                                    value={
-                                        detail.product.lastPurchasePaise != null && (detail.product.stock ?? 0) > 0
-                                            ? fmt(((detail.product.stock ?? 0) * detail.product.lastPurchasePaise) / 100)
-                                            : "—"
-                                    }
-                                />
+                                {(() => {
+                                    const scopeStock = stockScope === "org"
+                                        ? (detail.product.stock ?? 0)
+                                        : (detail.product.branchStocks?.find((b) => b.branch.id === stockScope)?.stock ?? 0);
+                                    return (
+                                        <>
+                                            <StatBox
+                                                label="Stock Qty"
+                                                value={`${scopeStock} ${detail.product.unit.code}`}
+                                                alert={scopeStock <= detail.product.lowStockThreshold}
+                                            />
+                                            <StatBox
+                                                label="Stock Value"
+                                                value={
+                                                    detail.product.lastPurchasePaise != null && scopeStock > 0
+                                                        ? fmt((scopeStock * detail.product.lastPurchasePaise) / 100)
+                                                        : "—"
+                                                }
+                                            />
+                                        </>
+                                    );
+                                })()}
                             </div>
 
-                            {/* Per-branch stock breakdown */}
-                            {detail.product.branchStocks && detail.product.branchStocks.length > 0 && (
-                                <div className="mt-3 rounded-lg border border-border bg-muted/30 overflow-hidden">
-                                    <table className="w-full text-xs">
-                                        <thead>
-                                            <tr className="border-b border-border bg-muted/60">
-                                                <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">Branch</th>
-                                                <th className="px-3 py-1.5 text-right font-medium text-muted-foreground">Stock</th>
-                                                <th className="px-3 py-1.5 text-right font-medium text-muted-foreground"></th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {detail.product.branchStocks.map((bs) => {
-                                                const isLow = bs.stock <= detail.product.lowStockThreshold;
-                                                return (
-                                                    <tr key={bs.branch.id} className="border-b last:border-0">
-                                                        <td className="px-3 py-1.5 text-muted-foreground">{bs.branch.name}</td>
-                                                        <td className={cn("px-3 py-1.5 text-right font-mono font-medium", isLow ? "text-amber-700 dark:text-amber-400" : "")}>
-                                                            {bs.stock} {detail.product.unit.code}
-                                                        </td>
-                                                        <td className="px-3 py-1.5 text-right">
-                                                            {isLow && <AlertTriangle size={11} className="inline text-amber-500" />}
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            )}
                         </div>
 
                         {/* Transactions */}
