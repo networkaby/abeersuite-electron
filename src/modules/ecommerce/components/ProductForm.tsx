@@ -61,6 +61,7 @@ export default function ProductForm({
     );
     const [lowStockThreshold, setLowStockThreshold] = useState(String(initial?.lowStockThreshold ?? 5));
     const [isListedInShop, setIsListedInShop] = useState(initial?.isListedInShop ?? true);
+    const [allowBackorder, setAllowBackorder] = useState(initial?.allowBackorder ?? false);
     const [isActive, setIsActive] = useState(initial?.isActive ?? true);
     const [busy, setBusy] = useState(false);
     // Owner-configured publish rules (which fields gate listing). Falls back to
@@ -89,6 +90,7 @@ export default function ProductForm({
         setStock(initial.stock === null || initial.stock === undefined ? "" : String(initial.stock));
         setLowStockThreshold(String(initial.lowStockThreshold ?? 5));
         setIsListedInShop(initial.isListedInShop ?? true);
+        setAllowBackorder(initial.allowBackorder ?? false);
         setIsActive(initial.isActive ?? true);
     }, [initial]);
 
@@ -105,6 +107,7 @@ export default function ProductForm({
             description: description.trim() || null,
             category: shopCategory.trim() || null,
             mrpPaise: mrpRupees.trim() ? paiseFromRupeesInput(mrpRupees) : null,
+            stock: stock.trim() === "" ? null : parseInt(stock, 10),
         },
         rules
     );
@@ -129,6 +132,7 @@ export default function ProductForm({
         stock: stock.trim() === "" ? null : parseInt(stock, 10),
         lowStockThreshold: parseInt(lowStockThreshold, 10) || 5,
         isListedInShop: listedEffective,
+        allowBackorder,
         isActive,
         unitId: initial?.unitId ?? 0,
         categoryId: initial?.categoryId ?? null,
@@ -140,6 +144,10 @@ export default function ProductForm({
         shopCategory: shopCategory.trim() || null,
         savedSalePricePaise: initial?.savedSalePricePaise ?? null,
         barcodePricePaise: initial?.barcodePricePaise ?? null,
+        // availability is display-only on the storefront; the admin preview card
+        // doesn't need a resolved value.
+        stockStatus: "in_stock",
+        orderable: true,
     };
 
     const submit = async () => {
@@ -163,6 +171,7 @@ export default function ProductForm({
             lowStockThreshold: parseInt(lowStockThreshold, 10) || 5,
             // Never send "listed" for a product that isn't shop-ready (server 422s).
             isListedInShop: listedEffective,
+            allowBackorder,
             isActive,
             imageUrl: galleryUrls[0] ?? null,
         };
@@ -287,6 +296,13 @@ export default function ProductForm({
                     />
                     <Label htmlFor="listed" className={!qualified ? "text-muted-foreground" : ""}>
                         Listed in shop {!qualified ? "(add the items above to enable)" : ""}
+                    </Label>
+                </div>
+                <div className="flex items-center gap-2">
+                    <Switch id="backorder" checked={allowBackorder} onCheckedChange={setAllowBackorder} />
+                    <Label htmlFor="backorder">
+                        Allow orders when out of stock
+                        <span className="text-muted-foreground ml-1 text-xs">(backorder — overrides the shop policy)</span>
                     </Label>
                 </div>
                 <div className="flex items-center gap-2">

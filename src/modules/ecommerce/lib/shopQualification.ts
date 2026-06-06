@@ -12,6 +12,7 @@ export type ShopPublishRules = {
     price: boolean;
     category: boolean;
     mrp: boolean;
+    stock: boolean;
 };
 
 /** Default rules = the original hardcoded gate (image + description + price). */
@@ -21,6 +22,7 @@ export const DEFAULT_SHOP_PUBLISH_RULES: ShopPublishRules = {
     price: true,
     category: false,
     mrp: false,
+    stock: false,
 };
 
 export type ShopRequirementKey = keyof ShopPublishRules;
@@ -32,6 +34,7 @@ export const SHOP_REQUIREMENT_LABELS: Record<ShopRequirementKey, string> = {
     price: "Sale price",
     category: "Shop category",
     mrp: "MRP",
+    stock: "In stock",
 };
 
 /** Coerce a stored OrgDefaults.shopPublishRulesJson value into clean rules. */
@@ -46,6 +49,7 @@ export function normalizeShopPublishRules(raw: unknown): ShopPublishRules {
         price: pick("price"),
         category: pick("category"),
         mrp: pick("mrp"),
+        stock: pick("stock"),
     };
 }
 
@@ -57,6 +61,8 @@ export type ShopQualifiable = {
     /** Explicit storefront category (shopCategory). */
     category?: string | null;
     mrpPaise?: number | null;
+    /** Tracked stock (null = untracked → always counts as in stock). */
+    stock?: number | null;
 };
 
 export type ShopQualificationResult = {
@@ -73,9 +79,11 @@ const REQUIREMENT_CHECKS: Record<ShopRequirementKey, (p: ShopQualifiable) => boo
     price: (p) => (p.pricePaise ?? 0) > 0,
     category: (p) => Boolean(p.category && p.category.trim().length > 0),
     mrp: (p) => (p.mrpPaise ?? 0) > 0,
+    // Untracked (null/undefined) counts as in stock; tracked must be > 0.
+    stock: (p) => p.stock === undefined || p.stock === null || p.stock > 0,
 };
 
-const REQUIREMENT_ORDER: ShopRequirementKey[] = ["image", "description", "price", "category", "mrp"];
+const REQUIREMENT_ORDER: ShopRequirementKey[] = ["image", "description", "price", "category", "mrp", "stock"];
 
 export function shopQualification(
     p: ShopQualifiable,

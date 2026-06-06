@@ -10,17 +10,13 @@ import type { ShopProductAdmin } from "@/modules/ecommerce/lib/productAdmin";
 import {
     shopQualification,
     DEFAULT_SHOP_PUBLISH_RULES,
-    SHOP_REQUIREMENT_LABELS,
     type ShopPublishRules,
-    type ShopRequirementKey,
 } from "@/modules/ecommerce/lib/shopQualification";
 import ProductForm from "@/modules/ecommerce/components/ProductForm";
 import { PaginationBar } from "@/shared/components/PaginationBar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
     Dialog,
@@ -84,6 +80,7 @@ function productStatus(p: ShopProductAdmin, rules: ShopPublishRules): ProductSta
             description: p.description,
             category: p.shopCategory,
             mrpPaise: p.mrpPaise,
+            stock: p.stock,
         },
         rules
     );
@@ -122,11 +119,9 @@ export default function EcommerceProductsPage() {
     const [pageSize, setPageSize] = useState(PAGE_SIZE);
     const [expanded, setExpanded] = useState<Set<number>>(new Set());
 
-    // Owner-configured publish rules + the settings dialog.
+    // Owner-configured publish rules (edited in Shop settings). Used to compute
+    // each product's shop status; fetched on mount.
     const [rules, setRules] = useState<ShopPublishRules>(DEFAULT_SHOP_PUBLISH_RULES);
-    const [rulesOpen, setRulesOpen] = useState(false);
-    const [draftRules, setDraftRules] = useState<ShopPublishRules>(DEFAULT_SHOP_PUBLISH_RULES);
-    const [savingRules, setSavingRules] = useState(false);
 
     // Multi-select + bulk publish/unpublish (declared up here so the page-select
     // derivations below can read `selected` without a TDZ error).
@@ -156,34 +151,6 @@ export default function EcommerceProductsPage() {
             .then((r) => setRules(r.data.rules))
             .catch(() => setRules(DEFAULT_SHOP_PUBLISH_RULES));
     }, []);
-
-    const openRulesDialog = async () => {
-        // Always seed the dialog from the freshly-persisted rules so a stale
-        // page state can never overwrite the owner's saved choices on Save.
-        try {
-            const { data } = await axios.get<{ rules: ShopPublishRules }>("/api/ecommerce/publish-rules");
-            setRules(data.rules);
-            setDraftRules(data.rules);
-        } catch {
-            setDraftRules(rules);
-        }
-        setRulesOpen(true);
-    };
-
-    const saveRules = async () => {
-        setSavingRules(true);
-        try {
-            const { data } = await axios.put<{ rules: ShopPublishRules }>("/api/ecommerce/publish-rules", draftRules);
-            setRules(data.rules);
-            setRulesOpen(false);
-            toast.success("Publish rules saved");
-            load(); // statuses recompute against the new rules
-        } catch {
-            toast.error("Failed to save publish rules");
-        } finally {
-            setSavingRules(false);
-        }
-    };
 
     const categories = useMemo(
         () => [...new Set(products.map((p) => p.category).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
@@ -345,9 +312,11 @@ export default function EcommerceProductsPage() {
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
-                    <Button type="button" variant="outline" className="gap-2" onClick={() => void openRulesDialog()}>
-                        <SlidersHorizontal className="size-4" />
-                        Publish rules
+                    <Button type="button" variant="outline" className="gap-2" asChild>
+                        <Link href="/office/settings/ecommerce">
+                            <SlidersHorizontal className="size-4" />
+                            Publish rules
+                        </Link>
                     </Button>
                     <Dialog open={open} onOpenChange={setOpen}>
                         <DialogTrigger asChild>
@@ -370,41 +339,6 @@ export default function EcommerceProductsPage() {
                     </Dialog>
                 </div>
             </div>
-
-            {/* Publish rules — owner decides which fields gate listing in the shop */}
-            <Dialog open={rulesOpen} onOpenChange={setRulesOpen}>
-                <DialogContent className="w-full max-w-md">
-                    <DialogHeader>
-                        <DialogTitle>Publish rules</DialogTitle>
-                    </DialogHeader>
-                    <p className="text-muted-foreground text-sm">
-                        Choose which fields a product must have before it can be listed in the shop. Products missing a
-                        required field show as <span className="font-medium">Needs info</span> and can’t be published.
-                    </p>
-                    <div className="mt-2 space-y-3">
-                        {(Object.keys(SHOP_REQUIREMENT_LABELS) as ShopRequirementKey[]).map((k) => (
-                            <div key={k} className="flex items-center justify-between rounded-md border border-border px-3 py-2">
-                                <Label htmlFor={`rule-${k}`} className="font-normal">
-                                    {SHOP_REQUIREMENT_LABELS[k]}
-                                </Label>
-                                <Switch
-                                    id={`rule-${k}`}
-                                    checked={draftRules[k]}
-                                    onCheckedChange={(v) => setDraftRules((d) => ({ ...d, [k]: v }))}
-                                />
-                            </div>
-                        ))}
-                    </div>
-                    <div className="mt-4 flex justify-end gap-2">
-                        <Button type="button" variant="outline" onClick={() => setRulesOpen(false)} disabled={savingRules}>
-                            Cancel
-                        </Button>
-                        <Button type="button" onClick={() => void saveRules()} disabled={savingRules}>
-                            {savingRules ? "Saving…" : "Save rules"}
-                        </Button>
-                    </div>
-                </DialogContent>
-            </Dialog>
 
             {/* Tabs + search + filter button */}
             <div className="flex flex-wrap items-center justify-between gap-3">

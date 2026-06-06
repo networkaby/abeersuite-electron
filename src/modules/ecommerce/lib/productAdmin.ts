@@ -9,6 +9,8 @@ export type ShopProductAdmin = ShopProductPublic & {
     lowStockThreshold: number;
     isActive: boolean;
     isListedInShop: boolean;
+    /** Per-product override: accept orders even at zero stock (backorder). */
+    allowBackorder: boolean;
     unitId: number;
     categoryId: number | null;
     groupId: number | null;
@@ -43,6 +45,7 @@ export function invProductToAdmin(
         lowStockThreshold: p.lowStockThreshold,
         isActive: p.isActive,
         isListedInShop: p.isListedInShop,
+        allowBackorder: p.allowBackorder,
         unitId: p.unitId,
         categoryId: p.categoryId,
         groupId: p.groupId,

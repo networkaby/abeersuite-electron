@@ -41,6 +41,13 @@ export default function ProductPurchasePanel({ product }: { product: ShopProduct
     return (
         <div className="space-y-6">
             <div className="flex flex-wrap gap-2">
+                {product.stockStatus === "out_of_stock" ? (
+                    <Badge variant="destructive">Out of stock</Badge>
+                ) : product.stockStatus === "backorder" ? (
+                    <Badge variant="outline" className="border-amber-500/40 bg-amber-50 text-amber-700">
+                        Available on backorder
+                    </Badge>
+                ) : null}
                 {product.badge ? <Badge variant="secondary">{product.badge}</Badge> : null}
                 <Badge variant="outline">{product.category}</Badge>
             </div>
@@ -107,14 +114,30 @@ export default function ProductPurchasePanel({ product }: { product: ShopProduct
                         size="lg"
                         className="min-w-[200px] flex-1 rounded-full text-base shadow-md"
                         type="button"
+                        disabled={!product.orderable}
                         onClick={() => {
                             add(product.id, qty);
-                            toast.success(`Added ${qty} to cart`);
+                            toast.success(
+                                product.stockStatus === "backorder" ? `Added ${qty} (backorder)` : `Added ${qty} to cart`
+                            );
                         }}
                     >
-                        Add to cart
+                        {!product.orderable
+                            ? "Out of stock"
+                            : product.stockStatus === "backorder"
+                              ? "Backorder"
+                              : "Add to cart"}
                     </Button>
                 </div>
+                {product.stockStatus === "backorder" ? (
+                    <p className="mt-3 text-xs text-amber-700">
+                        Out of stock — order now and we’ll procure and deliver it (may take longer).
+                    </p>
+                ) : !product.orderable ? (
+                    <p className="mt-3 text-xs text-muted-foreground">
+                        This item is currently out of stock. Please check back later.
+                    </p>
+                ) : null}
                 <div className="mt-4 flex flex-wrap gap-2">
                     <Button
                         type="button"

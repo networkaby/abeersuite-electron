@@ -222,6 +222,9 @@ model InvProduct {
   stock             Int?
   lowStockThreshold Int     @default(5)
   isListedInShop    Boolean @default(false)
+  /// Per-product override of the org out-of-stock policy: when true the shop
+  /// accepts orders for this product even at zero stock (backorder / procure later).
+  allowBackorder    Boolean @default(false)
 
   // ── Pricing strategy (cost basis + per-item overrides) ─────────────────────
   /// Per-item cost-basis method consumed by the pricing-strategy resolver +

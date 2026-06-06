@@ -14,6 +14,7 @@ export type ShopListingInput = {
     galleryUrls: string[];
     shopDescription: string | null;
     shopCategory: string | null;
+    stock: number | null;
     savedSalePricePaise: number | null;
     mrpPaise: number | null;
     effectiveSalePricePaise: number | null;
@@ -54,6 +55,7 @@ export function resolveShopListing(
             description: m.shopDescription,
             category: m.shopCategory,
             mrpPaise: m.mrpPaise,
+            stock: m.stock,
         },
         opts.rules ?? DEFAULT_SHOP_PUBLISH_RULES
     );

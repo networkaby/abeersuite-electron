@@ -27,6 +27,7 @@ const putSchema = z.object({
     price: z.boolean().optional(),
     category: z.boolean().optional(),
     mrp: z.boolean().optional(),
+    stock: z.boolean().optional(),
 });
 
 export async function PUT(req: Request) {

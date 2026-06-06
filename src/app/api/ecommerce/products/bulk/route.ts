@@ -41,7 +41,7 @@ export async function POST(req: Request) {
             where: { id: { in: ids } },
             select: {
                 id: true, name: true, sku: true, imageUrl: true, galleryJson: true,
-                shopDescription: true, shopCategory: true, savedSalePricePaise: true,
+                shopDescription: true, shopCategory: true, stock: true, savedSalePricePaise: true,
                 mrpPaise: true, effectiveSalePricePaise: true, slug: true,
             },
         });
@@ -58,6 +58,7 @@ export async function POST(req: Request) {
                 {
                     name: p.name, sku: p.sku, imageUrl: p.imageUrl, galleryUrls: gallery,
                     shopDescription: p.shopDescription, shopCategory: p.shopCategory,
+                    stock: p.stock,
                     savedSalePricePaise: p.savedSalePricePaise, mrpPaise: p.mrpPaise,
                     effectiveSalePricePaise: p.effectiveSalePricePaise, slug: p.slug,
                 },

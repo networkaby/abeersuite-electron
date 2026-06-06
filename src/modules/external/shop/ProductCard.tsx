@@ -50,7 +50,15 @@ export default function ProductCard({ product, className }: { product: ShopProdu
                     ) : (
                         <div className="flex size-full items-center justify-center text-muted-foreground text-sm">No image</div>
                     )}
-                    {product.badge ? (
+                    {product.stockStatus === "out_of_stock" ? (
+                        <Badge className="absolute left-3 top-3 rounded-md shadow-sm" variant="destructive">
+                            Out of stock
+                        </Badge>
+                    ) : product.stockStatus === "backorder" ? (
+                        <Badge className="absolute left-3 top-3 rounded-md border-amber-500/40 bg-amber-50 text-amber-700 shadow-sm" variant="outline">
+                            Backorder
+                        </Badge>
+                    ) : product.badge ? (
                         <Badge className="absolute left-3 top-3 rounded-md shadow-sm" variant="secondary">
                             {product.badge}
                         </Badge>
@@ -132,12 +140,13 @@ export default function ProductCard({ product, className }: { product: ShopProdu
                 <Button
                     className="h-11 min-h-11 w-full flex-1 touch-manipulation rounded-full shadow-sm sm:h-10 sm:min-h-10"
                     type="button"
+                    disabled={!product.orderable}
                     onClick={() => {
                         add(product.id, 1);
-                        toast.success("Added to cart");
+                        toast.success(product.stockStatus === "backorder" ? "Added (backorder)" : "Added to cart");
                     }}
                 >
-                    Add to cart
+                    {!product.orderable ? "Out of stock" : product.stockStatus === "backorder" ? "Backorder" : "Add to cart"}
                 </Button>
                 <Button
                     variant="outline"

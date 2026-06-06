@@ -20,6 +20,18 @@ enum ShopPaymentMethod {
   ONLINE
 }
 
+// What the storefront does with a tracked product that has zero stock.
+// Org-wide default (OrgDefaults.shopOutOfStockPolicy). A per-product
+// `InvProduct.allowBackorder` overrides this to always allow ordering.
+//   HIDE      – remove the product from the shop while out of stock.
+//   NOTIFY    – show it with an "Out of stock" notice, add-to-cart disabled.
+//   BACKORDER – show it and accept orders anyway (procure later).
+enum ShopOutOfStockPolicy {
+  HIDE
+  NOTIFY
+  BACKORDER
+}
+
 model ShopCoupon {
   id         String    @id @default(cuid())
   code       String    @unique

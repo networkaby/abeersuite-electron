@@ -156,6 +156,10 @@ model OrgDefaults {
   // untouched (survives reseed).
   shopPublishRulesJson Json?
 
+  // What the storefront does with a tracked product at zero stock (Settings →
+  // E-Commerce). Per-product `InvProduct.allowBackorder` can override to BACKORDER.
+  shopOutOfStockPolicy ShopOutOfStockPolicy @default(NOTIFY)
+
   updatedAt DateTime @updatedAt
 }
 

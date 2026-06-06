@@ -37,6 +37,7 @@ const createSchema = z.object({
     stock: z.coerce.number().int().min(0).optional().nullable(),
     lowStockThreshold: z.coerce.number().int().min(0).optional(),
     isListedInShop: z.boolean().optional(),
+    allowBackorder: z.boolean().optional(),
     isActive: z.boolean().optional(),
 });
 
@@ -100,6 +101,7 @@ export async function POST(req: Request) {
                 galleryUrls: galleryJson ?? [],
                 shopDescription: b.shopDescription ?? null,
                 shopCategory: b.shopCategory ?? null,
+                stock: b.stock === undefined ? null : b.stock,
                 savedSalePricePaise: null,
                 mrpPaise: b.mrpPaise ?? null,
                 effectiveSalePricePaise: b.pricePaise ?? null,
@@ -137,6 +139,7 @@ export async function POST(req: Request) {
                 stock: b.stock === undefined ? null : b.stock,
                 lowStockThreshold: b.lowStockThreshold ?? 5,
                 isListedInShop: listing.isListedInShop,
+                allowBackorder: b.allowBackorder ?? false,
                 isActive: b.isActive ?? true,
             },
             include: productInclude,

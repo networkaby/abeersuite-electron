@@ -2,7 +2,9 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { invProductToPublic as shopProductToPublic, type ShopProductPublic } from "@/shared/lib/shop/productPublic";
 import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
 import { loadShopPublishRules } from "@/shared/lib/shop/publishRules";
+import { loadShopStockPolicy } from "@/shared/lib/shop/stockPolicy";
 import { shopQualification } from "@/modules/ecommerce/lib/shopQualification";
+import { resolveAvailability } from "@/modules/ecommerce/lib/shopStock";
 import { invProductDb } from "@/shared/types/inventoryTypes";
 import { HERO_SLIDES, PROMO_BANNERS_TOP, PROMO_BANNERS_BOTTOM } from "@/shared/lib/shop/storeContent";
 import HeroCarousel from "@/modules/external/store/HeroCarousel";
@@ -46,14 +48,20 @@ export default async function StoreHomePage({
     const sp = await searchParams;
     const initialCategory = sp.category && sp.category !== "" ? sp.category : "all";
 
-    const [bands, rules] = await Promise.all([loadBarcodeBands(), loadShopPublishRules()]);
+    const [bands, rules, policy] = await Promise.all([
+        loadBarcodeBands(),
+        loadShopPublishRules(),
+        loadShopStockPolicy(),
+    ]);
     const rows = await invProductDb(prisma).findMany({
         where: { isListedInShop: true, isActive: true },
         include: { category: { select: { name: true } } },
         orderBy: [{ shopCategory: "asc" }, { id: "asc" }],
     });
     const products = rows
-        .map((p) => shopProductToPublic(p, bands))
+        .map((p) => ({ p, avail: resolveAvailability(p.stock, p.allowBackorder, policy) }))
+        .filter(({ avail }) => avail.visible)
+        .map(({ p, avail }) => shopProductToPublic(p, bands, avail))
         .filter((p) => shopQualification(p, rules).qualified);
 
     const allCategories = [...new Set(products.map((p) => p.category))];

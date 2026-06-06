@@ -1,5 +1,6 @@
 import type { InvProductFull } from "@/shared/types/inventoryTypes";
 import { barcodeTagPaise, type BarcodeBand } from "@/shared/lib/pricing/barcodePrice";
+import type { StockStatus } from "@/modules/ecommerce/lib/shopStock";
 
 /** Serializable storefront shape (SSR → client, APIs). */
 export type ShopProductPublic = {
@@ -15,6 +16,10 @@ export type ShopProductPublic = {
     imageUrl: string | null;
     galleryUrls: string[];
     specs: Record<string, string>;
+    /** Stock display state — drives the out-of-stock notice / backorder label. */
+    stockStatus: StockStatus;
+    /** Whether the customer may add this to cart / order it. */
+    orderable: boolean;
 };
 
 export function productPath(p: Pick<ShopProductPublic, "id" | "slug">): string {
@@ -33,7 +38,8 @@ export function productPath(p: Pick<ShopProductPublic, "id" | "slug">): string {
  */
 export function invProductToPublic(
     p: InvProductFull & { category?: { name: string } | null },
-    bands?: BarcodeBand[]
+    bands?: BarcodeBand[],
+    avail?: { status: StockStatus; orderable: boolean }
 ): ShopProductPublic {
     const rawGal = p.galleryJson;
     let galleryUrls: string[] = [];
@@ -69,6 +75,10 @@ export function invProductToPublic(
         imageUrl: p.imageUrl,
         galleryUrls,
         specs,
+        // Availability defaults to in-stock/orderable for callers that don't
+        // resolve it (e.g. the admin shape); storefront APIs pass the resolved value.
+        stockStatus: avail?.status ?? "in_stock",
+        orderable: avail?.orderable ?? true,
     };
 }
 

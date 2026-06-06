@@ -7,6 +7,7 @@ import { requirePortalCustomer } from "@/shared/lib/auth/portalAuthGuard";
 import { invProductDb } from "@/shared/types/inventoryTypes";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
+import { loadShopStockPolicy } from "@/shared/lib/shop/stockPolicy";
 import { barcodeTagPaise } from "@/shared/lib/pricing/barcodePrice";
 import { getOrdersPipeline } from "@/modules/ecommerce/lib/ordersPipeline";
 
@@ -36,12 +37,13 @@ export async function POST(req: Request) {
         }
 
         const productIds = [...new Set(lines.map((l) => l.productId))];
-        const [products, bands, ordersPipeline] = await Promise.all([
+        const [products, bands, ordersPipeline, stockPolicy] = await Promise.all([
             invProductDb(prisma).findMany({
                 where: { id: { in: productIds }, isListedInShop: true, isActive: true },
             }),
             loadBarcodeBands(),
             getOrdersPipeline(prisma),
+            loadShopStockPolicy(),
         ]);
         const byId = new Map(products.map((p) => [p.id, p]));
 
@@ -57,9 +59,17 @@ export async function POST(req: Request) {
             if (!p || unitPricePaise == null) {
                 return NextResponse.json({ error: `Unknown product ${l.productId}` }, { status: 400 });
             }
-            if (p.stock !== null && p.stock < l.quantity) {
+            // Short stock is allowed only when the product (or the org policy)
+            // permits backorder; otherwise block the order.
+            const backorderable = p.allowBackorder || stockPolicy === "BACKORDER";
+            if (p.stock !== null && p.stock < l.quantity && !backorderable) {
                 return NextResponse.json(
-                    { error: `Not enough stock for “${p.name}”. Available: ${p.stock}.` },
+                    {
+                        error:
+                            p.stock <= 0
+                                ? `“${p.name}” is out of stock.`
+                                : `Not enough stock for “${p.name}”. Available: ${p.stock}.`,
+                    },
                     { status: 400 }
                 );
             }

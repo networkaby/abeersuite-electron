@@ -35,6 +35,7 @@ const patchSchema = z.object({
     stock: z.coerce.number().int().min(0).optional().nullable(),
     lowStockThreshold: z.coerce.number().int().min(0).optional(),
     isListedInShop: z.boolean().optional(),
+    allowBackorder: z.boolean().optional(),
     isActive: z.boolean().optional(),
 });
 
@@ -74,7 +75,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
             where: { id: pid },
             select: {
                 name: true, sku: true, imageUrl: true, galleryJson: true,
-                shopDescription: true, shopCategory: true, savedSalePricePaise: true,
+                shopDescription: true, shopCategory: true, stock: true, savedSalePricePaise: true,
                 mrpPaise: true, effectiveSalePricePaise: true, slug: true,
             },
         });
@@ -109,6 +110,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
         if (specsJson !== undefined) data.specsJson = specsJson;
         if (b.stock !== undefined) data.stock = b.stock;
         if (b.lowStockThreshold !== undefined) data.lowStockThreshold = b.lowStockThreshold;
+        if (b.allowBackorder !== undefined) data.allowBackorder = b.allowBackorder;
         if (b.isActive !== undefined) data.isActive = b.isActive;
 
         // Resolve listing + slug from the merged (request ∪ existing) state.
@@ -126,6 +128,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
                     b.shopDescription !== undefined ? b.shopDescription ?? null : existing.shopDescription,
                 shopCategory:
                     b.shopCategory !== undefined ? b.shopCategory ?? null : existing.shopCategory,
+                stock: b.stock !== undefined ? b.stock ?? null : existing.stock,
                 savedSalePricePaise: existing.savedSalePricePaise,
                 mrpPaise: b.mrpPaise !== undefined ? b.mrpPaise ?? null : existing.mrpPaise,
                 effectiveSalePricePaise:
