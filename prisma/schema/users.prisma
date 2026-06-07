@@ -13,6 +13,11 @@ model User {
   title                   String?
   scope                   UserScope           @default(OWN)
   createdAt               DateTime            @default(now())
+  /// Server-side session revocation. Any JWT whose login time is BEFORE this
+  /// instant is rejected by the auth `jwt` callback. Bumped on sign-out (= log
+  /// out of every tab/device at once) and available for password-change / admin
+  /// force-logout later. null = never revoked.
+  tokensValidFrom         DateTime?
   managerId               Int?
   // public profile
   avatarUrl               String?

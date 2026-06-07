@@ -14,6 +14,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     callbacks: {
         async jwt({ token, user }) {
             if (user) {
+                token.loginAt = Date.now();   // for server-side revocation
                 token.id = user.id;
                 token.role = "role" in user && typeof user.role === "string" ? user.role : "";
                 token.roles = "roles" in user && Array.isArray(user.roles) ? (user.roles as string[]) : [];
@@ -46,10 +47,40 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     "activeAccountType" in user && (user.activeAccountType === "personal" || user.activeAccountType === "company")
                         ? user.activeAccountType
                         : undefined;
+                return token;
+            }
+            // ── Server-side revocation (staff only) ──────────────────────────
+            // On every subsequent request, reject a token whose login predates the
+            // user's `tokensValidFrom` (bumped on sign-out). This is what makes
+            // "logout" actually invalidate a stateless JWT server-side — so a
+            // logged-out till can't keep transacting.
+            if (token.id && token.kind !== "customer") {
+                try {
+                    const u = await prisma.user.findUnique({
+                        where: { id: Number(token.id) },
+                        select: { tokensValidFrom: true },
+                    });
+                    const validFrom = u?.tokensValidFrom?.getTime();
+                    const loginAt = typeof token.loginAt === "number" ? token.loginAt : 0;
+                    // Need a loginAt to compare — tokens minted before this feature
+                    // have none, so they're left alone (a fresh login stamps it).
+                    if (validFrom && loginAt && loginAt < validFrom) {
+                        token.revoked = true;
+                    }
+                } catch {
+                    // DB hiccup → fail OPEN so a transient outage can't mass-logout
+                    // every cashier. prisma's read-retry makes this rare.
+                }
             }
             return token;
         },
         async session({ session, token }) {
+            // Revoked server-side → present a session with no user so requireAuth()
+            // (which checks `!session.user`) rejects it with 401.
+            if (token?.revoked) {
+                (session as unknown as { user?: unknown }).user = undefined;
+                return session;
+            }
             if (token) {
                 const sessionUser = session.user as typeof session.user & {
                     id: string;
@@ -94,6 +125,19 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                         : undefined;
             }
             return session;
+        },
+    },
+    events: {
+        // Sign-out bumps tokensValidFrom → every existing token for this user is
+        // rejected on its next request (logout = log out of every tab/device).
+        async signOut(message) {
+            const token = "token" in message ? message.token : null;
+            const id = token?.id;
+            if (id && token?.kind !== "customer") {
+                await prisma.user
+                    .update({ where: { id: Number(id) }, data: { tokensValidFrom: new Date() } })
+                    .catch(() => { /* best-effort — don't block sign-out on a DB hiccup */ });
+            }
         },
     },
     providers: [

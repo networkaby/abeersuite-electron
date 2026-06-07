@@ -44,6 +44,13 @@ declare module "next-auth" {
 
 declare module "next-auth/jwt" {
     interface JWT {
+        /// Epoch ms when this token was issued at login — compared against the
+        /// user's `tokensValidFrom` to enforce server-side revocation.
+        loginAt?:      number;
+        /// Set by the jwt callback when the token has been revoked server-side
+        /// (login predates the user's `tokensValidFrom`); the session callback
+        /// then blanks the user so guards reject it.
+        revoked?:      boolean;
         id?:           string;
         role?:         string;
         roles?:        string[];

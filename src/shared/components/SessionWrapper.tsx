@@ -1,11 +1,54 @@
 "use client";
 
-import { SessionProvider } from "next-auth/react";
+import { SessionProvider, useSession } from "next-auth/react";
+import { useEffect, useRef } from "react";
+import axios from "axios";
 
-export default function SessionWrapper({
-    children,
-}: {
-    children: React.ReactNode;
-}) {
-    return <SessionProvider>{children}</SessionProvider>;
+// Staff-only wrapper (mounted by every (protected) layout, never the portal).
+// Adds two layers that make "logout" actually stick across tabs:
+//   1. Instant cross-tab — when an established session disappears (sign-out in
+//      another tab, which next-auth broadcasts), redirect this tab to login.
+//   2. Server-side revocation catch — any API 401 (e.g. a token revoked via
+//      tokensValidFrom after logout) kicks the tab to login on its next request,
+//      so a logged-out till can't keep transacting.
+
+let redirecting = false;
+function goLogin() {
+    if (redirecting || typeof window === "undefined") return;
+    if (window.location.pathname.startsWith("/staff/login")) return;
+    redirecting = true;
+    const back = window.location.pathname + window.location.search;
+    window.location.assign(`/staff/login?callbackUrl=${encodeURIComponent(back)}`);
+}
+
+function SessionGuard() {
+    const { status } = useSession();
+    const prev = useRef(status);
+
+    useEffect(() => {
+        if (prev.current === "authenticated" && status === "unauthenticated") goLogin();
+        prev.current = status;
+    }, [status]);
+
+    useEffect(() => {
+        const id = axios.interceptors.response.use(
+            (r) => r,
+            (err) => {
+                if (err?.response?.status === 401) goLogin();
+                return Promise.reject(err);
+            },
+        );
+        return () => axios.interceptors.response.eject(id);
+    }, []);
+
+    return null;
+}
+
+export default function SessionWrapper({ children }: { children: React.ReactNode }) {
+    return (
+        <SessionProvider>
+            <SessionGuard />
+            {children}
+        </SessionProvider>
+    );
 }
