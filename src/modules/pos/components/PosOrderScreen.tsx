@@ -345,7 +345,7 @@ export default function PosOrderScreen() {
             if (createDialogOpen || checkoutOpen) return;
             if (cart.length === 0 || !snapshot?.account) return;
             e.preventDefault();
-            void generateInvoice(true);   // Order saves directly — no payment checkout
+            openCheckout();   // Order opens the dialog to (optionally) collect an advance
         };
         window.addEventListener("keydown", handler);
         return () => window.removeEventListener("keydown", handler);
@@ -709,13 +709,26 @@ export default function PosOrderScreen() {
         if (!snapshot?.account) { toast.error("Select a customer first"); return; }
         if (cart.length === 0) { toast.error("Cart is empty"); return; }
         if (cart.some((l) => l.unitPrice <= 0)) { toast.error("All lines need a unit price"); return; }
+        // Order = OPTIONAL advance. Build payment tenders from the dialog (may be
+        // empty → no receipt voucher). Mirrors the POS sale tender shape.
+        type PayLine = { method: "CASH" | "MOBILE_PAYMENT" | "BANK_TRANSFER" | "CARD" | "CHEQUE" | "OTHER"; amount: number; reference?: string };
+        const paymentsList: PayLine[] = [];
+        if (cashNet > 0) paymentsList.push({ method: "CASH", amount: cashNet });
+        if (pay.upi > 0) paymentsList.push({ method: "MOBILE_PAYMENT", amount: pay.upi });
+        for (const e of extras) {
+            if (e.amount <= 0) continue;
+            const method = e.method === "WALLET" ? "OTHER" : e.method;
+            paymentsList.push({ method, amount: e.amount, reference: e.reference || undefined });
+        }
+        const advance = paymentsList.reduce((s, p) => s + p.amount, 0);
+        if (advance > total + 0.01) { toast.error("Advance can't exceed the order total"); return; }
         setSubmitting(true);
         try {
             const today = new Date().toISOString().slice(0, 10);
             // POS Order — counter order (deliver-later / book-and-collect). No GL,
-            // no stock (reservation is Phase 2/3); captures a CRM Deal when a
-            // customer is attached. Prints the real (discounted) price.
-            const { data } = await axios.post<{ voucherId: number; reference: string; dealId: number | null }>("/api/pos/order", {
+            // no stock (reservation is Phase 2/3); captures a CRM Deal. Any advance
+            // is posted as a SECOND voucher (Receipt) on the customer's account.
+            const { data } = await axios.post<{ voucherId: number; reference: string; dealId: number | null; receiptVoucherId: number | null; receiptVoucherRef: string | null }>("/api/pos/order", {
                 accountId: snapshot.account.id,
                 partyType: snapshot.party.kind === "company" ? "company" : "customer",
                 partyId: snapshot.party.id,
@@ -724,7 +737,7 @@ export default function PosOrderScreen() {
                 date: today,
                 discountAmt: discountAmount,
                 discountPct: discountAmount > 0 ? discountPct : 0,
-                notes: `POS Order (discount ${discountPct}%)`,
+                notes: `POS Order (discount ${discountPct}%)${advance > 0 ? ` | Advance ${fmtINR(advance)}` : ""}`,
                 lines: cart.map((l) => ({
                     productId: l.productId,
                     description: `${l.sku} — ${l.name}${l.description ? ` · ${l.description}` : ""}`,
@@ -734,8 +747,10 @@ export default function PosOrderScreen() {
                     mrpPaise: l.mrpPaise ?? null,
                     savedSalePricePaise: l.barcodePaise ?? null,
                 })),
+                payments: paymentsList,   // optional advance → server posts a Receipt voucher
             });
-            toast.success(`Order ${data.reference} · ${fmtINR(total)}${data.dealId ? " · lead captured" : ""}`);
+            const advMsg = data.receiptVoucherRef ? ` · advance ${data.receiptVoucherRef} ${fmtINR(advance)}` : "";
+            toast.success(`Order ${data.reference} · ${fmtINR(total)}${data.dealId ? " · lead captured" : ""}${advMsg}`);
             void qrDisplay.idle();
             setCart([]);
             setPay({ cashTendered: 0, cashReturn: 0, upi: 0 });
@@ -753,7 +768,11 @@ export default function PosOrderScreen() {
             setCharges([]);
             setAdjustmentsOpen(false);
             setCheckoutOpen(false);
-            if (printAfter) window.open(`/receipt/voucher/inv/${data.voucherId}`, "_blank", "noopener");
+            if (printAfter) {
+                window.open(`/receipt/voucher/inv/${data.voucherId}`, "_blank", "noopener");
+                // Advance receipt prints as a second slip (GL voucher source).
+                if (data.receiptVoucherId) window.open(`/receipt/voucher/gl/${data.receiptVoucherId}`, "_blank", "noopener");
+            }
         } catch (e: unknown) {
             const msg = axios.isAxiosError(e) ? (e.response?.data as { error?: string })?.error : undefined;
             toast.error(msg ?? "Failed to save order");
@@ -1551,8 +1570,8 @@ export default function PosOrderScreen() {
                                 </div>
                                 <span className="text-xl font-bold tabular-nums">{fmtINR(total)}</span>
                             </div>
-                            <Button onClick={() => void generateInvoice(true)} disabled={cart.length === 0 || !snapshot?.account || submitting} className="h-12 w-full text-base" size="lg">
-                                <ReceiptIndianRupee size={18} /> {submitting ? "Saving…" : "Save Order"}
+                            <Button onClick={openCheckout} disabled={cart.length === 0 || !snapshot?.account} className="h-12 w-full text-base" size="lg">
+                                <ReceiptIndianRupee size={18} /> Save Order
                                 <span className="ml-2 rounded border border-primary-foreground/30 px-1.5 py-px text-[10px] opacity-80">Ctrl ↵</span>
                             </Button>
                         </div>
@@ -1581,7 +1600,7 @@ export default function PosOrderScreen() {
             <Dialog open={checkoutOpen} onOpenChange={setCheckoutOpen}>
                 <DialogContent className="sm:max-w-lg">
                     <DialogHeader>
-                        <DialogTitle>Checkout · {fmtINR(total)}</DialogTitle>
+                        <DialogTitle>Save Order · {fmtINR(total)} <span className="text-sm font-normal text-muted-foreground">— advance optional</span></DialogTitle>
                     </DialogHeader>
 
                     <div className="space-y-3">
@@ -1607,20 +1626,11 @@ export default function PosOrderScreen() {
                             </div>
                         )}
 
-                        {/* Credit limit warning — shown when on-credit portion would breach the limit */}
-                        {creditLimitBreached && (
-                            <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-                                <AlertCircle size={16} className="mt-0.5 shrink-0" />
-                                <span>
-                                    {snapshot?.creditLimit === 0
-                                        ? "No credit facility — this account must be paid in full."
-                                        : `Credit limit ₹${snapshot!.creditLimit!.toLocaleString("en-IN")} exceeded. ` +
-                                        `Outstanding ₹${balanceDue.toLocaleString("en-IN")}, ` +
-                                        `this sale adds ₹${onCredit.toLocaleString("en-IN")} on credit.`
-                                    }
-                                </span>
-                            </div>
-                        )}
+                        {/* Order: advance is OPTIONAL — no credit-limit block here. */}
+                        <div className="flex items-start gap-2 rounded-md border border-indigo-200 bg-indigo-50 p-3 text-xs text-indigo-700 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-300">
+                            <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                            <span>Advance is optional — leave the amounts blank to book the order with no payment. Any amount collected posts a separate Receipt voucher on the customer&apos;s account.</span>
+                        </div>
 
                         {(() => {
                             // Enter on any amount field → confirm. Tab walks Cash → UPI → Confirm
@@ -1825,14 +1835,12 @@ export default function PosOrderScreen() {
 
                                     {/* Inline confirm CTAs — final amount + actions sit close to the payment-line entry */}
                                     <div className="grid grid-cols-2 gap-2 pt-1">
-                                        <Button onClick={() => generateInvoice(false)} disabled={submitting || creditLimitBreached || onCredit > 0.01} size="lg" variant="outline"
-                                            title={onCredit > 0.01 ? "Collect the full bill amount to confirm (under-payment → use /sale for credit)" : overpaid > 0 ? "Extra is collected as a Receipt voucher — clears old dues first, leftover becomes advance" : undefined}>
-                                            <ReceiptIndianRupee size={16} /> {submitting ? "Saving…" : (overpaid > 0 ? "Confirm + collect" : "Confirm")}
+                                        <Button onClick={() => generateInvoice(false)} disabled={submitting} size="lg" variant="outline">
+                                            <ReceiptIndianRupee size={16} /> {submitting ? "Saving…" : "Save Order"}
                                             <span className="ml-2 rounded border border-primary-foreground/30 px-1.5 py-px text-[10px] opacity-80">↵</span>
                                         </Button>
-                                        <Button onClick={() => generateInvoice(true)} disabled={submitting || creditLimitBreached || onCredit > 0.01} size="lg"
-                                            title={onCredit > 0.01 ? "Collect the full bill amount to confirm (under-payment → use /sale for credit)" : overpaid > 0 ? "Extra is collected as a Receipt voucher — clears old dues first, leftover becomes advance" : undefined}>
-                                            <ReceiptIndianRupee size={16} /> {submitting ? "Saving…" : "Confirm + Print"}
+                                        <Button onClick={() => generateInvoice(true)} disabled={submitting} size="lg">
+                                            <ReceiptIndianRupee size={16} /> {submitting ? "Saving…" : "Save + Print"}
                                             <span className="ml-2 rounded border border-border px-1.5 py-px text-[10px] opacity-80">Ctrl ↵</span>
                                         </Button>
                                     </div>
