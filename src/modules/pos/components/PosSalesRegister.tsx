@@ -253,25 +253,20 @@ export function PosSalesRegister() {
                 Shown for Sales / Orders / Estimates / Cash. Empty range = all dates.
                 (Cash Book keeps its own counter + today-defaulted range below.) */}
             {tab !== "ledger" && (
-                <div className="flex flex-wrap items-end gap-2">
-                    <div>
-                        <label className="mb-1 block text-xs text-muted-foreground">From</label>
-                        <TallyDateInput value={rangeFrom} onValueChange={setRangeFrom} className="h-9 w-32" />
-                    </div>
-                    <div>
-                        <label className="mb-1 block text-xs text-muted-foreground">To</label>
-                        <TallyDateInput value={rangeTo} onValueChange={setRangeTo} className="h-9 w-32" />
-                    </div>
+                <div className="flex flex-wrap items-center gap-2">
+                    <TallyDateInput value={rangeFrom} onValueChange={setRangeFrom} className="h-9 w-32" placeholder="From" />
+                    <span className="text-sm text-muted-foreground">–</span>
+                    <TallyDateInput value={rangeTo} onValueChange={setRangeTo} className="h-9 w-32" placeholder="To" />
                     <Button variant="outline" size="sm" className="h-9" onClick={() => { setRangeFrom(todayISO); setRangeTo(todayISO); }}>Today</Button>
                     {(rangeFrom || rangeTo) && (
                         <Button variant="ghost" size="sm" className="h-9 text-muted-foreground" onClick={() => { setRangeFrom(""); setRangeTo(""); }}>Clear</Button>
                     )}
                     {(tab === "sales" || tab === "orders" || tab === "estimates") && (
-                        <div className="relative min-w-[200px] flex-1">
+                        <div className="relative w-64">
                             <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                             <Input
                                 className="h-9 pl-8 text-sm"
-                                placeholder="Search by reference or customer…"
+                                placeholder="Search reference or customer…"
                                 value={tab === "sales" ? q : docQuery}
                                 onChange={(e) => { if (tab === "sales") { setQ(e.target.value); setPage(1); } else { setDocQuery(e.target.value); } }}
                             />
