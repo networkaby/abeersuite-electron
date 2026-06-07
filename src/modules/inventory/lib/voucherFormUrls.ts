@@ -18,6 +18,8 @@
 export const VOUCHER_URLS: Record<string, string> = {
     POS:             "/vouchers/pos",
     ESTIMATE:        "/vouchers/estimates",
+    POS_ESTIMATE:    "/vouchers/pos-estimates",
+    POS_ORDER:       "/vouchers/pos-orders",
     SALES_ORDER:     "/vouchers/sales-orders",
     PURCHASE_ORDER:  "/vouchers/purchase-orders",
     GRN:             "/vouchers/grn",
@@ -50,6 +52,10 @@ export const EDIT_FORM_URLS: Record<string, string> = {
     SALE_RETURN:     "/vouchers/sale-returns/new",
     PURCHASE_RETURN: "/vouchers/purchase-returns/new",
     ESTIMATE:        "/vouchers/estimates/new",
+    // POS Estimate / Order are created at the counter; reuse the estimate form
+    // for read/duplicate of the saved voucher (no dedicated office form yet).
+    POS_ESTIMATE:    "/vouchers/estimates/new",
+    POS_ORDER:       "/vouchers/estimates/new",
     SALES_ORDER:     "/vouchers/sales-orders/new",
     PURCHASE_ORDER:  "/vouchers/purchase-orders/new",
     GRN:             "/vouchers/grn/new",

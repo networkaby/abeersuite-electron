@@ -46,6 +46,14 @@ export const orgDefaultsUpdateSchema = z.object({
         .max(40)
         .transform((arr) => [...new Set(arr)].sort((a, b) => b - a))
         .optional(),
+    /// POS Estimate print — which discount lines are shown on the customer copy.
+    /// Default (all false) hides every discount so the customer sees the tag price.
+    posEstimateShowDiscountsJson: z.object({
+        tier:    z.boolean(),
+        loyalty: z.boolean(),
+        coupon:  z.boolean(),
+        manual:  z.boolean(),
+    }).optional(),
 });
 
 export type OrgDefaultsUpdateInput = z.infer<typeof orgDefaultsUpdateSchema>;

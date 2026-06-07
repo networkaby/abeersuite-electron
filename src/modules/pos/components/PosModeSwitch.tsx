@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { toast } from "sonner";
 import { ShoppingCart, ClipboardList, FileText } from "lucide-react";
 
 /**
@@ -32,15 +31,13 @@ export function PosModeSwitch({ active }: { active: "sale" | "order" | "estimate
             >
                 <ShoppingCart size={14} /> Sale
             </Link>
-            <button
-                type="button"
-                disabled
-                onClick={() => toast.info("Order mode — coming soon")}
-                className={`${base} ${off} cursor-not-allowed opacity-60`}
-                title="Order — deliver-later / book-and-collect (coming soon)"
+            <Link
+                href="/vouchers/pos/order"
+                className={`${base} ${active === "order" ? on.order : off}`}
+                title="Order — deliver-later / book-and-collect (no payment, no stock yet)"
             >
                 <ClipboardList size={14} /> Order
-            </button>
+            </Link>
             <Link
                 href="/vouchers/pos/estimate"
                 className={`${base} ${active === "estimate" ? on.estimate : off}`}

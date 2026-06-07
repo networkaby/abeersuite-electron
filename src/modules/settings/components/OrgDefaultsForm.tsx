@@ -15,6 +15,13 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import {
+    DEFAULT_ESTIMATE_DISCOUNT_VISIBILITY,
+    ESTIMATE_DISCOUNT_LABELS,
+    normalizeEstimateDiscountVisibility,
+    type EstimateDiscountVisibility,
+} from "@/modules/pos/lib/discountVisibility";
 
 interface InvUnit {
     id: number;
@@ -55,6 +62,7 @@ interface OrgDefaults {
     barcodeBandsJson: BarcodeBand[];
     cashDenominationsJson: number[];
     shippingPoolGroupId: number | null;
+    posEstimateShowDiscountsJson: EstimateDiscountVisibility;
 }
 
 const digitsOnly = (s: string): string => s.replace(/\D/g, "");
@@ -103,6 +111,7 @@ export function OrgDefaultsForm({ units }: { units: InvUnit[] }) {
                     cashDenominationsJson: Array.isArray(defaultsRes.data.cashDenominationsJson) && defaultsRes.data.cashDenominationsJson.length
                         ? defaultsRes.data.cashDenominationsJson
                         : DEFAULT_CASH_DENOMS,
+                    posEstimateShowDiscountsJson: normalizeEstimateDiscountVisibility(defaultsRes.data.posEstimateShowDiscountsJson),
                 };
                 setData(od);
                 setDraft(od);
@@ -164,6 +173,7 @@ export function OrgDefaultsForm({ units }: { units: InvUnit[] }) {
                 // Server dedupes + sorts high → low; send as-is.
                 cashDenominationsJson: draft.cashDenominationsJson ?? [],
                 shippingPoolGroupId: draft.shippingPoolGroupId,
+                posEstimateShowDiscountsJson: draft.posEstimateShowDiscountsJson ?? DEFAULT_ESTIMATE_DISCOUNT_VISIBILITY,
             };
             const { data: saved } = await axios.patch<OrgDefaults>("/api/settings/org-defaults", payload);
             setData(saved);
@@ -505,6 +515,40 @@ export function OrgDefaultsForm({ units }: { units: InvUnit[] }) {
                             Reset to defaults
                         </Button>
                     </div>
+                </div>
+            </section>
+
+            {/* POS Estimate print — discount visibility */}
+            <section className="rounded-lg border bg-card p-4 space-y-4">
+                <div>
+                    <h2 className="text-sm font-semibold">POS Estimate print — show discounts</h2>
+                    <p className="text-xs text-muted-foreground">
+                        On a <span className="font-medium">POS Estimate</span>, the cashier&apos;s screen always shows
+                        discounts (to negotiate). The <span className="font-medium">customer copy</span> (print + display)
+                        hides them by default so the customer sees only the tag / list price. Turn a row on to reveal that
+                        discount on the customer copy too.
+                    </p>
+                </div>
+                <div className="space-y-2">
+                    {(Object.keys(ESTIMATE_DISCOUNT_LABELS) as (keyof EstimateDiscountVisibility)[]).map((k) => (
+                        <div key={k} className="flex items-center justify-between rounded-md border border-border px-3 py-2.5">
+                            <Label htmlFor={`est-disc-${k}`} className="font-normal">{ESTIMATE_DISCOUNT_LABELS[k]}</Label>
+                            <Switch
+                                id={`est-disc-${k}`}
+                                checked={draft.posEstimateShowDiscountsJson?.[k] ?? false}
+                                disabled={saving}
+                                onCheckedChange={(v) =>
+                                    setDraft((d) => d && {
+                                        ...d,
+                                        posEstimateShowDiscountsJson: {
+                                            ...(d.posEstimateShowDiscountsJson ?? DEFAULT_ESTIMATE_DISCOUNT_VISIBILITY),
+                                            [k]: v,
+                                        },
+                                    })
+                                }
+                            />
+                        </div>
+                    ))}
                 </div>
             </section>
 

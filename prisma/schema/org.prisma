@@ -160,6 +160,13 @@ model OrgDefaults {
   // E-Commerce). Per-product `InvProduct.allowBackorder` can override to BACKORDER.
   shopOutOfStockPolicy ShopOutOfStockPolicy @default(NOTIFY)
 
+  // POS Estimate print — which discount lines are SHOWN on the customer-facing
+  // estimate printout/display. Price-privacy: the cashier's screen always shows
+  // discounts (to negotiate), but the customer copy hides them by default so they
+  // see only the tag/list price. null = all hidden. Shape: { tier, loyalty,
+  // coupon, manual: boolean }. Admin-chosen, so bootstrap-seed leaves it untouched.
+  posEstimateShowDiscountsJson Json?
+
   updatedAt DateTime @updatedAt
 }
 

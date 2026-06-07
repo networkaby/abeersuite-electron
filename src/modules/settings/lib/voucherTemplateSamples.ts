@@ -199,6 +199,17 @@ export function buildSampleForKind(kind: VoucherTemplateKind): ThermalReceiptSam
                 lines: [productLines[0]], subtotal: null, taxAmount: null, total: null,
                 notes: null,
             };
+        case "POS_ESTIMATE":
+        case "POS_ORDER":
+            return {
+                reference: kind === "POS_ORDER" ? "POSOD/26-27/0003" : "POSEV/26-27/0007",
+                date: today,
+                partyName: "Walk-in", partyPhone: null,
+                lines: productLines,
+                subtotal: 2694, taxAmount: 484.92, total: 3178.92,
+                notes: kind === "POS_ORDER" ? "Counter order — deliver later." : "Quotation — valid 7 days.",
+                taxBreakdown: intraBreakdown,
+            };
     }
 }
 
@@ -213,6 +224,8 @@ export const VOUCHER_KIND_LABEL: Record<VoucherTemplateKind, string> = {
     SALE: "Sale",
     POS: "POS",
     ESTIMATE: "Estimate",
+    POS_ESTIMATE: "POS Estimate",
+    POS_ORDER: "POS Order",
     SALE_RETURN: "Sale Return",
     PURCHASE_RETURN: "Purchase Return",
     MANUFACTURING_JOURNAL: "Manufacturing Journal",

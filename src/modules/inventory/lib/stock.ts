@@ -11,6 +11,8 @@ const SERIES_KINDS: Partial<Record<InvVoucherType, string>> = {
     POS:                   "POS",
     PURCHASE:              "PURCHASE",
     ESTIMATE:              "ESTIMATE",
+    // POS_ESTIMATE / POS_ORDER deliberately use the legacy PREFIX fallback below
+    // (POSEV-/POSOD- calendar-year) so they need no seeded VoucherSeries row.
     SALE_RETURN:           "SALE_RETURN",
     PURCHASE_RETURN:       "PURCHASE_RETURN",
     SALES_ORDER:           "SALES_ORDER",
@@ -31,6 +33,8 @@ const PREFIX: Record<InvVoucherType, string> = {
     SALE:             "SV",
     POS:              "POS",
     ESTIMATE:         "EV",
+    POS_ESTIMATE:     "POSEV",
+    POS_ORDER:        "POSOD",
     SALE_RETURN:      "SR",
     PURCHASE_RETURN:  "PR",
     MANUFACTURING_JOURNAL: "MJ",

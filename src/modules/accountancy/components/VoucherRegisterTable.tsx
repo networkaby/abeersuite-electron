@@ -59,6 +59,8 @@ const KIND_BADGE: Record<string, string> = {
     SALE_RETURN:           "bg-emerald-50 text-emerald-700",
     PURCHASE_RETURN:       "bg-blue-50 text-blue-700",
     ESTIMATE:              "bg-amber-100 text-amber-700",
+    POS_ESTIMATE:          "bg-amber-200 text-amber-800",
+    POS_ORDER:             "bg-indigo-100 text-indigo-700",
     SALES_ORDER:           "bg-teal-100 text-teal-700",
     PURCHASE_ORDER:        "bg-cyan-100 text-cyan-700",
     GRN:                   "bg-cyan-50 text-cyan-700",

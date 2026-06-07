@@ -8,6 +8,7 @@ import {
     type VoucherTemplateKind,
 } from "@/shared/lib/print/voucherTemplateDefaults";
 import { toNumber } from "@/modules/accountancy/lib/balance";
+import { loadEstimateDiscountVisibility } from "@/shared/lib/pos/estimateDiscountVisibility";
 
 // ── Cross-source receipt sample builder ─────────────────────────────────────
 //
@@ -72,9 +73,35 @@ async function buildInvSample(id: number): Promise<VoucherReceiptData> {
         return desc || l.product?.name || "";
     };
 
-    const subtotal  = toNumber(v.subtotal);
-    const taxAmount = toNumber(v.taxAmount);
-    const total     = toNumber(v.totalAmount);
+    let subtotal  = toNumber(v.subtotal);
+    let taxAmount = toNumber(v.taxAmount);
+    let total     = toNumber(v.totalAmount);
+    let lines = v.lines.map((l) => ({
+        description: lineName(l),
+        quantity:    toNumber(l.quantity),
+        amount:      toNumber(l.amount),
+    }));
+
+    // POS_ESTIMATE price-privacy: the customer copy prints the TAG/list price and
+    // hides discounts by default (cashier negotiates from the discounted price on
+    // screen). When the org turns ANY discount on (Settings → Org Defaults), the
+    // real discounted price is revealed instead. POS_ORDER always prints the real
+    // (discounted) price. (Per-line discount itemisation needs the rich POS ladder
+    // — the generic slip only toggles tag-vs-net.)
+    if (v.type === "POS_ESTIMATE") {
+        const vis = await loadEstimateDiscountVisibility();
+        const revealDiscounts = vis.tier || vis.loyalty || vis.coupon || vis.manual;
+        if (!revealDiscounts) {
+            lines = v.lines.map((l) => {
+                const qty = toNumber(l.quantity);
+                const tagUnit = l.savedSalePricePaise != null ? l.savedSalePricePaise / 100 : toNumber(l.rate);
+                return { description: lineName(l), quantity: qty, amount: tagUnit * qty };
+            });
+            total = lines.reduce((s, l) => s + l.amount, 0);
+            subtotal = total;
+            taxAmount = 0; // tag price is shown all-in; no separate tax line
+        }
+    }
 
     const sample: ThermalReceiptSample = {
         reference:  v.reference,
@@ -82,11 +109,7 @@ async function buildInvSample(id: number): Promise<VoucherReceiptData> {
         partyName:  party.name ?? v.partyName ?? "Walk-in",
         partyPhone: party.phone,
         partyGstin: party.gstin,
-        lines: v.lines.map((l) => ({
-            description: lineName(l),
-            quantity:    toNumber(l.quantity),
-            amount:      toNumber(l.amount),
-        })),
+        lines,
         subtotal:  subtotal || null,
         taxAmount: taxAmount || null,
         total,
