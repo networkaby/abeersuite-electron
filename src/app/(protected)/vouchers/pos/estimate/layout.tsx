@@ -15,7 +15,7 @@ export default async function PosEstimateLayout({ children }: { children: React.
 
     return (
         <SessionWrapper>
-            <div className="fixed inset-0 flex flex-col overflow-hidden bg-background text-foreground">
+            <div className="fixed inset-0 flex flex-col overflow-hidden bg-amber-50 text-foreground dark:bg-amber-950/20">
                 <Toaster position="top-center" richColors />
                 {children}
             </div>

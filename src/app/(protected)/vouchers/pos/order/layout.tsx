@@ -15,7 +15,7 @@ export default async function PosOrderLayout({ children }: { children: React.Rea
 
     return (
         <SessionWrapper>
-            <div className="fixed inset-0 flex flex-col overflow-hidden bg-background text-foreground">
+            <div className="fixed inset-0 flex flex-col overflow-hidden bg-indigo-50 text-foreground dark:bg-indigo-950/20">
                 <Toaster position="top-center" richColors />
                 {children}
             </div>
