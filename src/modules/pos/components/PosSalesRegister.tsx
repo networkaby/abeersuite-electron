@@ -114,6 +114,16 @@ export function PosSalesRegister() {
     const [posDocsLoading, setPosDocsLoading] = useState(false);
     const [docQuery, setDocQuery]             = useState("");
     const [pendingOnly, setPendingOnly]       = useState(false);
+    // Shared OPTIONAL date range for Sales / Orders / Estimates / Cash tabs
+    // (empty = all dates). The Cash Book tab keeps its own today-defaulted range.
+    const [rangeFrom, setRangeFrom]           = useState("");
+    const [rangeTo, setRangeTo]               = useState("");
+    const inDateRange = (iso: string) => {
+        const d = iso.slice(0, 10);
+        if (rangeFrom && d < rangeFrom) return false;
+        if (rangeTo && d > rangeTo) return false;
+        return true;
+    };
     useEffect(() => {
         if (tab !== "orders" && tab !== "estimates") return;
         const type = tab === "orders" ? "POS_ORDER" : "POS_ESTIMATE";
@@ -149,13 +159,15 @@ export function PosSalesRegister() {
             .finally(() => setLedgerLoading(false));
     }, [tab, counterId, from, to]);
 
-    const load = useCallback(async (search: string, pg: number) => {
+    const load = useCallback(async (search: string, pg: number, f: string, t: string) => {
         setLoading(true);
         try {
             const params = new URLSearchParams({
                 limit: String(limit),
                 page:  String(pg),
                 ...(search ? { q: search } : {}),
+                ...(f ? { from: f } : {}),
+                ...(t ? { to: t } : {}),
             });
             const { data } = await axios.get<ApiResponse>(`/api/pos/sales?${params}`);
             setItems(data.items);
@@ -167,7 +179,7 @@ export function PosSalesRegister() {
         }
     }, []);
 
-    useEffect(() => { void load(q, page); }, [load, q, page]);
+    useEffect(() => { void load(q, page, rangeFrom, rangeTo); }, [load, q, page, rangeFrom, rangeTo]);
 
     const totalPages = Math.max(1, Math.ceil(total / limit));
 
@@ -236,6 +248,25 @@ export function PosSalesRegister() {
                     </button>
                 ))}
             </div>
+
+            {/* Shared date range — Sales / Orders / Estimates / Cash. Empty = all.
+                (Cash Book keeps its own counter + today-defaulted range below.) */}
+            {tab !== "ledger" && (
+                <div className="flex flex-wrap items-end gap-2">
+                    <div>
+                        <label className="mb-1 block text-xs text-muted-foreground">From</label>
+                        <TallyDateInput value={rangeFrom} onValueChange={setRangeFrom} className="h-9 w-36" />
+                    </div>
+                    <div>
+                        <label className="mb-1 block text-xs text-muted-foreground">To</label>
+                        <TallyDateInput value={rangeTo} onValueChange={setRangeTo} className="h-9 w-36" />
+                    </div>
+                    <Button variant="outline" size="sm" className="h-9" onClick={() => { setRangeFrom(todayISO); setRangeTo(todayISO); }}>Today</Button>
+                    {(rangeFrom || rangeTo) && (
+                        <Button variant="ghost" size="sm" className="h-9 text-muted-foreground" onClick={() => { setRangeFrom(""); setRangeTo(""); }}>Clear (all dates)</Button>
+                    )}
+                </div>
+            )}
 
             {tab === "sales" && (
             <>
@@ -367,6 +398,7 @@ export function PosSalesRegister() {
             {(tab === "orders" || tab === "estimates") && (() => {
                 const t = docQuery.trim().toLowerCase();
                 const filtered = posDocs.filter((d) => {
+                    if (!inDateRange(d.date)) return false;
                     if (pendingOnly && (d._count?.refReturns ?? 0) > 0) return false;   // converted (a sale references it) → not pending
                     return !t || d.reference.toLowerCase().includes(t) || (d.partyName ?? "").toLowerCase().includes(t);
                 });
@@ -465,7 +497,7 @@ export function PosSalesRegister() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-border">
-                                {moves.map((m) => (
+                                {moves.filter((m) => inDateRange(m.date)).map((m) => (
                                     <tr key={m.id} className="transition-colors hover:bg-muted/30">
                                         <td className="px-4 py-2.5">
                                             <Badge variant="secondary" className={`text-[10px] font-medium ${m.kind === "IN" ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
