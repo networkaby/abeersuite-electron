@@ -7,7 +7,7 @@
 
 import { useEffect, useState, useCallback, type ReactNode } from "react";
 import axios from "axios";
-import { Clock, Monitor, Lock, ArrowRightLeft, RefreshCw, Users, X } from "lucide-react";
+import { Clock, Monitor, Lock, ArrowRightLeft, RefreshCw, Users, X, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { fmt } from "@/utils/constants";
 import { CashDropDialog } from "@/modules/pos/components/CashDropDialog";
@@ -153,6 +153,11 @@ export function ActiveShiftBar({
 
                 <div className="ml-auto flex items-center gap-1.5">
                     {rightSlot}
+                    <Button asChild size="sm" variant="outline" className="h-7 text-xs">
+                        <a href="/office" target="_blank" rel="noopener noreferrer" title="Open the office in a new tab">
+                            <ExternalLink size={12} /> Office
+                        </a>
+                    </Button>
                     <Button size="sm" variant="ghost" onClick={refresh} className="h-7 px-2 text-xs">
                         <RefreshCw size={11} />
                     </Button>
