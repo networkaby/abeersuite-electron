@@ -18,6 +18,7 @@ Personal-user till accounts no longer exist. Tills belong to counters, not peopl
 
 ### UI pages
 - `/vouchers/pos` — single-page POS register (standalone window, no office sidebar). File: `src/app/(protected)/vouchers/pos/page.tsx` + `src/modules/pos/components/PosScreen.tsx`.
+- `/vouchers/pos/estimate` — **POS Estimate mode** (own full-screen shell, separate from the POS Sale screen). Price-privacy quotation: lines priced at the barcode/tag (cap) price with all discounts stripped; captures a CRM Deal when a party is attached. File: `src/app/(protected)/vouchers/pos/estimate/page.tsx` + `src/modules/pos/components/PosEstimateScreen.tsx`. Reached via the `PosModeSwitch` (Sale / Order / Estimate) on the party bar of both screens; Order mode is disabled (Order-to-Cash Phase 3).
 - `/office/pos/shifts` — shift report (manager/admin). Columns: counter, user, opening, declared, →vault, variance, status.
 - `/office/pos/shifts/[id]` — shift audit page. Shows carry-over, vault top-up, handover chain, drops, linked Contras + variance JE.
 - `/office/admin/counters` — POS counter management (admin). Create / rename / activate-deactivate / delete counters per branch. Auto-creates the till GL account under Cash-in-Hand.
@@ -53,6 +54,9 @@ Personal-user till accounts no longer exist. Tills belong to counters, not peopl
 - `POST /api/pos/coupon-validate` — preview a coupon for the current cart (code entry or best AUTO offer). Runs the same engine as `/sale` so the client total matches the posted total. Returns `{ ok, couponId, code, name, discountRupees, droppedTier, blockedLoyalty, clampedByGuard }` or a reject reason. Requires `pos:shift:open`.
 - `POST /api/pos/gift-card-lookup` — check a gift-card code for the redeem box. Body `{ code }` → `{ ok, id, code, balance }` or `{ ok:false, reason }` (not found / not active / **disabled** / expired / no balance). Requires `pos:shift:open`.
 
+#### Estimate (Order-to-Cash Phase 1)
+- `POST /api/pos/estimate` — create an `ESTIMATE` InvVoucher (quotation — **no stock, no GL**) from the Estimate screen. Lines are priced at the **barcode/tag price** (rupees); reuses `invNextRef("ESTIMATE")` + `calcLineTotals` / `calcVoucherTotals`. Gated by `accountancy:view:org` (same as the POS sale — a cashier needs no `deals:manage`). When a party is attached it **captures a Deal**: `findOpenDealForParty` (most recent non-terminal Deal for the person/company) is reused if present, else a new Deal is created at P6 `S35` with `source: "POS Estimate"`; a SYSTEM `DealActivity` is stamped and `InvVoucher.dealId` soft-links the two. Anonymous estimate = quote only, no Deal. Tx runs with `{ timeout: 30_000, maxWait: 10_000 }`. Returns `{ voucherId, reference, dealId }`; the client opens `/receipt/voucher/inv/<id>` to print.
+
 #### Sale Return
 - `GET /api/pos/return/search` — two modes: `?q=INV-…` (substring match on invoice number) or `?customerId=N` (all PAID, non-return invoices for that account). Returns `FoundInvoice[]`. Requires `pos:shift:open`.
 - `POST /api/pos/return` — standard return. Body: `{ originalInvoiceId, lines: [{invoiceLineId, qty}], refundMode: "CASH"|"CREDIT", notes? }`. Creates negative Invoice with `returnOfId` set, posts JE, creates `SALE_RETURN InvVoucher`, restores stock. Requires `pos:shift:open`.
@@ -75,6 +79,8 @@ Personal-user till accounts no longer exist. Tills belong to counters, not peopl
 
 ## Key components
 - `PosScreen` (`src/modules/pos/components/PosScreen.tsx`) — full POS UI. On mount: checks `/current`, then `/pending-handover`. Shows `ActiveShiftBar` (OPEN), amber bar (AWAITING_HANDOVER), `HandoverAcceptDialog` (pending handover for B), or no-shift banner.
+- `PosModeSwitch` (`PosModeSwitch.tsx`) — colour-coded Sale / Order / Estimate buttons on the party bar. Sale → `/vouchers/pos/new`, Estimate → `/vouchers/pos/estimate`, Order disabled (Phase 3). Rendered in both `PosScreen` and `PosEstimateScreen`.
+- `PosEstimateScreen` (`PosEstimateScreen.tsx`) — slim Estimate UI (separate from `PosScreen` so the POS Sale voucher is untouched): optional party picker, product search (tag price), a discount-free cart, and Save & Print → `POST /api/pos/estimate`.
 - `ActiveShiftBar` (`ActiveShiftBar.tsx`) — top strip. OPEN: shows sales/drops/drawer + Drop/Close buttons. AWAITING_HANDOVER: amber strip with Cancel Handover.
 - `ShiftOpenDialog` (`ShiftOpenDialog.tsx`) — counter picker + carry-over balance + vault top-up input.
 - `CashDropDialog` — mid-shift drop.
@@ -224,3 +230,5 @@ _Last updated: 2026-06-01 — **Removed the lost-invoice tab from `PosReturnDial
 _Last updated: 2026-06-02 — **Documented coupons & gift cards at POS.** `POST /api/pos/sale` accepts `couponCode` / `autoApply` / `giftCardCode`; added `POST /api/pos/coupon-validate` (cart preview, same engine as /sale) and `POST /api/pos/gift-card-lookup`. A coupon posts as a negative charge to "Coupon Discounts" (clamped below the bill; non-stackable → tier=0 + 422 `COUPON_BLOCKS_LOYALTY`; global `maxTotalDiscountPct` guard). A gift card redeems as a tender drawing down "Gift Card Liability" (min(balance,total); must be ACTIVE + enabled, else 422 `GIFT_CARD_REJECTED`)._
 
 _Last updated: 2026-06-02 — **Customer "Today's discount" price ladder.** New `priceLadder.ts` helper drives a computed, per-item-price-hiding ladder (MRP + barcode per line → pooled "Today's discount" → "You saved" hero → net HSN summary) on the receipt (A4 `C` / thermal `B`) and the QR + thermal-relay payloads (additive — relays must render). POS sale lines now snapshot `mrpPaise` + new `InvVoucherLine.savedSalePricePaise`. Display-only; accounting math unchanged. See the two new sections above._
+
+_Last updated: 2026-06-07 — **POS Estimate mode (Order-to-Cash Phase 1).** POS is now mode-first via `PosModeSwitch` (Sale / Order / Estimate) on the party bar. New `/vouchers/pos/estimate` page (`PosEstimateScreen`) prints the barcode/tag price with discounts stripped (price privacy) and, via `POST /api/pos/estimate`, creates an `ESTIMATE` InvVoucher (no stock/GL) that captures a CRM Deal (find-or-create the party's open deal through new `findOpenDealForParty`, SYSTEM activity, soft-link `InvVoucher.dealId` ↔ `Deal.vouchers`). Anonymous = quote only. The existing POS Sale screen is untouched except for the additive mode switch in its header. Order mode button is disabled (Phase 3). Spec: `docs/srs/order-to-cash.md`._

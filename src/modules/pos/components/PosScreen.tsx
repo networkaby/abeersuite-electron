@@ -43,6 +43,7 @@ import { ShiftCloseDialog } from "@/modules/pos/components/ShiftCloseDialog";
 import { PosReturnDialog } from "@/modules/pos/components/PosReturnDialog";
 import { PosExpenditureDialog } from "@/modules/pos/components/PosExpenditureDialog";
 import { PosReceiptDialog } from "@/modules/pos/components/PosReceiptDialog";
+import { PosModeSwitch } from "@/modules/pos/components/PosModeSwitch";
 import { qrDisplay } from "@/modules/pos/lib/qrDisplay";
 import { computePriceLadder } from "@/modules/pos/lib/priceLadder";
 import type { VoucherTemplateDefaults } from "@/shared/lib/print/voucherTemplateDefaults";
@@ -1124,7 +1125,7 @@ export default function PosScreen() {
                 <Link href="/office" className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground" title="Back to office">
                     <ArrowLeft size={16} />
                 </Link>
-                <div className="text-sm font-semibold">POS</div>
+                <PosModeSwitch active="sale" />
                 <div className="flex-1 max-w-2xl">
                     <PartySearchAndCreate
                         ref={partySearchRef}

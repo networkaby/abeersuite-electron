@@ -405,6 +405,12 @@ model InvVoucher {
   ticketId Int?
   ticket   Ticket? @relation("TicketInvVouchers", fields: [ticketId], references: [id], onDelete: SetNull)
 
+  /// Soft link to a CRM Deal this voucher captured — set when a POS Estimate
+  /// captures a sales lead (Order-to-Cash "any signal → Deal"). One Deal can
+  /// have many vouchers (estimate → order → sale). SetNull on Deal delete.
+  dealId Int?
+  deal   Deal? @relation("DealInvVouchers", fields: [dealId], references: [id], onDelete: SetNull)
+
   // ── Lifecycle metadata (Cancel / Delete / Hard Delete) ──────────────────
   cancelledAt   DateTime?
   cancelledById Int?
@@ -438,6 +444,7 @@ model InvVoucher {
   @@index([branchId, type, date])
   @@index([accountId])
   @@index([ticketId])
+  @@index([dealId])
 }
 
 model InvVoucherAudit {
