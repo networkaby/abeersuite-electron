@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
         // ── Validate the advance BEFORE creating the order voucher ──────────────
         let shiftId: number | null = null;
         let shiftBranchId = branchId;
-        let tenders: { accountId: number; amount: number; description?: string }[] = [];
+        const tenders: { accountId: number; amount: number; description?: string }[] = [];
         if (advance > 0.005) {
             if (!body.accountId) {
                 return NextResponse.json({ error: "An advance needs an identified customer (not a walk-in)." }, { status: 400 });
