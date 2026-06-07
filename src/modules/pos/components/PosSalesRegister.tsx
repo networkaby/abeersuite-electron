@@ -139,6 +139,18 @@ export function PosSalesRegister() {
             .finally(() => setPosDocsLoading(false));
     }, [tab]);
 
+    // Toggle a non-GL doc between Draft (not finalised) and Issued (given to party).
+    async function toggleDocStatus(d: PosDoc) {
+        const next = d.status === "POSTED" ? "DRAFT" : "POSTED";
+        try {
+            await axios.patch(`/api/inventory/vouchers/${d.id}/status`, { status: next });
+            setPosDocs((arr) => arr.map((x) => (x.id === d.id ? { ...x, status: next } : x)));
+            toast.success(next === "POSTED" ? "Marked Issued" : "Marked Draft");
+        } catch {
+            toast.error("Couldn't change status");
+        }
+    }
+
     // ── Till cash book (ledger) ──────────────────────────────────────────────
     const todayISO = new Date().toISOString().slice(0, 10);
     const [counters, setCounters]   = useState<CounterOpt[]>([]);
@@ -443,6 +455,7 @@ export function PosSalesRegister() {
                                             <th className="px-3 py-2 text-left font-medium">Date</th>
                                             <th className="px-3 py-2 text-left font-medium">Customer</th>
                                             <th className="px-3 py-2 text-right font-medium">Total</th>
+                                            <th className="px-3 py-2 text-center font-medium">Status</th>
                                             <th className="px-3 py-2 text-center font-medium">Lead</th>
                                             <th className="w-10" />
                                         </tr>
@@ -454,6 +467,16 @@ export function PosSalesRegister() {
                                                 <td className="px-3 py-2 text-muted-foreground">{d.date.slice(0, 10)}</td>
                                                 <td className="px-3 py-2">{d.partyName ?? "Walk-in"}</td>
                                                 <td className="px-3 py-2 text-right tabular-nums">₹{fmt(Number(d.totalAmount))}</td>
+                                                <td className="px-3 py-2 text-center">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => toggleDocStatus(d)}
+                                                        title="Click to toggle Draft / Issued"
+                                                        className={`rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors ${d.status === "POSTED" ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300" : "bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-500/15 dark:text-amber-300"}`}
+                                                    >
+                                                        {d.status === "POSTED" ? "Issued" : "Draft"}
+                                                    </button>
+                                                </td>
                                                 <td className="px-3 py-2 text-center">
                                                     {d.dealId ? <Badge variant="outline" className="text-[10px]">Deal #{d.dealId}</Badge> : <span className="text-muted-foreground">—</span>}
                                                 </td>
