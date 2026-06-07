@@ -1,12 +1,10 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { Priority } from "@/generated/prisma/enums";
-import { buildTicketReadScopeWhere } from "@/modules/repairing/lib/ticketScope";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
 
 const createTicketSchema = z.object({
@@ -42,19 +40,14 @@ const createTicketSchema = z.object({
 
 // GET /api/tickets?pipelineId=P1
 export async function GET(req: Request) {
-    const { user, response } = await requireAuth();
+    const { response } = await requireAuth();
     if (response) return response;
     try {
         const { searchParams } = new URL(req.url);
         const pipelineId = searchParams.get("pipelineId");
-        const scopeWhere = buildTicketReadScopeWhere(user);
-
-        const where = {
-            AND: [
-                ...(pipelineId ? [{ pipelineId }] : []),
-                ...(scopeWhere ? [scopeWhere] : []),
-            ],
-        };
+        // TODO(rbac): scope filtering temporarily removed — any authenticated staff
+        // sees all tickets. Re-add buildTicketReadScopeWhere when RBAC is re-wired.
+        const where = pipelineId ? { pipelineId } : {};
 
         const tickets = await prisma.ticket.findMany({
             where,
@@ -109,7 +102,8 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-    const { user, response } = await requirePermission(PERMISSIONS.TICKETS_CREATE);
+    // TODO(rbac): was requirePermission(TICKETS_CREATE) — open to all staff for now.
+    const { user, response } = await requireAuth();
     if (response) return response;
     try {
         const { data, error } = await validateRequest(req, createTicketSchema);

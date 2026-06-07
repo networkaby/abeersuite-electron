@@ -2,20 +2,24 @@
 
 > Workflow for the repair-service line: a customer brings a device, a technician diagnoses and fixes (or escalates), the customer collects. Tickets are **info-only** — no parts list, no money. Parts and service fees are billed via normal sale vouchers with `InvVoucher.ticketId` back-link.
 
+> ⚠️ **RBAC temporarily removed (2026-06-07).** The repairing module was built on the old single-`User.role` system, which is empty for staff appointed via the new Position model. As an interim step, **all repairing access control was stripped**: every repairing UI page, ticket API route, and the service-centers routes are now **open to any authenticated staff member** (`requireAuth` only). Role/notification machinery (`notifyRoles` / `allowedRoles` / `handoffRole`, scope filtering, system notifications) is **disabled** — removal points are marked with `// TODO(rbac)` / `// TODO(notify)`. RBAC will be re-wired on Positions and notifications re-added (decoupled) later.
+
 ## URLs
 
-### UI pages (`src/app/(protected)/office/(repairing)/repairing/`)
+### UI pages (`src/app/(protected)/office/repairing/`)
 - `/office/repairing/tickets` — list locked to the Service & Repair pipeline (resolved by `REPAIR_PIPELINE_NAME = "service"` from [src/modules/repairing/lib/repairPipeline.ts](../../src/modules/repairing/lib/repairPipeline.ts)); no in-page pipeline switcher
 - `/office/repairing/tickets/[id]` — detail, status changes, notes, ownership, invoices linked
 - `/office/repairing/service-centers` — external repair-centre directory
 
 ### API routes
 - `GET/POST /api/tickets` — list + create
-- `GET/PATCH /api/tickets/[id]` — detail + edit
+- `GET/PUT /api/tickets/[id]` — detail + edit
 - Sub-resources: `/api/tickets/[id]/{assign, notes, participants, reopen, sub-status, transfer, warranty}`
 - Status / pipeline machinery: `/api/pipelines`, `/api/ticket-statuses`, `/api/sub-statuses`, `/api/sub-status-groups`, `/api/status-transitions`, `/api/sub-status-transitions`
 
 ## Permissions (gate keys)
+
+**Currently:** none enforced inside repairing — every route requires only a logged-in staff session (`requireAuth`). The keys below are the **intended** gates to re-apply when RBAC is re-wired on Positions:
 
 - `tickets:view:own/branch/org` — list / detail.
 - `tickets:create`, `tickets:status:set`, `tickets:substatus:set`, `tickets:assign`.
@@ -44,6 +48,7 @@
 
 ## Recent decisions / gotchas
 
+- **2026-06-07 — RBAC & notifications stripped (interim).** Repairing assumed the old single-`User.role`; under the Position model that field is null for real staff, so role-driven notifications, handoff auto-assign, and role gates silently failed. Rather than migrate piecemeal, all repairing access control was removed (open to any authenticated staff) and the notification calls detached. Status/sub-status notifications **do not fire** and pipeline handoff **does not auto-assign** right now. Search the repairing surface for `// TODO(rbac)` / `// TODO(notify)` for the re-wire anchor points. `notifyRoles` / `allowedRoles` / `handoffRole` columns remain on the status tables (still editable in the workflow-config admin UI) but are ignored by repair. `buildTicketReadScopeWhere` (`lib/ticketScope.ts`) is correct, Position-based, and intact — just no longer called; re-enable it on the re-wire.
 - **2026-05-07 — Tickets are info-only.** No parts, no money on the ticket. Billing flows through SALE/POS InvVouchers linked back via `InvVoucher.ticketId`. `TicketPart` model removed.
 - **Pipeline / status / sub-status configuration** lives under [admin.md](./admin.md), not here. Reuse the existing `settings:pipelines` / `settings:statuses` permissions.
 - **2026-05-10 — Tickets list is repair-only.** The pipeline switcher buttons and Pipeline column were removed from `/office/repairing/tickets`; the page resolves the "service" pipeline by name and only shows its tickets. Any `?pipeline=` URL param is ignored (the sidebar still passes `?pipeline=P1` — harmless no-op).
@@ -64,4 +69,4 @@
 | `buildTicketReadScopeWhere(user)` | `src/modules/repairing/lib/ticketScope.ts` | Build a Prisma `where` fragment that constrains tickets to what the caller's `scope` (own / branch / department / org) allows. Use in every list endpoint that returns tickets so the radius is consistent. |
 | `getRepairPipeline(prisma)`, `REPAIR_PIPELINE_NAME` | `src/modules/repairing/lib/repairPipeline.ts` | Name-based resolver for the seeded Service & Repair pipeline. Use instead of hardcoding `P1`. |
 
-_Last updated: 2026-05-24 — **Layer 3c: TicketInvoicesPanel migrated off Invoice onto InvVoucher.** `GET /api/inventory/vouchers` gained `?ticketId=N` + `?accountId=N` filters; `TicketInvoicesPanel` now queries `?ticketId=N&types=SALE,POS,SALE_RETURN` and resolves each row's edit URL via `editFormUrl()`. `Ticket.invoices Invoice[]` relation renamed to `Ticket.invVouchers InvVoucher[]` (relation `TicketInvVouchers`) when the Invoice table was retired in Layer 4. Previously (2026-05-23): noted that `buildTicketReadScopeWhere` now derives branch/department visibility from `userPositions[].position`, not the dropped `User.branches/departments` M2M (2026-05-20 Post→Position rename); date inputs in `TicketEscalation` / `WarrantyConvertModal` migrated to `TallyDateInput`._
+_Last updated: 2026-06-07 — **RBAC & notifications stripped from repairing (interim).** All ticket/service-centre API routes + UI pages are now open to any authenticated staff (`requireAuth` only); role/notify/handoff/scope logic removed behind `// TODO(rbac)` / `// TODO(notify)` markers, pending a Position-based re-wire. Single shared overview replaces the four role-keyed dashboards (AdminDashboard/TechnicianDashboard + HandoffPickerModal deleted). Doc fixes: corrected the UI-pages path (no `(repairing)` route group) and `/api/tickets/[id]` verb (`PUT`, not `PATCH`). Previously (2026-05-24): **Layer 3c: TicketInvoicesPanel migrated off Invoice onto InvVoucher.** `GET /api/inventory/vouchers` gained `?ticketId=N` + `?accountId=N` filters; `TicketInvoicesPanel` now queries `?ticketId=N&types=SALE,POS,SALE_RETURN` and resolves each row's edit URL via `editFormUrl()`. `Ticket.invoices Invoice[]` relation renamed to `Ticket.invVouchers InvVoucher[]` (relation `TicketInvVouchers`) when the Invoice table was retired in Layer 4. Previously (2026-05-23): noted that `buildTicketReadScopeWhere` now derives branch/department visibility from `userPositions[].position`, not the dropped `User.branches/departments` M2M (2026-05-20 Post→Position rename); date inputs in `TicketEscalation` / `WarrantyConvertModal` migrated to `TallyDateInput`._

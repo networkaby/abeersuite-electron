@@ -143,7 +143,6 @@ export default function TicketOwnershipPanel({
                         {participants.map(p => (
                             <div key={p.user.id} className="flex items-center gap-2 text-sm">
                                 <span className="flex-1 text-foreground">{p.user.name}</span>
-                                {p.addedForRole && <span className="text-xs text-muted-foreground">{p.addedForRole}</span>}
                                 {(canManage || p.user.id === currentUserId) && (
                                     <Button onClick={() => handleRemove(p.user.id)} disabled={removingId === p.user.id}
                                         variant="ghost" size="icon-xs" className="text-muted-foreground hover:text-destructive disabled:opacity-50">

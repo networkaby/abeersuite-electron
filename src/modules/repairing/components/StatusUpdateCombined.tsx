@@ -4,8 +4,7 @@ import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import axios from "axios";
 import { toast } from "sonner";
-import { X, ArrowRight, ChevronRight, Lock, Eye } from "lucide-react";
-import HandoffPickerModal from "./assignments/HandoffPickerModal";
+import { X, ChevronRight, Lock, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -14,7 +13,6 @@ import { Textarea } from "@/components/ui/textarea";
 interface NextMainStatus { id: string; label: string; }
 interface NextSubStatus {
     id: string; label: string; color: string;
-    notifyRoles: string[];
     triggerMap: Record<string, string>;
 }
 
@@ -39,11 +37,6 @@ export default function StatusUpdateCombined({ ticket, onClose }: Props) {
     const [nextSubStatuses, setNextSubStatuses] = useState<NextSubStatus[]>([]);
     const [loadingSubStatuses, setLoadingSubStatuses] = useState(true);
     const [statusLabels, setStatusLabels] = useState<Record<string, string>>({});
-    const [roleLabelMap, setRoleLabelMap] = useState<Record<string, string>>({});
-    const [handoff, setHandoff] = useState<{
-        role: string; subStatusId: string;
-        candidates: { id: number; name: string; role: string }[];
-    } | null>(null);
 
     const nextMainStatuses: NextMainStatus[] = ticket.ticketStatus.fromTransitions.map((t) => t.to);
 
@@ -72,16 +65,12 @@ export default function StatusUpdateCombined({ ticket, onClose }: Props) {
         Promise.all([
             axios.get(`/api/sub-statuses/next?${params}`),
             axios.get(`/api/ticket-statuses${statusParams}`),
-            axios.get("/api/roles/labels"),
         ])
-            .then(([subRes, statusRes, rolesRes]) => {
+            .then(([subRes, statusRes]) => {
                 setNextSubStatuses(subRes.data);
                 const labels: Record<string, string> = {};
                 for (const s of statusRes.data as { id: string; label: string }[]) labels[s.id] = s.label;
                 setStatusLabels(labels);
-                const roleMap: Record<string, string> = {};
-                for (const r of rolesRes.data as { id: string; label: string }[]) roleMap[r.id] = r.label;
-                setRoleLabelMap(roleMap);
                 if (subRes.data.length === 0 && nextMainStatuses.length > 0) setValue("mode", "mainstatus");
             })
             .catch(() => toast.error("Failed to load statuses"))
@@ -93,16 +82,9 @@ export default function StatusUpdateCombined({ ticket, onClose }: Props) {
         try {
             if (data.mode === "substatus") {
                 if (!data.subStatusId) { toast.error("Select a sub-status"); return; }
-                const res = await axios.patch<{
-                    ok?: boolean; requiresAssignment?: boolean; role?: string;
-                    subStatusId?: string; candidates?: { id: number; name: string; role: string }[];
-                }>(`/api/tickets/${ticket.id}/sub-status`, {
+                await axios.patch(`/api/tickets/${ticket.id}/sub-status`, {
                     subStatusId: data.subStatusId, note: data.note || undefined, visibility: data.visibility,
                 });
-                if (res.data.requiresAssignment && res.data.role && res.data.subStatusId && res.data.candidates) {
-                    setHandoff({ role: res.data.role, subStatusId: res.data.subStatusId, candidates: res.data.candidates });
-                    return;
-                }
             } else {
                 if (!data.mainStatusId) { toast.error("Select a status"); return; }
                 await axios.put(`/api/tickets/${ticket.id}`, {
@@ -115,17 +97,6 @@ export default function StatusUpdateCombined({ ticket, onClose }: Props) {
     };
 
     const isTerminalReopen = ticket.status === "S7" || ticket.status === "S8";
-
-    if (handoff) {
-        return (
-            <HandoffPickerModal
-                ticketId={ticket.id} role={handoff.role} subStatusId={handoff.subStatusId}
-                candidates={handoff.candidates}
-                onClose={() => { setHandoff(null); onClose(); }}
-                onDone={() => { setHandoff(null); onClose(); }}
-            />
-        );
-    }
 
     const visibilityBtn = (v: "INTERNAL" | "PUBLIC") => `flex h-auto items-center gap-1.5 flex-1 px-2 py-1.5 border text-xs font-medium transition-colors ${
         visibility === v
@@ -201,12 +172,6 @@ export default function StatusUpdateCombined({ ticket, onClose }: Props) {
                                             <span className={`text-xs px-2 py-0.5 shrink-0 ${ss.color}`}>{ss.id}</span>
                                         </Button>
                                     ))}
-                                </div>
-                            )}
-                            {selectedSub?.notifyRoles && selectedSub.notifyRoles.length > 0 && (
-                                <div className="mt-3 flex items-center gap-2 rounded-md border border-primary bg-primary/10 px-3 py-2 text-sm text-primary">
-                                    <ArrowRight size={13} />
-                                    Notifies: {selectedSub.notifyRoles.map((r) => roleLabelMap[r] ?? r).join(", ")}
                                 </div>
                             )}
                             {selectedSub?.triggerMap[ticket.status] && (

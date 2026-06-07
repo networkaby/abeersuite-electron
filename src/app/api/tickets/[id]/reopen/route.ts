@@ -1,11 +1,10 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { Priority } from "@/generated/prisma/enums";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const reopenSchema = z.object({
     priority: z.nativeEnum(Priority).optional(),
@@ -21,7 +20,8 @@ export async function POST(
     req: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const { user, response } = await requirePermission(PERMISSIONS.TICKETS_STATUS_SET);
+    // TODO(rbac): was requirePermission(TICKETS_STATUS_SET) — open to all staff for now.
+    const { user, response } = await requireAuth();
     if (response) return response;
     try {
         const { id } = await params;

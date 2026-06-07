@@ -1,11 +1,9 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { createSystemInboxNotifications } from "@/modules/message/lib/inbox";
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const subStatusUpdateSchema = z.object({
     subStatusId: z.string().trim().min(1, "Sub-status is required"),
@@ -15,7 +13,7 @@ const subStatusUpdateSchema = z.object({
 
 // PATCH /api/tickets/[id]/sub-status
 // Body: { subStatusId: string, note?: string, visibility?: string }
-// Returns { ok: true } or { ok: false, requiresAssignment: true, role, candidates }
+// Returns { ok: true }
 export async function PATCH(
     req: Request,
     { params }: { params: Promise<{ id: string }> }
@@ -26,15 +24,10 @@ export async function PATCH(
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        const sessionUser = session.user as { 
-            id?: string; 
-            role?: string; 
-            roles?: string[]; 
-            permissions?: string[];
-        };
+        const sessionUser = session.user as { id?: string };
         const userId = Number(sessionUser.id ?? 0);
-        const userRoles: string[] = sessionUser.role ? [sessionUser.role] : [];
-        const permissions = sessionUser.permissions ?? [];
+        // TODO(rbac): role gating (allowedRoles / handoffRole) removed — any
+        // authenticated staff may set any sub-status. Re-add when RBAC is re-wired.
 
         const { id } = await params;
         const ticketId = Number(id);
@@ -57,26 +50,6 @@ export async function PATCH(
             return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
         }
 
-        // Auth: Admin bypasses allowedRoles.
-        // Primary owner and active secondary owners can also update sub-status.
-        const isAdmin = permissions.includes(PERMISSIONS.ADMIN_BYPASS);
-        const isPrimaryOwner = ticket.primaryOwnerId === userId;
-
-        if (!isAdmin) {
-            // Check if secondary participant
-            const isSecondary = await prisma.ticketParticipant.findFirst({
-                where: { ticketId, userId, removedAt: null },
-                select: { id: true },
-            });
-
-            const roleAllowed = subStatus.allowedRoles.length === 0 || userRoles.some(r => subStatus.allowedRoles.includes(r));
-            const hasAccess = isPrimaryOwner || !!isSecondary || roleAllowed;
-
-            if (!hasAccess) {
-                return NextResponse.json({ error: "Your role cannot set this sub-status" }, { status: 403 });
-            }
-        }
-
         // Capture previous sub-status before update (needed for auto-revert)
         const prevSubStatusId = ticket.subStatusId;
 
@@ -84,10 +57,6 @@ export async function PATCH(
         const triggerStatusId = triggerMap[ticket.status] ?? null;
         const newMainStatus = triggerStatusId ?? ticket.status;
         const newSubStatusId = triggerStatusId ? null : subStatusId;
-        const fallbackStatus = await prisma.ticketStatus.findUnique({
-            where: { id: newMainStatus },
-            select: { label: true, notifyRoles: true },
-        });
 
         // ── Transaction: update ticket + auto-revert old participants ───────────
         await prisma.$transaction(async (tx) => {
@@ -154,64 +123,9 @@ export async function PATCH(
             }
         });
 
-        // ── Handoff: auto-assign secondary if handoffRole set ──────────────────
-        if (subStatus.handoffRole && newSubStatusId) {
-            const candidates = await prisma.user.findMany({
-                where: { role: subStatus.handoffRole },
-                select: { id: true, name: true, role: true },
-            });
-
-            if (candidates.length === 1) {
-                // Auto-assign the only candidate
-                try {
-                    await prisma.ticketParticipant.create({
-                        data: {
-                            ticketId,
-                            userId: candidates[0].id,
-                            addedById: userId,
-                            addedForRole: subStatus.handoffRole,
-                            addedBySubStatusId: subStatusId,
-                        },
-                    });
-                    await prisma.ticketLog.create({
-                        data: {
-                            ticketId,
-                            status: newMainStatus,
-                            note: `Auto-assigned ${candidates[0].name} as secondary (${subStatus.handoffRole})`,
-                            userId,
-                        },
-                    });
-                } catch {
-                    // Already a participant — ignore duplicate
-                }
-            } else if (candidates.length > 1) {
-                // Return picker prompt — ticket update already committed
-                return NextResponse.json({
-                    ok: false,
-                    requiresAssignment: true,
-                    role: subStatus.handoffRole,
-                    subStatusId,
-                    candidates,
-                });
-            }
-            // candidates.length === 0: skip silently
-        }
-
-        const effectiveNotifyRoles = subStatus.notifyRoles.length > 0
-            ? subStatus.notifyRoles
-            : (fallbackStatus?.notifyRoles ?? []);
-
-        if (effectiveNotifyRoles.length > 0) {
-            await createSystemInboxNotifications({
-                roleIds: effectiveNotifyRoles,
-                actorUserId: userId,
-                title: `Ticket #${ticketId} updated to ${subStatus.label}`,
-                body: triggerStatusId && fallbackStatus
-                    ? `Auto-advanced to ${fallbackStatus.label}. Next action is with ${effectiveNotifyRoles.join(", ")}.`
-                    : `Next action is with ${effectiveNotifyRoles.join(", ")}.`,
-                link: `/office/repairing/tickets/${ticketId}`,
-            });
-        }
+        // TODO(rbac): handoffRole auto-assignment removed (it looked staff up by the
+        // legacy User.role). Re-add Position-based handoff when RBAC is re-wired.
+        // TODO(notify): sub-status notifications detached — re-add later, decoupled.
 
         return NextResponse.json({ ok: true });
     } catch (e) {

@@ -1,11 +1,9 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission, isAdmin } from "@/shared/lib/auth/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
-import { buildTicketReadScopeWhere } from "@/modules/repairing/lib/ticketScope";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const assignSchema = z.object({
     action: z.enum(["claim", "pass", "reject"]),
@@ -16,7 +14,9 @@ export async function POST(
     req: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const { user, response } = await requirePermission(PERMISSIONS.TICKETS_ASSIGN);
+    // TODO(rbac): was requirePermission(TICKETS_ASSIGN) + owner/manager authority
+    // checks — open to all staff for now. Re-add when RBAC is re-wired.
+    const { user, response } = await requireAuth();
     if (response) return response;
 
     const { id } = await params;
@@ -28,12 +28,8 @@ export async function POST(
     const { action, toUserId } = body;
 
     try {
-        const scopeWhere = buildTicketReadScopeWhere(user);
-        const ticket = await prisma.ticket.findFirst({
-            where: {
-                id: ticketId,
-                ...(scopeWhere ?? {}),
-            },
+        const ticket = await prisma.ticket.findUnique({
+            where: { id: ticketId },
             select: {
                 id: true,
                 primaryOwnerId: true,
@@ -46,12 +42,6 @@ export async function POST(
         if (ticket.ticketStatus.isTerminal) {
             return NextResponse.json({ error: "Cannot assign a closed ticket" }, { status: 409 });
         }
-
-        // Check caller has authority over the ticket (for pass/reject)
-        const callerIsOwner = ticket.primaryOwnerId === user.id;
-        const callerIsAdmin = isAdmin(user);
-        const callerIsDirectManager = ticket.primaryOwner?.managerId === user.id;
-        const hasAuthority = callerIsOwner || callerIsAdmin || callerIsDirectManager;
 
         if (action === "claim") {
             if (ticket.primaryOwnerId !== null) {
@@ -83,7 +73,6 @@ export async function POST(
 
         if (action === "pass") {
             if (!toUserId) return NextResponse.json({ error: "toUserId required for pass" }, { status: 400 });
-            if (!hasAuthority) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
             const toUser = await prisma.user.findUnique({ where: { id: toUserId }, select: { id: true, name: true } });
             if (!toUser) return NextResponse.json({ error: "Target user not found" }, { status: 404 });
             const currentStatus = await prisma.ticket.findUnique({ where: { id: ticketId }, select: { status: true } });
@@ -100,7 +89,6 @@ export async function POST(
         }
 
         if (action === "reject") {
-            if (!hasAuthority) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
             const currentStatus = await prisma.ticket.findUnique({ where: { id: ticketId }, select: { status: true } });
             await prisma.ticket.update({ where: { id: ticketId }, data: { primaryOwnerId: null } });
             await prisma.ticketLog.create({

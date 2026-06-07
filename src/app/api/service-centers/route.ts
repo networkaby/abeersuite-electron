@@ -1,10 +1,9 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const serviceCenterSchema = z.object({
     name: z.string().trim().min(1, "Name is required"),
@@ -28,7 +27,8 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-    const { response } = await requirePermission(PERMISSIONS.WARRANTY_CONVERT);
+    // TODO(rbac): was requirePermission(WARRANTY_CONVERT) — open to all staff for now.
+    const { response } = await requireAuth();
     if (response) return response;
     try {
         const { data, error } = await validateRequest(req, serviceCenterSchema);

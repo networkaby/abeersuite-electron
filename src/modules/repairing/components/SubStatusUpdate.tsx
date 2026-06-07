@@ -5,7 +5,6 @@ import { useForm } from "react-hook-form";
 import axios from "axios";
 import { toast } from "sonner";
 import { ArrowRight } from "lucide-react";
-import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import {
     Dialog,
@@ -24,7 +23,6 @@ interface SubStatus {
     color: string;
     group: string;
     groupId: string | null;
-    notifyRoles: string[];
     triggerStatus: { id: string; label: string } | null;
 }
 
@@ -37,14 +35,12 @@ interface Props {
 type FormData = { subStatusId: string; note: string };
 
 export default function SubStatusUpdate({ ticket, onClose }: Props) {
-    const { data: session } = useSession();
     const { register, handleSubmit, watch, setValue, formState: { isSubmitting } } = useForm<FormData>({
         defaultValues: { subStatusId: "", note: "" },
     });
 
     const [subStatuses, setSubStatuses] = useState<SubStatus[]>([]);
     const [groupLabels, setGroupLabels] = useState<Record<string, string>>({});
-    const [roleLabelMap, setRoleLabelMap] = useState<Record<string, string>>({});
     const [loading, setLoading] = useState(true);
 
     // eslint-disable-next-line react-hooks/incompatible-library
@@ -54,15 +50,11 @@ export default function SubStatusUpdate({ ticket, onClose }: Props) {
         Promise.all([
             axios.get(`/api/sub-statuses?statusId=${ticket.status}`),
             axios.get("/api/sub-status-groups"),
-            axios.get("/api/roles/labels"),
-        ]).then(([ssRes, grRes, rolesRes]) => {
+        ]).then(([ssRes, grRes]) => {
             setSubStatuses(ssRes.data);
             const groupMap: Record<string, string> = {};
             for (const g of grRes.data) groupMap[g.id] = g.label;
             setGroupLabels(groupMap);
-            const roleMap: Record<string, string> = {};
-            for (const r of rolesRes.data) roleMap[r.id] = r.label;
-            setRoleLabelMap(roleMap);
         }).catch(() => {
             toast.error("Failed to load sub-statuses");
         }).finally(() => setLoading(false));
@@ -74,8 +66,6 @@ export default function SubStatusUpdate({ ticket, onClose }: Props) {
         acc[key].push(ss);
         return acc;
     }, {});
-
-    const userRoles: string[] = (session?.user as { roles?: string[] } | undefined)?.roles ?? [];
 
     const onSubmit = async (data: FormData) => {
         try {
@@ -121,33 +111,24 @@ export default function SubStatusUpdate({ ticket, onClose }: Props) {
                                     <p className="px-1 py-1 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                                         {groupLabels[groupKey] ?? groupKey}
                                     </p>
-                                    {items.map((ss) => {
-                                        const canSet = ss.notifyRoles.length === 0 || ss.notifyRoles.some(r => userRoles.includes(r));
-                                        return (
-                                            <Button
-                                                key={ss.id}
-                                                type="button"
-                                                variant="outline"
-                                                disabled={!canSet}
-                                                onClick={() => setValue("subStatusId", ss.id)}
-                                                className={`h-auto w-full justify-start gap-2 px-3 py-2 text-sm ${!canSet ? "opacity-50" : ""} ${
-                                                    selectedId === ss.id ? "border-primary bg-primary/10 hover:bg-primary/10" : ""
-                                                }`}
-                                            >
-                                                <span className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium ${ss.color}`}>{ss.label}</span>
-                                                {ss.triggerStatus && (
-                                                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                                                        <ArrowRight size={12} /> {ss.triggerStatus.label}
-                                                    </span>
-                                                )}
-                                                {ss.notifyRoles.length > 0 && (
-                                                    <span className="ml-auto text-xs text-muted-foreground">
-                                                        {ss.notifyRoles.map(r => roleLabelMap[r] ?? r).join(", ")}
-                                                    </span>
-                                                )}
-                                            </Button>
-                                        );
-                                    })}
+                                    {items.map((ss) => (
+                                        <Button
+                                            key={ss.id}
+                                            type="button"
+                                            variant="outline"
+                                            onClick={() => setValue("subStatusId", ss.id)}
+                                            className={`h-auto w-full justify-start gap-2 px-3 py-2 text-sm ${
+                                                selectedId === ss.id ? "border-primary bg-primary/10 hover:bg-primary/10" : ""
+                                            }`}
+                                        >
+                                            <span className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium ${ss.color}`}>{ss.label}</span>
+                                            {ss.triggerStatus && (
+                                                <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                                                    <ArrowRight size={12} /> {ss.triggerStatus.label}
+                                                </span>
+                                            )}
+                                        </Button>
+                                    ))}
                                 </div>
                             ))}
                         </div>

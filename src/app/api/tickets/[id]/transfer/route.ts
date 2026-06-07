@@ -4,7 +4,6 @@ import { auth } from "@/auth";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const transferSchema = z.object({
     targetPipelineId: z.string().trim().min(1),
@@ -20,16 +19,9 @@ export async function POST(
         const session = await auth();
         if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-        const sessionUser = session.user as {
-            id?: string;
-            permissions?: string[];
-        };
+        const sessionUser = session.user as { id?: string };
         const userId = Number(sessionUser.id);
-        const permissions = sessionUser.permissions ?? [];
-
-        if (!permissions.includes("tickets:transfer") && !permissions.includes(PERMISSIONS.ADMIN_BYPASS)) {
-            return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-        }
+        // TODO(rbac): was gated on tickets:transfer — open to all staff for now.
 
         const { id } = await params;
         const { data, error } = await validateRequest(req, transferSchema);

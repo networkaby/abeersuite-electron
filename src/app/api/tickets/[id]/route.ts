@@ -1,15 +1,11 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { createSystemInboxNotifications } from "@/modules/message/lib/inbox";
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { z } from "zod";
 import { Priority } from "@/generated/prisma/enums";
-import { buildTicketReadScopeWhere } from "@/modules/repairing/lib/ticketScope";
 import { resolvedUserFromSession } from "@/shared/lib/auth/permissions";
-import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
 
 const ticketUpdateSchema = z.object({
@@ -43,13 +39,11 @@ export async function GET(
         const { id } = await params;
         const session = await auth();
         if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-        const user = resolvedUserFromSession(session);
-        const scopeWhere = buildTicketReadScopeWhere(user);
+        // TODO(rbac): scope filtering removed — any authenticated staff can read any ticket.
 
         const ticket = await prisma.ticket.findFirst({
             where: {
                 id: Number(id),
-                ...(scopeWhere ?? {}),
             },
             include: {
                 device: {
@@ -128,17 +122,12 @@ export async function PUT(
         if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         const resolvedUser = resolvedUserFromSession(session);
         const userId = resolvedUser.id;
-        const userRoles = resolvedUser.roles ?? [resolvedUser.primaryRole ?? ""];
-        const permissions = resolvedUser.permissions ?? [];
-        const isAdmin = permissions.includes(PERMISSIONS.ADMIN_BYPASS);
+        // TODO(rbac): role/permission gating on status & owner changes removed — any
+        // authenticated staff may edit any ticket. Re-add when RBAC is re-wired.
 
         const { id } = await params;
-        const scopeWhere = buildTicketReadScopeWhere(resolvedUser);
-        const scopedTicket = await prisma.ticket.findFirst({
-            where: {
-                id: Number(id),
-                ...(scopeWhere ?? {}),
-            },
+        const scopedTicket = await prisma.ticket.findUnique({
+            where: { id: Number(id) },
             select: { id: true, status: true },
         });
         if (!scopedTicket) return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
@@ -147,29 +136,6 @@ export async function PUT(
 
         if (error) return error;
         const body = data;
-
-        if (body.status !== undefined && !isAdmin && !hasPermissionWithScope(permissions, "tickets:status:set")) {
-            return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-        }
-
-        // Enforce allowedRoles on main status change (Admin bypasses)
-        if (body.status && !isAdmin) {
-            const targetStatus = await prisma.ticketStatus.findUnique({
-                where: { id: body.status },
-                select: { allowedRoles: true, label: true, notifyRoles: true },
-            });
-            if (
-                targetStatus &&
-                targetStatus.allowedRoles.length > 0 &&
-                !targetStatus.allowedRoles.some(r => userRoles.includes(r))
-            ) {
-                return NextResponse.json({ error: "Your role cannot set this status." }, { status: 403 });
-            }
-        }
-
-        if (body.primaryOwnerId !== undefined && !isAdmin && !hasPermissionWithScope(permissions, "tickets:assign")) {
-            return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-        }
 
         const ticket = await prisma.ticket.update({
             where: { id: Number(id) },
@@ -193,11 +159,6 @@ export async function PUT(
         });
 
         if (body.status) {
-            const targetStatus = await prisma.ticketStatus.findUnique({
-                where: { id: body.status },
-                select: { id: true, label: true, notifyRoles: true },
-            });
-
             await prisma.ticketLog.create({
                 data: {
                     ticketId:   ticket.id,
@@ -207,16 +168,8 @@ export async function PUT(
                     userId,
                 },
             });
-
-            if (targetStatus?.notifyRoles.length) {
-                await createSystemInboxNotifications({
-                    roleIds: targetStatus.notifyRoles,
-                    actorUserId: userId,
-                    title: `Ticket #${ticket.id} moved to ${targetStatus.label}`,
-                    body: `Next action is now with ${targetStatus.notifyRoles.join(", ")}.`,
-                    link: `/office/repairing/tickets/${ticket.id}`,
-                });
-            }
+            // TODO(notify): ticket status notifications detached — re-add a
+            // notification system decoupled from the repair module later.
         }
 
         return NextResponse.json(ticket);

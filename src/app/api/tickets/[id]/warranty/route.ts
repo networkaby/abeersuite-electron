@@ -1,10 +1,9 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -18,7 +17,8 @@ const warrantySchema = z.object({
 });
 
 export async function POST(req: Request, { params }: Params) {
-    const { user, response } = await requirePermission(PERMISSIONS.WARRANTY_CONVERT);
+    // TODO(rbac): was requirePermission(WARRANTY_CONVERT) — open to all staff for now.
+    const { user, response } = await requireAuth();
     if (response) return response;
 
     try {

@@ -1,12 +1,6 @@
-import { auth } from "@/auth";
-import { redirect } from "next/navigation";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
-
-export default async function ServiceCentersLayout({ children }: { children: React.ReactNode }) {
-    const session = await auth();
-    const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
-    if (!permissions.includes(PERMISSIONS.WARRANTY_CONVERT) && !permissions.includes(PERMISSIONS.ADMIN_BYPASS)) {
-        redirect("/office/core/assignments");
-    }
+// TODO(rbac): this layout previously gated Service Centers on warranty:convert.
+// Gating removed — open to all authenticated staff (the office layout already
+// blocks non-staff). Re-add a position-based gate here when RBAC is re-wired.
+export default function ServiceCentersLayout({ children }: { children: React.ReactNode }) {
     return <>{children}</>;
 }

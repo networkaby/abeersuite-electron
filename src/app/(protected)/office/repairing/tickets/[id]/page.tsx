@@ -5,7 +5,6 @@ import { useParams } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
 import { formatDate, formatDateTime } from "@/shared/lib/format/formatDate";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import {
     ArrowLeft, Clock, User, Building2, AlertTriangle,
     Printer, Lock, Eye, NotebookPen, ArrowRightLeft,
@@ -89,12 +88,13 @@ export default function TicketDetailPage() {
     const [refValue, setRefValue] = useState("");
     const [savingRef, setSavingRef] = useState(false);
     const { data: session } = useSession();
-    const sessionUser = session?.user as { id?: string; roles?: string[]; permissions?: string[] } | undefined;
-    const permissions = sessionUser?.permissions ?? [];
+    const sessionUser = session?.user as { id?: string } | undefined;
     const currentUserId = Number(sessionUser?.id ?? "0");
-    const canConvertWarranty = permissions.includes(PERMISSIONS.WARRANTY_CONVERT) || permissions.includes(PERMISSIONS.ADMIN_BYPASS);
-    const canManageOwnership = permissions.includes(PERMISSIONS.TICKETS_MANAGE_PARTICIPANTS) || permissions.includes(PERMISSIONS.ADMIN_BYPASS);
-    const canTransfer = permissions.includes("tickets:transfer") || permissions.includes(PERMISSIONS.ADMIN_BYPASS);
+    // TODO(rbac): repairing actions temporarily open to all staff — re-gate on
+    // position-based permissions when RBAC is re-wired.
+    const canConvertWarranty = true;
+    const canManageOwnership = true;
+    const canTransfer = true;
 
     const saveRef = async () => {
         if (!ticket) return;
