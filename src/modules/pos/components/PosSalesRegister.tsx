@@ -109,6 +109,7 @@ export function PosSalesRegister() {
     // ── POS Orders / Estimates (POS_ORDER / POS_ESTIMATE vouchers) ───────────
     const [posDocs, setPosDocs]               = useState<PosDoc[]>([]);
     const [posDocsLoading, setPosDocsLoading] = useState(false);
+    const [docQuery, setDocQuery]             = useState("");
     useEffect(() => {
         if (tab !== "orders" && tab !== "estimates") return;
         const type = tab === "orders" ? "POS_ORDER" : "POS_ESTIMATE";
@@ -359,54 +360,75 @@ export function PosSalesRegister() {
             </>
             )}
 
-            {(tab === "orders" || tab === "estimates") && (
-                posDocsLoading ? (
-                    <div className="flex justify-center py-12"><Loader2 size={24} className="animate-spin text-muted-foreground" /></div>
-                ) : posDocs.length === 0 ? (
-                    <div className="flex flex-col items-center gap-3 py-16 text-muted-foreground text-sm">
-                        <Monitor size={32} className="opacity-30" />
-                        <p>No POS {tab === "orders" ? "orders" : "estimates"} yet.</p>
-                        <Button variant="outline" size="sm" asChild>
-                            <a href={tab === "orders" ? "/vouchers/pos/order" : "/vouchers/pos/estimate"} target="_blank" rel="noopener noreferrer">
-                                <ExternalLink size={13} /> Open {tab === "orders" ? "Order" : "Estimate"} screen
-                            </a>
-                        </Button>
+            {(tab === "orders" || tab === "estimates") && (() => {
+                const t = docQuery.trim().toLowerCase();
+                const filtered = t
+                    ? posDocs.filter((d) => d.reference.toLowerCase().includes(t) || (d.partyName ?? "").toLowerCase().includes(t))
+                    : posDocs;
+                if (posDocsLoading) {
+                    return <div className="flex justify-center py-12"><Loader2 size={24} className="animate-spin text-muted-foreground" /></div>;
+                }
+                return (
+                    <div className="space-y-3">
+                        {/* Search — mirrors the Sales tab filter */}
+                        <div className="relative max-w-sm">
+                            <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                            <Input
+                                className="pl-8 text-sm"
+                                placeholder="Search by reference or customer…"
+                                value={docQuery}
+                                onChange={(e) => setDocQuery(e.target.value)}
+                            />
+                        </div>
+                        {posDocs.length === 0 ? (
+                            <div className="flex flex-col items-center gap-3 py-16 text-muted-foreground text-sm">
+                                <Monitor size={32} className="opacity-30" />
+                                <p>No POS {tab === "orders" ? "orders" : "estimates"} yet.</p>
+                                <Button variant="outline" size="sm" asChild>
+                                    <a href={tab === "orders" ? "/vouchers/pos/order" : "/vouchers/pos/estimate"} target="_blank" rel="noopener noreferrer">
+                                        <ExternalLink size={13} /> Open {tab === "orders" ? "Order" : "Estimate"} screen
+                                    </a>
+                                </Button>
+                            </div>
+                        ) : filtered.length === 0 ? (
+                            <p className="py-12 text-center text-sm text-muted-foreground">No {tab === "orders" ? "orders" : "estimates"} match “{docQuery}”.</p>
+                        ) : (
+                            <div className="overflow-x-auto rounded-lg border border-border">
+                                <table className="w-full text-sm">
+                                    <thead className="bg-muted/40 text-xs text-muted-foreground">
+                                        <tr className="border-b border-border">
+                                            <th className="px-3 py-2 text-left font-medium">Reference</th>
+                                            <th className="px-3 py-2 text-left font-medium">Date</th>
+                                            <th className="px-3 py-2 text-left font-medium">Customer</th>
+                                            <th className="px-3 py-2 text-right font-medium">Total</th>
+                                            <th className="px-3 py-2 text-center font-medium">Lead</th>
+                                            <th className="w-10" />
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {filtered.map((d) => (
+                                            <tr key={d.id} className="border-b border-border/60 hover:bg-muted/30">
+                                                <td className="px-3 py-2 font-mono text-xs">{d.reference}</td>
+                                                <td className="px-3 py-2 text-muted-foreground">{d.date.slice(0, 10)}</td>
+                                                <td className="px-3 py-2">{d.partyName ?? "Walk-in"}</td>
+                                                <td className="px-3 py-2 text-right tabular-nums">₹{fmt(Number(d.totalAmount))}</td>
+                                                <td className="px-3 py-2 text-center">
+                                                    {d.dealId ? <Badge variant="outline" className="text-[10px]">Deal #{d.dealId}</Badge> : <span className="text-muted-foreground">—</span>}
+                                                </td>
+                                                <td className="px-2 py-2 text-right">
+                                                    <a href={`/receipt/voucher/inv/${d.id}`} target="_blank" rel="noopener noreferrer" className="inline-flex text-muted-foreground hover:text-foreground" title="Print">
+                                                        <Printer size={14} />
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
                     </div>
-                ) : (
-                    <div className="overflow-x-auto rounded-lg border border-border">
-                        <table className="w-full text-sm">
-                            <thead className="bg-muted/40 text-xs text-muted-foreground">
-                                <tr className="border-b border-border">
-                                    <th className="px-3 py-2 text-left font-medium">Reference</th>
-                                    <th className="px-3 py-2 text-left font-medium">Date</th>
-                                    <th className="px-3 py-2 text-left font-medium">Customer</th>
-                                    <th className="px-3 py-2 text-right font-medium">Total</th>
-                                    <th className="px-3 py-2 text-center font-medium">Lead</th>
-                                    <th className="w-10" />
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {posDocs.map((d) => (
-                                    <tr key={d.id} className="border-b border-border/60 hover:bg-muted/30">
-                                        <td className="px-3 py-2 font-mono text-xs">{d.reference}</td>
-                                        <td className="px-3 py-2 text-muted-foreground">{d.date.slice(0, 10)}</td>
-                                        <td className="px-3 py-2">{d.partyName ?? "Walk-in"}</td>
-                                        <td className="px-3 py-2 text-right tabular-nums">₹{fmt(Number(d.totalAmount))}</td>
-                                        <td className="px-3 py-2 text-center">
-                                            {d.dealId ? <Badge variant="outline" className="text-[10px]">Deal #{d.dealId}</Badge> : <span className="text-muted-foreground">—</span>}
-                                        </td>
-                                        <td className="px-2 py-2 text-right">
-                                            <a href={`/receipt/voucher/inv/${d.id}`} target="_blank" rel="noopener noreferrer" className="inline-flex text-muted-foreground hover:text-foreground" title="Print">
-                                                <Printer size={14} />
-                                            </a>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                )
-            )}
+                );
+            })()}
 
             {tab === "cash" && (
                 movesLoading ? (
