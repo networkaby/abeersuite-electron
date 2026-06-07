@@ -249,39 +249,46 @@ export function PosSalesRegister() {
                 ))}
             </div>
 
-            {/* Shared date range — Sales / Orders / Estimates / Cash. Empty = all.
+            {/* Shared filter bar — date range + search + pending, all on one line.
+                Shown for Sales / Orders / Estimates / Cash. Empty range = all dates.
                 (Cash Book keeps its own counter + today-defaulted range below.) */}
             {tab !== "ledger" && (
                 <div className="flex flex-wrap items-end gap-2">
                     <div>
                         <label className="mb-1 block text-xs text-muted-foreground">From</label>
-                        <TallyDateInput value={rangeFrom} onValueChange={setRangeFrom} className="h-9 w-36" />
+                        <TallyDateInput value={rangeFrom} onValueChange={setRangeFrom} className="h-9 w-32" />
                     </div>
                     <div>
                         <label className="mb-1 block text-xs text-muted-foreground">To</label>
-                        <TallyDateInput value={rangeTo} onValueChange={setRangeTo} className="h-9 w-36" />
+                        <TallyDateInput value={rangeTo} onValueChange={setRangeTo} className="h-9 w-32" />
                     </div>
                     <Button variant="outline" size="sm" className="h-9" onClick={() => { setRangeFrom(todayISO); setRangeTo(todayISO); }}>Today</Button>
                     {(rangeFrom || rangeTo) && (
-                        <Button variant="ghost" size="sm" className="h-9 text-muted-foreground" onClick={() => { setRangeFrom(""); setRangeTo(""); }}>Clear (all dates)</Button>
+                        <Button variant="ghost" size="sm" className="h-9 text-muted-foreground" onClick={() => { setRangeFrom(""); setRangeTo(""); }}>Clear</Button>
+                    )}
+                    {(tab === "sales" || tab === "orders" || tab === "estimates") && (
+                        <div className="relative min-w-[200px] flex-1">
+                            <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                            <Input
+                                className="h-9 pl-8 text-sm"
+                                placeholder="Search by reference or customer…"
+                                value={tab === "sales" ? q : docQuery}
+                                onChange={(e) => { if (tab === "sales") { setQ(e.target.value); setPage(1); } else { setDocQuery(e.target.value); } }}
+                            />
+                        </div>
+                    )}
+                    {(tab === "orders" || tab === "estimates") && (
+                        <label className="flex h-9 shrink-0 cursor-pointer items-center gap-1.5 text-sm text-muted-foreground">
+                            <Checkbox checked={pendingOnly} onCheckedChange={(v) => setPendingOnly(!!v)} />
+                            Pending only <span className="text-xs">(no sale)</span>
+                        </label>
                     )}
                 </div>
             )}
 
             {tab === "sales" && (
             <>
-            {/* ── Search ── */}
-            <div className="relative max-w-sm">
-                <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                    className="pl-8 text-sm"
-                    placeholder="Search by reference or description…"
-                    value={q}
-                    onChange={(e) => { setQ(e.target.value); setPage(1); }}
-                />
-            </div>
-
-            {/* ── Table ── */}
+            {/* ── Table ── (search + date filter live in the shared bar above) */}
             {loading ? (
                 <div className="flex justify-center py-12">
                     <Loader2 size={24} className="animate-spin text-muted-foreground" />
@@ -407,22 +414,6 @@ export function PosSalesRegister() {
                 }
                 return (
                     <div className="space-y-3">
-                        {/* Search + Pending-only — mirrors the Sales tab filter */}
-                        <div className="flex items-center gap-3">
-                            <div className="relative max-w-sm flex-1">
-                                <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                                <Input
-                                    className="pl-8 text-sm"
-                                    placeholder="Search by reference or customer…"
-                                    value={docQuery}
-                                    onChange={(e) => setDocQuery(e.target.value)}
-                                />
-                            </div>
-                            <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-sm text-muted-foreground">
-                                <Checkbox checked={pendingOnly} onCheckedChange={(v) => setPendingOnly(!!v)} />
-                                Pending only <span className="text-xs">(no sale yet)</span>
-                            </label>
-                        </div>
                         {posDocs.length === 0 ? (
                             <div className="flex flex-col items-center gap-3 py-16 text-muted-foreground text-sm">
                                 <Monitor size={32} className="opacity-30" />
