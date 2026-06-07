@@ -86,7 +86,10 @@ export async function GET(req: NextRequest) {
         include: {
             createdBy: { select: { name: true } },
             branch:    { select: { id: true, name: true } },
-            _count:    { select: { lines: true } },
+            // refReturns = vouchers that reference THIS one via refVoucherId. For a
+            // POS_ORDER / POS_ESTIMATE it means a sale was raised against it →
+            // "converted" (not pending). (For SALE etc. it's the returns count.)
+            _count:    { select: { lines: true, refReturns: true } },
         },
     });
 

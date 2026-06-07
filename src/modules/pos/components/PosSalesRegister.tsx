@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { fmt } from "@/utils/constants";
 import { ActiveShiftBar, type ActiveShift } from "@/modules/pos/components/ActiveShiftBar";
@@ -57,9 +58,11 @@ type LedgerData = {
 };
 
 // POS Order / Estimate documents (POS_ORDER / POS_ESTIMATE InvVouchers).
+// `_count.refReturns` > 0 ⇒ a sale was raised against it ⇒ converted (not pending).
 type PosDoc = {
     id: number; reference: string; date: string;
     partyName: string | null; totalAmount: string; status: string; dealId: number | null;
+    _count?: { refReturns: number };
 };
 
 const PAY_COLORS: Record<string, string> = {
@@ -110,6 +113,7 @@ export function PosSalesRegister() {
     const [posDocs, setPosDocs]               = useState<PosDoc[]>([]);
     const [posDocsLoading, setPosDocsLoading] = useState(false);
     const [docQuery, setDocQuery]             = useState("");
+    const [pendingOnly, setPendingOnly]       = useState(false);
     useEffect(() => {
         if (tab !== "orders" && tab !== "estimates") return;
         const type = tab === "orders" ? "POS_ORDER" : "POS_ESTIMATE";
@@ -362,23 +366,30 @@ export function PosSalesRegister() {
 
             {(tab === "orders" || tab === "estimates") && (() => {
                 const t = docQuery.trim().toLowerCase();
-                const filtered = t
-                    ? posDocs.filter((d) => d.reference.toLowerCase().includes(t) || (d.partyName ?? "").toLowerCase().includes(t))
-                    : posDocs;
+                const filtered = posDocs.filter((d) => {
+                    if (pendingOnly && (d._count?.refReturns ?? 0) > 0) return false;   // converted (a sale references it) → not pending
+                    return !t || d.reference.toLowerCase().includes(t) || (d.partyName ?? "").toLowerCase().includes(t);
+                });
                 if (posDocsLoading) {
                     return <div className="flex justify-center py-12"><Loader2 size={24} className="animate-spin text-muted-foreground" /></div>;
                 }
                 return (
                     <div className="space-y-3">
-                        {/* Search — mirrors the Sales tab filter */}
-                        <div className="relative max-w-sm">
-                            <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                            <Input
-                                className="pl-8 text-sm"
-                                placeholder="Search by reference or customer…"
-                                value={docQuery}
-                                onChange={(e) => setDocQuery(e.target.value)}
-                            />
+                        {/* Search + Pending-only — mirrors the Sales tab filter */}
+                        <div className="flex items-center gap-3">
+                            <div className="relative max-w-sm flex-1">
+                                <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                                <Input
+                                    className="pl-8 text-sm"
+                                    placeholder="Search by reference or customer…"
+                                    value={docQuery}
+                                    onChange={(e) => setDocQuery(e.target.value)}
+                                />
+                            </div>
+                            <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-sm text-muted-foreground">
+                                <Checkbox checked={pendingOnly} onCheckedChange={(v) => setPendingOnly(!!v)} />
+                                Pending only <span className="text-xs">(no sale yet)</span>
+                            </label>
                         </div>
                         {posDocs.length === 0 ? (
                             <div className="flex flex-col items-center gap-3 py-16 text-muted-foreground text-sm">
