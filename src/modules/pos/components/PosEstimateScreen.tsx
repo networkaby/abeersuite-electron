@@ -345,7 +345,7 @@ export default function PosEstimateScreen() {
             if (createDialogOpen || checkoutOpen) return;
             if (cart.length === 0 || !snapshot?.account) return;
             e.preventDefault();
-            openCheckout();
+            void generateInvoice(true);   // Estimate saves directly — no payment checkout
         };
         window.addEventListener("keydown", handler);
         return () => window.removeEventListener("keydown", handler);
@@ -1553,8 +1553,8 @@ export default function PosEstimateScreen() {
                                 </div>
                                 <span className="text-xl font-bold tabular-nums">{fmtINR(total)}</span>
                             </div>
-                            <Button onClick={openCheckout} disabled={cart.length === 0 || !snapshot?.account} className="h-12 w-full text-base" size="lg">
-                                <ReceiptIndianRupee size={18} /> Checkout
+                            <Button onClick={() => void generateInvoice(true)} disabled={cart.length === 0 || !snapshot?.account || submitting} className="h-12 w-full text-base" size="lg">
+                                <ReceiptIndianRupee size={18} /> {submitting ? "Saving…" : "Save Estimate"}
                                 <span className="ml-2 rounded border border-primary-foreground/30 px-1.5 py-px text-[10px] opacity-80">Ctrl ↵</span>
                             </Button>
                         </div>
