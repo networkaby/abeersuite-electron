@@ -124,6 +124,11 @@ export function PosSalesRegister() {
         if (rangeTo && d > rangeTo) return false;
         return true;
     };
+    // Client-side search match (Cash In/Out tab) over the given fields.
+    const matchesQuery = (...fields: (string | null | undefined)[]) => {
+        const t = docQuery.trim().toLowerCase();
+        return !t || fields.some((f) => (f ?? "").toLowerCase().includes(t));
+    };
     useEffect(() => {
         if (tab !== "orders" && tab !== "estimates") return;
         const type = tab === "orders" ? "POS_ORDER" : "POS_ESTIMATE";
@@ -272,7 +277,7 @@ export function PosSalesRegister() {
                 {(rangeFrom || rangeTo) && (
                     <Button variant="ghost" size="sm" className="h-9 text-muted-foreground" onClick={() => { setRangeFrom(""); setRangeTo(""); }}>Clear</Button>
                 )}
-                {(tab === "sales" || tab === "orders" || tab === "estimates") && (
+                {tab !== "ledger" && (
                     <div className="relative w-64">
                         <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                         <Input
@@ -493,7 +498,7 @@ export function PosSalesRegister() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-border">
-                                {moves.filter((m) => inDateRange(m.date)).map((m) => (
+                                {moves.filter((m) => inDateRange(m.date) && matchesQuery(m.reference, m.party, m.note)).map((m) => (
                                     <tr key={m.id} className="transition-colors hover:bg-muted/30">
                                         <td className="px-4 py-2.5">
                                             <Badge variant="secondary" className={`text-[10px] font-medium ${m.kind === "IN" ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
