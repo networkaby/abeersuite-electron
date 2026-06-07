@@ -426,6 +426,7 @@ export function PosSalesRegister() {
                 const t = docQuery.trim().toLowerCase();
                 const filtered = posDocs.filter((d) => {
                     if (!inDateRange(d.date)) return false;
+                    if (pendingOnly && d.status !== "POSTED") return false;             // draft = not finalised → not a pending order
                     if (pendingOnly && (d._count?.refReturns ?? 0) > 0) return false;   // converted (a sale references it) → not pending
                     return !t || d.reference.toLowerCase().includes(t) || (d.partyName ?? "").toLowerCase().includes(t);
                 });
