@@ -1536,6 +1536,8 @@ export default function PosScreen() {
                                 );
                             })()}
 
+                            {/* Coupon + Gift card share one row to save vertical space. */}
+                            <div className="flex flex-wrap items-center gap-x-6 gap-y-1">
                             {/* ── Coupon ────────────────────────────────────────
                                 Code entry; the server validates + owns the ₹ value.
                                 A non-stackable coupon replaces the tier discount and
@@ -1610,6 +1612,7 @@ export default function PosScreen() {
                                     )}
                                 </div>
                             )}
+                            </div>
                             {giftCardApplied > 0.005 && (
                                 <div className="flex items-center justify-between text-xs font-medium">
                                     <span className="text-muted-foreground">Pay (after gift card)</span>
