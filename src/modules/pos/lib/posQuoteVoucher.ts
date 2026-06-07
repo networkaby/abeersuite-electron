@@ -103,6 +103,13 @@ export async function createPosQuoteVoucher(opts: {
         const voucher = await tx.invVoucher.create({
             data: {
                 type,
+                // Issued/final the moment it's saved — these never go through the
+                // GL-post step (no GL, no stock), so leaving the default DRAFT made
+                // them read as unfinished in the Day Book. POSTED here means "issued"
+                // (journalEntryId stays null → no GL impact; Day Book/BS/P&L totals,
+                // which are journal-entry based, are unaffected).
+                status: "POSTED",
+                postedAt: new Date(),
                 reference,
                 branchId,
                 date: body.date ? new Date(body.date) : new Date(),
