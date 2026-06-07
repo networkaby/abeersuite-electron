@@ -277,17 +277,15 @@ export function PosSalesRegister() {
                 {(rangeFrom || rangeTo) && (
                     <Button variant="ghost" size="sm" className="h-9 text-muted-foreground" onClick={() => { setRangeFrom(""); setRangeTo(""); }}>Clear</Button>
                 )}
-                {tab !== "ledger" && (
-                    <div className="relative w-64">
-                        <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                            className="h-9 pl-8 text-sm"
-                            placeholder="Search reference or customer…"
-                            value={tab === "sales" ? q : docQuery}
-                            onChange={(e) => { if (tab === "sales") { setQ(e.target.value); setPage(1); } else { setDocQuery(e.target.value); } }}
-                        />
-                    </div>
-                )}
+                <div className="relative w-64">
+                    <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                        className="h-9 pl-8 text-sm"
+                        placeholder="Search…"
+                        value={tab === "sales" ? q : docQuery}
+                        onChange={(e) => { if (tab === "sales") { setQ(e.target.value); setPage(1); } else { setDocQuery(e.target.value); } }}
+                    />
+                </div>
                 {(tab === "orders" || tab === "estimates") && (
                     <label className="flex h-9 shrink-0 cursor-pointer items-center gap-1.5 text-sm text-muted-foreground">
                         <Checkbox checked={pendingOnly} onCheckedChange={(v) => setPendingOnly(!!v)} />
@@ -568,7 +566,7 @@ export function PosSalesRegister() {
                                     </tr>
                                     {ledger.rows.length === 0 ? (
                                         <tr><td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">No cash movements in this period.</td></tr>
-                                    ) : ledger.rows.map((r) => (
+                                    ) : ledger.rows.filter((r) => matchesQuery(r.particulars, r.reference)).map((r) => (
                                         <tr key={r.id} className="transition-colors hover:bg-muted/30">
                                             <td className="whitespace-nowrap px-4 py-2.5 text-muted-foreground">
                                                 {new Date(r.date).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}
