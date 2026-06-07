@@ -138,8 +138,6 @@ export function PosSalesRegister() {
     const todayISO = new Date().toISOString().slice(0, 10);
     const [counters, setCounters]   = useState<CounterOpt[]>([]);
     const [counterId, setCounterId] = useState<number | null>(null);
-    const [from, setFrom]           = useState(todayISO);
-    const [to, setTo]               = useState(todayISO);
     const [ledger, setLedger]       = useState<LedgerData | null>(null);
     const [ledgerLoading, setLedgerLoading] = useState(false);
 
@@ -152,12 +150,15 @@ export function PosSalesRegister() {
 
     useEffect(() => {
         if (tab !== "ledger" || counterId == null) return;
+        // Shared range; the cash book needs a bounded daily view, so empty ⇒ today.
+        const effFrom = rangeFrom || todayISO;
+        const effTo   = rangeTo   || todayISO;
         setLedgerLoading(true);
-        axios.get<LedgerData>(`/api/pos/till-ledger?counterId=${counterId}&from=${from}&to=${to}`)
+        axios.get<LedgerData>(`/api/pos/till-ledger?counterId=${counterId}&from=${effFrom}&to=${effTo}`)
             .then((r) => setLedger(r.data))
             .catch(() => toast.error("Failed to load till ledger"))
             .finally(() => setLedgerLoading(false));
-    }, [tab, counterId, from, to]);
+    }, [tab, counterId, rangeFrom, rangeTo]);
 
     const load = useCallback(async (search: string, pg: number, f: string, t: string) => {
         setLoading(true);
@@ -249,37 +250,46 @@ export function PosSalesRegister() {
                 ))}
             </div>
 
-            {/* Shared filter bar — date range + search + pending, all on one line.
-                Shown for Sales / Orders / Estimates / Cash. Empty range = all dates.
-                (Cash Book keeps its own counter + today-defaulted range below.) */}
-            {tab !== "ledger" && (
-                <div className="flex flex-wrap items-center gap-2">
-                    <TallyDateInput value={rangeFrom} onValueChange={setRangeFrom} className="h-9 w-32" placeholder="From" />
-                    <span className="text-sm text-muted-foreground">–</span>
-                    <TallyDateInput value={rangeTo} onValueChange={setRangeTo} className="h-9 w-32" placeholder="To" />
-                    <Button variant="outline" size="sm" className="h-9" onClick={() => { setRangeFrom(todayISO); setRangeTo(todayISO); }}>Today</Button>
-                    {(rangeFrom || rangeTo) && (
-                        <Button variant="ghost" size="sm" className="h-9 text-muted-foreground" onClick={() => { setRangeFrom(""); setRangeTo(""); }}>Clear</Button>
-                    )}
-                    {(tab === "sales" || tab === "orders" || tab === "estimates") && (
-                        <div className="relative w-64">
-                            <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                            <Input
-                                className="h-9 pl-8 text-sm"
-                                placeholder="Search reference or customer…"
-                                value={tab === "sales" ? q : docQuery}
-                                onChange={(e) => { if (tab === "sales") { setQ(e.target.value); setPage(1); } else { setDocQuery(e.target.value); } }}
-                            />
-                        </div>
-                    )}
-                    {(tab === "orders" || tab === "estimates") && (
-                        <label className="flex h-9 shrink-0 cursor-pointer items-center gap-1.5 text-sm text-muted-foreground">
-                            <Checkbox checked={pendingOnly} onCheckedChange={(v) => setPendingOnly(!!v)} />
-                            Pending only <span className="text-xs">(no sale)</span>
-                        </label>
-                    )}
-                </div>
-            )}
+            {/* One DRY filter bar for ALL tabs. Counter → Cash Book only; search →
+                Sales/Orders/Estimates; pending → Orders/Estimates; date range → all. */}
+            <div className="flex flex-wrap items-center gap-2">
+                {tab === "ledger" && (
+                    <select
+                        value={counterId ?? ""}
+                        onChange={(e) => setCounterId(Number(e.target.value))}
+                        className="h-9 rounded-md border border-input bg-transparent px-2 text-sm"
+                        aria-label="Counter"
+                    >
+                        {counters.map((c) => (
+                            <option key={c.id} value={c.id}>{c.name} — {c.tillAccount.name}</option>
+                        ))}
+                    </select>
+                )}
+                <TallyDateInput value={rangeFrom} onValueChange={setRangeFrom} className="h-9 w-32" placeholder="From" />
+                <span className="text-sm text-muted-foreground">–</span>
+                <TallyDateInput value={rangeTo} onValueChange={setRangeTo} className="h-9 w-32" placeholder="To" />
+                <Button variant="outline" size="sm" className="h-9" onClick={() => { setRangeFrom(todayISO); setRangeTo(todayISO); }}>Today</Button>
+                {(rangeFrom || rangeTo) && (
+                    <Button variant="ghost" size="sm" className="h-9 text-muted-foreground" onClick={() => { setRangeFrom(""); setRangeTo(""); }}>Clear</Button>
+                )}
+                {(tab === "sales" || tab === "orders" || tab === "estimates") && (
+                    <div className="relative w-64">
+                        <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                            className="h-9 pl-8 text-sm"
+                            placeholder="Search reference or customer…"
+                            value={tab === "sales" ? q : docQuery}
+                            onChange={(e) => { if (tab === "sales") { setQ(e.target.value); setPage(1); } else { setDocQuery(e.target.value); } }}
+                        />
+                    </div>
+                )}
+                {(tab === "orders" || tab === "estimates") && (
+                    <label className="flex h-9 shrink-0 cursor-pointer items-center gap-1.5 text-sm text-muted-foreground">
+                        <Checkbox checked={pendingOnly} onCheckedChange={(v) => setPendingOnly(!!v)} />
+                        Pending only <span className="text-xs">(no sale)</span>
+                    </label>
+                )}
+            </div>
 
             {tab === "sales" && (
             <>
@@ -525,32 +535,7 @@ export function PosSalesRegister() {
 
             {tab === "ledger" && (
                 <div className="space-y-3">
-                    {/* Controls: counter + date range (defaults to today) */}
-                    <div className="flex flex-wrap items-end gap-3">
-                        <div>
-                            <label className="mb-1 block text-xs text-muted-foreground">Counter</label>
-                            <select
-                                value={counterId ?? ""}
-                                onChange={(e) => setCounterId(Number(e.target.value))}
-                                className="h-9 rounded-md border border-input bg-transparent px-2 text-sm"
-                            >
-                                {counters.map((c) => (
-                                    <option key={c.id} value={c.id}>{c.name} — {c.tillAccount.name}</option>
-                                ))}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="mb-1 block text-xs text-muted-foreground">From</label>
-                            <TallyDateInput value={from} onValueChange={setFrom} className="h-9 w-36" />
-                        </div>
-                        <div>
-                            <label className="mb-1 block text-xs text-muted-foreground">To</label>
-                            <TallyDateInput value={to} onValueChange={setTo} className="h-9 w-36" />
-                        </div>
-                        <Button variant="outline" size="sm" className="h-9" onClick={() => { setFrom(todayISO); setTo(todayISO); }}>
-                            Today
-                        </Button>
-                    </div>
+                    {/* Counter + date range live in the shared filter bar above. */}
 
                     {ledgerLoading ? (
                         <div className="flex justify-center py-12"><Loader2 size={24} className="animate-spin text-muted-foreground" /></div>
