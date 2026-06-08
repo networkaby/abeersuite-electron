@@ -52,11 +52,13 @@ export const EDIT_FORM_URLS: Record<string, string> = {
     SALE_RETURN:     "/vouchers/sale-returns/new",
     PURCHASE_RETURN: "/vouchers/purchase-returns/new",
     ESTIMATE:        "/vouchers/estimates/new",
-    // POS Estimate / Order are created at the counter; reuse the estimate form
-    // for read/duplicate of the saved voucher (no dedicated office form yet).
+    // POS Estimate has no editable form yet → reuse the estimate form for read / duplicate.
     POS_ESTIMATE:    "/vouchers/estimates/new",
-    POS_ORDER:       "/vouchers/estimates/new",
-    SALES_ORDER:     "/vouchers/sales-orders/new",
+    // Orders (counter POS_ORDER + office SALES_ORDER) edit in the POS order screen —
+    // it covers the full discount surface the office form lacks. editFormUrl appends
+    // ?voucherId=, which the page reads to hydrate + PATCH (New / Under-Review only).
+    POS_ORDER:       "/vouchers/pos/order",
+    SALES_ORDER:     "/vouchers/pos/order",
     PURCHASE_ORDER:  "/vouchers/purchase-orders/new",
     GRN:             "/vouchers/grn/new",
     CHALLAN:         "/vouchers/challans/new",
