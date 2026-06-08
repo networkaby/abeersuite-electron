@@ -232,7 +232,9 @@ export async function PATCH(req: Request, { params }: Params) {
             // ────────────────────────────────────────────────────────────
             if (wasPosted) {
                 const isPurchase = existing.type === "PURCHASE" || existing.type === "GRN" || existing.type === "REJECTION_IN" || existing.type === "SALE_RETURN";
-                const isSale     = existing.type === "SALE"     || existing.type === "CHALLAN" || existing.type === "REJECTION_OUT" || existing.type === "PURCHASE_RETURN";
+                // POS = counter sale: same stock-out + GL shape as SALE (postInvVoucherToGl
+                // treats POS like SALE), so a posted-POS edit reverses + re-posts like a sale.
+                const isSale     = existing.type === "SALE"     || existing.type === "POS" || existing.type === "CHALLAN" || existing.type === "REJECTION_OUT" || existing.type === "PURCHASE_RETURN";
 
                 // Reverse stock — write counter entries against the same
                 // voucher id and adjust the cached InvProduct.stock so the
@@ -418,7 +420,7 @@ export async function PATCH(req: Request, { params }: Params) {
                 if (!fresh) throw new Error("Voucher disappeared mid-transaction");
 
                 const isPurchase = ["PURCHASE", "GRN", "REJECTION_IN", "SALE_RETURN"].includes(fresh.type);
-                const isSale     = ["SALE", "CHALLAN", "REJECTION_OUT", "PURCHASE_RETURN"].includes(fresh.type);
+                const isSale     = ["SALE", "POS", "CHALLAN", "REJECTION_OUT", "PURCHASE_RETURN"].includes(fresh.type);
 
                 for (const line of fresh.lines) {
                     const qty = toNumber(line.quantity);
@@ -444,7 +446,7 @@ export async function PATCH(req: Request, { params }: Params) {
                 }
 
                 let journalEntryId: number | null = null;
-                if (["SALE", "PURCHASE", "SALE_RETURN", "PURCHASE_RETURN"].includes(fresh.type)) {
+                if (["SALE", "POS", "PURCHASE", "SALE_RETURN", "PURCHASE_RETURN"].includes(fresh.type)) {
                     const out = await postInvVoucherToGl(tx, {
                         voucherId: fresh.id,
                         voucher:   fresh,
