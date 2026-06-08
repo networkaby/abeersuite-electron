@@ -1212,6 +1212,7 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
                     onOpenChange={setReceiptDialogOpen}
                     shiftId={activeShift.id}
                     counterName={activeShift.counter.tillAccount.name}
+                    paymentAccounts={activeShift.counter.paymentAccounts}
                     onDone={refreshActiveShift}
                 />
             )}

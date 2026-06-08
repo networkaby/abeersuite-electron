@@ -1365,6 +1365,7 @@ export default function PosScreen({ editId }: { editId?: number }) {
                     onOpenChange={setReceiptDialogOpen}
                     shiftId={activeShift.id}
                     counterName={activeShift.counter.tillAccount.name}
+                    paymentAccounts={activeShift.counter.paymentAccounts}
                     onDone={refreshActiveShift}
                 />
             )}

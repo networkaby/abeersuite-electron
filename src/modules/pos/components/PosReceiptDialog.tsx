@@ -17,30 +17,41 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import {
     PartySearchAndCreate,
     type PartySearchAndCreateHandle,
     type PickedParty,
 } from "@/shared/components/PartySearchAndCreate";
 
+// The counter's payment accounts (UPI/Card/…) the receipt can land in.
+type ReceiptAccount = { id: number; label: string; channel: string };
+
 export function PosReceiptDialog({
-    open, onOpenChange, shiftId, counterName, onDone,
+    open, onOpenChange, shiftId, counterName, paymentAccounts = [], onDone,
 }: {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     shiftId: number;
     counterName?: string;
+    paymentAccounts?: ReceiptAccount[];
     onDone: () => void;
 }) {
     const [party, setParty]       = useState<{ accountId: number; name: string } | null>(null);
     const [amount, setAmount]     = useState("");
     const [note, setNote]         = useState("");
+    // Where the money came in. null = Cash (the counter till); else a payment account id.
+    const [tenderId, setTenderId] = useState<number | null>(null);
     const [submitting, setSubmitting] = useState(false);
     const partyRef = useRef<PartySearchAndCreateHandle>(null);
 
     useEffect(() => {
         if (!open) return;
-        setParty(null); setAmount(""); setNote("");
+        setParty(null); setAmount(""); setNote(""); setTenderId(null);
     }, [open]);
+
+    const tenderLabel = tenderId == null ? "Cash" : (paymentAccounts.find((a) => a.id === tenderId)?.label ?? "Payment");
 
     const onPicked = (p: PickedParty) => {
         if (p.accountId == null) { toast.error(`${p.name} has no ledger account yet`); return; }
@@ -54,9 +65,10 @@ export function PosReceiptDialog({
         setSubmitting(true);
         try {
             const { data } = await axios.post<{ voucherId: number; voucherRef: string }>(`/api/pos/shifts/${shiftId}/receipts`, {
-                accountId:   party.accountId,
-                amountPaise: Math.round(rupees * 100),
-                note:        note.trim() || undefined,
+                accountId:        party.accountId,
+                amountPaise:      Math.round(rupees * 100),
+                paymentAccountId: tenderId,
+                note:             note.trim() || undefined,
             });
             toast.success(`Receipt ${data.voucherRef} · ₹${rupees.toFixed(2)} from ${party.name}`);
             // Open the printable receipt (auto-prints on load) in a new tab.
@@ -79,8 +91,9 @@ export function PosReceiptDialog({
                         <HandCoins size={18} className="text-primary" /> Receive from party
                     </DialogTitle>
                     <DialogDescription>
-                        Collect a cash payment from a customer (clearing credit, advance, etc.). Posts a receipt voucher
-                        (Dr {counterName ?? "counter till"} / Cr the party) — the cash lands in this counter&apos;s drawer.
+                        Collect a payment from a customer (clearing credit, advance, etc.). Posts a receipt voucher
+                        (Dr {tenderId == null ? (counterName ?? "counter till") : tenderLabel} / Cr the party)
+                        {tenderId == null ? " — the cash lands in this counter’s drawer." : " — booked to that account’s ledger."}
                     </DialogDescription>
                 </DialogHeader>
 
@@ -104,16 +117,35 @@ export function PosReceiptDialog({
                         )}
                     </div>
 
-                    <div className="space-y-1.5">
-                        <Label htmlFor="rcv-amount">Amount received (₹)</Label>
-                        <Input
-                            id="rcv-amount"
-                            type="text"
-                            inputMode="decimal"
-                            value={amount}
-                            onChange={(e) => setAmount(e.target.value.replace(/[^\d.]/g, ""))}
-                            placeholder="500"
-                        />
+                    <div className="grid grid-cols-[1fr_auto] items-end gap-2">
+                        <div className="space-y-1.5">
+                            <Label htmlFor="rcv-amount">Amount received (₹)</Label>
+                            <Input
+                                id="rcv-amount"
+                                type="text"
+                                inputMode="decimal"
+                                value={amount}
+                                onChange={(e) => setAmount(e.target.value.replace(/[^\d.]/g, ""))}
+                                placeholder="500"
+                            />
+                        </div>
+                        {/* Received in — Cash (till) by default, or a counter payment
+                            account (UPI/Card/…) so the receipt debits the right ledger. */}
+                        <div className="space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">Received in</Label>
+                            <Select
+                                value={tenderId == null ? "cash" : String(tenderId)}
+                                onValueChange={(v) => setTenderId(v === "cash" ? null : Number(v))}
+                            >
+                                <SelectTrigger className="w-[150px]"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="cash">Cash (drawer)</SelectItem>
+                                    {paymentAccounts.map((a) => (
+                                        <SelectItem key={a.id} value={String(a.id)}>{a.label}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
                     </div>
 
                     <div className="space-y-1.5">

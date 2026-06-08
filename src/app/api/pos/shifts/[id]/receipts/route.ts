@@ -20,6 +20,9 @@ import { postReceiptVoucher } from "@/modules/accountancy/lib/postReceiptVoucher
 const receiptSchema = z.object({
     amountPaise: z.number().int().positive(),
     accountId:   z.number().int().positive(),   // party AR ledger to credit
+    // Where the money was received: null/absent = CASH (the counter till); else one
+    // of the counter's payment accounts (UPI/Card/…) → its ledger is debited.
+    paymentAccountId: z.number().int().positive().nullish(),
     note:        z.string().trim().max(200).optional(),
 });
 
@@ -37,7 +40,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     try {
         const shift = await prisma.posShift.findUnique({
             where:  { id: shiftId },
-            select: { id: true, userId: true, status: true, branchId: true, counter: { select: { tillAccountId: true, name: true } } },
+            select: {
+                id: true, userId: true, status: true, branchId: true,
+                counter: {
+                    select: {
+                        tillAccountId: true, name: true,
+                        paymentAccounts: { where: { isActive: true }, select: { id: true, accountId: true, label: true } },
+                    },
+                },
+            },
         });
         if (!shift) return NextResponse.json({ error: "Shift not found" }, { status: 404 });
         if (shift.status !== "OPEN") {
@@ -54,11 +65,22 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         });
         if (!party) return NextResponse.json({ error: "Party account not found" }, { status: 404 });
 
+        // Resolve where the money landed: CASH (till) by default, else the chosen
+        // counter payment account's ledger (e.g. a UPI receipt debits the UPI bank).
+        let tenderAccountId = shift.counter.tillAccountId;
+        let tenderLabel = `Cash at ${shift.counter.name}`;
+        if (data.paymentAccountId != null) {
+            const acct = shift.counter.paymentAccounts.find((a) => a.id === data.paymentAccountId);
+            if (!acct) return NextResponse.json({ error: "That payment account isn't on this counter.", code: "PAYMENT_METHOD_NOT_MAPPED" }, { status: 422 });
+            tenderAccountId = acct.accountId;
+            tenderLabel = `${acct.label} at ${shift.counter.name}`;
+        }
+
         const rupees = data.amountPaise / 100;
         const result = await prisma.$transaction(async (tx) => {
             const r = await postReceiptVoucher(tx, {
                 customerAccountId: party.id,
-                tenders:   [{ accountId: shift.counter.tillAccountId, amount: rupees, description: `Cash at ${shift.counter.name}` }],
+                tenders:   [{ accountId: tenderAccountId, amount: rupees, description: tenderLabel }],
                 date:      new Date(),
                 userId:    user!.id,
                 branchId:  shift.branchId,
