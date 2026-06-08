@@ -66,29 +66,46 @@ export const upiProvider: PaymentLinkProvider = {
     },
 };
 
-/// All known rails, in display order. Append new providers here (e.g. a hosted
-/// Razorpay payment link once the backend exists) — no UI change needed.
-export const PAYMENT_LINK_PROVIDERS: PaymentLinkProvider[] = [upiProvider];
+/// Hosted payment-gateway link (card / netbanking / UPI) — to be backed by
+/// Cashfree, which creates a real payment-page URL server-side. Disabled until the
+/// backend + keys exist; once built, `build()` returns the Cashfree `link_url` and
+/// the share message carries that https link instead of the VPA.
+export const cashfreeProvider: PaymentLinkProvider = {
+    id: "cashfree",
+    label: "Card / Gateway (Cashfree)",
+    hint: () => "Card · netbanking · UPI payment link — coming soon (Cashfree).",
+    available: () => false,
+    build: () => {
+        throw new Error("Cashfree gateway not configured yet");
+    },
+};
+
+/// All known rails, in display order. The UPI rail works today; Cashfree is the
+/// next provider (hosted gateway link). Append more here — no UI change needed.
+export const PAYMENT_LINK_PROVIDERS: PaymentLinkProvider[] = [upiProvider, cashfreeProvider];
 
 /// Company-level payee name shown in the customer's UPI app (the VPA itself is
 /// per-counter and supplied separately).
 export const DEFAULT_PAYEE_NAME = COMPANY_DETAILS.upi.payeeName || COMPANY_DETAILS.brandName;
 
-/// Human-readable WhatsApp/SMS body ending with the payment link.
+/// Human-readable WhatsApp/SMS body. Carries the plain UPI ID (VPA) — clean to read
+/// and pay to — plus a nudge to scan the attached QR (which encodes the amount).
+/// When the Cashfree gateway lands, pass its https link as `payTo` instead.
 export function paymentLinkMessage(opts: {
     partyName?: string | null;
     amountRupees: number;
-    link: string;
+    payTo: string;
+    payToLabel?: string;
     billRef?: string | null;
 }): string {
-    const { partyName, amountRupees, link, billRef } = opts;
+    const { partyName, amountRupees, payTo, payToLabel = "UPI ID", billRef } = opts;
     const lines = [
         `Hello${partyName ? ` ${partyName}` : ""},`,
         ``,
         `Please pay ${fmtINR(amountRupees)}${billRef ? ` for ${billRef}` : ""}.`,
         ``,
-        `Tap to pay:`,
-        link,
+        `${payToLabel}: ${payTo}`,
+        `(or scan the QR I've shared)`,
         ``,
         `Thank you — ${DEFAULT_PAYEE_NAME}`,
     ];

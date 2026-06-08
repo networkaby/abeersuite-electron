@@ -187,15 +187,16 @@ export function PaymentLinkDialog({
 
     const canShare = !!link && amount > 0;
 
-    async function copyLink() {
-        if (!link) return;
+    async function copyUpiId() {
+        const vpa = ctx.upiVpa?.trim();
+        if (!vpa) return;
         try {
-            await navigator.clipboard.writeText(link);
+            await navigator.clipboard.writeText(vpa);
             setCopied(true);
-            toast.success("Payment link copied");
+            toast.success("UPI ID copied");
             setTimeout(() => setCopied(false), 1500);
         } catch {
-            toast.error("Couldn't copy — long-press the link to copy manually");
+            toast.error("Couldn't copy — long-press to copy manually");
         }
     }
 
@@ -210,7 +211,7 @@ export function PaymentLinkDialog({
     function sendOnWhatsApp() {
         const file = shareFile;
         if (!file) return;
-        const caption = paymentLinkMessage({ partyName, amountRupees: amount, link, billRef });
+        const caption = paymentLinkMessage({ partyName, amountRupees: amount, payTo: ctx.upiVpa ?? "", billRef });
         const chatUrl = waNum
             ? `https://web.whatsapp.com/send?phone=${waNum}&text=${encodeURIComponent(caption)}`
             : `https://web.whatsapp.com/send?text=${encodeURIComponent(caption)}`;
@@ -324,8 +325,8 @@ export function PaymentLinkDialog({
 
                     {/* Actions */}
                     <div className="grid grid-cols-2 gap-2">
-                        <Button variant="outline" onClick={copyLink} disabled={!canShare}>
-                            {copied ? <Check size={16} /> : <Copy size={16} />} Copy link
+                        <Button variant="outline" onClick={copyUpiId} disabled={!canShare}>
+                            {copied ? <Check size={16} /> : <Copy size={16} />} Copy UPI ID
                         </Button>
                         <Button
                             onClick={sendOnWhatsApp}
