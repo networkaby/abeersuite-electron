@@ -56,6 +56,18 @@ export function OrdersBoard() {
         }
     }
 
+    async function fulfil(o: OrderCard) {
+        if (o.source !== "inv") { toast.info("Online-order fulfilment is coming soon."); return; }
+        try {
+            const { data } = await axios.post<{ saleRef: string }>(`/api/orders/inv/${o.id}/fulfil`, {});
+            toast.success(`Fulfilled — Sale ${data.saleRef} posted`);
+            load();
+        } catch (e) {
+            const msg = axios.isAxiosError(e) ? (e.response?.data as { error?: string })?.error : null;
+            toast.error(msg || "Fulfil failed");
+        }
+    }
+
     if (loading) return <div className="flex justify-center py-16"><Loader2 className="animate-spin text-muted-foreground" /></div>;
 
     return (
@@ -99,6 +111,16 @@ export function OrdersBoard() {
                                             <span className="tabular-nums font-medium text-foreground">₹{o.total.toFixed(2)}</span>
                                         </div>
                                         {o.dealId && <div className="mt-0.5 text-[10px] text-muted-foreground">Deal #{o.dealId}</div>}
+                                        {o.source === "inv" && !stage.isTerminal && (
+                                            <button
+                                                type="button"
+                                                onClick={(e) => { e.stopPropagation(); void fulfil(o); }}
+                                                className="mt-1.5 w-full rounded border border-emerald-300 bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-700 hover:bg-emerald-100 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300"
+                                                title="Post the Sale (GL + stock-out) and mark Delivered"
+                                            >
+                                                Fulfil → post Sale
+                                            </button>
+                                        )}
                                     </div>
                                 ))}
                             </div>
