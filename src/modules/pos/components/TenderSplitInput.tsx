@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/select";
 
 export type TenderSplit = { id: string; paymentAccountId: number | null; amount: number; reference: string };
-export type TenderAccount = { id: number; channel: string; label: string; vpa: string | null };
+export type TenderAccount = { id: number; channel: string; label: string; vpa: string | null; defaultVisible?: boolean };
 
 const CHANNEL_ICON: Record<string, React.ReactNode> = {
     UPI:           <Smartphone size={14} />,

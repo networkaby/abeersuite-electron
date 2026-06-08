@@ -51,10 +51,17 @@ export function PosReceiptDialog({
 
     useEffect(() => {
         if (!open) return;
-        // Cash row is always present (TenderEntry); start with no extra splits.
+        // Cash row is always present (TenderEntry); pre-show the accounts flagged
+        // "default visible" as rows — same as the Sale/Order checkout does.
         setParty(null); setNote("");
         setPay({ cashTendered: 0, cashReturn: 0 });
-        setTenders([]);
+        setTenders(
+            paymentAccounts
+                .filter((a) => a.defaultVisible)
+                .map((a) => ({ id: crypto.randomUUID(), paymentAccountId: a.id, amount: 0, reference: "" })),
+        );
+        // Seed on open only — re-seeding mid-entry would wipe what the cashier typed.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open]);
 
     const total = useMemo(() => {
