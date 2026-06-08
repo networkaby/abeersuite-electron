@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { invNextRef, calcVoucherTotals } from "@/modules/inventory/lib/stock";
-import { recordStockMovement } from "@/modules/inventory/lib/stockMovement";
+import { recordStockMovementsBatch } from "@/modules/inventory/lib/stockMovement";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import { postInvVoucherToGl } from "@/modules/accountancy/lib/postInvVoucher";
 import { postReceiptVoucher } from "@/modules/accountancy/lib/postReceiptVoucher";
@@ -138,23 +138,36 @@ export async function POST(req: Request) {
     // Branch context comes from the shift, not the session cookie.
     // This lets multiple users bill in parallel from different browsers
     // without their active-branch cookie interfering.
-    const shift = await prisma.posShift.findFirst({
-        where:  { userId: user!.id, status: "OPEN" },
-        select: {
-            id: true, branchId: true,
-            counter: {
-                select: {
-                    name: true,
-                    tillAccountId:         true,
-                    upiAccountId:          true,
-                    cardAccountId:         true,
-                    walletAccountId:       true,
-                    chequeAccountId:       true,
-                    bankTransferAccountId: true,
+    // Independent reads — fetch in parallel (separate pooled connections) instead
+    // of three serial round-trips. Guards run after, in the same order + messages.
+    const [shift, customerAccount, loyaltyConfig] = await Promise.all([
+        prisma.posShift.findFirst({
+            where:  { userId: user!.id, status: "OPEN" },
+            select: {
+                id: true, branchId: true,
+                counter: {
+                    select: {
+                        name: true,
+                        tillAccountId:         true,
+                        upiAccountId:          true,
+                        cardAccountId:         true,
+                        walletAccountId:       true,
+                        chequeAccountId:       true,
+                        bankTransferAccountId: true,
+                    },
                 },
             },
-        },
-    });
+        }),
+        prisma.account.findUnique({
+            where:  { id: body.accountId },
+            select: {
+                id: true, name: true, personId: true, companyId: true,
+                person:  { select: { name: true } },
+                company: { select: { name: true } },
+            },
+        }),
+        prisma.loyaltyConfig.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} }),
+    ]);
     if (!shift) {
         return NextResponse.json(
             { error: "Open a shift before billing.", code: "NO_OPEN_SHIFT" },
@@ -181,14 +194,6 @@ export async function POST(req: Request) {
     // capture the display name + identity ids for the partyName/partyType/
     // partyId triple so postInvVoucherToGl can build the JE description and
     // any legacy reader (until Layer 5) still sees the old fields populated.
-    const customerAccount = await prisma.account.findUnique({
-        where:  { id: body.accountId },
-        select: {
-            id: true, name: true, personId: true, companyId: true,
-            person:  { select: { name: true } },
-            company: { select: { name: true } },
-        },
-    });
     if (!customerAccount) {
         return NextResponse.json({ error: "Customer account not found." }, { status: 422 });
     }
@@ -206,9 +211,6 @@ export async function POST(req: Request) {
     // Only identified customers (a real Person/Company account) earn or redeem;
     // anonymous walk-in / counter ledgers never accrue points.
     const isIdentified = customerAccount.personId !== null || customerAccount.companyId !== null;
-    const loyaltyConfig = await prisma.loyaltyConfig.upsert({
-        where: { id: 1 }, create: { id: 1 }, update: {},
-    });
     const loyaltyRates = ratesFromConfig(loyaltyConfig);
     const loyaltyEnabled = isIdentified && loyaltyRates.enabled;
     // Live, dynamic balance — Σ in-window lots (respects the current expiry window).
@@ -706,21 +708,25 @@ export async function POST(req: Request) {
             }
 
             // ── 4. Stock ledger + per-branch + org-wide stock decrement ───
+            // Batched: one createMany for all ledger rows + per-product balance
+            // updates (was one recordStockMovement — 3 writes — per line, serial
+            // on the tx connection). Same net effect.
             const date = new Date(body.issueDate);
-            for (const line of voucher.lines) {
-                const qty = Number(line.quantity);
-                if (qty <= 0) continue;
-                await recordStockMovement(tx, {
-                    voucherId: voucher.id,
-                    productId: line.productId,
-                    branchId:  activeBranchId,
-                    date,
-                    inQty:  0,
-                    outQty: qty,
-                    rate:   line.rate,
-                    amount: line.amount,
-                });
-            }
+            await recordStockMovementsBatch(
+                tx,
+                voucher.lines
+                    .filter((line) => Number(line.quantity) > 0)
+                    .map((line) => ({
+                        voucherId: voucher.id,
+                        productId: line.productId,
+                        branchId:  activeBranchId,
+                        date,
+                        inQty:  0,
+                        outQty: Number(line.quantity),
+                        rate:   line.rate,
+                        amount: line.amount,
+                    })),
+            );
 
             // ── 5. Surplus (collect-on-the-go) ────────────────────────────
             // The customer paid MORE than the bill. Book the FULL inflow as ONE

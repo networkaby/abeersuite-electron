@@ -93,6 +93,65 @@ export async function recordStockMovement(
     }
 }
 
+/**
+ * Batched form of recordStockMovement for multi-line posts (e.g. a POS sale with
+ * N lines). Identical net effect to calling recordStockMovement once per line, but
+ * the N ledger INSERTs collapse into a single createMany — cutting N-1 round-trips
+ * inside the transaction (the dominant cost on a pooled connection). The per-product
+ * balance updates stay individual (they target different rows). Keep this in lockstep
+ * with recordStockMovement.
+ */
+export async function recordStockMovementsBatch(
+    tx: Prisma.TransactionClient,
+    items: RecordStockMovementArgs[],
+): Promise<void> {
+    if (items.length === 0) return;
+
+    // 1. One INSERT for all ledger rows (was one per line).
+    await tx.invStockLedger.createMany({
+        data: items.map((a) => ({
+            productId: a.productId,
+            voucherId: a.voucherId,
+            branchId:  a.branchId,
+            date:      a.date,
+            inQty:     a.inQty as never,
+            outQty:    a.outQty as never,
+            rate:      a.rate as never,
+            amount:    a.amount as never,
+        })),
+    });
+
+    // 2 + 3. Per-product org-wide cache + per-branch balance (same logic as the
+    // single-row helper; different rows so they can't be a single statement).
+    for (const a of items) {
+        const delta = Math.round(toNumber(a.inQty)) - Math.round(toNumber(a.outQty));
+        if (delta === 0 && a.newMrpPaise == null) continue;
+        const updateOrgWide = a.updateOrgWideStock !== false;
+        const updateBranch  = a.updateBranchBalance !== false;
+
+        if (updateOrgWide) {
+            const productData: Prisma.InvProductUpdateInput = {};
+            if (delta !== 0) {
+                productData.stock = a.productCurrentStock === null
+                    ? delta
+                    : delta > 0 ? { increment: delta } : { decrement: -delta };
+            }
+            if (a.newMrpPaise != null) productData.mrpPaise = a.newMrpPaise;
+            if (Object.keys(productData).length > 0) {
+                await tx.invProduct.update({ where: { id: a.productId }, data: productData });
+            }
+        }
+
+        if (updateBranch && delta !== 0) {
+            await tx.invProductBranch.upsert({
+                where:  { productId_branchId: { productId: a.productId, branchId: a.branchId } },
+                create: { productId: a.productId, branchId: a.branchId, stock: delta },
+                update: { stock: delta > 0 ? { increment: delta } : { decrement: -delta } },
+            });
+        }
+    }
+}
+
 export interface ReverseStockMovementArgs {
     /** Original ledger row being reversed. */
     ledgerRow: {
