@@ -67,7 +67,7 @@ export function ensureDeletable(v: LifecycleVoucher): void {
   if (isCancelled(v)) {
     throw new LifecycleError(
       409,
-      "Cannot delete a cancelled voucher — its GL impact is already reversed via the counter-entry. Hard-delete instead.",
+      "Cannot delete a cancelled voucher — its GL impact is already reversed (marked CANCELLED). Hard-delete instead.",
     );
   }
 }

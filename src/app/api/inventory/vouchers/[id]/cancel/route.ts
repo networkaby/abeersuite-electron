@@ -1,7 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
-import { toNumber, nextRefFromSeries } from "@/modules/accountancy/lib/balance";
+import { toNumber, balanceDelta } from "@/modules/accountancy/lib/balance";
 import { recordStockMovement, reverseStockMovement } from "@/modules/inventory/lib/stockMovement";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import { ensureCancelable, cancelFields, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
@@ -119,36 +119,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 });
 
                 if (origJe && origJe.status === "POSTED") {
-                    const ref = await nextRefFromSeries(tx, "GL_POSTING", userId);
-
-                    const reversalLines = origJe.lines.map((l) => ({
-                        accountId:   l.accountId,
-                        type:        (l.type === "DEBIT" ? "CREDIT" : "DEBIT") as "DEBIT" | "CREDIT",
-                        amount:      toNumber(l.amount),
-                        description: `CANCEL: ${l.description ?? ""}`,
-                    }));
-
-                    const revJe = await tx.journalEntry.create({
-                        data: {
-                            date:        new Date(),
-                            reference:   ref,
-                            description: `CANCEL: ${origJe.description}`,
-                            status:      "POSTED",
-                            postedAt:    new Date(),
-                            createdById: userId,
-                            lines:       { create: reversalLines },
-                        },
-                    });
-
-                    for (const rl of reversalLines) {
-                        const origLine = origJe.lines.find((l) => l.accountId === rl.accountId)!;
-                        const delta = origLine.account.normalBalance === "DEBIT"
-                            ? (rl.type === "DEBIT" ? rl.amount : -rl.amount)
-                            : (rl.type === "CREDIT" ? rl.amount : -rl.amount);
-                        await tx.account.update({
-                            where: { id: rl.accountId },
-                            data:  { balance: { increment: delta } },
-                        });
+                    // Reverse the cached Account.balance, then mark the JE CANCELLED so
+                    // the truth path (Balance Sheet / ledgers) drops it. No counter-entry:
+                    // a reversing JE would be a second POSTED entry that survives the
+                    // POSTED-only filter → double-reversal. (Matches the soft-delete path.)
+                    for (const line of origJe.lines) {
+                        const delta = balanceDelta(line.account.normalBalance!, line.type, toNumber(line.amount));
+                        await tx.account.update({ where: { id: line.accountId }, data: { balance: { decrement: delta } } });
                     }
 
                     await tx.journalEntry.update({
@@ -157,7 +134,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                             status: "CANCELLED",
                             cancelledAt: new Date(),
                             cancelledById: userId,
-                            cancelReason: `Voucher ${voucher.reference} cancelled. Reversal: ${revJe.reference}`,
+                            cancelReason: `Voucher ${voucher.reference} cancelled: ${reason.trim()}`,
                         },
                     });
                 }

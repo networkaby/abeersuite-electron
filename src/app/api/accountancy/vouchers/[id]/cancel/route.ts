@@ -2,7 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
-import { balanceDelta, toNumber, nextRefFromSeries } from "@/modules/accountancy/lib/balance";
+import { balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
 import { ensureCancelable, cancelFields, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
@@ -30,38 +30,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         ensureCancelable(voucher);
 
         await prisma.$transaction(async (tx) => {
-            // Reverse account balances
+            // Reverse the cached Account.balance. No counter-entry: the truth path
+            // (Balance Sheet / ledgers) drops the voucher automatically once its JE
+            // is marked CANCELLED, so a reversing entry would double-reverse. An
+            // old/locked-period reversal is the accountant's manual office JV.
             for (const line of voucher.lines) {
                 const delta = balanceDelta(line.account.normalBalance!, line.type, toNumber(line.amount));
                 await tx.account.update({ where: { id: line.accountId }, data: { balance: { decrement: delta } } });
             }
 
-            // Counter JE
-            const reversalRef = await nextRefFromSeries(tx, "GL_POSTING", user!.id);
-            const reversalLines = voucher.lines.map((l) => ({
-                accountId:   l.accountId,
-                type:        (l.type === "DEBIT" ? "CREDIT" : "DEBIT") as "DEBIT" | "CREDIT",
-                amount:      l.amount,
-                description: `Cancel reversal — ${voucher.reference}`,
-            }));
-            const reversalJe = await tx.journalEntry.create({
-                data: {
-                    date:        new Date(),
-                    reference:   reversalRef,
-                    description: `CANCEL of ${voucher.type} ${voucher.reference}: ${data.reason}`,
-                    status:      "POSTED",
-                    postedAt:    new Date(),
-                    createdById: user!.id,
-                    lines:       { create: reversalLines },
-                },
-                include: { lines: { include: { account: { select: { normalBalance: true } } } } },
-            });
-            for (const line of reversalJe.lines) {
-                const delta = balanceDelta(line.account.normalBalance!, line.type, toNumber(line.amount));
-                await tx.account.update({ where: { id: line.accountId }, data: { balance: { increment: delta } } });
-            }
-
-            // Mirror JE on the original voucher → mark cancelled
+            // Mark the mirror JE CANCELLED → excluded from every POSTED-only aggregation.
             if (voucher.journalEntryId) {
                 await tx.journalEntry.update({
                     where: { id: voucher.journalEntryId },
@@ -69,7 +47,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                         status:        "CANCELLED",
                         cancelledAt:   new Date(),
                         cancelledById: user!.id,
-                        cancelReason:  `Voucher ${voucher.reference} cancelled. Reversal: ${reversalJe.reference}`,
+                        cancelReason:  `Voucher ${voucher.reference} cancelled: ${data.reason}`,
                     },
                 });
             }
@@ -78,8 +56,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 where: { id: voucher.id },
                 data:  cancelFields(user!.id, data.reason),
             });
-        // Per-line balance reversal + counter-JE over the Supabase pooler can
-        // exceed the default 5s interactive-tx ceiling (P2028) — match 30s.
+        // Per-line balance reversal over the Supabase pooler can exceed the
+        // default 5s interactive-tx ceiling (P2028) — match 30s.
         }, { timeout: 30_000, maxWait: 10_000 });
 
         const cancelled = await prisma.voucher.findUnique({ where: { id: Number(id) } });

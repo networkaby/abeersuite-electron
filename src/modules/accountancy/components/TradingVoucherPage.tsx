@@ -857,6 +857,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
             reference: string;
             date: string;
             status: string;
+            type: string;
             description: string;
             partyName: string | null;
             partyType: string | null;
@@ -909,6 +910,13 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
             .then((r) => {
                 if (cancelled) return;
                 const v = r.data;
+                if (v.type === "POS") {
+                    // POS sales edit in the POS screen — it preserves the POS-specific
+                    // loyalty / coupon / gift-card charge rows the office form would drop
+                    // (which corrupted the Balance Sheet). Send the user there.
+                    router.replace(`/vouchers/pos/new?voucherId=${editVoucherId}`);
+                    return;
+                }
                 if (v.status === "CANCELLED") {
                     toast.error("This voucher is cancelled. Use Duplicate to create a fresh copy.");
                     router.push("/office/inventory/inventory-details");
