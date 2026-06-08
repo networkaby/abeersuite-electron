@@ -209,6 +209,9 @@ export default function PosScreen({ editId }: { editId?: number }) {
     // UPI, and Credit (auto-balanced). No method dropdown, no UPI ref.
     const [checkoutOpen, setCheckoutOpen] = useState(false);
     const [shareOpen, setShareOpen] = useState(false);
+    // Which rail the share dialog opens locked to — set by each method's share
+    // button (UPI row → "upi"; a gateway method → "cashfree", later).
+    const [shareProvider, setShareProvider] = useState<string>("upi");
     const [pay, setPay] = useState({ cashTendered: 0, cashReturn: 0, upi: 0 });
     const [extras, setExtras] = useState<ExtraSplit[]>([]);
     const [submitting, setSubmitting] = useState(false);
@@ -1397,6 +1400,7 @@ export default function PosScreen({ editId }: { editId?: number }) {
                 partyName={snapshot?.party.name}
                 partyPhone={snapshot?.party.phone ?? null}
                 upiVpa={activeShift?.counter.upiVpa ?? null}
+                lockedProviderId={shareProvider}
             />
 
             {/* Shift drop / close — launched from the header ⋮ menu (OPEN shifts).
@@ -1990,7 +1994,7 @@ export default function PosScreen({ editId }: { editId?: number }) {
                                     {/* UPI — only shown when this counter accepts UPI.
                                         Counter may override the label (e.g. "PhonePe"). */}
                                     {counterMethods.upi && (
-                                        <div className="grid grid-cols-[80px_1fr] items-center gap-2">
+                                        <div className="grid grid-cols-[80px_1fr_auto] items-center gap-2">
                                             <Label className="flex items-center gap-1 text-xs">
                                                 <Smartphone size={12} /> {upiLabel}
                                                 <button
@@ -2015,6 +2019,16 @@ export default function PosScreen({ editId }: { editId?: number }) {
                                                 inputMode="decimal"
                                                 className="text-right"
                                             />
+                                            {/* Share the UPI QR / link with the customer (WhatsApp). */}
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                title="Share this counter's UPI QR with the customer"
+                                                onClick={() => { setShareProvider("upi"); setShareOpen(true); }}
+                                            >
+                                                <QrCode size={14} /> Share
+                                            </Button>
                                         </div>
                                     )}
 
@@ -2087,16 +2101,6 @@ export default function PosScreen({ editId }: { editId?: number }) {
                                             }}
                                         >
                                             <Plus size={14} /> Add payment line
-                                        </Button>
-
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            type="button"
-                                            onClick={() => setShareOpen(true)}
-                                            title="Share a UPI payment link + QR with the customer over WhatsApp"
-                                        >
-                                            <QrCode size={14} /> Payment link
                                         </Button>
 
                                         <ReceiptIndianRupee size={16} /> {submitting ? "Saving…" : `Confirm · ${fmtINR(total)}`}

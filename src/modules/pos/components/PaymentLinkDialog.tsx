@@ -100,6 +100,7 @@ export function PaymentLinkDialog({
     partyPhone,
     billRef,
     upiVpa,
+    lockedProviderId,
 }: {
     open: boolean;
     onOpenChange: (v: boolean) => void;
@@ -109,12 +110,15 @@ export function PaymentLinkDialog({
     billRef?: string | null;
     /** This counter's UPI VPA (PosCounter.upiVpa); null/empty = not configured. */
     upiVpa?: string | null;
+    /** Lock to one rail (e.g. "upi") — launched from that payment method's row,
+     *  so the provider picker is hidden. Omit for the free-choice dialog. */
+    lockedProviderId?: string;
 }) {
     const ctx: PaymentContext = useMemo(
         () => ({ upiVpa: upiVpa ?? null, payeeName: DEFAULT_PAYEE_NAME }),
         [upiVpa],
     );
-    const [providerId, setProviderId] = useState(PAYMENT_LINK_PROVIDERS[0]?.id ?? "");
+    const [providerId, setProviderId] = useState(lockedProviderId ?? PAYMENT_LINK_PROVIDERS[0]?.id ?? "");
     const [amountStr, setAmountStr] = useState("");
     const [qr, setQr] = useState<string | null>(null);
     const [copied, setCopied] = useState(false);
@@ -130,10 +134,13 @@ export function PaymentLinkDialog({
         [providerId],
     );
 
-    // Reset the amount to the default each time the dialog opens.
+    // Reset the amount (and, if launched from a method row, the rail) on open.
     useEffect(() => {
-        if (open) setAmountStr(defaultAmount > 0 ? defaultAmount.toFixed(2) : "");
-    }, [open, defaultAmount]);
+        if (open) {
+            setAmountStr(defaultAmount > 0 ? defaultAmount.toFixed(2) : "");
+            if (lockedProviderId) setProviderId(lockedProviderId);
+        }
+    }, [open, defaultAmount, lockedProviderId]);
 
     const amount = Number(amountStr) || 0;
     const note = billRef || (partyName ? `Payment — ${partyName}` : "Payment");
@@ -264,7 +271,7 @@ export function PaymentLinkDialog({
             <DialogContent className="sm:max-w-md">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
-                        <QrCode size={18} /> Share payment link
+                        <QrCode size={18} /> {provider ? `Share ${provider.label} QR` : "Share payment link"}
                     </DialogTitle>
                     <DialogDescription>
                         Show the QR for an in-store scan, or share it as a photo over WhatsApp to collect remotely.
@@ -272,8 +279,8 @@ export function PaymentLinkDialog({
                 </DialogHeader>
 
                 <div className="space-y-3">
-                    {/* Amount + rail */}
-                    <div className="grid grid-cols-[1fr_120px] gap-2">
+                    {/* Amount (+ rail picker, only in the free-choice dialog) */}
+                    <div className={lockedProviderId ? "space-y-1" : "grid grid-cols-[1fr_120px] gap-2"}>
                         <div className="space-y-1">
                             <Label className="text-xs text-muted-foreground">Amount</Label>
                             <Input
@@ -284,21 +291,23 @@ export function PaymentLinkDialog({
                                 className="text-right"
                             />
                         </div>
-                        <div className="space-y-1">
-                            <Label className="text-xs text-muted-foreground">Pay via</Label>
-                            <Select value={providerId} onValueChange={setProviderId}>
-                                <SelectTrigger className="w-full">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {PAYMENT_LINK_PROVIDERS.map((p) => (
-                                        <SelectItem key={p.id} value={p.id} disabled={!p.available(ctx)}>
-                                            {p.label}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
+                        {!lockedProviderId && (
+                            <div className="space-y-1">
+                                <Label className="text-xs text-muted-foreground">Pay via</Label>
+                                <Select value={providerId} onValueChange={setProviderId}>
+                                    <SelectTrigger className="w-full">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {PAYMENT_LINK_PROVIDERS.map((p) => (
+                                            <SelectItem key={p.id} value={p.id} disabled={!p.available(ctx)}>
+                                                {p.label}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
                     </div>
 
                     {/* Rail hint / not-configured notice */}
