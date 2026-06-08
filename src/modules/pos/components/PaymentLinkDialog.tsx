@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import QRCode from "qrcode";
 import { toast } from "sonner";
-import { Copy, Check, Share2, Loader2, QrCode } from "lucide-react";
+import { Copy, Check, MessageCircle, Loader2, QrCode } from "lucide-react";
 
 import {
     Dialog,
@@ -75,6 +75,16 @@ async function composeQrCard(qrDataUrl: string, amountLabel: string, payeeName: 
     );
 }
 
+// WhatsApp wants digits WITH country code, no "+". Default a bare 10-digit Indian
+// mobile to +91 so `web.whatsapp.com/send?phone=` opens the right chat.
+function waNumber(raw: string | null | undefined): string {
+    let d = (raw ?? "").replace(/\D/g, "");
+    if (!d) return "";
+    if (d.length === 10) d = "91" + d;
+    else if (d.length === 11 && d.startsWith("0")) d = "91" + d.slice(1);
+    return d;
+}
+
 // Keep only a positive decimal (no `input type="number"`, per house rule).
 function sanitizeAmount(raw: string): string {
     const cleaned = raw.replace(/[^0-9.]/g, "");
@@ -87,6 +97,7 @@ export function PaymentLinkDialog({
     onOpenChange,
     defaultAmount,
     partyName,
+    partyPhone,
     billRef,
     upiVpa,
 }: {
@@ -94,6 +105,7 @@ export function PaymentLinkDialog({
     onOpenChange: (v: boolean) => void;
     defaultAmount: number;
     partyName?: string | null;
+    partyPhone?: string | null;
     billRef?: string | null;
     /** This counter's UPI VPA (PosCounter.upiVpa); null/empty = not configured. */
     upiVpa?: string | null;
@@ -187,49 +199,63 @@ export function PaymentLinkDialog({
         }
     }
 
-    // Share the pre-built QR IMAGE (not just a link). Called straight from the
-    // click — no `await` before navigator.share()/clipboard.write(), so the
-    // user-gesture activation survives. On a phone the native share sheet lets the
-    // cashier pick WhatsApp → the photo is sent; on desktop Chrome the same Windows
-    // share sheet opens with WhatsApp as a target. Where Web Share for files is
-    // unavailable we fall back to copying the image (paste into WhatsApp Web), then
-    // to a download.
-    function shareQrImage() {
+    const waNum = waNumber(partyPhone);
+
+    // Send the QR to the customer's WhatsApp. Hybrid (targets the number AND sends
+    // the image): copy the pre-built QR photo to the clipboard, then open THIS
+    // customer's WhatsApp Web chat with the amount + link prefilled as the caption —
+    // the cashier pastes the QR (Ctrl+V) and hits Send. The text link rides along so
+    // nothing is lost if the paste is missed. Clipboard + window.open are both called
+    // synchronously in the click so the user-gesture activation survives.
+    function sendOnWhatsApp() {
         const file = shareFile;
         if (!file) return;
         const caption = paymentLinkMessage({ partyName, amountRupees: amount, link, billRef });
+        const chatUrl = waNum
+            ? `https://web.whatsapp.com/send?phone=${waNum}&text=${encodeURIComponent(caption)}`
+            : `https://web.whatsapp.com/send?text=${encodeURIComponent(caption)}`;
 
-        // 1) Web Share API Level 2 — native OS share sheet (incl. WhatsApp).
+        const CI = typeof ClipboardItem !== "undefined" ? ClipboardItem : undefined;
+        if (CI && navigator.clipboard?.write) {
+            // Initiate the image copy (sync, while focused), then open the chat.
+            navigator.clipboard
+                .write([new CI({ "image/png": file })])
+                .then(() =>
+                    toast.success(
+                        waNum
+                            ? "WhatsApp opened — press Ctrl+V to paste the QR, then Send"
+                            : "QR copied — paste it (Ctrl+V) into the chat, then Send",
+                    ),
+                )
+                .catch(() =>
+                    toast.message("Chat opened with the payment link — attach the QR (shown here) manually"),
+                );
+            window.open(chatUrl, "_blank", "noopener,noreferrer");
+            return;
+        }
+
+        // Phones without clipboard-image support: native share sheet sends the photo
+        // (the cashier picks the chat). Number can't be pre-targeted on this path.
         if (navigator.canShare?.({ files: [file] }) && navigator.share) {
             setSharing(true);
             navigator
                 .share({ files: [file], title: "Payment QR", text: caption })
                 .catch((e: { name?: string }) => {
-                    // AbortError = user dismissed the sheet; not a failure.
                     if (e?.name !== "AbortError") toast.error("Couldn't open the share menu");
                 })
                 .finally(() => setSharing(false));
             return;
         }
-        // 2) No file-share (rare): copy the image to paste into a WhatsApp Web chat.
-        const CI = typeof ClipboardItem !== "undefined" ? ClipboardItem : undefined;
-        if (CI && navigator.clipboard?.write) {
-            setSharing(true);
-            navigator.clipboard
-                .write([new CI({ "image/png": file })])
-                .then(() => toast.success("QR image copied — paste it into the WhatsApp chat (Ctrl+V)"))
-                .catch(() => toast.error("Couldn't copy the QR image"))
-                .finally(() => setSharing(false));
-            return;
-        }
-        // 3) Last resort: download the PNG to send manually.
+
+        // Last resort: download the PNG + open the chat to attach it manually.
         const url = URL.createObjectURL(file);
         const a = document.createElement("a");
         a.href = url;
         a.download = file.name;
         a.click();
         URL.revokeObjectURL(url);
-        toast.success("QR image downloaded — share it from your gallery");
+        window.open(chatUrl, "_blank", "noopener,noreferrer");
+        toast.success("QR downloaded — attach it in the WhatsApp chat");
     }
 
     return (
@@ -302,18 +328,19 @@ export function PaymentLinkDialog({
                             {copied ? <Check size={16} /> : <Copy size={16} />} Copy link
                         </Button>
                         <Button
-                            onClick={shareQrImage}
+                            onClick={sendOnWhatsApp}
                             disabled={!canShare || !shareFile || sharing}
-                            className="bg-emerald-600 hover:bg-emerald-700"
+                            className="bg-[#128C7E] hover:bg-[#128C7E]/90 text-white"
                         >
                             {sharing || (canShare && !shareFile)
                                 ? <Loader2 size={16} className="animate-spin" />
-                                : <Share2 size={16} />} Share QR
+                                : <MessageCircle size={16} />} WhatsApp
                         </Button>
                     </div>
                     <p className="text-center text-[11px] text-muted-foreground">
-                        Share QR sends the QR as a photo — pick WhatsApp from the share sheet (on a phone),
-                        or it&apos;s copied so you can paste it into a WhatsApp Web chat.
+                        {waNum
+                            ? <>Opens <span className="font-medium">{partyName || "the customer"}</span>&apos;s WhatsApp &amp; copies the QR — press <span className="font-medium">Ctrl+V</span> to paste it, then Send.</>
+                            : "No phone on file — opens a blank WhatsApp compose; the QR is copied to paste in."}
                     </p>
                 </div>
             </DialogContent>
