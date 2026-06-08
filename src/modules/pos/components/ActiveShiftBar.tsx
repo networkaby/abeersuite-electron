@@ -25,6 +25,8 @@ export type ActiveShift = {
         // Set under /office/admin/counters. Labels override the built-in
         // method name ("UPI", "Card", etc.) on the POS checkout dialog.
         upiAccount:          { id: number; name: string } | null; upiLabel:          string | null;
+        // This counter's UPI VPA for the "Share payment link" QR (null = unset).
+        upiVpa:              string | null;
         cardAccount:         { id: number; name: string } | null; cardLabel:         string | null;
         walletAccount:       { id: number; name: string } | null; walletLabel:       string | null;
         chequeAccount:       { id: number; name: string } | null; chequeLabel:       string | null;

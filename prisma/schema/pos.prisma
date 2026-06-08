@@ -40,6 +40,12 @@ model PosCounter {
   upiAccountId          Int?
   upiAccount            Account? @relation("CounterUpi",          fields: [upiAccountId],          references: [id])
   upiLabel              String?
+  // Per-counter UPI collection ID (VPA), e.g. "networkservice@okhdfcbank".
+  // Drives the "Share payment link" QR + WhatsApp link in POS checkout.
+  // Null/empty = counter has no UPI ID set → the share dialog shows a
+  // "configure UPI ID" hint instead of a link. Set via /office/admin/counters.
+  // Length capped to 60 at the API layer.
+  upiVpa                String?
   cardAccountId         Int?
   cardAccount           Account? @relation("CounterCard",         fields: [cardAccountId],         references: [id])
   cardLabel             String?

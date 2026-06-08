@@ -42,14 +42,12 @@ export type CompanyDetails = {
     };
 
     /**
-     * Business UPI collection identity. Used to build `upi://pay?...` deep links
-     * + QR codes (e.g. POS "share payment link"). Leave `vpa` empty until the real
-     * UPI ID is known — consumers treat an empty VPA as "UPI not configured" and
-     * disable UPI links rather than render a broken QR.
+     * Company-level UPI payee identity. The VPA itself is configured PER COUNTER
+     * (PosCounter.upiVpa, set under /office/admin/counters) so different tills can
+     * collect to different UPI IDs; only the payee *name* shown in the customer's
+     * UPI app is company-level.
      */
     upi: {
-        /** Virtual Payment Address, e.g. "networkservice@okhdfcbank". */
-        vpa: string;
         /** Payee name shown in the customer's UPI app. */
         payeeName: string;
     };
@@ -133,8 +131,7 @@ export const COMPANY_DETAILS: CompanyDetails = {
     },
 
     upi: {
-        vpa: "",                       // e.g. "networkservice@okhdfcbank" — OWNER TO FILL
-        payeeName: "Network Service",
+        payeeName: "Network Service",   // VPA is per-counter — see /office/admin/counters
     },
 
     address: {

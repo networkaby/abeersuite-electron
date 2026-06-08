@@ -25,8 +25,10 @@ import { Label } from "@/components/ui/label";
 
 import {
     PAYMENT_LINK_PROVIDERS,
+    DEFAULT_PAYEE_NAME,
     paymentLinkMessage,
     whatsappWebShareUrl,
+    type PaymentContext,
 } from "@/modules/pos/lib/paymentLink";
 
 const fmtINR = (n: number) =>
@@ -46,6 +48,7 @@ export function PaymentLinkDialog({
     partyName,
     partyPhone,
     billRef,
+    upiVpa,
 }: {
     open: boolean;
     onOpenChange: (v: boolean) => void;
@@ -53,7 +56,13 @@ export function PaymentLinkDialog({
     partyName?: string | null;
     partyPhone?: string | null;
     billRef?: string | null;
+    /** This counter's UPI VPA (PosCounter.upiVpa); null/empty = not configured. */
+    upiVpa?: string | null;
 }) {
+    const ctx: PaymentContext = useMemo(
+        () => ({ upiVpa: upiVpa ?? null, payeeName: DEFAULT_PAYEE_NAME }),
+        [upiVpa],
+    );
     const [providerId, setProviderId] = useState(PAYMENT_LINK_PROVIDERS[0]?.id ?? "");
     const [amountStr, setAmountStr] = useState("");
     const [qr, setQr] = useState<string | null>(null);
@@ -72,10 +81,11 @@ export function PaymentLinkDialog({
     const amount = Number(amountStr) || 0;
     const note = billRef || (partyName ? `Payment — ${partyName}` : "Payment");
 
+    const providerAvailable = !!provider?.available(ctx);
     const link = useMemo(() => {
-        if (!provider?.available || amount <= 0) return "";
-        return provider.build({ amountRupees: amount, note });
-    }, [provider, amount, note]);
+        if (!provider || !provider.available(ctx) || amount <= 0) return "";
+        return provider.build(ctx, { amountRupees: amount, note });
+    }, [provider, ctx, amount, note]);
 
     // Recompute the QR whenever the link changes.
     useEffect(() => {
@@ -150,7 +160,7 @@ export function PaymentLinkDialog({
                                 </SelectTrigger>
                                 <SelectContent>
                                     {PAYMENT_LINK_PROVIDERS.map((p) => (
-                                        <SelectItem key={p.id} value={p.id} disabled={!p.available}>
+                                        <SelectItem key={p.id} value={p.id} disabled={!p.available(ctx)}>
                                             {p.label}
                                         </SelectItem>
                                     ))}
@@ -160,9 +170,9 @@ export function PaymentLinkDialog({
                     </div>
 
                     {/* Rail hint / not-configured notice */}
-                    {provider && !provider.available && (
+                    {provider && !providerAvailable && (
                         <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-                            {provider.hint}
+                            {provider.hint(ctx)}
                         </p>
                     )}
 
@@ -173,9 +183,9 @@ export function PaymentLinkDialog({
                             <img src={qr} alt="Payment QR" width={200} height={200} className="rounded bg-white p-1" />
                         ) : (
                             <div className="flex h-[200px] w-[200px] items-center justify-center text-center text-xs text-muted-foreground">
-                                {provider?.available
+                                {providerAvailable
                                     ? "Enter an amount to generate the QR"
-                                    : "QR appears once UPI is configured"}
+                                    : "QR appears once a UPI ID is set for this counter"}
                             </div>
                         )}
                         {canShare && <div className="text-sm font-semibold">{fmtINR(amount)}</div>}

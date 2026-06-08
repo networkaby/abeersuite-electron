@@ -1396,6 +1396,7 @@ export default function PosScreen({ editId }: { editId?: number }) {
                 defaultAmount={onCredit > 0.01 ? onCredit : total}
                 partyName={snapshot?.party.name}
                 partyPhone={snapshot?.party.phone ?? null}
+                upiVpa={activeShift?.counter.upiVpa ?? null}
             />
 
             {/* Shift drop / close — launched from the header ⋮ menu (OPEN shifts).

@@ -35,6 +35,7 @@ type Counter = {
     isActive: boolean;
     tillAccount: { id: number; name: string; balance: string };
     upiAccount:          MappedAccount; upiLabel:          string | null;
+    upiVpa:              string | null;
     cardAccount:         MappedAccount; cardLabel:         string | null;
     walletAccount:       MappedAccount; walletLabel:       string | null;
     chequeAccount:       MappedAccount; chequeLabel:       string | null;
@@ -60,6 +61,7 @@ const EMPTY_FORM = { branchId: "", name: "" };
 type EditForm = {
     name: string;
     upiAccountId:          number | null; upiLabel:          string;
+    upiVpa:                string;
     cardAccountId:         number | null; cardLabel:         string;
     walletAccountId:       number | null; walletLabel:       string;
     chequeAccountId:       number | null; chequeLabel:       string;
@@ -69,6 +71,7 @@ type EditForm = {
 const EMPTY_EDIT: EditForm = {
     name: "",
     upiAccountId: null, upiLabel: "",
+    upiVpa: "",
     cardAccountId: null, cardLabel: "",
     walletAccountId: null, walletLabel: "",
     chequeAccountId: null, chequeLabel: "",
@@ -137,6 +140,7 @@ export default function CountersAdminPage() {
         setEditForm({
             name: c.name,
             upiAccountId:          c.upiAccount?.id          ?? null, upiLabel:          c.upiLabel          ?? "",
+            upiVpa:                c.upiVpa ?? "",
             cardAccountId:         c.cardAccount?.id         ?? null, cardLabel:         c.cardLabel         ?? "",
             walletAccountId:       c.walletAccount?.id       ?? null, walletLabel:       c.walletLabel       ?? "",
             chequeAccountId:       c.chequeAccount?.id       ?? null, chequeLabel:       c.chequeLabel       ?? "",
@@ -175,6 +179,7 @@ export default function CountersAdminPage() {
             await axios.patch(`/api/pos/counters/${editId}`, {
                 name:                  editForm.name.trim(),
                 upiAccountId:          editForm.upiAccountId,          upiLabel:          editForm.upiLabel.trim()          || null,
+                upiVpa:                editForm.upiVpa.trim()          || null,
                 cardAccountId:         editForm.cardAccountId,         cardLabel:         editForm.cardLabel.trim()         || null,
                 walletAccountId:       editForm.walletAccountId,       walletLabel:       editForm.walletLabel.trim()       || null,
                 chequeAccountId:       editForm.chequeAccountId,       chequeLabel:       editForm.chequeLabel.trim()       || null,
@@ -344,6 +349,20 @@ export default function CountersAdminPage() {
                                                                 </div>
                                                             );
                                                         })}
+                                                    </div>
+                                                    {/* UPI collection ID for the POS "Share payment link" QR /
+                                                        WhatsApp link. Separate from the routing ledger above:
+                                                        the ledger says where a UPI receipt is *booked*, this is
+                                                        the VPA the customer actually *pays into*. */}
+                                                    <div className="grid grid-cols-[90px_1fr] gap-2 items-center pt-1">
+                                                        <span className="text-xs font-medium">UPI ID</span>
+                                                        <Input
+                                                            value={editForm.upiVpa}
+                                                            onChange={(e) => setEditForm((f) => ({ ...f, upiVpa: e.target.value }))}
+                                                            placeholder="name@bank — for the payment-link QR (optional)"
+                                                            className="h-8 text-xs font-mono"
+                                                            maxLength={60}
+                                                        />
                                                     </div>
                                                 </div>
 

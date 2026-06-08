@@ -66,6 +66,7 @@ export async function GET(req: NextRequest) {
                     balance: c.tillAccount.balance.toString(),
                 },
                 upiAccount:          c.upiAccount,          upiLabel:          c.upiLabel,
+                upiVpa:              c.upiVpa,
                 cardAccount:         c.cardAccount,         cardLabel:         c.cardLabel,
                 walletAccount:       c.walletAccount,       walletLabel:       c.walletLabel,
                 chequeAccount:       c.chequeAccount,       chequeLabel:       c.chequeLabel,

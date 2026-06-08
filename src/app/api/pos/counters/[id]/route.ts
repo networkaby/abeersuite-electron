@@ -14,11 +14,16 @@ const accountIdOrClear = z.union([z.number().int().positive(), z.null()]).option
 // Empty string from the form coerces to null — operator wiped the override.
 const labelOrClear     = z.union([z.string().trim().max(30), z.null()]).optional()
     .transform((v) => (typeof v === "string" && v.length === 0) ? null : v);
+// UPI VPA, e.g. "name@bank". Empty → null (cleared). Must look like a VPA otherwise.
+const upiVpaOrClear    = z.union([z.string().trim().max(60), z.null()]).optional()
+    .transform((v) => (typeof v === "string" && v.length === 0) ? null : v)
+    .refine((v) => v == null || /^[\w.\-]+@[\w.\-]+$/.test(v), "Enter a valid UPI ID like name@bank");
 
 const updateSchema = z.object({
     name:                  z.string().trim().min(1).max(60).optional(),
     isActive:              z.boolean().optional(),
     upiAccountId:          accountIdOrClear, upiLabel:          labelOrClear,
+    upiVpa:                upiVpaOrClear,
     cardAccountId:         accountIdOrClear, cardLabel:         labelOrClear,
     walletAccountId:       accountIdOrClear, walletLabel:       labelOrClear,
     chequeAccountId:       accountIdOrClear, chequeLabel:       labelOrClear,
@@ -123,6 +128,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 data: {
                     ...(data.name     !== undefined && { name: data.name }),
                     ...(data.isActive !== undefined && { isActive: data.isActive }),
+                    ...(data.upiVpa   !== undefined && { upiVpa: data.upiVpa }),
                     ...(data.allowedExpenseAccountIds !== undefined && { allowedExpenseAccountIds: data.allowedExpenseAccountIds }),
                     ...mapUpdates,
                     ...labelUpdates,
@@ -151,6 +157,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 balance: updated.tillAccount.balance.toString(),
             },
             upiAccount:          updated.upiAccount,          upiLabel:          updated.upiLabel,
+            upiVpa:              updated.upiVpa,
             cardAccount:         updated.cardAccount,         cardLabel:         updated.cardLabel,
             walletAccount:       updated.walletAccount,       walletLabel:       updated.walletLabel,
             chequeAccount:       updated.chequeAccount,       chequeLabel:       updated.chequeLabel,
