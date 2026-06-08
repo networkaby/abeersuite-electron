@@ -64,7 +64,17 @@ For the milestone log (M1–M26) prior to 2026-05-14, read `git log` or earlier 
 ## 📋 Next up (prioritised)
 
 0. **Order-to-Cash (O2C) redesign — agreed 2026-06-07; Phase 1 SHIPPED.** Full design in [docs/srs/order-to-cash.md](docs/srs/order-to-cash.md), summary in the **🧭 Design: Order-to-Cash** section below. Headline: one **Order backbone** fed by all channels (counter/phone/online/B2B as adapters); **counter Sale = always hand-to-hand**, deferred cases are Orders identical to phone orders; **POS mode-first** (Sale/Order/Estimate on separate pages, frozen POS untouched); **parent Order pipeline + child pipelines** (Delivery/Recovery/Return); **lazy GL ledgers** (account on first transaction); **3-tier lead funnel** (RawLead→Contact→Customer); pluggable **carrier abstraction** (Shiprocket/own-boy/pickup) with rate-shopping. Accountancy engine reused unchanged. **Phase 1 (POS Estimate mode) shipped 2026-06-07** — see Recently shipped. **Next phases:** 2 = stock **reservation** layer (on-hand/reserved/available, per branch); 3 = extract **Order** out of Ecommerce into its own backbone module + POS **Order mode**; 4 = lazy ledger + lead→customer promotion; 5 = **Delivery module + Rate Engine** (own-boy/manual first); 6 = Recovery / Return&Refund pipelines.
-1. **Doc consistency sweep** — keep this file as the only source of status; resist re-adding "shipped" markers to module docs.
+1. **Deal pipeline redesign — match HubSpot stages + document-per-stage + win-probability (agreed 2026-06-08, build pending).** Reshape the Deals pipeline (P6) to MATCH HubSpot's default sales pipeline so the funnel + forecasting mirror the reference CRM:
+   `Appointment Scheduled (20%) → Qualified To Buy (40%) → Presentation Scheduled (60%) → Decision Maker Bought-In (80%) → Contract Sent (90%) → Closed Won (100%)` · `Closed Lost (0%)`.
+   - **Win-probability % per stage** → weighted-pipeline forecast on the board (deal value × stage %), like HubSpot's "Weighted amount".
+   - **Document mapped to stages**, with a **Create [doc]** action on the deal card that **auto-advances** the deal to that stage:
+     - Presentation Scheduled → **Estimate / Quotation** (`POS_ESTIMATE`)
+     - Contract Sent → **Sales Order** (`POS_ORDER`) **+ Proforma Invoice** (a NEW voucher type — invoice-shaped doc to collect an advance; has its own validity/payment-terms, never a GST/tax invoice)
+     - Closed Won → **Tax Invoice** (the Sale)
+   - Schema: add `winProbability Int?` + `documentKind String?` to `TicketStatus`. Keep existing stage IDs **migration-safe** (relabel, don't renumber) so current deals don't break; add new IDs only for genuinely new stages.
+   - Deal stage ≠ documents (HubSpot keeps Quotes a separate object too) — documents link to the deal via `dealId` / `deal.vouchers`, they aren't the stages themselves.
+   - Later: a 2nd **short retail pipeline** (Lead → Quoted → Won/Lost) for walk-ins, since they don't traverse the full B2B funnel.
+2. **Doc consistency sweep** — keep this file as the only source of status; resist re-adding "shipped" markers to module docs.
 2. **`/lab` decision** — promote to a real `/office` module, fold into existing nav, or delete. It currently lives undefined.
 3. **Universal Customer Finder** — build the multi-signal Front Office search: narrow to a customer by **any** clue — name / phone / email / address (✅ done) + product **bought / repaired / inquired / ordered online** + **month / last-active**. Move from client-side merge to one server-side `/api/customers/find` endpoint. Phased; next concrete step is **Phase B — products bought**. Full design, signal inventory, endpoint sketch, and gotchas in the **🧭 Design: Universal Customer Finder** section below.
 
