@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Loader2, RefreshCw, ShoppingCart } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { OrderEditDialog } from "./OrderEditDialog";
 
 // Phase 1 of the O2C order backbone: one board for orders from every channel
 // (counter POS_ORDER / office SALES_ORDER / online ShopOrder), all riding P7.
@@ -33,6 +34,7 @@ export function OrdersBoard() {
     const [orders, setOrders] = useState<OrderCard[]>([]);
     const [loading, setLoading] = useState(true);
     const [dragged, setDragged] = useState<OrderCard | null>(null);
+    const [editingOrderId, setEditingOrderId] = useState<number | null>(null);
 
     const load = useCallback(() => {
         setLoading(true);
@@ -99,6 +101,8 @@ export function OrdersBoard() {
                                         draggable
                                         onDragStart={() => setDragged(o)}
                                         onDragEnd={() => setDragged(null)}
+                                        onClick={() => { if (o.source === "inv") setEditingOrderId(o.id); }}
+                                        title={o.source === "inv" ? "Open / edit order" : undefined}
                                         className="cursor-grab rounded-md border border-border bg-card p-2 text-sm shadow-sm active:cursor-grabbing"
                                     >
                                         <div className="flex items-center justify-between gap-2">
@@ -134,6 +138,13 @@ export function OrdersBoard() {
                     </div>
                 )}
             </div>
+
+            <OrderEditDialog
+                orderId={editingOrderId}
+                open={editingOrderId != null}
+                onClose={() => setEditingOrderId(null)}
+                onSaved={load}
+            />
         </div>
     );
 }
