@@ -35,7 +35,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ source:
         return NextResponse.json({
             id: v.id, ref: v.reference, customer: v.partyName, statusId: v.orderStatusId,
             editable: v.orderStatusId != null && EDITABLE_STAGES.includes(v.orderStatusId),
-            subtotal: toNumber(v.subtotal), taxAmount: toNumber(v.taxAmount), discountAmt: toNumber(v.discountAmt), discountPct: v.discountPct != null ? toNumber(v.discountPct) : null, totalAmount: toNumber(v.totalAmount),
+            subtotal: toNumber(v.subtotal), taxAmount: toNumber(v.taxAmount), discountAmt: v.discountAmt != null ? toNumber(v.discountAmt) : 0, discountPct: v.discountPct != null ? toNumber(v.discountPct) : null, totalAmount: toNumber(v.totalAmount),
             lines: v.lines.map((l) => ({
                 id: l.id, productId: l.productId, description: l.description,
                 quantity: toNumber(l.quantity), rate: toNumber(l.rate), taxRate: toNumber(l.taxRate),

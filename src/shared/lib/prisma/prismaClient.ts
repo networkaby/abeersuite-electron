@@ -56,7 +56,12 @@ function isTransientConnError(e: unknown): boolean {
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-export const prisma = basePrisma.$extends({
+// $extends narrows the return type to DynamicClientExtensionThis (it drops $on/$use
+// etc.), which is NOT assignable to PrismaClient — and dozens of helpers across the
+// codebase are typed to accept PrismaClient. The retry extension only adds runtime
+// behavior on read ops; every model delegate is still present at runtime, so we
+// assert the wrapped client back to PrismaClient. Type-only; no runtime effect.
+export const prisma: PrismaClient = basePrisma.$extends({
     name: "retry-reads-on-conn-drop",
     query: {
         $allModels: {
@@ -76,4 +81,4 @@ export const prisma = basePrisma.$extends({
             },
         },
     },
-});
+}) as unknown as PrismaClient;

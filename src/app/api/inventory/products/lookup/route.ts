@@ -129,6 +129,7 @@ export async function GET(req: NextRequest) {
             sku:               true,
             name:              true,
             stock:             true,
+            reserved:          true,
             lowStockThreshold: true,
             effectiveSalePricePaise: true,
             mrpPaise:          true,
