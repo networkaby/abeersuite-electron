@@ -3,13 +3,16 @@
 import { useCallback, useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Loader2, RefreshCw, Truck } from "lucide-react";
+import { Loader2, RefreshCw, Truck, Pencil } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
 interface Stage { id: string; label: string; color: string; order: number; isTerminal: boolean; isEntryPoint: boolean }
-interface DeliveryCard { id: number; statusId: string | null; carrier: string | null; awb: string | null; orderRef: string; customer: string | null; createdAt: string }
+interface DeliveryCard { id: number; statusId: string | null; carrier: string | null; awb: string | null; trackingUrl: string | null; orderRef: string; customer: string | null; createdAt: string }
 
+const CARRIERS = ["OWN_BOY", "PICKUP", "SHIPROCKET", "DTDC", "MARUTI"] as const;
 const CARRIER_LABEL: Record<string, string> = {
     SHIPROCKET: "Shiprocket", DTDC: "DTDC", MARUTI: "Maruti", OWN_BOY: "Own boy", PICKUP: "Pickup",
 };
@@ -19,6 +22,32 @@ export function DeliveryBoard() {
     const [items, setItems] = useState<DeliveryCard[]>([]);
     const [loading, setLoading] = useState(true);
     const [dragged, setDragged] = useState<DeliveryCard | null>(null);
+    const [editing, setEditing] = useState<DeliveryCard | null>(null);
+    const [form, setForm] = useState<{ carrier: string; awb: string; trackingUrl: string }>({ carrier: "", awb: "", trackingUrl: "" });
+    const [saving, setSaving] = useState(false);
+
+    function openEdit(d: DeliveryCard) {
+        setForm({ carrier: d.carrier ?? "", awb: d.awb ?? "", trackingUrl: d.trackingUrl ?? "" });
+        setEditing(d);
+    }
+    async function saveEdit() {
+        if (!editing) return;
+        setSaving(true);
+        try {
+            await axios.patch(`/api/deliveries/${editing.id}`, {
+                carrier: form.carrier || null,
+                awb: form.awb,
+                trackingUrl: form.trackingUrl,
+            });
+            toast.success("Delivery updated");
+            setEditing(null);
+            load();
+        } catch {
+            toast.error("Couldn't save");
+        } finally {
+            setSaving(false);
+        }
+    }
 
     const load = useCallback(() => {
         setLoading(true);
@@ -81,6 +110,13 @@ export function DeliveryBoard() {
                                         </div>
                                         <div className="mt-0.5 truncate font-medium">{d.customer ?? "Walk-in"}</div>
                                         {d.awb && <div className="text-[10px] text-muted-foreground">AWB {d.awb}</div>}
+                                        <button
+                                            type="button"
+                                            onClick={(e) => { e.stopPropagation(); openEdit(d); }}
+                                            className="mt-1 inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground"
+                                        >
+                                            <Pencil size={10} /> carrier / AWB
+                                        </button>
                                     </div>
                                 ))}
                             </div>
@@ -93,6 +129,41 @@ export function DeliveryBoard() {
                     </div>
                 )}
             </div>
+
+            <Dialog open={!!editing} onOpenChange={(o) => { if (!o) setEditing(null); }}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader><DialogTitle>Delivery — {editing?.orderRef}</DialogTitle></DialogHeader>
+                    <div className="space-y-3">
+                        <div>
+                            <div className="mb-1 text-xs font-medium text-muted-foreground">Carrier</div>
+                            <div className="flex flex-wrap gap-1.5">
+                                {CARRIERS.map((c) => (
+                                    <button
+                                        key={c}
+                                        type="button"
+                                        onClick={() => setForm((f) => ({ ...f, carrier: c }))}
+                                        className={`rounded-md border px-2.5 py-1 text-xs transition-colors ${form.carrier === c ? "border-primary bg-primary/10 font-medium" : "border-border hover:bg-muted"}`}
+                                    >
+                                        {CARRIER_LABEL[c]}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                        <div>
+                            <div className="mb-1 text-xs font-medium text-muted-foreground">AWB / docket number</div>
+                            <Input value={form.awb} onChange={(e) => setForm((f) => ({ ...f, awb: e.target.value }))} placeholder="Tracking / docket number" className="h-9" />
+                        </div>
+                        <div>
+                            <div className="mb-1 text-xs font-medium text-muted-foreground">Tracking URL</div>
+                            <Input value={form.trackingUrl} onChange={(e) => setForm((f) => ({ ...f, trackingUrl: e.target.value }))} placeholder="https://…" className="h-9" />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="ghost" onClick={() => setEditing(null)} disabled={saving}>Cancel</Button>
+                        <Button onClick={() => void saveEdit()} disabled={saving}>{saving ? "Saving…" : "Save"}</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

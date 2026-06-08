@@ -35,6 +35,7 @@ export async function GET() {
                 statusId: d.statusId,
                 carrier: d.carrier,
                 awb: d.awb,
+                trackingUrl: d.trackingUrl,
                 orderRef: inv?.ref ?? `WEB-${d.orderId}`,
                 customer: inv?.customer ?? null,
                 createdAt: d.createdAt.toISOString(),
