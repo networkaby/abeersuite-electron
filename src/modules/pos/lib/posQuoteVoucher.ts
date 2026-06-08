@@ -41,9 +41,15 @@ export type PosQuoteBody = {
     partyPhone?: string | null;
     notes?: string | null;
     date?: string | null;
-    /// Bill-level discount (tier + manual), already computed on the cashier screen.
+    /// Bill-level discount, already computed on the cashier screen. For an ORDER
+    /// this is the FULL discount (tier + loyalty + coupon) so the locked total
+    /// matches the POS sale it will become; for an ESTIMATE it's the tier discount.
     discountAmt?: number | null;
     discountPct?: number | null;
+    /// Shipping + round-off so the saved total matches the cashier screen exactly
+    /// (both flow through the same calcVoucherTotals the POS sale uses).
+    shippingAmt?: number | null;
+    roundOff?: number | null;
     lines: PosQuoteLine[];
 };
 
@@ -84,7 +90,9 @@ export async function createPosQuoteVoucher(opts: {
             : body.discountPct != null && Number(body.discountPct) > 0
                 ? (lineSubtotal * Number(body.discountPct)) / 100
                 : 0;
-    const { subtotal, taxAmount, totalAmount } = calcVoucherTotals(computedLines, 0, overallDiscount, 0, 0);
+    const shippingAmt = Number(body.shippingAmt) || 0;
+    const roundOff = Number(body.roundOff) || 0;
+    const { subtotal, taxAmount, totalAmount } = calcVoucherTotals(computedLines, shippingAmt, overallDiscount, roundOff, 0);
 
     const personId = body.partyType === "customer" && body.partyId ? body.partyId : null;
     const companyId = body.partyType === "company" && body.partyId ? body.partyId : null;
@@ -122,6 +130,8 @@ export async function createPosQuoteVoucher(opts: {
                 deliveryMode: "COUNTER",
                 discountPct: body.discountPct != null ? Number(body.discountPct) : null,
                 discountAmt: overallDiscount > 0 ? overallDiscount : null,
+                shippingAmt,
+                roundOff,
                 subtotal,
                 taxAmount,
                 totalAmount,

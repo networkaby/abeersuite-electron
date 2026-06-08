@@ -735,9 +735,19 @@ export default function PosOrderScreen() {
                 partyName: snapshot.party.name,
                 partyPhone: snapshot.party.phone ?? null,
                 date: today,
-                discountAmt: discountAmount,
+                // Order is LOCKED = its total must equal the POS sale it will become,
+                // so we send the FULL bill discount (tier + loyalty + coupon) plus
+                // shipping + round-off. These ride the same calcVoucherTotals the sale
+                // uses, so server total === the cashier's screen total. (Loyalty/coupon
+                // are RECORDED here and actually redeemed at fulfilment — Phase 2 holds.)
+                discountAmt: totalDiscount,
                 discountPct: discountAmount > 0 ? discountPct : 0,
-                notes: `POS Order (discount ${discountPct}%)${advance > 0 ? ` | Advance ${fmtINR(advance)}` : ""}`,
+                shippingAmt,
+                roundOff,
+                notes: `POS Order — tier ${discountPct}%`
+                    + (effRedeemPts > 0 ? `, loyalty ${effRedeemPts}pts ₹${effRedemptionRupees.toFixed(2)}` : "")
+                    + (appliedCoupon ? `, coupon ${appliedCoupon.code ?? appliedCoupon.name} ₹${couponRupees.toFixed(2)}` : "")
+                    + (advance > 0 ? ` | Advance ${fmtINR(advance)}` : ""),
                 lines: cart.map((l) => ({
                     productId: l.productId,
                     description: `${l.sku} — ${l.name}${l.description ? ` · ${l.description}` : ""}`,
