@@ -107,6 +107,11 @@ export function PaymentLinkDialog({
     const [qr, setQr] = useState<string | null>(null);
     const [copied, setCopied] = useState(false);
     const [sharing, setSharing] = useState(false);
+    // Pre-built share image (File) — kept ready so the Share click can call
+    // navigator.share() SYNCHRONOUSLY. Doing the (async) QR + canvas work inside
+    // the click instead would drop the user-gesture activation and the browser
+    // would refuse the share / clipboard write.
+    const [shareFile, setShareFile] = useState<File | null>(null);
 
     const provider = useMemo(
         () => PAYMENT_LINK_PROVIDERS.find((p) => p.id === providerId) ?? PAYMENT_LINK_PROVIDERS[0],
@@ -146,6 +151,28 @@ export function PaymentLinkDialog({
         };
     }, [link]);
 
+    // Pre-build the high-res share image (the "Scan to Pay" card) whenever the
+    // link/amount/payee change, so the Share click below is synchronous.
+    useEffect(() => {
+        let alive = true;
+        if (!link || amount <= 0) {
+            setShareFile(null);
+            return;
+        }
+        (async () => {
+            try {
+                const hiRes = await QRCode.toDataURL(link, { width: 512, margin: 2, errorCorrectionLevel: "M" });
+                const blob = await composeQrCard(hiRes, fmtINR(amount), ctx.payeeName);
+                if (alive) setShareFile(new File([blob], `payment-qr-${amount.toFixed(2)}.png`, { type: "image/png" }));
+            } catch {
+                if (alive) setShareFile(null);
+            }
+        })();
+        return () => {
+            alive = false;
+        };
+    }, [link, amount, ctx.payeeName]);
+
     const canShare = !!link && amount > 0;
 
     async function copyLink() {
@@ -160,45 +187,49 @@ export function PaymentLinkDialog({
         }
     }
 
-    // Share the QR as an actual IMAGE (not just a link). On mobile the native
-    // share sheet lets the cashier pick WhatsApp → the photo is sent. WhatsApp has
-    // no API to attach media via a URL, so on desktop we fall back to copying the
-    // image (paste into the open WhatsApp Web chat), then to a download.
-    async function shareQrImage() {
-        if (!link || amount <= 0) return;
-        setSharing(true);
-        try {
-            const hiRes = await QRCode.toDataURL(link, { width: 512, margin: 2, errorCorrectionLevel: "M" });
-            const blob = await composeQrCard(hiRes, fmtINR(amount), ctx.payeeName);
-            const file = new File([blob], `payment-qr-${amount.toFixed(2)}.png`, { type: "image/png" });
-            const caption = paymentLinkMessage({ partyName, amountRupees: amount, link, billRef });
+    // Share the pre-built QR IMAGE (not just a link). Called straight from the
+    // click — no `await` before navigator.share()/clipboard.write(), so the
+    // user-gesture activation survives. On a phone the native share sheet lets the
+    // cashier pick WhatsApp → the photo is sent; on desktop Chrome the same Windows
+    // share sheet opens with WhatsApp as a target. Where Web Share for files is
+    // unavailable we fall back to copying the image (paste into WhatsApp Web), then
+    // to a download.
+    function shareQrImage() {
+        const file = shareFile;
+        if (!file) return;
+        const caption = paymentLinkMessage({ partyName, amountRupees: amount, link, billRef });
 
-            // 1) Web Share API Level 2 — native sheet (mobile → WhatsApp sends the photo).
-            if (typeof navigator !== "undefined" && navigator.canShare?.({ files: [file] }) && navigator.share) {
-                await navigator.share({ files: [file], title: "Payment QR", text: caption });
-                return;
-            }
-            // 2) Desktop: copy the image so it can be pasted into a WhatsApp Web chat.
-            const CI = typeof ClipboardItem !== "undefined" ? ClipboardItem : undefined;
-            if (CI && navigator.clipboard?.write) {
-                await navigator.clipboard.write([new CI({ "image/png": blob })]);
-                toast.success("QR image copied — paste it into the WhatsApp chat (Ctrl+V)");
-                return;
-            }
-            // 3) Last resort: download the PNG to send manually.
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = `payment-qr-${amount.toFixed(2)}.png`;
-            a.click();
-            URL.revokeObjectURL(url);
-            toast.success("QR image downloaded — share it from your gallery");
-        } catch (e) {
-            // AbortError = the user dismissed the native share sheet; not a failure.
-            if ((e as { name?: string })?.name !== "AbortError") toast.error("Couldn't share the QR image");
-        } finally {
-            setSharing(false);
+        // 1) Web Share API Level 2 — native OS share sheet (incl. WhatsApp).
+        if (navigator.canShare?.({ files: [file] }) && navigator.share) {
+            setSharing(true);
+            navigator
+                .share({ files: [file], title: "Payment QR", text: caption })
+                .catch((e: { name?: string }) => {
+                    // AbortError = user dismissed the sheet; not a failure.
+                    if (e?.name !== "AbortError") toast.error("Couldn't open the share menu");
+                })
+                .finally(() => setSharing(false));
+            return;
         }
+        // 2) No file-share (rare): copy the image to paste into a WhatsApp Web chat.
+        const CI = typeof ClipboardItem !== "undefined" ? ClipboardItem : undefined;
+        if (CI && navigator.clipboard?.write) {
+            setSharing(true);
+            navigator.clipboard
+                .write([new CI({ "image/png": file })])
+                .then(() => toast.success("QR image copied — paste it into the WhatsApp chat (Ctrl+V)"))
+                .catch(() => toast.error("Couldn't copy the QR image"))
+                .finally(() => setSharing(false));
+            return;
+        }
+        // 3) Last resort: download the PNG to send manually.
+        const url = URL.createObjectURL(file);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = file.name;
+        a.click();
+        URL.revokeObjectURL(url);
+        toast.success("QR image downloaded — share it from your gallery");
     }
 
     return (
@@ -272,10 +303,12 @@ export function PaymentLinkDialog({
                         </Button>
                         <Button
                             onClick={shareQrImage}
-                            disabled={!canShare || sharing}
+                            disabled={!canShare || !shareFile || sharing}
                             className="bg-emerald-600 hover:bg-emerald-700"
                         >
-                            {sharing ? <Loader2 size={16} className="animate-spin" /> : <Share2 size={16} />} Share QR
+                            {sharing || (canShare && !shareFile)
+                                ? <Loader2 size={16} className="animate-spin" />
+                                : <Share2 size={16} />} Share QR
                         </Button>
                     </div>
                     <p className="text-center text-[11px] text-muted-foreground">
