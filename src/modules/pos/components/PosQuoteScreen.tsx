@@ -8,7 +8,7 @@ import Link from "next/link";
 import {
     Search, X, User, Phone, Mail, Award, TrendingUp, Clock,
     ShoppingCart, Plus, Minus, Trash2, ArrowLeft, ExternalLink,
-    Banknote, Wallet, CreditCard, Smartphone, Building2, FileText, UserPlus,
+    Banknote, Wallet, CreditCard, Building2, UserPlus,
     MapPin, Star, Sparkles, AlertCircle, TrendingDown, Tag,
     ReceiptIndianRupee, Check, RotateCcw, ChevronDown, ChevronRight, HelpCircle, HandCoins,
     RefreshCw, Lock, ArrowRightLeft, Monitor, MoreVertical,
@@ -24,9 +24,6 @@ import { Badge } from "@/components/ui/badge";
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
-import {
-    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
 import {
     DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
     DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator,
@@ -44,6 +41,7 @@ import { ShiftCloseDialog } from "@/modules/pos/components/ShiftCloseDialog";
 import { PosReturnDialog } from "@/modules/pos/components/PosReturnDialog";
 import { PosExpenditureDialog } from "@/modules/pos/components/PosExpenditureDialog";
 import { PosReceiptDialog } from "@/modules/pos/components/PosReceiptDialog";
+import { TenderSplitInput, seedTenderSplit, type TenderSplit } from "@/modules/pos/components/TenderSplitInput";
 import { PosModeSwitch } from "@/modules/pos/components/PosModeSwitch";
 import { qrDisplay } from "@/modules/pos/lib/qrDisplay";
 import { computePriceLadder } from "@/modules/pos/lib/priceLadder";
@@ -121,17 +119,6 @@ type CartLine = {
     redeemCapPct?: number | null;
 };
 
-// A non-cash advance split — picks one of the counter's payment accounts.
-type Split = { id: string; paymentAccountId: number; amount: number; reference: string };
-
-const CHANNEL_ICON: Record<string, React.ReactNode> = {
-    UPI:           <Smartphone size={14} />,
-    CARD:          <CreditCard size={14} />,
-    CHEQUE:        <FileText size={14} />,
-    WALLET:        <Wallet size={14} />,
-    BANK_TRANSFER: <Building2 size={14} />,
-    GATEWAY:       <CreditCard size={14} />,
-};
 
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -224,7 +211,7 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
     // UPI, and Credit (auto-balanced). No method dropdown, no UPI ref.
     const [checkoutOpen, setCheckoutOpen] = useState(false);
     const [pay, setPay] = useState({ cashTendered: 0, cashReturn: 0 });
-    const [splits, setSplits] = useState<Split[]>([]);
+    const [splits, setSplits] = useState<TenderSplit[]>([]);
     const [submitting, setSubmitting] = useState(false);
     const cashTenderedRef = useRef<HTMLInputElement>(null);
 
@@ -891,7 +878,7 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
     const cashNet = Math.max(0, pay.cashTendered - pay.cashReturn);
     const splitsSum = splits.reduce((s, x) => s + x.amount, 0);
     const upiEntered = splits.reduce(
-        (s, x) => s + (payAccountById.get(x.paymentAccountId)?.channel === "UPI" ? x.amount : 0),
+        (s, x) => s + (payAccountById.get(x.paymentAccountId ?? -1)?.channel === "UPI" ? x.amount : 0),
         0,
     );
     const collected = cashNet + splitsSum;
@@ -1799,47 +1786,12 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
                                     {/* Non-cash advance splits — each picks a counter payment
                                         account (UPI 1 → HDFC, UPI 2 → SBI, Card…). The chosen
                                         account's ledger is where the advance Receipt is booked. */}
-                                    {splits.map((s) => (
-                                        <div key={s.id} className="grid grid-cols-[170px_1fr_1fr_auto] items-center gap-2">
-                                            <Select
-                                                value={String(s.paymentAccountId)}
-                                                onValueChange={(v) => setSplits((prev) => prev.map((x) => x.id === s.id ? { ...x, paymentAccountId: Number(v) } : x))}
-                                            >
-                                                <SelectTrigger>
-                                                    <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {payAccounts.map((a) => (
-                                                        <SelectItem key={a.id} value={String(a.id)}>
-                                                            <span className="flex items-center gap-2">{CHANNEL_ICON[a.channel]} {a.label}</span>
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                            <Input
-                                                value={s.amount || ""}
-                                                onChange={(ev) => setSplits((prev) => prev.map((x) => x.id === s.id ? { ...x, amount: Number(ev.target.value) || 0 } : x))}
-                                                onKeyDown={enterToSubmit}
-                                                placeholder="₹ amount"
-                                                className="text-right"
-                                                inputMode="decimal"
-                                            />
-                                            <Input
-                                                value={s.reference}
-                                                onChange={(ev) => setSplits((prev) => prev.map((x) => x.id === s.id ? { ...x, reference: ev.target.value } : x))}
-                                                onKeyDown={enterToSubmit}
-                                                placeholder="Ref / last-4"
-                                            />
-                                            <Button
-                                                variant="ghost"
-                                                size="icon-sm"
-                                                onClick={() => setSplits((prev) => prev.filter((x) => x.id !== s.id))}
-                                                title="Remove"
-                                            >
-                                                <Trash2 size={12} className="text-destructive" />
-                                            </Button>
-                                        </div>
-                                    ))}
+                                    <TenderSplitInput
+                                        accounts={payAccounts}
+                                        value={splits}
+                                        onChange={setSplits}
+                                        onEnter={enterToSubmit}
+                                    />
 
                                     {/* Credit — readonly, auto-balanced */}
                                     <div className="grid grid-cols-[80px_1fr] items-center gap-2">
@@ -1860,10 +1812,9 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
                                             disabled={payAccounts.length === 0}
                                             title={payAccounts.length === 0 ? "This counter only accepts Cash. Add payment accounts under /office/admin/counters." : undefined}
                                             onClick={() => {
-                                                const seed = payAccounts[0]?.id;
-                                                if (!seed) return;
+                                                if (payAccounts.length === 0) return;
                                                 const remaining = Math.max(0, +(payableTotal - collected).toFixed(2));
-                                                setSplits((prev) => [...prev, { id: crypto.randomUUID(), paymentAccountId: seed, amount: remaining, reference: "" }]);
+                                                setSplits((prev) => [...prev, seedTenderSplit(payAccounts, remaining)]);
                                             }}
                                         >
                                             <Plus size={14} /> Add payment line

@@ -8,10 +8,10 @@ import Link from "next/link";
 import {
     Search, X, User, Phone, Mail, Award, TrendingUp, Clock,
     ShoppingCart, Plus, Minus, Trash2, ArrowLeft, ExternalLink,
-    Banknote, Wallet, CreditCard, Smartphone, Building2, FileText, UserPlus,
+    Banknote, Wallet, CreditCard, Building2, UserPlus,
     MapPin, Star, Sparkles, AlertCircle, TrendingDown, Tag,
     ReceiptIndianRupee, Check, RotateCcw, ChevronDown, ChevronRight, HelpCircle, HandCoins,
-    RefreshCw, Lock, ArrowRightLeft, Monitor, MoreVertical, QrCode,
+    RefreshCw, Lock, ArrowRightLeft, Monitor, MoreVertical,
 } from "lucide-react";
 import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/components/GlAccountCombobox";
 import { calcVoucherTotals, calcLineTotals } from "@/modules/inventory/lib/stock";
@@ -24,9 +24,6 @@ import { Badge } from "@/components/ui/badge";
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
-import {
-    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
 import {
     DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
     DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator,
@@ -45,6 +42,7 @@ import { PosReturnDialog } from "@/modules/pos/components/PosReturnDialog";
 import { PosExpenditureDialog } from "@/modules/pos/components/PosExpenditureDialog";
 import { PosReceiptDialog } from "@/modules/pos/components/PosReceiptDialog";
 import { PaymentLinkDialog } from "@/modules/pos/components/PaymentLinkDialog";
+import { TenderSplitInput, seedTenderSplit, type TenderSplit } from "@/modules/pos/components/TenderSplitInput";
 import { PosModeSwitch } from "@/modules/pos/components/PosModeSwitch";
 import { qrDisplay } from "@/modules/pos/lib/qrDisplay";
 import { computePriceLadder } from "@/modules/pos/lib/priceLadder";
@@ -120,20 +118,6 @@ type CartLine = {
     /// Loyalty redeem-cap override (% redeemable with points; null = global cap).
     /// Snapshotted so the redeem ceiling matches the server's at checkout.
     redeemCapPct?: number | null;
-};
-
-// A non-cash payment split — picks one of the counter's payment accounts
-// (paymentAccountId) for its amount. Cash is the separate fixed row (the till).
-type Split = { id: string; paymentAccountId: number; amount: number; reference: string };
-
-// Icon per counter payment channel (for the account picker rows).
-const CHANNEL_ICON: Record<string, React.ReactNode> = {
-    UPI:           <Smartphone size={14} />,
-    CARD:          <CreditCard size={14} />,
-    CHEQUE:        <FileText size={14} />,
-    WALLET:        <Wallet size={14} />,
-    BANK_TRANSFER: <Building2 size={14} />,
-    GATEWAY:       <CreditCard size={14} />,
 };
 
 
@@ -217,7 +201,7 @@ export default function PosScreen({ editId }: { editId?: number }) {
     const [shareProvider, setShareProvider] = useState<string>("upi");
     const [shareVpa, setShareVpa] = useState<string | null>(null);
     const [pay, setPay] = useState({ cashTendered: 0, cashReturn: 0 });
-    const [splits, setSplits] = useState<Split[]>([]);
+    const [splits, setSplits] = useState<TenderSplit[]>([]);
     const [submitting, setSubmitting] = useState(false);
     const cashTenderedRef = useRef<HTMLInputElement>(null);
 
@@ -802,7 +786,7 @@ export default function PosScreen({ editId }: { editId?: number }) {
         }
         for (const s of splits) {
             if (s.amount <= 0) continue;
-            const label = payAccountById.get(s.paymentAccountId)?.label ?? "Payment";
+            const label = payAccountById.get(s.paymentAccountId ?? -1)?.label ?? "Payment";
             summaryParts.push(`${label} ${fmtINR(s.amount)}${s.reference ? ` (${s.reference})` : ""}`);
         }
         if (onCredit > 0) summaryParts.push(`On credit ${fmtINR(onCredit)}`);
@@ -987,8 +971,8 @@ export default function PosScreen({ editId }: { editId?: number }) {
                             cashPaid:   overpaid > 0 ? 0 : cashNet,
                             upiPaid:    overpaid > 0 ? 0 : upiEntered,
                             extrasPaid: overpaid > 0 ? [] : splits
-                                .filter((s) => s.amount > 0 && payAccountById.get(s.paymentAccountId)?.channel !== "UPI")
-                                .map((s) => ({ method: payAccountById.get(s.paymentAccountId)?.label ?? "Other", amount: s.amount, reference: s.reference })),
+                                .filter((s) => s.amount > 0 && payAccountById.get(s.paymentAccountId ?? -1)?.channel !== "UPI")
+                                .map((s) => ({ method: payAccountById.get(s.paymentAccountId ?? -1)?.label ?? "Other", amount: s.amount, reference: s.reference })),
                             // "Today's discount" ladder (additive).
                             grossAtTag:  printLadder.barcodeTotal,
                             discounts:   printLadder.discounts.map((d) => ({ label: d.label, amount: d.amount })),
@@ -1005,7 +989,7 @@ export default function PosScreen({ editId }: { editId?: number }) {
                         if (cashNet > 0) rcvTenders.push({ label: "Cash", amount: cashNet });
                         for (const s of splits) {
                             if (s.amount <= 0) continue;
-                            rcvTenders.push({ label: payAccountById.get(s.paymentAccountId)?.label ?? "Payment", amount: s.amount });
+                            rcvTenders.push({ label: payAccountById.get(s.paymentAccountId ?? -1)?.label ?? "Payment", amount: s.amount });
                         }
                         fetch("http://localhost:9191/print/payment", {
                             method: "POST",
@@ -1044,7 +1028,7 @@ export default function PosScreen({ editId }: { editId?: number }) {
     const splitsSum = splits.reduce((s, x) => s + x.amount, 0);
     // Total entered against UPI-channel accounts — drives the customer-display QR.
     const upiEntered = splits.reduce(
-        (s, x) => s + (payAccountById.get(x.paymentAccountId)?.channel === "UPI" ? x.amount : 0),
+        (s, x) => s + (payAccountById.get(x.paymentAccountId ?? -1)?.channel === "UPI" ? x.amount : 0),
         0,
     );
     const collected = cashNet + splitsSum;
@@ -1974,63 +1958,13 @@ export default function PosScreen({ editId }: { editId?: number }) {
                                         payment accounts (UPI 1 → HDFC, UPI 2 → SBI, Card…). The chosen
                                         account sets the ledger debited; UPI/gateway accounts show a
                                         Share button that builds the QR from that account's VPA. */}
-                                    {splits.map((s) => {
-                                        const acct = payAccountById.get(s.paymentAccountId);
-                                        const canShare = !!acct?.vpa && (acct.channel === "UPI" || acct.channel === "GATEWAY");
-                                        return (
-                                            <div key={s.id} className="grid grid-cols-[170px_1fr_1fr_auto] items-center gap-2">
-                                                <Select
-                                                    value={String(s.paymentAccountId)}
-                                                    onValueChange={(v) => setSplits((prev) => prev.map((x) => x.id === s.id ? { ...x, paymentAccountId: Number(v) } : x))}
-                                                >
-                                                    <SelectTrigger>
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        {payAccounts.map((a) => (
-                                                            <SelectItem key={a.id} value={String(a.id)}>
-                                                                <span className="flex items-center gap-2">{CHANNEL_ICON[a.channel]} {a.label}</span>
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                                <Input
-                                                    value={s.amount || ""}
-                                                    onChange={(ev) => setSplits((prev) => prev.map((x) => x.id === s.id ? { ...x, amount: Number(ev.target.value) || 0 } : x))}
-                                                    onKeyDown={enterToSubmit}
-                                                    placeholder="₹ amount"
-                                                    className="text-right"
-                                                    inputMode="decimal"
-                                                />
-                                                {canShare ? (
-                                                    <Button
-                                                        type="button"
-                                                        variant="outline"
-                                                        size="sm"
-                                                        title={`Share ${acct?.label} QR with the customer`}
-                                                        onClick={() => { setShareProvider("upi"); setShareVpa(acct?.vpa ?? null); setShareOpen(true); }}
-                                                    >
-                                                        <QrCode size={14} /> Share
-                                                    </Button>
-                                                ) : (
-                                                    <Input
-                                                        value={s.reference}
-                                                        onChange={(ev) => setSplits((prev) => prev.map((x) => x.id === s.id ? { ...x, reference: ev.target.value } : x))}
-                                                        onKeyDown={enterToSubmit}
-                                                        placeholder="Ref / last-4"
-                                                    />
-                                                )}
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon-sm"
-                                                    onClick={() => setSplits((prev) => prev.filter((x) => x.id !== s.id))}
-                                                    title="Remove"
-                                                >
-                                                    <Trash2 size={12} className="text-destructive" />
-                                                </Button>
-                                            </div>
-                                        );
-                                    })}
+                                    <TenderSplitInput
+                                        accounts={payAccounts}
+                                        value={splits}
+                                        onChange={setSplits}
+                                        onShare={(a) => { setShareProvider("upi"); setShareVpa(a.vpa); setShareOpen(true); }}
+                                        onEnter={enterToSubmit}
+                                    />
 
                                     {/* Credit — readonly, auto-balanced */}
                                     <div className="grid grid-cols-[80px_1fr] items-center gap-2">
@@ -2051,10 +1985,9 @@ export default function PosScreen({ editId }: { editId?: number }) {
                                             disabled={payAccounts.length === 0}
                                             title={payAccounts.length === 0 ? "This counter only accepts Cash. Add payment accounts under /office/admin/counters." : undefined}
                                             onClick={() => {
-                                                const seed = payAccounts[0]?.id;
-                                                if (!seed) return;
+                                                if (payAccounts.length === 0) return;
                                                 const remaining = Math.max(0, +(payableTotal - collected).toFixed(2));
-                                                setSplits((prev) => [...prev, { id: crypto.randomUUID(), paymentAccountId: seed, amount: remaining, reference: "" }]);
+                                                setSplits((prev) => [...prev, seedTenderSplit(payAccounts, remaining)]);
                                             }}
                                         >
                                             <Plus size={14} /> Add payment line

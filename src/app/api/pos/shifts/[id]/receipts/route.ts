@@ -18,12 +18,14 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { postReceiptVoucher } from "@/modules/accountancy/lib/postReceiptVoucher";
 
 const receiptSchema = z.object({
-    amountPaise: z.number().int().positive(),
-    accountId:   z.number().int().positive(),   // party AR ledger to credit
-    // Where the money was received: null/absent = CASH (the counter till); else one
-    // of the counter's payment accounts (UPI/Card/…) → its ledger is debited.
-    paymentAccountId: z.number().int().positive().nullish(),
-    note:        z.string().trim().max(200).optional(),
+    accountId: z.number().int().positive(),   // party AR ledger to credit
+    // One debit leg per tender. paymentAccountId null = CASH (the counter till);
+    // else one of the counter's payment accounts (UPI/Card/…) → its ledger.
+    tenders: z.array(z.object({
+        paymentAccountId: z.number().int().positive().nullable(),
+        amountPaise:      z.number().int().positive(),
+    })).min(1, "At least one tender is required"),
+    note: z.string().trim().max(200).optional(),
 });
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -65,22 +67,25 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         });
         if (!party) return NextResponse.json({ error: "Party account not found" }, { status: 404 });
 
-        // Resolve where the money landed: CASH (till) by default, else the chosen
-        // counter payment account's ledger (e.g. a UPI receipt debits the UPI bank).
-        let tenderAccountId = shift.counter.tillAccountId;
-        let tenderLabel = `Cash at ${shift.counter.name}`;
-        if (data.paymentAccountId != null) {
-            const acct = shift.counter.paymentAccounts.find((a) => a.id === data.paymentAccountId);
+        // Resolve each tender → its debit ledger: CASH = the counter till; else the
+        // chosen counter payment account (e.g. a UPI receipt debits the UPI bank).
+        const payAcctById = new Map(shift.counter.paymentAccounts.map((a) => [a.id, a]));
+        const tenders: { accountId: number; amount: number; description: string }[] = [];
+        for (const t of data.tenders) {
+            if (t.paymentAccountId == null) {
+                tenders.push({ accountId: shift.counter.tillAccountId, amount: t.amountPaise / 100, description: `Cash at ${shift.counter.name}` });
+                continue;
+            }
+            const acct = payAcctById.get(t.paymentAccountId);
             if (!acct) return NextResponse.json({ error: "That payment account isn't on this counter.", code: "PAYMENT_METHOD_NOT_MAPPED" }, { status: 422 });
-            tenderAccountId = acct.accountId;
-            tenderLabel = `${acct.label} at ${shift.counter.name}`;
+            tenders.push({ accountId: acct.accountId, amount: t.amountPaise / 100, description: `${acct.label} at ${shift.counter.name}` });
         }
+        const totalPaise = data.tenders.reduce((s, t) => s + t.amountPaise, 0);
 
-        const rupees = data.amountPaise / 100;
         const result = await prisma.$transaction(async (tx) => {
             const r = await postReceiptVoucher(tx, {
                 customerAccountId: party.id,
-                tenders:   [{ accountId: tenderAccountId, amount: rupees, description: tenderLabel }],
+                tenders,
                 date:      new Date(),
                 userId:    user!.id,
                 branchId:  shift.branchId,
@@ -90,7 +95,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             await tx.posReceipt.create({
                 data: {
                     shiftId,
-                    amountPaise: BigInt(data.amountPaise),
+                    amountPaise: BigInt(totalPaise),
                     accountId:   party.id,
                     note:        data.note ?? null,
                     voucherId:   r.voucherId,
@@ -101,7 +106,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         });
 
         return NextResponse.json(
-            { voucherId: result.voucherId, voucherRef: result.voucherRef, amountPaise: String(data.amountPaise) },
+            { voucherId: result.voucherId, voucherRef: result.voucherRef, amountPaise: String(totalPaise) },
             { status: 201 },
         );
     } catch (e) {
