@@ -121,16 +121,17 @@ type CartLine = {
     redeemCapPct?: number | null;
 };
 
-// Extras = Card / Cheque / Bank Transfer / Wallet (Cash / UPI / Credit are fixed rows)
-type ExtraMethod = "CARD" | "CHEQUE" | "BANK_TRANSFER" | "WALLET";
-type ExtraSplit = { id: string; method: ExtraMethod; amount: number; reference: string };
+// A non-cash advance split — picks one of the counter's payment accounts.
+type Split = { id: string; paymentAccountId: number; amount: number; reference: string };
 
-const EXTRA_METHODS: { value: ExtraMethod; label: string; icon: React.ReactNode }[] = [
-    { value: "CARD", label: "Card", icon: <CreditCard size={14} /> },
-    { value: "CHEQUE", label: "Cheque", icon: <FileText size={14} /> },
-    { value: "BANK_TRANSFER", label: "Bank transfer", icon: <Building2 size={14} /> },
-    { value: "WALLET", label: "Wallet", icon: <Wallet size={14} /> },
-];
+const CHANNEL_ICON: Record<string, React.ReactNode> = {
+    UPI:           <Smartphone size={14} />,
+    CARD:          <CreditCard size={14} />,
+    CHEQUE:        <FileText size={14} />,
+    WALLET:        <Wallet size={14} />,
+    BANK_TRANSFER: <Building2 size={14} />,
+    GATEWAY:       <CreditCard size={14} />,
+};
 
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -222,11 +223,10 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
     // Fixed three-row checkout: Cash (with a separate "return" sub-input),
     // UPI, and Credit (auto-balanced). No method dropdown, no UPI ref.
     const [checkoutOpen, setCheckoutOpen] = useState(false);
-    const [pay, setPay] = useState({ cashTendered: 0, cashReturn: 0, upi: 0 });
-    const [extras, setExtras] = useState<ExtraSplit[]>([]);
+    const [pay, setPay] = useState({ cashTendered: 0, cashReturn: 0 });
+    const [splits, setSplits] = useState<Split[]>([]);
     const [submitting, setSubmitting] = useState(false);
     const cashTenderedRef = useRef<HTMLInputElement>(null);
-    const upiAmountRef = useRef<HTMLInputElement>(null);
 
     // ── Cart-level adjustments (shipping / round-off / charges) ────────────
     // Mirrors office SALE (TradingVoucherPage). Hidden behind a collapsible
@@ -302,44 +302,14 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
         refreshActiveShift();
     }, [refreshActiveShift]);
 
-    // Accepted non-cash methods are derived from the active shift's counter
-    // (each counter wires UPI / Card / Wallet / Cheque / Bank Transfer to a
-    // specific ledger under /office/admin/counters). Null mapping = method
-    // not accepted at this counter → hidden in checkout. Cash is always
-    // accepted (routes to till).
-    const counterMethods = useMemo(() => {
-        const c = activeShift?.counter;
-        return {
-            upi: c?.upiAccount ?? null,
-            card: c?.cardAccount ?? null,
-            wallet: c?.walletAccount ?? null,
-            cheque: c?.chequeAccount ?? null,
-            bankTransfer: c?.bankTransferAccount ?? null,
-        };
-    }, [activeShift]);
-    // Counter-supplied custom labels — "PhonePe", "HDFC POS Terminal", etc.
-    // Falls back to the built-in label in EXTRA_METHODS / the UPI fixed row.
-    const upiLabel = activeShift?.counter.upiLabel?.trim() || "UPI";
-    // Build the extras list with per-method label overrides applied so the
-    // cashier sees the operator's wording in the picker.
-    const allowedExtras = useMemo(() => EXTRA_METHODS
-        .filter((m) => {
-            if (m.value === "CARD") return counterMethods.card != null;
-            if (m.value === "WALLET") return counterMethods.wallet != null;
-            if (m.value === "CHEQUE") return counterMethods.cheque != null;
-            if (m.value === "BANK_TRANSFER") return counterMethods.bankTransfer != null;
-            return false;
-        })
-        .map((m) => {
-            const c = activeShift?.counter;
-            const override =
-                m.value === "CARD" ? c?.cardLabel :
-                    m.value === "WALLET" ? c?.walletLabel :
-                        m.value === "CHEQUE" ? c?.chequeLabel :
-                            m.value === "BANK_TRANSFER" ? c?.bankTransferLabel : null;
-            const trimmed = override?.trim();
-            return trimmed ? { ...m, label: trimmed } : m;
-        }), [counterMethods, activeShift]);
+    // The counter's non-cash payment accounts, configured under
+    // /office/admin/counters. Each advance split picks one; its accountId is the
+    // ledger the advance Receipt is booked to. Cash routes to till (not listed).
+    const payAccounts = useMemo(() => activeShift?.counter.paymentAccounts ?? [], [activeShift]);
+    const payAccountById = useMemo(
+        () => new Map(payAccounts.map((a) => [a.id, a])),
+        [payAccounts],
+    );
 
     // ── Effects ─────────────────────────────────────────────────────────────
 
@@ -774,8 +744,8 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
         if (!snapshot?.account) { toast.error("Pick a customer first"); return; }
         if (cart.length === 0) { toast.error("Cart is empty"); return; }
         if (cart.some((l) => l.unitPrice <= 0)) { toast.error("All lines need a unit price"); return; }
-        setPay({ cashTendered: 0, cashReturn: 0, upi: 0 });
-        setExtras([]);
+        setPay({ cashTendered: 0, cashReturn: 0 });
+        setSplits([]);
         setCheckoutOpen(true);
         setTimeout(() => cashTenderedRef.current?.focus(), 50);
     };
@@ -821,15 +791,13 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
         // Order = OPTIONAL advance. Build payment tenders from the checkout dialog
         // (may be empty → no receipt voucher), mirroring the POS sale tender shape.
         // Estimate never collects payment, so its tender list stays empty.
-        type PayLine = { method: "CASH" | "MOBILE_PAYMENT" | "BANK_TRANSFER" | "CARD" | "CHEQUE" | "OTHER"; amount: number; reference?: string };
+        type PayLine = { paymentAccountId: number | null; amount: number; reference?: string };
         const paymentsList: PayLine[] = [];
         if (mode === "order") {
-            if (cashNet > 0) paymentsList.push({ method: "CASH", amount: cashNet });
-            if (pay.upi > 0) paymentsList.push({ method: "MOBILE_PAYMENT", amount: pay.upi });
-            for (const e of extras) {
-                if (e.amount <= 0) continue;
-                const method = e.method === "WALLET" ? "OTHER" : e.method;
-                paymentsList.push({ method, amount: e.amount, reference: e.reference || undefined });
+            if (cashNet > 0) paymentsList.push({ paymentAccountId: null, amount: cashNet });
+            for (const s of splits) {
+                if (s.amount <= 0) continue;
+                paymentsList.push({ paymentAccountId: s.paymentAccountId, amount: s.amount, reference: s.reference || undefined });
             }
         }
         const advance = paymentsList.reduce((s, p) => s + p.amount, 0);
@@ -890,8 +858,8 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
             }
             void qrDisplay.idle();
             setCart([]);
-            setPay({ cashTendered: 0, cashReturn: 0, upi: 0 });
-            setExtras([]);
+            setPay({ cashTendered: 0, cashReturn: 0 });
+            setSplits([]);
             setShippingAmtStr("");
             setRedeemPointsStr("");
             setRedeemOn(false);
@@ -920,8 +888,12 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
 
     // Money math derived from pay — Cash net = tendered − return.
     const cashNet = Math.max(0, pay.cashTendered - pay.cashReturn);
-    const extrasSum = extras.reduce((s, e) => s + e.amount, 0);
-    const collected = cashNet + pay.upi + extrasSum;
+    const splitsSum = splits.reduce((s, x) => s + x.amount, 0);
+    const upiEntered = splits.reduce(
+        (s, x) => s + (payAccountById.get(x.paymentAccountId)?.channel === "UPI" ? x.amount : 0),
+        0,
+    );
+    const collected = cashNet + splitsSum;
     const onCredit = Math.max(0, payableTotal - collected);
     const overpaid = Math.max(0, collected - payableTotal);
     const balanceDue = snapshot?.balanceDue ?? 0;
@@ -946,12 +918,12 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
         if (displayHold === "thankyou") return;
 
         const timer = setTimeout(() => {
-            if (checkoutOpen && pay.upi > 0) {
+            if (checkoutOpen && upiEntered > 0) {
                 void qrDisplay.upi({
-                    amount: pay.upi,
-                    caption: `Pay ₹${pay.upi.toFixed(2)} via UPI`,
+                    amount: upiEntered,
+                    caption: `Pay ₹${upiEntered.toFixed(2)} via UPI`,
                 });
-            } else if (checkoutOpen && (cashNet > 0 || extrasSum > 0)) {
+            } else if (checkoutOpen && (cashNet > 0 || splitsSum > 0)) {
                 void qrDisplay.payment({
                     total: payableTotal,
                     cashPaid: cashNet,
@@ -1014,7 +986,7 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
         return () => clearTimeout(timer);
     }, [
         displayHold, checkoutOpen, cart, snapshot,
-        cashNet, pay.upi, extrasSum, collected,
+        cashNet, upiEntered, splitsSum, collected,
         subtotal, discountAmount, total,
         totalDiscount, effDiscountAmount, effRedemptionRupees, couponRupees,
     ]);
@@ -1788,7 +1760,7 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
                                                 type="button"
                                                 title="Fill remaining amount in cash"
                                                 onClick={() => {
-                                                    const remaining = Math.max(0, +(payableTotal - pay.upi - extrasSum).toFixed(2));
+                                                    const remaining = Math.max(0, +(payableTotal - splitsSum).toFixed(2));
                                                     setPay((s) => ({ ...s, cashTendered: remaining, cashReturn: 0 }));
                                                     setTimeout(() => cashTenderedRef.current?.select(), 0);
                                                 }}
@@ -1822,74 +1794,44 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
                                         </div>
                                     )}
 
-                                    {/* UPI — only shown when this counter accepts UPI.
-                                        Counter may override the label (e.g. "PhonePe"). */}
-                                    {counterMethods.upi && (
-                                        <div className="grid grid-cols-[80px_1fr] items-center gap-2">
-                                            <Label className="flex items-center gap-1 text-xs">
-                                                <Smartphone size={12} /> {upiLabel}
-                                                <button
-                                                    type="button"
-                                                    title={`Fill remaining amount in ${upiLabel}`}
-                                                    onClick={() => {
-                                                        const remaining = Math.max(0, +(payableTotal - cashNet - extrasSum).toFixed(2));
-                                                        setPay((s) => ({ ...s, upi: remaining }));
-                                                        setTimeout(() => upiAmountRef.current?.select(), 0);
-                                                    }}
-                                                    className="ml-0.5 rounded-full text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 p-0.5 transition-colors"
-                                                >
-                                                    <Check size={11} strokeWidth={2.5} />
-                                                </button>
-                                            </Label>
-                                            <Input
-                                                ref={upiAmountRef}
-                                                value={pay.upi || ""}
-                                                onChange={(e) => setPay((s) => ({ ...s, upi: Number(e.target.value) || 0 }))}
-                                                onKeyDown={enterToSubmit}
-                                                placeholder="₹ amount"
-                                                inputMode="decimal"
-                                                className="text-right"
-                                            />
-                                        </div>
-                                    )}
-
-                                    {/* Extras — Card / Cheque / Bank Transfer / Wallet (added on demand,
-                                        only methods mapped on this counter appear in the picker) */}
-                                    {extras.map((e) => (
-                                        <div key={e.id} className="grid grid-cols-[160px_1fr_1fr_auto] items-center gap-2">
+                                    {/* Non-cash advance splits — each picks a counter payment
+                                        account (UPI 1 → HDFC, UPI 2 → SBI, Card…). The chosen
+                                        account's ledger is where the advance Receipt is booked. */}
+                                    {splits.map((s) => (
+                                        <div key={s.id} className="grid grid-cols-[170px_1fr_1fr_auto] items-center gap-2">
                                             <Select
-                                                value={e.method}
-                                                onValueChange={(v) => setExtras((prev) => prev.map((x) => x.id === e.id ? { ...x, method: v as ExtraMethod } : x))}
+                                                value={String(s.paymentAccountId)}
+                                                onValueChange={(v) => setSplits((prev) => prev.map((x) => x.id === s.id ? { ...x, paymentAccountId: Number(v) } : x))}
                                             >
                                                 <SelectTrigger>
                                                     <SelectValue />
                                                 </SelectTrigger>
                                                 <SelectContent>
-                                                    {allowedExtras.map((m) => (
-                                                        <SelectItem key={m.value} value={m.value}>
-                                                            <span className="flex items-center gap-2">{m.icon} {m.label}</span>
+                                                    {payAccounts.map((a) => (
+                                                        <SelectItem key={a.id} value={String(a.id)}>
+                                                            <span className="flex items-center gap-2">{CHANNEL_ICON[a.channel]} {a.label}</span>
                                                         </SelectItem>
                                                     ))}
                                                 </SelectContent>
                                             </Select>
                                             <Input
-                                                value={e.amount || ""}
-                                                onChange={(ev) => setExtras((prev) => prev.map((x) => x.id === e.id ? { ...x, amount: Number(ev.target.value) || 0 } : x))}
+                                                value={s.amount || ""}
+                                                onChange={(ev) => setSplits((prev) => prev.map((x) => x.id === s.id ? { ...x, amount: Number(ev.target.value) || 0 } : x))}
                                                 onKeyDown={enterToSubmit}
                                                 placeholder="₹ amount"
                                                 className="text-right"
                                                 inputMode="decimal"
                                             />
                                             <Input
-                                                value={e.reference}
-                                                onChange={(ev) => setExtras((prev) => prev.map((x) => x.id === e.id ? { ...x, reference: ev.target.value } : x))}
+                                                value={s.reference}
+                                                onChange={(ev) => setSplits((prev) => prev.map((x) => x.id === s.id ? { ...x, reference: ev.target.value } : x))}
                                                 onKeyDown={enterToSubmit}
                                                 placeholder="Ref / last-4"
                                             />
                                             <Button
                                                 variant="ghost"
                                                 size="icon-sm"
-                                                onClick={() => setExtras((prev) => prev.filter((x) => x.id !== e.id))}
+                                                onClick={() => setSplits((prev) => prev.filter((x) => x.id !== s.id))}
                                                 title="Remove"
                                             >
                                                 <Trash2 size={12} className="text-destructive" />
@@ -1913,12 +1855,13 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
                                         <Button
                                             variant="outline"
                                             size="sm"
-                                            disabled={allowedExtras.length === 0}
-                                            title={allowedExtras.length === 0 ? "This counter only accepts Cash (+ UPI if mapped). Map more methods under /office/admin/counters." : undefined}
+                                            disabled={payAccounts.length === 0}
+                                            title={payAccounts.length === 0 ? "This counter only accepts Cash. Add payment accounts under /office/admin/counters." : undefined}
                                             onClick={() => {
-                                                const seed = allowedExtras[0]?.value;
+                                                const seed = payAccounts[0]?.id;
                                                 if (!seed) return;
-                                                setExtras((prev) => [...prev, { id: crypto.randomUUID(), method: seed, amount: 0, reference: "" }]);
+                                                const remaining = Math.max(0, +(payableTotal - collected).toFixed(2));
+                                                setSplits((prev) => [...prev, { id: crypto.randomUUID(), paymentAccountId: seed, amount: remaining, reference: "" }]);
                                             }}
                                         >
                                             <Plus size={14} /> Add payment line

@@ -27,7 +27,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
                 user:    { select: { id: true, name: true, email: true } },
                 branch:  { select: { id: true, name: true, vaultAccountId: true } },
                 counter: {
-                    include: { tillAccount: { select: { id: true, name: true, balance: true } } },
+                    include: {
+                        tillAccount: { select: { id: true, name: true, balance: true } },
+                        paymentAccounts: { where: { isActive: true }, select: { channel: true, label: true, accountId: true } },
+                    },
                 },
                 openedBy:             { select: { id: true, name: true } },
                 closedBy:             { select: { id: true, name: true } },

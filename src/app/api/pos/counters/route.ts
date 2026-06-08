@@ -41,11 +41,14 @@ export async function GET(req: NextRequest) {
                 include: {
                     tillAccount:         { select: { id: true, name: true, balance: true } },
                     branch:              { select: { id: true, name: true } },
-                    upiAccount:          { select: { id: true, name: true } },
-                    cardAccount:         { select: { id: true, name: true } },
-                    walletAccount:       { select: { id: true, name: true } },
-                    chequeAccount:       { select: { id: true, name: true } },
-                    bankTransferAccount: { select: { id: true, name: true } },
+                    paymentAccounts: {
+                        orderBy: { sortOrder: "asc" },
+                        select: {
+                            id: true, channel: true, label: true, accountId: true, vpa: true,
+                            sortOrder: true, isActive: true,
+                            account: { select: { id: true, name: true } },
+                        },
+                    },
                     _count:      { select: { shifts: true } },
                     shifts: {
                         where:  { status: { in: ["OPEN", "AWAITING_HANDOVER"] } },
@@ -65,12 +68,7 @@ export async function GET(req: NextRequest) {
                     name:    c.tillAccount.name,
                     balance: c.tillAccount.balance.toString(),
                 },
-                upiAccount:          c.upiAccount,          upiLabel:          c.upiLabel,
-                upiVpa:              c.upiVpa,
-                cardAccount:         c.cardAccount,         cardLabel:         c.cardLabel,
-                walletAccount:       c.walletAccount,       walletLabel:       c.walletLabel,
-                chequeAccount:       c.chequeAccount,       chequeLabel:       c.chequeLabel,
-                bankTransferAccount: c.bankTransferAccount, bankTransferLabel: c.bankTransferLabel,
+                paymentAccounts: c.paymentAccounts,
                 allowedExpenseAccountIds: c.allowedExpenseAccountIds,
                 totalShifts: c._count.shifts,
                 activeShift: c.shifts[0] ?? null,

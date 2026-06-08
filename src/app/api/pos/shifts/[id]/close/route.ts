@@ -200,7 +200,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                     notes: data.notes ? (shift.notes ? `${shift.notes}\n${data.notes}` : data.notes) : shift.notes,
                 },
                 include: {
-                    counter: { include: { tillAccount: { select: { id: true, name: true } } } },
+                    counter: { include: { tillAccount: { select: { id: true, name: true } }, paymentAccounts: { where: { isActive: true }, select: { channel: true, label: true, accountId: true } } } },
                     branch:  { select: { id: true, name: true } },
                     closingContraVoucher: { select: { id: true, reference: true } },
                     varianceJournalEntry: { select: { id: true, reference: true } },

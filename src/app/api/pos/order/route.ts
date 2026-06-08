@@ -8,12 +8,9 @@ import { handleApiError } from "@/shared/lib/api";
 import { createPosQuoteVoucher, type PosQuoteBody } from "@/modules/pos/lib/posQuoteVoucher";
 import { postReceiptVoucher } from "@/modules/accountancy/lib/postReceiptVoucher";
 
-type PayMethod = "CASH" | "MOBILE_PAYMENT" | "BANK_TRANSFER" | "CARD" | "CHEQUE" | "OTHER";
-type PayLine = { method: PayMethod; amount: number; reference?: string };
-
-const METHOD_LABEL: Record<PayMethod, string> = {
-    CASH: "Cash", MOBILE_PAYMENT: "UPI", CARD: "Card", CHEQUE: "Cheque", BANK_TRANSFER: "Bank Transfer", OTHER: "Wallet",
-};
+// An advance payment line — null paymentAccountId = CASH (the till); else one of
+// the counter's payment accounts (resolved to its ledger below).
+type PayLine = { paymentAccountId: number | null; amount: number; reference?: string };
 
 /**
  * POST /api/pos/order — O2C POS Order mode.
@@ -69,8 +66,11 @@ export async function POST(req: NextRequest) {
                     id: true, branchId: true,
                     counter: {
                         select: {
-                            name: true, tillAccountId: true, upiAccountId: true, cardAccountId: true,
-                            walletAccountId: true, chequeAccountId: true, bankTransferAccountId: true,
+                            name: true, tillAccountId: true,
+                            paymentAccounts: {
+                                where:  { isActive: true },
+                                select: { id: true, accountId: true, label: true },
+                            },
                         },
                     },
                 },
@@ -78,20 +78,17 @@ export async function POST(req: NextRequest) {
             if (!shift) {
                 return NextResponse.json({ error: "Open a shift to collect an advance (or save the order with no payment).", code: "NO_OPEN_SHIFT" }, { status: 400 });
             }
-            const methodMap: Record<PayMethod, number | null> = {
-                CASH: shift.counter.tillAccountId,
-                MOBILE_PAYMENT: shift.counter.upiAccountId,
-                CARD: shift.counter.cardAccountId,
-                OTHER: shift.counter.walletAccountId,
-                CHEQUE: shift.counter.chequeAccountId,
-                BANK_TRANSFER: shift.counter.bankTransferAccountId,
-            };
+            const payAcctById = new Map(shift.counter.paymentAccounts.map((a) => [a.id, a]));
             for (const p of payments) {
-                const accId = methodMap[p.method];
-                if (!accId) {
-                    return NextResponse.json({ error: `Counter "${shift.counter.name}" does not accept ${METHOD_LABEL[p.method]}. Map it under /office/admin/counters first.`, code: "PAYMENT_METHOD_NOT_MAPPED" }, { status: 400 });
+                if (p.paymentAccountId == null) {
+                    tenders.push({ accountId: shift.counter.tillAccountId, amount: Number(p.amount), description: p.reference || `Cash at ${shift.counter.name}` });
+                    continue;
                 }
-                tenders.push({ accountId: accId, amount: Number(p.amount), description: p.reference || `${METHOD_LABEL[p.method]} at ${shift.counter.name}` });
+                const acct = payAcctById.get(p.paymentAccountId);
+                if (!acct) {
+                    return NextResponse.json({ error: `Counter "${shift.counter.name}" doesn't have that payment account. Reconfigure under /office/admin/counters.`, code: "PAYMENT_METHOD_NOT_MAPPED" }, { status: 400 });
+                }
+                tenders.push({ accountId: acct.accountId, amount: Number(p.amount), description: p.reference || `${acct.label} at ${shift.counter.name}` });
             }
             shiftId = shift.id;
             shiftBranchId = shift.branchId;

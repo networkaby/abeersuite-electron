@@ -1,4 +1,4 @@
-// PATCH  /api/pos/counters/[id]  — rename or toggle active
+// PATCH  /api/pos/counters/[id]  — rename / toggle active / manage payment accounts
 // DELETE /api/pos/counters/[id]  — only allowed when no shifts have ever used this counter
 
 import { prisma } from "@/shared/lib/prisma/prismaClient";
@@ -8,39 +8,45 @@ import { z } from "zod";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
-// Nullable id = "clear this mapping" (method becomes not accepted at this counter).
-// Positive int = link to that Account ledger.
-const accountIdOrClear = z.union([z.number().int().positive(), z.null()]).optional();
-// Empty string from the form coerces to null — operator wiped the override.
-const labelOrClear     = z.union([z.string().trim().max(30), z.null()]).optional()
-    .transform((v) => (typeof v === "string" && v.length === 0) ? null : v);
-// UPI VPA, e.g. "name@bank". Empty → null (cleared). Must look like a VPA otherwise.
-const upiVpaOrClear    = z.union([z.string().trim().max(60), z.null()]).optional()
-    .transform((v) => (typeof v === "string" && v.length === 0) ? null : v)
-    .refine((v) => v == null || /^[\w.\-]+@[\w.\-]+$/.test(v), "Enter a valid UPI ID like name@bank");
+// One payment account on the counter. `id` present = update that row; absent =
+// create. `accountId` is the bank/cash-style ledger debited when collected here.
+// `vpa` is optional (UPI/gateway pay-to id); validated only when supplied.
+const paymentAccountSchema = z.object({
+    id:        z.number().int().positive().optional(),
+    channel:   z.enum(["UPI", "CARD", "CHEQUE", "WALLET", "BANK_TRANSFER", "GATEWAY"]),
+    label:     z.string().trim().min(1).max(40),
+    accountId: z.number().int().positive(),
+    vpa:       z.union([z.string().trim().max(60), z.null()]).optional()
+        .transform((v) => (typeof v === "string" && v.trim().length ? v.trim() : null))
+        .refine((v) => v == null || /^[\w.\-]+@[\w.\-]+$/.test(v), "Enter a valid UPI ID like name@bank"),
+    sortOrder: z.number().int().min(0).optional(),
+    isActive:  z.boolean().optional(),
+});
 
 const updateSchema = z.object({
-    name:                  z.string().trim().min(1).max(60).optional(),
-    isActive:              z.boolean().optional(),
-    upiAccountId:          accountIdOrClear, upiLabel:          labelOrClear,
-    upiVpa:                upiVpaOrClear,
-    cardAccountId:         accountIdOrClear, cardLabel:         labelOrClear,
-    walletAccountId:       accountIdOrClear, walletLabel:       labelOrClear,
-    chequeAccountId:       accountIdOrClear, chequeLabel:       labelOrClear,
-    bankTransferAccountId: accountIdOrClear, bankTransferLabel: labelOrClear,
+    name:     z.string().trim().min(1).max(60).optional(),
+    isActive: z.boolean().optional(),
+    // Full replace of the counter's payment-account list when supplied.
+    paymentAccounts: z.array(paymentAccountSchema).max(20).optional(),
     // Allowed POS-expenditure ledgers (EXPENSE group). Empty = no restriction.
-    // Deduped on save.
     allowedExpenseAccountIds: z.array(z.number().int().positive())
         .max(50)
         .transform((arr) => [...new Set(arr)])
         .optional(),
 });
 
-// Helper: pull only the non-undefined mapping fields off the parsed body.
-const PAYMENT_MAP_FIELDS = ["upiAccountId", "cardAccountId", "walletAccountId", "chequeAccountId", "bankTransferAccountId"] as const;
-type PaymentMapField = typeof PAYMENT_MAP_FIELDS[number];
-const PAYMENT_LABEL_FIELDS = ["upiLabel", "cardLabel", "walletLabel", "chequeLabel", "bankTransferLabel"] as const;
-type PaymentLabelField = typeof PAYMENT_LABEL_FIELDS[number];
+const counterInclude = {
+    tillAccount: { select: { id: true, name: true, balance: true } },
+    branch:      { select: { id: true, name: true } },
+    paymentAccounts: {
+        orderBy: { sortOrder: "asc" as const },
+        select: {
+            id: true, channel: true, label: true, accountId: true, vpa: true,
+            sortOrder: true, isActive: true,
+            account: { select: { id: true, name: true } },
+        },
+    },
+};
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { response } = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
@@ -57,24 +63,19 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         const existing = await prisma.posCounter.findUnique({ where: { id }, include: { tillAccount: true, branch: { select: { name: true } } } });
         if (!existing) return NextResponse.json({ error: "Counter not found" }, { status: 404 });
 
-        // ── Validate any newly set payment-method mappings reference real ASSET ledgers.
-        // Null is fine ("clear mapping"). Each non-null id must resolve to an ASSET-type
-        // account so we don't accidentally route a Card receipt to, say, a Revenue ledger.
-        const mappingIdsToCheck: number[] = [];
-        for (const f of PAYMENT_MAP_FIELDS) {
-            const v = data[f];
-            if (typeof v === "number") mappingIdsToCheck.push(v);
-        }
-        if (mappingIdsToCheck.length > 0) {
+        // ── Each payment account's ledger must be a real ASSET account, so we never
+        // route a receipt to, say, a Revenue ledger. ──────────────────────────────
+        if (data.paymentAccounts && data.paymentAccounts.length > 0) {
+            const ledgerIds = [...new Set(data.paymentAccounts.map((p) => p.accountId))];
             const accounts = await prisma.account.findMany({
-                where: { id: { in: mappingIdsToCheck } },
+                where:  { id: { in: ledgerIds } },
                 select: { id: true, group: { select: { type: true } } },
             });
             const byId = new Map(accounts.map((a) => [a.id, a]));
-            for (const aid of mappingIdsToCheck) {
+            for (const aid of ledgerIds) {
                 const a = byId.get(aid);
-                if (!a)                          return NextResponse.json({ error: `Account ${aid} not found` }, { status: 400 });
-                if (a.group?.type !== "ASSET")   return NextResponse.json({ error: `Account ${aid} is not an ASSET ledger (cash/bank-style) — cannot route payment receipts here.` }, { status: 400 });
+                if (!a)                        return NextResponse.json({ error: `Account ${aid} not found` }, { status: 400 });
+                if (a.group?.type !== "ASSET") return NextResponse.json({ error: `Account ${aid} is not an ASSET ledger (cash/bank-style) — cannot route payment receipts here.` }, { status: 400 });
             }
         }
 
@@ -113,35 +114,39 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 const newTillName = `Cash – ${data.name} – ${existing.branch.name}`;
                 await tx.account.update({ where: { id: existing.tillAccountId }, data: { name: newTillName } });
             }
-            // Only include each mapping field if the caller actually sent it
-            // (undefined = leave as-is; null = clear; number = set).
-            const mapUpdates: Partial<Record<PaymentMapField, number | null>> = {};
-            for (const f of PAYMENT_MAP_FIELDS) {
-                if (data[f] !== undefined) mapUpdates[f] = data[f] as number | null;
+
+            // Diff-replace the payment-account list (only when the caller sent it).
+            if (data.paymentAccounts !== undefined) {
+                const owned = await tx.posCounterPaymentAccount.findMany({ where: { counterId: id }, select: { id: true } });
+                const ownedIds = new Set(owned.map((r) => r.id));
+                const keepIds = data.paymentAccounts.filter((p) => p.id && ownedIds.has(p.id)).map((p) => p.id!);
+                await tx.posCounterPaymentAccount.deleteMany({ where: { counterId: id, id: { notIn: keepIds.length ? keepIds : [-1] } } });
+                for (let i = 0; i < data.paymentAccounts.length; i++) {
+                    const p = data.paymentAccounts[i];
+                    const row = {
+                        channel:   p.channel,
+                        label:     p.label,
+                        accountId: p.accountId,
+                        vpa:       p.vpa,
+                        sortOrder: p.sortOrder ?? i,
+                        isActive:  p.isActive ?? true,
+                    };
+                    if (p.id && ownedIds.has(p.id)) {
+                        await tx.posCounterPaymentAccount.update({ where: { id: p.id }, data: row });
+                    } else {
+                        await tx.posCounterPaymentAccount.create({ data: { counterId: id, ...row } });
+                    }
+                }
             }
-            const labelUpdates: Partial<Record<PaymentLabelField, string | null>> = {};
-            for (const f of PAYMENT_LABEL_FIELDS) {
-                if (data[f] !== undefined) labelUpdates[f] = data[f] as string | null;
-            }
+
             return tx.posCounter.update({
                 where: { id },
                 data: {
                     ...(data.name     !== undefined && { name: data.name }),
                     ...(data.isActive !== undefined && { isActive: data.isActive }),
-                    ...(data.upiVpa   !== undefined && { upiVpa: data.upiVpa }),
                     ...(data.allowedExpenseAccountIds !== undefined && { allowedExpenseAccountIds: data.allowedExpenseAccountIds }),
-                    ...mapUpdates,
-                    ...labelUpdates,
                 },
-                include: {
-                    tillAccount:         { select: { id: true, name: true, balance: true } },
-                    branch:              { select: { id: true, name: true } },
-                    upiAccount:          { select: { id: true, name: true } },
-                    cardAccount:         { select: { id: true, name: true } },
-                    walletAccount:       { select: { id: true, name: true } },
-                    chequeAccount:       { select: { id: true, name: true } },
-                    bankTransferAccount: { select: { id: true, name: true } },
-                },
+                include: counterInclude,
             });
         });
 
@@ -156,12 +161,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 name:    updated.tillAccount.name,
                 balance: updated.tillAccount.balance.toString(),
             },
-            upiAccount:          updated.upiAccount,          upiLabel:          updated.upiLabel,
-            upiVpa:              updated.upiVpa,
-            cardAccount:         updated.cardAccount,         cardLabel:         updated.cardLabel,
-            walletAccount:       updated.walletAccount,       walletLabel:       updated.walletLabel,
-            chequeAccount:       updated.chequeAccount,       chequeLabel:       updated.chequeLabel,
-            bankTransferAccount: updated.bankTransferAccount, bankTransferLabel: updated.bankTransferLabel,
+            paymentAccounts: updated.paymentAccounts,
             allowedExpenseAccountIds: updated.allowedExpenseAccountIds,
         });
     } catch (e) {
@@ -197,6 +197,7 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
             );
         }
 
+        // Payment-account rows cascade-delete with the counter (onDelete: Cascade).
         await prisma.posCounter.delete({ where: { id } });
         // We intentionally KEEP the till GL account (audit trail) — just unlinked from the counter now.
         return NextResponse.json({ success: true });

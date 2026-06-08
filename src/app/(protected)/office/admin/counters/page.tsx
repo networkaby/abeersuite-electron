@@ -22,10 +22,22 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { fmt } from "@/utils/constants";
 import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/components/GlAccountCombobox";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
+import { CHANNEL_LABEL, POS_PAY_CHANNELS, channelNeedsVpa } from "@/modules/pos/lib/counterTenders";
+import type { PosPayChannel } from "@/generated/prisma/client";
 
 type Branch = { id: string; name: string; isActive: boolean };
 
-type MappedAccount = { id: number; name: string } | null;
+// A counter payment account as returned by the API.
+type PaymentAccount = {
+    id: number;
+    channel: PosPayChannel;
+    label: string;
+    accountId: number;
+    account: { id: number; name: string } | null;
+    vpa: string | null;
+    sortOrder: number;
+    isActive: boolean;
+};
 
 type Counter = {
     id: number;
@@ -34,48 +46,25 @@ type Counter = {
     branch: { id: string; name: string };
     isActive: boolean;
     tillAccount: { id: number; name: string; balance: string };
-    upiAccount:          MappedAccount; upiLabel:          string | null;
-    upiVpa:              string | null;
-    cardAccount:         MappedAccount; cardLabel:         string | null;
-    walletAccount:       MappedAccount; walletLabel:       string | null;
-    chequeAccount:       MappedAccount; chequeLabel:       string | null;
-    bankTransferAccount: MappedAccount; bankTransferLabel: string | null;
+    paymentAccounts: PaymentAccount[];
     allowedExpenseAccountIds: number[];
     totalShifts: number;
     activeShift: { id: number; status: string; user: { name: string } } | null;
 };
 
-// One row per non-cash payment method. The schema column on PosCounter is
-// `<key>AccountId`, the API field is `<key>Account`. Label is what the
-// operator sees in both the admin form and the POS checkout dialog.
-const PAYMENT_METHOD_ROWS: { key: "upi" | "card" | "wallet" | "cheque" | "bankTransfer"; label: string }[] = [
-    { key: "upi",          label: "UPI" },
-    { key: "card",         label: "Card" },
-    { key: "wallet",       label: "Wallet" },
-    { key: "cheque",       label: "Cheque" },
-    { key: "bankTransfer", label: "Bank Transfer" },
-];
-
 const EMPTY_FORM = { branchId: "", name: "" };
+
+// An editable payment-account row (accountId nullable until the ledger is picked).
+type EditPayAcct = { id?: number; channel: PosPayChannel; label: string; accountId: number | null; vpa: string };
 
 type EditForm = {
     name: string;
-    upiAccountId:          number | null; upiLabel:          string;
-    upiVpa:                string;
-    cardAccountId:         number | null; cardLabel:         string;
-    walletAccountId:       number | null; walletLabel:       string;
-    chequeAccountId:       number | null; chequeLabel:       string;
-    bankTransferAccountId: number | null; bankTransferLabel: string;
+    paymentAccounts: EditPayAcct[];
     allowedExpenseAccountIds: number[];
 };
 const EMPTY_EDIT: EditForm = {
     name: "",
-    upiAccountId: null, upiLabel: "",
-    upiVpa: "",
-    cardAccountId: null, cardLabel: "",
-    walletAccountId: null, walletLabel: "",
-    chequeAccountId: null, chequeLabel: "",
-    bankTransferAccountId: null, bankTransferLabel: "",
+    paymentAccounts: [],
     allowedExpenseAccountIds: [],
 };
 
@@ -139,18 +128,33 @@ export default function CountersAdminPage() {
     const startEdit = (c: Counter) => {
         setEditForm({
             name: c.name,
-            upiAccountId:          c.upiAccount?.id          ?? null, upiLabel:          c.upiLabel          ?? "",
-            upiVpa:                c.upiVpa ?? "",
-            cardAccountId:         c.cardAccount?.id         ?? null, cardLabel:         c.cardLabel         ?? "",
-            walletAccountId:       c.walletAccount?.id       ?? null, walletLabel:       c.walletLabel       ?? "",
-            chequeAccountId:       c.chequeAccount?.id       ?? null, chequeLabel:       c.chequeLabel       ?? "",
-            bankTransferAccountId: c.bankTransferAccount?.id ?? null, bankTransferLabel: c.bankTransferLabel ?? "",
+            paymentAccounts: (c.paymentAccounts ?? []).map((p) => ({
+                id: p.id,
+                channel: p.channel,
+                label: p.label,
+                accountId: p.accountId,
+                vpa: p.vpa ?? "",
+            })),
             allowedExpenseAccountIds: Array.isArray(c.allowedExpenseAccountIds) ? c.allowedExpenseAccountIds : [],
         });
         setEditId(c.id);
         setAddingNew(false);
     };
     const cancel = () => { setAddingNew(false); setEditId(null); };
+
+    // Payment-account row editors (operate on editForm.paymentAccounts).
+    const addPayAcct = () => setEditForm((f) => ({
+        ...f,
+        paymentAccounts: [...f.paymentAccounts, { channel: "UPI" as PosPayChannel, label: "", accountId: null, vpa: "" }],
+    }));
+    const updatePayAcct = (idx: number, patch: Partial<EditPayAcct>) => setEditForm((f) => ({
+        ...f,
+        paymentAccounts: f.paymentAccounts.map((p, i) => (i === idx ? { ...p, ...patch } : p)),
+    }));
+    const removePayAcct = (idx: number) => setEditForm((f) => ({
+        ...f,
+        paymentAccounts: f.paymentAccounts.filter((_, i) => i !== idx),
+    }));
 
     const handleCreate = async () => {
         if (!form.branchId)    { toast.error("Pick a branch"); return; }
@@ -174,19 +178,26 @@ export default function CountersAdminPage() {
     const handleUpdate = async () => {
         if (editId == null) return;
         if (!editForm.name.trim()) { toast.error("Counter name is required"); return; }
+        // Only rows with a linked bank ledger are sent; an incomplete row is dropped.
+        const dropped = editForm.paymentAccounts.filter((p) => !p.accountId).length;
+        const paymentAccounts = editForm.paymentAccounts
+            .filter((p) => p.accountId != null)
+            .map((p, i) => ({
+                ...(p.id ? { id: p.id } : {}),
+                channel: p.channel,
+                label: p.label.trim() || CHANNEL_LABEL[p.channel],
+                accountId: p.accountId as number,
+                vpa: p.vpa.trim() || null,
+                sortOrder: i,
+            }));
         setSaving(true);
         try {
             await axios.patch(`/api/pos/counters/${editId}`, {
-                name:                  editForm.name.trim(),
-                upiAccountId:          editForm.upiAccountId,          upiLabel:          editForm.upiLabel.trim()          || null,
-                upiVpa:                editForm.upiVpa.trim()          || null,
-                cardAccountId:         editForm.cardAccountId,         cardLabel:         editForm.cardLabel.trim()         || null,
-                walletAccountId:       editForm.walletAccountId,       walletLabel:       editForm.walletLabel.trim()       || null,
-                chequeAccountId:       editForm.chequeAccountId,       chequeLabel:       editForm.chequeLabel.trim()       || null,
-                bankTransferAccountId: editForm.bankTransferAccountId, bankTransferLabel: editForm.bankTransferLabel.trim() || null,
+                name: editForm.name.trim(),
+                paymentAccounts,
                 allowedExpenseAccountIds: editForm.allowedExpenseAccountIds,
             });
-            toast.success("Counter updated");
+            toast.success(dropped > 0 ? `Counter updated (${dropped} row without a ledger skipped)` : "Counter updated");
             cancel();
             void load();
         } catch (e: unknown) {
@@ -312,58 +323,62 @@ export default function CountersAdminPage() {
                                                     Renaming the counter also renames its till GL account.
                                                 </p>
 
-                                                {/* Per-method ledger mapping. Empty picker = method not
-                                                    accepted at this counter (hidden on POS checkout). Cash
-                                                    is intentionally absent — it always routes to till.
-                                                    Optional custom label per row overrides the default
-                                                    method name in the POS checkout dialog (e.g. "PhonePe"
-                                                    instead of "UPI"). */}
+                                                {/* Payment accounts — a flexible list. Each row: method
+                                                    (UPI/Card/…), a cashier-facing label, the bank ledger it
+                                                    settles to, and (UPI/gateway) the VPA the customer pays
+                                                    into for the QR. Add two UPIs to collect into two banks.
+                                                    Cash always routes to the till and isn't listed here. */}
                                                 <div className="space-y-2 pt-2 border-t border-border">
-                                                    <p className="text-xs font-semibold text-muted-foreground">Payment options accepted at this counter</p>
+                                                    <p className="text-xs font-semibold text-muted-foreground">Payment accounts accepted at this counter</p>
                                                     <p className="text-[11px] text-muted-foreground">
-                                                        Pick a settlement ledger per method (and optionally rename it for the cashier — e.g. &ldquo;PhonePe&rdquo; instead of &ldquo;UPI&rdquo;).
+                                                        Each row = method + label + the bank ledger it&apos;s booked to (UPI/gateway also take a VPA for the share QR).
                                                         Cash routes to <span className="font-mono">{c.tillAccount.name}</span> automatically.
-                                                        Methods left blank won&apos;t appear on the checkout dialog.
                                                     </p>
-                                                    <div className="space-y-1.5">
-                                                        {PAYMENT_METHOD_ROWS.map((m) => {
-                                                            const acctKey  = `${m.key}AccountId` as const;
-                                                            const labelKey = `${m.key}Label`     as const;
-                                                            return (
-                                                                <div key={m.key} className="grid grid-cols-[90px_160px_1fr] gap-2 items-center">
-                                                                    <span className="text-xs font-medium">{m.label}</span>
+                                                    <div className="space-y-2">
+                                                        {editForm.paymentAccounts.map((p, idx) => (
+                                                            <div key={p.id ?? `new-${idx}`} className="rounded-md border border-border bg-muted/20 p-2 space-y-1.5">
+                                                                <div className="grid grid-cols-[130px_1fr_auto] gap-2 items-center">
+                                                                    <Select value={p.channel} onValueChange={(v) => updatePayAcct(idx, { channel: v as PosPayChannel })}>
+                                                                        <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                                                                        <SelectContent>
+                                                                            {POS_PAY_CHANNELS.map((ch) => (
+                                                                                <SelectItem key={ch} value={ch}>{CHANNEL_LABEL[ch]}</SelectItem>
+                                                                            ))}
+                                                                        </SelectContent>
+                                                                    </Select>
                                                                     <Input
-                                                                        value={editForm[labelKey]}
-                                                                        onChange={(e) => setEditForm((f) => ({ ...f, [labelKey]: e.target.value }))}
-                                                                        placeholder={`(default: ${m.label})`}
+                                                                        value={p.label}
+                                                                        onChange={(e) => updatePayAcct(idx, { label: e.target.value })}
+                                                                        placeholder={`Label (e.g. ${CHANNEL_LABEL[p.channel]} 1)`}
                                                                         className="h-8 text-xs"
-                                                                        maxLength={30}
+                                                                        maxLength={40}
                                                                     />
-                                                                    <GlAccountCombobox
-                                                                        value={editForm[acctKey]}
-                                                                        onChange={(acc) => setEditForm((f) => ({ ...f, [acctKey]: acc?.id ?? null }))}
-                                                                        accounts={glAccounts}
-                                                                        placeholder="(not accepted)"
-                                                                        className="h-8 text-xs"
-                                                                    />
+                                                                    <Button variant="ghost" size="icon-sm" title="Remove" onClick={() => removePayAcct(idx)}>
+                                                                        <Trash2 size={12} className="text-destructive" />
+                                                                    </Button>
                                                                 </div>
-                                                            );
-                                                        })}
+                                                                <GlAccountCombobox
+                                                                    value={p.accountId}
+                                                                    onChange={(acc) => updatePayAcct(idx, { accountId: acc?.id ?? null })}
+                                                                    accounts={glAccounts}
+                                                                    placeholder="Linked bank ledger…"
+                                                                    className="h-8 text-xs"
+                                                                />
+                                                                {channelNeedsVpa(p.channel) && (
+                                                                    <Input
+                                                                        value={p.vpa}
+                                                                        onChange={(e) => updatePayAcct(idx, { vpa: e.target.value })}
+                                                                        placeholder="name@bank — VPA for the Share QR (optional)"
+                                                                        className="h-8 text-xs font-mono"
+                                                                        maxLength={60}
+                                                                    />
+                                                                )}
+                                                            </div>
+                                                        ))}
                                                     </div>
-                                                    {/* UPI collection ID for the POS "Share payment link" QR /
-                                                        WhatsApp link. Separate from the routing ledger above:
-                                                        the ledger says where a UPI receipt is *booked*, this is
-                                                        the VPA the customer actually *pays into*. */}
-                                                    <div className="grid grid-cols-[90px_1fr] gap-2 items-center pt-1">
-                                                        <span className="text-xs font-medium">UPI ID</span>
-                                                        <Input
-                                                            value={editForm.upiVpa}
-                                                            onChange={(e) => setEditForm((f) => ({ ...f, upiVpa: e.target.value }))}
-                                                            placeholder="name@bank — for the payment-link QR (optional)"
-                                                            className="h-8 text-xs font-mono"
-                                                            maxLength={60}
-                                                        />
-                                                    </div>
+                                                    <Button variant="outline" size="sm" onClick={addPayAcct}>
+                                                        <Plus size={14} /> Add payment account
+                                                    </Button>
                                                 </div>
 
                                                 {/* Allowed expenditure ledgers (Exp button). The cashier can
@@ -427,19 +442,15 @@ export default function CountersAdminPage() {
                                                             </span>
                                                         )}
                                                     </div>
-                                                    {/* Compact mapped-method summary so the operator can see what's
-                                                        wired without opening the edit form. CASH is always there. */}
+                                                    {/* Compact summary so the operator can see what's wired
+                                                        without opening the edit form. CASH is always there. */}
                                                     <div className="flex gap-1 mt-1.5 flex-wrap">
                                                         <Badge variant="outline" className="text-[10px] font-normal">Cash</Badge>
-                                                        {PAYMENT_METHOD_ROWS.map((m) => {
-                                                            const acct  = c[`${m.key}Account`];
-                                                            const label = c[`${m.key}Label`] ?? null;
-                                                            return acct ? (
-                                                                <Badge key={m.key} variant="outline" className="text-[10px] font-normal" title={acct.name}>
-                                                                    {label || m.label} → {acct.name}
-                                                                </Badge>
-                                                            ) : null;
-                                                        })}
+                                                        {(c.paymentAccounts ?? []).map((p) => (
+                                                            <Badge key={p.id} variant="outline" className="text-[10px] font-normal" title={`${CHANNEL_LABEL[p.channel]}${p.vpa ? ` · ${p.vpa}` : ""} → ${p.account?.name ?? ""}`}>
+                                                                {p.label} → {p.account?.name ?? "?"}
+                                                            </Badge>
+                                                        ))}
                                                     </div>
                                                 </div>
                                                 <div className="flex items-center gap-2 shrink-0">

@@ -76,6 +76,21 @@ enum PaymentMethod {
   OTHER
 }
 
+// Collection channel for a counter payment account (the "method" dropdown in
+// /office/admin/counters). Broader than PaymentMethod: it distinguishes UPI from
+// the gateway brands (Razorpay/Cashfree). The InvVoucherTender.method
+// (PaymentMethod) is derived from this — see counterTenders.ts.
+enum PosPayChannel {
+  UPI
+  CARD
+  CHEQUE
+  WALLET
+  BANK_TRANSFER
+  // RAZORPAY
+  // CASHFREE
+  GATEWAY // Razorpay/Cashfree
+}
+
 // ── Accounting voucher types ────────────────────────────────────────────────
 // JOURNAL is the catch-all "any GL adjustment" voucher used by the Tally-style
 // JournalVoucherPage. The other five mirror Tally's classical kinds.

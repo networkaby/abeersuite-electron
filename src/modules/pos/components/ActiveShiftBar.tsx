@@ -21,16 +21,17 @@ export type ActiveShift = {
         id:   number;
         name: string;
         tillAccount: { id: number; name: string };
-        // Per-method routing — null = method not accepted at this counter.
-        // Set under /office/admin/counters. Labels override the built-in
-        // method name ("UPI", "Card", etc.) on the POS checkout dialog.
-        upiAccount:          { id: number; name: string } | null; upiLabel:          string | null;
-        // This counter's UPI VPA for the "Share payment link" QR (null = unset).
-        upiVpa:              string | null;
-        cardAccount:         { id: number; name: string } | null; cardLabel:         string | null;
-        walletAccount:       { id: number; name: string } | null; walletLabel:       string | null;
-        chequeAccount:       { id: number; name: string } | null; chequeLabel:       string | null;
-        bankTransferAccount: { id: number; name: string } | null; bankTransferLabel: string | null;
+        // The counter's payment accounts (UPI/Card/gateway…), set under
+        // /office/admin/counters. Each drives a checkout payment row: `accountId`
+        // is the ledger debited, `vpa` (UPI/gateway) feeds the Share QR.
+        paymentAccounts: {
+            id: number;
+            channel: "UPI" | "CARD" | "CHEQUE" | "WALLET" | "BANK_TRANSFER" | "GATEWAY";
+            label: string;
+            accountId: number;
+            account: { id: number; name: string } | null;
+            vpa: string | null;
+        }[];
     };
     branch: { id: string; name: string };
     openingFloatPaise: string;

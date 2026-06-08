@@ -160,14 +160,11 @@ export async function sumShiftTendersByAccount(
 }
 
 // Counter shape needed to map settlement accounts → method labels. Structurally
-// matched by the Prisma counter objects the shift routes already load.
+// matched by the Prisma counter objects the shift routes already load (cash till
+// + the flexible payment-account list).
 type CounterRouting = {
-    tillAccount:           { id: number };
-    upiAccountId:          number | null; upiLabel:          string | null;
-    cardAccountId:         number | null; cardLabel:         string | null;
-    walletAccountId:       number | null; walletLabel:       string | null;
-    chequeAccountId:       number | null; chequeLabel:       string | null;
-    bankTransferAccountId: number | null; bankTransferLabel: string | null;
+    tillAccount:     { id: number };
+    paymentAccounts: { channel: string; label: string; accountId: number }[];
 };
 
 export type TenderBreakdownRow = { method: string; label: string; amountPaise: string };
@@ -186,12 +183,8 @@ export async function buildShiftTenderBreakdown(
 ): Promise<TenderBreakdownRow[]> {
     const c = args.counter;
     const defs: Array<{ method: string; accountId: number | null; label: string }> = [
-        { method: "CASH",          accountId: c.tillAccount.id,        label: "Cash" },
-        { method: "UPI",           accountId: c.upiAccountId,          label: c.upiLabel?.trim()          || "UPI" },
-        { method: "CARD",          accountId: c.cardAccountId,         label: c.cardLabel?.trim()         || "Card" },
-        { method: "WALLET",        accountId: c.walletAccountId,       label: c.walletLabel?.trim()       || "Wallet" },
-        { method: "CHEQUE",        accountId: c.chequeAccountId,       label: c.chequeLabel?.trim()       || "Cheque" },
-        { method: "BANK_TRANSFER", accountId: c.bankTransferAccountId, label: c.bankTransferLabel?.trim() || "Bank Transfer" },
+        { method: "CASH", accountId: c.tillAccount.id, label: "Cash" },
+        ...c.paymentAccounts.map((a) => ({ method: a.channel, accountId: a.accountId as number | null, label: a.label?.trim() || a.channel })),
     ];
 
     const accountIds = [...new Set(defs.map((d) => d.accountId).filter((x): x is number => x != null))];

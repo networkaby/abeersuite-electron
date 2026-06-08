@@ -1044,11 +1044,10 @@ async function main() {
         if (!tillRows[0]) continue;
         const tillId = tillRows[0].id;
 
-        // Upsert the PosCounter row. Per-counter payment overrides (upiAccountId,
-        // upiLabel, upiVpa, card/wallet/cheque/bankTransfer mappings) are left null
-        // here — they're operator-configured under /office/admin/counters, not
-        // bootstrap defaults. upiVpa (the counter's UPI ID for the POS payment-link
-        // QR) follows the same stance: blank until the owner sets it.
+        // Upsert the PosCounter row. The counter's payment accounts (UPI/Card/…
+        // rows in PosCounterPaymentAccount, each with a bank ledger + optional VPA)
+        // are operator-configured under /office/admin/counters, not bootstrap
+        // defaults — a fresh counter starts with Cash (the till) only.
         const { rows: existing } = await pool.query<{ id: number }>(
             `SELECT id FROM "pos_counters" WHERE "branchId" = $1 AND name = $2 LIMIT 1`,
             [b.id, counterName],

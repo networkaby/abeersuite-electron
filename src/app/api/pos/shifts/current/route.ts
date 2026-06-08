@@ -25,16 +25,17 @@ export async function GET() {
                 counter: {
                     include: {
                         tillAccount:         { select: { id: true, name: true, balance: true } },
-                        // Per-method payment routing — drives which rows the
-                        // checkout dialog renders. Null = method not accepted.
-                        // Labels (sibling cols on PosCounter) come back via
-                        // the default include — Prisma always returns scalar
-                        // columns; only relations need explicit `select`.
-                        upiAccount:          { select: { id: true, name: true } },
-                        cardAccount:         { select: { id: true, name: true } },
-                        walletAccount:       { select: { id: true, name: true } },
-                        chequeAccount:       { select: { id: true, name: true } },
-                        bankTransferAccount: { select: { id: true, name: true } },
+                        // The counter's payment accounts (UPI/Card/gateway…) — drive
+                        // the checkout payment rows. Each carries its bank ledger
+                        // (accountId) + optional VPA for the Share QR.
+                        paymentAccounts: {
+                            where:   { isActive: true },
+                            orderBy: { sortOrder: "asc" },
+                            select: {
+                                id: true, channel: true, label: true, accountId: true, vpa: true,
+                                account: { select: { id: true, name: true } },
+                            },
+                        },
                     },
                 },
                 branch:  { select: { id: true, name: true, vaultAccountId: true } },

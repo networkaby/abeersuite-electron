@@ -7,6 +7,8 @@ import { recordStockMovementsBatch } from "@/modules/inventory/lib/stockMovement
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import { postInvVoucherToGl } from "@/modules/accountancy/lib/postInvVoucher";
 import { postReceiptVoucher } from "@/modules/accountancy/lib/postReceiptVoucher";
+import { channelToPaymentMethod } from "@/modules/pos/lib/counterTenders";
+import type { PaymentMethod } from "@/generated/prisma/client";
 import { getOpenSaleBillsForFifo } from "@/modules/accountancy/lib/outstandings";
 import { getVoucherTemplate } from "@/shared/lib/print/voucherTemplate";
 import * as Sentry from "@sentry/nextjs";
@@ -72,10 +74,11 @@ const lineSchema = z.object({
 });
 
 const paymentSchema = z.object({
-    method:    z.enum(["CASH", "BANK_TRANSFER", "CARD", "CHEQUE", "MOBILE_PAYMENT", "OTHER"]),
-    amount:    z.number().positive(),
-    accountId: z.number().int().positive().optional(),   // required for non-CASH; CASH auto-routes to till
-    reference: z.string().trim().max(120).optional(),
+    // Which counter payment account collected this — null = CASH (the till).
+    // The server resolves its ledger + method from the counter's list.
+    paymentAccountId: z.number().int().positive().nullable(),
+    amount:           z.number().positive(),
+    reference:        z.string().trim().max(120).optional(),
 });
 
 // Signed amount — positive raises the bill (Cr Income leg), negative lowers it
@@ -149,12 +152,11 @@ export async function POST(req: Request) {
                 counter: {
                     select: {
                         name: true,
-                        tillAccountId:         true,
-                        upiAccountId:          true,
-                        cardAccountId:         true,
-                        walletAccountId:       true,
-                        chequeAccountId:       true,
-                        bankTransferAccountId: true,
+                        tillAccountId: true,
+                        paymentAccounts: {
+                            where:  { isActive: true },
+                            select: { id: true, channel: true, accountId: true, label: true },
+                        },
                     },
                 },
             },
@@ -177,17 +179,10 @@ export async function POST(req: Request) {
     }
     const tillAccountId  = shift.counter.tillAccountId;
     const activeBranchId = shift.branchId;
-    // Per-method ledger map: server is the source of truth for which Account
-    // each non-CASH method settles into. Null = method not accepted at this
-    // counter. Operator configures these under /office/admin/counters.
-    const counterMethodMap: Record<typeof body.payments[number]["method"], number | null> = {
-        CASH:           tillAccountId,   // always — auto-routed
-        MOBILE_PAYMENT: shift.counter.upiAccountId,
-        CARD:           shift.counter.cardAccountId,
-        OTHER:          shift.counter.walletAccountId,    // "Wallet" surface label
-        CHEQUE:         shift.counter.chequeAccountId,
-        BANK_TRANSFER:  shift.counter.bankTransferAccountId,
-    };
+    // The counter's payment accounts (id → {channel, ledger}). A non-cash payment
+    // line carries the chosen paymentAccountId; we resolve its ledger + method
+    // here. Operator configures these under /office/admin/counters.
+    const payAcctById = new Map(shift.counter.paymentAccounts.map((a) => [a.id, a]));
     const counterName = shift.counter.name;
 
     // ── Resolve customer account (party ledger) ───────────────────────────
@@ -458,24 +453,29 @@ export async function POST(req: Request) {
         }
     }
 
-    // Resolve each payment line's settlement ledger via the counter's mapping.
-    // The client-supplied `accountId` (if any) is ignored — the counter owns
-    // routing so the same UPI transaction always lands on the same ledger no
-    // matter which cashier is at the counter. Unmapped methods are rejected
-    // here (the PosScreen also hides them, so this is a guardrail).
-    const METHOD_LABEL: Record<typeof body.payments[number]["method"], string> = {
+    // Resolve each payment line to its settlement ledger + method via the
+    // counter's payment-account list. CASH (paymentAccountId null) → till. A
+    // non-cash line must reference one of THIS counter's accounts (rejected
+    // otherwise — the checkout only offers the counter's accounts, so this is a
+    // guardrail). The ledger is written onto the tender, so the same UPI account
+    // always lands on the same bank regardless of cashier.
+    const METHOD_LABEL: Record<PaymentMethod, string> = {
         CASH: "Cash", MOBILE_PAYMENT: "UPI", CARD: "Card", CHEQUE: "Cheque", BANK_TRANSFER: "Bank Transfer", OTHER: "Wallet",
     };
-    const resolvedPayments: { method: typeof body.payments[number]["method"]; accountId: number; amount: number; reference?: string }[] = [];
+    const resolvedPayments: { method: PaymentMethod; accountId: number; amount: number; reference?: string }[] = [];
     for (const p of body.payments) {
-        const mappedAccountId = counterMethodMap[p.method];
-        if (mappedAccountId == null) {
+        if (p.paymentAccountId == null) {
+            resolvedPayments.push({ method: "CASH", accountId: tillAccountId, amount: p.amount, reference: p.reference });
+            continue;
+        }
+        const acct = payAcctById.get(p.paymentAccountId);
+        if (!acct) {
             return NextResponse.json(
-                { error: `Counter "${counterName}" does not accept ${METHOD_LABEL[p.method]}. Map it under /office/admin/counters first.`, code: "PAYMENT_METHOD_NOT_MAPPED" },
+                { error: `Counter "${counterName}" doesn't have that payment account. Reconfigure under /office/admin/counters.`, code: "PAYMENT_METHOD_NOT_MAPPED" },
                 { status: 422 },
             );
         }
-        resolvedPayments.push({ method: p.method, accountId: mappedAccountId, amount: p.amount, reference: p.reference });
+        resolvedPayments.push({ method: channelToPaymentMethod(acct.channel), accountId: acct.accountId, amount: p.amount, reference: p.reference });
     }
 
     // Amount that will increase the customer's AR balance (onCredit portion).

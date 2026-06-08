@@ -70,11 +70,8 @@ model Account {
   // POS reverse rels
   branchVaults           Branch[]                @relation("BranchVaultAccount")
   counterTills           PosCounter[]            @relation("CounterTill")
-  counterUpi             PosCounter[]            @relation("CounterUpi")
-  counterCard            PosCounter[]            @relation("CounterCard")
-  counterWallet          PosCounter[]            @relation("CounterWallet")
-  counterCheque          PosCounter[]            @relation("CounterCheque")
-  counterBankTransfer    PosCounter[]            @relation("CounterBankTransfer")
+  // Counter non-cash payment accounts (UPI/Card/gateway…) that settle to this ledger.
+  posPaymentAccounts     PosCounterPaymentAccount[] @relation("PosPayAccountLedger")
   // Loyalty reverse rels
   loyalty                LoyaltyAccount?         @relation("AccountLoyalty")
   loyaltyRedeemConfig    LoyaltyConfig[]         @relation("LoyaltyRedeemLedger")

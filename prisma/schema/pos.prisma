@@ -28,36 +28,12 @@ model PosCounter {
   name          String // "Counter 1", "Billing Desk", "Service Counter"
   tillAccountId Int        @unique
   tillAccount   Account    @relation("CounterTill", fields: [tillAccountId], references: [id])
-  // Non-cash payment routing. Null = method not accepted at this counter
-  // (hidden in POS checkout). User-mapped via /office/admin/counters.
-  // Multiple counters may point at the same Account (shared settlement
-  // ledger) or unique ones (per-terminal). CASH always routes to
-  // tillAccountId above.
-  // Optional per-counter display label override. Null/empty = use the
-  // built-in label ("UPI", "Card", "Wallet", "Cheque", "Bank Transfer").
-  // Lets one counter show "PhonePe UPI" while another shows "GooglePay".
-  // Length capped to 30 at the API layer.
-  upiAccountId          Int?
-  upiAccount            Account? @relation("CounterUpi",          fields: [upiAccountId],          references: [id])
-  upiLabel              String?
-  // Per-counter UPI collection ID (VPA), e.g. "networkservice@okhdfcbank".
-  // Drives the "Share payment link" QR + WhatsApp link in POS checkout.
-  // Null/empty = counter has no UPI ID set → the share dialog shows a
-  // "configure UPI ID" hint instead of a link. Set via /office/admin/counters.
-  // Length capped to 60 at the API layer.
-  upiVpa                String?
-  cardAccountId         Int?
-  cardAccount           Account? @relation("CounterCard",         fields: [cardAccountId],         references: [id])
-  cardLabel             String?
-  walletAccountId       Int?
-  walletAccount         Account? @relation("CounterWallet",       fields: [walletAccountId],       references: [id])
-  walletLabel           String?
-  chequeAccountId       Int?
-  chequeAccount         Account? @relation("CounterCheque",       fields: [chequeAccountId],       references: [id])
-  chequeLabel           String?
-  bankTransferAccountId Int?
-  bankTransferAccount   Account? @relation("CounterBankTransfer", fields: [bankTransferAccountId], references: [id])
-  bankTransferLabel     String?
+  // Non-cash payment accounts are a flexible LIST (paymentAccounts below) — each
+  // a {channel, label, bank ledger, VPA?}. CASH always routes to tillAccountId
+  // above; the list covers UPI (possibly several: UPI 1 → HDFC, UPI 2 → SBI),
+  // Card, Cheque, Wallet, Bank Transfer, and gateway channels (Razorpay/Cashfree).
+  // User-managed via /office/admin/counters.
+  paymentAccounts PosCounterPaymentAccount[]
   // POS Expenditure (Exp button) — which EXPENSE-group ledgers this counter may
   // spend to. Empty array = no restriction (all expense ledgers allowed). When
   // non-empty, only these account ids appear in the Exp dialog and the API
@@ -69,6 +45,36 @@ model PosCounter {
   @@unique([branchId, name])
   @@index([branchId])
   @@map("pos_counters")
+}
+
+// ── POS Counter payment account (one collection rail on a counter) ─────────────
+//
+// Replaces the former fixed per-method columns on PosCounter. A counter can now
+// hold any number of these — e.g. two UPIs landing in different banks, plus a
+// card terminal and a gateway. At checkout the cashier picks one; its `accountId`
+// is the ledger debited (written onto InvVoucherTender.accountId) and its `vpa`
+// drives the shared "Scan to Pay" QR. `channel` is the method dropdown; the
+// InvVoucherTender's PaymentMethod is derived from it (see counterTenders.ts).
+model PosCounterPaymentAccount {
+  id        Int          @id @default(autoincrement())
+  counterId Int
+  counter   PosCounter   @relation(fields: [counterId], references: [id], onDelete: Cascade)
+  channel   PosPayChannel
+  // Cashier-facing name shown on the checkout row, e.g. "UPI 1", "PhonePe", "HDFC UPI".
+  label     String
+  // The GL ledger that gets debited when money is collected via this account.
+  accountId Int
+  account   Account      @relation("PosPayAccountLedger", fields: [accountId], references: [id])
+  // UPI/gateway pay-to id (VPA), e.g. "networkservice@okhdfcbank". Drives the QR.
+  vpa       String?
+  // Reserved for future method-specific config (gateway merchant id / keys ref).
+  configJson Json        @default("{}")
+  sortOrder Int          @default(0)
+  isActive  Boolean      @default(true)
+
+  @@index([counterId])
+  @@index([accountId])
+  @@map("pos_counter_payment_accounts")
 }
 
 // ── POS Shift (one cashier's session at one counter) ─────────────────────────

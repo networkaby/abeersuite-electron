@@ -614,24 +614,16 @@ export class MergeBlockedError extends Error {
 
 async function partyAccountUsage(accountId: number): Promise<MergeBlocker[]> {
     const blockers: MergeBlocker[] = [];
-    const [vaultUse, tillUse, upiUse, cardUse, walletUse, chequeUse, btUse, children] = await Promise.all([
+    const [vaultUse, tillUse, payAcctUse, children] = await Promise.all([
         prisma.branch.count({ where: { vaultAccountId: accountId } }),
         prisma.posCounter.count({ where: { tillAccountId: accountId } }),
-        prisma.posCounter.count({ where: { upiAccountId: accountId } }),
-        prisma.posCounter.count({ where: { cardAccountId: accountId } }),
-        prisma.posCounter.count({ where: { walletAccountId: accountId } }),
-        prisma.posCounter.count({ where: { chequeAccountId: accountId } }),
-        prisma.posCounter.count({ where: { bankTransferAccountId: accountId } }),
+        prisma.posCounterPaymentAccount.count({ where: { accountId } }),
         prisma.account.count({ where: { parentId: accountId } }),
     ]);
     const tags: string[] = [];
     if (vaultUse) tags.push(`Branch.vaultAccountId×${vaultUse}`);
     if (tillUse) tags.push(`PosCounter.tillAccountId×${tillUse}`);
-    if (upiUse) tags.push(`PosCounter.upiAccountId×${upiUse}`);
-    if (cardUse) tags.push(`PosCounter.cardAccountId×${cardUse}`);
-    if (walletUse) tags.push(`PosCounter.walletAccountId×${walletUse}`);
-    if (chequeUse) tags.push(`PosCounter.chequeAccountId×${chequeUse}`);
-    if (btUse) tags.push(`PosCounter.bankTransferAccountId×${btUse}`);
+    if (payAcctUse) tags.push(`PosCounterPaymentAccount.accountId×${payAcctUse}`);
     if (tags.length > 0) blockers.push({ kind: "accountIsTillOrVault", usage: tags.join(", ") });
     if (children > 0) blockers.push({ kind: "accountIsParent", childCount: children });
     return blockers;
