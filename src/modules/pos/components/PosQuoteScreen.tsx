@@ -10,7 +10,7 @@ import {
     ShoppingCart, Plus, Minus, Trash2, ArrowLeft, ExternalLink,
     Banknote, Wallet, CreditCard, Building2, UserPlus,
     MapPin, Star, Sparkles, AlertCircle, TrendingDown, Tag,
-    ReceiptIndianRupee, Check, RotateCcw, ChevronDown, ChevronRight, HelpCircle, HandCoins,
+    ReceiptIndianRupee, RotateCcw, ChevronDown, ChevronRight, HelpCircle, HandCoins,
     RefreshCw, Lock, ArrowRightLeft, Monitor, MoreVertical,
 } from "lucide-react";
 import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/components/GlAccountCombobox";
@@ -21,9 +21,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import {
-    Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
-} from "@/components/ui/dialog";
 import {
     DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
     DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator,
@@ -41,7 +38,9 @@ import { ShiftCloseDialog } from "@/modules/pos/components/ShiftCloseDialog";
 import { PosReturnDialog } from "@/modules/pos/components/PosReturnDialog";
 import { PosExpenditureDialog } from "@/modules/pos/components/PosExpenditureDialog";
 import { PosReceiptDialog } from "@/modules/pos/components/PosReceiptDialog";
-import { TenderSplitInput, seedTenderSplit, type TenderSplit } from "@/modules/pos/components/TenderSplitInput";
+import { type TenderSplit } from "@/modules/pos/components/TenderSplitInput";
+import { CheckoutDialog } from "@/modules/pos/components/CheckoutDialog";
+import { PaymentLinkDialog } from "@/modules/pos/components/PaymentLinkDialog";
 import { PosModeSwitch } from "@/modules/pos/components/PosModeSwitch";
 import { qrDisplay } from "@/modules/pos/lib/qrDisplay";
 import { computePriceLadder } from "@/modules/pos/lib/priceLadder";
@@ -214,6 +213,9 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
     const [splits, setSplits] = useState<TenderSplit[]>([]);
     const [submitting, setSubmitting] = useState(false);
     const cashTenderedRef = useRef<HTMLInputElement>(null);
+    // Share a UPI QR for the advance, exactly like POS Sale.
+    const [shareOpen, setShareOpen] = useState(false);
+    const [shareVpa, setShareVpa] = useState<string | null>(null);
 
     // ── Cart-level adjustments (shipping / round-off / charges) ────────────
     // Mirrors office SALE (TradingVoucherPage). Hidden behind a collapsible
@@ -1695,200 +1697,45 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
             </div>
 
             {/* ── Checkout dialog — fixed Cash / UPI / Credit rows ──────────────── */}
-            <Dialog open={checkoutOpen} onOpenChange={setCheckoutOpen}>
-                <DialogContent className="sm:max-w-lg">
-                    <DialogHeader>
-                        <DialogTitle>Save Order · {fmtINR(total)} <span className="text-sm font-normal text-muted-foreground">— advance optional</span></DialogTitle>
-                    </DialogHeader>
+            {/* Order advance — the same checkout body as POS Sale, in "order" mode
+                (advance optional, no credit-limit block, "Save Order" CTAs). */}
+            <CheckoutDialog
+                mode="order"
+                open={checkoutOpen}
+                onOpenChange={setCheckoutOpen}
+                total={total}
+                collected={collected}
+                onCredit={onCredit}
+                payableTotal={payableTotal}
+                overpaid={overpaid}
+                balanceDue={balanceDue}
+                arrearPaid={arrearPaid}
+                advanceTaken={advanceTaken}
+                giftCardApplied={giftCardApplied}
+                giftCardCode={giftCard?.code}
+                creditLimitBreached={creditLimitBreached}
+                creditLimit={snapshot?.creditLimit ?? null}
+                pay={pay}
+                setPay={setPay}
+                cashTenderedRef={cashTenderedRef}
+                accounts={payAccounts}
+                splits={splits}
+                setSplits={setSplits}
+                submitting={submitting}
+                onConfirm={generateInvoice}
+                onShare={(a) => { setShareVpa(a.vpa); setShareOpen(true); }}
+            />
 
-                    <div className="space-y-3">
-                        <div className="grid grid-cols-3 gap-2 rounded-md border border-border bg-muted/30 p-3 text-center text-sm">
-                            <div>
-                                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Total</div>
-                                <div className="font-semibold">{fmtINR(total)}</div>
-                            </div>
-                            <div>
-                                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Collected</div>
-                                <div className="font-semibold">{fmtINR(collected)}</div>
-                            </div>
-                            <div>
-                                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">On credit</div>
-                                <div className={`font-semibold ${onCredit > 0 ? "text-amber-600" : "text-emerald-600"}`}>{fmtINR(onCredit)}</div>
-                            </div>
-                        </div>
-
-                        {giftCardApplied > 0.005 && (
-                            <div className="flex items-center justify-between rounded-md border border-teal-200 bg-teal-50 px-3 py-2 text-sm dark:border-teal-500/30 dark:bg-teal-500/10">
-                                <span className="flex items-center gap-1.5 text-teal-700 dark:text-teal-300"><CreditCard size={14} /> Gift card {giftCard?.code} − {fmtINR(giftCardApplied)}</span>
-                                <span className="font-semibold tabular-nums">Pay {fmtINR(payableTotal)}</span>
-                            </div>
-                        )}
-
-                        {/* Order: advance is OPTIONAL — no credit-limit block here. */}
-                        <div className="flex items-start gap-2 rounded-md border border-indigo-200 bg-indigo-50 p-3 text-xs text-indigo-700 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-300">
-                            <AlertCircle size={14} className="mt-0.5 shrink-0" />
-                            <span>Advance is optional — leave the amounts blank to book the order with no payment. Any amount collected posts a separate Receipt voucher on the customer&apos;s account.</span>
-                        </div>
-
-                        {(() => {
-                            // Enter on any amount field → confirm. Tab walks Cash → UPI → Confirm
-                            // (Cash-return is tabIndex=-1 and skipped; clickable for chip-changing).
-                            const enterToSubmit = (e: React.KeyboardEvent) => {
-                                if (e.key === "Enter" && !e.shiftKey) {
-                                    e.preventDefault();
-                                    void generateInvoice(e.ctrlKey || e.metaKey);
-                                }
-                            };
-                            return (
-                                <div className="space-y-2">
-                                    {/* Cash — tendered + return on the same row, hint with net cash */}
-                                    <div className="grid grid-cols-[80px_1fr_auto_1fr] items-center gap-2">
-                                        <Label className="flex items-center gap-1 text-xs">
-                                            <Banknote size={12} /> Cash
-                                            <button
-                                                type="button"
-                                                title="Fill remaining amount in cash"
-                                                onClick={() => {
-                                                    const remaining = Math.max(0, +(payableTotal - splitsSum).toFixed(2));
-                                                    setPay((s) => ({ ...s, cashTendered: remaining, cashReturn: 0 }));
-                                                    setTimeout(() => cashTenderedRef.current?.select(), 0);
-                                                }}
-                                                className="ml-0.5 rounded-full text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 p-0.5 transition-colors"
-                                            >
-                                                <Check size={11} strokeWidth={2.5} />
-                                            </button>
-                                        </Label>
-                                        <Input
-                                            ref={cashTenderedRef}
-                                            value={pay.cashTendered || ""}
-                                            onChange={(e) => setPay((s) => ({ ...s, cashTendered: Number(e.target.value) || 0 }))}
-                                            onKeyDown={enterToSubmit}
-                                            placeholder="₹ tendered"
-                                            inputMode="decimal"
-                                            className="text-right"
-                                        />
-                                        <Label className="flex items-center gap-1 text-[10px] text-muted-foreground">return</Label>
-                                        <Input
-                                            value={pay.cashReturn || ""}
-                                            onChange={(e) => setPay((s) => ({ ...s, cashReturn: Number(e.target.value) || 0 }))}
-                                            onKeyDown={enterToSubmit}
-                                            placeholder="₹ change back"
-                                            inputMode="decimal"
-                                            className="text-right"
-                                        />
-                                    </div>
-                                    {pay.cashReturn > 0 && (
-                                        <div className="pl-[88px] text-[11px] text-muted-foreground">
-                                            net cash {fmtINR(cashNet)} = ₹{pay.cashTendered} − ₹{pay.cashReturn} return
-                                        </div>
-                                    )}
-
-                                    {/* Non-cash advance splits — each picks a counter payment
-                                        account (UPI 1 → HDFC, UPI 2 → SBI, Card…). The chosen
-                                        account's ledger is where the advance Receipt is booked. */}
-                                    <TenderSplitInput
-                                        accounts={payAccounts}
-                                        value={splits}
-                                        onChange={setSplits}
-                                        onEnter={enterToSubmit}
-                                    />
-
-                                    {/* Credit — readonly, auto-balanced */}
-                                    <div className="grid grid-cols-[80px_1fr] items-center gap-2">
-                                        <Label className="flex items-center gap-1.5 text-xs text-muted-foreground"><Clock size={12} /> Credit</Label>
-                                        <Input
-                                            value={onCredit ? onCredit.toFixed(2) : ""}
-                                            readOnly
-                                            tabIndex={-1}
-                                            placeholder="auto"
-                                            className="bg-muted/50 cursor-default text-right"
-                                            title="Auto-balanced — fill Cash / UPI / Card etc. and the rest goes on credit"
-                                        />
-                                    </div>
-                                    <div className="flex items-center justify-between gap-2">
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            disabled={payAccounts.length === 0}
-                                            title={payAccounts.length === 0 ? "This counter only accepts Cash. Add payment accounts under /office/admin/counters." : undefined}
-                                            onClick={() => {
-                                                if (payAccounts.length === 0) return;
-                                                const remaining = Math.max(0, +(payableTotal - collected).toFixed(2));
-                                                setSplits((prev) => [...prev, seedTenderSplit(payAccounts, remaining)]);
-                                            }}
-                                        >
-                                            <Plus size={14} /> Add payment line
-                                        </Button>
-
-                                        <ReceiptIndianRupee size={16} /> {submitting ? "Saving…" : `Confirm · ${fmtINR(total)}`}
-                                        <span className="ml-2 rounded border border-primary-foreground/30 px-1.5 py-px text-[10px] opacity-80">↵</span>
-                                    </div>
-                                    {/* Overpayment is collected on Confirm: the extra clears the oldest
-                                        open bills first (FIFO), and any leftover becomes a customer
-                                        advance — booked as a separate GST Receipt voucher so the bank/UPI
-                                        statement matches 1:1. */}
-                                    {(overpaid > 0 || balanceDue > 0) && (
-                                        <div className="space-y-1 rounded-md border border-border bg-muted/30 p-2.5 text-xs">
-                                            {balanceDue > 0 && (
-                                                <div className="flex items-center justify-between">
-                                                    <span className="text-muted-foreground">Existing dues</span>
-                                                    <span className="font-medium text-amber-600">{fmtINR(balanceDue)}</span>
-                                                </div>
-                                            )}
-                                            {overpaid > 0 && (
-                                                <>
-                                                    <div className="flex items-center justify-between">
-                                                        <span className="text-muted-foreground">Extra collected</span>
-                                                        <span className="font-medium text-foreground">{fmtINR(overpaid)}</span>
-                                                    </div>
-                                                    {arrearPaid > 0 && (
-                                                        <div className="flex items-center justify-between">
-                                                            <span className="text-muted-foreground">→ Clears old dues</span>
-                                                            <span className="font-medium text-emerald-600">{fmtINR(arrearPaid)}</span>
-                                                        </div>
-                                                    )}
-                                                    {advanceTaken > 0 && (
-                                                        <div className="flex items-center justify-between">
-                                                            <span className="text-muted-foreground">→ Advance / credit</span>
-                                                            <span className="font-medium text-emerald-600">{fmtINR(advanceTaken)}</span>
-                                                        </div>
-                                                    )}
-                                                    <p className="text-[11px] leading-snug text-muted-foreground">
-                                                        Confirm issues a Receipt voucher for the extra. Needs an identified customer (not a walk-in).
-                                                    </p>
-                                                </>
-                                            )}
-                                            {overpaid <= 0 && balanceDue > 0 && (
-                                                <p className="text-[11px] leading-snug text-muted-foreground">
-                                                    Collect dues by tendering more than the bill — the extra clears the oldest bills first.
-                                                </p>
-                                            )}
-                                        </div>
-                                    )}
-
-                                    {/* Inline confirm CTAs — final amount + actions sit close to the payment-line entry */}
-                                    <div className="grid grid-cols-2 gap-2 pt-1">
-                                        <Button onClick={() => generateInvoice(false)} disabled={submitting} size="lg" variant="outline">
-                                            <ReceiptIndianRupee size={16} /> {submitting ? "Saving…" : "Save Order"}
-                                            <span className="ml-2 rounded border border-primary-foreground/30 px-1.5 py-px text-[10px] opacity-80">↵</span>
-                                        </Button>
-                                        <Button onClick={() => generateInvoice(true)} disabled={submitting} size="lg">
-                                            <ReceiptIndianRupee size={16} /> {submitting ? "Saving…" : "Save + Print"}
-                                            <span className="ml-2 rounded border border-border px-1.5 py-px text-[10px] opacity-80">Ctrl ↵</span>
-                                        </Button>
-                                    </div>
-                                </div>
-                            );
-                        })()}
-                    </div>
-
-                    <DialogFooter>
-                        <Button variant="ghost" onClick={() => setCheckoutOpen(false)} disabled={submitting}>
-                            Cancel
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+            {/* Share a UPI QR with the customer to collect the advance remotely. */}
+            <PaymentLinkDialog
+                open={shareOpen}
+                onOpenChange={setShareOpen}
+                defaultAmount={onCredit > 0.01 ? onCredit : total}
+                partyName={snapshot?.party.name}
+                partyPhone={snapshot?.party.phone ?? null}
+                upiVpa={shareVpa}
+                lockedProviderId="upi"
+            />
 
         </div>
     );

@@ -1,11 +1,18 @@
 "use client";
 
 // ── CheckoutDialog ───────────────────────────────────────────────────────────
-// The POS sale checkout modal: Total/Collected/On-credit header, Cash row, the
+// The POS checkout modal: Total/Collected/On-credit header, Cash row, the
 // multi-tender split picker (TenderSplitInput), Credit (auto-balanced) row, the
 // overpayment panel, and the Confirm / Confirm+Print CTAs. Extracted from
 // PosScreen as a presentational component — it owns NO business logic; all state
 // + the confirm/share actions are passed in by the parent.
+//
+// `mode` adapts the same body to two sites:
+//   "sale"  (default) — collecting AGAINST a bill: credit-limit guard, Confirm
+//                       blocked on under-payment, overpayment → Receipt panel.
+//   "order" — collecting an OPTIONAL advance on a POS order: no credit-limit
+//             block, partial/zero advance is fine, "Save Order" CTAs. The sale
+//             path renders byte-identically to before when mode is omitted.
 
 import React from "react";
 import {
@@ -25,6 +32,7 @@ type PayState = { cashTendered: number; cashReturn: number };
 
 export function CheckoutDialog({
     open, onOpenChange,
+    mode = "sale",
     total, collected, onCredit, payableTotal,
     overpaid, balanceDue, arrearPaid, advanceTaken,
     giftCardApplied, giftCardCode,
@@ -35,6 +43,7 @@ export function CheckoutDialog({
 }: {
     open: boolean;
     onOpenChange: (v: boolean) => void;
+    mode?: "sale" | "order";
     // Totals (all rupees)
     total: number;
     collected: number;
@@ -61,8 +70,17 @@ export function CheckoutDialog({
     // Actions
     submitting: boolean;
     onConfirm: (printAfter: boolean) => void;
-    onShare: (acct: TenderAccount) => void;
+    onShare?: (acct: TenderAccount) => void;
 }) {
+    const isOrder = mode === "order";
+    // Sale blocks Confirm on under-payment (a credit sale must go through /sale)
+    // and on a credit-limit breach. An order advance is optional, so only
+    // `submitting` gates it — the route still rejects advance > total.
+    const confirmBlocked = submitting || (!isOrder && (creditLimitBreached || onCredit > 0.01));
+    const underpayTitle = !isOrder && onCredit > 0.01
+        ? "Collect the full bill amount to confirm (under-payment → use /sale for credit)"
+        : overpaid > 0 ? "Extra is collected as a Receipt voucher — clears old dues first, leftover becomes advance" : undefined;
+
     // Enter on any amount field → confirm. Ctrl/Cmd+Enter → confirm + print.
     const enterToSubmit = (e: React.KeyboardEvent) => {
         if (e.key === "Enter" && !e.shiftKey) {
@@ -75,7 +93,10 @@ export function CheckoutDialog({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-lg">
                 <DialogHeader>
-                    <DialogTitle>Checkout · {fmtINR(total)}</DialogTitle>
+                    <DialogTitle>
+                        {isOrder ? "Save Order" : "Checkout"} · {fmtINR(total)}
+                        {isOrder && <span className="text-sm font-normal text-muted-foreground"> — advance optional</span>}
+                    </DialogTitle>
                 </DialogHeader>
 
                 <div className="space-y-3">
@@ -101,8 +122,8 @@ export function CheckoutDialog({
                         </div>
                     )}
 
-                    {/* Credit limit warning — shown when on-credit portion would breach the limit */}
-                    {creditLimitBreached && (
+                    {/* Sale: credit-limit warning when the on-credit portion would breach the limit. */}
+                    {!isOrder && creditLimitBreached && (
                         <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
                             <AlertCircle size={16} className="mt-0.5 shrink-0" />
                             <span>
@@ -113,6 +134,14 @@ export function CheckoutDialog({
                                     `this sale adds ₹${onCredit.toLocaleString("en-IN")} on credit.`
                                 }
                             </span>
+                        </div>
+                    )}
+
+                    {/* Order: advance is optional — no credit-limit block. */}
+                    {isOrder && (
+                        <div className="flex items-start gap-2 rounded-md border border-indigo-200 bg-indigo-50 p-3 text-xs text-indigo-700 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-300">
+                            <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                            <span>Advance is optional — leave the amounts blank to book the order with no payment. Any amount collected posts a separate Receipt voucher on the customer&apos;s account.</span>
                         </div>
                     )}
 
@@ -147,8 +176,9 @@ export function CheckoutDialog({
                         {/* Overpayment is collected on Confirm: the extra clears the oldest
                             open bills first (FIFO), and any leftover becomes a customer
                             advance — booked as a separate GST Receipt voucher so the bank/UPI
-                            statement matches 1:1. */}
-                        {(overpaid > 0 || balanceDue > 0) && (
+                            statement matches 1:1. (Sale only — an order advance can't exceed
+                            the total, so there's nothing to overpay.) */}
+                        {!isOrder && (overpaid > 0 || balanceDue > 0) && (
                             <div className="space-y-1 rounded-md border border-border bg-muted/30 p-2.5 text-xs">
                                 {balanceDue > 0 && (
                                     <div className="flex items-center justify-between">
@@ -189,14 +219,12 @@ export function CheckoutDialog({
 
                         {/* Inline confirm CTAs — final amount + actions sit close to the payment-line entry */}
                         <div className="grid grid-cols-2 gap-2 pt-1">
-                            <Button onClick={() => onConfirm(false)} disabled={submitting || creditLimitBreached || onCredit > 0.01} size="lg" variant="outline"
-                                title={onCredit > 0.01 ? "Collect the full bill amount to confirm (under-payment → use /sale for credit)" : overpaid > 0 ? "Extra is collected as a Receipt voucher — clears old dues first, leftover becomes advance" : undefined}>
-                                <ReceiptIndianRupee size={16} /> {submitting ? "Saving…" : (overpaid > 0 ? "Confirm + collect" : "Confirm")}
+                            <Button onClick={() => onConfirm(false)} disabled={confirmBlocked} size="lg" variant="outline" title={underpayTitle}>
+                                <ReceiptIndianRupee size={16} /> {submitting ? "Saving…" : (isOrder ? "Save Order" : overpaid > 0 ? "Confirm + collect" : "Confirm")}
                                 <span className="ml-2 rounded border border-primary-foreground/30 px-1.5 py-px text-[10px] opacity-80">↵</span>
                             </Button>
-                            <Button onClick={() => onConfirm(true)} disabled={submitting || creditLimitBreached || onCredit > 0.01} size="lg"
-                                title={onCredit > 0.01 ? "Collect the full bill amount to confirm (under-payment → use /sale for credit)" : overpaid > 0 ? "Extra is collected as a Receipt voucher — clears old dues first, leftover becomes advance" : undefined}>
-                                <ReceiptIndianRupee size={16} /> {submitting ? "Saving…" : "Confirm + Print"}
+                            <Button onClick={() => onConfirm(true)} disabled={confirmBlocked} size="lg" title={underpayTitle}>
+                                <ReceiptIndianRupee size={16} /> {submitting ? "Saving…" : (isOrder ? "Save + Print" : "Confirm + Print")}
                                 <span className="ml-2 rounded border border-border px-1.5 py-px text-[10px] opacity-80">Ctrl ↵</span>
                             </Button>
                         </div>
