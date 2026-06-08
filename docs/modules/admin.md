@@ -14,7 +14,7 @@
 - `/office/admin/role` — Roles UI (the **Enterprise Permission Matrix** lives here)
 - `/office/admin/branches`, `/office/admin/departments`, `/office/admin/positions`
 - `/office/admin/org-chart` — visual hierarchy
-- `/office/admin/counters` — POS counter management — create / rename / activate / delete, plus per-method ledger mapping (UPI / Card / Wallet / Cheque / Bank Transfer → Account). See [pos.md](./pos.md).
+- `/office/admin/counters` — POS counter management — create / rename / activate / delete, plus per-method ledger mapping (UPI / Card / Wallet / Cheque / Bank Transfer → Account) and a per-counter **UPI ID (`name@bank`)** for the POS "Share payment link" QR. See [pos.md](./pos.md).
 
 > 2026-05-11: route groups `(admin)`, `(core)`, `(message)`, `(roadmap)`, `(social)` were promoted to real URL segments. Sub-paths now carry their module prefix (e.g. `/office/branches` → `/office/admin/branches`, `/office/users` → `/office/admin/users`, profile pages `/office/users/[id]` → `/office/social/users/[id]`).
 
