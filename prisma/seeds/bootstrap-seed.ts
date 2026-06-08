@@ -439,6 +439,20 @@ const PIPELINES: PipelineSeed[] = [
         ],
     },
     {
+        id: "P8", name: "delivery", label: "Delivery",
+        description: "Delivery / dispatch sub-pipeline — carrier dispatch & tracking for confirmed orders",
+        color: "bg-sky-100 text-sky-800", order: 8,
+        statuses: [
+            { id: "S50", label: "To Dispatch", color: "bg-gray-100 text-gray-600", order: 1, isEntryPoint: true,  isTerminal: false, pipelineId: "P8" },
+            { id: "S51", label: "Carrier Assigned", color: "bg-blue-100 text-blue-700", order: 2, isEntryPoint: false, isTerminal: false, pipelineId: "P8", actionLabel: "Assign Carrier" },
+            { id: "S52", label: "Picked Up", color: "bg-indigo-100 text-indigo-700", order: 3, isEntryPoint: false, isTerminal: false, pipelineId: "P8", actionLabel: "Mark Picked Up" },
+            { id: "S53", label: "In Transit", color: "bg-purple-100 text-purple-700", order: 4, isEntryPoint: false, isTerminal: false, pipelineId: "P8", actionLabel: "Mark In Transit" },
+            { id: "S54", label: "Out for Delivery", color: "bg-amber-100 text-amber-700", order: 5, isEntryPoint: false, isTerminal: false, pipelineId: "P8", actionLabel: "Out for Delivery" },
+            { id: "S55", label: "Delivered", color: "bg-green-100 text-green-700", order: 6, isEntryPoint: false, isTerminal: true,  pipelineId: "P8", actionLabel: "Mark Delivered" },
+            { id: "S56", label: "Failed / RTO", color: "bg-red-100 text-red-600", order: 7, isEntryPoint: false, isTerminal: true,  pipelineId: "P8", actionLabel: "Mark Failed" },
+        ],
+    },
+    {
         id: "P6", name: "deals", label: "Deals",
         description: "Sales deal pipeline (revenue opportunities); stages shared with pipeline settings",
         color: "bg-cyan-100 text-cyan-800", order: 6,
@@ -537,6 +551,17 @@ const STATUS_TRANSITIONS = [
     { fromStatusId: "S45", toStatusId: "S46" },
     { fromStatusId: "S46", toStatusId: "S47" },
     { fromStatusId: "S46", toStatusId: "S49" },
+    // P8 delivery sub-pipeline
+    { fromStatusId: "S50", toStatusId: "S51" },
+    { fromStatusId: "S50", toStatusId: "S56" },
+    { fromStatusId: "S51", toStatusId: "S52" },
+    { fromStatusId: "S51", toStatusId: "S56" },
+    { fromStatusId: "S52", toStatusId: "S53" },
+    { fromStatusId: "S52", toStatusId: "S56" },
+    { fromStatusId: "S53", toStatusId: "S54" },
+    { fromStatusId: "S53", toStatusId: "S56" },
+    { fromStatusId: "S54", toStatusId: "S55" },
+    { fromStatusId: "S54", toStatusId: "S56" },
 ];
 
 const SUB_STATUS_TRANSITIONS = [

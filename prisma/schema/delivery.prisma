@@ -1,0 +1,33 @@
+// O2C Delivery sub-pipeline (Phase 4). A Delivery is spawned when an order is
+// Confirmed and rides pipeline P8 (To Dispatch → … → Delivered / Failed-RTO). It
+// reports a coarse status back to the order. Polymorphic order ref (same scheme as
+// StockReservation): orderSource = "inv" (POS_ORDER/SALES_ORDER voucher) | "shop"
+// (ShopOrder). GL-silent — carrier cost is decision-support (Additional-Cost layer),
+// never posted here.
+model Delivery {
+  id          Int     @id @default(autoincrement())
+  orderSource String  // "inv" | "shop"
+  orderId     Int
+  pipelineId  String?
+  statusId    String?
+  // Carrier: SHIPROCKET | DTDC | MARUTI | OWN_BOY | PICKUP — every option (incl.
+  // the in-house delivery boy and counter pickup) is just a carrier.
+  carrier     String?
+  awb         String?
+  trackingUrl String?
+  addressJson Json?
+  // Two distinct amounts (never conflated): what we charge the customer vs what we
+  // pay the carrier. Both display-only here.
+  chargeToCustomerPaise Int @default(0)
+  costToCarrierPaise    Int @default(0)
+  createdBy   Json     @default("{}") // ActorSnapshot
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  pipeline       Pipeline?     @relation("DeliveryPipeline", fields: [pipelineId], references: [id])
+  deliveryStatus TicketStatus? @relation("DeliveryStatus", fields: [statusId], references: [id])
+
+  @@index([orderSource, orderId])
+  @@index([statusId])
+  @@map("deliveries")
+}

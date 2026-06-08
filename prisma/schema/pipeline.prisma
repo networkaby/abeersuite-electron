@@ -19,6 +19,8 @@ model Pipeline {
   tasks       Task[]
   // Order-type InvVouchers (POS_ORDER / SALES_ORDER) riding this pipeline (O2C P7).
   orderVouchers InvVoucher[] @relation("OrderVoucherPipeline")
+  // Deliveries riding this pipeline (O2C P8).
+  deliveries    Delivery[]   @relation("DeliveryPipeline")
 }
 
 model TicketStatus {
@@ -42,6 +44,7 @@ model TicketStatus {
   shopOrders      ShopOrder[]
   tasks           Task[]
   orderVouchers   InvVoucher[] @relation("OrderVoucherStatus")
+  deliveries      Delivery[]   @relation("DeliveryStatus")
 }
 
 model TicketSubStatus {
