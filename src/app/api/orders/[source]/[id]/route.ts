@@ -33,10 +33,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ source:
                 lines: { select: { id: true, productId: true, description: true, quantity: true, rate: true, taxRate: true, mrpPaise: true, savedSalePricePaise: true, amount: true, product: { select: { sku: true, name: true } } } },
             },
         });
-        if (!v || (v.type !== "POS_ORDER" && v.type !== "SALES_ORDER")) return NextResponse.json({ error: "Order not found" }, { status: 404 });
+        if (!v || (v.type !== "POS_ORDER" && v.type !== "SALES_ORDER" && v.type !== "POS_ESTIMATE")) return NextResponse.json({ error: "Order not found" }, { status: 404 });
         return NextResponse.json({
             id: v.id, ref: v.reference, customer: v.partyName, statusId: v.orderStatusId, accountId: v.accountId,
-            editable: v.orderStatusId != null && EDITABLE_STAGES.includes(v.orderStatusId),
+            // Estimates are GL-silent quotes → always editable; orders only at New / Under-Review.
+            editable: v.type === "POS_ESTIMATE" ? true : (v.orderStatusId != null && EDITABLE_STAGES.includes(v.orderStatusId)),
             subtotal: toNumber(v.subtotal), taxAmount: toNumber(v.taxAmount), discountAmt: v.discountAmt != null ? toNumber(v.discountAmt) : 0, discountPct: v.discountPct != null ? toNumber(v.discountPct) : null, totalAmount: toNumber(v.totalAmount),
             lines: v.lines.map((l) => ({
                 id: l.id, productId: l.productId, sku: l.product.sku, name: l.product.name, description: l.description,
@@ -68,8 +69,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ source
         }
 
         const order = await prisma.invVoucher.findUnique({ where: { id }, select: { type: true, orderStatusId: true } });
-        if (!order || (order.type !== "POS_ORDER" && order.type !== "SALES_ORDER")) return NextResponse.json({ error: "Order not found" }, { status: 404 });
-        if (!order.orderStatusId || !EDITABLE_STAGES.includes(order.orderStatusId)) {
+        if (!order || (order.type !== "POS_ORDER" && order.type !== "SALES_ORDER" && order.type !== "POS_ESTIMATE")) return NextResponse.json({ error: "Order not found" }, { status: 404 });
+        // Estimates are GL-silent quotes → always editable. Orders only at New / Under-Review.
+        if (order.type !== "POS_ESTIMATE" && (!order.orderStatusId || !EDITABLE_STAGES.includes(order.orderStatusId))) {
             return NextResponse.json({ error: "Only orders at New / Under Review can be edited. Move it back to Review first.", code: "NOT_EDITABLE" }, { status: 409 });
         }
 

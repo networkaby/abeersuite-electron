@@ -201,9 +201,10 @@ const QUOTE_CFG = {
 export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; editId?: number }) {
     const cfg = QUOTE_CFG[mode];
     const router = useRouter();
-    // Edit mode (order only): reopen an existing order in this same screen, hydrate
+    // Edit mode: reopen an existing order / estimate in this same screen, hydrate
     // its customer + lines, and PATCH on save instead of creating a new voucher.
-    const isEdit = mode === "order" && editId != null;
+    // Both go through the order endpoint — it accepts POS_ESTIMATE too (GL-silent).
+    const isEdit = editId != null;
     // ── Customer search omnibox (delegated to shared component) ─────────────
     const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
     const [loadingSnapshot, setLoadingSnapshot] = useState(false);
@@ -692,12 +693,12 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
             } catch (e: unknown) {
                 if (cancelled) return;
                 const msg = axios.isAxiosError(e) ? (e.response?.data as { error?: string })?.error : undefined;
-                toast.error(msg ?? "Could not load the order to edit");
-                router.push("/office/orders");
+                toast.error(msg ?? `Could not load the ${mode} to edit`);
+                router.push(mode === "order" ? "/office/orders" : "/office/accountancy/vouchers-registers/estimates");
             }
         })();
         return () => { cancelled = true; };
-        // One-shot hydration keyed on the order id; the helpers it calls are stable.
+        // One-shot hydration keyed on the voucher id; the helpers it calls are stable.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isEdit, editId]);
 
@@ -799,16 +800,18 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
                         mrpPaise: l.mrpPaise ?? null,
                         savedSalePricePaise: l.barcodePaise ?? null,
                     })),
-                    discountAmt: totalDiscount,
+                    // Order locks the full bill discount (tier + loyalty + coupon) + shipping
+                    // + round-off; an estimate is a tag-price quote → tier discount only.
+                    discountAmt: mode === "order" ? totalDiscount : discountAmount,
                     discountPct: discountAmount > 0 ? discountPct : 0,
-                    shippingAmt,
-                    roundOff,
+                    shippingAmt: mode === "order" ? shippingAmt : 0,
+                    roundOff: mode === "order" ? roundOff : 0,
                 });
-                toast.success("Order updated");
-                router.push("/office/orders");
+                toast.success(mode === "order" ? "Order updated" : "Estimate updated");
+                router.push(mode === "order" ? "/office/orders" : "/office/accountancy/vouchers-registers/estimates");
             } catch (e: unknown) {
                 const msg = axios.isAxiosError(e) ? (e.response?.data as { error?: string })?.error : undefined;
-                toast.error(msg ?? "Failed to update order");
+                toast.error(msg ?? `Failed to update ${mode}`);
             } finally {
                 setSubmitting(false);
             }

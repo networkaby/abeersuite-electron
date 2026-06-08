@@ -52,8 +52,9 @@ export const EDIT_FORM_URLS: Record<string, string> = {
     SALE_RETURN:     "/vouchers/sale-returns/new",
     PURCHASE_RETURN: "/vouchers/purchase-returns/new",
     ESTIMATE:        "/vouchers/estimates/new",
-    // POS Estimate has no editable form yet → reuse the estimate form for read / duplicate.
-    POS_ESTIMATE:    "/vouchers/estimates/new",
+    // POS Estimate edits in the POS estimate screen — the same screen it was created
+    // in (GL-silent quote). editFormUrl appends ?voucherId=, which the page reads.
+    POS_ESTIMATE:    "/vouchers/pos/estimate",
     // Orders (counter POS_ORDER + office SALES_ORDER) edit in the POS order screen —
     // it covers the full discount surface the office form lacks. editFormUrl appends
     // ?voucherId=, which the page reads to hydrate + PATCH (New / Under-Review only).
