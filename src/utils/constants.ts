@@ -376,6 +376,19 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         ],
     },
 
+    // Orders (O2C backbone — counter + online + office orders on one pipeline)
+    {
+        label: "Orders",
+        icon: ListOrdered,
+        key: "orders",
+        permission: "accountancy:view:org",
+        dashboardHref: "/office/orders",
+        pathPrefixes: ["/office/orders"],
+        children: [
+            { label: "Orders board", icon: ListOrdered, href: "/office/orders", permission: "accountancy:view:org" },
+        ],
+    },
+
 
 
     // E-Commerce
