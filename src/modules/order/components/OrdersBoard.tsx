@@ -36,8 +36,9 @@ export function OrdersBoard() {
     const [dragged, setDragged] = useState<OrderCard | null>(null);
     const [editingOrderId, setEditingOrderId] = useState<number | null>(null);
 
+    // Fetch only sets state in async callbacks (no synchronous setState in the
+    // mount effect — initial loading=true covers first paint; Refresh sets it).
     const load = useCallback(() => {
-        setLoading(true);
         axios.get<{ stages: Stage[]; orders: OrderCard[] }>("/api/orders")
             .then((r) => { setStages(r.data.stages); setOrders(r.data.orders); })
             .catch(() => toast.error("Failed to load orders"))
@@ -76,7 +77,7 @@ export function OrdersBoard() {
         <div className="space-y-3">
             <div className="flex items-center justify-between">
                 <p className="text-sm text-muted-foreground">{orders.length} order{orders.length !== 1 ? "s" : ""} across all channels</p>
-                <Button variant="outline" size="sm" onClick={load}><RefreshCw size={14} /> Refresh</Button>
+                <Button variant="outline" size="sm" onClick={() => { setLoading(true); load(); }}><RefreshCw size={14} /> Refresh</Button>
             </div>
             <div className="flex gap-3 overflow-x-auto pb-4">
                 {stages.map((stage) => {

@@ -49,8 +49,9 @@ export function DeliveryBoard() {
         }
     }
 
+    // No synchronous setState in the mount effect (initial loading=true covers
+    // first paint; Refresh sets it in its own handler).
     const load = useCallback(() => {
-        setLoading(true);
         axios.get<{ stages: Stage[]; deliveries: DeliveryCard[] }>("/api/deliveries")
             .then((r) => { setStages(r.data.stages); setItems(r.data.deliveries); })
             .catch(() => toast.error("Failed to load deliveries"))
@@ -77,7 +78,7 @@ export function DeliveryBoard() {
         <div className="space-y-3">
             <div className="flex items-center justify-between">
                 <p className="text-sm text-muted-foreground">{items.length} deliver{items.length !== 1 ? "ies" : "y"}</p>
-                <Button variant="outline" size="sm" onClick={load}><RefreshCw size={14} /> Refresh</Button>
+                <Button variant="outline" size="sm" onClick={() => { setLoading(true); load(); }}><RefreshCw size={14} /> Refresh</Button>
             </div>
             <div className="flex gap-3 overflow-x-auto pb-4">
                 {stages.map((stage) => {

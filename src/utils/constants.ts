@@ -11,7 +11,6 @@ import {
     Plus,
     FileText,
     Calculator,
-    Boxes,
     Network,
     Briefcase,
     Monitor,
@@ -30,7 +29,6 @@ import {
     Inbox,
     BookOpen,
     ScrollText,
-    Table,
     ListOrdered,
     Receipt,
     ArrowUpRight,
@@ -57,8 +55,6 @@ import {
     Ticket,
     CreditCard,
     Gift,
-    Megaphone,
-    Plug,
 } from "lucide-react";
 
 // Keys match the Priority enum: LOW | MEDIUM | HIGH | URGENT
