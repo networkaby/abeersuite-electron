@@ -29,7 +29,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (!voucher) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     const isPurchase = voucher.type === "PURCHASE" || voucher.type === "GRN";
-    const isSale     = voucher.type === "SALE"     || voucher.type === "CHALLAN";
+    // POS = counter sale: it moves stock OUT like SALE, so reversing it must put
+    // the stock back. Omitting POS here left the GL reversed but stock un-restored
+    // → inventory (a Balance-Sheet asset) came out wrong.
+    const isSale     = voucher.type === "SALE"     || voucher.type === "POS" || voucher.type === "CHALLAN";
     const isBranchTransfer = voucher.type === "BRANCH_TRANSFER";
     // Voucher types whose stock impact is computed at post-time (per-line
     // delta vs running stock), not driven by a fixed in/out direction.

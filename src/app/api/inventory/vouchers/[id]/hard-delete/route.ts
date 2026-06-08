@@ -31,7 +31,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (!voucher) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     const isPurchase = voucher.type === "PURCHASE" || voucher.type === "GRN";
-    const isSale     = voucher.type === "SALE"     || voucher.type === "CHALLAN";
+    // POS = counter sale: moves stock OUT like SALE, so reversing must restore it.
+    // Omitting POS left the GL reversed but stock un-restored → inventory (a
+    // Balance-Sheet asset) came out wrong.
+    const isSale     = voucher.type === "SALE"     || voucher.type === "POS" || voucher.type === "CHALLAN";
 
     const needsReversal = isPosted(voucher) && !isDeleted(voucher) && !isCancelled(voucher);
 
