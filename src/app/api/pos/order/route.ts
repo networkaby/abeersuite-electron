@@ -45,6 +45,13 @@ export async function POST(req: NextRequest) {
     try {
         const body = (await req.json()) as PosQuoteBody & { payments?: PayLine[] };
 
+        // O2C: every order needs an identified customer — there is NO anonymous/
+        // walk-in order (anonymous = instant counter Sale only). The Order screen
+        // already blocks save without a customer; this is the API backstop.
+        if (!body.accountId) {
+            return NextResponse.json({ error: "An order needs a customer. Pick or create one first.", code: "CUSTOMER_REQUIRED" }, { status: 400 });
+        }
+
         const payments = (Array.isArray(body.payments) ? body.payments : []).filter((p) => p && p.amount > 0);
         const advance = payments.reduce((s, p) => s + Number(p.amount), 0);
 
