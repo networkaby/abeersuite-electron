@@ -1,5 +1,5 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { invNextRef, calcVoucherTotals } from "@/modules/inventory/lib/stock";
@@ -133,6 +133,7 @@ export async function POST(req: Request) {
     const { data, error } = await validateRequest(req, createSchema);
     if (error) return error;
     const body = data;
+    const _t0 = performance.now(); // perf timing — see [pos-timing] log before the response
 
     // ── Active shift requirement ──────────────────────────────────────────
     // Branch context comes from the shift, not the session cookie.
@@ -498,6 +499,7 @@ export async function POST(req: Request) {
     const sellerStateCode = (posBranch?.gstStateCode || "").trim() || null;
 
     try {
+        const _tPreTx = performance.now();
         const result = await prisma.$transaction(async (tx) => {
             // ── Credit limit check (inside tx so balance read is fresh) ────
             await checkCreditLimit(tx, body.accountId, onCredit);
@@ -826,11 +828,17 @@ export async function POST(req: Request) {
             timeout: 30_000,
             maxWait: 10_000,
         });
+        const _tTx = performance.now();
 
         const touchedProductIds = body.lines.map((l) => l.productId);
-        await recomputePricesForProducts(touchedProductIds).catch((err: unknown) => {
-            Sentry.captureException(err, { tags: { source: "price-recompute", voucherId: String(result.voucherId) } });
-            console.error("[price-recompute] failed for voucher", result.voucherId, err);
+        // Pricing-cache refresh is NOT needed for the receipt response — defer it
+        // past the response with after() (reliable on serverless, unlike a bare
+        // fire-and-forget) so the cashier never waits on it.
+        after(async () => {
+            await recomputePricesForProducts(touchedProductIds).catch((err: unknown) => {
+                Sentry.captureException(err, { tags: { source: "price-recompute", voucherId: String(result.voucherId) } });
+                console.error("[price-recompute] failed for voucher", result.voucherId, err);
+            });
         });
 
         // Resolved POS print template — the cashier lacks `settings:manage`, so
@@ -838,6 +846,7 @@ export async function POST(req: Request) {
         // forwarded to the thermal relay so the printed slip respects the admin's
         // template and matches /receipt/invoice/[id]?kind=POS. Display-only.
         const posTemplate = await getVoucherTemplate("POS");
+        console.log(`[pos-timing] ${result.invoiceNumber}: preTx=${Math.round(_tPreTx - _t0)}ms tx=${Math.round(_tTx - _tPreTx)}ms post=${Math.round(performance.now() - _tTx)}ms total=${Math.round(performance.now() - _t0)}ms (lines=${body.lines.length})`);
         return NextResponse.json({ ...result, posTemplate }, { status: 201 });
     } catch (err) {
         if (err instanceof CreditLimitError) {
