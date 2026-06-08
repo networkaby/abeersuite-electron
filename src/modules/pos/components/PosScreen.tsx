@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
 import Link from "next/link";
@@ -177,7 +178,18 @@ const since = (iso: string | null) => {
 
 // ── Component ────────────────────────────────────────────────────────────────
 
-export default function PosScreen() {
+type EditMeta = { charges: { accountId: number; description?: string; amount: number }[]; discountAmt: number; discountPct: number | null; shippingAmt: number; roundOff: number };
+
+export default function PosScreen({ editId }: { editId?: number }) {
+    const router = useRouter();
+    // Edit mode: reopen a posted POS sale here (instead of the office form, which
+    // drops the POS-specific charge rows → wrong Balance Sheet). We hydrate only the
+    // customer + cart; on save we PATCH the lines and RE-SEND the original
+    // charges/discount while OMITTING tenders — so the payment + loyalty / coupon /
+    // gift-card rows are preserved and the GL re-posts faithfully. A reduced total
+    // over the unchanged payment lands as a credit on the customer's account.
+    const isEdit = editId != null;
+    const editMeta = useRef<EditMeta | null>(null);
     // ── Customer search omnibox (delegated to shared component) ─────────────
     const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
     const [loadingSnapshot, setLoadingSnapshot] = useState(false);
@@ -345,7 +357,8 @@ export default function PosScreen() {
             if (createDialogOpen || checkoutOpen) return;
             if (cart.length === 0 || !snapshot?.account) return;
             e.preventDefault();
-            openCheckout();
+            if (isEdit) void generateInvoice(false);   // editing → PATCH, no checkout
+            else openCheckout();
         };
         window.addEventListener("keydown", handler);
         return () => window.removeEventListener("keydown", handler);
@@ -627,6 +640,60 @@ export default function PosScreen() {
         partySearchRef.current?.focus();
     };
 
+    // ── Edit mode: hydrate a posted POS sale on mount ───────────────────────────
+    useEffect(() => {
+        if (!isEdit) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const { data } = await axios.get<{
+                    accountId: number | null; type: string; status: string; deletedAt: string | null;
+                    discountAmt: string | number | null; discountPct: string | number | null;
+                    shippingAmt: string | number | null; roundOff: string | number | null;
+                    lines: { productId: number; description: string | null; quantity: string | number; rate: string | number; taxRate: string | number; mrpPaise: number | null; savedSalePricePaise: number | null; product: { sku: string; name: string } }[];
+                    charges: { accountId: number; description: string | null; amount: string | number }[];
+                }>(`/api/inventory/vouchers/${editId}`);
+                if (cancelled) return;
+                if (data.type !== "POS" || data.deletedAt || data.status === "CANCELLED") {
+                    toast.error("This POS sale can't be edited.");
+                    router.push("/office/accountancy/vouchers-registers/sales");
+                    return;
+                }
+                // Preserve the original charges (incl. server-added loyalty / coupon /
+                // gift-card rows) + discount / shipping / round-off — re-sent on save so
+                // the total + GL stay faithful while the cashier only adjusts items.
+                editMeta.current = {
+                    charges: data.charges.map((c) => ({ accountId: c.accountId, description: c.description ?? undefined, amount: Number(c.amount) })),
+                    discountAmt: data.discountAmt != null ? Number(data.discountAmt) : 0,
+                    discountPct: data.discountPct != null ? Number(data.discountPct) : null,
+                    shippingAmt: data.shippingAmt != null ? Number(data.shippingAmt) : 0,
+                    roundOff: data.roundOff != null ? Number(data.roundOff) : 0,
+                };
+                if (data.accountId != null) await fetchSnapshot(data.accountId);
+                if (cancelled) return;
+                setCart(data.lines.map((l) => ({
+                    productId: l.productId,
+                    sku: l.product.sku,
+                    name: l.product.name,
+                    qty: Number(l.quantity),
+                    unitPrice: Number(l.rate),
+                    description: l.description?.split(" · ").slice(1).join(" · ") || "",
+                    taxRate: Number(l.taxRate),
+                    mrpPaise: l.mrpPaise,
+                    barcodePaise: l.savedSalePricePaise,
+                })));
+            } catch (e: unknown) {
+                if (cancelled) return;
+                const msg = axios.isAxiosError(e) ? (e.response?.data as { error?: string })?.error : undefined;
+                toast.error(msg ?? "Could not load the sale to edit");
+                router.push("/office/accountancy/vouchers-registers/sales");
+            }
+        })();
+        return () => { cancelled = true; };
+        // One-shot hydration keyed on the voucher id; the helpers it calls are stable.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isEdit, editId]);
+
     // ── Cart actions ────────────────────────────────────────────────────────
     const addToCart = (p: ProductOption) => {
         // Product's effectiveSalePricePaise is treated as TAX-INCLUSIVE (matches
@@ -707,6 +774,44 @@ export default function PosScreen() {
 
     const generateInvoice = async (printAfter = false) => {
         if (!snapshot?.account) return;
+
+        // ── Edit mode: PATCH the existing sale's lines, preserving payments + offers ──
+        // Re-send the original charges + discount/shipping/round-off and OMIT tenders, so
+        // the PATCH keeps the loyalty/coupon/gift-card + payment rows and re-posts the GL
+        // faithfully. A reduced total over the unchanged payment becomes a customer
+        // account credit. No checkout / loyalty / coupon flow on an edit.
+        if (isEdit && editMeta.current) {
+            if (cart.length === 0) { toast.error("Cart is empty"); return; }
+            if (cart.some((l) => l.unitPrice <= 0)) { toast.error("All lines need a unit price"); return; }
+            setSubmitting(true);
+            try {
+                await axios.patch(`/api/inventory/vouchers/${editId}`, {
+                    lines: cart.map((l) => ({
+                        productId: l.productId,
+                        description: `${l.sku} — ${l.name}${l.description ? ` · ${l.description}` : ""}`,
+                        quantity: l.qty,
+                        rate: l.unitPrice,
+                        taxRate: l.taxRate,
+                        mrpPaise: l.mrpPaise ?? undefined,
+                    })),
+                    charges: editMeta.current.charges,
+                    discountAmt: editMeta.current.discountAmt,
+                    discountPct: editMeta.current.discountPct ?? undefined,
+                    shippingAmt: editMeta.current.shippingAmt,
+                    roundOff: editMeta.current.roundOff,
+                    // tenders deliberately omitted → preserved; the GL re-post reuses them.
+                });
+                toast.success("Sale updated");
+                router.push("/office/accountancy/vouchers-registers/sales");
+            } catch (e: unknown) {
+                const msg = axios.isAxiosError(e) ? (e.response?.data as { error?: string })?.error : undefined;
+                toast.error(msg ?? "Failed to update sale");
+            } finally {
+                setSubmitting(false);
+            }
+            return;
+        }
+
         if (creditLimitBreached) return;   // guard against keyboard shortcut bypass
         // Build the summary from the named pay fields. Cash net = tendered − return.
         const summaryParts: string[] = [];
@@ -1745,8 +1850,8 @@ export default function PosScreen() {
                                 </div>
                                 <span className="text-xl font-bold tabular-nums">{fmtINR(total)}</span>
                             </div>
-                            <Button onClick={openCheckout} disabled={cart.length === 0 || !snapshot?.account} className="h-12 w-full text-base" size="lg">
-                                <ReceiptIndianRupee size={18} /> Checkout
+                            <Button onClick={isEdit ? () => void generateInvoice(false) : openCheckout} disabled={cart.length === 0 || !snapshot?.account || submitting} className="h-12 w-full text-base" size="lg">
+                                <ReceiptIndianRupee size={18} /> {isEdit ? "Update Sale" : "Checkout"}
                                 <span className="ml-2 rounded border border-primary-foreground/30 px-1.5 py-px text-[10px] opacity-80">Ctrl ↵</span>
                             </Button>
                         </div>
