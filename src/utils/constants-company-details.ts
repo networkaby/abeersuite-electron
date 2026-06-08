@@ -133,7 +133,7 @@ export const COMPANY_DETAILS: CompanyDetails = {
     },
 
     upi: {
-        vpa: "networkservice@okhdfcbank",                       // e.g. "networkservice@okhdfcbank" — OWNER TO FILL
+        vpa: "",                       // e.g. "networkservice@okhdfcbank" — OWNER TO FILL
         payeeName: "Network Service",
     },
 
