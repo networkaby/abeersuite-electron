@@ -20,6 +20,10 @@ export interface NormalizedOrder {
     branchId: string | null;
     dealId: number | null;
     createdAt: string;           // ISO
+    // G3 — credit at the Review gate: the customer's limit + current AR, and whether
+    // confirming this order on credit would breach it (deny-by-default: NULL/0 limit =
+    // no credit). null for shop orders / accounts we can't resolve.
+    credit: { limit: number; outstanding: number; breach: boolean } | null;
 }
 
 /** All orders across channels, optionally filtered to one P7 stage. */
@@ -34,7 +38,7 @@ export async function listOrders(opts?: { statusId?: string }): Promise<Normaliz
                 deletedAt: null,
             },
             select: {
-                id: true, reference: true, type: true, partyName: true,
+                id: true, reference: true, type: true, partyName: true, accountId: true,
                 totalAmount: true, orderStatusId: true, branchId: true, dealId: true, createdAt: true,
             },
             orderBy: { createdAt: "desc" },
@@ -46,18 +50,39 @@ export async function listOrders(opts?: { statusId?: string }): Promise<Normaliz
         }),
     ]);
 
-    const fromInv: NormalizedOrder[] = invs.map((v) => ({
-        source: "inv",
-        id: v.id,
-        ref: v.reference,
-        kind: v.type as "POS_ORDER" | "SALES_ORDER",
-        customerName: v.partyName ?? null,
-        total: toNumber(v.totalAmount),
-        statusId: v.orderStatusId,
-        branchId: v.branchId,
-        dealId: v.dealId,
-        createdAt: v.createdAt.toISOString(),
-    }));
+    // Batch-load the customers' credit state (one query) so each inv order can show
+    // whether confirming it on credit would breach the limit — the Review gate.
+    const acctIds = [...new Set(invs.map((v) => v.accountId).filter((x): x is number => x != null))];
+    const acctRows = acctIds.length
+        ? await prisma.account.findMany({ where: { id: { in: acctIds } }, select: { id: true, creditLimit: true, balance: true } })
+        : [];
+    const acctById = new Map(acctRows.map((a) => [a.id, a]));
+
+    const fromInv: NormalizedOrder[] = invs.map((v) => {
+        const total = toNumber(v.totalAmount);
+        const acct = v.accountId != null ? acctById.get(v.accountId) : undefined;
+        let credit: NormalizedOrder["credit"] = null;
+        if (acct) {
+            // Deny-by-default: NULL limit == 0 == no credit (mirrors checkCreditLimit).
+            const limit = acct.creditLimit == null ? 0 : toNumber(acct.creditLimit);
+            const outstanding = toNumber(acct.balance); // positive = customer owes us
+            const breach = limit === 0 ? total > 0.005 : outstanding + total > limit + 0.005;
+            credit = { limit, outstanding: Math.max(0, outstanding), breach };
+        }
+        return {
+            source: "inv",
+            id: v.id,
+            ref: v.reference,
+            kind: v.type as "POS_ORDER" | "SALES_ORDER",
+            customerName: v.partyName ?? null,
+            total,
+            statusId: v.orderStatusId,
+            branchId: v.branchId,
+            dealId: v.dealId,
+            createdAt: v.createdAt.toISOString(),
+            credit,
+        };
+    });
     const fromShop: NormalizedOrder[] = shops.map((o) => ({
         source: "shop",
         id: o.id,
@@ -69,6 +94,7 @@ export async function listOrders(opts?: { statusId?: string }): Promise<Normaliz
         branchId: null,
         dealId: null,
         createdAt: o.createdAt.toISOString(),
+        credit: null,
     }));
 
     return [...fromInv, ...fromShop].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));

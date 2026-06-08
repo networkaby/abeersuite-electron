@@ -11,7 +11,7 @@ import {
     Banknote, Wallet, CreditCard, Smartphone, Building2, FileText, UserPlus,
     MapPin, Star, Sparkles, AlertCircle, TrendingDown, Tag,
     ReceiptIndianRupee, Check, RotateCcw, ChevronDown, ChevronRight, HelpCircle, HandCoins,
-    RefreshCw, Lock, ArrowRightLeft, Monitor, MoreVertical,
+    RefreshCw, Lock, ArrowRightLeft, Monitor, MoreVertical, QrCode,
 } from "lucide-react";
 import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/components/GlAccountCombobox";
 import { calcVoucherTotals, calcLineTotals } from "@/modules/inventory/lib/stock";
@@ -44,6 +44,7 @@ import { ShiftCloseDialog } from "@/modules/pos/components/ShiftCloseDialog";
 import { PosReturnDialog } from "@/modules/pos/components/PosReturnDialog";
 import { PosExpenditureDialog } from "@/modules/pos/components/PosExpenditureDialog";
 import { PosReceiptDialog } from "@/modules/pos/components/PosReceiptDialog";
+import { PaymentLinkDialog } from "@/modules/pos/components/PaymentLinkDialog";
 import { PosModeSwitch } from "@/modules/pos/components/PosModeSwitch";
 import { qrDisplay } from "@/modules/pos/lib/qrDisplay";
 import { computePriceLadder } from "@/modules/pos/lib/priceLadder";
@@ -207,6 +208,7 @@ export default function PosScreen({ editId }: { editId?: number }) {
     // Fixed three-row checkout: Cash (with a separate "return" sub-input),
     // UPI, and Credit (auto-balanced). No method dropdown, no UPI ref.
     const [checkoutOpen, setCheckoutOpen] = useState(false);
+    const [shareOpen, setShareOpen] = useState(false);
     const [pay, setPay] = useState({ cashTendered: 0, cashReturn: 0, upi: 0 });
     const [extras, setExtras] = useState<ExtraSplit[]>([]);
     const [submitting, setSubmitting] = useState(false);
@@ -1386,6 +1388,16 @@ export default function PosScreen({ editId }: { editId?: number }) {
                 />
             )}
 
+            {/* Share a UPI payment link + QR with the customer (collect remotely /
+                in-store scan). Defaults to the balance still on credit. */}
+            <PaymentLinkDialog
+                open={shareOpen}
+                onOpenChange={setShareOpen}
+                defaultAmount={onCredit > 0.01 ? onCredit : total}
+                partyName={snapshot?.party.name}
+                partyPhone={snapshot?.party.phone ?? null}
+            />
+
             {/* Shift drop / close — launched from the header ⋮ menu (OPEN shifts).
                 Awaiting-handover uses ActiveShiftBar's own copies instead. */}
             {activeShift?.status === "OPEN" && (
@@ -2074,6 +2086,16 @@ export default function PosScreen({ editId }: { editId?: number }) {
                                             }}
                                         >
                                             <Plus size={14} /> Add payment line
+                                        </Button>
+
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            type="button"
+                                            onClick={() => setShareOpen(true)}
+                                            title="Share a UPI payment link + QR with the customer over WhatsApp"
+                                        >
+                                            <QrCode size={14} /> Payment link
                                         </Button>
 
                                         <ReceiptIndianRupee size={16} /> {submitting ? "Saving…" : `Confirm · ${fmtINR(total)}`}

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
-import { Loader2, RefreshCw, ShoppingCart, MoreVertical, Pencil, XCircle } from "lucide-react";
+import { Loader2, RefreshCw, ShoppingCart, MoreVertical, Pencil, XCircle, AlertCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -19,6 +19,7 @@ interface OrderCard {
     kind: "POS_ORDER" | "SALES_ORDER" | "SHOP";
     customerName: string | null; total: number; statusId: string | null;
     branchId: string | null; dealId: number | null; createdAt: string;
+    credit: { limit: number; outstanding: number; breach: boolean } | null;
 }
 
 const KIND_BADGE: Record<OrderCard["kind"], string> = {
@@ -154,6 +155,17 @@ export function OrdersBoard() {
                                             <span className="tabular-nums font-medium text-foreground">₹{o.total.toFixed(2)}</span>
                                         </div>
                                         {o.dealId && <div className="mt-0.5 text-[10px] text-muted-foreground">Deal #{o.dealId}</div>}
+                                        {o.credit?.breach && (
+                                            <div
+                                                className="mt-1 flex items-center gap-1 rounded bg-destructive/10 px-1.5 py-0.5 text-[10px] font-medium text-destructive"
+                                                title={o.credit.limit === 0
+                                                    ? "No credit facility — collect payment before fulfilling"
+                                                    : `Outstanding ₹${o.credit.outstanding.toLocaleString("en-IN")} + this order exceeds the ₹${o.credit.limit.toLocaleString("en-IN")} credit limit`}
+                                            >
+                                                <AlertCircle size={11} className="shrink-0" />
+                                                {o.credit.limit === 0 ? "No credit — collect payment" : "Over credit limit"}
+                                            </div>
+                                        )}
                                         {o.source === "inv" && !stage.isTerminal && (
                                             <button
                                                 type="button"

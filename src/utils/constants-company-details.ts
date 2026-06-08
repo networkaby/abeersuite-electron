@@ -41,6 +41,19 @@ export type CompanyDetails = {
         whatsapp: string;
     };
 
+    /**
+     * Business UPI collection identity. Used to build `upi://pay?...` deep links
+     * + QR codes (e.g. POS "share payment link"). Leave `vpa` empty until the real
+     * UPI ID is known — consumers treat an empty VPA as "UPI not configured" and
+     * disable UPI links rather than render a broken QR.
+     */
+    upi: {
+        /** Virtual Payment Address, e.g. "networkservice@okhdfcbank". */
+        vpa: string;
+        /** Payee name shown in the customer's UPI app. */
+        payeeName: string;
+    };
+
     /** Postal address for the company. */
     address: {
         line1: string;
@@ -117,6 +130,11 @@ export const COMPANY_DETAILS: CompanyDetails = {
         supportEmail: "support@networkservice.in",
         phone: "+91 88769 96969",
         whatsapp: "+91 88769 96969",
+    },
+
+    upi: {
+        vpa: "networkservice@okhdfcbank",                       // e.g. "networkservice@okhdfcbank" — OWNER TO FILL
+        payeeName: "Network Service",
     },
 
     address: {
