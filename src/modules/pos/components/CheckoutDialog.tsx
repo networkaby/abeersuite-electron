@@ -14,10 +14,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Banknote, Check, Clock, Plus, ReceiptIndianRupee, CreditCard, AlertCircle } from "lucide-react";
-import {
-    TenderSplitInput, seedTenderSplit, type TenderSplit, type TenderAccount,
-} from "@/modules/pos/components/TenderSplitInput";
+import { Clock, ReceiptIndianRupee, CreditCard, AlertCircle } from "lucide-react";
+import { type TenderSplit, type TenderAccount } from "@/modules/pos/components/TenderSplitInput";
+import { TenderEntry } from "@/modules/pos/components/TenderEntry";
 
 const fmtINR = (n: number) =>
     `₹${n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -26,7 +25,7 @@ type PayState = { cashTendered: number; cashReturn: number };
 
 export function CheckoutDialog({
     open, onOpenChange,
-    total, collected, onCredit, payableTotal, cashNet, splitsSum,
+    total, collected, onCredit, payableTotal,
     overpaid, balanceDue, arrearPaid, advanceTaken,
     giftCardApplied, giftCardCode,
     creditLimitBreached, creditLimit,
@@ -41,8 +40,6 @@ export function CheckoutDialog({
     collected: number;
     onCredit: number;
     payableTotal: number;
-    cashNet: number;
-    splitsSum: number;
     overpaid: number;
     balanceDue: number;
     arrearPaid: number;
@@ -120,56 +117,17 @@ export function CheckoutDialog({
                     )}
 
                     <div className="space-y-2">
-                        {/* Cash — tendered + return on the same row, hint with net cash */}
-                        <div className="grid grid-cols-[80px_1fr_auto_1fr] items-center gap-2">
-                            <Label className="flex items-center gap-1 text-xs">
-                                <Banknote size={12} /> Cash
-                                <button
-                                    type="button"
-                                    title="Fill remaining amount in cash"
-                                    onClick={() => {
-                                        const remaining = Math.max(0, +(payableTotal - splitsSum).toFixed(2));
-                                        setPay((s) => ({ ...s, cashTendered: remaining, cashReturn: 0 }));
-                                        setTimeout(() => cashTenderedRef.current?.select(), 0);
-                                    }}
-                                    className="ml-0.5 rounded-full text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 p-0.5 transition-colors"
-                                >
-                                    <Check size={11} strokeWidth={2.5} />
-                                </button>
-                            </Label>
-                            <Input
-                                ref={cashTenderedRef}
-                                value={pay.cashTendered || ""}
-                                onChange={(e) => setPay((s) => ({ ...s, cashTendered: Number(e.target.value) || 0 }))}
-                                onKeyDown={enterToSubmit}
-                                placeholder="₹ tendered"
-                                inputMode="decimal"
-                                className="text-right"
-                            />
-                            <Label className="flex items-center gap-1 text-[10px] text-muted-foreground">return</Label>
-                            <Input
-                                value={pay.cashReturn || ""}
-                                onChange={(e) => setPay((s) => ({ ...s, cashReturn: Number(e.target.value) || 0 }))}
-                                onKeyDown={enterToSubmit}
-                                placeholder="₹ change back"
-                                inputMode="decimal"
-                                className="text-right"
-                            />
-                        </div>
-                        {pay.cashReturn > 0 && (
-                            <div className="pl-[88px] text-[11px] text-muted-foreground">
-                                net cash {fmtINR(cashNet)} = ₹{pay.cashTendered} − ₹{pay.cashReturn} return
-                            </div>
-                        )}
-
-                        {/* Non-cash payment splits — each picks one of the counter's
-                            payment accounts (UPI 1 → HDFC, UPI 2 → SBI, Card…). The chosen
-                            account sets the ledger debited; UPI/gateway accounts show a
-                            Share button that builds the QR from that account's VPA. */}
-                        <TenderSplitInput
+                        {/* Cash row + non-cash splits + Add-line — the shared tender body,
+                            also reused by the Rcv dialog. targetTotal enables the cash
+                            "fill remaining" helper and seeds new lines with the balance. */}
+                        <TenderEntry
                             accounts={accounts}
-                            value={splits}
-                            onChange={setSplits}
+                            splits={splits}
+                            setSplits={setSplits}
+                            pay={pay}
+                            setPay={setPay}
+                            cashTenderedRef={cashTenderedRef}
+                            targetTotal={payableTotal}
                             onShare={onShare}
                             onEnter={enterToSubmit}
                         />
@@ -185,24 +143,6 @@ export function CheckoutDialog({
                                 className="bg-muted/50 cursor-default text-right"
                                 title="Auto-balanced — fill Cash / UPI / Card etc. and the rest goes on credit"
                             />
-                        </div>
-                        <div className="flex items-center justify-between gap-2">
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                disabled={accounts.length === 0}
-                                title={accounts.length === 0 ? "This counter only accepts Cash. Add payment accounts under /office/admin/counters." : undefined}
-                                onClick={() => {
-                                    if (accounts.length === 0) return;
-                                    const remaining = Math.max(0, +(payableTotal - collected).toFixed(2));
-                                    setSplits((prev) => [...prev, seedTenderSplit(accounts, remaining)]);
-                                }}
-                            >
-                                <Plus size={14} /> Add payment line
-                            </Button>
-
-                            <ReceiptIndianRupee size={16} /> {submitting ? "Saving…" : `Confirm · ${fmtINR(total)}`}
-                            <span className="ml-2 rounded border border-primary-foreground/30 px-1.5 py-px text-[10px] opacity-80">↵</span>
                         </div>
                         {/* Overpayment is collected on Confirm: the extra clears the oldest
                             open bills first (FIFO), and any leftover becomes a customer

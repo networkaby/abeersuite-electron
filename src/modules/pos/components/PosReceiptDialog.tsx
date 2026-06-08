@@ -8,10 +8,10 @@
 // (one Dr per tender / Cr party AR). Cash legs fall in the shift window so the
 // shift-close drawer picks them up; non-cash legs hit their bank ledger instead.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Loader2, HandCoins, X, Plus } from "lucide-react";
+import { Loader2, HandCoins, X } from "lucide-react";
 import {
     Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
@@ -23,9 +23,8 @@ import {
     type PartySearchAndCreateHandle,
     type PickedParty,
 } from "@/shared/components/PartySearchAndCreate";
-import {
-    TenderSplitInput, seedTenderSplit, type TenderSplit, type TenderAccount,
-} from "@/modules/pos/components/TenderSplitInput";
+import { type TenderSplit, type TenderAccount } from "@/modules/pos/components/TenderSplitInput";
+import { TenderEntry, type PayState } from "@/modules/pos/components/TenderEntry";
 import { PaymentLinkDialog } from "@/modules/pos/components/PaymentLinkDialog";
 
 const fmtINR = (n: number) => `₹${n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -41,21 +40,27 @@ export function PosReceiptDialog({
     onDone: () => void;
 }) {
     const [party, setParty]   = useState<{ accountId: number; name: string } | null>(null);
+    const [pay, setPay]       = useState<PayState>({ cashTendered: 0, cashReturn: 0 });
     const [tenders, setTenders] = useState<TenderSplit[]>([]);
     const [note, setNote]     = useState("");
     const [submitting, setSubmitting] = useState(false);
     const [shareOpen, setShareOpen]   = useState(false);
     const [shareVpa, setShareVpa]     = useState<string | null>(null);
     const partyRef = useRef<PartySearchAndCreateHandle>(null);
+    const cashTenderedRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         if (!open) return;
-        // Start with one Cash row; the cashier changes the account or adds more.
+        // Cash row is always present (TenderEntry); start with no extra splits.
         setParty(null); setNote("");
-        setTenders([{ id: crypto.randomUUID(), paymentAccountId: null, amount: 0, reference: "" }]);
+        setPay({ cashTendered: 0, cashReturn: 0 });
+        setTenders([]);
     }, [open]);
 
-    const total = useMemo(() => tenders.reduce((s, t) => s + t.amount, 0), [tenders]);
+    const total = useMemo(() => {
+        const cashNet = Math.max(0, pay.cashTendered - pay.cashReturn);
+        return cashNet + tenders.reduce((s, t) => s + t.amount, 0);
+    }, [pay, tenders]);
 
     const onPicked = (p: PickedParty) => {
         if (p.accountId == null) { toast.error(`${p.name} has no ledger account yet`); return; }
@@ -64,7 +69,11 @@ export function PosReceiptDialog({
 
     const submit = async () => {
         if (!party)     { toast.error("Pick the party paying"); return; }
-        const lines = tenders.filter((t) => t.amount > 0).map((t) => ({ paymentAccountId: t.paymentAccountId, amountPaise: Math.round(t.amount * 100) }));
+        const cashNet = Math.max(0, pay.cashTendered - pay.cashReturn);
+        const lines = [
+            ...(cashNet > 0 ? [{ paymentAccountId: null, amountPaise: Math.round(cashNet * 100) }] : []),
+            ...tenders.filter((t) => t.amount > 0).map((t) => ({ paymentAccountId: t.paymentAccountId, amountPaise: Math.round(t.amount * 100) })),
+        ];
         if (lines.length === 0) { toast.error("Enter at least one amount"); return; }
         setSubmitting(true);
         try {
@@ -83,6 +92,11 @@ export function PosReceiptDialog({
         } finally {
             setSubmitting(false);
         }
+    };
+
+    // Enter on any amount field records the receipt.
+    const enterToSubmit = (e: React.KeyboardEvent) => {
+        if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void submit(); }
     };
 
     return (
@@ -119,22 +133,22 @@ export function PosReceiptDialog({
                         )}
                     </div>
 
-                    {/* Received in — multi-tender, reused from checkout. */}
+                    {/* Received in — the same Cash + multi-tender body as checkout
+                        (no bill, so no targetTotal; the tenders define the total). UPI/
+                        gateway rows show a Share button that puts the QR on the display. */}
                     <div className="space-y-2">
                         <Label>Received in</Label>
-                        <TenderSplitInput
+                        <TenderEntry
                             accounts={paymentAccounts}
-                            value={tenders}
-                            onChange={setTenders}
-                            includeCash
+                            splits={tenders}
+                            setSplits={setTenders}
+                            pay={pay}
+                            setPay={setPay}
+                            cashTenderedRef={cashTenderedRef}
+                            showTotal
                             onShare={(a) => { setShareVpa(a.vpa); setShareOpen(true); }}
+                            onEnter={enterToSubmit}
                         />
-                        <div className="flex items-center justify-between">
-                            <Button variant="outline" size="sm" onClick={() => setTenders((prev) => [...prev, seedTenderSplit(paymentAccounts, 0, true)])}>
-                                <Plus size={14} /> Add payment line
-                            </Button>
-                            <span className="text-sm font-semibold">Total {fmtINR(total)}</span>
-                        </div>
                     </div>
 
                     <div className="space-y-1.5">

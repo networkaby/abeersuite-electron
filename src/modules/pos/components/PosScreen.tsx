@@ -1862,8 +1862,6 @@ export default function PosScreen({ editId }: { editId?: number }) {
                 collected={collected}
                 onCredit={onCredit}
                 payableTotal={payableTotal}
-                cashNet={cashNet}
-                splitsSum={splitsSum}
                 overpaid={overpaid}
                 balanceDue={balanceDue}
                 arrearPaid={arrearPaid}
