@@ -43,6 +43,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ sou
         if (order.lines.length === 0) {
             return NextResponse.json({ error: "Order has no lines to fulfil." }, { status: 400 });
         }
+        // Fulfil posts the SALE on credit (no tender), so it needs a resolvable
+        // customer to carry the receivable. A walk-in order has nothing to debit
+        // and would fail GL posting with a cryptic 422 — guard with a clear message.
+        // (Walk-in fulfilment that collects payment via a tender is a follow-up.)
+        if (!order.partyType || !order.partyId) {
+            return NextResponse.json({
+                error: "This order has no customer attached. Fulfil posts the sale on credit (to the customer's account), so attach a customer first. Walk-in fulfilment with payment collection is coming soon.",
+            }, { status: 400 });
+        }
 
         const today = new Date().toISOString().slice(0, 10);
         const cookie = req.headers.get("cookie") ?? "";
