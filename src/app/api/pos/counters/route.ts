@@ -45,7 +45,7 @@ export async function GET(req: NextRequest) {
                         orderBy: { sortOrder: "asc" },
                         select: {
                             id: true, channel: true, label: true, accountId: true, vpa: true,
-                            sortOrder: true, isActive: true,
+                            sortOrder: true, isActive: true, defaultVisible: true,
                             account: { select: { id: true, name: true } },
                         },
                     },

@@ -31,6 +31,7 @@ export type ActiveShift = {
             accountId: number;
             account: { id: number; name: string } | null;
             vpa: string | null;
+            defaultVisible: boolean;
         }[];
     };
     branch: { id: string; name: string };

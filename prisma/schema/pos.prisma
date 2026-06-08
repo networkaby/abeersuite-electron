@@ -71,6 +71,9 @@ model PosCounterPaymentAccount {
   configJson Json        @default("{}")
   sortOrder Int          @default(0)
   isActive  Boolean      @default(true)
+  // Show this account as a checkout row by default (like the old fixed UPI row).
+  // Off = available only via "Add payment line". Set per account in the counters UI.
+  defaultVisible Boolean @default(false)
 
   @@index([counterId])
   @@index([accountId])

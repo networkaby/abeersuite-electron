@@ -37,6 +37,7 @@ type PaymentAccount = {
     vpa: string | null;
     sortOrder: number;
     isActive: boolean;
+    defaultVisible: boolean;
 };
 
 type Counter = {
@@ -55,7 +56,7 @@ type Counter = {
 const EMPTY_FORM = { branchId: "", name: "" };
 
 // An editable payment-account row (accountId nullable until the ledger is picked).
-type EditPayAcct = { id?: number; channel: PosPayChannel; label: string; accountId: number | null; vpa: string };
+type EditPayAcct = { id?: number; channel: PosPayChannel; label: string; accountId: number | null; vpa: string; defaultVisible: boolean };
 
 type EditForm = {
     name: string;
@@ -134,6 +135,7 @@ export default function CountersAdminPage() {
                 label: p.label,
                 accountId: p.accountId,
                 vpa: p.vpa ?? "",
+                defaultVisible: p.defaultVisible,
             })),
             allowedExpenseAccountIds: Array.isArray(c.allowedExpenseAccountIds) ? c.allowedExpenseAccountIds : [],
         });
@@ -145,7 +147,7 @@ export default function CountersAdminPage() {
     // Payment-account row editors (operate on editForm.paymentAccounts).
     const addPayAcct = () => setEditForm((f) => ({
         ...f,
-        paymentAccounts: [...f.paymentAccounts, { channel: "UPI" as PosPayChannel, label: "", accountId: null, vpa: "" }],
+        paymentAccounts: [...f.paymentAccounts, { channel: "UPI" as PosPayChannel, label: "", accountId: null, vpa: "", defaultVisible: true }],
     }));
     const updatePayAcct = (idx: number, patch: Partial<EditPayAcct>) => setEditForm((f) => ({
         ...f,
@@ -188,6 +190,7 @@ export default function CountersAdminPage() {
                 label: p.label.trim() || CHANNEL_LABEL[p.channel],
                 accountId: p.accountId as number,
                 vpa: p.vpa.trim() || null,
+                defaultVisible: p.defaultVisible,
                 sortOrder: i,
             }));
         setSaving(true);
@@ -373,6 +376,15 @@ export default function CountersAdminPage() {
                                                                         maxLength={60}
                                                                     />
                                                                 )}
+                                                                <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer select-none">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={p.defaultVisible}
+                                                                        onChange={(e) => updatePayAcct(idx, { defaultVisible: e.target.checked })}
+                                                                        className="h-3.5 w-3.5 accent-primary"
+                                                                    />
+                                                                    Show in checkout by default (else under &ldquo;Add payment line&rdquo;)
+                                                                </label>
                                                             </div>
                                                         ))}
                                                     </div>

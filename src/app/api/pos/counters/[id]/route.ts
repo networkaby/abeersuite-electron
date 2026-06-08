@@ -21,6 +21,7 @@ const paymentAccountSchema = z.object({
         .refine((v) => v == null || /^[\w.\-]+@[\w.\-]+$/.test(v), "Enter a valid UPI ID like name@bank"),
     sortOrder: z.number().int().min(0).optional(),
     isActive:  z.boolean().optional(),
+    defaultVisible: z.boolean().optional(),
 });
 
 const updateSchema = z.object({
@@ -42,7 +43,7 @@ const counterInclude = {
         orderBy: { sortOrder: "asc" as const },
         select: {
             id: true, channel: true, label: true, accountId: true, vpa: true,
-            sortOrder: true, isActive: true,
+            sortOrder: true, isActive: true, defaultVisible: true,
             account: { select: { id: true, name: true } },
         },
     },
@@ -130,6 +131,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                         vpa:       p.vpa,
                         sortOrder: p.sortOrder ?? i,
                         isActive:  p.isActive ?? true,
+                        defaultVisible: p.defaultVisible ?? false,
                     };
                     if (p.id && ownedIds.has(p.id)) {
                         await tx.posCounterPaymentAccount.update({ where: { id: p.id }, data: row });

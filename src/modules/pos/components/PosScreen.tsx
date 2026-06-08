@@ -746,7 +746,9 @@ export default function PosScreen({ editId }: { editId?: number }) {
         if (cart.length === 0) { toast.error("Cart is empty"); return; }
         if (cart.some((l) => l.unitPrice <= 0)) { toast.error("All lines need a unit price"); return; }
         setPay({ cashTendered: 0, cashReturn: 0 });
-        setSplits([]);
+        // Pre-show the accounts flagged "default visible" as rows (like the old
+        // fixed UPI row); the rest stay behind "Add payment line".
+        setSplits(payAccounts.filter((a) => a.defaultVisible).map((a) => ({ id: crypto.randomUUID(), paymentAccountId: a.id, amount: 0, reference: "" })));
         setCheckoutOpen(true);
         setTimeout(() => cashTenderedRef.current?.focus(), 50);
     };

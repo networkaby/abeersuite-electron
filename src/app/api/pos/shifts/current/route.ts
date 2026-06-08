@@ -32,7 +32,7 @@ export async function GET() {
                             where:   { isActive: true },
                             orderBy: { sortOrder: "asc" },
                             select: {
-                                id: true, channel: true, label: true, accountId: true, vpa: true,
+                                id: true, channel: true, label: true, accountId: true, vpa: true, defaultVisible: true,
                                 account: { select: { id: true, name: true } },
                             },
                         },
