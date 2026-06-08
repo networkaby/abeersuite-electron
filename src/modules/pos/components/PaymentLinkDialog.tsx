@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import QRCode from "qrcode";
 import { toast } from "sonner";
-import { Copy, Check, MessageCircle, QrCode } from "lucide-react";
+import { Copy, Check, Share2, Loader2, QrCode } from "lucide-react";
 
 import {
     Dialog,
@@ -27,12 +27,53 @@ import {
     PAYMENT_LINK_PROVIDERS,
     DEFAULT_PAYEE_NAME,
     paymentLinkMessage,
-    whatsappWebShareUrl,
     type PaymentContext,
 } from "@/modules/pos/lib/paymentLink";
 
 const fmtINR = (n: number) =>
     `₹${n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+// Load a data-URL into an <img> so it can be drawn onto a canvas.
+function loadImage(src: string): Promise<HTMLImageElement> {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = src;
+    });
+}
+
+// Rasterise a self-contained "Scan to Pay" card (QR + amount + payee) so the
+// shared PHOTO explains itself even if the caption is dropped. Dependency-free
+// canvas — no html-to-image needed.
+async function composeQrCard(qrDataUrl: string, amountLabel: string, payeeName: string): Promise<Blob> {
+    const W = 640, H = 820;
+    const canvas = document.createElement("canvas");
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Canvas unsupported");
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, W, H);
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#0f172a";
+    ctx.font = "600 32px system-ui, Segoe UI, sans-serif";
+    ctx.fillText("Scan to Pay", W / 2, 74);
+    ctx.font = "700 56px system-ui, Segoe UI, sans-serif";
+    ctx.fillText(amountLabel, W / 2, 144);
+    const qr = await loadImage(qrDataUrl);
+    const size = 460, x = (W - size) / 2, y = 188;
+    ctx.drawImage(qr, x, y, size, size);
+    ctx.fillStyle = "#334155";
+    ctx.font = "500 26px system-ui, Segoe UI, sans-serif";
+    ctx.fillText(payeeName, W / 2, y + size + 56);
+    ctx.fillStyle = "#94a3b8";
+    ctx.font = "400 20px system-ui, Segoe UI, sans-serif";
+    ctx.fillText("Pay with any UPI app — GPay · PhonePe · Paytm", W / 2, y + size + 92);
+    return await new Promise<Blob>((resolve, reject) =>
+        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("toBlob failed"))), "image/png"),
+    );
+}
 
 // Keep only a positive decimal (no `input type="number"`, per house rule).
 function sanitizeAmount(raw: string): string {
@@ -46,7 +87,6 @@ export function PaymentLinkDialog({
     onOpenChange,
     defaultAmount,
     partyName,
-    partyPhone,
     billRef,
     upiVpa,
 }: {
@@ -54,7 +94,6 @@ export function PaymentLinkDialog({
     onOpenChange: (v: boolean) => void;
     defaultAmount: number;
     partyName?: string | null;
-    partyPhone?: string | null;
     billRef?: string | null;
     /** This counter's UPI VPA (PosCounter.upiVpa); null/empty = not configured. */
     upiVpa?: string | null;
@@ -67,6 +106,7 @@ export function PaymentLinkDialog({
     const [amountStr, setAmountStr] = useState("");
     const [qr, setQr] = useState<string | null>(null);
     const [copied, setCopied] = useState(false);
+    const [sharing, setSharing] = useState(false);
 
     const provider = useMemo(
         () => PAYMENT_LINK_PROVIDERS.find((p) => p.id === providerId) ?? PAYMENT_LINK_PROVIDERS[0],
@@ -106,7 +146,6 @@ export function PaymentLinkDialog({
         };
     }, [link]);
 
-    const phoneDigits = (partyPhone ?? "").replace(/\D/g, "");
     const canShare = !!link && amount > 0;
 
     async function copyLink() {
@@ -121,10 +160,45 @@ export function PaymentLinkDialog({
         }
     }
 
-    function shareWhatsApp() {
-        if (!canShare) return;
-        const text = paymentLinkMessage({ partyName, amountRupees: amount, link, billRef });
-        window.open(whatsappWebShareUrl(phoneDigits, text), "_blank", "noopener,noreferrer");
+    // Share the QR as an actual IMAGE (not just a link). On mobile the native
+    // share sheet lets the cashier pick WhatsApp → the photo is sent. WhatsApp has
+    // no API to attach media via a URL, so on desktop we fall back to copying the
+    // image (paste into the open WhatsApp Web chat), then to a download.
+    async function shareQrImage() {
+        if (!link || amount <= 0) return;
+        setSharing(true);
+        try {
+            const hiRes = await QRCode.toDataURL(link, { width: 512, margin: 2, errorCorrectionLevel: "M" });
+            const blob = await composeQrCard(hiRes, fmtINR(amount), ctx.payeeName);
+            const file = new File([blob], `payment-qr-${amount.toFixed(2)}.png`, { type: "image/png" });
+            const caption = paymentLinkMessage({ partyName, amountRupees: amount, link, billRef });
+
+            // 1) Web Share API Level 2 — native sheet (mobile → WhatsApp sends the photo).
+            if (typeof navigator !== "undefined" && navigator.canShare?.({ files: [file] }) && navigator.share) {
+                await navigator.share({ files: [file], title: "Payment QR", text: caption });
+                return;
+            }
+            // 2) Desktop: copy the image so it can be pasted into a WhatsApp Web chat.
+            const CI = typeof ClipboardItem !== "undefined" ? ClipboardItem : undefined;
+            if (CI && navigator.clipboard?.write) {
+                await navigator.clipboard.write([new CI({ "image/png": blob })]);
+                toast.success("QR image copied — paste it into the WhatsApp chat (Ctrl+V)");
+                return;
+            }
+            // 3) Last resort: download the PNG to send manually.
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `payment-qr-${amount.toFixed(2)}.png`;
+            a.click();
+            URL.revokeObjectURL(url);
+            toast.success("QR image downloaded — share it from your gallery");
+        } catch (e) {
+            // AbortError = the user dismissed the native share sheet; not a failure.
+            if ((e as { name?: string })?.name !== "AbortError") toast.error("Couldn't share the QR image");
+        } finally {
+            setSharing(false);
+        }
     }
 
     return (
@@ -135,7 +209,7 @@ export function PaymentLinkDialog({
                         <QrCode size={18} /> Share payment link
                     </DialogTitle>
                     <DialogDescription>
-                        Show the QR for an in-store scan, or send the link over WhatsApp to collect remotely.
+                        Show the QR for an in-store scan, or share it as a photo over WhatsApp to collect remotely.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -197,21 +271,16 @@ export function PaymentLinkDialog({
                             {copied ? <Check size={16} /> : <Copy size={16} />} Copy link
                         </Button>
                         <Button
-                            onClick={shareWhatsApp}
-                            disabled={!canShare || !phoneDigits}
-                            title={!phoneDigits ? "This customer has no phone number on file" : undefined}
+                            onClick={shareQrImage}
+                            disabled={!canShare || sharing}
                             className="bg-emerald-600 hover:bg-emerald-700"
                         >
-                            <MessageCircle size={16} /> WhatsApp
+                            {sharing ? <Loader2 size={16} className="animate-spin" /> : <Share2 size={16} />} Share QR
                         </Button>
                     </div>
-                    {!phoneDigits && canShare && (
-                        <p className="text-center text-[11px] text-muted-foreground">
-                            No phone on file — copy the link or let the customer scan the QR.
-                        </p>
-                    )}
                     <p className="text-center text-[11px] text-muted-foreground">
-                        WhatsApp sends the link text; the QR is for an in-person scan.
+                        Share QR sends the QR as a photo — pick WhatsApp from the share sheet (on a phone),
+                        or it&apos;s copied so you can paste it into a WhatsApp Web chat.
                     </p>
                 </div>
             </DialogContent>

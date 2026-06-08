@@ -1395,7 +1395,6 @@ export default function PosScreen({ editId }: { editId?: number }) {
                 onOpenChange={setShareOpen}
                 defaultAmount={onCredit > 0.01 ? onCredit : total}
                 partyName={snapshot?.party.name}
-                partyPhone={snapshot?.party.phone ?? null}
                 upiVpa={activeShift?.counter.upiVpa ?? null}
             />
 
