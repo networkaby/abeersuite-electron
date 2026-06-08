@@ -411,6 +411,14 @@ model InvVoucher {
   dealId Int?
   deal   Deal? @relation("DealInvVouchers", fields: [dealId], references: [id], onDelete: SetNull)
 
+  /// O2C order pipeline (P7) for order-type vouchers (POS_ORDER / SALES_ORDER).
+  /// Lets a counter/office order ride the same Orders board as ShopOrder. Null
+  /// for every other voucher type. `orderStatusId` is the current P7 stage.
+  orderPipelineId String?
+  orderPipeline   Pipeline?     @relation("OrderVoucherPipeline", fields: [orderPipelineId], references: [id])
+  orderStatusId   String?
+  orderStatus     TicketStatus? @relation("OrderVoucherStatus", fields: [orderStatusId], references: [id])
+
   // ── Lifecycle metadata (Cancel / Delete / Hard Delete) ──────────────────
   cancelledAt   DateTime?
   cancelledById Int?
@@ -445,6 +453,7 @@ model InvVoucher {
   @@index([accountId])
   @@index([ticketId])
   @@index([dealId])
+  @@index([orderStatusId])
 }
 
 model InvVoucherAudit {

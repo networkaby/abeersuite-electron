@@ -15,6 +15,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { invNextRef, calcLineTotals, calcVoucherTotals } from "@/modules/inventory/lib/stock";
 import { getDealsPipeline, findOpenDealForParty } from "@/modules/deals/lib/dealsPipeline";
+import { getOrderPipeline, orderEntryStatus } from "@/modules/order/lib/orderPipeline";
 import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 
 export type PosQuoteType = "POS_ESTIMATE" | "POS_ORDER";
@@ -103,6 +104,12 @@ export async function createPosQuoteVoucher(opts: {
     const entry = pipeline?.statuses.find((s) => s.isEntryPoint) ?? pipeline?.statuses[0] ?? null;
     const actor = hasParty ? await buildActorSnapshot(userId) : null;
 
+    // POS_ORDER rides the unified Orders pipeline (P7) so it shows on the Orders
+    // board; POS_ESTIMATE does not (a quote isn't an order).
+    const orderPipeline = type === "POS_ORDER" ? await getOrderPipeline(prisma) : null;
+    if (type === "POS_ORDER" && !orderPipeline) throw new Error("Orders pipeline not configured");
+    const orderStatusId = orderEntryStatus(orderPipeline);
+
     const description = `${LABEL[type]}${body.partyName ? ` — ${body.partyName}` : ""}`;
     const firstName = lines[0]?.description?.trim();
 
@@ -128,6 +135,8 @@ export async function createPosQuoteVoucher(opts: {
                 partyId: body.partyId || null,
                 partyPhone: body.partyPhone || null,
                 deliveryMode: "COUNTER",
+                orderPipelineId: orderPipeline?.id ?? null,
+                orderStatusId,
                 discountPct: body.discountPct != null ? Number(body.discountPct) : null,
                 discountAmt: overallDiscount > 0 ? overallDiscount : null,
                 shippingAmt,

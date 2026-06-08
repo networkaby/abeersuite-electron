@@ -10,6 +10,7 @@ import { handleApiError } from "@/shared/lib/api";
 import { getOrganisation } from "@/shared/lib/org/getOrganisation";
 import { resolveBuyerStateCode } from "@/shared/lib/gst/resolveBuyerState";
 import { isValidStateCode } from "@/shared/lib/gst/indianStates";
+import { getOrderPipeline, orderEntryStatus } from "@/modules/order/lib/orderPipeline";
 
 // GET /api/inventory/vouchers?type=PURCHASE|SALE&status=DRAFT|POSTED|CANCELLED&branchId=BR-HQ|all&includeDeleted=1
 //
@@ -412,6 +413,16 @@ export async function POST(req: NextRequest) {
 
     const userId = user!.id;
 
+    // Office SALES_ORDER rides the unified Orders pipeline (P7) so it shows on the
+    // Orders board alongside counter + online orders.
+    let orderPipelineId: string | null = null;
+    let orderStatusId: string | null = null;
+    if (type === "SALES_ORDER") {
+        const op = await getOrderPipeline(prisma);
+        orderPipelineId = op?.id ?? null;
+        orderStatusId = orderEntryStatus(op);
+    }
+
     try {
         const voucher = await prisma.$transaction(async (tx) => {
             const reference = await invNextRef(tx, type);
@@ -420,6 +431,8 @@ export async function POST(req: NextRequest) {
                     type,
                     reference,
                     branchId,
+                    orderPipelineId,
+                    orderStatusId,
                     date:         new Date(date),
                     description:  description.trim(),
                     partyName:    partyName  || null,
