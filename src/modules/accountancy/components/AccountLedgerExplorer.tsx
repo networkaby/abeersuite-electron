@@ -443,8 +443,7 @@ export function AccountLedgerExplorer({
                                             ) : detail.rows.map((row) => (
                                                 <tr
                                                     key={row.id}
-                                                    className="hover:bg-muted/40 transition-colors cursor-pointer"
-                                                    onClick={() => router.push(`/office/accountancy/journal-entries/${row.journalEntryId}`)}
+                                                    className="hover:bg-muted/40 transition-colors"
                                                 >
                                                     <td className="px-4 py-2.5 text-xs text-muted-foreground whitespace-nowrap">
                                                         {formatDate(row.date)}
@@ -453,7 +452,6 @@ export function AccountLedgerExplorer({
                                                         {row.source ? (
                                                             <Link
                                                                 href={row.source.url}
-                                                                onClick={(e) => e.stopPropagation()}
                                                                 className={`inline-block text-xs px-2 py-0.5 border rounded-sm font-mono font-medium hover:underline ${SOURCE_COLOR[row.source.kind]}`}
                                                             >
                                                                 {row.source.reference ?? row.source.number}

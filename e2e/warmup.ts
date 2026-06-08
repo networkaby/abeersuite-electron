@@ -27,10 +27,10 @@ test("warm up heavy authed routes", async ({ page }) => {
     for (const route of ROUTES) {
         try {
             await page.goto(route, { waitUntil: "commit", timeout: 200_000 });
-            // eslint-disable-next-line no-console
+             
             console.log(`warmed: ${route}`);
         } catch {
-            // eslint-disable-next-line no-console
+             
             console.log(`warmup miss (will retry in-spec): ${route}`);
         }
     }

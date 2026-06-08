@@ -38,6 +38,32 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                     const delta = balanceDelta(line.account.normalBalance!, line.type, toNumber(line.amount));
                     await tx.account.update({ where: { id: line.accountId }, data: { balance: { decrement: delta } } });
                 }
+
+                // The cached Account.balance is reversed above via voucher.lines, but
+                // the mirror GL JournalEntry (created on post) must also be removed —
+                // otherwise it lingers POSTED in the truth path (Balance Sheet / ledgers
+                // sum POSTED JournalLines). Snapshot it, then physically delete it (its
+                // JournalLines cascade). journalEntryId is a soft pointer (no cascade),
+                // so the voucher delete alone would never touch it.
+                if (voucher.journalEntryId) {
+                    const origJe = await tx.journalEntry.findUnique({
+                        where: { id: voucher.journalEntryId },
+                        include: { lines: true },
+                    });
+                    if (origJe) {
+                        await tx.journalEntryAudit.create({
+                            data: {
+                                originalId:  origJe.id,
+                                originalRef: origJe.reference,
+                                action:      "HARD_DELETED",
+                                reason:      `Voucher ${voucher.reference} hard-deleted: ${data.reason}`,
+                                snapshot:    origJe as unknown as object,
+                                actorId:     user!.id,
+                            },
+                        });
+                        await tx.journalEntry.delete({ where: { id: origJe.id } });
+                    }
+                }
             }
 
             const created = await tx.voucherAudit.create({
