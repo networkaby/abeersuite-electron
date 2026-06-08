@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
 import Link from "next/link";
@@ -197,8 +198,12 @@ const QUOTE_CFG = {
     },
 } as const;
 
-export default function PosQuoteScreen({ mode }: { mode: QuoteMode }) {
+export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; editId?: number }) {
     const cfg = QUOTE_CFG[mode];
+    const router = useRouter();
+    // Edit mode (order only): reopen an existing order in this same screen, hydrate
+    // its customer + lines, and PATCH on save instead of creating a new voucher.
+    const isEdit = mode === "order" && editId != null;
     // ── Customer search omnibox (delegated to shared component) ─────────────
     const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
     const [loadingSnapshot, setLoadingSnapshot] = useState(false);
@@ -366,7 +371,8 @@ export default function PosQuoteScreen({ mode }: { mode: QuoteMode }) {
             if (createDialogOpen || checkoutOpen) return;
             if (cart.length === 0 || !snapshot?.account) return;
             e.preventDefault();
-            if (mode === "estimate") void generateInvoice(true);   // Estimate saves directly — no payment checkout
+            if (isEdit) void generateInvoice(false);               // Editing → PATCH (no checkout / print)
+            else if (mode === "estimate") void generateInvoice(true);   // Estimate saves directly — no payment checkout
             else openCheckout();                                   // Order opens the dialog to (optionally) collect an advance
         };
         window.addEventListener("keydown", handler);
@@ -649,6 +655,52 @@ export default function PosQuoteScreen({ mode }: { mode: QuoteMode }) {
         partySearchRef.current?.focus();
     };
 
+    // ── Edit mode: hydrate an existing order on mount ───────────────────────────
+    // Reopen the order in this very screen — load its customer (so the tier discount
+    // re-derives) and rebuild the cart from its lines. Only New / Under-Review orders
+    // are editable; the GET reports that and we bounce out otherwise.
+    useEffect(() => {
+        if (!isEdit) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const { data } = await axios.get<{
+                    accountId: number | null;
+                    editable: boolean;
+                    lines: { productId: number; sku: string; name: string; description: string | null; quantity: number; rate: number; taxRate: number; mrpPaise: number | null; savedSalePricePaise: number | null }[];
+                }>(`/api/orders/inv/${editId}`);
+                if (cancelled) return;
+                if (!data.editable) {
+                    toast.error("This order can't be edited at its current stage.");
+                    router.push("/office/orders");
+                    return;
+                }
+                if (data.accountId != null) await fetchSnapshot(data.accountId);
+                if (cancelled) return;
+                setCart(data.lines.map((l) => ({
+                    productId: l.productId,
+                    sku: l.sku,
+                    name: l.name,
+                    qty: l.quantity,
+                    unitPrice: l.rate,
+                    // The server embeds "sku — name · note"; keep only the cashier's note.
+                    description: l.description?.split(" · ").slice(1).join(" · ") || "",
+                    taxRate: l.taxRate,
+                    mrpPaise: l.mrpPaise,
+                    barcodePaise: l.savedSalePricePaise,
+                })));
+            } catch (e: unknown) {
+                if (cancelled) return;
+                const msg = axios.isAxiosError(e) ? (e.response?.data as { error?: string })?.error : undefined;
+                toast.error(msg ?? "Could not load the order to edit");
+                router.push("/office/orders");
+            }
+        })();
+        return () => { cancelled = true; };
+        // One-shot hydration keyed on the order id; the helpers it calls are stable.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isEdit, editId]);
+
     // ── Cart actions ────────────────────────────────────────────────────────
     const addToCart = (p: ProductOption) => {
         // Product's effectiveSalePricePaise is treated as TAX-INCLUSIVE (matches
@@ -731,6 +783,38 @@ export default function PosQuoteScreen({ mode }: { mode: QuoteMode }) {
         if (!snapshot?.account) { toast.error("Select a customer first"); return; }
         if (cart.length === 0) { toast.error("Cart is empty"); return; }
         if (cart.some((l) => l.unitPrice <= 0)) { toast.error("All lines need a unit price"); return; }
+
+        // Edit mode → PATCH the existing order's lines + discount (server recomputes
+        // exactly like creation). No checkout / advance / print on an edit.
+        if (isEdit) {
+            setSubmitting(true);
+            try {
+                await axios.patch(`/api/orders/inv/${editId}`, {
+                    lines: cart.map((l) => ({
+                        productId: l.productId,
+                        description: l.description || null,
+                        quantity: l.qty,
+                        rate: l.unitPrice,
+                        taxRate: l.taxRate,
+                        mrpPaise: l.mrpPaise ?? null,
+                        savedSalePricePaise: l.barcodePaise ?? null,
+                    })),
+                    discountAmt: totalDiscount,
+                    discountPct: discountAmount > 0 ? discountPct : 0,
+                    shippingAmt,
+                    roundOff,
+                });
+                toast.success("Order updated");
+                router.push("/office/orders");
+            } catch (e: unknown) {
+                const msg = axios.isAxiosError(e) ? (e.response?.data as { error?: string })?.error : undefined;
+                toast.error(msg ?? "Failed to update order");
+            } finally {
+                setSubmitting(false);
+            }
+            return;
+        }
+
         // Order = OPTIONAL advance. Build payment tenders from the checkout dialog
         // (may be empty → no receipt voucher), mirroring the POS sale tender shape.
         // Estimate never collects payment, so its tender list stays empty.
@@ -1620,8 +1704,8 @@ export default function PosQuoteScreen({ mode }: { mode: QuoteMode }) {
                                 </div>
                                 <span className="text-xl font-bold tabular-nums">{fmtINR(total)}</span>
                             </div>
-                            <Button onClick={mode === "estimate" ? () => void generateInvoice(true) : openCheckout} disabled={cart.length === 0 || !snapshot?.account || submitting} className="h-12 w-full text-base" size="lg">
-                                <ReceiptIndianRupee size={18} /> {mode === "estimate" ? "Save Estimate" : "Save Order"}
+                            <Button onClick={isEdit ? () => void generateInvoice(false) : (mode === "estimate" ? () => void generateInvoice(true) : openCheckout)} disabled={cart.length === 0 || !snapshot?.account || submitting} className="h-12 w-full text-base" size="lg">
+                                <ReceiptIndianRupee size={18} /> {isEdit ? "Update Order" : (mode === "estimate" ? "Save Estimate" : "Save Order")}
                                 <span className="ml-2 rounded border border-primary-foreground/30 px-1.5 py-px text-[10px] opacity-80">Ctrl ↵</span>
                             </Button>
                         </div>

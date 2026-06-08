@@ -26,18 +26,20 @@ export async function GET(_req: Request, { params }: { params: Promise<{ source:
         const v = await prisma.invVoucher.findUnique({
             where: { id },
             select: {
-                id: true, reference: true, type: true, orderStatusId: true, partyName: true,
+                id: true, reference: true, type: true, orderStatusId: true, partyName: true, accountId: true,
                 subtotal: true, taxAmount: true, discountAmt: true, discountPct: true, totalAmount: true,
-                lines: { select: { id: true, productId: true, description: true, quantity: true, rate: true, taxRate: true, mrpPaise: true, savedSalePricePaise: true, amount: true } },
+                // sku/name let the POS screen rebuild cart rows when an order is reopened
+                // in edit mode (the line description alone embeds them but isn't reliable).
+                lines: { select: { id: true, productId: true, description: true, quantity: true, rate: true, taxRate: true, mrpPaise: true, savedSalePricePaise: true, amount: true, product: { select: { sku: true, name: true } } } },
             },
         });
         if (!v || (v.type !== "POS_ORDER" && v.type !== "SALES_ORDER")) return NextResponse.json({ error: "Order not found" }, { status: 404 });
         return NextResponse.json({
-            id: v.id, ref: v.reference, customer: v.partyName, statusId: v.orderStatusId,
+            id: v.id, ref: v.reference, customer: v.partyName, statusId: v.orderStatusId, accountId: v.accountId,
             editable: v.orderStatusId != null && EDITABLE_STAGES.includes(v.orderStatusId),
             subtotal: toNumber(v.subtotal), taxAmount: toNumber(v.taxAmount), discountAmt: v.discountAmt != null ? toNumber(v.discountAmt) : 0, discountPct: v.discountPct != null ? toNumber(v.discountPct) : null, totalAmount: toNumber(v.totalAmount),
             lines: v.lines.map((l) => ({
-                id: l.id, productId: l.productId, description: l.description,
+                id: l.id, productId: l.productId, sku: l.product.sku, name: l.product.name, description: l.description,
                 quantity: toNumber(l.quantity), rate: toNumber(l.rate), taxRate: toNumber(l.taxRate),
                 mrpPaise: l.mrpPaise, savedSalePricePaise: l.savedSalePricePaise, amount: toNumber(l.amount),
             })),
