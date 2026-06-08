@@ -1,5 +1,5 @@
-import PosOrderScreen from "@/modules/pos/components/PosOrderScreen";
+import PosQuoteScreen from "@/modules/pos/components/PosQuoteScreen";
 
 export default function PosOrderPage() {
-    return <PosOrderScreen />;
+    return <PosQuoteScreen mode="order" />;
 }

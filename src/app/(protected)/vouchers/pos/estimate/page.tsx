@@ -1,5 +1,5 @@
-import PosEstimateScreen from "@/modules/pos/components/PosEstimateScreen";
+import PosQuoteScreen from "@/modules/pos/components/PosQuoteScreen";
 
 export default function PosEstimatePage() {
-    return <PosEstimateScreen />;
+    return <PosQuoteScreen mode="estimate" />;
 }
