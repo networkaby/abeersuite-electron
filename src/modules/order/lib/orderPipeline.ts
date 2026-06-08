@@ -6,6 +6,21 @@ import type { PrismaClient, Prisma } from "@/generated/prisma/client";
 // this one pipeline so they share a single Orders board. Resolve by stable name.
 export const ORDER_PIPELINE_NAME = "sales-orders" as const;
 
+// Seeded P7 stage ids (bootstrap-seed.ts). Used to trigger reservation / fulfil:
+// reserve on CONFIRMED, release on CANCELLED/RETURNED, fulfil on DELIVERED.
+export const ORDER_STAGE = {
+    NEW: "S42",
+    UNDER_REVIEW: "S43",
+    CONFIRMED: "S44",
+    PACKING: "S45",
+    DISPATCHED: "S46",
+    DELIVERED: "S47",
+    CANCELLED: "S48",
+    RETURNED: "S49",
+} as const;
+/** Stages that release a held reservation (order is dead). */
+export const ORDER_RELEASE_STAGES: string[] = [ORDER_STAGE.CANCELLED, ORDER_STAGE.RETURNED];
+
 export async function getOrderPipeline(db: PrismaClient | Prisma.TransactionClient) {
     return db.pipeline.findUnique({
         where: { name: ORDER_PIPELINE_NAME },

@@ -84,6 +84,7 @@ export async function GET(req: NextRequest) {
                 sku:               true,
                 name:              true,
                 stock:             true,
+                reserved:          true,
                 lowStockThreshold: true,
                 effectiveSalePricePaise: true,
                 mrpPaise:          true,
@@ -115,6 +116,8 @@ export async function GET(req: NextRequest) {
             // Printed barcode tag (paise) derived from saved price + MRP — the
             // public price snapshotted on POS lines for the customer ladder.
             barcodePricePaise: barcodeTagPaise(product.savedSalePricePaise, product.mrpPaise, barcodeBands),
+            // O2C available-to-sell = on-hand − reserved (null when untracked).
+            availableToSell: product.stock == null ? null : product.stock - (product.reserved ?? 0),
         });
     }
 
@@ -174,6 +177,8 @@ export async function GET(req: NextRequest) {
             // Printed barcode tag (paise) derived from saved price + MRP — the
             // public price snapshotted on POS lines for the customer ladder.
             barcodePricePaise: barcodeTagPaise(p.savedSalePricePaise, p.mrpPaise, barcodeBands),
+            // O2C available-to-sell = on-hand − reserved (null when untracked).
+            availableToSell: p.stock == null ? null : p.stock - (p.reserved ?? 0),
         };
     });
 

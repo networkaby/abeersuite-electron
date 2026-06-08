@@ -3,8 +3,9 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { handleApiError } from "@/shared/lib/api";
-import { assertOrderStatus } from "@/modules/order/lib/orderPipeline";
+import { assertOrderStatus, ORDER_STAGE, ORDER_RELEASE_STAGES } from "@/modules/order/lib/orderPipeline";
 import { resolveOrderStatus, writeOrderStatus, type OrderSource } from "@/modules/order/lib/orderAdapter";
+import { reserveOrder, releaseOrder } from "@/modules/order/lib/reservation";
 
 // PATCH /api/orders/[source]/[id]/status   body { statusId }
 //
@@ -48,6 +49,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ source
         }
 
         await writeOrderStatus(ref, statusId);
+
+        // O2C reservation hooks: hold stock when the order is Confirmed; release it
+        // when the order is Cancelled/Returned. (Fulfil — convert hold → stock-out —
+        // is Phase 3.) Best-effort: a reservation hiccup must not undo the move.
+        try {
+            if (statusId === ORDER_STAGE.CONFIRMED) await reserveOrder(ref);
+            else if (ORDER_RELEASE_STAGES.includes(statusId)) await releaseOrder(ref);
+        } catch (e) {
+            console.error("[orders] reservation hook failed for", ref, e);
+        }
+
         return NextResponse.json({ source, id, statusId });
     } catch (e) {
         return handleApiError(e, "Failed to move order");

@@ -40,10 +40,13 @@ export type ShopAvailability = {
 export function resolveAvailability(
     stock: number | null | undefined,
     allowBackorder: boolean,
-    policy: ShopOutOfStockPolicy
+    policy: ShopOutOfStockPolicy,
+    /** O2C reserved units held by confirmed orders — available-to-sell = stock − reserved. */
+    reserved: number = 0,
 ): ShopAvailability {
     const tracked = stock !== null && stock !== undefined;
-    if (!tracked || stock > 0) {
+    const available = tracked ? stock - (reserved || 0) : null;
+    if (!tracked || (available as number) > 0) {
         return { visible: true, orderable: true, status: "in_stock" };
     }
     // zero (or negative) tracked stock
