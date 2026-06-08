@@ -7,12 +7,16 @@
 // PosScreen as a presentational component — it owns NO business logic; all state
 // + the confirm/share actions are passed in by the parent.
 //
-// `mode` adapts the same body to two sites:
-//   "sale"  (default) — collecting AGAINST a bill: credit-limit guard, Confirm
-//                       blocked on under-payment, overpayment → Receipt panel.
-//   "order" — collecting an OPTIONAL advance on a POS order: no credit-limit
-//             block, partial/zero advance is fine, "Save Order" CTAs. The sale
-//             path renders byte-identically to before when mode is omitted.
+// `mode` adapts the same body to three sites:
+//   "sale"   (default) — collecting AGAINST a bill: credit-limit guard, Confirm
+//                        blocked on under-payment, overpayment → Receipt panel.
+//   "order"  — collecting an OPTIONAL advance on a POS order: no credit-limit
+//              block, partial/zero advance is fine, "Save Order" CTAs. The sale
+//              path renders byte-identically to before when mode is omitted.
+//   "receipt"— receiving money with NO bill (the "Rcv" button): no totals header /
+//              gift-card / credit / overpayment. The parent passes a party picker
+//              as `topSlot` and a note field as `bottomSlot`; the tenders define
+//              the total; CTAs read "Record receipt" / "Record + Print".
 
 import React from "react";
 import {
@@ -33,32 +37,33 @@ type PayState = { cashTendered: number; cashReturn: number };
 export function CheckoutDialog({
     open, onOpenChange,
     mode = "sale",
-    total, collected, onCredit, payableTotal,
-    overpaid, balanceDue, arrearPaid, advanceTaken,
-    giftCardApplied, giftCardCode,
-    creditLimitBreached, creditLimit,
+    total, collected = 0, onCredit = 0, payableTotal = 0,
+    overpaid = 0, balanceDue = 0, arrearPaid = 0, advanceTaken = 0,
+    giftCardApplied = 0, giftCardCode,
+    creditLimitBreached = false, creditLimit = null,
     pay, setPay, cashTenderedRef,
     accounts, splits, setSplits,
     submitting, onConfirm, onShare,
+    topSlot, bottomSlot, confirmDisabled = false,
 }: {
     open: boolean;
     onOpenChange: (v: boolean) => void;
-    mode?: "sale" | "order";
-    // Totals (all rupees)
+    mode?: "sale" | "order" | "receipt";
+    // Totals (all rupees). For "receipt" the bill-only fields are unused.
     total: number;
-    collected: number;
-    onCredit: number;
-    payableTotal: number;
-    overpaid: number;
-    balanceDue: number;
-    arrearPaid: number;
-    advanceTaken: number;
+    collected?: number;
+    onCredit?: number;
+    payableTotal?: number;
+    overpaid?: number;
+    balanceDue?: number;
+    arrearPaid?: number;
+    advanceTaken?: number;
     // Gift card applied as a tender
-    giftCardApplied: number;
+    giftCardApplied?: number;
     giftCardCode?: string | null;
     // Credit-limit guard
-    creditLimitBreached: boolean;
-    creditLimit: number | null;
+    creditLimitBreached?: boolean;
+    creditLimit?: number | null;
     // Cash payment state
     pay: PayState;
     setPay: React.Dispatch<React.SetStateAction<PayState>>;
@@ -71,13 +76,18 @@ export function CheckoutDialog({
     submitting: boolean;
     onConfirm: (printAfter: boolean) => void;
     onShare?: (acct: TenderAccount) => void;
+    // "receipt" mode chrome — a party picker above the tenders and a note below.
+    topSlot?: React.ReactNode;
+    bottomSlot?: React.ReactNode;
+    confirmDisabled?: boolean;
 }) {
     const isOrder = mode === "order";
+    const isReceipt = mode === "receipt";
     // Sale blocks Confirm on under-payment (a credit sale must go through /sale)
-    // and on a credit-limit breach. An order advance is optional, so only
-    // `submitting` gates it — the route still rejects advance > total.
-    const confirmBlocked = submitting || (!isOrder && (creditLimitBreached || onCredit > 0.01));
-    const underpayTitle = !isOrder && onCredit > 0.01
+    // and on a credit-limit breach. An order advance / a receipt are optional in
+    // amount, so only `submitting` (+ a parent-supplied guard) gates them.
+    const confirmBlocked = submitting || confirmDisabled || (!isOrder && !isReceipt && (creditLimitBreached || onCredit > 0.01));
+    const underpayTitle = !isOrder && !isReceipt && onCredit > 0.01
         ? "Collect the full bill amount to confirm (under-payment → use /sale for credit)"
         : overpaid > 0 ? "Extra is collected as a Receipt voucher — clears old dues first, leftover becomes advance" : undefined;
 
@@ -94,12 +104,16 @@ export function CheckoutDialog({
             <DialogContent className="sm:max-w-lg">
                 <DialogHeader>
                     <DialogTitle>
-                        {isOrder ? "Save Order" : "Checkout"} · {fmtINR(total)}
+                        {isReceipt ? "Receive from party" : isOrder ? `Save Order · ${fmtINR(total)}` : `Checkout · ${fmtINR(total)}`}
                         {isOrder && <span className="text-sm font-normal text-muted-foreground"> — advance optional</span>}
                     </DialogTitle>
                 </DialogHeader>
 
                 <div className="space-y-3">
+                    {/* Receipt: the party picker sits where the bill header would be. */}
+                    {isReceipt && topSlot}
+
+                    {!isReceipt && (
                     <div className="grid grid-cols-3 gap-2 rounded-md border border-border bg-muted/30 p-3 text-center text-sm">
                         <div>
                             <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Total</div>
@@ -114,8 +128,9 @@ export function CheckoutDialog({
                             <div className={`font-semibold ${onCredit > 0 ? "text-amber-600" : "text-emerald-600"}`}>{fmtINR(onCredit)}</div>
                         </div>
                     </div>
+                    )}
 
-                    {giftCardApplied > 0.005 && (
+                    {!isReceipt && giftCardApplied > 0.005 && (
                         <div className="flex items-center justify-between rounded-md border border-teal-200 bg-teal-50 px-3 py-2 text-sm dark:border-teal-500/30 dark:bg-teal-500/10">
                             <span className="flex items-center gap-1.5 text-teal-700 dark:text-teal-300"><CreditCard size={14} /> Gift card {giftCardCode} − {fmtINR(giftCardApplied)}</span>
                             <span className="font-semibold tabular-nums">Pay {fmtINR(payableTotal)}</span>
@@ -123,7 +138,7 @@ export function CheckoutDialog({
                     )}
 
                     {/* Sale: credit-limit warning when the on-credit portion would breach the limit. */}
-                    {!isOrder && creditLimitBreached && (
+                    {!isOrder && !isReceipt && creditLimitBreached && (
                         <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
                             <AlertCircle size={16} className="mt-0.5 shrink-0" />
                             <span>
@@ -147,8 +162,9 @@ export function CheckoutDialog({
 
                     <div className="space-y-2">
                         {/* Cash row + non-cash splits + Add-line — the shared tender body,
-                            also reused by the Rcv dialog. targetTotal enables the cash
-                            "fill remaining" helper and seeds new lines with the balance. */}
+                            also reused by the Rcv dialog. targetTotal (bill) enables the
+                            cash "fill remaining" helper; receipt omits it (tenders define
+                            the total, so it shows its own running Total instead). */}
                         <TenderEntry
                             accounts={accounts}
                             splits={splits}
@@ -156,12 +172,14 @@ export function CheckoutDialog({
                             pay={pay}
                             setPay={setPay}
                             cashTenderedRef={cashTenderedRef}
-                            targetTotal={payableTotal}
+                            targetTotal={isReceipt ? undefined : payableTotal}
+                            showTotal={isReceipt}
                             onShare={onShare}
                             onEnter={enterToSubmit}
                         />
 
-                        {/* Credit — readonly, auto-balanced */}
+                        {/* Credit — readonly, auto-balanced (bill modes only) */}
+                        {!isReceipt && (
                         <div className="grid grid-cols-[80px_1fr] items-center gap-2">
                             <Label className="flex items-center gap-1.5 text-xs text-muted-foreground"><Clock size={12} /> Credit</Label>
                             <Input
@@ -173,12 +191,17 @@ export function CheckoutDialog({
                                 title="Auto-balanced — fill Cash / UPI / Card etc. and the rest goes on credit"
                             />
                         </div>
+                        )}
+
+                        {/* Receipt: optional note sits where the credit row would be. */}
+                        {isReceipt && bottomSlot}
+
                         {/* Overpayment is collected on Confirm: the extra clears the oldest
                             open bills first (FIFO), and any leftover becomes a customer
                             advance — booked as a separate GST Receipt voucher so the bank/UPI
                             statement matches 1:1. (Sale only — an order advance can't exceed
                             the total, so there's nothing to overpay.) */}
-                        {!isOrder && (overpaid > 0 || balanceDue > 0) && (
+                        {!isOrder && !isReceipt && (overpaid > 0 || balanceDue > 0) && (
                             <div className="space-y-1 rounded-md border border-border bg-muted/30 p-2.5 text-xs">
                                 {balanceDue > 0 && (
                                     <div className="flex items-center justify-between">
@@ -220,11 +243,11 @@ export function CheckoutDialog({
                         {/* Inline confirm CTAs — final amount + actions sit close to the payment-line entry */}
                         <div className="grid grid-cols-2 gap-2 pt-1">
                             <Button onClick={() => onConfirm(false)} disabled={confirmBlocked} size="lg" variant="outline" title={underpayTitle}>
-                                <ReceiptIndianRupee size={16} /> {submitting ? "Saving…" : (isOrder ? "Save Order" : overpaid > 0 ? "Confirm + collect" : "Confirm")}
+                                <ReceiptIndianRupee size={16} /> {submitting ? "Saving…" : (isReceipt ? "Record receipt" : isOrder ? "Save Order" : overpaid > 0 ? "Confirm + collect" : "Confirm")}
                                 <span className="ml-2 rounded border border-primary-foreground/30 px-1.5 py-px text-[10px] opacity-80">↵</span>
                             </Button>
                             <Button onClick={() => onConfirm(true)} disabled={confirmBlocked} size="lg" title={underpayTitle}>
-                                <ReceiptIndianRupee size={16} /> {submitting ? "Saving…" : (isOrder ? "Save + Print" : "Confirm + Print")}
+                                <ReceiptIndianRupee size={16} /> {submitting ? "Saving…" : (isReceipt ? "Record + Print" : isOrder ? "Save + Print" : "Confirm + Print")}
                                 <span className="ml-2 rounded border border-border px-1.5 py-px text-[10px] opacity-80">Ctrl ↵</span>
                             </Button>
                         </div>

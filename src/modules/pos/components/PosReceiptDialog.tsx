@@ -1,20 +1,20 @@
 "use client";
 
 // ── PosReceiptDialog ─────────────────────────────────────────────────────────
-// Collect a payment from a party (customer) at the counter — they clear an
-// outstanding credit or pay an advance. Reuses the checkout multi-tender picker
-// (TenderSplitInput): receive across Cash + UPI/Card accounts, each tender posting
-// to its own ledger, with the per-account Share QR. Posts a RECEIPT voucher
-// (one Dr per tender / Cr party AR). Cash legs fall in the shift window so the
-// shift-close drawer picks them up; non-cash legs hit their bank ledger instead.
+// The "Rcv" button — collect a payment from a party (customer) at the counter
+// with NO order/bill behind it: they clear an outstanding credit or pay an
+// advance. Renders the SAME checkout dialog as POS Sale / Save-Order, in
+// `mode="receipt"`: this component owns the receipt state (party, tenders, note)
+// and feeds CheckoutDialog the party picker (topSlot) + note (bottomSlot); the
+// shared tender body (Cash + UPI/Card splits + per-account Share QR) and the CTAs
+// come from CheckoutDialog. Posts a RECEIPT voucher (one Dr per tender / Cr party
+// AR) — cash legs fall in the shift window for the close drawer; non-cash legs
+// hit their own bank ledger.
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Loader2, HandCoins, X } from "lucide-react";
-import {
-    Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription,
-} from "@/components/ui/dialog";
+import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,18 +24,18 @@ import {
     type PickedParty,
 } from "@/shared/components/PartySearchAndCreate";
 import { type TenderSplit, type TenderAccount } from "@/modules/pos/components/TenderSplitInput";
-import { TenderEntry, type PayState } from "@/modules/pos/components/TenderEntry";
+import { type PayState } from "@/modules/pos/components/TenderEntry";
+import { CheckoutDialog } from "@/modules/pos/components/CheckoutDialog";
 import { PaymentLinkDialog } from "@/modules/pos/components/PaymentLinkDialog";
 
 const fmtINR = (n: number) => `₹${n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export function PosReceiptDialog({
-    open, onOpenChange, shiftId, counterName, paymentAccounts = [], onDone,
+    open, onOpenChange, shiftId, paymentAccounts = [], onDone,
 }: {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     shiftId: number;
-    counterName?: string;
     paymentAccounts?: TenderAccount[];
     onDone: () => void;
 }) {
@@ -67,7 +67,7 @@ export function PosReceiptDialog({
         setParty({ accountId: p.accountId, name: p.name });
     };
 
-    const submit = async () => {
+    const submit = async (printAfter = false) => {
         if (!party)     { toast.error("Pick the party paying"); return; }
         const cashNet = Math.max(0, pay.cashTendered - pay.cashReturn);
         const lines = [
@@ -83,7 +83,7 @@ export function PosReceiptDialog({
                 note:      note.trim() || undefined,
             });
             toast.success(`Receipt ${data.voucherRef} · ${fmtINR(total)} from ${party.name}`);
-            window.open(`/receipt/payment/${data.voucherId}`, "_blank", "noopener");
+            if (printAfter) window.open(`/receipt/payment/${data.voucherId}`, "_blank", "noopener");
             onDone();
             onOpenChange(false);
         } catch (e: unknown) {
@@ -94,26 +94,24 @@ export function PosReceiptDialog({
         }
     };
 
-    // Enter on any amount field records the receipt.
-    const enterToSubmit = (e: React.KeyboardEvent) => {
-        if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void submit(); }
-    };
-
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2">
-                        <HandCoins size={18} className="text-primary" /> Receive from party
-                    </DialogTitle>
-                    <DialogDescription>
-                        Collect a payment from a customer (clearing credit, advance, etc.) across Cash and/or
-                        UPI/Card — each tender posts to its own ledger ({counterName ?? "this counter"}&apos;s till
-                        for cash, the account&apos;s bank for the rest). Share a UPI QR to collect remotely.
-                    </DialogDescription>
-                </DialogHeader>
-
-                <div className="space-y-4 py-2">
+        <>
+            <CheckoutDialog
+                mode="receipt"
+                open={open}
+                onOpenChange={onOpenChange}
+                total={total}
+                pay={pay}
+                setPay={setPay}
+                cashTenderedRef={cashTenderedRef}
+                accounts={paymentAccounts}
+                splits={tenders}
+                setSplits={setTenders}
+                submitting={submitting}
+                confirmDisabled={!party || total <= 0}
+                onConfirm={(printAfter) => void submit(printAfter)}
+                onShare={(a) => { setShareVpa(a.vpa); setShareOpen(true); }}
+                topSlot={
                     <div className="space-y-1.5">
                         <Label>Party</Label>
                         {party ? (
@@ -132,26 +130,9 @@ export function PosReceiptDialog({
                             />
                         )}
                     </div>
-
-                    {/* Received in — the same Cash + multi-tender body as checkout
-                        (no bill, so no targetTotal; the tenders define the total). UPI/
-                        gateway rows show a Share button that puts the QR on the display. */}
-                    <div className="space-y-2">
-                        <Label>Received in</Label>
-                        <TenderEntry
-                            accounts={paymentAccounts}
-                            splits={tenders}
-                            setSplits={setTenders}
-                            pay={pay}
-                            setPay={setPay}
-                            cashTenderedRef={cashTenderedRef}
-                            showTotal
-                            onShare={(a) => { setShareVpa(a.vpa); setShareOpen(true); }}
-                            onEnter={enterToSubmit}
-                        />
-                    </div>
-
-                    <div className="space-y-1.5">
+                }
+                bottomSlot={
+                    <div className="space-y-1.5 pt-1">
                         <Label htmlFor="rcv-note">Note <span className="text-muted-foreground text-xs">(optional)</span></Label>
                         <Input
                             id="rcv-note"
@@ -162,15 +143,8 @@ export function PosReceiptDialog({
                             maxLength={200}
                         />
                     </div>
-                </div>
-
-                <DialogFooter>
-                    <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>Cancel</Button>
-                    <Button onClick={submit} disabled={submitting}>
-                        {submitting && <Loader2 size={14} className="animate-spin" />} Record receipt
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
+                }
+            />
 
             <PaymentLinkDialog
                 open={shareOpen}
@@ -180,6 +154,6 @@ export function PosReceiptDialog({
                 upiVpa={shareVpa}
                 lockedProviderId="upi"
             />
-        </Dialog>
+        </>
     );
 }
