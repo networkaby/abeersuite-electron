@@ -1121,7 +1121,7 @@ export default function PosScreen() {
             )}
 
             {/* Top bar — customer search */}
-            <header className="flex shrink-0 items-center gap-3 border-b border-border bg-card px-4 py-3">
+            <header className="flex shrink-0 items-center gap-3 border-b-2 border-emerald-300 bg-emerald-100/70 px-4 py-3 dark:border-emerald-900 dark:bg-emerald-950/30">
                 <Link href="/office" className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground" title="Back to office">
                     <ArrowLeft size={16} />
                 </Link>
