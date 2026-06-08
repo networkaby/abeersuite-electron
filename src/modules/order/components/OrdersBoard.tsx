@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
-import { Loader2, RefreshCw, ShoppingCart } from "lucide-react";
+import { Loader2, RefreshCw, ShoppingCart, MoreVertical, Pencil, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { OrderEditDialog } from "./OrderEditDialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 // Phase 1 of the O2C order backbone: one board for orders from every channel
 // (counter POS_ORDER / office SALES_ORDER / online ShopOrder), all riding P7.
@@ -34,7 +35,7 @@ export function OrdersBoard() {
     const [orders, setOrders] = useState<OrderCard[]>([]);
     const [loading, setLoading] = useState(true);
     const [dragged, setDragged] = useState<OrderCard | null>(null);
-    const [editingOrderId, setEditingOrderId] = useState<number | null>(null);
+    const router = useRouter();
 
     // Fetch only sets state in async callbacks (no synchronous setState in the
     // mount effect — initial loading=true covers first paint; Refresh sets it).
@@ -71,6 +72,22 @@ export function OrdersBoard() {
         }
     }
 
+    function editOrder(o: OrderCard) {
+        if (o.source !== "inv") { toast.info("Online orders are managed in the ecommerce admin."); return; }
+        // Reopen in the same POS screen that created it (Phase B edit mode).
+        router.push(`/vouchers/pos/order?id=${o.id}`);
+    }
+
+    async function cancelOrder(o: OrderCard) {
+        const cancelStage = stages.find((s) => /cancel/i.test(s.label));
+        if (!cancelStage) { toast.error("No Cancelled stage is configured on the pipeline."); return; }
+        if (o.statusId === cancelStage.id) return;
+        if (!window.confirm(`Cancel order ${o.ref}? Any held stock will be released.`)) return;
+        // Moving to Cancelled runs the order status route, which releases the
+        // reservation cleanly — orders are GL-silent, so there's nothing to reverse.
+        await move(o, cancelStage.id);
+    }
+
     if (loading) return <div className="flex justify-center py-16"><Loader2 className="animate-spin text-muted-foreground" /></div>;
 
     return (
@@ -102,13 +119,34 @@ export function OrdersBoard() {
                                         draggable
                                         onDragStart={() => setDragged(o)}
                                         onDragEnd={() => setDragged(null)}
-                                        onClick={() => { if (o.source === "inv") setEditingOrderId(o.id); }}
+                                        onClick={() => editOrder(o)}
                                         title={o.source === "inv" ? "Open / edit order" : undefined}
                                         className="cursor-grab rounded-md border border-border bg-card p-2 text-sm shadow-sm active:cursor-grabbing"
                                     >
                                         <div className="flex items-center justify-between gap-2">
                                             <span className="font-mono text-[11px] text-muted-foreground">{o.ref}</span>
-                                            <Badge variant="outline" className={`text-[10px] ${KIND_BADGE[o.kind]}`}>{KIND_LABEL[o.kind]}</Badge>
+                                            <div className="flex items-center gap-1">
+                                                <Badge variant="outline" className={`text-[10px] ${KIND_BADGE[o.kind]}`}>{KIND_LABEL[o.kind]}</Badge>
+                                                {o.source === "inv" && (
+                                                    <DropdownMenu>
+                                                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                                                            <button type="button" className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground" title="Order actions">
+                                                                <MoreVertical size={14} />
+                                                            </button>
+                                                        </DropdownMenuTrigger>
+                                                        <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                                                            <DropdownMenuItem onClick={() => editOrder(o)}>
+                                                                <Pencil size={13} /> Edit
+                                                            </DropdownMenuItem>
+                                                            {!stage.isTerminal && (
+                                                                <DropdownMenuItem onClick={() => void cancelOrder(o)} className="text-destructive focus:text-destructive">
+                                                                    <XCircle size={13} /> Cancel order
+                                                                </DropdownMenuItem>
+                                                            )}
+                                                        </DropdownMenuContent>
+                                                    </DropdownMenu>
+                                                )}
+                                            </div>
                                         </div>
                                         <div className="mt-0.5 truncate font-medium">{o.customerName ?? "Walk-in"}</div>
                                         <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -139,13 +177,6 @@ export function OrdersBoard() {
                     </div>
                 )}
             </div>
-
-            <OrderEditDialog
-                orderId={editingOrderId}
-                open={editingOrderId != null}
-                onClose={() => setEditingOrderId(null)}
-                onSaved={load}
-            />
         </div>
     );
 }
