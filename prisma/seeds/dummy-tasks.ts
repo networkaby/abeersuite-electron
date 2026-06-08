@@ -16,7 +16,7 @@ dotenv.config({ path: ".env.local" });
 dotenv.config({ path: ".env" });
 
 const rawUrl = (process.env.DIRECT_URL ?? process.env.DATABASE_URL ?? "").replace(/[?&]sslmode=[^&]*/g, "");
-const pool = new Pool({ connectionString: rawUrl, ssl: { rejectUnauthorized: false } });
+const pool = new Pool({ connectionString: rawUrl, ssl: /@(localhost|127\.0\.0\.1)/.test(rawUrl) ? false : { rejectUnauthorized: false } });
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 

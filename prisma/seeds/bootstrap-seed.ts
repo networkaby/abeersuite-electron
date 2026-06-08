@@ -63,7 +63,7 @@ const rawUrl = (process.env.DIRECT_URL ?? process.env.DATABASE_URL ?? "")
     .replace(/[?&]sslmode=[^&]*/g, "")
     .replace(/[?&]$/, "");
 
-const pool = new Pool({ connectionString: rawUrl, ssl: { rejectUnauthorized: false }, max: 5 });
+const pool = new Pool({ connectionString: rawUrl, ssl: /@(localhost|127\.0\.0\.1)/.test(rawUrl) ? false : { rejectUnauthorized: false }, max: 5 });
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 

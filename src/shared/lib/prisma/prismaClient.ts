@@ -4,12 +4,17 @@ import { Pool } from "pg";
 
 const connectionString = process.env.DATABASE_URL?.replace(/[?&]sslmode=[^&]*/g, "").replace(/[?&]$/, "");
 
+// Local Postgres (localhost) speaks plaintext — forcing SSL there fails the
+// handshake. Supabase/remote needs SSL. Detect by host so dev-on-localhost and
+// prod-on-Supabase both work from the same client.
+const isLocalDb = /@(localhost|127\.0\.0\.1|\[::1\])[:/]/.test(connectionString ?? "");
+
 // On Vercel serverless: prefer the Supabase pooler URL (port 6543, pgbouncer transaction mode)
 // in DATABASE_URL. With pooler, max can stay modest per container. Without pooler, raising max
 // risks exhausting Postgres' direct-connection limit under concurrent invocations.
 const pool = new Pool({
     connectionString,
-    ssl: { rejectUnauthorized: false },
+    ssl: isLocalDb ? false : { rejectUnauthorized: false },
     max: 10,
     connectionTimeoutMillis: 10000,
     idleTimeoutMillis: 10000,
