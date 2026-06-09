@@ -30,20 +30,42 @@ export async function GET(_req: Request, { params }: { params: Promise<{ source:
                 subtotal: true, taxAmount: true, discountAmt: true, discountPct: true, totalAmount: true,
                 // sku/name let the POS screen rebuild cart rows when an order is reopened
                 // in edit mode (the line description alone embeds them but isn't reliable).
-                lines: { select: { id: true, productId: true, description: true, quantity: true, rate: true, taxRate: true, mrpPaise: true, savedSalePricePaise: true, amount: true, product: { select: { sku: true, name: true } } } },
+                // stock/reserved drive the Review popup's per-line "deliverable?" check
+                // (available-to-sell = stock − reserved); sku/name rebuild cart rows on edit.
+                lines: { select: { id: true, productId: true, description: true, quantity: true, rate: true, taxRate: true, mrpPaise: true, savedSalePricePaise: true, amount: true, product: { select: { sku: true, name: true, stock: true, reserved: true } } } },
             },
         });
         if (!v || (v.type !== "POS_ORDER" && v.type !== "SALES_ORDER" && v.type !== "POS_ESTIMATE")) return NextResponse.json({ error: "Order not found" }, { status: 404 });
+
+        // Customer delivery address for the Review popup's "address deliverable?" flag.
+        // Resolve from the order's ledger account → Person / Company.
+        let address: string | null = null;
+        if (v.accountId) {
+            const acct = await prisma.account.findUnique({
+                where: { id: v.accountId },
+                select: { person: { select: { address: true } }, company: { select: { address: true } } },
+            });
+            address = acct?.person?.address ?? acct?.company?.address ?? null;
+        }
+
         return NextResponse.json({
             id: v.id, ref: v.reference, customer: v.partyName, statusId: v.orderStatusId, accountId: v.accountId,
+            address,
             // Estimates are GL-silent quotes → always editable; orders only at New / Under-Review.
             editable: v.type === "POS_ESTIMATE" ? true : (v.orderStatusId != null && EDITABLE_STAGES.includes(v.orderStatusId)),
             subtotal: toNumber(v.subtotal), taxAmount: toNumber(v.taxAmount), discountAmt: v.discountAmt != null ? toNumber(v.discountAmt) : 0, discountPct: v.discountPct != null ? toNumber(v.discountPct) : null, totalAmount: toNumber(v.totalAmount),
-            lines: v.lines.map((l) => ({
-                id: l.id, productId: l.productId, sku: l.product.sku, name: l.product.name, description: l.description,
-                quantity: toNumber(l.quantity), rate: toNumber(l.rate), taxRate: toNumber(l.taxRate),
-                mrpPaise: l.mrpPaise, savedSalePricePaise: l.savedSalePricePaise, amount: toNumber(l.amount),
-            })),
+            lines: v.lines.map((l) => {
+                const qty = toNumber(l.quantity);
+                // Untracked products (stock = null) are always deliverable; tracked ones
+                // are deliverable when available-to-sell (stock − reserved) covers the line.
+                const available = l.product.stock == null ? null : toNumber(l.product.stock) - l.product.reserved;
+                return {
+                    id: l.id, productId: l.productId, sku: l.product.sku, name: l.product.name, description: l.description,
+                    quantity: qty, rate: toNumber(l.rate), taxRate: toNumber(l.taxRate),
+                    mrpPaise: l.mrpPaise, savedSalePricePaise: l.savedSalePricePaise, amount: toNumber(l.amount),
+                    available, deliverable: available == null ? true : available >= qty,
+                };
+            }),
         });
     } catch (e) {
         return handleApiError(e, "Failed to load order");

@@ -543,6 +543,9 @@ const STATUS_TRANSITIONS = [
     { fromStatusId: "S7", toStatusId: "S1" },
     { fromStatusId: "S8", toStatusId: "S1" },
     { fromStatusId: "S42", toStatusId: "S43" },
+    // New → Confirmed directly: the board's Review popup confirms a New order in one
+    // click (skipping the manual Under Review hop). Under Review → Confirmed still exists.
+    { fromStatusId: "S42", toStatusId: "S44" },
     { fromStatusId: "S42", toStatusId: "S48" },
     { fromStatusId: "S43", toStatusId: "S44" },
     { fromStatusId: "S43", toStatusId: "S48" },

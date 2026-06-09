@@ -4,15 +4,15 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
-import { Loader2, RefreshCw, ShoppingCart, MoreVertical, Pencil, XCircle, AlertCircle } from "lucide-react";
+import { Loader2, RefreshCw, ShoppingCart, AlertCircle, FolderOpen, Eye, Check, Ban, Package, MapPin, CheckCircle2, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { type GlAccount } from "@/modules/accountancy/components/GlAccountCombobox";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
+import { ORDER_STAGE } from "@/modules/order/lib/orderPipeline";
 
 // Phase 1 of the O2C order backbone: one board for orders from every channel
 // (counter POS_ORDER / office SALES_ORDER / online ShopOrder), all riding P7.
@@ -25,6 +25,13 @@ interface OrderCard {
     customerName: string | null; total: number; statusId: string | null;
     branchId: string | null; dealId: number | null; createdAt: string;
     credit: { limit: number; outstanding: number; breach: boolean } | null;
+}
+
+// Order detail for the Review popup (GET /api/orders/[source]/[id]).
+interface OrderLineDetail { id: number; name: string; quantity: number; rate: number; available: number | null; deliverable: boolean }
+interface OrderDetail {
+    id: number; ref: string; customer: string | null; statusId: string | null;
+    address: string | null; totalAmount: number; lines: OrderLineDetail[];
 }
 
 const KIND_BADGE: Record<OrderCard["kind"], string> = {
@@ -51,6 +58,12 @@ export function OrdersBoard() {
     const [payAmount, setPayAmount] = useState<string>("");
     const [fulfilling, setFulfilling] = useState(false);
     const [fulfilErr, setFulfilErr] = useState<string | null>(null);
+
+    // Review popup: inspect items + customer/address deliverability, then Confirm/Reject.
+    const [viewTarget, setViewTarget] = useState<OrderCard | null>(null);
+    const [viewData, setViewData] = useState<OrderDetail | null>(null);
+    const [viewLoading, setViewLoading] = useState(false);
+    const [reviewBusy, setReviewBusy] = useState(false);
 
     // Fetch only sets state in async callbacks (no synchronous setState in the
     // mount effect — initial loading=true covers first paint; Refresh sets it).
@@ -123,17 +136,47 @@ export function OrdersBoard() {
         router.push(`/vouchers/pos/order?id=${o.id}`);
     }
 
-    async function cancelOrder(o: OrderCard) {
-        const cancelStage = stages.find((s) => /cancel/i.test(s.label));
-        if (!cancelStage) { toast.error("No Cancelled stage is configured on the pipeline."); return; }
-        if (o.statusId === cancelStage.id) return;
-        if (!window.confirm(`Cancel order ${o.ref}? Any held stock will be released.`)) return;
-        // Moving to Cancelled runs the order status route, which releases the
-        // reservation cleanly — orders are GL-silent, so there's nothing to reverse.
-        await move(o, cancelStage.id);
+    // Open the Review popup: fetch the order's items + customer address so the
+    // reviewer can judge "is the item in stock and the address deliverable?".
+    function openView(o: OrderCard) {
+        if (o.source !== "inv") { toast.info("Online orders are reviewed in the ecommerce admin."); return; }
+        setViewData(null);
+        setViewLoading(true);
+        setViewTarget(o);
+        axios.get<OrderDetail>(`/api/orders/inv/${o.id}`)
+            .then((r) => setViewData(r.data))
+            .catch(() => { toast.error("Couldn't load the order"); setViewTarget(null); })
+            .finally(() => setViewLoading(false));
+    }
+
+    // Review decision → a P7 stage move via the status route (Confirm reserves stock +
+    // spawns delivery; Reject releases the hold). Reused for the non-review Cancel too.
+    async function review(o: OrderCard, statusId: string) {
+        setReviewBusy(true);
+        try {
+            await axios.patch(`/api/orders/inv/${o.id}/status`, { statusId });
+            toast.success(
+                statusId === ORDER_STAGE.CONFIRMED ? `Order ${o.ref} confirmed`
+                    : statusId === ORDER_STAGE.CANCELLED ? `Order ${o.ref} rejected`
+                        : `Order ${o.ref} updated`,
+            );
+            setViewTarget(null);
+            load();
+        } catch (e) {
+            const msg = axios.isAxiosError(e) ? (e.response?.data as { error?: string })?.error : null;
+            toast.error(msg || "That action isn't allowed");
+        } finally {
+            setReviewBusy(false);
+        }
     }
 
     if (loading) return <div className="flex justify-center py-16"><Loader2 className="animate-spin text-muted-foreground" /></div>;
+
+    // Review-popup derived state.
+    const vStage = viewTarget ? stages.find((s) => s.id === viewTarget.statusId) ?? null : null;
+    const inReview = viewTarget != null && (viewTarget.statusId === ORDER_STAGE.NEW || viewTarget.statusId === ORDER_STAGE.UNDER_REVIEW);
+    const allDeliverable = (viewData?.lines.length ?? 0) > 0 && (viewData?.lines.every((l) => l.deliverable) ?? false);
+    const hasAddress = !!viewData?.address && viewData.address.trim().length > 0;
 
     return (
         <div className="space-y-3">
@@ -164,34 +207,11 @@ export function OrdersBoard() {
                                         draggable
                                         onDragStart={() => setDragged(o)}
                                         onDragEnd={() => setDragged(null)}
-                                        onClick={() => editOrder(o)}
-                                        title={o.source === "inv" ? "Open / edit order" : undefined}
                                         className="cursor-grab rounded-md border border-border bg-card p-2 text-sm shadow-sm active:cursor-grabbing"
                                     >
                                         <div className="flex items-center justify-between gap-2">
                                             <span className="font-mono text-[11px] text-muted-foreground">{o.ref}</span>
-                                            <div className="flex items-center gap-1">
-                                                <Badge variant="outline" className={`text-[10px] ${KIND_BADGE[o.kind]}`}>{KIND_LABEL[o.kind]}</Badge>
-                                                {o.source === "inv" && (
-                                                    <DropdownMenu>
-                                                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                                                            <button type="button" className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground" title="Order actions">
-                                                                <MoreVertical size={14} />
-                                                            </button>
-                                                        </DropdownMenuTrigger>
-                                                        <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-                                                            <DropdownMenuItem onClick={() => editOrder(o)}>
-                                                                <Pencil size={13} /> Edit
-                                                            </DropdownMenuItem>
-                                                            {!stage.isTerminal && (
-                                                                <DropdownMenuItem onClick={() => void cancelOrder(o)} className="text-destructive focus:text-destructive">
-                                                                    <XCircle size={13} /> Cancel order
-                                                                </DropdownMenuItem>
-                                                            )}
-                                                        </DropdownMenuContent>
-                                                    </DropdownMenu>
-                                                )}
-                                            </div>
+                                            <Badge variant="outline" className={`text-[10px] ${KIND_BADGE[o.kind]}`}>{KIND_LABEL[o.kind]}</Badge>
                                         </div>
                                         <div className="mt-0.5 truncate font-medium">{o.customerName ?? "Walk-in"}</div>
                                         <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -210,10 +230,30 @@ export function OrdersBoard() {
                                                 {o.credit.limit === 0 ? "No credit — collect payment" : "Over credit limit"}
                                             </div>
                                         )}
+                                        {o.source === "inv" && (
+                                            <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => editOrder(o)}
+                                                    className="flex items-center justify-center gap-1 rounded border border-border bg-background px-2 py-1 text-[11px] font-medium hover:bg-muted"
+                                                    title="Open the full order page"
+                                                >
+                                                    <FolderOpen size={12} /> Open
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => openView(o)}
+                                                    className="flex items-center justify-center gap-1 rounded border border-border bg-background px-2 py-1 text-[11px] font-medium hover:bg-muted"
+                                                    title="Review items + customer / address"
+                                                >
+                                                    <Eye size={12} /> View
+                                                </button>
+                                            </div>
+                                        )}
                                         {o.source === "inv" && !stage.isTerminal && (
                                             <button
                                                 type="button"
-                                                onClick={(e) => { e.stopPropagation(); openFulfil(o); }}
+                                                onClick={() => openFulfil(o)}
                                                 className="mt-1.5 w-full rounded border border-emerald-300 bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-700 hover:bg-emerald-100 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300"
                                                 title="Post the Sale (GL + stock-out) and mark Delivered"
                                             >
@@ -291,6 +331,85 @@ export function OrdersBoard() {
                             {fulfilling && <Loader2 className="animate-spin" size={14} />}
                             Fulfil → post Sale
                         </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={viewTarget != null} onOpenChange={(open) => { if (!open && !reviewBusy) setViewTarget(null); }}>
+                <DialogContent className="sm:max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle>Review order {viewTarget?.ref}</DialogTitle>
+                    </DialogHeader>
+                    {viewLoading || !viewData ? (
+                        <div className="flex justify-center py-10"><Loader2 className="animate-spin text-muted-foreground" /></div>
+                    ) : (
+                        <div className="space-y-3 text-sm">
+                            {/* Customer + delivery address */}
+                            <div className="rounded-md border border-border p-2.5">
+                                <div className="flex items-center justify-between">
+                                    <span className="font-medium">{viewData.customer ?? "Walk-in"}</span>
+                                    <span className="tabular-nums font-semibold">₹{viewData.totalAmount.toFixed(2)}</span>
+                                </div>
+                                <div className={`mt-1 flex items-start gap-1.5 text-xs ${hasAddress ? "text-muted-foreground" : "text-destructive"}`}>
+                                    <MapPin size={13} className="mt-0.5 shrink-0" />
+                                    <span>{hasAddress ? viewData.address : "No delivery address on file — address not deliverable."}</span>
+                                </div>
+                            </div>
+
+                            {/* Item list with per-line deliverability */}
+                            <div className="rounded-md border border-border">
+                                <div className="flex items-center gap-1.5 border-b border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground">
+                                    <Package size={13} /> Items ({viewData.lines.length})
+                                </div>
+                                <ul className="divide-y divide-border">
+                                    {viewData.lines.map((l) => (
+                                        <li key={l.id} className="flex items-center justify-between gap-2 px-2.5 py-1.5">
+                                            <div className="min-w-0">
+                                                <div className="truncate">{l.name}</div>
+                                                <div className="text-[11px] text-muted-foreground tabular-nums">
+                                                    {l.quantity} × ₹{l.rate.toFixed(2)}
+                                                    {l.available != null && <> · {l.available} in stock</>}
+                                                </div>
+                                            </div>
+                                            {l.deliverable ? (
+                                                <span className="flex shrink-0 items-center gap-1 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
+                                                    <CheckCircle2 size={11} /> In stock
+                                                </span>
+                                            ) : (
+                                                <span className="flex shrink-0 items-center gap-1 rounded bg-destructive/10 px-1.5 py-0.5 text-[10px] font-medium text-destructive">
+                                                    <XCircle size={11} /> Short
+                                                </span>
+                                            )}
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+
+                            {/* Overall deliverability verdict */}
+                            <div className={`flex items-start gap-1.5 rounded px-2 py-1.5 text-xs ${allDeliverable && hasAddress ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300" : "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300"}`}>
+                                {allDeliverable && hasAddress
+                                    ? <><CheckCircle2 size={13} className="mt-0.5 shrink-0" /> Items in stock and address on file — deliverable.</>
+                                    : <><AlertCircle size={13} className="mt-0.5 shrink-0" /> {!allDeliverable && "Some items are short on stock. "}{!hasAddress && "No delivery address. "}Confirm only if you can fulfil it.</>}
+                            </div>
+                        </div>
+                    )}
+                    <DialogFooter className="gap-2 sm:gap-2">
+                        <Button variant="outline" onClick={() => setViewTarget(null)} disabled={reviewBusy}>Close</Button>
+                        {viewTarget && viewData && inReview && (
+                            <>
+                                <Button variant="destructive" onClick={() => void review(viewTarget, ORDER_STAGE.CANCELLED)} disabled={reviewBusy}>
+                                    {reviewBusy ? <Loader2 className="animate-spin" size={14} /> : <Ban size={14} />} Reject
+                                </Button>
+                                <Button onClick={() => void review(viewTarget, ORDER_STAGE.CONFIRMED)} disabled={reviewBusy}>
+                                    {reviewBusy ? <Loader2 className="animate-spin" size={14} /> : <Check size={14} />} Confirm
+                                </Button>
+                            </>
+                        )}
+                        {viewTarget && viewData && !inReview && vStage && !vStage.isTerminal && (
+                            <Button variant="destructive" onClick={() => void review(viewTarget, ORDER_STAGE.CANCELLED)} disabled={reviewBusy}>
+                                {reviewBusy ? <Loader2 className="animate-spin" size={14} /> : <Ban size={14} />} Cancel order
+                            </Button>
+                        )}
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
