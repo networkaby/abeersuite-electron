@@ -7,6 +7,7 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { createPosQuoteVoucher, type PosQuoteBody } from "@/modules/pos/lib/posQuoteVoucher";
 import { postReceiptVoucher } from "@/modules/accountancy/lib/postReceiptVoucher";
+import { holdRedemptions, type RedemptionIntent } from "@/modules/order/lib/redemptionHold";
 
 // An advance payment line — null paymentAccountId = CASH (the till); else one of
 // the counter's payment accounts (resolved to its ledger below).
@@ -40,7 +41,7 @@ export async function POST(req: NextRequest) {
     }
 
     try {
-        const body = (await req.json()) as PosQuoteBody & { payments?: PayLine[] };
+        const body = (await req.json()) as PosQuoteBody & { payments?: PayLine[]; redemptions?: RedemptionIntent[] };
 
         // O2C: every order needs an identified customer — there is NO anonymous/
         // walk-in order (anonymous = instant counter Sale only). The Order screen
@@ -96,6 +97,15 @@ export async function POST(req: NextRequest) {
 
         // ── Create the order voucher (always) ───────────────────────────────────
         const order = await createPosQuoteVoucher({ type: "POS_ORDER", branchId, userId: user!.id, body });
+
+        // ── Hold any reward redemptions applied to the order (2b) ────────────────
+        // GL-silent: loyalty / coupon / gift-card value is recorded as HELD against the
+        // order, burned on the Sale at Fulfil, released on cancel. No capture UI sends
+        // these yet — this is the API backstop, ready for it.
+        const redemptions = Array.isArray(body.redemptions) ? body.redemptions : [];
+        if (redemptions.length > 0) {
+            await holdRedemptions({ source: "inv", id: order.voucherId }, redemptions);
+        }
 
         // ── Post the advance Receipt voucher (only when collected) ──────────────
         let receiptVoucherId: number | null = null;

@@ -346,6 +346,33 @@ model StockReservation {
   @@map("stock_reservations")
 }
 
+/// O2C redemption hold (Phase 2b). Mirrors StockReservation but for *reward value*
+/// rather than stock: when an ORDER is placed with a loyalty / coupon / gift-card
+/// redemption, the value is HELD (not yet burned) so it can't be double-spent
+/// before the order is invoiced. EXECUTED when the order is fulfilled (the sale
+/// burns the reward for real); RELEASED when the order is cancelled/returned.
+/// Polymorphic order key (orderSource, orderId) like StockReservation. GL-silent —
+/// the actual ledger/wallet effect happens on the Sale at Fulfil, not here.
+model RedemptionHold {
+  id          Int      @id @default(autoincrement())
+  orderSource String   // "inv" | "shop"
+  orderId     Int
+  rewardType  String   // LOYALTY | COUPON | GIFT_CARD
+  rewardRef   String?  // coupon code / gift-card code (null for loyalty)
+  rewardId    Int?     // Coupon.id / GiftCard.id (null for loyalty wallet)
+  accountId   Int?     // customer ledger account the reward belongs to
+  points      Int?     // loyalty points held (null for coupon/gift-card)
+  amount      Decimal  @default(0) @db.Decimal(14, 2) // rupee value held
+  meta        Json?    // reward-specific plan (e.g. loyalty FIFO lot consumption)
+  status      String   @default("HELD") // HELD | EXECUTED | RELEASED
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([orderSource, orderId])
+  @@index([rewardType, status])
+  @@map("redemption_holds")
+}
+
 // ── Stock Vouchers (Purchase / Sale) ─────────────────────────────────────────
 
 model InvVoucher {

@@ -6,6 +6,7 @@ import { handleApiError } from "@/shared/lib/api";
 import { toNumber } from "@/modules/accountancy/lib/balance";
 import { ORDER_STAGE } from "@/modules/order/lib/orderPipeline";
 import { checkCreditLimit, CreditLimitError } from "@/shared/lib/accountancy/checkCreditLimit";
+import { executeRedemptions } from "@/modules/order/lib/redemptionHold";
 
 // POST /api/orders/[source]/[id]/fulfil
 //
@@ -145,6 +146,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ sou
                 where: { orderSource: "inv", orderId: id, status: "HELD" },
                 data: { status: "EXECUTED" },
             });
+            // 2b: flip any reward holds to EXECUTED in the same tx. (Burning the reward
+            // onto this sale — loyalty lots / coupon / gift card — is TODO(2b-apply);
+            // a no-op today since no capture UI produces holds yet.)
+            await executeRedemptions({ source: "inv", id }, tx);
             await tx.invVoucher.update({ where: { id: sale.id }, data: { refVoucherId: id } }); // sale → order
             await tx.invVoucher.update({ where: { id }, data: { orderStatusId: ORDER_STAGE.DELIVERED } });
         }, { timeout: 30_000, maxWait: 10_000 });

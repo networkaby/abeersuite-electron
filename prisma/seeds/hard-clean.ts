@@ -68,6 +68,11 @@ const TRANSACTION_TABLES = [
     // are issued value backed by the liability ledger (truncated above), so they
     // must be wiped too or they'd orphan after a clean.
     "CouponRedemption", "GiftCardTxn", "GiftCard",
+    // O2C redemption holds (Phase 2b) — reward value HELD against open orders.
+    // Polymorphic order key, so NO FK cascade reaches it (unlike stock_reservations,
+    // which cascade-truncates via its InvProduct FK) — it must be listed explicitly.
+    // Bootstrap seeds nothing into it.
+    "redemption_holds",
     "TicketLog", "TicketParticipant", "Ticket", "Device",
     "TaskComment", "Task",
     "DealActivity", "Deal", "WallPost",

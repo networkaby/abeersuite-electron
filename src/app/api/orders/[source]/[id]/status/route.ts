@@ -6,6 +6,7 @@ import { handleApiError } from "@/shared/lib/api";
 import { assertOrderStatus, ORDER_STAGE, ORDER_RELEASE_STAGES } from "@/modules/order/lib/orderPipeline";
 import { resolveOrderStatus, writeOrderStatus, type OrderSource } from "@/modules/order/lib/orderAdapter";
 import { reserveOrder, releaseOrder } from "@/modules/order/lib/reservation";
+import { releaseRedemptions } from "@/modules/order/lib/redemptionHold";
 import { spawnDelivery } from "@/modules/delivery/lib/delivery";
 
 // PATCH /api/orders/[source]/[id]/status   body { statusId }
@@ -60,6 +61,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ source
                 await spawnDelivery(ref);   // P8 delivery sub-pipeline
             } else if (ORDER_RELEASE_STAGES.includes(statusId)) {
                 await releaseOrder(ref);
+                await releaseRedemptions(ref);   // free any held loyalty/coupon/gift-card value
             }
         } catch (e) {
             console.error("[orders] confirm hooks failed for", ref, e);
