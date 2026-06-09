@@ -25,6 +25,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ sou
         return NextResponse.json({ error: "Fulfil currently supports counter/office orders." }, { status: 400 });
     }
 
+    // G4b — optional payment collected at fulfilment. Each row settles to an explicit
+    // ledger (cash / bank / UPI account picked by the operator); the unpaid balance
+    // then rides a customer-AR tender so the sale's tenders sum to its total.
+    const body = (await req.json().catch(() => ({}))) as { payments?: { accountId: number; amount: number; method?: string; reference?: string }[] };
+    const payments = (Array.isArray(body.payments) ? body.payments : [])
+        .filter((p) => p && Number.isFinite(Number(p.accountId)) && Number(p.amount) > 0)
+        .map((p) => ({ accountId: Number(p.accountId), amount: Number(p.amount), method: p.method, reference: p.reference }));
+    const paidTotal = payments.reduce((s, p) => s + p.amount, 0);
+
     try {
         const order = await prisma.invVoucher.findUnique({
             where: { id },
@@ -53,14 +62,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ sou
         const accountId = order.accountId;
 
         // Credit limit is ENFORCED (deny-by-default: no positive limit ⇒ no credit
-        // sale). Fulfil currently posts the SALE fully on credit (no tender yet), so
-        // the whole total is the on-credit amount. Reuse the canonical helper — same
-        // one the POS sale uses — so the sign/semantics are correct. A no-credit
-        // customer is correctly blocked here ("must be paid in full"); collecting
-        // payment at Fulfil (so onCredit drops) is the G4b follow-up.
-        // (Minor TOCTOU vs the later post tx — acceptable for fulfilment; fully
-        // atomic enforcement would require the check inside the protected post route.)
-        const onCredit = toNumber(order.totalAmount);
+        // sale). G4b: any payment collected at fulfilment reduces the on-credit amount,
+        // so a no-credit customer can fulfil by paying in full. Reuse the canonical
+        // helper — same one the POS sale uses — so the sign/semantics match.
+        // (Minor TOCTOU vs the later post tx — acceptable for fulfilment.)
+        const total = toNumber(order.totalAmount);
+        if (paidTotal > total + 0.01) {
+            return NextResponse.json({ error: "Payment collected exceeds the order total." }, { status: 400 });
+        }
+        const onCredit = Math.max(0, total - paidTotal);
         try {
             await prisma.$transaction(async (tx) => { await checkCreditLimit(tx, accountId, onCredit); }, { timeout: 15_000, maxWait: 10_000 });
         } catch (e) {
@@ -96,6 +106,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ sou
                     taxRate: toNumber(l.taxRate),
                     mrpPaise: l.mrpPaise ?? undefined,
                 })),
+                // G4b: collected payments + a customer-AR row for the unpaid balance.
+                // The create route requires tenders to sum to the total; an empty
+                // payments[] → the whole total is the AR row (the old all-credit path).
+                tenders: [
+                    ...payments,
+                    ...(onCredit > 0.005 ? [{ accountId, amount: onCredit }] : []),
+                ],
             }),
         });
         if (!createRes.ok) {
@@ -132,7 +149,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ sou
             await tx.invVoucher.update({ where: { id }, data: { orderStatusId: ORDER_STAGE.DELIVERED } });
         }, { timeout: 30_000, maxWait: 10_000 });
 
-        return NextResponse.json({ saleId: sale.id, saleRef: sale.reference });
+        return NextResponse.json({ saleId: sale.id, saleRef: sale.reference, paid: paidTotal, onCredit });
     } catch (e) {
         return handleApiError(e, "Failed to fulfil order");
     }
