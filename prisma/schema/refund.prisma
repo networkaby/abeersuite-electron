@@ -15,6 +15,9 @@ model Refund {
   // The advance Receipt voucher this refund pays back (accountancy Voucher.id) — for
   // the GL pay-back step + audit. Null when it couldn't be resolved.
   sourceVoucherId Int?
+  // The Payment voucher posted when this refund is marked Refunded (reverses the
+  // advance Receipt). Set once → idempotency guard + audit link. Null until paid.
+  payoutVoucherId Int?
   createdBy   Json     @default("{}") // ActorSnapshot
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

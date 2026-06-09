@@ -6,6 +6,14 @@ import type { OrderRef } from "@/modules/order/lib/orderAdapter";
 // Approved → Refunded / Rejected). Sibling of the Delivery sub-pipeline (P8).
 export const REFUND_PIPELINE_NAME = "refund" as const;
 
+// Seeded P9 refund stage ids (bootstrap-seed.ts). REFUNDED is the pay-out trigger.
+export const REFUND_STAGE = {
+    REQUESTED: "S57",
+    APPROVED: "S58",
+    REFUNDED: "S59",
+    REJECTED: "S60",
+} as const;
+
 export async function getRefundPipeline() {
     return prisma.pipeline.findUnique({
         where: { name: REFUND_PIPELINE_NAME },
@@ -60,6 +68,59 @@ export async function spawnRefund(ref: OrderRef): Promise<void> {
             reason: "Order rejected / cancelled",
         },
     });
+}
+
+/**
+ * Resolve everything needed to post a refund's GL pay-back: the customer ledger to
+ * debit and the cash/bank ledger to credit are read back from the original advance
+ * Receipt (its party account + its DEBIT line), so the money goes back the way it
+ * came. Returns alreadyPaid=true if a payout was already posted (idempotency).
+ */
+export async function getRefundForPayout(refundId: number): Promise<{
+    alreadyPaid: boolean;
+    sourceVoucherId: number | null;
+    amount: number;                    // rupees
+    customerAccountId: number | null;
+    cashBankAccountId: number | null;
+    orderRef: string | null;
+} | null> {
+    const refund = await prisma.refund.findUnique({
+        where: { id: refundId },
+        select: { payoutVoucherId: true, sourceVoucherId: true, amountPaise: true, orderSource: true, orderId: true },
+    });
+    if (!refund) return null;
+
+    let customerAccountId: number | null = null;
+    let cashBankAccountId: number | null = null;
+    if (refund.sourceVoucherId) {
+        const src = await prisma.voucher.findUnique({
+            where: { id: refund.sourceVoucherId },
+            select: { partyAccountId: true, lines: { select: { accountId: true, type: true } } },
+        });
+        customerAccountId = src?.partyAccountId ?? null;
+        // The advance Receipt debited cash/bank — refund pays back from the same ledger.
+        cashBankAccountId = src?.lines.find((l) => l.type === "DEBIT")?.accountId ?? null;
+    }
+
+    let orderRef: string | null = null;
+    if (refund.orderSource === "inv") {
+        const v = await prisma.invVoucher.findUnique({ where: { id: refund.orderId }, select: { reference: true } });
+        orderRef = v?.reference ?? null;
+    }
+
+    return {
+        alreadyPaid: refund.payoutVoucherId != null,
+        sourceVoucherId: refund.sourceVoucherId,
+        amount: refund.amountPaise / 100,
+        customerAccountId,
+        cashBankAccountId,
+        orderRef,
+    };
+}
+
+/** Link the posted Payment voucher onto the refund (idempotency + audit). */
+export async function markRefundPaid(refundId: number, payoutVoucherId: number): Promise<void> {
+    await prisma.refund.update({ where: { id: refundId }, data: { payoutVoucherId } });
 }
 
 /** Validate that a statusId belongs to the refund pipeline. */

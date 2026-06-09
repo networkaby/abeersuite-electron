@@ -3,11 +3,12 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { handleApiError } from "@/shared/lib/api";
-import { assertRefundStatus } from "@/modules/refund/lib/refund";
+import { assertRefundStatus, getRefundForPayout, markRefundPaid, REFUND_STAGE } from "@/modules/refund/lib/refund";
 
 // PATCH /api/refunds/[id]/status  body { statusId } — move a refund along P9
-// (validates the seeded transition graph). The GL pay-back on "Refunded" is a
-// follow-up (TODO(refund-apply)); this only advances the tracking stage.
+// (validates the seeded transition graph). Moving to Refunded (S59) posts the GL
+// pay-back: a PAYMENT voucher (Dr customer / Cr cash-bank) reversing the advance
+// Receipt, via the canonical create+post voucher routes — no new GL math here.
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
     if (response) return response;
@@ -35,8 +36,57 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             }
         }
 
+        // refund-apply: posting the pay-back when the refund reaches Refunded. Reuse
+        // the protected create+post voucher routes (internal fetch, forwarding the
+        // operator's cookie) so the GL math stays in the tested path. Idempotent via
+        // the refund's payoutVoucherId.
+        let payoutRef: string | null = null;
+        if (statusId === REFUND_STAGE.REFUNDED) {
+            const payout = await getRefundForPayout(id);
+            if (payout && !payout.alreadyPaid) {
+                if (!payout.sourceVoucherId) {
+                    return NextResponse.json({ error: "No advance Receipt is linked to this refund — pay it back manually, then mark it Refunded.", code: "NO_SOURCE_VOUCHER" }, { status: 409 });
+                }
+                if (!payout.customerAccountId || !payout.cashBankAccountId || !(payout.amount > 0)) {
+                    return NextResponse.json({ error: "Couldn't resolve the advance to refund (customer / cash ledger). Pay it back manually.", code: "PAYOUT_UNRESOLVED" }, { status: 409 });
+                }
+                const cookie = req.headers.get("cookie") ?? "";
+                const today = new Date().toISOString().slice(0, 10);
+                const narration = `Refund of advance${payout.orderRef ? ` — ${payout.orderRef}` : ""}`;
+                const createRes = await fetch(new URL("/api/accountancy/vouchers", req.url), {
+                    method: "POST",
+                    headers: { "content-type": "application/json", cookie },
+                    body: JSON.stringify({
+                        type: "PAYMENT",
+                        date: today,
+                        narration,
+                        partyAccountId: payout.customerAccountId,
+                        lines: [
+                            { accountId: payout.customerAccountId, type: "DEBIT", amount: payout.amount, description: "Advance refund" },
+                            { accountId: payout.cashBankAccountId, type: "CREDIT", amount: payout.amount, description: "Advance refund" },
+                        ],
+                    }),
+                });
+                if (!createRes.ok) {
+                    const e = (await createRes.json().catch(() => ({}))) as { error?: string };
+                    return NextResponse.json({ error: e.error || "Couldn't create the refund payment.", code: "PAYOUT_CREATE_FAILED" }, { status: 422 });
+                }
+                const pv = (await createRes.json()) as { id: number; reference: string };
+                const postRes = await fetch(new URL(`/api/accountancy/vouchers/${pv.id}/post`, req.url), {
+                    method: "POST",
+                    headers: { "content-type": "application/json", cookie },
+                });
+                if (!postRes.ok) {
+                    const e = (await postRes.json().catch(() => ({}))) as { error?: string };
+                    return NextResponse.json({ error: e.error || "Refund payment created but posting failed.", code: "PAYOUT_POST_FAILED" }, { status: 422 });
+                }
+                await markRefundPaid(id, pv.id);
+                payoutRef = pv.reference;
+            }
+        }
+
         await prisma.refund.update({ where: { id }, data: { statusId } });
-        return NextResponse.json({ id, statusId });
+        return NextResponse.json({ id, statusId, payoutRef });
     } catch (e) {
         return handleApiError(e, "Failed to move refund");
     }

@@ -30,7 +30,8 @@ export function RefundBoard() {
         const prev = items;
         setItems((arr) => arr.map((x) => (x.id === d.id ? { ...x, statusId } : x)));
         try {
-            await axios.patch(`/api/refunds/${d.id}/status`, { statusId });
+            const { data } = await axios.patch<{ payoutRef?: string | null }>(`/api/refunds/${d.id}/status`, { statusId });
+            if (data?.payoutRef) toast.success(`Refund paid — Payment ${data.payoutRef} posted`);
         } catch (e) {
             setItems(prev);
             const msg = axios.isAxiosError(e) ? (e.response?.data as { error?: string })?.error : null;
