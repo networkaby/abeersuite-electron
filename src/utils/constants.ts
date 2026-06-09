@@ -56,6 +56,7 @@ import {
     Ticket,
     CreditCard,
     Gift,
+    Trash2,
 } from "lucide-react";
 
 // Keys match the Priority enum: LOW | MEDIUM | HIGH | URGENT
@@ -263,6 +264,8 @@ export const MODULE_SECTIONS: ModuleSection[] = [
                 label: "Vouchers Register", icon: ClipboardList, href: "/office/accountancy/vouchers-registers/all", permission: "finance:voucher:create",
 
             },
+
+            { label: "Recycle Bin", icon: Trash2, href: "/office/accountancy/recycle-bin", permission: "finance:voucher:hard-delete" },
 
             {
                 label: "Masters",

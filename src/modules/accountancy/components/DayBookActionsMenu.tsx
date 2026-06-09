@@ -49,7 +49,7 @@ interface Props {
     onChanged?: () => void;
 }
 
-type ConfirmAction = "cancel" | "delete" | "hard-delete" | null;
+type ConfirmAction = "cancel" | "hard-delete" | null;
 
 // ── Component ─────────────────────────────────────────────────────────────
 
@@ -78,7 +78,6 @@ export function DayBookActionsMenu({
 
     // ── Cancel / Delete / Hard-Delete (reason dialog) ──────────────────────
     const startCancel     = () => { setReason(""); setConfirmAction("cancel"); };
-    const startDelete     = () => { setReason(""); setConfirmAction("delete"); };
     const startHardDelete = () => { setReason(""); setConfirmAction("hard-delete"); };
 
     const submitConfirm = async () => {
@@ -87,11 +86,7 @@ export function DayBookActionsMenu({
         setBusy(true);
         try {
             await axios.post(`${base}/${confirmAction}`, { reason: reason.trim() });
-            toast.success(
-                confirmAction === "cancel"     ? "Voucher cancelled"
-              : confirmAction === "delete"     ? "Voucher deleted"
-              : "Voucher permanently deleted",
-            );
+            toast.success(confirmAction === "cancel" ? "Voucher cancelled" : "Voucher removed (in Recycle Bin)");
             setConfirmAction(null);
             onChanged?.();
         } catch (e: unknown) {
@@ -181,18 +176,11 @@ export function DayBookActionsMenu({
                     label:       "Confirm cancel",
                     variant:     "default" as const,
                 };
-            case "delete":
-                return {
-                    title:       `Delete ${reference}?`,
-                    description: "Soft-delete — stock and GL impact are reversed and the row is hidden. Recoverable from the Deleted filter in the All Vouchers register.",
-                    label:       "Confirm delete",
-                    variant:     "destructive" as const,
-                };
             case "hard-delete":
                 return {
-                    title:       `Permanently delete ${reference}?`,
-                    description: "Removes the row from the database. An audit snapshot is kept. This action cannot be undone.",
-                    label:       "Permanently delete",
+                    title:       `Delete ${reference}?`,
+                    description: "Removes the row and reverses any GL / stock impact. A full snapshot is kept in the Recycle Bin, so it can be restored later.",
+                    label:       "Delete",
                     variant:     "destructive" as const,
                 };
             default:
@@ -244,7 +232,7 @@ export function DayBookActionsMenu({
                             <DropdownMenuItem onSelect={startCancel} disabled={busy}>
                                 <Ban className="size-4" /> Cancel
                             </DropdownMenuItem>
-                            <DropdownMenuItem variant="destructive" onSelect={startDelete} disabled={busy}>
+                            <DropdownMenuItem variant="destructive" onSelect={startHardDelete} disabled={busy}>
                                 <Trash2 className="size-4" /> Delete
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />

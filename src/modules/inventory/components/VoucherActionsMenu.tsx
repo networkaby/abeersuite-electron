@@ -43,7 +43,7 @@ interface Props {
     onChanged?: () => void;
 }
 
-type ConfirmAction = "cancel" | "delete" | null;
+type ConfirmAction = "cancel" | "hard-delete" | null;
 
 export function VoucherActionsMenu({ voucherId, voucherType, voucherRef, onChanged }: Props) {
     const router = useRouter();
@@ -79,7 +79,7 @@ export function VoucherActionsMenu({ voucherId, voucherType, voucherRef, onChang
     };
 
     const startCancel = () => { setReason(""); setConfirmAction("cancel"); };
-    const startDelete = () => { setReason(""); setConfirmAction("delete"); };
+    const startDelete = () => { setReason(""); setConfirmAction("hard-delete"); };
 
     const submitConfirm = async () => {
         if (!confirmAction) return;
@@ -89,7 +89,7 @@ export function VoucherActionsMenu({ voucherId, voucherType, voucherRef, onChang
             await axios.post(`/api/inventory/vouchers/${voucherId}/${confirmAction}`, {
                 reason: reason.trim(),
             });
-            toast.success(confirmAction === "cancel" ? "Voucher cancelled" : "Voucher deleted");
+            toast.success(confirmAction === "cancel" ? "Voucher cancelled" : "Voucher removed (in Recycle Bin)");
             setConfirmAction(null);
             onChanged?.();
         } catch (e: unknown) {
@@ -124,9 +124,9 @@ export function VoucherActionsMenu({ voucherId, voucherType, voucherRef, onChang
         ? `Cancel voucher ${voucherRef}?`
         : `Delete voucher ${voucherRef}?`;
     const description = isCancel
-        ? "Stock and GL impact will be reversed via a counter-entry. The voucher remains visible but is marked CANCELLED."
-        : "Soft-delete — stock and GL impact are reversed and the row is hidden. Recoverable from the audit log.";
-    const confirmLabel = isCancel ? "Confirm cancel" : "Confirm delete";
+        ? "Reverses the stock / GL impact and marks the voucher CANCELLED — it stays visible but is excluded from all totals."
+        : "Removes the voucher and reverses its stock / GL impact. A full snapshot is kept in the Recycle Bin, so it can be restored later.";
+    const confirmLabel = isCancel ? "Confirm cancel" : "Delete";
 
     return (
         <>
