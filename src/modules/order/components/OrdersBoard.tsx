@@ -7,7 +7,12 @@ import { toast } from "sonner";
 import { Loader2, RefreshCw, ShoppingCart, MoreVertical, Pencil, XCircle, AlertCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { type GlAccount } from "@/modules/accountancy/components/GlAccountCombobox";
+import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 
 // Phase 1 of the O2C order backbone: one board for orders from every channel
 // (counter POS_ORDER / office SALES_ORDER / online ShopOrder), all riding P7.
@@ -38,6 +43,15 @@ export function OrdersBoard() {
     const [dragged, setDragged] = useState<OrderCard | null>(null);
     const router = useRouter();
 
+    // G4b — pay-at-Fulfil. Cash/bank ledgers for the settlement picker, plus the
+    // dialog state (which order is being fulfilled, the collected amount + ledger).
+    const [cashBank, setCashBank] = useState<GlAccount[]>([]);
+    const [fulfilTarget, setFulfilTarget] = useState<OrderCard | null>(null);
+    const [payLedgerId, setPayLedgerId] = useState<string>("");
+    const [payAmount, setPayAmount] = useState<string>("");
+    const [fulfilling, setFulfilling] = useState(false);
+    const [fulfilErr, setFulfilErr] = useState<string | null>(null);
+
     // Fetch only sets state in async callbacks (no synchronous setState in the
     // mount effect — initial loading=true covers first paint; Refresh sets it).
     const load = useCallback(() => {
@@ -47,6 +61,15 @@ export function OrdersBoard() {
             .finally(() => setLoading(false));
     }, []);
     useEffect(() => { load(); }, [load]);
+
+    // Cash/bank tills the operator can receive a fulfil payment into (same source
+    // the office voucher form uses for its tender picker).
+    useEffect(() => {
+        axios.get<GlAccount[]>("/api/accountancy/gl-accounts?includeParties=false")
+            .then((r) => setCashBank(r.data.filter((a) =>
+                a.group?.name === ACCOUNT_GROUPS.CASH_IN_HAND || a.group?.name === ACCOUNT_GROUPS.BANK_ACCOUNTS)))
+            .catch(() => setCashBank([]));
+    }, []);
 
     async function move(o: OrderCard, statusId: string) {
         if (o.statusId === statusId) return;
@@ -61,15 +84,36 @@ export function OrdersBoard() {
         }
     }
 
-    async function fulfil(o: OrderCard) {
+    // Open the fulfil dialog (G4b): pick a settlement ledger + collect payment.
+    function openFulfil(o: OrderCard) {
         if (o.source !== "inv") { toast.info("Online-order fulfilment is coming soon."); return; }
+        setFulfilErr(null);
+        setPayAmount("");
+        const def = cashBank.find((a) => a.group?.name === ACCOUNT_GROUPS.CASH_IN_HAND) ?? cashBank[0] ?? null;
+        setPayLedgerId(def ? String(def.id) : "");
+        setFulfilTarget(o);
+    }
+
+    async function confirmFulfil() {
+        const o = fulfilTarget;
+        if (!o) return;
+        const amt = Number(payAmount);
+        const collecting = payAmount.trim() !== "" && amt > 0;
+        if (collecting && !payLedgerId) { setFulfilErr("Pick a ledger to receive the payment."); return; }
+        if (collecting && amt > o.total + 0.01) { setFulfilErr("Payment can't exceed the order total."); return; }
+        const payments = collecting ? [{ accountId: Number(payLedgerId), amount: amt }] : [];
+        setFulfilling(true);
+        setFulfilErr(null);
         try {
-            const { data } = await axios.post<{ saleRef: string }>(`/api/orders/inv/${o.id}/fulfil`, {});
-            toast.success(`Fulfilled — Sale ${data.saleRef} posted`);
+            const { data } = await axios.post<{ saleRef: string; paid: number; onCredit: number }>(`/api/orders/inv/${o.id}/fulfil`, { payments });
+            toast.success(`Fulfilled — Sale ${data.saleRef} posted${data.onCredit > 0.005 ? ` · ₹${data.onCredit.toFixed(2)} on credit` : ""}`);
+            setFulfilTarget(null);
             load();
         } catch (e) {
             const msg = axios.isAxiosError(e) ? (e.response?.data as { error?: string })?.error : null;
-            toast.error(msg || "Fulfil failed");
+            setFulfilErr(msg || "Fulfil failed");
+        } finally {
+            setFulfilling(false);
         }
     }
 
@@ -169,7 +213,7 @@ export function OrdersBoard() {
                                         {o.source === "inv" && !stage.isTerminal && (
                                             <button
                                                 type="button"
-                                                onClick={(e) => { e.stopPropagation(); void fulfil(o); }}
+                                                onClick={(e) => { e.stopPropagation(); openFulfil(o); }}
                                                 className="mt-1.5 w-full rounded border border-emerald-300 bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-700 hover:bg-emerald-100 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300"
                                                 title="Post the Sale (GL + stock-out) and mark Delivered"
                                             >
@@ -189,6 +233,67 @@ export function OrdersBoard() {
                     </div>
                 )}
             </div>
+
+            <Dialog open={fulfilTarget != null} onOpenChange={(open) => { if (!open && !fulfilling) setFulfilTarget(null); }}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Fulfil order {fulfilTarget?.ref}</DialogTitle>
+                    </DialogHeader>
+                    {fulfilTarget && (
+                        <div className="space-y-3 text-sm">
+                            <div className="flex justify-between">
+                                <span className="text-muted-foreground">Customer</span>
+                                <span className="font-medium">{fulfilTarget.customerName ?? "Walk-in"}</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-muted-foreground">Order total</span>
+                                <span className="font-semibold tabular-nums">₹{fulfilTarget.total.toFixed(2)}</span>
+                            </div>
+                            {fulfilTarget.credit?.breach && (
+                                <div className="flex items-start gap-1.5 rounded bg-destructive/10 px-2 py-1.5 text-xs text-destructive">
+                                    <AlertCircle size={13} className="mt-0.5 shrink-0" />
+                                    <span>{fulfilTarget.credit.limit === 0
+                                        ? "No credit facility — collect payment in full to fulfil."
+                                        : "Over the customer's credit limit — collect at least the excess to fulfil."}</span>
+                                </div>
+                            )}
+                            <div className="space-y-2 rounded-md border border-border p-2.5">
+                                <div className="flex items-center justify-between">
+                                    <span className="font-medium">Collect payment</span>
+                                    <button type="button" onClick={() => setPayAmount(String(fulfilTarget.total))} className="text-xs text-primary hover:underline">
+                                        Pay full
+                                    </button>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <Select value={payLedgerId} onValueChange={setPayLedgerId}>
+                                        <SelectTrigger><SelectValue placeholder="Cash / Bank" /></SelectTrigger>
+                                        <SelectContent>
+                                            {cashBank.map((a) => <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>)}
+                                        </SelectContent>
+                                    </Select>
+                                    <Input
+                                        inputMode="decimal"
+                                        placeholder="0.00"
+                                        value={payAmount}
+                                        onChange={(e) => setPayAmount(e.target.value.replace(/[^\d.]/g, ""))}
+                                    />
+                                </div>
+                                <p className="text-[11px] text-muted-foreground">
+                                    Leave blank to fulfil on credit — any balance becomes the customer&apos;s due.
+                                </p>
+                            </div>
+                            {fulfilErr && <p className="text-xs text-destructive">{fulfilErr}</p>}
+                        </div>
+                    )}
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setFulfilTarget(null)} disabled={fulfilling}>Cancel</Button>
+                        <Button onClick={() => void confirmFulfil()} disabled={fulfilling}>
+                            {fulfilling && <Loader2 className="animate-spin" size={14} />}
+                            Fulfil → post Sale
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
