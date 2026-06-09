@@ -58,6 +58,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             const created = await tx.auditLog.create({
                 data: auditSnapshot({
                     entityType:  "GL_VOUCHER",
+                    subtype:     voucher.type,
                     originalId:  voucher.id,
                     originalRef: voucher.reference,
                     reason:      data.reason,

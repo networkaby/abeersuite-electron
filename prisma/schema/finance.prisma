@@ -45,6 +45,7 @@ model JournalEntry {
 model AuditLog {
   id           Int       @id @default(autoincrement())
   entityType   String    // "INV_VOUCHER" | "GL_VOUCHER" | "JOURNAL_ENTRY"
+  subtype      String?   // the removed voucher's concrete type (e.g. POS_ESTIMATE, SALE, PAYMENT) for a readable label; null for journal entries
   originalId   Int
   originalRef  String
   action       String

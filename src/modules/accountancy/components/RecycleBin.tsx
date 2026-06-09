@@ -11,10 +11,12 @@ import { Loader2, Undo2, RefreshCw, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/shared/lib/format/formatDate";
+import { voucherTypeLabel } from "@/shared/lib/format/voucherTypeLabel";
 
 interface AuditRow {
     id: number;
     entityType: "INV_VOUCHER" | "GL_VOUCHER" | "JOURNAL_ENTRY";
+    subtype: string | null;
     originalRef: string;
     action: string;
     reason: string | null;
@@ -101,7 +103,7 @@ export function RecycleBin() {
                             {rows.map((row) => (
                                 <tr key={row.id} className="hover:bg-muted/40">
                                     <td className="px-4 py-2.5 font-mono text-xs font-medium">{row.originalRef}</td>
-                                    <td className="px-4 py-2.5"><Badge variant="secondary" className="text-xs">{TYPE_LABEL[row.entityType]}</Badge></td>
+                                    <td className="px-4 py-2.5"><Badge variant="secondary" className="text-xs">{voucherTypeLabel(row.subtype) ?? TYPE_LABEL[row.entityType]}</Badge></td>
                                     <td className="px-4 py-2.5 text-xs text-muted-foreground max-w-xs truncate">{row.reason ?? "—"}</td>
                                     <td className="px-4 py-2.5 text-xs text-muted-foreground">{row.actor?.name ?? "—"}</td>
                                     <td className="px-4 py-2.5 text-xs text-muted-foreground whitespace-nowrap">{formatDate(row.createdAt)}</td>

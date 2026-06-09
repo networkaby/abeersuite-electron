@@ -4,3 +4,4 @@ export * from "./moneyInr";
 export * from "./numberWords";
 export * from "./slugify";
 export * from "./utils";
+export * from "./voucherTypeLabel";

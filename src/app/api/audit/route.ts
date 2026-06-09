@@ -37,7 +37,7 @@ export async function GET(req: Request) {
             orderBy: { createdAt: "desc" },
             take: 200,
             select: {
-                id: true, entityType: true, originalRef: true, action: true, reason: true,
+                id: true, entityType: true, subtype: true, originalRef: true, action: true, reason: true,
                 createdAt: true, restoredAt: true,
                 actor: { select: { id: true, name: true } },
                 restoredBy: { select: { id: true, name: true } },

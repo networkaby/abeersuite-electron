@@ -118,6 +118,7 @@ export type AuditEntityType = "INV_VOUCHER" | "GL_VOUCHER" | "JOURNAL_ENTRY";
  */
 export function auditSnapshot(args: {
   entityType: AuditEntityType;
+  subtype?: string | null;
   originalId: number;
   originalRef: string;
   reason?: string | null;
@@ -127,6 +128,7 @@ export function auditSnapshot(args: {
 }) {
   return {
     entityType: args.entityType,
+    subtype: args.subtype ?? null,
     originalId: args.originalId,
     originalRef: args.originalRef,
     action: args.action ?? "HARD_DELETED",
