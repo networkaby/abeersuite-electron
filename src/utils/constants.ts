@@ -30,6 +30,7 @@ import {
     BookOpen,
     ScrollText,
     ListOrdered,
+    Undo2,
     Receipt,
     ArrowUpRight,
     ArrowDownRight,
@@ -383,6 +384,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         children: [
             { label: "Orders board", icon: ListOrdered, href: "/office/orders", permission: "accountancy:view:org" },
             { label: "Delivery", icon: Truck, href: "/office/orders/delivery", permission: "accountancy:view:org" },
+            { label: "Refunds", icon: Undo2, href: "/office/orders/refund", permission: "accountancy:view:org" },
         ],
     },
 

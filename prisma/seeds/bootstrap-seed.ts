@@ -453,6 +453,17 @@ const PIPELINES: PipelineSeed[] = [
         ],
     },
     {
+        id: "P9", name: "refund", label: "Refund",
+        description: "Refund sub-pipeline — pay back advances on rejected / cancelled orders",
+        color: "bg-rose-100 text-rose-800", order: 9,
+        statuses: [
+            { id: "S57", label: "Requested", color: "bg-gray-100 text-gray-600", order: 1, isEntryPoint: true,  isTerminal: false, pipelineId: "P9" },
+            { id: "S58", label: "Approved", color: "bg-amber-100 text-amber-700", order: 2, isEntryPoint: false, isTerminal: false, pipelineId: "P9", actionLabel: "Approve Refund" },
+            { id: "S59", label: "Refunded", color: "bg-green-100 text-green-700", order: 3, isEntryPoint: false, isTerminal: true,  pipelineId: "P9", actionLabel: "Mark Refunded" },
+            { id: "S60", label: "Rejected", color: "bg-red-100 text-red-600", order: 4, isEntryPoint: false, isTerminal: true,  pipelineId: "P9", actionLabel: "Reject Refund" },
+        ],
+    },
+    {
         id: "P6", name: "deals", label: "Deals",
         description: "Sales deal pipeline (revenue opportunities); stages shared with pipeline settings",
         color: "bg-cyan-100 text-cyan-800", order: 6,
@@ -565,6 +576,11 @@ const STATUS_TRANSITIONS = [
     { fromStatusId: "S53", toStatusId: "S56" },
     { fromStatusId: "S54", toStatusId: "S55" },
     { fromStatusId: "S54", toStatusId: "S56" },
+    // P9 refund sub-pipeline: Requested → Approved → Refunded; reject from either.
+    { fromStatusId: "S57", toStatusId: "S58" },
+    { fromStatusId: "S57", toStatusId: "S60" },
+    { fromStatusId: "S58", toStatusId: "S59" },
+    { fromStatusId: "S58", toStatusId: "S60" },
 ];
 
 const SUB_STATUS_TRANSITIONS = [

@@ -21,6 +21,8 @@ model Pipeline {
   orderVouchers InvVoucher[] @relation("OrderVoucherPipeline")
   // Deliveries riding this pipeline (O2C P8).
   deliveries    Delivery[]   @relation("DeliveryPipeline")
+  // Refunds riding this pipeline (O2C P9).
+  refunds       Refund[]     @relation("RefundPipeline")
 }
 
 model TicketStatus {
@@ -45,6 +47,7 @@ model TicketStatus {
   tasks           Task[]
   orderVouchers   InvVoucher[] @relation("OrderVoucherStatus")
   deliveries      Delivery[]   @relation("DeliveryStatus")
+  refunds         Refund[]     @relation("RefundStatus")
 }
 
 model TicketSubStatus {

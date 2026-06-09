@@ -76,6 +76,9 @@ const TRANSACTION_TABLES = [
     // which cascade-truncates via its InvProduct FK) — it must be listed explicitly.
     // Bootstrap seeds nothing into it.
     "redemption_holds",
+    // O2C delivery + refund sub-pipeline rows (P8 / P9). Transactional — spawned per
+    // order; the pipelines themselves survive (bootstrap config).
+    "deliveries", "refunds",
     "TicketLog", "TicketParticipant", "Ticket", "Device",
     "TaskComment", "Task",
     "DealActivity", "Deal", "WallPost",

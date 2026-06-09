@@ -1,0 +1,28 @@
+// O2C Refund sub-pipeline (Phase 4b). A Refund is spawned when an order that
+// collected an advance is Rejected / Cancelled, and rides pipeline P9 (Requested →
+// Approved → Refunded / Rejected). Mirrors Delivery: polymorphic order ref
+// (orderSource = "inv" | "shop"), reports a coarse status, GL-silent here. The
+// actual pay-back (a Payment voucher reversing the advance Receipt) is posted when
+// staff mark it Refunded — that GL wiring is the follow-up; this tracks the process.
+model Refund {
+  id          Int     @id @default(autoincrement())
+  orderSource String  // "inv" | "shop"
+  orderId     Int
+  pipelineId  String?
+  statusId    String?
+  amountPaise Int     @default(0) // advance amount to refund (paise)
+  reason      String?
+  // The advance Receipt voucher this refund pays back (accountancy Voucher.id) — for
+  // the GL pay-back step + audit. Null when it couldn't be resolved.
+  sourceVoucherId Int?
+  createdBy   Json     @default("{}") // ActorSnapshot
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  pipeline     Pipeline?     @relation("RefundPipeline", fields: [pipelineId], references: [id])
+  refundStatus TicketStatus? @relation("RefundStatus", fields: [statusId], references: [id])
+
+  @@index([orderSource, orderId])
+  @@index([statusId])
+  @@map("refunds")
+}

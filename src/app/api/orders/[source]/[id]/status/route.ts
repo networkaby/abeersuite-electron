@@ -8,6 +8,7 @@ import { resolveOrderStatus, writeOrderStatus, type OrderSource } from "@/module
 import { reserveOrder, releaseOrder } from "@/modules/order/lib/reservation";
 import { releaseRedemptions } from "@/modules/order/lib/redemptionHold";
 import { spawnDelivery } from "@/modules/delivery/lib/delivery";
+import { spawnRefund } from "@/modules/refund/lib/refund";
 
 // PATCH /api/orders/[source]/[id]/status   body { statusId }
 //
@@ -62,6 +63,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ source
             } else if (ORDER_RELEASE_STAGES.includes(statusId)) {
                 await releaseOrder(ref);
                 await releaseRedemptions(ref);   // free any held loyalty/coupon/gift-card value
+                await spawnRefund(ref);          // P9: refund the advance if one was collected
             }
         } catch (e) {
             console.error("[orders] confirm hooks failed for", ref, e);
