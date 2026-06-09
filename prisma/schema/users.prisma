@@ -39,16 +39,15 @@ model User {
   journalEntries          JournalEntry[]      @relation("JournalCreatedBy")
   journalEntriesCancelled JournalEntry[]      @relation("JournalCancelledBy")
   journalEntriesDeleted   JournalEntry[]      @relation("JournalDeletedBy")
-  journalEntryAudits      JournalEntryAudit[] @relation("JournalAuditActor")
   vouchers                Voucher[]           @relation("VoucherCreatedBy")
   vouchersCancelled       Voucher[]           @relation("VoucherCancelledBy")
   vouchersDeleted         Voucher[]           @relation("VoucherDeletedBy")
-  voucherAudits           VoucherAudit[]      @relation("VoucherAuditActor")
   voucherAllocations      VoucherAllocation[] @relation("VoucherAllocationCreatedBy")
   invVouchers             InvVoucher[]        @relation("InvVoucherCreatedBy")
   invVouchersCancelled    InvVoucher[]        @relation("InvVoucherCancelledBy")
   invVouchersDeleted      InvVoucher[]        @relation("InvVoucherDeletedBy")
-  invVoucherAudits        InvVoucherAudit[]   @relation("InvVoucherAuditActor")
+  auditLogs               AuditLog[]          @relation("AuditLogActor")
+  auditLogsRestored       AuditLog[]          @relation("AuditLogRestoredBy")
   ownedChatRooms          ChatRoom[]          @relation("OwnedChatRooms")
   chatRoomMembers         ChatRoomMember[]
   chatMessages            ChatMessage[]

@@ -48,11 +48,14 @@ const ADMIN_EMAIL = "admin@networkservice.in";
 // Phase 1 — pure-transaction tables (CASCADE handles cross-FK)
 const TRANSACTION_TABLES = [
     "pos_handovers", "pos_cash_drops", "pos_expenditures", "pos_receipts", "pos_shifts",
-    "JournalLine", "JournalEntry", "JournalEntryAudit",
-    "VoucherAllocation", "VoucherLine", "Voucher", "VoucherAudit",
+    "JournalLine", "JournalEntry",
+    "VoucherAllocation", "VoucherLine", "Voucher",
+    // AuditLog — unified recycle-bin for hard-deleted vouchers/JEs (2026-06-09,
+    // replaced the 3 *Audit tables). Transactional snapshot data, wiped here.
+    "AuditLog",
     // Invoice / InvoiceLine / InvoiceAudit / Payment / PaymentAudit tables
     // were dropped on 2026-05-24 (Invoice → InvVoucher consolidation, Layer 5b).
-    "InvStockLedger", "InvVoucherCharge", "InvVoucherLine", "InvVoucher", "InvVoucherAudit",
+    "InvStockLedger", "InvVoucherCharge", "InvVoucherLine", "InvVoucher",
     // Pricing-strategy additional-cost pool draws — transaction/history data,
     // not bootstrap config. FKs to JournalLine + InvProduct (both wiped here /
     // phase 5), so truncate it in phase 1. Bootstrap seeds nothing into it.
@@ -87,7 +90,7 @@ const TRANSACTION_TABLES = [
 // trade-specific reference data seeded by helper-inventory-masters.ts (NOT
 // bootstrap), so they are wiped here and restored by `pnpm seed:helper-inventory`.
 const INVENTORY_MASTERS = [
-    "InvStockLedger", "InvVoucherCharge", "InvVoucherLine", "InvVoucher", "InvVoucherAudit",  // re-listed defensively
+    "InvStockLedger", "InvVoucherCharge", "InvVoucherLine", "InvVoucher",  // re-listed defensively
     "InvBomLine", "InvBom",
     "inv_product_branches",
     "InvProduct",

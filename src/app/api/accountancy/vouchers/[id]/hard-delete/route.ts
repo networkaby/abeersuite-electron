@@ -11,7 +11,8 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 const schema = z.object({ reason: z.string().trim().min(1, "Delete reason required") });
 
 // POST /api/accountancy/vouchers/[id]/hard-delete
-// Physically removes the voucher and its lines. Snapshot to VoucherAudit.
+// Physically removes the voucher and its lines. Snapshot to AuditLog (GL_VOUCHER +
+// JOURNAL_ENTRY for the mirror GL entry).
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { user, response } = await requirePermission(PERMISSIONS.FINANCE_VOUCHER_HARD_DELETE);
     if (response) return response;
@@ -51,8 +52,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                         include: { lines: true },
                     });
                     if (origJe) {
-                        await tx.journalEntryAudit.create({
+                        await tx.auditLog.create({
                             data: {
+                                entityType:  "JOURNAL_ENTRY",
                                 originalId:  origJe.id,
                                 originalRef: origJe.reference,
                                 action:      "HARD_DELETED",
@@ -66,8 +68,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 }
             }
 
-            const created = await tx.voucherAudit.create({
+            const created = await tx.auditLog.create({
                 data: auditSnapshot({
+                    entityType:  "GL_VOUCHER",
                     originalId:  voucher.id,
                     originalRef: voucher.reference,
                     reason:      data.reason,

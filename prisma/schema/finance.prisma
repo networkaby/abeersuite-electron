@@ -35,22 +35,32 @@ model JournalEntry {
   @@index([deletedAt])
 }
 
-// Snapshot of hard-deleted journal entries. Created in the same transaction as the
-// physical row deletion so the deletion itself is traceable (who/when/why + full data).
-model JournalEntryAudit {
-  id          Int      @id @default(autoincrement())
-  originalId  Int
-  originalRef String
-  action      String
-  reason      String?
-  snapshot    Json
-  actorId     Int
-  actor       User     @relation("JournalAuditActor", fields: [actorId], references: [id])
-  createdAt   DateTime @default(now())
+// Unified audit / recycle-bin for every hard-deleted entity (vouchers + journal
+// entries). One row per removed entity, discriminated by `entityType`, with the
+// full JSON snapshot needed to restore it. Written in the same transaction as the
+// physical row deletion so the deletion is traceable (who/when/why + data) AND
+// recoverable. Replaced the 3 byte-identical InvVoucherAudit/VoucherAudit/
+// JournalEntryAudit tables (2026-06-09). `restoredAt` is stamped when an entry is
+// rebuilt from its snapshot via the recycle-bin restore.
+model AuditLog {
+  id           Int       @id @default(autoincrement())
+  entityType   String    // "INV_VOUCHER" | "GL_VOUCHER" | "JOURNAL_ENTRY"
+  originalId   Int
+  originalRef  String
+  action       String
+  reason       String?
+  snapshot     Json
+  actorId      Int
+  actor        User      @relation("AuditLogActor", fields: [actorId], references: [id])
+  restoredAt   DateTime?
+  restoredById Int?
+  restoredBy   User?     @relation("AuditLogRestoredBy", fields: [restoredById], references: [id])
+  createdAt    DateTime  @default(now())
 
-  @@index([originalId])
+  @@index([entityType, originalRef])
   @@index([actorId])
   @@index([createdAt])
+  @@index([restoredAt])
 }
 
 model JournalLine {
@@ -134,21 +144,6 @@ model VoucherLine {
   @@index([accountId])
 }
 
-model VoucherAudit {
-  id          Int      @id @default(autoincrement())
-  originalId  Int
-  originalRef String
-  action      String
-  reason      String?
-  snapshot    Json
-  actorId     Int
-  actor       User     @relation("VoucherAuditActor", fields: [actorId], references: [id])
-  createdAt   DateTime @default(now())
-
-  @@index([originalId])
-  @@index([actorId])
-  @@index([createdAt])
-}
 
 // ── Bill-wise allocation (free-form linking) ─────────────────────────────
 // Polymorphic: any voucher (target) can be settled by any other voucher (source),

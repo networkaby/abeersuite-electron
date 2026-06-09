@@ -12,7 +12,7 @@ const hardDeleteSchema = z.object({
 });
 
 // POST /api/accountancy/journal-entries/[id]/hard-delete
-// Physically removes the entry. Snapshots row + lines into JournalEntryAudit
+// Physically removes the entry. Snapshots row + lines into AuditLog (JOURNAL_ENTRY)
 // in the same transaction so the deletion is traceable.
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { user, response } = await requirePermission(PERMISSIONS.FINANCE_JOURNAL_HARD_DELETE);
@@ -53,8 +53,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 }
             }
 
-            const created = await tx.journalEntryAudit.create({
+            const created = await tx.auditLog.create({
                 data: {
+                    entityType: "JOURNAL_ENTRY",
                     originalId: entry.id,
                     originalRef: entry.reference,
                     action: "HARD_DELETED",

@@ -28,17 +28,16 @@ const TABLES = [
     // GL side
     "JournalLine",
     "JournalEntry",
-    "JournalEntryAudit",
     // Voucher side
     "VoucherAllocation",
     "VoucherLine",
     "Voucher",
-    "VoucherAudit",
     // Inventory side
     "InvStockLedger",
     "InvVoucherLine",
     "InvVoucher",
-    "InvVoucherAudit",
+    // AuditLog — unified recycle-bin (replaced the 3 *Audit tables 2026-06-09)
+    "AuditLog",
     // Invoice / Payment family was dropped on 2026-05-24 (Invoice →
     // InvVoucher consolidation, Layer 5b) and no longer exists.
 ];

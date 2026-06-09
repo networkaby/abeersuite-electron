@@ -511,21 +511,6 @@ model InvVoucher {
   @@index([orderStatusId])
 }
 
-model InvVoucherAudit {
-  id          Int      @id @default(autoincrement())
-  originalId  Int
-  originalRef String
-  action      String
-  reason      String?
-  snapshot    Json
-  actorId     Int
-  actor       User     @relation("InvVoucherAuditActor", fields: [actorId], references: [id])
-  createdAt   DateTime @default(now())
-
-  @@index([originalId])
-  @@index([actorId])
-  @@index([createdAt])
-}
 
 model InvVoucherLine {
   id          Int        @id @default(autoincrement())

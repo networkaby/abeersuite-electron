@@ -108,11 +108,16 @@ export function restoreFields() {
 
 // ── Audit-snapshot helper ─────────────────────────────────────────────────
 
+/** Discriminator for the unified AuditLog table. */
+export type AuditEntityType = "INV_VOUCHER" | "GL_VOUCHER" | "JOURNAL_ENTRY";
+
 /**
- * Build the payload for an *Audit row written during hard-delete. Caller passes
- * the full row (including child relations like lines), the actor, and the reason.
+ * Build the payload for an `AuditLog` row written during hard-delete. Caller passes
+ * the entity type, the full row (including child relations like lines), the actor,
+ * and the reason.
  */
 export function auditSnapshot(args: {
+  entityType: AuditEntityType;
   originalId: number;
   originalRef: string;
   reason?: string | null;
@@ -121,6 +126,7 @@ export function auditSnapshot(args: {
   action?: string;
 }) {
   return {
+    entityType: args.entityType,
     originalId: args.originalId,
     originalRef: args.originalRef,
     action: args.action ?? "HARD_DELETED",

@@ -12,8 +12,8 @@ const schema = z.object({ reason: z.string().trim().min(1, "Delete reason is req
 
 // POST /api/inventory/vouchers/[id]/hard-delete
 // Physically removes the voucher AND its GL journal entry from the database — nothing
-// live survives. Both removals are snapshotted first (InvVoucherAudit for the voucher,
-// JournalEntryAudit for the GL entry) in the same transaction, so the deletion stays
+// live survives. Both removals are snapshotted first into AuditLog (INV_VOUCHER for the
+// voucher, JOURNAL_ENTRY for the GL entry) in the same transaction, so the deletion stays
 // fully traceable (who / when / why + a frozen copy of the data). When the voucher is
 // currently posted (not already cancelled / soft-deleted) the cached stock +
 // Account.balance are restored first.
@@ -88,8 +88,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                         // + AdditionalCostAllocation consumers cascade). Keeps the GL removal
                         // traceable while leaving nothing in the truth-path reports
                         // (Balance Sheet / ledgers sum POSTED JournalLines).
-                        await tx.journalEntryAudit.create({
+                        await tx.auditLog.create({
                             data: {
+                                entityType:  "JOURNAL_ENTRY",
                                 originalId:  origJe.id,
                                 originalRef: origJe.reference,
                                 action:      "HARD_DELETED",
@@ -105,8 +106,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
             // Snapshot the voucher before physical deletion so the hard-delete stays
             // traceable (who / when / why + a full frozen copy of the voucher + lines).
-            const created = await tx.invVoucherAudit.create({
+            const created = await tx.auditLog.create({
                 data: auditSnapshot({
+                    entityType: "INV_VOUCHER",
                     originalId: voucher.id,
                     originalRef: voucher.reference,
                     reason: data.reason,
