@@ -135,12 +135,17 @@ export function PaymentLinkDialog({
     );
 
     // Reset the amount (and, if launched from a method row, the rail) on open.
-    useEffect(() => {
+    // Done in the render phase via a prev-open compare rather than an effect, so
+    // opening doesn't cascade an extra render (and React re-renders immediately
+    // with the seeded values before paint).
+    const [wasOpen, setWasOpen] = useState(open);
+    if (open !== wasOpen) {
+        setWasOpen(open);
         if (open) {
             setAmountStr(defaultAmount > 0 ? defaultAmount.toFixed(2) : "");
             if (lockedProviderId) setProviderId(lockedProviderId);
         }
-    }, [open, defaultAmount, lockedProviderId]);
+    }
 
     const amount = Number(amountStr) || 0;
     const note = billRef || (partyName ? `Payment — ${partyName}` : "Payment");
@@ -151,14 +156,14 @@ export function PaymentLinkDialog({
         return provider.build(ctx, { amountRupees: amount, note });
     }, [provider, ctx, amount, note]);
 
-    // Recompute the QR whenever the link changes.
+    // Recompute the QR whenever the link changes. Routed through a promise so the
+    // "no link → clear" path also resolves asynchronously (never a synchronous
+    // setState in the effect body).
     useEffect(() => {
         let alive = true;
-        if (!link) {
-            setQr(null);
-            return;
-        }
-        QRCode.toDataURL(link, { width: 240, margin: 1, errorCorrectionLevel: "M" })
+        Promise.resolve(
+            link ? QRCode.toDataURL(link, { width: 240, margin: 1, errorCorrectionLevel: "M" }) : null,
+        )
             .then((url) => {
                 if (alive) setQr(url);
             })
@@ -174,19 +179,19 @@ export function PaymentLinkDialog({
     // link/amount/payee change, so the Share click below is synchronous.
     useEffect(() => {
         let alive = true;
-        if (!link || amount <= 0) {
-            setShareFile(null);
-            return;
-        }
-        (async () => {
-            try {
-                const hiRes = await QRCode.toDataURL(link, { width: 512, margin: 2, errorCorrectionLevel: "M" });
-                const blob = await composeQrCard(hiRes, fmtINR(amount), ctx.payeeName);
-                if (alive) setShareFile(new File([blob], `payment-qr-${amount.toFixed(2)}.png`, { type: "image/png" }));
-            } catch {
+        const build = async (): Promise<File | null> => {
+            if (!link || amount <= 0) return null;
+            const hiRes = await QRCode.toDataURL(link, { width: 512, margin: 2, errorCorrectionLevel: "M" });
+            const blob = await composeQrCard(hiRes, fmtINR(amount), ctx.payeeName);
+            return new File([blob], `payment-qr-${amount.toFixed(2)}.png`, { type: "image/png" });
+        };
+        build()
+            .then((file) => {
+                if (alive) setShareFile(file);
+            })
+            .catch(() => {
                 if (alive) setShareFile(null);
-            }
-        })();
+            });
         return () => {
             alive = false;
         };
