@@ -17,7 +17,9 @@ import { handleApiError } from "@/shared/lib/api";
 const TOGGLEABLE = new Set<string>(["POS_ESTIMATE", "POS_ORDER", "ESTIMATE", "SALES_ORDER", "PURCHASE_ORDER"]);
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
+    // Reverting a finalised (POSTED) document back to DRAFT is an un-finalize action —
+    // same gravity as Cancel, NOT a mere view. (Was gated only on ACCOUNTANCY_VIEW_ORG.)
+    const { response } = await requirePermission(PERMISSIONS.INVENTORY_VOUCHER_CANCEL);
     if (response) return response;
 
     const id = Number((await params).id);
