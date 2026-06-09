@@ -101,7 +101,10 @@ const INVENTORY_MASTERS = [
     "InvCategory", "InvProductGroup", "InvBrand",
 ];
 
-// Phase 6 — other dummy-only config tables
+// Phase 6 — other dummy-only config tables.
+// NOTE: payment_gateways (Settings → Payment Methods) is NOT listed here — it's
+// cleared with an explicit DELETE in Phase 6 so its ON DELETE SET NULL fires and
+// preserves the counter payment rails. See the DELETE below.
 const DUMMY_CONFIG_TABLES = [
     "ServiceCenter",
 ];
@@ -149,6 +152,14 @@ async function main(): Promise<void> {
     const cfgList = DUMMY_CONFIG_TABLES.map((t) => `"${t}"`).join(", ");
     await pool.query(`TRUNCATE TABLE ${cfgList} RESTART IDENTITY CASCADE`);
     for (const t of DUMMY_CONFIG_TABLES) console.log(`      ✓ ${t}`);
+
+    // Payment-gateway catalog (Settings → Payment Methods) — operator config, not
+    // bootstrap-seeded, so it's wiped here. We DELETE (not TRUNCATE … CASCADE) so the
+    // ON DELETE SET NULL on pos_counter_payment_accounts.gatewayId fires: counter
+    // payment rails (also operator config) are PRESERVED, just unlinked from the
+    // deleted gateways. A TRUNCATE CASCADE would instead wipe those rails too.
+    const pg = await pool.query(`DELETE FROM "payment_gateways"`);
+    console.log(`      ✓ payment_gateways (${pg.rowCount} deleted; counter rails preserved, unlinked)`);
     console.log("");
 
     // ── Phase 7 — Reset cached running balances on bootstrap rows ──────

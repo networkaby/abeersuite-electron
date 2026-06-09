@@ -26,12 +26,19 @@ export default function ShopCheckoutPage() {
     const [products, setProducts] = useState<ShopProductPublic[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
+    // Config-only: which online gateway is configured (display name only, no keys).
+    // The live charge is not wired yet — this just informs the customer it's coming.
+    const [onlineGateway, setOnlineGateway] = useState<string | null>(null);
 
     useEffect(() => {
         axios
             .get<ShopProductPublic[]>("/api/shop/products")
             .then((r) => setProducts(r.data))
             .catch(() => setProducts([]));
+        axios
+            .get<{ online: { provider: string; displayName: string } | null }>("/api/shop/payment-config")
+            .then((r) => setOnlineGateway(r.data.online?.displayName ?? null))
+            .catch(() => setOnlineGateway(null));
     }, []);
 
     const byId = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
@@ -189,8 +196,10 @@ export default function ShopCheckoutPage() {
                             {loading ? "Placing order…" : "Place COD order"}
                         </Button>
                         <p className="text-[11px] text-center text-muted-foreground leading-relaxed">
-                            Pay on delivery — you’ll pay the courier when your order arrives. Online payment
-                            options are coming soon.
+                            Pay on delivery — you’ll pay the courier when your order arrives.
+                            {onlineGateway
+                                ? ` Online payment via ${onlineGateway} is coming soon.`
+                                : " Online payment options are coming soon."}
                         </p>
                     </CardFooter>
                 </Card>

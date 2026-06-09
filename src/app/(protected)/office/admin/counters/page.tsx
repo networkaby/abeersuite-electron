@@ -27,6 +27,10 @@ import type { PosPayChannel } from "@/generated/prisma/client";
 
 type Branch = { id: string; name: string; isActive: boolean };
 
+// A configured gateway from the Settings → Payment Methods catalog, filtered to
+// the ones available at the counter. The counter picks one for a GATEWAY rail.
+type CounterGateway = { id: number; displayName: string; provider: string };
+
 // A counter payment account as returned by the API.
 type PaymentAccount = {
     id: number;
@@ -38,6 +42,8 @@ type PaymentAccount = {
     sortOrder: number;
     isActive: boolean;
     defaultVisible: boolean;
+    gatewayId: number | null;
+    gateway: { id: number; displayName: string; provider: string } | null;
 };
 
 type Counter = {
@@ -56,7 +62,8 @@ type Counter = {
 const EMPTY_FORM = { branchId: "", name: "" };
 
 // An editable payment-account row (accountId nullable until the ledger is picked).
-type EditPayAcct = { id?: number; channel: PosPayChannel; label: string; accountId: number | null; vpa: string; defaultVisible: boolean };
+// gatewayId links a GATEWAY rail to a configured catalog entry (null = none).
+type EditPayAcct = { id?: number; channel: PosPayChannel; label: string; accountId: number | null; vpa: string; defaultVisible: boolean; gatewayId: number | null };
 
 type EditForm = {
     name: string;
@@ -74,6 +81,7 @@ export default function CountersAdminPage() {
     const [branches, setBranches] = useState<Branch[]>([]);
     const [glAccounts, setGlAccounts] = useState<GlAccount[]>([]);
     const [expenseAccounts, setExpenseAccounts] = useState<GlAccount[]>([]);
+    const [gateways, setGateways] = useState<CounterGateway[]>([]);
     const [loading, setLoading]   = useState(true);
     const [addingNew, setAddingNew] = useState(false);
     const [editId, setEditId]     = useState<number | null>(null);
@@ -104,6 +112,20 @@ export default function CountersAdminPage() {
         }
     };
 
+    // Gateways configured under Settings → Payment Methods, available at the counter.
+    const loadGateways = async () => {
+        try {
+            const { data } = await axios.get<{ gateways: (CounterGateway & { enabledForCounter: boolean; isActive: boolean })[] }>("/api/settings/payment-methods");
+            setGateways(
+                data.gateways
+                    .filter((g) => g.enabledForCounter && g.isActive)
+                    .map((g) => ({ id: g.id, displayName: g.displayName, provider: g.provider })),
+            );
+        } catch {
+            setGateways([]);
+        }
+    };
+
     const load = async () => {
         setLoading(true);
         try {
@@ -119,7 +141,7 @@ export default function CountersAdminPage() {
             setLoading(false);
         }
     };
-    useEffect(() => { void load(); void loadGlAccounts(); void loadExpenseAccounts(); }, []);
+    useEffect(() => { void load(); void loadGlAccounts(); void loadExpenseAccounts(); void loadGateways(); }, []);
 
     const startAdd = () => {
         setForm({ ...EMPTY_FORM, branchId: branches[0]?.id ?? "" });
@@ -136,6 +158,7 @@ export default function CountersAdminPage() {
                 accountId: p.accountId,
                 vpa: p.vpa ?? "",
                 defaultVisible: p.defaultVisible,
+                gatewayId: p.gatewayId ?? null,
             })),
             allowedExpenseAccountIds: Array.isArray(c.allowedExpenseAccountIds) ? c.allowedExpenseAccountIds : [],
         });
@@ -147,7 +170,7 @@ export default function CountersAdminPage() {
     // Payment-account row editors (operate on editForm.paymentAccounts).
     const addPayAcct = () => setEditForm((f) => ({
         ...f,
-        paymentAccounts: [...f.paymentAccounts, { channel: "UPI" as PosPayChannel, label: "", accountId: null, vpa: "", defaultVisible: true }],
+        paymentAccounts: [...f.paymentAccounts, { channel: "UPI" as PosPayChannel, label: "", accountId: null, vpa: "", defaultVisible: true, gatewayId: null }],
     }));
     const updatePayAcct = (idx: number, patch: Partial<EditPayAcct>) => setEditForm((f) => ({
         ...f,
@@ -190,6 +213,8 @@ export default function CountersAdminPage() {
                 label: p.label.trim() || CHANNEL_LABEL[p.channel],
                 accountId: p.accountId as number,
                 vpa: p.vpa.trim() || null,
+                // Gateway link only applies to the GATEWAY channel; cleared otherwise server-side too.
+                gatewayId: p.channel === "GATEWAY" ? (p.gatewayId ?? null) : null,
                 defaultVisible: p.defaultVisible,
                 sortOrder: i,
             }));
@@ -376,6 +401,27 @@ export default function CountersAdminPage() {
                                                                         maxLength={60}
                                                                     />
                                                                 )}
+                                                                {p.channel === "GATEWAY" && (
+                                                                    <Select
+                                                                        value={p.gatewayId != null ? String(p.gatewayId) : "none"}
+                                                                        onValueChange={(v) => updatePayAcct(idx, { gatewayId: v === "none" ? null : Number(v) })}
+                                                                    >
+                                                                        <SelectTrigger className="h-8 text-xs">
+                                                                            <SelectValue placeholder="Pick a configured gateway…" />
+                                                                        </SelectTrigger>
+                                                                        <SelectContent>
+                                                                            <SelectItem value="none">No gateway selected</SelectItem>
+                                                                            {gateways.map((g) => (
+                                                                                <SelectItem key={g.id} value={String(g.id)}>{g.displayName}</SelectItem>
+                                                                            ))}
+                                                                        </SelectContent>
+                                                                    </Select>
+                                                                )}
+                                                                {p.channel === "GATEWAY" && gateways.length === 0 && (
+                                                                    <p className="text-[10px] text-muted-foreground">
+                                                                        No gateways configured. Add one under Settings → Payment Methods.
+                                                                    </p>
+                                                                )}
                                                                 <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer select-none">
                                                                     <input
                                                                         type="checkbox"
@@ -459,8 +505,8 @@ export default function CountersAdminPage() {
                                                     <div className="flex gap-1 mt-1.5 flex-wrap">
                                                         <Badge variant="outline" className="text-[10px] font-normal">Cash</Badge>
                                                         {(c.paymentAccounts ?? []).map((p) => (
-                                                            <Badge key={p.id} variant="outline" className="text-[10px] font-normal" title={`${CHANNEL_LABEL[p.channel]}${p.vpa ? ` · ${p.vpa}` : ""} → ${p.account?.name ?? ""}`}>
-                                                                {p.label} → {p.account?.name ?? "?"}
+                                                            <Badge key={p.id} variant="outline" className="text-[10px] font-normal" title={`${CHANNEL_LABEL[p.channel]}${p.gateway ? ` · ${p.gateway.displayName}` : ""}${p.vpa ? ` · ${p.vpa}` : ""} → ${p.account?.name ?? ""}`}>
+                                                                {p.label}{p.gateway ? ` (${p.gateway.displayName})` : ""} → {p.account?.name ?? "?"}
                                                             </Badge>
                                                         ))}
                                                     </div>

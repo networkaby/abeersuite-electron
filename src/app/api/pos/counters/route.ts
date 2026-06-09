@@ -45,8 +45,9 @@ export async function GET(req: NextRequest) {
                         orderBy: { sortOrder: "asc" },
                         select: {
                             id: true, channel: true, label: true, accountId: true, vpa: true,
-                            sortOrder: true, isActive: true, defaultVisible: true,
+                            sortOrder: true, isActive: true, defaultVisible: true, gatewayId: true,
                             account: { select: { id: true, name: true } },
+                            gateway: { select: { id: true, displayName: true, provider: true } },
                         },
                     },
                     _count:      { select: { shifts: true } },

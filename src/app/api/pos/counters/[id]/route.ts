@@ -19,6 +19,9 @@ const paymentAccountSchema = z.object({
     vpa:       z.union([z.string().trim().max(60), z.null()]).optional()
         .transform((v) => (typeof v === "string" && v.trim().length ? v.trim() : null))
         .refine((v) => v == null || /^[\w.\-]+@[\w.\-]+$/.test(v), "Enter a valid UPI ID like name@bank"),
+    // Optional link to a configured gateway from the Settings catalog (PaymentGateway).
+    // Only meaningful for the GATEWAY channel; validated below. null = no gateway.
+    gatewayId: z.union([z.number().int().positive(), z.null()]).optional(),
     sortOrder: z.number().int().min(0).optional(),
     isActive:  z.boolean().optional(),
     defaultVisible: z.boolean().optional(),
@@ -43,8 +46,9 @@ const counterInclude = {
         orderBy: { sortOrder: "asc" as const },
         select: {
             id: true, channel: true, label: true, accountId: true, vpa: true,
-            sortOrder: true, isActive: true, defaultVisible: true,
+            sortOrder: true, isActive: true, defaultVisible: true, gatewayId: true,
             account: { select: { id: true, name: true } },
+            gateway: { select: { id: true, displayName: true, provider: true } },
         },
     },
 };
@@ -77,6 +81,23 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 const a = byId.get(aid);
                 if (!a)                        return NextResponse.json({ error: `Account ${aid} not found` }, { status: 400 });
                 if (a.group?.type !== "ASSET") return NextResponse.json({ error: `Account ${aid} is not an ASSET ledger (cash/bank-style) — cannot route payment receipts here.` }, { status: 400 });
+            }
+
+            // Any picked gateway must exist, be active, and be enabled for the counter.
+            const gatewayIds = [...new Set(
+                data.paymentAccounts.map((p) => p.gatewayId).filter((g): g is number => typeof g === "number"),
+            )];
+            if (gatewayIds.length > 0) {
+                const gateways = await prisma.paymentGateway.findMany({
+                    where:  { id: { in: gatewayIds } },
+                    select: { id: true, isActive: true, enabledForCounter: true, displayName: true },
+                });
+                const gById = new Map(gateways.map((g) => [g.id, g]));
+                for (const gid of gatewayIds) {
+                    const g = gById.get(gid);
+                    if (!g)                        return NextResponse.json({ error: `Payment gateway ${gid} not found` }, { status: 400 });
+                    if (!g.isActive || !g.enabledForCounter) return NextResponse.json({ error: `"${g.displayName}" is not available for counters. Enable it under Settings → Payment Methods.` }, { status: 400 });
+                }
             }
         }
 
@@ -129,6 +150,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                         label:     p.label,
                         accountId: p.accountId,
                         vpa:       p.vpa,
+                        // Only the GATEWAY channel carries a gateway link; clear it otherwise.
+                        gatewayId: p.channel === "GATEWAY" ? (p.gatewayId ?? null) : null,
                         sortOrder: p.sortOrder ?? i,
                         isActive:  p.isActive ?? true,
                         defaultVisible: p.defaultVisible ?? false,

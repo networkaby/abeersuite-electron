@@ -74,10 +74,56 @@ model PosCounterPaymentAccount {
   // Show this account as a checkout row by default (like the old fixed UPI row).
   // Off = available only via "Add payment line". Set per account in the counters UI.
   defaultVisible Boolean @default(false)
+  // Optional link to a configured gateway from the global catalog (PaymentGateway),
+  // set in the counters UI when channel = GATEWAY (e.g. this counter collects via
+  // Razorpay). The GL ledger debited is still `accountId` above — the gateway is
+  // metadata for which provider the cashier collects through, NOT a GL change.
+  // Nullable + SetNull so deleting a catalog entry just clears this pointer.
+  gatewayId Int?
+  gateway   PaymentGateway? @relation("PayAccountGateway", fields: [gatewayId], references: [id], onDelete: SetNull)
 
   @@index([counterId])
   @@index([accountId])
+  @@index([gatewayId])
   @@map("pos_counter_payment_accounts")
+}
+
+// ── Payment Gateway (global catalog, configured in Settings → Payment Methods) ──
+//
+// The "heavy" payment configuration that doesn't belong on the per-counter screen.
+// Each row is one configured gateway/method (Razorpay, Cashfree, manual UPI, …);
+// a counter then PICKS one via PosCounterPaymentAccount.gatewayId, and online
+// checkout reads the single `enabledForOnline` row.
+//
+// SECRETS NEVER LIVE HERE. API keys/secrets stay in env vars; the Settings page
+// only reports whether a provider's env vars are present (✓/✗) — it never stores
+// or returns their values. `configJson` holds NON-SECRET extras only (e.g. a
+// manual UPI VPA). `provider` is a plain string keyed to the code registry
+// (src/modules/pos/lib/paymentGateways.ts) so new providers (PayU, PayPal) need
+// no migration. See docs/modules/pos.md.
+model PaymentGateway {
+  id          Int      @id @default(autoincrement())
+  // Registry key: "razorpay" | "cashfree" | "manual_upi" | future "payu"/"paypal".
+  provider    String
+  displayName String
+  // "TEST" | "LIVE" — validated in the API; drives which env-var set is checked.
+  environment String   @default("TEST")
+  // Selectable as a collection rail on a counter (PosCounterPaymentAccount.gatewayId).
+  enabledForCounter Boolean @default(true)
+  // The active online-checkout gateway. API enforces ≤1 enabled per environment.
+  enabledForOnline  Boolean @default(false)
+  // NON-SECRET config only (e.g. { "vpa": "shop@okhdfcbank" } for manual UPI).
+  configJson  Json     @default("{}")
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  counterAccounts PosCounterPaymentAccount[] @relation("PayAccountGateway")
+
+  @@index([provider])
+  @@index([enabledForOnline])
+  @@map("payment_gateways")
 }
 
 // ── POS Shift (one cashier's session at one counter) ─────────────────────────

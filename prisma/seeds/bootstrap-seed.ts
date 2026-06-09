@@ -1067,6 +1067,9 @@ async function main() {
         // rows in PosCounterPaymentAccount, each with a bank ledger + optional VPA)
         // are operator-configured under /office/admin/counters, not bootstrap
         // defaults — a fresh counter starts with Cash (the till) only.
+        // Likewise the PaymentGateway catalog (Settings → Payment Methods, which a
+        // GATEWAY rail or online checkout points to) is operator config — bootstrap
+        // seeds none; it starts empty and is wiped by hard-clean.
         const { rows: existing } = await pool.query<{ id: number }>(
             `SELECT id FROM "pos_counters" WHERE "branchId" = $1 AND name = $2 LIMIT 1`,
             [b.id, counterName],

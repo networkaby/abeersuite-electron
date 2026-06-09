@@ -91,6 +91,7 @@ pnpm seed:hard-clean
 - All Persons / Companies / Phones / Emails
 - All party-linked Account rows
 - ServiceCenter, ShopCoupon, PortalCredentials
+- Payment gateways (`payment_gateways`, Settings → Payment Methods — operator config, bootstrap seeds none). Cleared with an explicit `DELETE` (not a `TRUNCATE … CASCADE`) so the `ON DELETE SET NULL` on `PosCounterPaymentAccount.gatewayId` fires: counter payment rails are **preserved**, just unlinked from the deleted gateways.
 
 **Preserves** everything bootstrap-seed wrote, plus user-set config:
 - Roles, Permissions, RolePermissions, Pipelines, Statuses, Branches, Departments
