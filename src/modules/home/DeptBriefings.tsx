@@ -242,7 +242,7 @@ export async function DespatchBriefing() {
     try {
         [pendingDespatch, escalated] = await Promise.all([
             prisma.ticket.count({
-                where: { ticketSubStatus: { notifyRoles: { has: "R4" } }, ticketStatus: { isTerminal: false } },
+                where: { subStatusId: "SS22", ticketStatus: { isTerminal: false } },
             }),
             prisma.ticket.count({ where: { escalated: true, status: "S4" } }),
         ]);

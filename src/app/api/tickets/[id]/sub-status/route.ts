@@ -1,6 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { requireAuth } from "@/shared/lib/auth/permissions";
+import { passesWorkGate } from "@/modules/repairing/lib/workGate";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
@@ -19,15 +20,9 @@ export async function PATCH(
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
-        const session = await auth();
-        if (!session?.user) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-        }
-
-        const sessionUser = session.user as { id?: string };
-        const userId = Number(sessionUser.id ?? 0);
-        // TODO(rbac): role gating (allowedRoles / handoffRole) removed — any
-        // authenticated staff may set any sub-status. Re-add when RBAC is re-wired.
+        const { user, response } = await requireAuth();
+        if (response) return response;
+        const userId = user.id;
 
         const { id } = await params;
         const ticketId = Number(id);
@@ -37,9 +32,15 @@ export async function PATCH(
 
         const subStatus = await prisma.ticketSubStatus.findUnique({
             where: { id: subStatusId },
+            include: { work: { select: { permissionId: true } } },
         });
         if (!subStatus) {
             return NextResponse.json({ error: "Sub-status not found" }, { status: 404 });
+        }
+        // Work-permission gate: only staff holding the sub-status' Work permission
+        // may set it (ungated works are open to anyone; admin:bypass always passes).
+        if (!passesWorkGate(user, subStatus.work)) {
+            return NextResponse.json({ error: "You don't have permission for this work" }, { status: 403 });
         }
 
         const ticket = await prisma.ticket.findUnique({

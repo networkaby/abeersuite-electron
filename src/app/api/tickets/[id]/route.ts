@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { z } from "zod";
 import { Priority } from "@/generated/prisma/enums";
 import { resolvedUserFromSession } from "@/shared/lib/auth/permissions";
+import { passesWorkGate } from "@/modules/repairing/lib/workGate";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
@@ -122,8 +123,6 @@ export async function PUT(
         if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         const resolvedUser = resolvedUserFromSession(session);
         const userId = resolvedUser.id;
-        // TODO(rbac): role/permission gating on status & owner changes removed — any
-        // authenticated staff may edit any ticket. Re-add when RBAC is re-wired.
 
         const { id } = await params;
         const scopedTicket = await prisma.ticket.findUnique({
@@ -136,6 +135,18 @@ export async function PUT(
 
         if (error) return error;
         const body = data;
+
+        // Work-permission gate on status changes: a target status carrying a gated
+        // Work requires that permission. Statuses with no/ungated Work are open.
+        if (body.status) {
+            const targetStatus = await prisma.ticketStatus.findUnique({
+                where: { id: body.status },
+                select: { work: { select: { permissionId: true } } },
+            });
+            if (!passesWorkGate(resolvedUser, targetStatus?.work ?? null)) {
+                return NextResponse.json({ error: "You don't have permission for this work" }, { status: 403 });
+            }
+        }
 
         const ticket = await prisma.ticket.update({
             where: { id: Number(id) },

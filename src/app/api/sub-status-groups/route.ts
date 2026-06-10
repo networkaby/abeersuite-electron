@@ -16,7 +16,7 @@ export async function GET() {
     const { response } = await requireAuth();
     if (response) return response;
     try {
-        const groups = await prisma.subStatusGroup.findMany({ orderBy: { order: "asc" } });
+        const groups = await prisma.work.findMany({ orderBy: { order: "asc" } });
         return NextResponse.json(groups);
     } catch (e) {
         return handleApiError(e, "Failed to fetch groups");
@@ -33,13 +33,13 @@ export async function POST(req: Request) {
         const { label, order } = data;
         const id = label.toLowerCase().trim().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
 
-        const existing = await prisma.subStatusGroup.findUnique({ where: { id } });
+        const existing = await prisma.work.findUnique({ where: { id } });
         if (existing) {
             return NextResponse.json({ error: `A group with id "${id}" already exists.` }, { status: 409 });
         }
 
-        const maxOrder = order ?? (await prisma.subStatusGroup.count());
-        const group = await prisma.subStatusGroup.create({ data: { id, label, order: maxOrder } });
+        const maxOrder = order ?? (await prisma.work.count());
+        const group = await prisma.work.create({ data: { id, label, order: maxOrder } });
         return NextResponse.json(group, { status: 201 });
     } catch (e) {
         return handleApiError(e, "Failed to create group");

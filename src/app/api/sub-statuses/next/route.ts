@@ -1,6 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireAuth, isAdmin } from "@/shared/lib/auth/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
+import { passesWorkGate } from "@/modules/repairing/lib/workGate";
 import { handleApiError } from "@/shared/lib/api";
 
 // GET /api/sub-statuses/next?statusId=S3&fromSubStatusId=SS10
@@ -26,7 +27,7 @@ export async function GET(req: Request) {
 
         const transitions = await prisma.subStatusTransition.findMany({
             where: { fromSubStatusId: entryOnly || !fromSubStatusId ? null : fromSubStatusId },
-            include: { to: true },
+            include: { to: { include: { work: { select: { permissionId: true } } } } },
             orderBy: { id: "asc" },
         });
 
@@ -37,7 +38,7 @@ export async function GET(req: Request) {
                 if (seen.has(ss.id)) return false;
                 seen.add(ss.id);
                 if (!ss.applicableStatusIds.includes(statusId)) return false;
-                if (!isAdmin(user) && ss.allowedRoles.length > 0 && !ss.allowedRoles.some((role) => user.roles.includes(role))) return false;
+                if (!passesWorkGate(user, ss.work)) return false;
                 const scope = ss.warrantyScope ?? "any";
                 if (scope !== "any") {
                     if (scope === "warranty_only" && !isWarranty) return false;

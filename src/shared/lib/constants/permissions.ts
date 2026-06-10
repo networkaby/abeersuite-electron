@@ -163,6 +163,12 @@ export const PERMISSIONS = {
     SERVICE_CENTERS_CREATE:              "service-centers:create",
     SERVICE_CENTERS_EDIT_ORG:            "service-centers:edit:org",
     SERVICE_CENTERS_DELETE_ORG:          "service-centers:delete:org",
+
+    // Auto-added by check-doc-sync --fix:
+    WORK_CUSTOMER_COMM:                  "work:customer_comm",
+    WORK_APPROVAL:                       "work:approval",
+    WORK_PARTS:                          "work:parts",
+    WORK_QC:                             "work:qc",
 } as const;
 
 export type PermissionId = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

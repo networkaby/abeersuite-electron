@@ -45,15 +45,15 @@ interface SubStatus {
     id: string;
     label: string;
     color: string;
-    group: string;
-    groupId: string | null;
+    group?: string;
+    groupId?: string | null;
     order: number;
     applicableStatusIds: string[];
-    allowedRoles: string[];
-    notifyRoles: string[];
+    allowedRoles?: string[];
+    notifyRoles?: string[];
     triggerMap: Record<string, string>;
     actionLabel: string | null;
-    handoffRole: string | null;
+    handoffRole?: string | null;
     autoRevertOnClear: boolean;
     isEntryPoint: boolean;
     fromTransitions: { to: { id: string; label: string; color: string } }[];
@@ -436,11 +436,11 @@ export default function SubStatusesPage() {
         setEditForm({
             label: subStatus.label,
             color: subStatus.color,
-            group: subStatus.groupId ?? subStatus.group,
+            group: subStatus.groupId ?? subStatus.group ?? "",
             order: String(subStatus.order),
             applicableStatusIds: subStatus.applicableStatusIds,
-            allowedRoles: subStatus.allowedRoles,
-            notifyRoles: subStatus.notifyRoles,
+            allowedRoles: subStatus.allowedRoles ?? [],
+            notifyRoles: subStatus.notifyRoles ?? [],
             triggerMap: (subStatus.triggerMap ?? {}) as Record<string, string>,
             actionLabel: subStatus.actionLabel ?? "",
             warrantyScope: (subStatus as SubStatus & { warrantyScope?: string }).warrantyScope ?? "any",
@@ -695,7 +695,7 @@ export default function SubStatusesPage() {
                                                 <span className="text-sm font-medium">{subStatus.label}</span>
                                                 {(subStatus.groupId ?? subStatus.group) && (
                                                     <Badge variant="outline">
-                                                        {groupLabelMap[subStatus.groupId ?? subStatus.group] ?? subStatus.groupId ?? subStatus.group}
+                                                        {groupLabelMap[(subStatus.groupId ?? subStatus.group) ?? ""] ?? subStatus.groupId ?? subStatus.group}
                                                     </Badge>
                                                 )}
                                                 {subStatus.isEntryPoint && <Badge className="bg-green-100 text-green-700">Entry point</Badge>}
@@ -708,16 +708,16 @@ export default function SubStatusesPage() {
                                             </div>
 
                                             <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                                                {subStatus.allowedRoles.length > 0 && (
+                                                {(subStatus.allowedRoles ?? []).length > 0 && (
                                                     <span>
                                                         <span className="font-medium text-foreground">Set by:</span>{" "}
-                                                        {subStatus.allowedRoles.map((roleId) => roleLabelMap[roleId] ?? roleId).join(", ")}
+                                                        {(subStatus.allowedRoles ?? []).map((roleId) => roleLabelMap[roleId] ?? roleId).join(", ")}
                                                     </span>
                                                 )}
-                                                {subStatus.notifyRoles.length > 0 && (
+                                                {(subStatus.notifyRoles ?? []).length > 0 && (
                                                     <span>
                                                         <span className="font-medium text-foreground">Notifies:</span>{" "}
-                                                        {subStatus.notifyRoles.map((roleId) => roleLabelMap[roleId] ?? roleId).join(", ")}
+                                                        {(subStatus.notifyRoles ?? []).map((roleId) => roleLabelMap[roleId] ?? roleId).join(", ")}
                                                     </span>
                                                 )}
                                             </div>

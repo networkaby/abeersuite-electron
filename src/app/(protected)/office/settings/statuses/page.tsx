@@ -49,8 +49,8 @@ interface TicketStatus {
     order: number;
     isTerminal: boolean;
     isEntryPoint: boolean;
-    allowedRoles: string[];
-    notifyRoles: string[];
+    allowedRoles?: string[];
+    notifyRoles?: string[];
     actionLabel: string | null;
     warrantyScope: string;
     pipelineId: string | null;
@@ -177,8 +177,8 @@ export default function StatusesPage() {
     const openRoles = (status: TicketStatus) => {
         setRolesModalId(status.id);
         setRolesForm({
-            allowedRoles: status.allowedRoles,
-            notifyRoles: status.notifyRoles,
+            allowedRoles: status.allowedRoles ?? [],
+            notifyRoles: status.notifyRoles ?? [],
             actionLabel: status.actionLabel ?? "",
             warrantyScope: status.warrantyScope ?? "any",
         });
@@ -402,11 +402,11 @@ export default function StatusesPage() {
                                                     </div>
                                                 </TableCell>
                                                 <TableCell>
-                                                    {status.allowedRoles.length === 0 ? (
+                                                    {(status.allowedRoles ?? []).length === 0 ? (
                                                         <span className="text-xs text-muted-foreground">Anyone</span>
                                                     ) : (
                                                         <div className="flex flex-wrap gap-1">
-                                                            {status.allowedRoles.map((roleId) => (
+                                                            {(status.allowedRoles ?? []).map((roleId) => (
                                                                 <Badge key={roleId} variant="outline">
                                                                     {roles.find((role) => role.id === roleId)?.label ?? roleId}
                                                                 </Badge>
@@ -415,11 +415,11 @@ export default function StatusesPage() {
                                                     )}
                                                 </TableCell>
                                                 <TableCell>
-                                                    {status.notifyRoles.length === 0 ? (
+                                                    {(status.notifyRoles ?? []).length === 0 ? (
                                                         <span className="text-xs text-muted-foreground">None</span>
                                                     ) : (
                                                         <div className="flex flex-wrap gap-1">
-                                                            {status.notifyRoles.map((roleId) => (
+                                                            {(status.notifyRoles ?? []).map((roleId) => (
                                                                 <Badge key={roleId} className="bg-orange-100 text-orange-700">
                                                                     {roles.find((role) => role.id === roleId)?.label ?? roleId}
                                                                 </Badge>

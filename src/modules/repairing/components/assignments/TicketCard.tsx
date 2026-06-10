@@ -18,7 +18,9 @@ export interface TicketCardData {
     primaryOwner: { id: number; name: string } | null;
     serviceCenter: { name: string } | null;
     ticketStatus: { label: string; color: string; actionLabel: string | null };
-    ticketSubStatus: { id: string; label: string; color: string; actionLabel: string | null; notifyRoles?: string[] } | null;
+    ticketSubStatus: { id: string; label: string; color: string; actionLabel: string | null } | null;
+    /** Work the current sub-status belongs to (null when no sub-status). */
+    subStatusWorkId?: string | null;
     activeParticipants?: { user: { id: number; name: string } }[];
 }
 

@@ -32,10 +32,10 @@ model TicketStatus {
   order           Int
   isTerminal      Boolean            @default(false)
   isEntryPoint    Boolean            @default(false)
-  allowedRoles    String[]
-  notifyRoles     String[]
   actionLabel     String?
   warrantyScope   String             @default("any")
+  workId          String?
+  work            Work?              @relation(fields: [workId], references: [id])
   pipelineId      String?
   pipeline        Pipeline?          @relation(fields: [pipelineId], references: [id])
   fromTransitions StatusTransition[] @relation("FromStatus")
@@ -54,17 +54,14 @@ model TicketSubStatus {
   id                  String                @id
   label               String
   color               String                @default("bg-gray-100 text-gray-600")
-  group               String
   order               Int
   applicableStatusIds String[]
-  allowedRoles        String[]
-  notifyRoles         String[]
   triggerMap          Json                  @default("{}")
   actionLabel         String?
   autoRevertOnClear   Boolean               @default(true)
-  handoffRole         String?
   warrantyScope       String                @default("any")
-  groupId             String?
+  workId              String?
+  work                Work?                 @relation(fields: [workId], references: [id])
   pipelineId          String?
   pipeline            Pipeline?             @relation(fields: [pipelineId], references: [id])
   fromTransitions     SubStatusTransition[] @relation("FromSubStatus")
@@ -72,14 +69,20 @@ model TicketSubStatus {
   tickets             Ticket[]
   logs                TicketLog[]
   participants        TicketParticipant[]   @relation("ParticipantSubStatus")
-  SubStatusGroup      SubStatusGroup?       @relation(fields: [groupId], references: [id])
 }
 
-model SubStatusGroup {
-  id              String            @id
-  label           String
-  order           Int               @default(0)
-  TicketSubStatus TicketSubStatus[]
+// A unit of work a status/sub-status represents (calling, parts, qc…). Each
+// gated Work mints a permission ("work:<id>") that gates who can set statuses
+// /sub-statuses carrying it. Generalizes the former SubStatusGroup.
+model Work {
+  id           String            @id
+  label        String
+  color        String            @default("bg-gray-100 text-gray-600")
+  order        Int               @default(0)
+  permissionId String?
+  permission   Permission?       @relation(fields: [permissionId], references: [id])
+  statuses     TicketStatus[]
+  subStatuses  TicketSubStatus[]
 }
 
 model SubStatusTransition {

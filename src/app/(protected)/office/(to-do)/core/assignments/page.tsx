@@ -11,7 +11,8 @@ import {
 } from "lucide-react";
 import { TicketSection, type TicketCardData } from "@/modules/repairing/components/assignments/TicketCard";
 
-const GROUP_CARD_META: Record<string, { icon: React.ReactNode; textColor: string }> = {
+// Per-Work card chrome, keyed by Work id (the former sub-status group slugs).
+const WORK_CARD_META: Record<string, { icon: React.ReactNode; textColor: string }> = {
     customer_comm: { icon: <Phone size={20} />, textColor: "text-blue-600" },
     approval: { icon: <CheckCircle size={20} />, textColor: "text-yellow-600" },
     parts: { icon: <Package size={20} />, textColor: "text-orange-600" },
@@ -45,8 +46,8 @@ const TICKET_INCLUDE = {
     },
     primaryOwner: { select: { id: true, name: true } },
     serviceCenter: { select: { name: true } },
-    ticketStatus: { select: { label: true, color: true, actionLabel: true, notifyRoles: true } },
-    ticketSubStatus: { select: { id: true, label: true, color: true, group: true, actionLabel: true, notifyRoles: true } },
+    ticketStatus: { select: { label: true, color: true, actionLabel: true } },
+    ticketSubStatus: { select: { id: true, label: true, color: true, workId: true, actionLabel: true } },
     participants: {
         where: { removedAt: null },
         select: { userId: true, user: { select: { id: true, name: true } } },
@@ -88,8 +89,8 @@ function toCard(t: RawTicket): TicketCardData {
             label: t.ticketSubStatus.label,
             color: t.ticketSubStatus.color,
             actionLabel: t.ticketSubStatus.actionLabel,
-            notifyRoles: t.ticketSubStatus.notifyRoles,
         } : null,
+        subStatusWorkId: t.ticketSubStatus?.workId ?? null,
         activeParticipants: t.participants,
     };
 }
@@ -120,17 +121,15 @@ export default async function AssignmentsPage({
 
     const sessionUser = session?.user as {
         id?: string;
-        role?: string;
-        roles?: string[];
         permissions?: string[];
     } | undefined;
 
     const userId = Number(sessionUser?.id ?? "0");
-    const userRoles = sessionUser?.roles ?? (sessionUser?.role ? [sessionUser.role] : []);
     const permissions: string[] = sessionUser?.permissions ?? [];
+    const isAdminUser = permissions.includes(PERMISSIONS.ADMIN_BYPASS);
 
-    const canViewTeam = permissions.includes(PERMISSIONS.ASSIGNMENTS_VIEW_TEAM) || permissions.includes(PERMISSIONS.ADMIN_BYPASS);
-    const canViewOrg = permissions.includes(PERMISSIONS.ASSIGNMENTS_VIEW_ORG_LEGACY) || permissions.includes(PERMISSIONS.ADMIN_BYPASS);
+    const canViewTeam = permissions.includes(PERMISSIONS.ASSIGNMENTS_VIEW_TEAM) || isAdminUser;
+    const canViewOrg = permissions.includes(PERMISSIONS.ASSIGNMENTS_VIEW_ORG_LEGACY) || isAdminUser;
 
     const scope: "me" | "team" | "org" =
         rawScope === "team" && canViewTeam ? "team" :
@@ -140,7 +139,7 @@ export default async function AssignmentsPage({
     if (rawScope === "org" && !canViewOrg) redirect("/office/core/assignments?scope=me");
 
     // ── Fetch ─────────────────────────────────────────────────────────────────
-    const [raw, groups] = await Promise.all([
+    const [raw, works] = await Promise.all([
         scope === "me"
             ? prisma.ticket.findMany({
                 where: {
@@ -158,52 +157,42 @@ export default async function AssignmentsPage({
                 orderBy: { updatedAt: "asc" },
                 include: TICKET_INCLUDE,
             }),
-        prisma.subStatusGroup.findMany({ orderBy: { order: "asc" } }),
+        prisma.work.findMany({ orderBy: { order: "asc" } }),
     ]);
 
     const cards = raw.map(toCard);
 
-    // ── Categorise ─────────────────────────────────────────────────────────────
-    let myOwned: TicketCardData[] = [];
-    let mySecond: TicketCardData[] = [];
-    let callQueue: TicketCardData[] = [];
-    let despQueue: TicketCardData[] = [];
-    let unassigned: TicketCardData[] = [];
-    let general: TicketCardData[] = [];
+    // Works the user can act on (team view shows only these; org shows all).
+    const visibleWorks = scope === "team"
+        ? works.filter((w) => !w.permissionId || permissions.includes(w.permissionId) || isAdminUser)
+        : works;
+    const visibleWorkIds = new Set(visibleWorks.map((w) => w.id));
 
-    if (scope === "me") {
-        myOwned = cards.filter(t => t.primaryOwner?.id === userId);
-        mySecond = cards.filter(t => t.primaryOwner?.id !== userId);
-    } else if (scope === "team") {
-        const myTeamTickets = cards.filter((_, idx) => {
-            const t = raw[idx];
-            return t.ticketSubStatus?.notifyRoles?.some(r => userRoles.includes(r)) ||
-                t.ticketStatus?.notifyRoles?.some(r => userRoles.includes(r));
-        });
+    // ── Categorise (team / org) ─────────────────────────────────────────────────
+    // team is scoped to tickets in works you can act on (plus untriaged ones with
+    // no sub-status); org sees everything.
+    const inScope = scope === "team"
+        ? cards.filter((t) => t.subStatusWorkId == null || visibleWorkIds.has(t.subStatusWorkId))
+        : cards;
 
-        callQueue = myTeamTickets.filter(t => t.ticketSubStatus?.notifyRoles?.includes("R3"));
-        despQueue = myTeamTickets.filter(t => t.ticketSubStatus?.notifyRoles?.includes("R4") && !callQueue.includes(t));
-        unassigned = myTeamTickets.filter(t => !t.primaryOwner && !callQueue.includes(t) && !despQueue.includes(t));
-        general = myTeamTickets.filter(t => !callQueue.includes(t) && !despQueue.includes(t) && !unassigned.includes(t));
-    } else {
-        unassigned = cards.filter(t => !t.primaryOwner);
-        callQueue = cards.filter(t => t.ticketSubStatus?.notifyRoles?.includes("R3") && !unassigned.includes(t));
-        despQueue = cards.filter(t => t.ticketSubStatus?.notifyRoles?.includes("R4") && !unassigned.includes(t) && !callQueue.includes(t));
-        general = cards.filter(t => !unassigned.includes(t) && !callQueue.includes(t) && !despQueue.includes(t));
-    }
+    const unassigned = inScope.filter((t) => !t.primaryOwner);
+    const ownedInScope = inScope.filter((t) => t.primaryOwner);
+    const noWork = ownedInScope.filter((t) => !t.subStatusWorkId);
+    const byWork = (workId: string) => ownedInScope.filter((t) => t.subStatusWorkId === workId);
+
+    // ── me scope ────────────────────────────────────────────────────────────────
+    const myOwned = scope === "me" ? cards.filter((t) => t.primaryOwner?.id === userId) : [];
+    const mySecond = scope === "me" ? cards.filter((t) => t.primaryOwner?.id !== userId) : [];
 
     const total = cards.length;
-    const groupedSubStatusCounts = Object.fromEntries(
-        groups.map(({ id }) => [
-            id,
-            raw.filter((ticket) => ticket.ticketSubStatus?.group === id).length,
-        ]),
+    const workCounts = Object.fromEntries(
+        works.map((w) => [w.id, cards.filter((t) => t.subStatusWorkId === w.id).length]),
     );
 
     // ── Tabs ───────────────────────────────────────────────────────────────────
     const TABS = [
         { id: "me", label: "Assigned to Me", desc: "Your primary & secondary assignments" },
-        ...(canViewTeam ? [{ id: "team", label: "My Team", desc: "All tickets for your role" }] : []),
+        ...(canViewTeam ? [{ id: "team", label: "My Works", desc: "Tickets in works you can do" }] : []),
         ...(canViewOrg ? [{ id: "org", label: "All Organisation", desc: "Every active ticket" }] : []),
     ] as const;
 
@@ -257,10 +246,12 @@ export default async function AssignmentsPage({
                 <div className="mb-6 rounded-lg border border-border bg-card p-4">
                     <div className="flex items-center gap-2 text-foreground">
                         <Users size={16} className="text-primary" />
-                        <span className="text-sm font-medium">Team view — {userRoles.join(", ")}</span>
+                        <span className="text-sm font-medium">
+                            Your works — {visibleWorks.map((w) => w.label).join(", ") || "none"}
+                        </span>
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">
-                        All active tickets routed to your role, whether assigned to someone or not.
+                        Active tickets grouped by the work you have permission to do.
                     </p>
                 </div>
             )}
@@ -270,21 +261,21 @@ export default async function AssignmentsPage({
                         <AlertCircle size={16} className="text-primary" />
                         <span className="text-sm font-medium">Organisation view</span>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1">All active tickets across every role.</p>
+                    <p className="text-xs text-muted-foreground mt-1">All active tickets across every work.</p>
                 </div>
             )}
 
             {/* Stats */}
             <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-4 mb-6">
                 <StatCard label="Total" value={total} icon={<AlertCircle size={20} />} textColor="text-muted-foreground" />
-                {groups.map(({ id, label }) => {
-                    const meta = GROUP_CARD_META[id];
+                {works.map((w) => {
+                    const meta = WORK_CARD_META[w.id];
                     if (!meta) return null;
                     return (
                         <StatCard
-                            key={id}
-                            label={label}
-                            value={groupedSubStatusCounts[id] ?? 0}
+                            key={w.id}
+                            label={w.label}
+                            value={workCounts[w.id] ?? 0}
                             icon={meta.icon}
                             textColor={meta.textColor}
                         />
@@ -292,7 +283,7 @@ export default async function AssignmentsPage({
                 })}
             </div>
 
-            {/* Sections */}
+            {/* Sections — me scope */}
             {scope === "me" && (
                 <>
                     <TicketSection
@@ -316,7 +307,8 @@ export default async function AssignmentsPage({
                 </>
             )}
 
-            {scope === "team" && (
+            {/* Sections — team / org scopes: Unassigned, then one section per Work */}
+            {(scope === "team" || scope === "org") && (
                 <>
                     <TicketSection
                         title="Unassigned"
@@ -327,68 +319,24 @@ export default async function AssignmentsPage({
                         icon={<UserCheck size={16} className="text-amber-500" />}
                         currentUserId={userId}
                     />
+                    {visibleWorks.map((w) => {
+                        const meta = WORK_CARD_META[w.id];
+                        return (
+                            <TicketSection
+                                key={w.id}
+                                title={w.label}
+                                tickets={byWork(w.id)}
+                                type="status"
+                                color={meta?.textColor ?? "text-foreground"}
+                                bgColor="bg-muted"
+                                icon={meta?.icon ?? <CheckCircle size={16} className="text-muted-foreground" />}
+                                currentUserId={userId}
+                            />
+                        );
+                    })}
                     <TicketSection
-                        title="Call Queue"
-                        tickets={callQueue}
-                        type="call"
-                        color="text-red-700"
-                        bgColor="bg-red-50"
-                        icon={<Phone size={16} className="text-red-500" />}
-                        currentUserId={userId}
-                    />
-                    <TicketSection
-                        title="Despatch Queue"
-                        tickets={despQueue}
-                        type="despatch"
-                        color="text-orange-700"
-                        bgColor="bg-orange-50"
-                        icon={<Package size={16} className="text-orange-500" />}
-                        currentUserId={userId}
-                    />
-                    <TicketSection
-                        title="Active Tickets"
-                        tickets={general}
-                        type="status"
-                        color="text-foreground"
-                        bgColor="bg-muted"
-                        icon={<CheckCircle size={16} className="text-muted-foreground" />}
-                        currentUserId={userId}
-                    />
-                </>
-            )}
-
-            {scope === "org" && (
-                <>
-                    <TicketSection
-                        title="Unassigned"
-                        tickets={unassigned}
-                        type="unassigned"
-                        color="text-blue-700"
-                        bgColor="bg-blue-50"
-                        icon={<UserCheck size={16} className="text-blue-500" />}
-                        currentUserId={userId}
-                    />
-                    <TicketSection
-                        title="Call Queue"
-                        tickets={callQueue}
-                        type="call"
-                        color="text-red-700"
-                        bgColor="bg-red-50"
-                        icon={<Phone size={16} className="text-red-500" />}
-                        currentUserId={userId}
-                    />
-                    <TicketSection
-                        title="Despatch Queue"
-                        tickets={despQueue}
-                        type="despatch"
-                        color="text-orange-700"
-                        bgColor="bg-orange-50"
-                        icon={<Package size={16} className="text-orange-500" />}
-                        currentUserId={userId}
-                    />
-                    <TicketSection
-                        title="All Active Tickets"
-                        tickets={general}
+                        title="No sub-status yet"
+                        tickets={noWork}
                         type="status"
                         color="text-foreground"
                         bgColor="bg-muted"

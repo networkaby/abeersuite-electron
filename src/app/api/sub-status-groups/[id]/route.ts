@@ -24,7 +24,7 @@ export async function PATCH(
         const { data, error } = await validateRequest(req, patchSchema);
         if (error) return error;
         const body = data;
-        const updated = await prisma.subStatusGroup.update({
+        const updated = await prisma.work.update({
             where: { id },
             data: pickDefined({
                 label: body.label,
@@ -46,14 +46,14 @@ export async function DELETE(
     if (response) return response;
     try {
         const { id } = await params;
-        const inUse = await prisma.ticketSubStatus.count({ where: { groupId: id } });
+        const inUse = await prisma.ticketSubStatus.count({ where: { workId: id } });
         if (inUse > 0) {
             return NextResponse.json(
                 { error: `Cannot delete — ${inUse} sub-status(es) are assigned to this group.` },
                 { status: 409 }
             );
         }
-        await prisma.subStatusGroup.delete({ where: { id } });
+        await prisma.work.delete({ where: { id } });
         return NextResponse.json({ ok: true });
     } catch (e) {
         return handleApiError(e, "Failed to delete group");
