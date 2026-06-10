@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Plus, Trash2, Save, ArrowUpDown, GitMerge, Users } from "lucide-react";
+import { Plus, Trash2, Save, ArrowUpDown, GitMerge, Briefcase, Lock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
@@ -42,6 +42,14 @@ interface Pipeline {
     color: string;
 }
 
+interface Work {
+    id: string;
+    label: string;
+    color: string;
+    order: number;
+    permissionId: string | null;
+}
+
 interface TicketStatus {
     id: string;
     label: string;
@@ -49,8 +57,7 @@ interface TicketStatus {
     order: number;
     isTerminal: boolean;
     isEntryPoint: boolean;
-    allowedRoles?: string[];
-    notifyRoles?: string[];
+    workId?: string | null;
     actionLabel: string | null;
     warrantyScope: string;
     pipelineId: string | null;
@@ -62,7 +69,7 @@ export default function StatusesPage() {
     const [pipelines, setPipelines] = useState<Pipeline[]>([]);
     const [activePipelineId, setActivePipelineId] = useState<string>("P1");
     const [statuses, setStatuses] = useState<TicketStatus[]>([]);
-    const [roles, setRoles] = useState<{ id: string; label: string }[]>([]);
+    const [works, setWorks] = useState<Work[]>([]);
     const [loading, setLoading] = useState(true);
 
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -74,28 +81,29 @@ export default function StatusesPage() {
     const [selectedToIds, setSelectedToIds] = useState<string[]>([]);
     const [savingTransitions, setSavingTransitions] = useState(false);
 
-    const [rolesModalId, setRolesModalId] = useState<string | null>(null);
-    const [rolesForm, setRolesForm] = useState<{
-        allowedRoles: string[];
-        notifyRoles: string[];
+    const [workModalId, setWorkModalId] = useState<string | null>(null);
+    const [workForm, setWorkForm] = useState<{
+        workId: string;
         actionLabel: string;
         warrantyScope: string;
-    }>({ allowedRoles: [], notifyRoles: [], actionLabel: "", warrantyScope: "any" });
-    const [savingRoles, setSavingRoles] = useState(false);
+    }>({ workId: "", actionLabel: "", warrantyScope: "any" });
+    const [savingWork, setSavingWork] = useState(false);
 
     const [addingNew, setAddingNew] = useState(false);
     const [newStatus, setNewStatus] = useState({ label: "", color: "bg-gray-100 text-gray-600", isTerminal: false });
 
+    const worksById = Object.fromEntries(works.map((w) => [w.id, w]));
+
     const fetchData = async (pipelineId: string) => {
         setLoading(true);
         try {
-            const [statusesResponse, rolesResponse, pipelinesResponse] = await Promise.all([
+            const [statusesResponse, worksResponse, pipelinesResponse] = await Promise.all([
                 axios.get(`/api/ticket-statuses?pipelineId=${pipelineId}`),
-                axios.get("/api/roles"),
+                axios.get("/api/works"),
                 axios.get("/api/pipelines"),
             ]);
             setStatuses(statusesResponse.data);
-            setRoles(rolesResponse.data);
+            setWorks(worksResponse.data);
             setPipelines(pipelinesResponse.data);
         } catch {
             toast.error("Failed to load data");
@@ -174,42 +182,31 @@ export default function StatusesPage() {
         }
     };
 
-    const openRoles = (status: TicketStatus) => {
-        setRolesModalId(status.id);
-        setRolesForm({
-            allowedRoles: status.allowedRoles ?? [],
-            notifyRoles: status.notifyRoles ?? [],
+    const openWork = (status: TicketStatus) => {
+        setWorkModalId(status.id);
+        setWorkForm({
+            workId: status.workId ?? "",
             actionLabel: status.actionLabel ?? "",
             warrantyScope: status.warrantyScope ?? "any",
         });
     };
 
-    const toggleRole = (field: "allowedRoles" | "notifyRoles", id: string) => {
-        setRolesForm((prev) => ({
-            ...prev,
-            [field]: prev[field].includes(id)
-                ? prev[field].filter((roleId) => roleId !== id)
-                : [...prev[field], id],
-        }));
-    };
-
-    const saveRoles = async () => {
-        if (!rolesModalId) return;
-        setSavingRoles(true);
+    const saveWork = async () => {
+        if (!workModalId) return;
+        setSavingWork(true);
         try {
-            await axios.patch(`/api/ticket-statuses/${rolesModalId}`, {
-                allowedRoles: rolesForm.allowedRoles,
-                notifyRoles: rolesForm.notifyRoles,
-                actionLabel: rolesForm.actionLabel || null,
-                warrantyScope: rolesForm.warrantyScope,
+            await axios.patch(`/api/ticket-statuses/${workModalId}`, {
+                workId: workForm.workId || null,
+                actionLabel: workForm.actionLabel || null,
+                warrantyScope: workForm.warrantyScope,
             });
-            toast.success("Role settings saved");
-            setRolesModalId(null);
+            toast.success("Work settings saved");
+            setWorkModalId(null);
             await fetchData(activePipelineId);
         } catch {
-            toast.error("Failed to save role settings");
+            toast.error("Failed to save work settings");
         } finally {
-            setSavingRoles(false);
+            setSavingWork(false);
         }
     };
 
@@ -237,8 +234,9 @@ export default function StatusesPage() {
     };
 
     const transitionStatus = transitionModalId ? statuses.find((status) => status.id === transitionModalId) : null;
-    const rolesStatus = rolesModalId ? statuses.find((status) => status.id === rolesModalId) : null;
+    const workStatus = workModalId ? statuses.find((status) => status.id === workModalId) : null;
     const activePipeline = pipelines.find((pipeline) => pipeline.id === activePipelineId);
+    const selectedWork = workForm.workId ? worksById[workForm.workId] : undefined;
 
     return (
         <ScrollArea className="h-full" type="always">
@@ -247,7 +245,7 @@ export default function StatusesPage() {
                 <div>
                     <h1 className="text-3xl font-bold">Ticket Statuses</h1>
                     <p className="mt-1 text-sm text-muted-foreground">
-                        Manage status labels, colors, transitions, and role permissions per pipeline.
+                        Manage status labels, colors, transitions, and the work each stage represents.
                     </p>
                 </div>
                 <Button type="button" onClick={() => setAddingNew(true)}>
@@ -295,8 +293,7 @@ export default function StatusesPage() {
                                         <span className="flex items-center gap-1"><ArrowUpDown size={12} /> Order</span>
                                     </TableHead>
                                     <TableHead>Flags</TableHead>
-                                    <TableHead>Who can set</TableHead>
-                                    <TableHead>Notifies</TableHead>
+                                    <TableHead>Work</TableHead>
                                     <TableHead>Transitions To</TableHead>
                                     <TableHead>Tickets</TableHead>
                                     <TableHead>Actions</TableHead>
@@ -305,7 +302,7 @@ export default function StatusesPage() {
                             <TableBody>
                                 {statuses.length === 0 && !addingNew && (
                                     <TableRow>
-                                        <TableCell colSpan={10} className="py-10 text-center text-sm text-muted-foreground">
+                                        <TableCell colSpan={9} className="py-10 text-center text-sm text-muted-foreground">
                                             No statuses in this pipeline yet. Add the first one.
                                         </TableCell>
                                     </TableRow>
@@ -371,7 +368,7 @@ export default function StatusesPage() {
                                                         </label>
                                                     </div>
                                                 </TableCell>
-                                                <TableCell colSpan={2} className="text-xs text-muted-foreground">—</TableCell>
+                                                <TableCell className="text-xs text-muted-foreground">—</TableCell>
                                                 <TableCell className="text-xs text-muted-foreground">—</TableCell>
                                                 <TableCell>{status._count.tickets}</TableCell>
                                                 <TableCell>
@@ -402,30 +399,17 @@ export default function StatusesPage() {
                                                     </div>
                                                 </TableCell>
                                                 <TableCell>
-                                                    {(status.allowedRoles ?? []).length === 0 ? (
-                                                        <span className="text-xs text-muted-foreground">Anyone</span>
-                                                    ) : (
-                                                        <div className="flex flex-wrap gap-1">
-                                                            {(status.allowedRoles ?? []).map((roleId) => (
-                                                                <Badge key={roleId} variant="outline">
-                                                                    {roles.find((role) => role.id === roleId)?.label ?? roleId}
-                                                                </Badge>
-                                                            ))}
-                                                        </div>
-                                                    )}
-                                                </TableCell>
-                                                <TableCell>
-                                                    {(status.notifyRoles ?? []).length === 0 ? (
-                                                        <span className="text-xs text-muted-foreground">None</span>
-                                                    ) : (
-                                                        <div className="flex flex-wrap gap-1">
-                                                            {(status.notifyRoles ?? []).map((roleId) => (
-                                                                <Badge key={roleId} className="bg-orange-100 text-orange-700">
-                                                                    {roles.find((role) => role.id === roleId)?.label ?? roleId}
-                                                                </Badge>
-                                                            ))}
-                                                        </div>
-                                                    )}
+                                                    {(() => {
+                                                        const work = status.workId ? worksById[status.workId] : undefined;
+                                                        return work ? (
+                                                            <Badge className={work.color}>
+                                                                {work.permissionId && <Lock size={10} className="mr-1" />}
+                                                                {work.label}
+                                                            </Badge>
+                                                        ) : (
+                                                            <span className="text-xs text-muted-foreground">None</span>
+                                                        );
+                                                    })()}
                                                 </TableCell>
                                                 <TableCell>
                                                     {status.fromTransitions.length === 0 ? (
@@ -446,8 +430,8 @@ export default function StatusesPage() {
                                                         <Button type="button" size="sm" variant="outline" onClick={() => startEdit(status)}>
                                                             Edit
                                                         </Button>
-                                                        <Button type="button" size="sm" variant="outline" onClick={() => openRoles(status)}>
-                                                            <Users size={12} /> Roles
+                                                        <Button type="button" size="sm" variant="outline" onClick={() => openWork(status)}>
+                                                            <Briefcase size={12} /> Work
                                                         </Button>
                                                         <Button type="button" size="sm" variant="outline" onClick={() => openTransitions(status)}>
                                                             <GitMerge size={12} /> Transitions
@@ -510,8 +494,8 @@ export default function StatusesPage() {
                                                 Terminal
                                             </label>
                                         </TableCell>
-                                        <TableCell colSpan={3} className="text-xs text-muted-foreground">
-                                            Set roles after creation
+                                        <TableCell colSpan={2} className="text-xs text-muted-foreground">
+                                            Set work after creation
                                         </TableCell>
                                         <TableCell>0</TableCell>
                                         <TableCell>
@@ -577,53 +561,41 @@ export default function StatusesPage() {
                 </DialogContent>
             </Dialog>
 
-            <Dialog open={!!rolesModalId && !!rolesStatus} onOpenChange={(isOpen) => { if (!isOpen) setRolesModalId(null); }}>
+            <Dialog open={!!workModalId && !!workStatus} onOpenChange={(isOpen) => { if (!isOpen) setWorkModalId(null); }}>
                 <DialogContent className="sm:max-w-xl">
                     <DialogHeader>
-                        <DialogTitle>Role Settings</DialogTitle>
+                        <DialogTitle>Work &amp; access</DialogTitle>
                         <DialogDescription>
-                            {rolesStatus ? `Configure access and notifications for ${rolesStatus.label}.` : ""}
+                            {workStatus ? `Set the work and action for ${workStatus.label}.` : ""}
                         </DialogDescription>
                     </DialogHeader>
 
                     <div className="space-y-5">
                         <div className="space-y-2">
-                            <Label>Who can move a ticket to this status?</Label>
-                            <p className="text-xs text-muted-foreground">Leave all unchecked to allow any role. Admin always bypasses this.</p>
-                            <div className="grid grid-cols-2 gap-2">
-                                {roles.map((role) => (
-                                    <label key={role.id} className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm">
-                                        <Checkbox
-                                            checked={rolesForm.allowedRoles.includes(role.id)}
-                                            onCheckedChange={() => toggleRole("allowedRoles", role.id)}
-                                        />
-                                        {role.label}
-                                    </label>
-                                ))}
-                            </div>
-                        </div>
-
-                        <div className="space-y-2">
-                            <Label>Which roles see this as an action item?</Label>
-                            <p className="text-xs text-muted-foreground">These roles will see tickets in this status on their dashboard queue.</p>
-                            <div className="grid grid-cols-2 gap-2">
-                                {roles.map((role) => (
-                                    <label key={role.id} className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm">
-                                        <Checkbox
-                                            checked={rolesForm.notifyRoles.includes(role.id)}
-                                            onCheckedChange={() => toggleRole("notifyRoles", role.id)}
-                                        />
-                                        {role.label}
-                                    </label>
-                                ))}
-                            </div>
+                            <Label>Work</Label>
+                            <Select value={workForm.workId || "__none__"} onValueChange={(value) => setWorkForm((prev) => ({ ...prev, workId: value === "__none__" ? "" : value }))}>
+                                <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="Select work" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="__none__">— none —</SelectItem>
+                                    {works.map((w) => (
+                                        <SelectItem key={w.id} value={w.id}>{w.label}{w.permissionId ? " (gated)" : ""}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <p className="text-xs text-muted-foreground">
+                                {selectedWork?.permissionId
+                                    ? `Only staff with the “${selectedWork.label}” work permission can move a ticket to this status. Admin always bypasses.`
+                                    : "Ungated — any staff can move a ticket to this status."}
+                            </p>
                         </div>
 
                         <div className="space-y-2">
                             <Label>Warranty scope</Label>
                             <Select
-                                value={rolesForm.warrantyScope}
-                                onValueChange={(value) => setRolesForm((prev) => ({ ...prev, warrantyScope: value }))}
+                                value={workForm.warrantyScope}
+                                onValueChange={(value) => setWorkForm((prev) => ({ ...prev, warrantyScope: value }))}
                             >
                                 <SelectTrigger className="w-full">
                                     <SelectValue />
@@ -639,19 +611,19 @@ export default function StatusesPage() {
                         <div className="space-y-2">
                             <Label>Action label</Label>
                             <Input
-                                value={rolesForm.actionLabel}
-                                onChange={(e) => setRolesForm((prev) => ({ ...prev, actionLabel: e.target.value }))}
+                                value={workForm.actionLabel}
+                                onChange={(e) => setWorkForm((prev) => ({ ...prev, actionLabel: e.target.value }))}
                                 placeholder="e.g. New ticket received — assign a technician"
                             />
                         </div>
                     </div>
 
                     <DialogFooter>
-                        <Button type="button" variant="outline" onClick={() => setRolesModalId(null)}>
+                        <Button type="button" variant="outline" onClick={() => setWorkModalId(null)}>
                             Cancel
                         </Button>
-                        <Button type="button" onClick={saveRoles} disabled={savingRoles}>
-                            {savingRoles ? "Saving…" : "Save Role Settings"}
+                        <Button type="button" onClick={saveWork} disabled={savingWork}>
+                            {savingWork ? "Saving…" : "Save"}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

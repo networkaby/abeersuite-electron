@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { ChevronRight, GitMerge, Pencil, Plus, Trash2 } from "lucide-react";
+import { ChevronRight, GitMerge, Lock, Pencil, Plus, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -45,38 +45,34 @@ interface SubStatus {
     id: string;
     label: string;
     color: string;
-    group?: string;
-    groupId?: string | null;
+    workId?: string | null;
     order: number;
     applicableStatusIds: string[];
-    allowedRoles?: string[];
-    notifyRoles?: string[];
     triggerMap: Record<string, string>;
     actionLabel: string | null;
-    handoffRole?: string | null;
+    warrantyScope?: string;
     autoRevertOnClear: boolean;
     isEntryPoint: boolean;
     fromTransitions: { to: { id: string; label: string; color: string } }[];
 }
 
-interface SubStatusGroup {
+interface Work {
     id: string;
     label: string;
+    color: string;
     order: number;
+    permissionId: string | null;
 }
 
 type FormValues = {
     label: string;
     color: string;
-    group: string;
+    workId: string;
     order: string;
     applicableStatusIds: string[];
-    allowedRoles: string[];
-    notifyRoles: string[];
     triggerMap: Record<string, string>;
     actionLabel: string;
     warrantyScope: string;
-    handoffRole: string;
     autoRevertOnClear: boolean;
     isEntryPoint: boolean;
 };
@@ -84,15 +80,12 @@ type FormValues = {
 const BLANK_FORM: FormValues = {
     label: "",
     color: "bg-gray-100 text-gray-600",
-    group: "",
+    workId: "",
     order: "",
     applicableStatusIds: [],
-    allowedRoles: [],
-    notifyRoles: [],
     triggerMap: {},
     actionLabel: "",
     warrantyScope: "any",
-    handoffRole: "",
     autoRevertOnClear: true,
     isEntryPoint: true,
 };
@@ -106,8 +99,7 @@ function SubStatusFormModal({
     onClose,
     saving,
     statuses,
-    roles,
-    groups,
+    works,
 }: {
     open: boolean;
     title: string;
@@ -117,15 +109,14 @@ function SubStatusFormModal({
     onClose: () => void;
     saving: boolean;
     statuses: StatusItem[];
-    roles: { id: string; label: string }[];
-    groups: SubStatusGroup[];
+    works: Work[];
 }) {
-    const toggle = (field: "applicableStatusIds" | "allowedRoles" | "notifyRoles", value: string) =>
+    const toggleApplicable = (value: string) =>
         setForm({
             ...form,
-            [field]: form[field].includes(value)
-                ? form[field].filter((item) => item !== value)
-                : [...form[field], value],
+            applicableStatusIds: form.applicableStatusIds.includes(value)
+                ? form.applicableStatusIds.filter((item) => item !== value)
+                : [...form.applicableStatusIds, value],
         });
 
     const setTrigger = (statusId: string, targetId: string) => {
@@ -135,13 +126,15 @@ function SubStatusFormModal({
         setForm({ ...form, triggerMap: next });
     };
 
+    const selectedWork = works.find((w) => w.id === form.workId);
+
     return (
         <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose(); }}>
             <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
                 <DialogHeader>
                     <DialogTitle>{title}</DialogTitle>
                     <DialogDescription>
-                        Configure where this sub-status appears, who can use it, and how it hands off work.
+                        Configure where this sub-status appears and which work it represents.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -155,18 +148,39 @@ function SubStatusFormModal({
                         />
                     </div>
 
-                    <div className="space-y-2">
-                        <Label>Warranty scope</Label>
-                        <Select value={form.warrantyScope} onValueChange={(value) => setForm({ ...form, warrantyScope: value })}>
-                            <SelectTrigger className="w-full">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {WARRANTY_SCOPE_OPTIONS.map((o) => (
-                                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label>Work</Label>
+                            <Select value={form.workId || "__none__"} onValueChange={(value) => setForm({ ...form, workId: value === "__none__" ? "" : value })}>
+                                <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="Select work" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="__none__">— none —</SelectItem>
+                                    {works.map((w) => (
+                                        <SelectItem key={w.id} value={w.id}>{w.label}{w.permissionId ? " (gated)" : ""}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <p className="text-xs text-muted-foreground">
+                                {selectedWork?.permissionId
+                                    ? `Only staff with the “${selectedWork.label}” work permission can set this.`
+                                    : "Ungated work — any staff can set this sub-status."}
+                            </p>
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Warranty scope</Label>
+                            <Select value={form.warrantyScope} onValueChange={(value) => setForm({ ...form, warrantyScope: value })}>
+                                <SelectTrigger className="w-full">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {WARRANTY_SCOPE_OPTIONS.map((o) => (
+                                        <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
                     </div>
 
                     <div className="space-y-2">
@@ -177,27 +191,24 @@ function SubStatusFormModal({
                             placeholder="e.g. Call customer — quote ready for approval"
                         />
                         <p className="text-xs text-muted-foreground">
-                            Shown on role dashboards as the task description.
+                            Shown on work dashboards as the task description.
                         </p>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                            <Label>Handoff role</Label>
-                            <Select value={form.handoffRole || "__none__"} onValueChange={(value) => setForm({ ...form, handoffRole: value === "__none__" ? "" : value })}>
+                            <Label>Color</Label>
+                            <Select value={form.color} onValueChange={(value) => setForm({ ...form, color: value })}>
                                 <SelectTrigger className="w-full">
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="__none__">— none —</SelectItem>
-                                    {roles.map((role) => (
-                                        <SelectItem key={role.id} value={role.id}>{role.label}</SelectItem>
+                                    {COLOR_OPTIONS.map((color) => (
+                                        <SelectItem key={color.value} value={color.value}>{color.label}</SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
-                            <p className="text-xs text-muted-foreground">
-                                Auto-assigns a secondary owner with this role when the sub-status is set.
-                            </p>
+                            <Badge className={form.color}>Preview</Badge>
                         </div>
                         <div className="space-y-3 pt-6">
                             <label className="flex items-center gap-2 text-sm">
@@ -217,37 +228,6 @@ function SubStatusFormModal({
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <Label>Color</Label>
-                            <Select value={form.color} onValueChange={(value) => setForm({ ...form, color: value })}>
-                                <SelectTrigger className="w-full">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {COLOR_OPTIONS.map((color) => (
-                                        <SelectItem key={color.value} value={color.value}>{color.label}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                            <Badge className={form.color}>Preview</Badge>
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Group</Label>
-                            <Select value={form.group || "__none__"} onValueChange={(value) => setForm({ ...form, group: value === "__none__" ? "" : value })}>
-                                <SelectTrigger className="w-full">
-                                    <SelectValue placeholder="Select group" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="__none__">— none —</SelectItem>
-                                    {groups.map((g) => (
-                                        <SelectItem key={g.id} value={g.id}>{g.label}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    </div>
-
                     <div className="space-y-3">
                         <Label>Applies to (main status)</Label>
                         {statuses.length === 0 ? (
@@ -260,7 +240,7 @@ function SubStatusFormModal({
                                             <label className="flex items-center gap-2 text-sm">
                                                 <Checkbox
                                                     checked={form.applicableStatusIds.includes(status.id)}
-                                                    onCheckedChange={() => toggle("applicableStatusIds", status.id)}
+                                                    onCheckedChange={() => toggleApplicable(status.id)}
                                                 />
                                                 <Badge className={status.color}>{status.label}</Badge>
                                             </label>
@@ -288,37 +268,6 @@ function SubStatusFormModal({
                                 ))}
                             </div>
                         )}
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <Label>Who can set it</Label>
-                            <div className="space-y-2">
-                                {roles.map((role) => (
-                                    <label key={role.id} className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm">
-                                        <Checkbox
-                                            checked={form.allowedRoles.includes(role.id)}
-                                            onCheckedChange={() => toggle("allowedRoles", role.id)}
-                                        />
-                                        {role.label}
-                                    </label>
-                                ))}
-                            </div>
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Notifies</Label>
-                            <div className="space-y-2">
-                                {roles.map((role) => (
-                                    <label key={role.id} className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm">
-                                        <Checkbox
-                                            checked={form.notifyRoles.includes(role.id)}
-                                            onCheckedChange={() => toggle("notifyRoles", role.id)}
-                                        />
-                                        {role.label}
-                                    </label>
-                                ))}
-                            </div>
-                        </div>
                     </div>
 
                     <div className="space-y-2">
@@ -351,8 +300,7 @@ export default function SubStatusesPage() {
     const [activePipelineId, setActivePipelineId] = useState<string>("P1");
     const [statuses, setStatuses] = useState<StatusItem[]>([]);
     const [subStatuses, setSubStatuses] = useState<SubStatus[]>([]);
-    const [roles, setRoles] = useState<{ id: string; label: string }[]>([]);
-    const [groups, setGroups] = useState<SubStatusGroup[]>([]);
+    const [works, setWorks] = useState<Work[]>([]);
     const [loading, setLoading] = useState(true);
 
     const [showCreate, setShowCreate] = useState(false);
@@ -369,38 +317,40 @@ export default function SubStatusesPage() {
     const [selectedToIds, setSelectedToIds] = useState<string[]>([]);
     const [savingTransitions, setSavingTransitions] = useState(false);
 
-    // Group CRUD state
-    const [showGroupCreate, setShowGroupCreate] = useState(false);
-    const [groupCreateLabel, setGroupCreateLabel] = useState("");
-    const [groupCreateOrder, setGroupCreateOrder] = useState("");
-    const [savingGroup, setSavingGroup] = useState(false);
-    const [groupEditId, setGroupEditId] = useState<string | null>(null);
-    const [groupEditLabel, setGroupEditLabel] = useState("");
-    const [groupEditOrder, setGroupEditOrder] = useState("");
-    const [deletingGroupId, setDeletingGroupId] = useState<string | null>(null);
+    // Work CRUD state
+    const [showWorkCreate, setShowWorkCreate] = useState(false);
+    const [workCreateLabel, setWorkCreateLabel] = useState("");
+    const [workCreateColor, setWorkCreateColor] = useState("bg-gray-100 text-gray-600");
+    const [workCreateGated, setWorkCreateGated] = useState(false);
+    const [workCreateOrder, setWorkCreateOrder] = useState("");
+    const [savingWork, setSavingWork] = useState(false);
+    const [workEditId, setWorkEditId] = useState<string | null>(null);
+    const [workEditLabel, setWorkEditLabel] = useState("");
+    const [workEditColor, setWorkEditColor] = useState("bg-gray-100 text-gray-600");
+    const [workEditGated, setWorkEditGated] = useState(false);
+    const [workEditOrder, setWorkEditOrder] = useState("");
+    const [deletingWorkId, setDeletingWorkId] = useState<string | null>(null);
 
-    const groupLabelMap = Object.fromEntries(groups.map((g) => [g.id, g.label]));
+    const worksById = Object.fromEntries(works.map((w) => [w.id, w]));
 
-    const loadGroups = async () => {
-        const res = await axios.get("/api/sub-status-groups");
-        setGroups(res.data);
+    const loadWorks = async () => {
+        const res = await axios.get("/api/works");
+        setWorks(res.data);
     };
 
     const loadAll = async (pipelineId: string) => {
         setLoading(true);
         try {
-            const [statusResponse, subStatusResponse, roleResponse, pipelineResponse, groupResponse] = await Promise.all([
+            const [statusResponse, subStatusResponse, pipelineResponse, workResponse] = await Promise.all([
                 axios.get(`/api/ticket-statuses?pipelineId=${pipelineId}`),
                 axios.get(`/api/sub-statuses?pipelineId=${pipelineId}`),
-                axios.get("/api/roles"),
                 axios.get("/api/pipelines"),
-                axios.get("/api/sub-status-groups"),
+                axios.get("/api/works"),
             ]);
             setStatuses((statusResponse.data as StatusItem[]).sort((a, b) => a.order - b.order));
             setSubStatuses(subStatusResponse.data);
-            setRoles(roleResponse.data);
             setPipelines(pipelineResponse.data);
-            setGroups(groupResponse.data);
+            setWorks(workResponse.data);
         } catch {
             toast.error("Failed to load data");
         } finally {
@@ -410,17 +360,23 @@ export default function SubStatusesPage() {
 
     useEffect(() => { loadAll(activePipelineId); }, [activePipelineId]);
 
+    const subStatusPayload = (form: FormValues) => ({
+        label: form.label,
+        color: form.color,
+        workId: form.workId || null,
+        order: form.order ? Number(form.order) : undefined,
+        applicableStatusIds: form.applicableStatusIds,
+        triggerMap: form.triggerMap,
+        actionLabel: form.actionLabel || null,
+        warrantyScope: form.warrantyScope,
+        autoRevertOnClear: form.autoRevertOnClear,
+        isEntryPoint: form.isEntryPoint,
+    });
+
     const handleCreate = async () => {
         setCreating(true);
         try {
-            await axios.post("/api/sub-statuses", {
-                ...createForm,
-                order: createForm.order ? Number(createForm.order) : undefined,
-                handoffRole: createForm.handoffRole || null,
-                pipelineId: activePipelineId,
-                isEntryPoint: createForm.isEntryPoint,
-                groupId: createForm.group || null,
-            });
+            await axios.post("/api/sub-statuses", { ...subStatusPayload(createForm), pipelineId: activePipelineId });
             toast.success("Sub-status created");
             setShowCreate(false);
             setCreateForm(BLANK_FORM);
@@ -436,15 +392,12 @@ export default function SubStatusesPage() {
         setEditForm({
             label: subStatus.label,
             color: subStatus.color,
-            group: subStatus.groupId ?? subStatus.group ?? "",
+            workId: subStatus.workId ?? "",
             order: String(subStatus.order),
             applicableStatusIds: subStatus.applicableStatusIds,
-            allowedRoles: subStatus.allowedRoles ?? [],
-            notifyRoles: subStatus.notifyRoles ?? [],
             triggerMap: (subStatus.triggerMap ?? {}) as Record<string, string>,
             actionLabel: subStatus.actionLabel ?? "",
-            warrantyScope: (subStatus as SubStatus & { warrantyScope?: string }).warrantyScope ?? "any",
-            handoffRole: subStatus.handoffRole ?? "",
+            warrantyScope: subStatus.warrantyScope ?? "any",
             autoRevertOnClear: subStatus.autoRevertOnClear ?? true,
             isEntryPoint: subStatus.isEntryPoint ?? false,
         });
@@ -455,22 +408,7 @@ export default function SubStatusesPage() {
         if (!editId) return;
         setEditing(true);
         try {
-            await axios.patch(`/api/sub-statuses/${editId}`, {
-                label: editForm.label,
-                color: editForm.color,
-                group: editForm.group || null,
-                groupId: editForm.group || null,
-                order: editForm.order ? Number(editForm.order) : undefined,
-                applicableStatusIds: editForm.applicableStatusIds,
-                allowedRoles: editForm.allowedRoles,
-                notifyRoles: editForm.notifyRoles,
-                triggerMap: editForm.triggerMap,
-                actionLabel: editForm.actionLabel || null,
-                warrantyScope: editForm.warrantyScope,
-                handoffRole: editForm.handoffRole || null,
-                autoRevertOnClear: editForm.autoRevertOnClear,
-                isEntryPoint: editForm.isEntryPoint,
-            });
+            await axios.patch(`/api/sub-statuses/${editId}`, subStatusPayload(editForm));
             toast.success("Sub-status updated");
             setEditId(null);
             loadAll(activePipelineId);
@@ -495,62 +433,70 @@ export default function SubStatusesPage() {
         }
     };
 
-    const handleGroupCreate = async () => {
-        setSavingGroup(true);
+    const handleWorkCreate = async () => {
+        setSavingWork(true);
         try {
-            await axios.post("/api/sub-status-groups", {
-                label: groupCreateLabel,
-                order: groupCreateOrder ? Number(groupCreateOrder) : undefined,
+            await axios.post("/api/works", {
+                label: workCreateLabel,
+                color: workCreateColor,
+                gated: workCreateGated,
+                order: workCreateOrder ? Number(workCreateOrder) : undefined,
             });
-            toast.success("Group created");
-            setShowGroupCreate(false);
-            setGroupCreateLabel("");
-            setGroupCreateOrder("");
-            loadGroups();
+            toast.success("Work created");
+            setShowWorkCreate(false);
+            setWorkCreateLabel("");
+            setWorkCreateColor("bg-gray-100 text-gray-600");
+            setWorkCreateGated(false);
+            setWorkCreateOrder("");
+            loadWorks();
         } catch (err) {
-            const message = axios.isAxiosError(err) ? err.response?.data?.error : "Failed to create group";
-            toast.error(message ?? "Failed to create group");
+            const message = axios.isAxiosError(err) ? err.response?.data?.error : "Failed to create work";
+            toast.error(message ?? "Failed to create work");
         } finally {
-            setSavingGroup(false);
+            setSavingWork(false);
         }
     };
 
-    const openGroupEdit = (group: SubStatusGroup) => {
-        setGroupEditId(group.id);
-        setGroupEditLabel(group.label);
-        setGroupEditOrder(String(group.order));
+    const openWorkEdit = (work: Work) => {
+        setWorkEditId(work.id);
+        setWorkEditLabel(work.label);
+        setWorkEditColor(work.color);
+        setWorkEditGated(!!work.permissionId);
+        setWorkEditOrder(String(work.order));
     };
 
-    const handleGroupEdit = async () => {
-        if (!groupEditId) return;
-        setSavingGroup(true);
+    const handleWorkEdit = async () => {
+        if (!workEditId) return;
+        setSavingWork(true);
         try {
-            await axios.patch(`/api/sub-status-groups/${groupEditId}`, {
-                label: groupEditLabel,
-                order: groupEditOrder ? Number(groupEditOrder) : undefined,
+            await axios.patch(`/api/works/${workEditId}`, {
+                label: workEditLabel,
+                color: workEditColor,
+                gated: workEditGated,
+                order: workEditOrder ? Number(workEditOrder) : undefined,
             });
-            toast.success("Group updated");
-            setGroupEditId(null);
-            loadGroups();
+            toast.success("Work updated");
+            setWorkEditId(null);
+            loadWorks();
         } catch (err) {
-            const message = axios.isAxiosError(err) ? err.response?.data?.error : "Failed to update group";
-            toast.error(message ?? "Failed to update group");
+            const message = axios.isAxiosError(err) ? err.response?.data?.error : "Failed to update work";
+            toast.error(message ?? "Failed to update work");
         } finally {
-            setSavingGroup(false);
+            setSavingWork(false);
         }
     };
 
-    const handleGroupDelete = async (id: string) => {
-        setDeletingGroupId(id);
+    const handleWorkDelete = async (id: string) => {
+        setDeletingWorkId(id);
         try {
-            await axios.delete(`/api/sub-status-groups/${id}`);
-            toast.success("Group deleted");
-            loadGroups();
+            await axios.delete(`/api/works/${id}`);
+            toast.success("Work deleted");
+            loadWorks();
         } catch (err) {
-            const message = axios.isAxiosError(err) ? err.response?.data?.error : "Failed to delete group";
-            toast.error(message ?? "Failed to delete group");
+            const message = axios.isAxiosError(err) ? err.response?.data?.error : "Failed to delete work";
+            toast.error(message ?? "Failed to delete work");
         } finally {
-            setDeletingGroupId(null);
+            setDeletingWorkId(null);
         }
     };
 
@@ -587,7 +533,6 @@ export default function SubStatusesPage() {
         : [];
 
     const statusLabelMap = Object.fromEntries(statuses.map((status) => [status.id, status.label]));
-    const roleLabelMap = Object.fromEntries(roles.map((role) => [role.id, role.label]));
 
     const byParent = statuses.map((status) => ({
         status,
@@ -613,39 +558,42 @@ export default function SubStatusesPage() {
                 </Button>
             </div>
 
-            {/* Groups management */}
+            {/* Works management */}
             <Card>
                 <CardHeader className="border-b">
                     <div className="flex items-center justify-between">
                         <div>
-                            <CardTitle>Groups</CardTitle>
-                            <CardDescription>Categories that organise sub-statuses.</CardDescription>
+                            <CardTitle>Works</CardTitle>
+                            <CardDescription>The activity each sub-status represents. A gated work mints a permission you can grant from Roles.</CardDescription>
                         </div>
-                        <Button type="button" size="sm" onClick={() => setShowGroupCreate(true)}>
-                            <Plus size={14} /> Add Group
+                        <Button type="button" size="sm" onClick={() => setShowWorkCreate(true)}>
+                            <Plus size={14} /> Add Work
                         </Button>
                     </div>
                 </CardHeader>
                 <CardContent className="px-0 pt-0">
-                    {groups.length === 0 ? (
-                        <p className="px-6 py-4 text-sm text-muted-foreground">No groups yet.</p>
+                    {works.length === 0 ? (
+                        <p className="px-6 py-4 text-sm text-muted-foreground">No works yet.</p>
                     ) : (
-                        groups.map((group) => (
-                            <div key={group.id} className="flex items-center gap-3 border-b px-6 py-3 last:border-b-0">
-                                <div className="flex-1">
-                                    <span className="text-sm font-medium">{group.label}</span>
-                                    <span className="ml-2 text-xs text-muted-foreground">id: {group.id}</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <Button type="button" size="sm" variant="outline" onClick={() => openGroupEdit(group)}>
+                        works.map((work) => (
+                            <div key={work.id} className="flex items-center gap-3 border-b px-6 py-3 last:border-b-0">
+                                <Badge className={work.color}>{work.label}</Badge>
+                                <span className="text-xs text-muted-foreground">id: {work.id}</span>
+                                {work.permissionId && (
+                                    <Badge variant="outline" className="gap-1 text-amber-700">
+                                        <Lock size={11} /> Gated
+                                    </Badge>
+                                )}
+                                <div className="ml-auto flex items-center gap-2">
+                                    <Button type="button" size="sm" variant="outline" onClick={() => openWorkEdit(work)}>
                                         <Pencil size={13} /> Edit
                                     </Button>
                                     <Button
                                         type="button"
                                         size="icon-sm"
                                         variant="destructive"
-                                        onClick={() => handleGroupDelete(group.id)}
-                                        disabled={deletingGroupId === group.id}
+                                        onClick={() => handleWorkDelete(work.id)}
+                                        disabled={deletingWorkId === work.id}
                                     >
                                         <Trash2 size={13} />
                                     </Button>
@@ -686,16 +634,19 @@ export default function SubStatusesPage() {
                                 </div>
                             </CardHeader>
                             <CardContent className="space-y-0 px-0 pt-0">
-                                {children.map((subStatus) => (
+                                {children.map((subStatus) => {
+                                    const work = subStatus.workId ? worksById[subStatus.workId] : undefined;
+                                    return (
                                     <div key={subStatus.id} className="flex items-start gap-3 border-b px-6 py-4 last:border-b-0">
                                         <Badge className={subStatus.color}>{subStatus.id}</Badge>
 
                                         <div className="min-w-0 flex-1">
                                             <div className="flex flex-wrap items-center gap-2">
                                                 <span className="text-sm font-medium">{subStatus.label}</span>
-                                                {(subStatus.groupId ?? subStatus.group) && (
-                                                    <Badge variant="outline">
-                                                        {groupLabelMap[(subStatus.groupId ?? subStatus.group) ?? ""] ?? subStatus.groupId ?? subStatus.group}
+                                                {work && (
+                                                    <Badge className={work.color}>
+                                                        {work.permissionId && <Lock size={10} className="mr-1" />}
+                                                        {work.label}
                                                     </Badge>
                                                 )}
                                                 {subStatus.isEntryPoint && <Badge className="bg-green-100 text-green-700">Entry point</Badge>}
@@ -704,21 +655,6 @@ export default function SubStatusesPage() {
                                                         <ChevronRight size={11} />
                                                         {statusLabelMap[subStatus.triggerMap[status.id]] ?? subStatus.triggerMap[status.id]}
                                                     </Badge>
-                                                )}
-                                            </div>
-
-                                            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                                                {(subStatus.allowedRoles ?? []).length > 0 && (
-                                                    <span>
-                                                        <span className="font-medium text-foreground">Set by:</span>{" "}
-                                                        {(subStatus.allowedRoles ?? []).map((roleId) => roleLabelMap[roleId] ?? roleId).join(", ")}
-                                                    </span>
-                                                )}
-                                                {(subStatus.notifyRoles ?? []).length > 0 && (
-                                                    <span>
-                                                        <span className="font-medium text-foreground">Notifies:</span>{" "}
-                                                        {(subStatus.notifyRoles ?? []).map((roleId) => roleLabelMap[roleId] ?? roleId).join(", ")}
-                                                    </span>
                                                 )}
                                             </div>
 
@@ -752,7 +688,8 @@ export default function SubStatusesPage() {
                                             </Button>
                                         </div>
                                     </div>
-                                ))}
+                                    );
+                                })}
                             </CardContent>
                         </Card>
                     ))}
@@ -802,8 +739,7 @@ export default function SubStatusesPage() {
                 onClose={() => setShowCreate(false)}
                 saving={creating}
                 statuses={statuses}
-                roles={roles}
-                groups={groups}
+                works={works}
             />
 
             <SubStatusFormModal
@@ -815,57 +751,88 @@ export default function SubStatusesPage() {
                 onClose={() => setEditId(null)}
                 saving={editing}
                 statuses={statuses}
-                roles={roles}
-                groups={groups}
+                works={works}
             />
 
-            {/* Group create dialog */}
-            <Dialog open={showGroupCreate} onOpenChange={(isOpen) => { if (!isOpen) { setShowGroupCreate(false); setGroupCreateLabel(""); setGroupCreateOrder(""); } }}>
+            {/* Work create dialog */}
+            <Dialog open={showWorkCreate} onOpenChange={(isOpen) => { if (!isOpen) { setShowWorkCreate(false); } }}>
                 <DialogContent className="sm:max-w-sm">
                     <DialogHeader>
-                        <DialogTitle>Add Group</DialogTitle>
-                        <DialogDescription>The group id is auto-generated from the label.</DialogDescription>
+                        <DialogTitle>Add Work</DialogTitle>
+                        <DialogDescription>The work id is auto-generated from the label.</DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4">
                         <div className="space-y-2">
                             <Label>Label</Label>
-                            <Input value={groupCreateLabel} onChange={(e) => setGroupCreateLabel(e.target.value)} placeholder="e.g. Customer Communication" />
+                            <Input value={workCreateLabel} onChange={(e) => setWorkCreateLabel(e.target.value)} placeholder="e.g. Cleaning" />
                         </div>
                         <div className="space-y-2">
+                            <Label>Color</Label>
+                            <Select value={workCreateColor} onValueChange={setWorkCreateColor}>
+                                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    {COLOR_OPTIONS.map((color) => (
+                                        <SelectItem key={color.value} value={color.value}>{color.label}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <Badge className={workCreateColor}>Preview</Badge>
+                        </div>
+                        <label className="flex items-center gap-2 text-sm">
+                            <Checkbox checked={workCreateGated} onCheckedChange={(checked) => setWorkCreateGated(checked === true)} />
+                            Gated (requires a permission to set)
+                        </label>
+                        <div className="space-y-2">
                             <Label>Order</Label>
-                            <Input type="text" inputMode="numeric" value={groupCreateOrder} onChange={(e) => setGroupCreateOrder(e.target.value)} placeholder="Auto-assigned if blank" />
+                            <Input type="text" inputMode="numeric" value={workCreateOrder} onChange={(e) => setWorkCreateOrder(e.target.value)} placeholder="Auto-assigned if blank" />
                         </div>
                     </div>
                     <DialogFooter>
-                        <Button type="button" variant="outline" onClick={() => setShowGroupCreate(false)}>Cancel</Button>
-                        <Button type="button" onClick={handleGroupCreate} disabled={savingGroup || !groupCreateLabel.trim()}>
-                            {savingGroup ? "Saving…" : "Save"}
+                        <Button type="button" variant="outline" onClick={() => setShowWorkCreate(false)}>Cancel</Button>
+                        <Button type="button" onClick={handleWorkCreate} disabled={savingWork || !workCreateLabel.trim()}>
+                            {savingWork ? "Saving…" : "Save"}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
 
-            {/* Group edit dialog */}
-            <Dialog open={!!groupEditId} onOpenChange={(isOpen) => { if (!isOpen) setGroupEditId(null); }}>
+            {/* Work edit dialog */}
+            <Dialog open={!!workEditId} onOpenChange={(isOpen) => { if (!isOpen) setWorkEditId(null); }}>
                 <DialogContent className="sm:max-w-sm">
                     <DialogHeader>
-                        <DialogTitle>Edit Group</DialogTitle>
-                        <DialogDescription>id: {groupEditId} (immutable)</DialogDescription>
+                        <DialogTitle>Edit Work</DialogTitle>
+                        <DialogDescription>id: {workEditId} (immutable)</DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4">
                         <div className="space-y-2">
                             <Label>Label</Label>
-                            <Input value={groupEditLabel} onChange={(e) => setGroupEditLabel(e.target.value)} />
+                            <Input value={workEditLabel} onChange={(e) => setWorkEditLabel(e.target.value)} />
                         </div>
                         <div className="space-y-2">
+                            <Label>Color</Label>
+                            <Select value={workEditColor} onValueChange={setWorkEditColor}>
+                                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    {COLOR_OPTIONS.map((color) => (
+                                        <SelectItem key={color.value} value={color.value}>{color.label}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <Badge className={workEditColor}>Preview</Badge>
+                        </div>
+                        <label className="flex items-center gap-2 text-sm">
+                            <Checkbox checked={workEditGated} onCheckedChange={(checked) => setWorkEditGated(checked === true)} />
+                            Gated (requires a permission to set)
+                        </label>
+                        <div className="space-y-2">
                             <Label>Order</Label>
-                            <Input type="text" inputMode="numeric" value={groupEditOrder} onChange={(e) => setGroupEditOrder(e.target.value)} />
+                            <Input type="text" inputMode="numeric" value={workEditOrder} onChange={(e) => setWorkEditOrder(e.target.value)} />
                         </div>
                     </div>
                     <DialogFooter>
-                        <Button type="button" variant="outline" onClick={() => setGroupEditId(null)}>Cancel</Button>
-                        <Button type="button" onClick={handleGroupEdit} disabled={savingGroup || !groupEditLabel.trim()}>
-                            {savingGroup ? "Saving…" : "Save"}
+                        <Button type="button" variant="outline" onClick={() => setWorkEditId(null)}>Cancel</Button>
+                        <Button type="button" onClick={handleWorkEdit} disabled={savingWork || !workEditLabel.trim()}>
+                            {savingWork ? "Saving…" : "Save"}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

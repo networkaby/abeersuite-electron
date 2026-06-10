@@ -7,7 +7,7 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
 import {
     Wrench, Phone, Package, CheckCircle, AlertCircle,
-    UserCheck, Users, User, ShieldAlert, ClipboardCheck,
+    UserCheck, Users, User, ShieldAlert, ClipboardCheck, Circle,
 } from "lucide-react";
 import { TicketSection, type TicketCardData } from "@/modules/repairing/components/assignments/TicketCard";
 
@@ -56,7 +56,8 @@ const TICKET_INCLUDE = {
 
 type RawTicket = Awaited<ReturnType<typeof prisma.ticket.findMany<{ include: typeof TICKET_INCLUDE }>>>[0];
 
-function toCard(t: RawTicket): TicketCardData {
+function toCard(t: RawTicket, worksById: Record<string, { label: string; color: string }>): TicketCardData {
+    const work = t.ticketSubStatus?.workId ? worksById[t.ticketSubStatus.workId] : undefined;
     return {
         id: t.id,
         escalated: t.escalated,
@@ -91,6 +92,7 @@ function toCard(t: RawTicket): TicketCardData {
             actionLabel: t.ticketSubStatus.actionLabel,
         } : null,
         subStatusWorkId: t.ticketSubStatus?.workId ?? null,
+        subStatusWork: work ? { label: work.label, color: work.color } : null,
         activeParticipants: t.participants,
     };
 }
@@ -160,7 +162,8 @@ export default async function AssignmentsPage({
         prisma.work.findMany({ orderBy: { order: "asc" } }),
     ]);
 
-    const cards = raw.map(toCard);
+    const worksById = Object.fromEntries(works.map((w) => [w.id, { label: w.label, color: w.color }]));
+    const cards = raw.map((t) => toCard(t, worksById));
 
     // Works the user can act on (team view shows only these; org shows all).
     const visibleWorks = scope === "team"
@@ -270,14 +273,14 @@ export default async function AssignmentsPage({
                 <StatCard label="Total" value={total} icon={<AlertCircle size={20} />} textColor="text-muted-foreground" />
                 {works.map((w) => {
                     const meta = WORK_CARD_META[w.id];
-                    if (!meta) return null;
+                    const textColor = meta?.textColor ?? w.color.split(" ").find((c) => c.startsWith("text-")) ?? "text-muted-foreground";
                     return (
                         <StatCard
                             key={w.id}
                             label={w.label}
                             value={workCounts[w.id] ?? 0}
-                            icon={meta.icon}
-                            textColor={meta.textColor}
+                            icon={meta?.icon ?? <Circle size={20} />}
+                            textColor={textColor}
                         />
                     );
                 })}

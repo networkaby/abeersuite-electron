@@ -21,6 +21,8 @@ export interface TicketCardData {
     ticketSubStatus: { id: string; label: string; color: string; actionLabel: string | null } | null;
     /** Work the current sub-status belongs to (null when no sub-status). */
     subStatusWorkId?: string | null;
+    /** The Work's display label + colour, for the card badge. */
+    subStatusWork?: { label: string; color: string } | null;
     activeParticipants?: { user: { id: number; name: string } }[];
 }
 
@@ -85,6 +87,11 @@ export default function TicketCard({ ticket, type, currentUserId, isPrimaryOwner
                         ) : (
                             <span className={`text-xs px-2 py-0.5 font-medium ${ticket.ticketStatus.color}`}>
                                 {ticket.ticketStatus.label}
+                            </span>
+                        )}
+                        {ticket.subStatusWork && (
+                            <span className={`text-xs px-2 py-0.5 font-medium ${ticket.subStatusWork.color}`}>
+                                {ticket.subStatusWork.label}
                             </span>
                         )}
                         <span className="text-xs text-muted-foreground">{timeAgo(ticket.updatedAt)}</span>

@@ -21,8 +21,7 @@ interface SubStatus {
     id: string;
     label: string;
     color: string;
-    group: string;
-    groupId: string | null;
+    workId: string | null;
     triggerStatus: { id: string; label: string } | null;
 }
 
@@ -49,7 +48,7 @@ export default function SubStatusUpdate({ ticket, onClose }: Props) {
     useEffect(() => {
         Promise.all([
             axios.get(`/api/sub-statuses?statusId=${ticket.status}`),
-            axios.get("/api/sub-status-groups"),
+            axios.get("/api/works"),
         ]).then(([ssRes, grRes]) => {
             setSubStatuses(ssRes.data);
             const groupMap: Record<string, string> = {};
@@ -61,7 +60,7 @@ export default function SubStatusUpdate({ ticket, onClose }: Props) {
     }, [ticket.status]);
 
     const grouped = subStatuses.reduce<Record<string, SubStatus[]>>((acc, ss) => {
-        const key = ss.groupId ?? ss.group ?? "__none__";
+        const key = ss.workId ?? "__none__";
         if (!acc[key]) acc[key] = [];
         acc[key].push(ss);
         return acc;
