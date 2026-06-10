@@ -164,11 +164,11 @@ export const PERMISSIONS = {
     SERVICE_CENTERS_EDIT_ORG:            "service-centers:edit:org",
     SERVICE_CENTERS_DELETE_ORG:          "service-centers:delete:org",
 
-    // Auto-added by check-doc-sync --fix:
-    WORK_CUSTOMER_COMM:                  "work:customer_comm",
-    WORK_APPROVAL:                       "work:approval",
-    WORK_PARTS:                          "work:parts",
-    WORK_QC:                             "work:qc",
+    // Seeded gated-work permissions (work:<opaque id>).
+    WORK_W1:                             "work:W1",
+    WORK_W2:                             "work:W2",
+    WORK_W3:                             "work:W3",
+    WORK_W4:                             "work:W4",
 } as const;
 
 export type PermissionId = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

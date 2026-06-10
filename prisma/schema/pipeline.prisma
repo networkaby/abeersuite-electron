@@ -35,7 +35,7 @@ model TicketStatus {
   actionLabel     String?
   warrantyScope   String             @default("any")
   workId          String?
-  work            Work?              @relation(fields: [workId], references: [id])
+  work            Work?              @relation(fields: [workId], references: [id], onDelete: SetNull)
   pipelineId      String?
   pipeline        Pipeline?          @relation(fields: [pipelineId], references: [id])
   fromTransitions StatusTransition[] @relation("FromStatus")
@@ -61,7 +61,7 @@ model TicketSubStatus {
   autoRevertOnClear   Boolean               @default(true)
   warrantyScope       String                @default("any")
   workId              String?
-  work                Work?                 @relation(fields: [workId], references: [id])
+  work                Work?                 @relation(fields: [workId], references: [id], onDelete: SetNull)
   pipelineId          String?
   pipeline            Pipeline?             @relation(fields: [pipelineId], references: [id])
   fromTransitions     SubStatusTransition[] @relation("FromSubStatus")

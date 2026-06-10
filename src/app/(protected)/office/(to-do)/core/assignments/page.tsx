@@ -6,21 +6,10 @@ import Link from "next/link";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
 import {
-    Wrench, Phone, Package, CheckCircle, AlertCircle,
-    UserCheck, Users, User, ShieldAlert, ClipboardCheck, Circle,
+    Wrench, CheckCircle, AlertCircle,
+    UserCheck, Users, User, Circle,
 } from "lucide-react";
 import { TicketSection, type TicketCardData } from "@/modules/repairing/components/assignments/TicketCard";
-
-// Per-Work card chrome, keyed by Work id (the former sub-status group slugs).
-const WORK_CARD_META: Record<string, { icon: React.ReactNode; textColor: string }> = {
-    customer_comm: { icon: <Phone size={20} />, textColor: "text-blue-600" },
-    approval: { icon: <CheckCircle size={20} />, textColor: "text-yellow-600" },
-    parts: { icon: <Package size={20} />, textColor: "text-orange-600" },
-    qc: { icon: <ClipboardCheck size={20} />, textColor: "text-teal-600" },
-    escalated: { icon: <ShieldAlert size={20} />, textColor: "text-red-600" },
-    ready: { icon: <CheckCircle size={20} />, textColor: "text-green-600" },
-    no_fix: { icon: <AlertCircle size={20} />, textColor: "text-muted-foreground" },
-};
 
 // ── Shared include ────────────────────────────────────────────────────────────
 const TICKET_INCLUDE = {
@@ -272,14 +261,13 @@ export default async function AssignmentsPage({
             <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-4 mb-6">
                 <StatCard label="Total" value={total} icon={<AlertCircle size={20} />} textColor="text-muted-foreground" />
                 {works.map((w) => {
-                    const meta = WORK_CARD_META[w.id];
-                    const textColor = meta?.textColor ?? w.color.split(" ").find((c) => c.startsWith("text-")) ?? "text-muted-foreground";
+                    const textColor = w.color.split(" ").find((c) => c.startsWith("text-")) ?? "text-muted-foreground";
                     return (
                         <StatCard
                             key={w.id}
                             label={w.label}
                             value={workCounts[w.id] ?? 0}
-                            icon={meta?.icon ?? <Circle size={20} />}
+                            icon={<Circle size={20} className={textColor} />}
                             textColor={textColor}
                         />
                     );
@@ -323,16 +311,16 @@ export default async function AssignmentsPage({
                         currentUserId={userId}
                     />
                     {visibleWorks.map((w) => {
-                        const meta = WORK_CARD_META[w.id];
+                        const textColor = w.color.split(" ").find((c) => c.startsWith("text-")) ?? "text-foreground";
                         return (
                             <TicketSection
                                 key={w.id}
                                 title={w.label}
                                 tickets={byWork(w.id)}
                                 type="status"
-                                color={meta?.textColor ?? "text-foreground"}
+                                color={textColor}
                                 bgColor="bg-muted"
-                                icon={meta?.icon ?? <CheckCircle size={16} className="text-muted-foreground" />}
+                                icon={<Circle size={16} className={textColor} />}
                                 currentUserId={userId}
                             />
                         );

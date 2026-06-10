@@ -6,7 +6,6 @@ import {
     UserCog,
     Settings,
     ShieldCheck,
-    GitBranch,
     Wrench,
     Plus,
     FileText,
@@ -144,7 +143,7 @@ export type ButtonBarAction = {
 
 export const WORKSPACE_NAV: NavItem[] = [
     { label: "Inbox", href: "/office/message/inbox", icon: Inbox, permission: null },
-    // { label: "My Assignments", href: "/office/core/assignments", icon: ClipboardList, permission: null },
+    { label: "My Assignments", href: "/office/core/assignments", icon: ClipboardList, permission: null },
     // { label: "CallLog", href: "/office/core/call-log", icon: PhoneCall, permission: null },
     // { label: "Search SLno", href: "/office/core/search-slno", icon: Search, permission: null },
 
@@ -585,9 +584,7 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     { label: "Org Defaults", href: "/office/settings/org-defaults", icon: Settings, permission: "settings:manage" },
     { label: "E-Commerce", href: "/office/settings/ecommerce", icon: ShoppingCart, permission: "ecommerce:manage" },
     { label: "Payment Methods", href: "/office/settings/payment-methods", icon: CreditCard, permission: "settings:manage" },
-    { label: "Statuses", href: "/office/settings/statuses", icon: Settings, permission: "settings:statuses" },
-    { label: "Sub-Statuses", href: "/office/settings/sub-statuses", icon: Settings, permission: "settings:statuses" },
-    { label: "Pipelines", href: "/office/settings/pipelines", icon: GitBranch, permission: "settings:pipelines" },
+    { label: "Workflow", href: "/office/settings/workflow", icon: Workflow, permission: "settings:statuses" },
     { label: "Naming Convention", icon: ClipboardList, href: "/office/settings/naming-convention", permission: "inventory:manage" },
     { label: "Year Ending", href: "/office/settings/year-ending", icon: Calendar, permission: "settings:manage" },
     { label: "Thermal Printer", href: "/office/settings/printer-settings", icon: Printer, permission: "settings:manage" },

@@ -2,7 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
-import { validateRequest } from "@/shared/lib/api";
+import { validateRequest, generateNextOpaqueId } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
@@ -30,7 +30,13 @@ export async function GET() {
     const { response } = await requireAuth();
     if (response) return response;
     try {
-        const works = await prisma.work.findMany({ orderBy: { order: "asc" } });
+        const works = await prisma.work.findMany({
+            orderBy: { order: "asc" },
+            include: {
+                statuses: { select: { id: true, label: true, color: true, pipelineId: true }, orderBy: { order: "asc" } },
+                subStatuses: { select: { id: true, label: true, color: true, pipelineId: true }, orderBy: { order: "asc" } },
+            },
+        });
         return NextResponse.json(works);
     } catch (e) {
         return handleApiError(e, "Failed to fetch works");
@@ -45,13 +51,10 @@ export async function POST(req: Request) {
         const { data, error } = await validateRequest(req, createSchema);
         if (error) return error;
         const { label, color, order, gated } = data;
-        const id = label.toLowerCase().trim().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
-        if (!id) return NextResponse.json({ error: "Label must contain letters or numbers." }, { status: 400 });
-
-        const existing = await prisma.work.findUnique({ where: { id } });
-        if (existing) return NextResponse.json({ error: `A work with id "${id}" already exists.` }, { status: 409 });
-
-        const maxOrder = order ?? (await prisma.work.count());
+        // Opaque, hidden id (W1, W2, …) like statuses (S#) / sub-statuses (SS#),
+        // so the id never encodes the label and renames stay comfortable.
+        const { id, n } = await generateNextOpaqueId(prisma.work, "W");
+        const maxOrder = order ?? n;
         const permissionId = gated ? await mintWorkPermission(id, label) : null;
         const work = await prisma.work.create({
             data: { id, label, color: color ?? "bg-gray-100 text-gray-600", order: maxOrder, permissionId },

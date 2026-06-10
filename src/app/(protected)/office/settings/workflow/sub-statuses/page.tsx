@@ -317,26 +317,7 @@ export default function SubStatusesPage() {
     const [selectedToIds, setSelectedToIds] = useState<string[]>([]);
     const [savingTransitions, setSavingTransitions] = useState(false);
 
-    // Work CRUD state
-    const [showWorkCreate, setShowWorkCreate] = useState(false);
-    const [workCreateLabel, setWorkCreateLabel] = useState("");
-    const [workCreateColor, setWorkCreateColor] = useState("bg-gray-100 text-gray-600");
-    const [workCreateGated, setWorkCreateGated] = useState(false);
-    const [workCreateOrder, setWorkCreateOrder] = useState("");
-    const [savingWork, setSavingWork] = useState(false);
-    const [workEditId, setWorkEditId] = useState<string | null>(null);
-    const [workEditLabel, setWorkEditLabel] = useState("");
-    const [workEditColor, setWorkEditColor] = useState("bg-gray-100 text-gray-600");
-    const [workEditGated, setWorkEditGated] = useState(false);
-    const [workEditOrder, setWorkEditOrder] = useState("");
-    const [deletingWorkId, setDeletingWorkId] = useState<string | null>(null);
-
     const worksById = Object.fromEntries(works.map((w) => [w.id, w]));
-
-    const loadWorks = async () => {
-        const res = await axios.get("/api/works");
-        setWorks(res.data);
-    };
 
     const loadAll = async (pipelineId: string) => {
         setLoading(true);
@@ -433,73 +414,6 @@ export default function SubStatusesPage() {
         }
     };
 
-    const handleWorkCreate = async () => {
-        setSavingWork(true);
-        try {
-            await axios.post("/api/works", {
-                label: workCreateLabel,
-                color: workCreateColor,
-                gated: workCreateGated,
-                order: workCreateOrder ? Number(workCreateOrder) : undefined,
-            });
-            toast.success("Work created");
-            setShowWorkCreate(false);
-            setWorkCreateLabel("");
-            setWorkCreateColor("bg-gray-100 text-gray-600");
-            setWorkCreateGated(false);
-            setWorkCreateOrder("");
-            loadWorks();
-        } catch (err) {
-            const message = axios.isAxiosError(err) ? err.response?.data?.error : "Failed to create work";
-            toast.error(message ?? "Failed to create work");
-        } finally {
-            setSavingWork(false);
-        }
-    };
-
-    const openWorkEdit = (work: Work) => {
-        setWorkEditId(work.id);
-        setWorkEditLabel(work.label);
-        setWorkEditColor(work.color);
-        setWorkEditGated(!!work.permissionId);
-        setWorkEditOrder(String(work.order));
-    };
-
-    const handleWorkEdit = async () => {
-        if (!workEditId) return;
-        setSavingWork(true);
-        try {
-            await axios.patch(`/api/works/${workEditId}`, {
-                label: workEditLabel,
-                color: workEditColor,
-                gated: workEditGated,
-                order: workEditOrder ? Number(workEditOrder) : undefined,
-            });
-            toast.success("Work updated");
-            setWorkEditId(null);
-            loadWorks();
-        } catch (err) {
-            const message = axios.isAxiosError(err) ? err.response?.data?.error : "Failed to update work";
-            toast.error(message ?? "Failed to update work");
-        } finally {
-            setSavingWork(false);
-        }
-    };
-
-    const handleWorkDelete = async (id: string) => {
-        setDeletingWorkId(id);
-        try {
-            await axios.delete(`/api/works/${id}`);
-            toast.success("Work deleted");
-            loadWorks();
-        } catch (err) {
-            const message = axios.isAxiosError(err) ? err.response?.data?.error : "Failed to delete work";
-            toast.error(message ?? "Failed to delete work");
-        } finally {
-            setDeletingWorkId(null);
-        }
-    };
-
     const openTransitionModal = (id: string) => {
         const subStatus = subStatuses.find((item) => item.id === id);
         setSelectedToIds(subStatus?.fromTransitions.map((transition) => transition.to.id) ?? []);
@@ -557,52 +471,6 @@ export default function SubStatusesPage() {
                     <Plus size={16} /> Add Sub-Status
                 </Button>
             </div>
-
-            {/* Works management */}
-            <Card>
-                <CardHeader className="border-b">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <CardTitle>Works</CardTitle>
-                            <CardDescription>The activity each sub-status represents. A gated work mints a permission you can grant from Roles.</CardDescription>
-                        </div>
-                        <Button type="button" size="sm" onClick={() => setShowWorkCreate(true)}>
-                            <Plus size={14} /> Add Work
-                        </Button>
-                    </div>
-                </CardHeader>
-                <CardContent className="px-0 pt-0">
-                    {works.length === 0 ? (
-                        <p className="px-6 py-4 text-sm text-muted-foreground">No works yet.</p>
-                    ) : (
-                        works.map((work) => (
-                            <div key={work.id} className="flex items-center gap-3 border-b px-6 py-3 last:border-b-0">
-                                <Badge className={work.color}>{work.label}</Badge>
-                                <span className="text-xs text-muted-foreground">id: {work.id}</span>
-                                {work.permissionId && (
-                                    <Badge variant="outline" className="gap-1 text-amber-700">
-                                        <Lock size={11} /> Gated
-                                    </Badge>
-                                )}
-                                <div className="ml-auto flex items-center gap-2">
-                                    <Button type="button" size="sm" variant="outline" onClick={() => openWorkEdit(work)}>
-                                        <Pencil size={13} /> Edit
-                                    </Button>
-                                    <Button
-                                        type="button"
-                                        size="icon-sm"
-                                        variant="destructive"
-                                        onClick={() => handleWorkDelete(work.id)}
-                                        disabled={deletingWorkId === work.id}
-                                    >
-                                        <Trash2 size={13} />
-                                    </Button>
-                                </div>
-                            </div>
-                        ))
-                    )}
-                </CardContent>
-            </Card>
 
             <div className="flex flex-wrap gap-2">
                 {pipelines.map((pipeline) => (
@@ -753,90 +621,6 @@ export default function SubStatusesPage() {
                 statuses={statuses}
                 works={works}
             />
-
-            {/* Work create dialog */}
-            <Dialog open={showWorkCreate} onOpenChange={(isOpen) => { if (!isOpen) { setShowWorkCreate(false); } }}>
-                <DialogContent className="sm:max-w-sm">
-                    <DialogHeader>
-                        <DialogTitle>Add Work</DialogTitle>
-                        <DialogDescription>The work id is auto-generated from the label.</DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4">
-                        <div className="space-y-2">
-                            <Label>Label</Label>
-                            <Input value={workCreateLabel} onChange={(e) => setWorkCreateLabel(e.target.value)} placeholder="e.g. Cleaning" />
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Color</Label>
-                            <Select value={workCreateColor} onValueChange={setWorkCreateColor}>
-                                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                    {COLOR_OPTIONS.map((color) => (
-                                        <SelectItem key={color.value} value={color.value}>{color.label}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                            <Badge className={workCreateColor}>Preview</Badge>
-                        </div>
-                        <label className="flex items-center gap-2 text-sm">
-                            <Checkbox checked={workCreateGated} onCheckedChange={(checked) => setWorkCreateGated(checked === true)} />
-                            Gated (requires a permission to set)
-                        </label>
-                        <div className="space-y-2">
-                            <Label>Order</Label>
-                            <Input type="text" inputMode="numeric" value={workCreateOrder} onChange={(e) => setWorkCreateOrder(e.target.value)} placeholder="Auto-assigned if blank" />
-                        </div>
-                    </div>
-                    <DialogFooter>
-                        <Button type="button" variant="outline" onClick={() => setShowWorkCreate(false)}>Cancel</Button>
-                        <Button type="button" onClick={handleWorkCreate} disabled={savingWork || !workCreateLabel.trim()}>
-                            {savingWork ? "Saving…" : "Save"}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            {/* Work edit dialog */}
-            <Dialog open={!!workEditId} onOpenChange={(isOpen) => { if (!isOpen) setWorkEditId(null); }}>
-                <DialogContent className="sm:max-w-sm">
-                    <DialogHeader>
-                        <DialogTitle>Edit Work</DialogTitle>
-                        <DialogDescription>id: {workEditId} (immutable)</DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4">
-                        <div className="space-y-2">
-                            <Label>Label</Label>
-                            <Input value={workEditLabel} onChange={(e) => setWorkEditLabel(e.target.value)} />
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Color</Label>
-                            <Select value={workEditColor} onValueChange={setWorkEditColor}>
-                                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                    {COLOR_OPTIONS.map((color) => (
-                                        <SelectItem key={color.value} value={color.value}>{color.label}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                            <Badge className={workEditColor}>Preview</Badge>
-                        </div>
-                        <label className="flex items-center gap-2 text-sm">
-                            <Checkbox checked={workEditGated} onCheckedChange={(checked) => setWorkEditGated(checked === true)} />
-                            Gated (requires a permission to set)
-                        </label>
-                        <div className="space-y-2">
-                            <Label>Order</Label>
-                            <Input type="text" inputMode="numeric" value={workEditOrder} onChange={(e) => setWorkEditOrder(e.target.value)} />
-                        </div>
-                    </div>
-                    <DialogFooter>
-                        <Button type="button" variant="outline" onClick={() => setWorkEditId(null)}>Cancel</Button>
-                        <Button type="button" onClick={handleWorkEdit} disabled={savingWork || !workEditLabel.trim()}>
-                            {savingWork ? "Saving…" : "Save"}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
 
             {/* Transitions dialog */}
             <Dialog open={!!transitionModalId && !!modalSubStatus} onOpenChange={(isOpen) => { if (!isOpen) setTransitionModalId(null); }}>

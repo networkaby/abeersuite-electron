@@ -67,14 +67,8 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
     if (response) return response;
     try {
         const { id } = await params;
-        const subInUse = await prisma.ticketSubStatus.count({ where: { workId: id } });
-        const statusInUse = await prisma.ticketStatus.count({ where: { workId: id } });
-        if (subInUse + statusInUse > 0) {
-            return NextResponse.json(
-                { error: `Cannot delete — ${subInUse} sub-status(es) and ${statusInUse} status(es) use this work.` },
-                { status: 409 },
-            );
-        }
+        // Deleting a Work detaches it from any statuses / sub-statuses using it
+        // (their workId is set to null via the FK's onDelete: SetNull).
         await prisma.work.delete({ where: { id } });
         return NextResponse.json({ ok: true });
     } catch (e) {
