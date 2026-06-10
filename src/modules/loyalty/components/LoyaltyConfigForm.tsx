@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { parseDecimalInput, parseDigitsInput } from "@/shared/lib/format";
 
 interface LoyaltyConfig {
     id: number;
@@ -25,8 +26,6 @@ interface LoyaltyConfig {
     maxRedeemPctOfBill: string | number | null;
 }
 
-const dec = (s: string): string => s.replace(/[^\d.]/g, "").replace(/(\..*)\./g, "$1");
-const int = (s: string): string => s.replace(/\D/g, "");
 const optNum = (v: string | number | null): string => (v == null ? "" : String(v));
 
 /// Small field wrapper — label, control, optional helper text.
@@ -79,7 +78,7 @@ export function LoyaltyConfigForm() {
     }
 
     function onRedeemPtsChange(raw: string) {
-        const s = dec(raw);
+        const s = parseDecimalInput(raw);
         setRedeemPtsStr(s);
         set("redeemValue", ptsToRedeemValue(Number(s)));
     }
@@ -148,12 +147,12 @@ export function LoyaltyConfigForm() {
                     <CardContent className="space-y-4">
                         <Field label="Loyalty point conversion" hint="Per category/group/product multipliers can override this rate.">
                             <div className="flex items-center gap-2">
-                                <RupeeInput value={String(draft.globalEarnRatePer)} onChange={(v) => set("globalEarnRatePer", dec(v))} />
+                                <RupeeInput value={String(draft.globalEarnRatePer)} onChange={(v) => set("globalEarnRatePer", parseDecimalInput(v))} />
                                 <span className="text-sm text-muted-foreground">= 1 point</span>
                             </div>
                         </Field>
                         <Field label="Minimum invoice value to earn" hint="Sales below this earn no points. Blank = no minimum.">
-                            <RupeeInput value={optNum(draft.minEarnInvoiceValue)} onChange={(v) => set("minEarnInvoiceValue", dec(v) || null)} placeholder="0.00" />
+                            <RupeeInput value={optNum(draft.minEarnInvoiceValue)} onChange={(v) => set("minEarnInvoiceValue", parseDecimalInput(v) || null)} placeholder="0.00" />
                         </Field>
                         <div className="flex items-center justify-between rounded-md border border-border/60 bg-muted/30 px-3 py-2">
                             <span className="text-xs font-medium text-muted-foreground">Set point expiry</span>
@@ -162,7 +161,7 @@ export function LoyaltyConfigForm() {
                         {draft.expiryEnabled && (
                             <Field label="Points expire after" hint="Dynamic: raising this revives recently-lapsed points; lowering it drops older ones.">
                                 <div className="flex items-center gap-2">
-                                    <Input inputMode="numeric" value={String(draft.expiryDays)} onChange={(e) => set("expiryDays", Number(int(e.target.value) || "0"))} className="w-28 text-right" />
+                                    <Input inputMode="numeric" value={String(draft.expiryDays)} onChange={(e) => set("expiryDays", Number(parseDigitsInput(e.target.value) || "0"))} className="w-28 text-right" />
                                     <span className="text-sm text-muted-foreground">days</span>
                                 </div>
                             </Field>
@@ -194,15 +193,15 @@ export function LoyaltyConfigForm() {
                         </Field>
                         <Field label="Maximum % of invoice value" hint="Caps the loyalty discount at this share of the bill. Blank = no cap.">
                             <div className="flex items-center gap-2">
-                                <Input inputMode="decimal" value={optNum(draft.maxRedeemPctOfBill)} onChange={(e) => set("maxRedeemPctOfBill", dec(e.target.value) || null)} placeholder="0" className="w-24 text-right" />
+                                <Input inputMode="decimal" value={optNum(draft.maxRedeemPctOfBill)} onChange={(e) => set("maxRedeemPctOfBill", parseDecimalInput(e.target.value) || null)} placeholder="0" className="w-24 text-right" />
                                 <span className="text-sm text-muted-foreground">%</span>
                             </div>
                         </Field>
                         <Field label="Minimum invoice value to redeem" hint="Invoices below this can't redeem points. Blank = no minimum.">
-                            <RupeeInput value={optNum(draft.minRedeemInvoiceValue)} onChange={(v) => set("minRedeemInvoiceValue", dec(v) || null)} placeholder="0.00" />
+                            <RupeeInput value={optNum(draft.minRedeemInvoiceValue)} onChange={(v) => set("minRedeemInvoiceValue", parseDecimalInput(v) || null)} placeholder="0.00" />
                         </Field>
                         <Field label="Minimum points to redeem" hint="Blank = none.">
-                            <Input inputMode="numeric" value={draft.minRedeemPoints == null ? "" : String(draft.minRedeemPoints)} onChange={(e) => { const v = int(e.target.value); set("minRedeemPoints", v === "" ? null : Number(v)); }} placeholder="0" className="w-28 text-right" />
+                            <Input inputMode="numeric" value={draft.minRedeemPoints == null ? "" : String(draft.minRedeemPoints)} onChange={(e) => { const v = parseDigitsInput(e.target.value); set("minRedeemPoints", v === "" ? null : Number(v)); }} placeholder="0" className="w-28 text-right" />
                         </Field>
                     </CardContent>
                 </Card>

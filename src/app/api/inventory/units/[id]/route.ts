@@ -6,14 +6,16 @@ import { revalidateTag } from "next/cache";
 import { INV_UNITS_TAG } from "../route";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { parseIdParam } from "@/shared/lib/api";
+import { pickDefined } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { response } = await requirePermission(PERMISSIONS.INVENTORY_MANAGE);
     if (response) return response;
     try {
-        const id = Number((await params).id);
-        if (!Number.isFinite(id)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+        const { id, error: idError } = await parseIdParam(params);
+        if (idError) return idError;
         const { data, error } = await validateRequest(req, invUnitUpdateSchema);
         if (error) return error;
         const b = data;
@@ -24,12 +26,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         }
         const row = await prisma.invUnit.update({
             where: { id },
-            data: {
-                ...(b.code !== undefined ? { code: b.code.toUpperCase() } : {}),
-                ...(b.label !== undefined ? { label: b.label } : {}),
-                ...(b.decimals !== undefined ? { decimals: b.decimals } : {}),
-                ...(b.isActive !== undefined ? { isActive: b.isActive } : {}),
-            },
+            data: pickDefined({
+                code: b.code?.toUpperCase(),
+                label: b.label,
+                decimals: b.decimals,
+                isActive: b.isActive,
+            }),
         });
         revalidateTag(INV_UNITS_TAG, { expire: 0 });
         return NextResponse.json(row);
@@ -42,8 +44,8 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
     const { response } = await requirePermission(PERMISSIONS.INVENTORY_MANAGE);
     if (response) return response;
     try {
-        const id = Number((await params).id);
-        if (!Number.isFinite(id)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+        const { id, error } = await parseIdParam(params);
+        if (error) return error;
         const n = await prisma.invProduct.count({ where: { unitId: id } });
         if (n > 0) {
             return NextResponse.json({ error: "Cannot delete unit while products reference it." }, { status: 400 });

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { useRouter } from "next/navigation";
+import { formatInr } from "@/shared/lib/format";
 import {
     X,
     Phone,
@@ -85,7 +86,7 @@ function rupees(d: string | number | null | undefined): number {
 }
 
 function fmtRs(val: number): string {
-    return `₹${val.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+    return formatInr(val, 0);
 }
 
 function tenureLabel(createdAt: string): string {

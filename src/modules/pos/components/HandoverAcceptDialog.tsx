@@ -23,6 +23,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { fmt } from "@/utils/constants";
 import { formatDate } from "@/shared/lib/format/formatDate";
+import { extractApiError } from "@/shared/lib/api";
 
 export type PendingHandover = {
     id: number;
@@ -74,8 +75,7 @@ export function HandoverAcceptDialog({
             toast.success(`Handover accepted — Shift #${data.openedShiftId} opened with ₹${fmt(Number(data.openingFloatPaise) / 100)}`);
             onAccepted(data.openedShiftId, Number(data.openingFloatPaise) / 100);
         } catch (e: unknown) {
-            const msg = axios.isAxiosError(e) ? (e.response?.data as { error?: string })?.error : undefined;
-            toast.error(msg ?? "Failed to accept handover");
+            toast.error(extractApiError(e, "Failed to accept handover"));
         } finally {
             setSubmitting(false);
         }

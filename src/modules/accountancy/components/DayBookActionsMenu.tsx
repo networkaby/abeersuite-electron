@@ -20,6 +20,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
+import { extractApiError } from "@/shared/lib/api";
 import { MoreVertical, Pencil, Ban, Trash2, Copy, Undo2, AlertTriangle, Printer, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -90,8 +91,7 @@ export function DayBookActionsMenu({
             setConfirmAction(null);
             onChanged?.();
         } catch (e: unknown) {
-            const msg = axios.isAxiosError(e) ? e.response?.data?.error : null;
-            toast.error(msg ?? `Failed to ${confirmAction}`);
+            toast.error(extractApiError(e, `Failed to ${confirmAction}`));
         } finally {
             setBusy(false);
         }
@@ -105,8 +105,7 @@ export function DayBookActionsMenu({
             toast.success("Voucher restored");
             onChanged?.();
         } catch (e: unknown) {
-            const msg = axios.isAxiosError(e) ? e.response?.data?.error : null;
-            toast.error(msg ?? "Failed to restore");
+            toast.error(extractApiError(e, "Failed to restore"));
         } finally {
             setBusy(false);
         }
@@ -159,8 +158,7 @@ export function DayBookActionsMenu({
             if (newUrl) router.push(newUrl);
             else toast.error(`No create form for ${kind}`);
         } catch (e: unknown) {
-            const msg = axios.isAxiosError(e) ? e.response?.data?.error : null;
-            toast.error(msg ?? "Failed to duplicate");
+            toast.error(extractApiError(e, "Failed to duplicate"));
         } finally {
             setBusy(false);
         }

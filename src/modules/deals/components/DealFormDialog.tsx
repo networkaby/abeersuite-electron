@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
+import { extractApiError } from "@/shared/lib/api";
+import { toDateTimeLocalInput } from "@/shared/lib/format";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,13 +26,6 @@ const UNASSIGNED = "__none__";
 const SOURCES = ["Walk-in", "Phone", "Website", "Referral", "Social", "Exhibition", "Other"];
 
 type Linked = { kind: "person" | "company"; id: number; name: string };
-
-function toLocalInput(iso: string | null): string {
-    if (!iso) return "";
-    const d = new Date(iso);
-    const pad = (n: number) => String(n).padStart(2, "0");
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
 
 /** "1234.50" → 123450 paise; blank/invalid → null. */
 function rupeesToPaise(v: string): number | null {
@@ -84,7 +79,7 @@ export default function DealFormDialog({
         setSource(deal?.source ?? "");
         setPriority(deal?.priority ?? "MEDIUM");
         setAssignedPositionId(deal?.assignedPositionId ?? UNASSIGNED);
-        setNextFollowUpAt(toLocalInput(deal?.nextFollowUpAt ?? null));
+        setNextFollowUpAt(toDateTimeLocalInput(deal?.nextFollowUpAt ?? null));
         setNotes(deal?.notes ?? "");
         setLinked(
             deal?.person
@@ -128,8 +123,7 @@ export default function DealFormDialog({
             onOpenChange(false);
             onSaved();
         } catch (err) {
-            const msg = axios.isAxiosError(err) ? err.response?.data?.error : null;
-            toast.error(msg ?? "Failed to save deal");
+            toast.error(extractApiError(err, "Failed to save deal"));
         } finally {
             setSaving(false);
         }

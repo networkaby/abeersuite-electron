@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
+import { extractApiError } from "@/shared/lib/api";
 import { Loader2, RefreshCw, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -34,8 +35,7 @@ export function RefundBoard() {
             if (data?.payoutRef) toast.success(`Refund paid — Payment ${data.payoutRef} posted`);
         } catch (e) {
             setItems(prev);
-            const msg = axios.isAxiosError(e) ? (e.response?.data as { error?: string })?.error : null;
-            toast.error(msg || "That move isn't allowed");
+            toast.error(extractApiError(e, "That move isn't allowed"));
         }
     }
 

@@ -11,6 +11,8 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { extractApiError } from "@/shared/lib/api";
+import { parseDecimalInput } from "@/shared/lib/format";
 
 type Opt = { id: number; name: string; sku?: string };
 type Scope = "CATEGORY" | "GROUP" | "PRODUCT";
@@ -28,8 +30,6 @@ interface EarnRule {
     group: { id: number; name: string } | null;
     product: { id: number; name: string; sku: string } | null;
 }
-
-const dec = (s: string): string => s.replace(/[^\d.]/g, "").replace(/(\..*)\./g, "$1");
 
 export function LoyaltyEarnRules({
     categories,
@@ -81,8 +81,7 @@ export function LoyaltyEarnRules({
             setShowAdd(false);
             load();
         } catch (e) {
-            const msg = axios.isAxiosError(e) ? (e.response?.data?.error ?? "Failed to add rule") : "Failed to add rule";
-            toast.error(msg);
+            toast.error(extractApiError(e, "Failed to add rule"));
         } finally {
             setAdding(false);
         }
@@ -178,14 +177,14 @@ export function LoyaltyEarnRules({
                                 <div className="space-y-1">
                                     <Label className="text-[11px] text-muted-foreground">Earn multiplier</Label>
                                     <div className="flex items-center gap-1.5">
-                                        <Input value={multiplier} onChange={(e) => setMultiplier(dec(e.target.value))} className="h-9 w-20 text-right" />
+                                        <Input value={multiplier} onChange={(e) => setMultiplier(parseDecimalInput(e.target.value))} className="h-9 w-20 text-right" />
                                         <span className="text-sm text-muted-foreground">× global</span>
                                     </div>
                                 </div>
                                 <div className="space-y-1">
                                     <Label className="text-[11px] text-muted-foreground">Redeem cap</Label>
                                     <div className="flex items-center gap-1.5">
-                                        <Input value={redeemCap} onChange={(e) => setRedeemCap(dec(e.target.value))} placeholder="global" className="h-9 w-20 text-right" />
+                                        <Input value={redeemCap} onChange={(e) => setRedeemCap(parseDecimalInput(e.target.value))} placeholder="global" className="h-9 w-20 text-right" />
                                         <span className="text-sm text-muted-foreground">%</span>
                                     </div>
                                 </div>
@@ -213,7 +212,7 @@ export function LoyaltyEarnRules({
                                     <Input
                                         defaultValue={String(Number(r.multiplier))}
                                         onBlur={(e) => {
-                                            const v = Number(dec(e.target.value));
+                                            const v = Number(parseDecimalInput(e.target.value));
                                             if (Number.isFinite(v) && v !== Number(r.multiplier)) patchRule(r.id, { multiplier: v });
                                         }}
                                         className="h-8 w-14 text-right text-xs"
@@ -226,7 +225,7 @@ export function LoyaltyEarnRules({
                                         defaultValue={r.redeemCapPct == null ? "" : String(Number(r.redeemCapPct))}
                                         placeholder="global"
                                         onBlur={(e) => {
-                                            const raw = dec(e.target.value).trim();
+                                            const raw = parseDecimalInput(e.target.value).trim();
                                             const next = raw === "" ? null : Number(raw);
                                             const cur = r.redeemCapPct == null ? null : Number(r.redeemCapPct);
                                             if (next !== cur) patchRule(r.id, { redeemCapPct: next });

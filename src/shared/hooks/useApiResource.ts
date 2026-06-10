@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import axios from "axios";
+import { extractApiError } from "@/shared/lib/api/extractApiError";
 
 /**
  * One-shot GET hook for the common `useEffect(() => { fetch; setState })` pattern.
@@ -47,11 +48,7 @@ export function useApiResource<T>(
             })
             .catch((e) => {
                 if (cancelled) return;
-                const msg =
-                    axios.isAxiosError(e) && typeof e.response?.data?.error === "string"
-                        ? e.response.data.error
-                        : "Failed to load";
-                setError(msg);
+                setError(extractApiError(e, "Failed to load"));
             })
             .finally(() => {
                 if (cancelled) return;

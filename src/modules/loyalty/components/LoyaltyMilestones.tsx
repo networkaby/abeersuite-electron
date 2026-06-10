@@ -10,6 +10,8 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { extractApiError } from "@/shared/lib/api";
+import { parseDecimalInput, parseDigitsInput, formatInr } from "@/shared/lib/format";
 
 interface Milestone {
     id: number;
@@ -22,10 +24,6 @@ interface Milestone {
 }
 
 interface CouponOpt { id: number; name: string; code: string | null }
-
-const dec = (s: string): string => s.replace(/[^\d.]/g, "").replace(/(\..*)\./g, "$1");
-const int = (s: string): string => s.replace(/\D/g, "");
-const fmtINR = (n: number) => `₹${n.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 
 export function LoyaltyMilestones() {
     const [tiers, setTiers] = useState<Milestone[]>([]);
@@ -68,8 +66,7 @@ export function LoyaltyMilestones() {
             setThreshold(""); setBonus(""); setLabel(""); setCouponTemplateId("none"); setShowAdd(false);
             load();
         } catch (e) {
-            const msg = axios.isAxiosError(e) ? (e.response?.data?.error ?? "Failed to add milestone") : "Failed to add milestone";
-            toast.error(msg);
+            toast.error(extractApiError(e, "Failed to add milestone"));
         } finally {
             setAdding(false);
         }
@@ -125,12 +122,12 @@ export function LoyaltyMilestones() {
                             <Label className="text-[11px] text-muted-foreground">Lifetime spend ≥</Label>
                             <div className="relative">
                                 <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">₹</span>
-                                <Input inputMode="decimal" value={threshold} onChange={(e) => setThreshold(dec(e.target.value))} placeholder="50000" className="h-9 pl-6 text-right" />
+                                <Input inputMode="decimal" value={threshold} onChange={(e) => setThreshold(parseDecimalInput(e.target.value))} placeholder="50000" className="h-9 pl-6 text-right" />
                             </div>
                         </div>
                         <div className="space-y-1">
                             <Label className="text-[11px] text-muted-foreground">Bonus points</Label>
-                            <Input inputMode="numeric" value={bonus} onChange={(e) => setBonus(int(e.target.value))} placeholder="500" className="h-9 text-right" />
+                            <Input inputMode="numeric" value={bonus} onChange={(e) => setBonus(parseDigitsInput(e.target.value))} placeholder="500" className="h-9 text-right" />
                         </div>
                         <div className="space-y-1">
                             <Label className="text-[11px] text-muted-foreground">Label (optional)</Label>
@@ -169,7 +166,7 @@ export function LoyaltyMilestones() {
                             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-400"><Gift size={15} /></span>
                             <div className="min-w-0 flex-1">
                                 <div className="truncate text-sm font-medium">
-                                    {fmtINR(Number(t.threshold))} <span className="text-muted-foreground">→</span>{" "}
+                                    {formatInr(Number(t.threshold), 0)} <span className="text-muted-foreground">→</span>{" "}
                                     {t.bonusPoints > 0 ? `+${t.bonusPoints.toLocaleString("en-IN")} pts` : ""}
                                     {t.bonusPoints > 0 && t.issuesCouponTemplateId != null ? " + " : ""}
                                     {t.issuesCouponTemplateId != null ? "🎟 coupon" : ""}

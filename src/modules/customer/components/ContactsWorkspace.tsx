@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { PaginationBar } from "@/shared/components/PaginationBar";
 import UserAvatar from "@/shared/components/UserAvatar";
 import { formatDate } from "@/shared/lib/format";
+import { extractApiError } from "@/shared/lib/api";
 import {
     LIFECYCLE_META, LIFECYCLES,
     type ContactDto, type ContactLifecycle, type ContactPositionOption, type ContactsResponse,
@@ -118,8 +119,7 @@ export default function ContactsWorkspace({
             setSelected(new Set());
             load();
         } catch (err) {
-            const msg = axios.isAxiosError(err) ? err.response?.data?.error : null;
-            toast.error(msg ?? "Bulk action failed");
+            toast.error(extractApiError(err, "Bulk action failed"));
         }
     };
 

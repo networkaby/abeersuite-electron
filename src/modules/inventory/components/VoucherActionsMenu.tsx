@@ -14,6 +14,7 @@ import { useRouter } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
 import { MoreVertical, Pencil, Ban, Trash2, Copy, Printer } from "lucide-react";
+import { extractApiError } from "@/shared/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -93,8 +94,7 @@ export function VoucherActionsMenu({ voucherId, voucherType, voucherRef, onChang
             setConfirmAction(null);
             onChanged?.();
         } catch (e: unknown) {
-            const msg = axios.isAxiosError(e) ? e.response?.data?.error : null;
-            toast.error(msg ?? `Failed to ${confirmAction} voucher`);
+            toast.error(extractApiError(e, `Failed to ${confirmAction} voucher`));
         } finally {
             setBusy(false);
         }
@@ -112,8 +112,7 @@ export function VoucherActionsMenu({ voucherId, voucherType, voucherRef, onChang
             toast.success(`Duplicated as ${data.reference}`);
             if (url) router.push(url);
         } catch (e: unknown) {
-            const msg = axios.isAxiosError(e) ? e.response?.data?.error : null;
-            toast.error(msg ?? "Failed to duplicate voucher");
+            toast.error(extractApiError(e, "Failed to duplicate voucher"));
         } finally {
             setBusy(false);
         }

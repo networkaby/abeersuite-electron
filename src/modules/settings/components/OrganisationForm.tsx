@@ -3,6 +3,7 @@
 import { useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
+import { extractApiError } from "@/shared/lib/api";
 import { Loader2, Save, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,10 +42,7 @@ export function OrganisationForm({ initial }: Props) {
             setBaseline(data);
             toast.success("Organisation saved");
         } catch (err) {
-            const msg = axios.isAxiosError(err)
-                ? (err.response?.data as { error?: string })?.error
-                : undefined;
-            toast.error(msg ?? "Save failed");
+            toast.error(extractApiError(err, "Save failed"));
         } finally {
             setSaving(false);
         }

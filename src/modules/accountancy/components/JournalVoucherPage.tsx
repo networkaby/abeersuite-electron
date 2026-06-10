@@ -28,6 +28,7 @@ import {
 import { fmt, JOURNAL_STATUS_COLORS } from "@/utils/constants";
 import { parseAmount, isAmountChars } from "@/utils/numberInput";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
+import { extractApiError } from "@/shared/lib/api";
 import { consumeDuplicate } from "@/modules/accountancy/lib/duplicate";
 import { GlAccountCombobox } from "@/modules/accountancy/components/GlAccountCombobox";
 import { BalanceHint } from "@/modules/accountancy/components/BalanceHint";
@@ -414,8 +415,7 @@ export function JournalVoucherPage({ voucherId }: { voucherId?: number } = {}) {
                 toast.success(`Journal voucher ${loadedJe?.reference ?? ""} updated`);
                 closeForm();
             } catch (err: unknown) {
-                const msg = axios.isAxiosError(err) ? err.response?.data?.error : "Save failed";
-                toast.error(msg ?? "Save failed");
+                toast.error(extractApiError(err, "Save failed"));
             } finally {
                 setSaving(false);
             }
@@ -439,8 +439,7 @@ export function JournalVoucherPage({ voucherId }: { voucherId?: number } = {}) {
             else               toast.success(`Journal voucher ${res.data.reference} saved as draft`);
             router.push(listPath);
         } catch (err: unknown) {
-            const msg = axios.isAxiosError(err) ? err.response?.data?.error : "Save failed";
-            toast.error(msg ?? "Save failed");
+            toast.error(extractApiError(err, "Save failed"));
         } finally {
             setSaving(false);
         }

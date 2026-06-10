@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { useRouter } from "next/navigation";
+import { formatInr } from "@/shared/lib/format";
 import {
     Search,
     X,
@@ -82,7 +83,7 @@ function isPhone(q: string): boolean {
 }
 function formatPaise(p: number | null): string {
     if (p == null) return "—";
-    return `₹${(p / 100).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+    return formatInr(p / 100, 0);
 }
 function partyHitToPicked(p: PartyHit): PickedParty {
     return {

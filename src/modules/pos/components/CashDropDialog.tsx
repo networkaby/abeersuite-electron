@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { extractApiError } from "@/shared/lib/api";
 
 export function CashDropDialog({
     open, onOpenChange, shiftId, onDropped,
@@ -44,8 +45,7 @@ export function CashDropDialog({
             onDropped();
             onOpenChange(false);
         } catch (e: unknown) {
-            const msg = axios.isAxiosError(e) ? (e.response?.data as { error?: string })?.error : undefined;
-            toast.error(msg ?? "Failed to log drop");
+            toast.error(extractApiError(e, "Failed to log drop"));
         } finally {
             setSubmitting(false);
         }

@@ -9,6 +9,7 @@ import { useSession } from "next-auth/react";
 import axios from "axios";
 import Link from "next/link";
 import { toast } from "sonner";
+import { extractApiError } from "@/shared/lib/api";
 import { Loader2, ArrowLeft, CheckCircle, ExternalLink, Pencil, Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { fmt, JOURNAL_STATUS_COLORS } from "@/utils/constants";
@@ -110,7 +111,7 @@ export function InvVoucherDetail({ basePath, label, formPath }: {
             toast.success(`${label} posted`);
             load();
         } catch (err: unknown) {
-            toast.error(axios.isAxiosError(err) ? err.response?.data?.error : "Failed to post");
+            toast.error(extractApiError(err, "Failed to post"));
         } finally { setPosting(false); }
     };
 

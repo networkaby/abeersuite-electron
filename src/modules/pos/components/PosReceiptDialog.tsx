@@ -27,8 +27,8 @@ import { type TenderSplit, type TenderAccount } from "@/modules/pos/components/T
 import { type PayState } from "@/modules/pos/components/TenderEntry";
 import { CheckoutDialog } from "@/modules/pos/components/CheckoutDialog";
 import { PaymentLinkDialog } from "@/modules/pos/components/PaymentLinkDialog";
-
-const fmtINR = (n: number) => `₹${n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+import { extractApiError } from "@/shared/lib/api";
+import { formatInr } from "@/shared/lib/format";
 
 export function PosReceiptDialog({
     open, onOpenChange, shiftId, paymentAccounts = [], onDone,
@@ -89,13 +89,12 @@ export function PosReceiptDialog({
                 tenders:   lines,
                 note:      note.trim() || undefined,
             });
-            toast.success(`Receipt ${data.voucherRef} · ${fmtINR(total)} from ${party.name}`);
+            toast.success(`Receipt ${data.voucherRef} · ${formatInr(total)} from ${party.name}`);
             if (printAfter) window.open(`/receipt/payment/${data.voucherId}`, "_blank", "noopener");
             onDone();
             onOpenChange(false);
         } catch (e: unknown) {
-            const msg = axios.isAxiosError(e) ? (e.response?.data as { error?: string })?.error : undefined;
-            toast.error(msg ?? "Failed to record receipt");
+            toast.error(extractApiError(e, "Failed to record receipt"));
         } finally {
             setSubmitting(false);
         }

@@ -2,6 +2,8 @@ export * from "./formatDate";
 export * from "./timeAgo";
 export * from "./moneyInr";
 export * from "./numberWords";
+export * from "./parseNumericInput";
+export * from "./dateInput";
 export * from "./slugify";
 export * from "./utils";
 export * from "./voucherTypeLabel";

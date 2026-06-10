@@ -17,9 +17,7 @@ import { Label } from "@/components/ui/label";
 import {
     TenderSplitInput, seedTenderSplit, type TenderSplit, type TenderAccount,
 } from "@/modules/pos/components/TenderSplitInput";
-
-const fmtINR = (n: number) =>
-    `₹${n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+import { formatInr } from "@/shared/lib/format";
 
 export type PayState = { cashTendered: number; cashReturn: number };
 
@@ -89,7 +87,7 @@ export function TenderEntry({
             </div>
             {pay.cashReturn > 0 && (
                 <div className="pl-[88px] text-[11px] text-muted-foreground">
-                    net cash {fmtINR(cashNet)} = ₹{pay.cashTendered} − ₹{pay.cashReturn} return
+                    net cash {formatInr(cashNet)} = ₹{pay.cashTendered} − ₹{pay.cashReturn} return
                 </div>
             )}
 
@@ -117,7 +115,7 @@ export function TenderEntry({
                 >
                     <Plus size={14} /> Add payment line
                 </Button>
-                {showTotal && <span className="text-sm font-semibold">Total {fmtINR(total)}</span>}
+                {showTotal && <span className="text-sm font-semibold">Total {formatInr(total)}</span>}
             </div>
         </div>
     );

@@ -15,6 +15,8 @@ import {
     DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { giftCardWhatsappUrl, giftCardWhatsappWebUrl, giftCardEmailUrl, giftCardMessage, type GiftCardShareInfo } from "@/modules/coupons/lib/giftCardShare";
+import { extractApiError } from "@/shared/lib/api";
+import { parseDecimalInput, formatInr } from "@/shared/lib/format";
 
 interface GiftCard {
     id: number;
@@ -30,8 +32,6 @@ interface GiftCard {
 
 type StatusFilter = "ALL" | "DRAFT" | "ACTIVE" | "DISABLED" | "REDEEMED" | "EXPIRED" | "VOID";
 
-const dec = (s: string): string => s.replace(/[^\d.]/g, "").replace(/(\..*)\./g, "$1");
-const fmtINR = (n: number) => `₹${n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 // Hero gradient per lifecycle state.
 const heroTone: Record<GiftCard["status"], string> = {
     DRAFT:    "from-sky-600 via-sky-700 to-cyan-800",
@@ -108,21 +108,21 @@ export function GiftCards({ brandName }: { brandName: string }) {
             setValue(""); setCode(""); setExpiresAt("");
             load();
         } catch (e) {
-            toast.error(axios.isAxiosError(e) ? (e.response?.data?.error ?? "Failed to generate") : "Failed to generate");
+            toast.error(extractApiError(e, "Failed to generate"));
         } finally {
             setGenerating(false);
         }
     }
 
     async function issue(c: GiftCard) {
-        if (!confirm(`Sell gift card ${c.code} for ${fmtINR(Number(c.initialValue))}?\nThis takes payment and posts Dr Cash / Cr Gift Card Liability.`)) return;
+        if (!confirm(`Sell gift card ${c.code} for ${formatInr(Number(c.initialValue))}?\nThis takes payment and posts Dr Cash / Cr Gift Card Liability.`)) return;
         setBusyId(c.id);
         try {
             await axios.post(`/api/gift-cards/${c.id}/issue`, {});
             toast.success(`Gift card ${c.code} issued`);
             load();
         } catch (e) {
-            toast.error(axios.isAxiosError(e) ? (e.response?.data?.error ?? "Failed to issue") : "Failed to issue");
+            toast.error(extractApiError(e, "Failed to issue"));
         } finally {
             setBusyId(null);
         }
@@ -136,7 +136,7 @@ export function GiftCards({ brandName }: { brandName: string }) {
             toast.success("Draft deleted");
             setCards((cs) => cs.filter((x) => x.id !== c.id));
         } catch (e) {
-            toast.error(axios.isAxiosError(e) ? (e.response?.data?.error ?? "Failed to delete") : "Failed to delete");
+            toast.error(extractApiError(e, "Failed to delete"));
         } finally {
             setBusyId(null);
         }
@@ -149,7 +149,7 @@ export function GiftCards({ brandName }: { brandName: string }) {
             toast.success(next ? "Gift card enabled" : "Gift card disabled (can't be redeemed)");
         } catch (e) {
             setCards((cs) => cs.map((x) => (x.id === c.id ? { ...x, enabled: !next } : x))); // revert
-            toast.error(axios.isAxiosError(e) ? (e.response?.data?.error ?? "Failed") : "Failed");
+            toast.error(extractApiError(e, "Failed"));
         }
     }
 
@@ -158,10 +158,10 @@ export function GiftCards({ brandName }: { brandName: string }) {
         setSweeping(true);
         try {
             const r = await axios.post<{ expired: number; total: number }>("/api/gift-cards/expire-breakage", {});
-            toast.success(`Breakage recognised: ${r.data.expired} card(s), ${fmtINR(r.data.total)}`);
+            toast.success(`Breakage recognised: ${r.data.expired} card(s), ${formatInr(r.data.total)}`);
             load();
         } catch (e) {
-            toast.error(axios.isAxiosError(e) ? (e.response?.data?.error ?? "Failed") : "Failed");
+            toast.error(extractApiError(e, "Failed"));
         } finally {
             setSweeping(false);
         }
@@ -268,7 +268,7 @@ export function GiftCards({ brandName }: { brandName: string }) {
                             <Label className="text-[11px] text-muted-foreground">Value</Label>
                             <div className="relative">
                                 <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">₹</span>
-                                <Input inputMode="decimal" value={value} onChange={(e) => setValue(dec(e.target.value))} placeholder="1000" className="h-9 pl-6 text-right" />
+                                <Input inputMode="decimal" value={value} onChange={(e) => setValue(parseDecimalInput(e.target.value))} placeholder="1000" className="h-9 pl-6 text-right" />
                             </div>
                         </div>
                         <div className="w-44 space-y-1">
@@ -352,8 +352,8 @@ export function GiftCards({ brandName }: { brandName: string }) {
                                                 </Badge>
                                             </div>
                                             <div className="mt-4 text-[10px] opacity-80">BALANCE</div>
-                                            <div className="text-2xl font-extrabold leading-none">{fmtINR(Number(c.balance))}</div>
-                                            <div className="mt-0.5 text-[10px] opacity-70">of {fmtINR(Number(c.initialValue))}</div>
+                                            <div className="text-2xl font-extrabold leading-none">{formatInr(Number(c.balance))}</div>
+                                            <div className="mt-0.5 text-[10px] opacity-70">of {formatInr(Number(c.initialValue))}</div>
                                             <div className="mt-3 font-mono text-sm font-bold tracking-wider break-all">{c.code}</div>
                                         </div>
 

@@ -4,6 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { pickDefined } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const patchSchema = z.object({
@@ -25,10 +26,10 @@ export async function PATCH(
         const body = data;
         const updated = await prisma.subStatusGroup.update({
             where: { id },
-            data: {
-                ...(body.label !== undefined && { label: body.label }),
-                ...(body.order !== undefined && { order: body.order }),
-            },
+            data: pickDefined({
+                label: body.label,
+                order: body.order,
+            }),
         });
         return NextResponse.json(updated);
     } catch (e) {

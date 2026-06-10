@@ -15,6 +15,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import axios from "axios";
+import { extractApiError } from "@/shared/lib/api";
 import { getOrgDefaults } from "@/shared/lib/orgDefaults";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -322,7 +323,7 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
             onOpenChange(false);
             onSaved?.();
         } catch (e: unknown) {
-            toast.error(axios.isAxiosError(e) ? e.response?.data?.error : "Save failed");
+            toast.error(extractApiError(e, "Save failed"));
         } finally {
             setSaving(false);
         }

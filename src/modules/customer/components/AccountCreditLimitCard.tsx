@@ -5,6 +5,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import { ShieldCheck, Lock } from "lucide-react";
 import { formatRupees } from "@/shared/lib/format/moneyInr";
+import { extractApiError } from "@/shared/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -54,7 +55,7 @@ export default function AccountCreditLimitCard({ accountId, initialLimit, canEdi
             toast.success(next === null ? "Set to cash-only" : `Credit limit set to ${formatRupees(next)}`);
             onSaved();
         } catch (e) {
-            toast.error(axios.isAxiosError(e) ? (e.response?.data?.error ?? "Save failed") : "Save failed");
+            toast.error(extractApiError(e, "Save failed"));
         } finally {
             setSaving(false);
         }

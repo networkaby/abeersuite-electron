@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
+import { extractApiError } from "@/shared/lib/api";
+import { parseDigitsInput } from "@/shared/lib/format";
 import { Loader2, RotateCcw, Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,7 +28,7 @@ interface Props {
 }
 
 function clampInt(raw: string, min: number, max: number, fallback: number): number {
-    const n = parseInt(raw.replace(/[^\d]/g, ""), 10);
+    const n = parseInt(parseDigitsInput(raw), 10);
     if (Number.isNaN(n)) return fallback;
     return Math.min(max, Math.max(min, n));
 }
@@ -95,10 +97,7 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
             setWorking(w);
             toast.success(`Saved ${KIND_LABEL[selectedKind]} template`);
         } catch (err) {
-            const msg = axios.isAxiosError(err)
-                ? (err.response?.data as { error?: string })?.error
-                : undefined;
-            toast.error(msg ?? "Save failed");
+            toast.error(extractApiError(err, "Save failed"));
         } finally {
             setSaving(false);
         }
@@ -117,10 +116,7 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
             const w = new Map(working);  w.set(selectedKind, data); setWorking(w);
             toast.success(`${KIND_LABEL[selectedKind]} template reset to defaults`);
         } catch (err) {
-            const msg = axios.isAxiosError(err)
-                ? (err.response?.data as { error?: string })?.error
-                : undefined;
-            toast.error(msg ?? "Reset failed");
+            toast.error(extractApiError(err, "Reset failed"));
         } finally {
             setResetting(false);
         }

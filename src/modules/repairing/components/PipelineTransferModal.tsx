@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
+import { extractApiError } from "@/shared/lib/api";
 import { ArrowRightLeft, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -67,8 +68,7 @@ export default function PipelineTransferModal({ ticketId, currentPipelineLabel, 
             toast.success("Ticket transferred successfully");
             onClose();
         } catch (err: unknown) {
-            const message = axios.isAxiosError(err) ? err.response?.data?.error : undefined;
-            toast.error(message ?? "Failed to transfer ticket");
+            toast.error(extractApiError(err, "Failed to transfer ticket"));
         } finally {
             setSubmitting(false);
         }

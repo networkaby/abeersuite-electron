@@ -8,14 +8,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { parseDecimalInput } from "@/shared/lib/format";
 
 interface Config {
     maxTotalDiscountPct: string | number | null;
     couponExpenseAccountId: number | null;
     giftCardLiabilityAccountId: number | null;
 }
-
-const dec = (s: string): string => s.replace(/[^\d.]/g, "").replace(/(\..*)\./g, "$1");
 
 export function CouponConfigCard() {
     const [loaded, setLoaded] = useState(false);
@@ -65,7 +64,7 @@ export function CouponConfigCard() {
                         <div className="flex items-end gap-3">
                             <div className="space-y-1">
                                 <Label className="text-[11px] text-muted-foreground">Max total discount %</Label>
-                                <Input inputMode="decimal" value={maxPct} onChange={(e) => setMaxPct(dec(e.target.value))} placeholder="no cap" className="h-9 w-32 text-right" />
+                                <Input inputMode="decimal" value={maxPct} onChange={(e) => setMaxPct(parseDecimalInput(e.target.value))} placeholder="no cap" className="h-9 w-32 text-right" />
                             </div>
                             <Button size="sm" onClick={save} disabled={saving}><Save size={14} className="mr-1" /> Save</Button>
                         </div>

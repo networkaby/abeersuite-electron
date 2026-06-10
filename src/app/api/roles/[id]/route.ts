@@ -4,6 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { pickDefined } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 export async function GET(
@@ -47,11 +48,11 @@ export async function PATCH(
         const body = data;
         const role = await prisma.role.update({
             where: { id },
-            data: {
-                ...(body.label !== undefined && { label: body.label }),
-                ...(body.color !== undefined && { color: body.color }),
-                ...(body.rank  !== undefined && { rank:  body.rank  }),
-            },
+            data: pickDefined({
+                label: body.label,
+                color: body.color,
+                rank: body.rank,
+            }),
         });
         return NextResponse.json(role);
     } catch (e) {

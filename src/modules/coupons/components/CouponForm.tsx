@@ -11,6 +11,8 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelect } from "@/shared/components/SearchableSelect";
+import { extractApiError } from "@/shared/lib/api";
+import { parseDecimalInput, parseDigitsInput, toDateInput } from "@/shared/lib/format";
 
 export interface CategoryOpt { id: number; name: string }
 export interface ProductOpt { id: number; sku: string; name: string }
@@ -46,13 +48,10 @@ export interface Coupon {
     _count?: { redemptions: number };
 }
 
-const dec = (s: string): string => s.replace(/[^\d.]/g, "").replace(/(\..*)\./g, "$1");
-const int = (s: string): string => s.replace(/\D/g, "");
 const str = (v: string | number | null | undefined): string => (v == null ? "" : String(v));
 const optNum = (s: string): number | null => (s.trim() === "" ? null : Number(s));
 const optInt = (s: string): number | null => (s.trim() === "" ? null : parseInt(s, 10));
 // <input type="date"> needs YYYY-MM-DD; the API stores a full timestamp.
-const toDateInput = (iso: string | null): string => (iso ? iso.slice(0, 10) : "");
 const fromDateInput = (d: string): string | null => (d.trim() === "" ? null : new Date(d + "T00:00:00").toISOString());
 
 interface Props {
@@ -131,8 +130,7 @@ export function CouponForm({ initial, categories, products, onSaved, onCancel, e
             toast.success(editing ? "Coupon updated" : "Coupon created");
             onSaved();
         } catch (e) {
-            const msg = axios.isAxiosError(e) ? (e.response?.data?.error ?? "Save failed") : "Save failed";
-            toast.error(msg);
+            toast.error(extractApiError(e, "Save failed"));
         } finally {
             setSaving(false);
         }
@@ -197,16 +195,16 @@ export function CouponForm({ initial, categories, products, onSaved, onCancel, e
                 {type === "PERCENT" && (
                     <>
                         <Field label="% off">
-                            <Input inputMode="decimal" value={percentOff} onChange={(e) => setPercentOff(dec(e.target.value))} placeholder="20" className="h-9 text-right" />
+                            <Input inputMode="decimal" value={percentOff} onChange={(e) => setPercentOff(parseDecimalInput(e.target.value))} placeholder="20" className="h-9 text-right" />
                         </Field>
                         <Field label="Max ₹ cap (optional)">
-                            <RupeeInput value={maxDiscountAmt} onChange={(v) => setMaxDiscountAmt(dec(v))} placeholder="500" />
+                            <RupeeInput value={maxDiscountAmt} onChange={(v) => setMaxDiscountAmt(parseDecimalInput(v))} placeholder="500" />
                         </Field>
                     </>
                 )}
                 {type === "FLAT" && (
                     <Field label="Flat ₹ off">
-                        <RupeeInput value={flatAmt} onChange={(v) => setFlatAmt(dec(v))} placeholder="200" />
+                        <RupeeInput value={flatAmt} onChange={(v) => setFlatAmt(parseDecimalInput(v))} placeholder="200" />
                     </Field>
                 )}
                 {type === "FREE_ITEM" && (
@@ -221,10 +219,10 @@ export function CouponForm({ initial, categories, products, onSaved, onCancel, e
                             />
                         </Field>
                         <Field label="Free qty">
-                            <Input inputMode="decimal" value={freeQty} onChange={(e) => setFreeQty(dec(e.target.value))} placeholder="1" className="h-9 text-right" />
+                            <Input inputMode="decimal" value={freeQty} onChange={(e) => setFreeQty(parseDecimalInput(e.target.value))} placeholder="1" className="h-9 text-right" />
                         </Field>
                         <Field label="Discount % on it (100 = free)">
-                            <Input inputMode="decimal" value={freeDiscountPct} onChange={(e) => setFreeDiscountPct(dec(e.target.value))} placeholder="100" className="h-9 text-right" />
+                            <Input inputMode="decimal" value={freeDiscountPct} onChange={(e) => setFreeDiscountPct(parseDecimalInput(e.target.value))} placeholder="100" className="h-9 text-right" />
                         </Field>
                     </>
                 )}
@@ -240,10 +238,10 @@ export function CouponForm({ initial, categories, products, onSaved, onCancel, e
                             />
                         </Field>
                         <Field label="Buy qty (X)">
-                            <Input inputMode="decimal" value={buyQty} onChange={(e) => setBuyQty(dec(e.target.value))} placeholder="1" className="h-9 text-right" />
+                            <Input inputMode="decimal" value={buyQty} onChange={(e) => setBuyQty(parseDecimalInput(e.target.value))} placeholder="1" className="h-9 text-right" />
                         </Field>
                         <Field label="Get qty (Y)">
-                            <Input inputMode="decimal" value={getQty} onChange={(e) => setGetQty(dec(e.target.value))} placeholder="1" className="h-9 text-right" />
+                            <Input inputMode="decimal" value={getQty} onChange={(e) => setGetQty(parseDecimalInput(e.target.value))} placeholder="1" className="h-9 text-right" />
                         </Field>
                         <Field label="Get item (blank = same as buy)">
                             <SearchableSelect<number>
@@ -255,7 +253,7 @@ export function CouponForm({ initial, categories, products, onSaved, onCancel, e
                             />
                         </Field>
                         <Field label="Discount % on get (100 = free)">
-                            <Input inputMode="decimal" value={freeDiscountPct} onChange={(e) => setFreeDiscountPct(dec(e.target.value))} placeholder="100" className="h-9 text-right" />
+                            <Input inputMode="decimal" value={freeDiscountPct} onChange={(e) => setFreeDiscountPct(parseDecimalInput(e.target.value))} placeholder="100" className="h-9 text-right" />
                         </Field>
                     </>
                 )}
@@ -273,13 +271,13 @@ export function CouponForm({ initial, categories, products, onSaved, onCancel, e
                     <Input type="date" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} className="h-9" />
                 </Field>
                 <Field label="Min bill ₹ (optional)">
-                    <RupeeInput value={minBillValue} onChange={(v) => setMinBillValue(dec(v))} placeholder="1000" />
+                    <RupeeInput value={minBillValue} onChange={(v) => setMinBillValue(parseDecimalInput(v))} placeholder="1000" />
                 </Field>
                 <Field label="Total uses (optional)">
-                    <Input inputMode="numeric" value={totalUsageLimit} onChange={(e) => setTotalUsageLimit(int(e.target.value))} placeholder="∞" className="h-9 text-right" />
+                    <Input inputMode="numeric" value={totalUsageLimit} onChange={(e) => setTotalUsageLimit(parseDigitsInput(e.target.value))} placeholder="∞" className="h-9 text-right" />
                 </Field>
                 <Field label="Per-customer uses (optional)">
-                    <Input inputMode="numeric" value={perCustomerLimit} onChange={(e) => setPerCustomerLimit(int(e.target.value))} placeholder="∞" className="h-9 text-right" />
+                    <Input inputMode="numeric" value={perCustomerLimit} onChange={(e) => setPerCustomerLimit(parseDigitsInput(e.target.value))} placeholder="∞" className="h-9 text-right" />
                 </Field>
                 <Field label="Eligibility">
                     <Select value={eligibility} onValueChange={(v) => setEligibility(v as Coupon["eligibility"])}>

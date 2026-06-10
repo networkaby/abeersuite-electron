@@ -4,6 +4,7 @@ import { useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { extractApiError } from "@/shared/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -33,11 +34,7 @@ export default function CustomerEmergencyPasswordResetCard({ customerId }: Props
             });
             toast.success("Emergency portal password reset successful");
         } catch (error) {
-            toast.error(
-                axios.isAxiosError(error)
-                    ? error.response?.data?.error ?? "Emergency reset failed"
-                    : "Emergency reset failed"
-            );
+            toast.error(extractApiError(error, "Emergency reset failed"));
         } finally {
             setSaving(false);
         }

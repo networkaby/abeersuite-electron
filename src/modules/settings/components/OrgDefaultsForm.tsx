@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
+import { extractApiError } from "@/shared/lib/api";
 import { invalidateOrgDefaultsCache } from "@/shared/lib/orgDefaults";
 import { Plus, Save, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -181,8 +182,7 @@ export function OrgDefaultsForm({ units }: { units: InvUnit[] }) {
             invalidateOrgDefaultsCache();
             toast.success("Org defaults saved");
         } catch (err) {
-            const msg = axios.isAxiosError(err) ? err.response?.data?.error : null;
-            toast.error(msg ?? "Failed to save");
+            toast.error(extractApiError(err, "Failed to save"));
         } finally {
             setSaving(false);
         }

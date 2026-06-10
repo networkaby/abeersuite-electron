@@ -45,6 +45,8 @@ import { PosModeSwitch } from "@/modules/pos/components/PosModeSwitch";
 import { qrDisplay } from "@/modules/pos/lib/qrDisplay";
 import { computePriceLadder } from "@/modules/pos/lib/priceLadder";
 import type { VoucherTemplateDefaults } from "@/shared/lib/print/voucherTemplateDefaults";
+import { extractApiError } from "@/shared/lib/api";
+import { formatInr, parseDecimalInput, parseDigitsInput } from "@/shared/lib/format";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -121,26 +123,16 @@ type CartLine = {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-const fmtINR = (n: number) =>
-    `₹${n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-
 // Text-input sanitisers — same shape as TradingVoucherPage's num/numSigned.
 // Project rule: no <input type="number">; we keep raw strings in state and
 // parse on submit / when computing totals.
-function numUnsigned(s: string): string {
-    return s.replace(/[^\d.]/g, "").replace(/(\..*)\./g, "$1");
-}
 function numSignedStr(s: string): string {
     const sign = s.trimStart().startsWith("-") ? "-" : "";
-    return sign + numUnsigned(s);
+    return sign + parseDecimalInput(s);
 }
 function parseAmt(s: string): number {
     const n = Number(s);
     return Number.isFinite(n) ? n : 0;
-}
-// Whole-number sanitiser for the loyalty redeem-points input (no decimals).
-function digitsInt(s: string): string {
-    return s.replace(/[^\d]/g, "");
 }
 
 type ChargeRow = { id: string; accountId: number | null; description: string; amount: string };
@@ -397,7 +389,7 @@ export default function PosScreen({ editId }: { editId?: number }) {
         const frac = cap == null ? 1 : Math.max(0, Math.min(100, cap)) / 100;
         return acc + net * frac;
     }, 0);
-    const requestedPts = canRedeem && redeemOn && !redeemBlocked ? parseInt(digitsInt(redeemPointsStr) || "0", 10) : 0;
+    const requestedPts = canRedeem && redeemOn && !redeemBlocked ? parseInt(parseDigitsInput(redeemPointsStr) || "0", 10) : 0;
     const maxRedeemablePts = rates && rates.redeemValue > 0 ? Math.floor(maxRedeemableRupees / rates.redeemValue) : 0;
     const cappedPts = Math.min(requestedPts, loyaltyBalance, maxRedeemablePts);
     const redeemPts = cappedPts >= minRedeemPts ? cappedPts : 0;
@@ -465,7 +457,7 @@ export default function PosScreen({ editId }: { editId?: number }) {
         setGcBusy(true);
         try {
             const { data } = await axios.post<{ ok: boolean; reason?: string; id: number; code: string; balance: number }>("/api/pos/gift-card-lookup", { code });
-            if (data.ok) { setGiftCard({ id: data.id, code: data.code, balance: data.balance }); toast.success(`Gift card ${data.code} · ${fmtINR(data.balance)} available`); }
+            if (data.ok) { setGiftCard({ id: data.id, code: data.code, balance: data.balance }); toast.success(`Gift card ${data.code} · ${formatInr(data.balance)} available`); }
             else { setGiftCard(null); toast.error(data.reason ?? "Gift card not usable"); }
         } catch {
             toast.error("Gift-card lookup failed");
@@ -534,7 +526,7 @@ export default function PosScreen({ editId }: { editId?: number }) {
             const data = await runValidate({ code });
             if (data?.ok) {
                 setAppliedCoupon(hit(data));
-                toast.success(`Coupon ${data.code ?? data.name} applied · − ${fmtINR(data.discountRupees)}`);
+                toast.success(`Coupon ${data.code ?? data.name} applied · − ${formatInr(data.discountRupees)}`);
             } else {
                 setAppliedCoupon(null);
                 toast.error(data?.reason ?? "Coupon not applicable");
@@ -645,8 +637,7 @@ export default function PosScreen({ editId }: { editId?: number }) {
                 })));
             } catch (e: unknown) {
                 if (cancelled) return;
-                const msg = axios.isAxiosError(e) ? (e.response?.data as { error?: string })?.error : undefined;
-                toast.error(msg ?? "Could not load the sale to edit");
+                toast.error(extractApiError(e, "Could not load the sale to edit"));
                 router.push("/office/accountancy/vouchers-registers/sales");
             }
         })();
@@ -767,8 +758,7 @@ export default function PosScreen({ editId }: { editId?: number }) {
                 toast.success("Sale updated");
                 router.push("/office/accountancy/vouchers-registers/sales");
             } catch (e: unknown) {
-                const msg = axios.isAxiosError(e) ? (e.response?.data as { error?: string })?.error : undefined;
-                toast.error(msg ?? "Failed to update sale");
+                toast.error(extractApiError(e, "Failed to update sale"));
             } finally {
                 setSubmitting(false);
             }
@@ -780,14 +770,14 @@ export default function PosScreen({ editId }: { editId?: number }) {
         const summaryParts: string[] = [];
         if (cashNet > 0) {
             const tenderedNote = pay.cashReturn > 0 ? ` (₹${pay.cashTendered} − ₹${pay.cashReturn} return)` : "";
-            summaryParts.push(`Cash ${fmtINR(cashNet)}${tenderedNote}`);
+            summaryParts.push(`Cash ${formatInr(cashNet)}${tenderedNote}`);
         }
         for (const s of splits) {
             if (s.amount <= 0) continue;
             const label = payAccountById.get(s.paymentAccountId ?? -1)?.label ?? "Payment";
-            summaryParts.push(`${label} ${fmtINR(s.amount)}${s.reference ? ` (${s.reference})` : ""}`);
+            summaryParts.push(`${label} ${formatInr(s.amount)}${s.reference ? ` (${s.reference})` : ""}`);
         }
-        if (onCredit > 0) summaryParts.push(`On credit ${fmtINR(onCredit)}`);
+        if (onCredit > 0) summaryParts.push(`On credit ${formatInr(onCredit)}`);
         if (summaryParts.length === 0) {
             toast.error("Enter Cash or UPI — or it'll all go on credit (which is fine, just say so)");
             return;
@@ -803,8 +793,8 @@ export default function PosScreen({ editId }: { editId?: number }) {
             const due = new Date(); due.setDate(due.getDate() + 30);
             const splitSummary = summaryParts.join(" + ");
             const tail =
-                advanceTaken > 0 ? ` | Advance ${fmtINR(advanceTaken)}` :
-                    arrearPaid > 0 ? ` | Cleared arrear ${fmtINR(arrearPaid)}` :
+                advanceTaken > 0 ? ` | Advance ${formatInr(advanceTaken)}` :
+                    arrearPaid > 0 ? ` | Cleared arrear ${formatInr(arrearPaid)}` :
                         "";
 
             // Build the payments array. Each non-cash line carries the chosen
@@ -877,16 +867,16 @@ export default function PosScreen({ editId }: { editId?: number }) {
                 : data.pointsRedeemed > 0 ? ` · ${data.pointsRedeemed} pts redeemed (bal ${data.loyaltyBalance})`
                     : "";
             const bonusMsg = data.milestoneBonus > 0 ? ` 🏆 +${data.milestoneBonus} milestone bonus!` : "";
-            const couponMsg = data.couponDiscount > 0 ? ` · coupon − ${fmtINR(data.couponDiscount)}` : "";
+            const couponMsg = data.couponDiscount > 0 ? ` · coupon − ${formatInr(data.couponDiscount)}` : "";
             const gcCouponMsg = data.milestoneCoupons?.length ? ` 🎟 coupon ${data.milestoneCoupons.join(", ")} issued!` : "";
             let surplusMsg = "";
             if (data.surplusCollected > 0) {
                 const parts: string[] = [];
-                if (data.arrearCleared > 0) parts.push(`cleared dues ${fmtINR(data.arrearCleared)}`);
-                if (data.advanceCredited > 0) parts.push(`advance ${fmtINR(data.advanceCredited)}`);
-                surplusMsg = ` · ${data.receiptVoucherRef ?? "Receipt"} +${fmtINR(data.surplusCollected)}${parts.length ? ` (${parts.join(", ")})` : ""}`;
+                if (data.arrearCleared > 0) parts.push(`cleared dues ${formatInr(data.arrearCleared)}`);
+                if (data.advanceCredited > 0) parts.push(`advance ${formatInr(data.advanceCredited)}`);
+                surplusMsg = ` · ${data.receiptVoucherRef ?? "Receipt"} +${formatInr(data.surplusCollected)}${parts.length ? ` (${parts.join(", ")})` : ""}`;
             }
-            toast.success(`Invoice ${data.voucherRef} · ${fmtINR(total)}${couponMsg}${ptsMsg}${bonusMsg}${gcCouponMsg}${surplusMsg}`);
+            toast.success(`Invoice ${data.voucherRef} · ${formatInr(total)}${couponMsg}${ptsMsg}${bonusMsg}${gcCouponMsg}${surplusMsg}`);
             // Show "Thank You ₹X" on the customer display and hold it so the
             // coordinator doesn't immediately overwrite it as state resets.
             void qrDisplay.thankyou({ amount: total });
@@ -1014,8 +1004,7 @@ export default function PosScreen({ editId }: { editId?: number }) {
                 }
             }
         } catch (e: unknown) {
-            const msg = axios.isAxiosError(e) ? (e.response?.data as { error?: string })?.error : undefined;
-            toast.error(msg ?? "Failed to generate invoice");
+            toast.error(extractApiError(e, "Failed to generate invoice"));
         } finally {
             setSubmitting(false);
         }
@@ -1475,11 +1464,11 @@ export default function PosScreen({ editId }: { editId?: number }) {
                                                     <div className="hidden lg:flex flex-col items-end gap-0.5 text-[10px] leading-tight text-muted-foreground">
                                                         <div className="flex items-center gap-1.5">
                                                             <span className="uppercase tracking-wider">MRP</span>
-                                                            <span className={mrp != null && mrp !== l.unitPrice ? "line-through" : ""}>{mrp != null ? fmtINR(mrp) : "—"}</span>
+                                                            <span className={mrp != null && mrp !== l.unitPrice ? "line-through" : ""}>{mrp != null ? formatInr(mrp) : "—"}</span>
                                                         </div>
                                                         <div className="flex items-center gap-1.5">
                                                             <span className="uppercase tracking-wider">Barcode</span>
-                                                            <span>{barcode != null ? fmtINR(barcode) : "—"}</span>
+                                                            <span>{barcode != null ? formatInr(barcode) : "—"}</span>
                                                         </div>
                                                     </div>
                                                     <div className="flex items-center gap-1">
@@ -1526,10 +1515,10 @@ export default function PosScreen({ editId }: { editId?: number }) {
                                 <span>Subtotal</span>
                                 {tax > 0.005 && (
                                     <span className="text-[11px] font-normal tabular-nums text-muted-foreground">
-                                        incl. GST · SGST {fmtINR(tax / 2)} + CGST {fmtINR(tax / 2)} = {fmtINR(tax)}
+                                        incl. GST · SGST {formatInr(tax / 2)} + CGST {formatInr(tax / 2)} = {formatInr(tax)}
                                     </span>
                                 )}
-                                <span className="font-medium">{fmtINR(subtotal + tax)}</span>
+                                <span className="font-medium">{formatInr(subtotal + tax)}</span>
                             </div>
                             {/* Discounts — each kind is its own chip, joined by a "+" since
                                 they add up. One flex-wrap row; extra discount types wrap to
@@ -1548,7 +1537,7 @@ export default function PosScreen({ editId }: { editId?: number }) {
                                             >
                                                 Level Discount ({snapshot?.customerLevel ? `${snapshot.customerLevel} ` : ""}{discountPct}%)
                                             </span>
-                                            <span className="font-medium tabular-nums">− {fmtINR(discountAmount)}</span>
+                                            <span className="font-medium tabular-nums">− {formatInr(discountAmount)}</span>
                                         </span>,
                                     );
                                 }
@@ -1579,7 +1568,7 @@ export default function PosScreen({ editId }: { editId?: number }) {
                                                     type="text"
                                                     inputMode="numeric"
                                                     value={redeemPointsStr}
-                                                    onChange={(e) => setRedeemPointsStr(digitsInt(e.target.value))}
+                                                    onChange={(e) => setRedeemPointsStr(parseDigitsInput(e.target.value))}
                                                     placeholder="0"
                                                     className="h-5 w-20 text-right text-xs"
                                                 />
@@ -1588,11 +1577,11 @@ export default function PosScreen({ editId }: { editId?: number }) {
                                                 {couponBlockedLoyalty
                                                     ? "(blocked by coupon)"
                                                     : redeemBlocked
-                                                        ? `(redeem from ${fmtINR(rates.minRedeemInvoiceValue ?? 0)})`
-                                                        : `(${loyaltyBalance} avail · ${fmtINR(rates.redeemValue)}/pt)`}
+                                                        ? `(redeem from ${formatInr(rates.minRedeemInvoiceValue ?? 0)})`
+                                                        : `(${loyaltyBalance} avail · ${formatInr(rates.redeemValue)}/pt)`}
                                             </span>
                                             {effRedemptionRupees > 0.005 && (
-                                                <span className="font-medium tabular-nums text-emerald-600 dark:text-emerald-400">− {fmtINR(effRedemptionRupees)}</span>
+                                                <span className="font-medium tabular-nums text-emerald-600 dark:text-emerald-400">− {formatInr(effRedemptionRupees)}</span>
                                             )}
                                         </span>,
                                     );
@@ -1611,7 +1600,7 @@ export default function PosScreen({ editId }: { editId?: number }) {
                                         {/* combined total on the right of the SAME line */}
                                         {totalDiscount > 0.005 && (
                                             <span className="shrink-0 whitespace-nowrap font-medium tabular-nums text-emerald-600 dark:text-emerald-400">
-                                                Total discount − {fmtINR(totalDiscount)}
+                                                Total discount − {formatInr(totalDiscount)}
                                             </span>
                                         )}
                                     </div>
@@ -1632,7 +1621,7 @@ export default function PosScreen({ editId }: { editId?: number }) {
                                             <span className="rounded bg-rose-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-rose-700 dark:bg-rose-500/15 dark:text-rose-300">
                                                 {appliedCoupon.code ?? "AUTO"}
                                             </span>
-                                            <span className="font-medium tabular-nums text-emerald-600 dark:text-emerald-400">− {fmtINR(couponRupees)}</span>
+                                            <span className="font-medium tabular-nums text-emerald-600 dark:text-emerald-400">− {formatInr(couponRupees)}</span>
                                             {couponDroppedTier && <span className="text-[10px] text-amber-600 dark:text-amber-400">replaces tier</span>}
                                             {couponBlockedLoyalty && <span className="text-[10px] text-amber-600 dark:text-amber-400">blocks loyalty</span>}
                                             <Button size="icon" variant="ghost" className="h-5 w-5" onClick={() => { setAppliedCoupon(null); setCouponCodeStr(""); }}>
@@ -1643,7 +1632,7 @@ export default function PosScreen({ editId }: { editId?: number }) {
                                         <div className="flex flex-wrap items-center gap-2">
                                             {autoCoupon && (
                                                 <span className="inline-flex items-center gap-1 rounded bg-emerald-100 px-1.5 py-0.5 text-[11px] text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
-                                                    <Sparkles size={11} /> Auto offer{autoCoupon.code ? ` ${autoCoupon.code}` : ""} · − {fmtINR(autoCoupon.rupees)}
+                                                    <Sparkles size={11} /> Auto offer{autoCoupon.code ? ` ${autoCoupon.code}` : ""} · − {formatInr(autoCoupon.rupees)}
                                                 </span>
                                             )}
                                             <Input
@@ -1672,8 +1661,8 @@ export default function PosScreen({ editId }: { editId?: number }) {
                                             <span className="rounded bg-teal-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-teal-700 dark:bg-teal-500/15 dark:text-teal-300">
                                                 {giftCard.code}
                                             </span>
-                                            <span className="font-medium tabular-nums text-emerald-600 dark:text-emerald-400">− {fmtINR(giftCardApplied)}</span>
-                                            <span className="text-[10px] text-muted-foreground">bal {fmtINR(Math.max(0, giftCard.balance - giftCardApplied))} after</span>
+                                            <span className="font-medium tabular-nums text-emerald-600 dark:text-emerald-400">− {formatInr(giftCardApplied)}</span>
+                                            <span className="text-[10px] text-muted-foreground">bal {formatInr(Math.max(0, giftCard.balance - giftCardApplied))} after</span>
                                             <Button size="icon" variant="ghost" className="h-5 w-5" onClick={() => { setGiftCard(null); setGiftCardCodeStr(""); }}>
                                                 <X size={12} />
                                             </Button>
@@ -1698,7 +1687,7 @@ export default function PosScreen({ editId }: { editId?: number }) {
                             {giftCardApplied > 0.005 && (
                                 <div className="flex items-center justify-between text-xs font-medium">
                                     <span className="text-muted-foreground">Pay (after gift card)</span>
-                                    <span className="tabular-nums">{fmtINR(payableTotal)}</span>
+                                    <span className="tabular-nums">{formatInr(payableTotal)}</span>
                                 </div>
                             )}
 
@@ -1736,7 +1725,7 @@ export default function PosScreen({ editId }: { editId?: number }) {
                                                         type="text"
                                                         inputMode="decimal"
                                                         value={shippingAmtStr}
-                                                        onChange={(e) => setShippingAmtStr(numUnsigned(e.target.value))}
+                                                        onChange={(e) => setShippingAmtStr(parseDecimalInput(e.target.value))}
                                                         placeholder="0.00"
                                                         className="h-7 w-28 text-right text-xs"
                                                     />
@@ -1825,7 +1814,7 @@ export default function PosScreen({ editId }: { editId?: number }) {
                                         <span className="text-[11px] text-muted-foreground">{cart.length} item{cart.length > 1 ? "s" : ""}</span>
                                     )}
                                 </div>
-                                <span className="text-xl font-bold tabular-nums">{fmtINR(total)}</span>
+                                <span className="text-xl font-bold tabular-nums">{formatInr(total)}</span>
                             </div>
                             <Button onClick={isEdit ? () => void generateInvoice(false) : openCheckout} disabled={cart.length === 0 || !snapshot?.account || submitting} className="h-12 w-full text-base" size="lg">
                                 <ReceiptIndianRupee size={18} /> {isEdit ? "Update Sale" : "Checkout"}
@@ -1924,8 +1913,8 @@ function CustomerPanel({ snapshot }: { snapshot: Snapshot }) {
                 <Stat
                     icon={<CreditCard size={14} />}
                     label="Avail. credit"
-                    value={snapshot.availableCredit != null ? fmtINR(snapshot.availableCredit) : "Unlimited"}
-                    sub={snapshot.creditLimit != null ? `limit ${fmtINR(snapshot.creditLimit)}` : "no limit set"}
+                    value={snapshot.availableCredit != null ? formatInr(snapshot.availableCredit) : "Unlimited"}
+                    sub={snapshot.creditLimit != null ? `limit ${formatInr(snapshot.creditLimit)}` : "no limit set"}
                 />
                 {/* Due — sign-aware: flips to "Advance" (green) when the ledger is
                     in credit, so it absorbs the old separate ledger-balance row. */}
@@ -1936,7 +1925,7 @@ function CustomerPanel({ snapshot }: { snapshot: Snapshot }) {
                         <Stat
                             icon={credit ? <Wallet size={14} /> : <TrendingDown size={14} />}
                             label={credit ? "Advance" : "Due"}
-                            value={fmtINR(credit ? Math.abs(bal) : snapshot.balanceDue)}
+                            value={formatInr(credit ? Math.abs(bal) : snapshot.balanceDue)}
                             sub={credit ? "in their favour" : snapshot.balanceDue > 0 ? "outstanding" : "clean"}
                             valueClass={credit ? "text-emerald-600 dark:text-emerald-400" : undefined}
                         />
@@ -1945,7 +1934,7 @@ function CustomerPanel({ snapshot }: { snapshot: Snapshot }) {
                 <Stat
                     icon={<AlertCircle size={14} />}
                     label="Overdue"
-                    value={fmtINR(snapshot.balanceOverdue)}
+                    value={formatInr(snapshot.balanceOverdue)}
                     sub={snapshot.balanceOverdue > 0 ? "past due" : "—"}
                 />
             </div>
@@ -1981,9 +1970,9 @@ function CustomerPanel({ snapshot }: { snapshot: Snapshot }) {
 
             {/* Value & loyalty */}
             <div className="grid grid-cols-2 gap-1.5">
-                <Stat icon={<TrendingUp size={14} />} label="Lifetime turnover" value={fmtINR(snapshot.turnover.lifetime)} sub={`${snapshot.turnover.invoiceCount} invoices`} />
-                <Stat icon={<TrendingUp size={14} />} label="Last 12 mo" value={fmtINR(snapshot.turnover.last12Months)} />
-                <Stat icon={<Award size={14} />} label="Loyalty points" value={String(snapshot.loyaltyPoints)} sub={snapshot.loyaltyRates?.enabled ? `worth ${fmtINR(snapshot.loyaltyPoints * snapshot.loyaltyRates.redeemValue)} · 1 pt / ₹${snapshot.loyaltyRates.globalEarnRatePer}` : snapshot.discountPct > 0 ? `${snapshot.discountPct}% discount tier` : "No tier yet"} />
+                <Stat icon={<TrendingUp size={14} />} label="Lifetime turnover" value={formatInr(snapshot.turnover.lifetime)} sub={`${snapshot.turnover.invoiceCount} invoices`} />
+                <Stat icon={<TrendingUp size={14} />} label="Last 12 mo" value={formatInr(snapshot.turnover.last12Months)} />
+                <Stat icon={<Award size={14} />} label="Loyalty points" value={String(snapshot.loyaltyPoints)} sub={snapshot.loyaltyRates?.enabled ? `worth ${formatInr(snapshot.loyaltyPoints * snapshot.loyaltyRates.redeemValue)} · 1 pt / ₹${snapshot.loyaltyRates.globalEarnRatePer}` : snapshot.discountPct > 0 ? `${snapshot.discountPct}% discount tier` : "No tier yet"} />
                 <Stat icon={<Clock size={14} />} label="Last visit" value={since(snapshot.lastVisitAt)} />
             </div>
 

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requirePermission } from "@/shared/lib/auth/permissions";
-import { validateRequest, handleApiError } from "@/shared/lib/api";
+import { validateRequest, handleApiError, parseIdParam } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { giftCardUpdateSchema } from "@/shared/lib/schemas/giftCardSchemas";
 
@@ -11,8 +11,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const { response } = await requirePermission(PERMISSIONS.COUPONS_MANAGE);
     if (response) return response;
 
-    const id = Number((await params).id);
-    if (!Number.isFinite(id)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+    const { id, error: idError } = await parseIdParam(params);
+    if (idError) return idError;
 
     const { data, error } = await validateRequest(req, giftCardUpdateSchema);
     if (error) return error;
@@ -61,8 +61,8 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     const { response } = await requirePermission(PERMISSIONS.COUPONS_MANAGE);
     if (response) return response;
 
-    const id = Number((await params).id);
-    if (!Number.isFinite(id)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+    const { id, error } = await parseIdParam(params);
+    if (error) return error;
 
     try {
         const card = await prisma.giftCard.findUnique({ where: { id }, select: { status: true } });

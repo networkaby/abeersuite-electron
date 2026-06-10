@@ -4,6 +4,8 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { parseIdParam } from "@/shared/lib/api";
+import { pickDefined } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const updateSchema = z.object({
@@ -19,8 +21,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
     if (response) return response;
 
-    const id = Number((await params).id);
-    if (!Number.isFinite(id)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+    const { id, error: idError } = await parseIdParam(params);
+    if (idError) return idError;
 
     const { data, error } = await validateRequest(req, updateSchema);
 
@@ -35,13 +37,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     try {
         const account = await prisma.account.update({
             where: { id },
-            data: {
-                ...(body.name        !== undefined ? { name:        body.name }        : {}),
-                ...(body.groupId     !== undefined ? { groupId:     body.groupId }     : {}),
-                ...(body.code        !== undefined ? { code:        body.code }        : {}),
-                ...(body.description !== undefined ? { description: body.description } : {}),
-                ...(body.isActive    !== undefined ? { isActive:    body.isActive }    : {}),
-            },
+            data: pickDefined({
+                name: body.name,
+                groupId: body.groupId,
+                code: body.code,
+                description: body.description,
+                isActive: body.isActive,
+            }),
             include: { group: { select: { id: true, name: true } } },
         });
         return NextResponse.json(account);

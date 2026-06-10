@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/components/GlAccountCombobox";
+import { extractApiError } from "@/shared/lib/api";
 
 export function PosExpenditureDialog({
     open, onOpenChange, shiftId, counterName, onDone,
@@ -62,8 +63,7 @@ export function PosExpenditureDialog({
             onDone();
             onOpenChange(false);
         } catch (e: unknown) {
-            const msg = axios.isAxiosError(e) ? (e.response?.data as { error?: string })?.error : undefined;
-            toast.error(msg ?? "Failed to record expenditure");
+            toast.error(extractApiError(e, "Failed to record expenditure"));
         } finally {
             setSubmitting(false);
         }

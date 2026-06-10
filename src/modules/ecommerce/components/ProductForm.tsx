@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
+import { extractApiError } from "@/shared/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -187,11 +188,7 @@ export default function ProductForm({
             toast.success("Saved");
             onSaved?.(res.data);
         } catch (e: unknown) {
-            const msg =
-                axios.isAxiosError(e) && e.response?.data && typeof e.response.data === "object"
-                    ? (e.response.data as { error?: string }).error
-                    : "Save failed";
-            toast.error(msg ?? "Save failed");
+            toast.error(extractApiError(e, "Save failed"));
         } finally {
             setBusy(false);
         }

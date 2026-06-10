@@ -5,6 +5,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import { X, Plus, Check } from "lucide-react";
 import { phoneError, emailError } from "@/shared/components/PartySearchAndCreate";
+import { extractApiError } from "@/shared/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -69,7 +70,7 @@ export default function CompanyProfileEdit({ profile, onSaved }: Props) {
             toast.success("Saved");
             onSaved();
         } catch (e) {
-            toast.error(axios.isAxiosError(e) ? (e.response?.data?.error ?? "Save failed") : "Save failed");
+            toast.error(extractApiError(e, "Save failed"));
         } finally {
             setSaving(false);
         }
@@ -86,7 +87,7 @@ export default function CompanyProfileEdit({ profile, onSaved }: Props) {
             setNewPhone("");
             setAddingPhone(false);
         } catch (e) {
-            toast.error(axios.isAxiosError(e) ? (e.response?.data?.error ?? "Failed to add phone") : "Failed to add phone");
+            toast.error(extractApiError(e, "Failed to add phone"));
         }
     };
 
@@ -110,7 +111,7 @@ export default function CompanyProfileEdit({ profile, onSaved }: Props) {
             setNewEmail("");
             setAddingEmail(false);
         } catch (e) {
-            toast.error(axios.isAxiosError(e) ? (e.response?.data?.error ?? "Failed to add email") : "Failed to add email");
+            toast.error(extractApiError(e, "Failed to add email"));
         }
     };
 

@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { voucherTypeLabel } from "@/shared/lib/format/voucherTypeLabel";
+import { extractApiError } from "@/shared/lib/api";
 
 interface AuditRow {
     id: number;
@@ -56,8 +57,7 @@ export function RecycleBin() {
             toast.success(`Restored ${data.reference}`);
             load();
         } catch (e: unknown) {
-            const msg = axios.isAxiosError(e) ? e.response?.data?.error : null;
-            toast.error(msg ?? "Restore failed");
+            toast.error(extractApiError(e, "Restore failed"));
         } finally {
             setBusyId(null);
         }

@@ -2,7 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { toNumber } from "@/modules/accountancy/lib/balance";
-import { handleApiError } from "@/shared/lib/api";
+import { handleApiError, parseIdParam } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 // POST /api/inventory/products/[id]/resync-stock
@@ -18,8 +18,8 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     const { response } = await requirePermission(PERMISSIONS.INVENTORY_MANAGE);
     if (response) return response;
     try {
-        const id = Number((await params).id);
-        if (!Number.isFinite(id)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+        const { id, error } = await parseIdParam(params);
+        if (error) return error;
 
         const before = await prisma.invProduct.findUnique({
             where: { id },

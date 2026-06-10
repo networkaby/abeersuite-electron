@@ -31,6 +31,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
+import { extractApiError } from "@/shared/lib/api";
 import { Crown, Building2, Briefcase, Users, AlertCircle, Landmark, Plus, Trash2, UserPlus, UserMinus, ArrowRightLeft } from "lucide-react";
 import type { OrgStructure, PositionNode } from "@/shared/types/orgChart";
 import { classifyPosition, SECTION_LABELS } from "@/modules/admin/lib/orgChartClassification";
@@ -660,8 +661,7 @@ export default function OrgRegions({
             toast.success(`${noun.charAt(0).toUpperCase() + noun.slice(1)} ${label} deleted`);
             onMutated?.();
         } catch (err: unknown) {
-            const msg = axios.isAxiosError(err) ? (err.response?.data?.error ?? err.message) : `Failed to delete ${noun}`;
-            toast.error(msg);
+            toast.error(extractApiError(err, `Failed to delete ${noun}`));
         }
     }, [onMutated]);
 
@@ -675,8 +675,7 @@ export default function OrgRegions({
             toast.success(`${userName} removed from ${positionTitle}`);
             onMutated?.();
         } catch (err: unknown) {
-            const msg = axios.isAxiosError(err) ? (err.response?.data?.error ?? err.message) : "Failed to remove holder";
-            toast.error(msg);
+            toast.error(extractApiError(err, "Failed to remove holder"));
         }
     }, [onMutated]);
 

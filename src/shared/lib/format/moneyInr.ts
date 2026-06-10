@@ -18,3 +18,14 @@ export function formatRupees(rupees: number): string {
         maximumFractionDigits: 0,
     }).format(rupees);
 }
+
+/**
+ * Float rupees → "₹1,234.00" (2dp, default) or "₹1,234" (0dp), matching the
+ * legacy inline `₹${n.toLocaleString("en-IN", …)}` format used across modules.
+ */
+export function formatInr(rupees: number, decimals: 0 | 2 = 2): string {
+    return `₹${rupees.toLocaleString("en-IN", {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals,
+    })}`;
+}

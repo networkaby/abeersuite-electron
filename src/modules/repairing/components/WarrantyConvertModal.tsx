@@ -11,6 +11,7 @@ import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { toDateInput } from "@/shared/lib/format";
 
 interface Props {
     ticketId: number; isWarranty: boolean; warrantyStatus: string;
@@ -32,7 +33,7 @@ export default function WarrantyConvertModal({ ticketId, isWarranty, warrantySta
     const [voidReason, setVoidReason] = useState("");
     const [note, setNote] = useState("");
     const [warrantyRef, setWarrantyRef] = useState(initRef ?? "");
-    const [purchaseDate, setPurchaseDate] = useState(initDate ? initDate.slice(0, 10) : "");
+    const [purchaseDate, setPurchaseDate] = useState(toDateInput(initDate ?? null));
     const [saving, setSaving] = useState(false);
 
     const toWarranty = !isWarranty || (isWarranty && warrantyStatus === "VOID");

@@ -23,6 +23,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { fmt } from "@/utils/constants";
+import { extractApiError } from "@/shared/lib/api";
 
 type Counter = {
     id: number;
@@ -93,8 +94,7 @@ export function ShiftOpenDialog({
             onOpened(data);
             onOpenChange(false);
         } catch (e: unknown) {
-            const msg = axios.isAxiosError(e) ? (e.response?.data as { error?: string })?.error : undefined;
-            toast.error(msg ?? "Failed to open shift");
+            toast.error(extractApiError(e, "Failed to open shift"));
         } finally {
             setSubmitting(false);
         }

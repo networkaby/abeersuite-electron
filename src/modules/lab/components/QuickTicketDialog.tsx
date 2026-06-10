@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
+import { extractApiError } from "@/shared/lib/api";
 import { Wrench, X } from "lucide-react";
 import {
     Dialog,
@@ -100,11 +101,7 @@ export default function QuickTicketDialog({
             onCreated?.(data.id);
             onOpenChange(false);
         } catch (err: unknown) {
-            const message = axios.isAxiosError(err)
-                ? (err.response?.data as { error?: string })?.error ??
-                  err.message
-                : "Could not create ticket";
-            toast.error(message);
+            toast.error(extractApiError(err, "Could not create ticket"));
         } finally {
             setSubmitting(false);
         }

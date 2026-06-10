@@ -4,6 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { parseIdParam } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const updateSchema = z.object({
@@ -35,8 +36,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
     if (response) return response;
 
-    const id = Number((await params).id);
-    if (!Number.isFinite(id)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+    const { id, error: idError } = await parseIdParam(params);
+    if (idError) return idError;
 
     const { data, error } = await validateRequest(req, updateSchema);
 
@@ -86,8 +87,8 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
     if (response) return response;
 
-    const id = Number((await params).id);
-    if (!Number.isFinite(id)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+    const { id, error } = await parseIdParam(params);
+    if (error) return error;
 
     const group = await prisma.accountGroup.findUnique({
         where: { id },

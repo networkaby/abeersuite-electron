@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requireAuth } from "@/shared/lib/auth/permissions";
-import { handleApiError } from "@/shared/lib/api";
+import { handleApiError, parseIdParam } from "@/shared/lib/api";
 import { selectPrimaryPhone, selectPrimaryEmail } from "@/shared/lib/prisma/fragments";
 
 // GET /api/pos/person-snapshot/[id]
@@ -27,8 +27,8 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     const { response } = await requireAuth();
     if (response) return response;
 
-    const id = Number((await params).id);
-    if (!Number.isFinite(id)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+    const { id, error } = await parseIdParam(params);
+    if (error) return error;
 
     try {
         const person = await prisma.person.findUnique({

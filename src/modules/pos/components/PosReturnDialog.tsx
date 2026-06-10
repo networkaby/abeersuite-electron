@@ -24,6 +24,7 @@ import {
     type PickedParty,
 } from "@/shared/components/PartySearchAndCreate";
 import { fmt } from "@/utils/constants";
+import { extractApiError } from "@/shared/lib/api";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -242,10 +243,7 @@ export function PosReturnDialog({
             onOpenChange(false);
             reset();
         } catch (e: unknown) {
-            const msg = axios.isAxiosError(e)
-                ? (e.response?.data as { error?: string })?.error
-                : undefined;
-            toast.error(msg ?? "Failed to process return");
+            toast.error(extractApiError(e, "Failed to process return"));
         } finally {
             setSubmitting(false);
         }

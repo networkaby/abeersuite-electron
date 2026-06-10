@@ -18,6 +18,8 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
+import { extractApiError } from "@/shared/lib/api";
+import { parseDigitsInput } from "@/shared/lib/format";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { SearchableSelect } from "@/shared/components/SearchableSelect";
@@ -226,8 +228,7 @@ export function InventoryMasterDropdownQuickDialog({
             toast.success(`Created ${kind} "${kind === "unit" ? code.trim() : trimmedName}"`);
             await onCreated(res.data.id);
         } catch (e: unknown) {
-            const msg = axios.isAxiosError(e) ? e.response?.data?.error : null;
-            toast.error(msg ?? `Failed to create ${kind}`);
+            toast.error(extractApiError(e, `Failed to create ${kind}`));
         } finally {
             setSaving(false);
         }
@@ -363,7 +364,7 @@ export function InventoryMasterDropdownQuickDialog({
                                 <Input
                                     id="mq-days"
                                     value={durationDays}
-                                    onChange={(e) => setDurationDays(e.target.value.replace(/[^\d]/g, ""))}
+                                    onChange={(e) => setDurationDays(parseDigitsInput(e.target.value))}
                                     placeholder="e.g. 365 (1 year)"
                                     inputMode="numeric"
                                 />
@@ -387,7 +388,7 @@ export function InventoryMasterDropdownQuickDialog({
                             <Input
                                 id="mq-dec"
                                 value={decimals}
-                                onChange={(e) => setDecimals(e.target.value.replace(/[^\d]/g, ""))}
+                                onChange={(e) => setDecimals(parseDigitsInput(e.target.value))}
                                 inputMode="numeric"
                                 className="w-24"
                             />

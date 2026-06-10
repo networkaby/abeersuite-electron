@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { extractApiError } from "@/shared/lib/api";
+import { parseDecimalInput } from "@/shared/lib/format";
 
 interface Tier {
     id: number;
@@ -18,8 +20,6 @@ interface Tier {
     enabled: boolean;
     sortOrder: number;
 }
-
-const dec = (s: string): string => s.replace(/[^\d.]/g, "").replace(/(\..*)\./g, "$1");
 
 export function CustomerTiers() {
     const [tiers, setTiers] = useState<Tier[]>([]);
@@ -50,8 +50,7 @@ export function CustomerTiers() {
             setName(""); setMinSpend(""); setDiscountPct(""); setShowAdd(false);
             load();
         } catch (e) {
-            const msg = axios.isAxiosError(e) ? (e.response?.data?.error ?? "Failed to add tier") : "Failed to add tier";
-            toast.error(msg);
+            toast.error(extractApiError(e, "Failed to add tier"));
         } finally {
             setAdding(false);
         }
@@ -111,12 +110,12 @@ export function CustomerTiers() {
                             <Label className="text-[11px] text-muted-foreground">Lifetime spend ≥</Label>
                             <div className="relative">
                                 <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">₹</span>
-                                <Input inputMode="decimal" value={minSpend} onChange={(e) => setMinSpend(dec(e.target.value))} placeholder="50000" className="h-9 pl-6 text-right" />
+                                <Input inputMode="decimal" value={minSpend} onChange={(e) => setMinSpend(parseDecimalInput(e.target.value))} placeholder="50000" className="h-9 pl-6 text-right" />
                             </div>
                         </div>
                         <div className="space-y-1">
                             <Label className="text-[11px] text-muted-foreground">Discount %</Label>
-                            <Input inputMode="decimal" value={discountPct} onChange={(e) => setDiscountPct(dec(e.target.value))} placeholder="5" className="h-9 text-right" />
+                            <Input inputMode="decimal" value={discountPct} onChange={(e) => setDiscountPct(parseDecimalInput(e.target.value))} placeholder="5" className="h-9 text-right" />
                         </div>
                     </div>
                     <div className="flex justify-end">
@@ -146,7 +145,7 @@ export function CustomerTiers() {
                                     <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">₹</span>
                                     <Input
                                         defaultValue={String(Number(t.minSpend))}
-                                        onBlur={(e) => { const v = Number(dec(e.target.value)); if (Number.isFinite(v) && v !== Number(t.minSpend)) patchTier(t.id, { minSpend: v }); }}
+                                        onBlur={(e) => { const v = Number(parseDecimalInput(e.target.value)); if (Number.isFinite(v) && v !== Number(t.minSpend)) patchTier(t.id, { minSpend: v }); }}
                                         className="h-8 pl-6 text-right text-xs"
                                     />
                                 </div>
@@ -154,7 +153,7 @@ export function CustomerTiers() {
                             <div className="flex shrink-0 items-center gap-1" title="Discount % at this tier">
                                 <Input
                                     defaultValue={String(Number(t.discountPct))}
-                                    onBlur={(e) => { const v = Number(dec(e.target.value)); if (Number.isFinite(v) && v !== Number(t.discountPct)) patchTier(t.id, { discountPct: v }); }}
+                                    onBlur={(e) => { const v = Number(parseDecimalInput(e.target.value)); if (Number.isFinite(v) && v !== Number(t.discountPct)) patchTier(t.id, { discountPct: v }); }}
                                     className="h-8 w-16 text-right text-xs"
                                 />
                                 <span className="text-xs text-muted-foreground">%</span>

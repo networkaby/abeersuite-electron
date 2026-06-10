@@ -5,7 +5,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
-import { validateRequest, handleApiError } from "@/shared/lib/api";
+import { validateRequest, handleApiError, pickDefined } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 // One payment account on the counter. `id` present = update that row; absent =
@@ -166,11 +166,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
             return tx.posCounter.update({
                 where: { id },
-                data: {
-                    ...(data.name     !== undefined && { name: data.name }),
-                    ...(data.isActive !== undefined && { isActive: data.isActive }),
-                    ...(data.allowedExpenseAccountIds !== undefined && { allowedExpenseAccountIds: data.allowedExpenseAccountIds }),
-                },
+                data: pickDefined({
+                    name: data.name,
+                    isActive: data.isActive,
+                    allowedExpenseAccountIds: data.allowedExpenseAccountIds,
+                }),
                 include: counterInclude,
             });
         });

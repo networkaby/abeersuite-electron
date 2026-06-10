@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
+import { extractApiError } from "@/shared/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -224,7 +225,7 @@ export function AllocateVoucherDialog({
             onDone();
             onClose();
         } catch (err: unknown) {
-            toast.error(axios.isAxiosError(err) ? err.response?.data?.error ?? "Allocation failed" : "Allocation failed");
+            toast.error(extractApiError(err, "Allocation failed"));
         } finally {
             setSubmitting(false);
         }

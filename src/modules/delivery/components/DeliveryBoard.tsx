@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
+import { extractApiError } from "@/shared/lib/api";
 import { Loader2, RefreshCw, Truck, Pencil } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -67,8 +68,7 @@ export function DeliveryBoard() {
             await axios.patch(`/api/deliveries/${d.id}/status`, { statusId });
         } catch (e) {
             setItems(prev);
-            const msg = axios.isAxiosError(e) ? (e.response?.data as { error?: string })?.error : null;
-            toast.error(msg || "That move isn't allowed");
+            toast.error(extractApiError(e, "That move isn't allowed"));
         }
     }
 

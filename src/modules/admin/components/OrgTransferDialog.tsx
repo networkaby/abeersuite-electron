@@ -9,6 +9,7 @@
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
+import { extractApiError } from "@/shared/lib/api";
 import { ArrowRightLeft, Search, Building2, Layers } from "lucide-react";
 import {
     Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
@@ -85,8 +86,7 @@ export default function OrgTransferDialog({
             onTransferred();
             onClose();
         } catch (err: unknown) {
-            const msg = axios.isAxiosError(err) ? (err.response?.data?.error ?? err.message) : "Failed to transfer";
-            toast.error(msg);
+            toast.error(extractApiError(err, "Failed to transfer"));
         } finally {
             setBusyId(null);
         }

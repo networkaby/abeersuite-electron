@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { fmt, JOURNAL_STATUS_COLORS } from "@/utils/constants";
 import { parseAmount, isAmountChars } from "@/utils/numberInput";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
+import { extractApiError } from "@/shared/lib/api";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { consumeDuplicate } from "@/modules/accountancy/lib/duplicate";
 import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/components/GlAccountCombobox";
@@ -440,8 +441,7 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
                 toast.success(`${copy.title} ${loadedVoucher?.reference ?? ""} updated`);
                 closeForm();
             } catch (err: unknown) {
-                const msg = axios.isAxiosError(err) ? err.response?.data?.error : "Save failed";
-                toast.error(msg ?? "Save failed");
+                toast.error(extractApiError(err, "Save failed"));
             } finally {
                 setSaving(false);
             }
@@ -468,8 +468,7 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
             }
             router.push(copy.listPath);
         } catch (err: unknown) {
-            const msg = axios.isAxiosError(err) ? err.response?.data?.error : "Save failed";
-            toast.error(msg ?? "Save failed");
+            toast.error(extractApiError(err, "Save failed"));
         } finally {
             setSaving(false);
         }

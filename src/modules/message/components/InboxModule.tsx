@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
+import { extractApiError } from "@/shared/lib/api";
 import Link from "next/link";
 import { Send, Users2, Monitor, User, MessageSquare, Loader2, Hash, AtSign, Bell } from "lucide-react";
 import { supabase } from "@/shared/lib/supabase/supabaseClient";
@@ -357,8 +358,7 @@ export default function InboxModule({
             // Rollback optimistic
             setMessages((prev) => prev.filter((m) => m.id !== tempId));
             setDraft(body);
-            const msg = axios.isAxiosError(error) ? error.response?.data?.error : null;
-            toast.error(msg ?? "Failed to send message");
+            toast.error(extractApiError(error, "Failed to send message"));
         } finally {
             setSending(false);
         }

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
+import { extractApiError } from "@/shared/lib/api";
 import { Trash2, PackagePlus, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -84,7 +85,7 @@ export function AllocationDetailDialog({
             onDone();
             if (next.length === 0) onClose();
         } catch (err: unknown) {
-            toast.error(axios.isAxiosError(err) ? err.response?.data?.error ?? "Delete failed" : "Delete failed");
+            toast.error(extractApiError(err, "Delete failed"));
         }
     }
 
@@ -113,7 +114,7 @@ export function AllocationDetailDialog({
             onDone();
             onClose();
         } catch (err: unknown) {
-            toast.error(axios.isAxiosError(err) ? err.response?.data?.error ?? "Save failed" : "Save failed");
+            toast.error(extractApiError(err, "Save failed"));
         } finally {
             setSaving(false);
         }

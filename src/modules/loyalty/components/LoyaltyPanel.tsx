@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { extractApiError } from "@/shared/lib/api";
+import { parseSignedInput, formatInr } from "@/shared/lib/format";
 
 type LedgerRow = {
     id: number;
@@ -26,8 +28,6 @@ const REASON_LABEL: Record<LedgerRow["reason"], string> = {
     EARN_SALE: "Earned", REDEEM_SALE: "Redeemed", REVERSAL_RETURN: "Return reversal", ADMIN_ADJUST: "Adjustment", MILESTONE_BONUS: "Milestone bonus",
 };
 const fmtDate = (s: string) => new Date(s).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
-const fmtINR = (n: number) => `₹${n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const digitsSigned = (s: string) => s.replace(/[^\d-]/g, "").replace(/(?!^)-/g, "");
 
 export function LoyaltyPanel({ accountId, canManage = false }: { accountId: number; canManage?: boolean }) {
     const [wallet, setWallet] = useState<Wallet | null>(null);
@@ -57,8 +57,7 @@ export function LoyaltyPanel({ accountId, canManage = false }: { accountId: numb
             setNote("");
             load();
         } catch (e) {
-            const msg = axios.isAxiosError(e) ? (e.response?.data?.error ?? "Failed to adjust") : "Failed to adjust";
-            toast.error(msg);
+            toast.error(extractApiError(e, "Failed to adjust"));
         } finally {
             setSaving(false);
         }
@@ -74,7 +73,7 @@ export function LoyaltyPanel({ accountId, canManage = false }: { accountId: numb
                     <div className="flex items-center gap-1 text-xs text-muted-foreground"><Award size={14} /> Balance</div>
                     <div className="mt-1 text-2xl font-semibold tabular-nums">{wallet.balance}</div>
                 </CardContent></Card>
-                <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Worth (memo)</div><div className="mt-1 text-xl font-medium tabular-nums">{fmtINR(wallet.value)}</div></CardContent></Card>
+                <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Worth (memo)</div><div className="mt-1 text-xl font-medium tabular-nums">{formatInr(wallet.value)}</div></CardContent></Card>
                 <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Earned (lifetime)</div><div className="mt-1 text-xl font-medium tabular-nums">{wallet.totalEarned}</div></CardContent></Card>
                 <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Redeemed</div><div className="mt-1 text-xl font-medium tabular-nums">{wallet.totalRedeemed}</div></CardContent></Card>
             </div>
@@ -84,7 +83,7 @@ export function LoyaltyPanel({ accountId, canManage = false }: { accountId: numb
                 <div className="flex flex-wrap items-end gap-2 rounded-lg border border-border p-3">
                     <div className="space-y-1">
                         <label className="text-[11px] text-muted-foreground">Adjust points (±)</label>
-                        <Input value={deltaStr} onChange={(e) => setDeltaStr(digitsSigned(e.target.value))} placeholder="e.g. 50 or -20" className="h-8 w-32 text-right text-xs" />
+                        <Input value={deltaStr} onChange={(e) => setDeltaStr(parseSignedInput(e.target.value))} placeholder="e.g. 50 or -20" className="h-8 w-32 text-right text-xs" />
                     </div>
                     <div className="flex-1 space-y-1">
                         <label className="text-[11px] text-muted-foreground">Note (optional)</label>

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
+import { extractApiError } from "@/shared/lib/api";
 import { useRouter } from "next/navigation";
 import { ArrowRightLeft, Loader2, Search, Trash2, User, Building2, AlertTriangle, Merge } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -174,10 +175,7 @@ function ConvertSection() {
                     : `/office/customers/all?personId=${data.newId}`;
             router.push(target);
         } catch (err: unknown) {
-            const msg = axios.isAxiosError(err)
-                ? (err.response?.data?.error ?? "Conversion failed")
-                : "Conversion failed";
-            toast.error(msg);
+            toast.error(extractApiError(err, "Conversion failed"));
         } finally {
             setConverting(false);
         }
@@ -382,8 +380,7 @@ function MergeSection() {
             const target = data.winnerAccountId ? `/office/customers/${data.winnerAccountId}` : "/office/customers/all";
             router.push(target);
         } catch (err) {
-            const msg = axios.isAxiosError(err) ? (err.response?.data?.error ?? "Merge failed") : "Merge failed";
-            toast.error(msg);
+            toast.error(extractApiError(err, "Merge failed"));
         } finally {
             setMerging(false);
         }
@@ -643,10 +640,7 @@ function TrashSection() {
             toast.success(`Hard-deleted ${row.type} #${row.id}`);
             await load();
         } catch (err) {
-            const msg = axios.isAxiosError(err)
-                ? (err.response?.data?.error ?? "Hard-delete failed")
-                : "Hard-delete failed";
-            toast.error(msg);
+            toast.error(extractApiError(err, "Hard-delete failed"));
         } finally {
             setDeletingId(null);
         }

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
+import { extractApiError } from "@/shared/lib/api";
 import { ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,9 +37,7 @@ export default function PortalPasswordCard() {
             setNewPassword("");
             setConfirmPassword("");
         } catch (error) {
-            toast.error(
-                axios.isAxiosError(error) ? error.response?.data?.error ?? "Failed to update password" : "Failed to update password"
-            );
+            toast.error(extractApiError(error, "Failed to update password"));
         } finally {
             setLoading(false);
         }

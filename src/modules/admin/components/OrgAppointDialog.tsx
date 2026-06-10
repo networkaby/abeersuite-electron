@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import axios from "axios";
 import { toast } from "sonner";
+import { extractApiError } from "@/shared/lib/api";
 import { UserPlus, Search } from "lucide-react";
 import {
     Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
@@ -71,8 +72,7 @@ export default function OrgAppointDialog({
             onAppointed();
             onClose();
         } catch (err: unknown) {
-            const msg = axios.isAxiosError(err) ? (err.response?.data?.error ?? err.message) : "Failed to appoint";
-            toast.error(msg);
+            toast.error(extractApiError(err, "Failed to appoint"));
         } finally {
             setBusyId(null);
         }

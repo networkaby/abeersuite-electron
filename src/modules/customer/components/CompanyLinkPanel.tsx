@@ -7,6 +7,7 @@ import { Plus, X, User } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { extractApiError } from "@/shared/lib/api";
 
 interface LinkedCustomer {
     id: number;
@@ -50,8 +51,7 @@ export default function CompanyLinkPanel({ companyId, initialLinks, onLinked }: 
             setResults([]);
             onLinked?.();
         } catch (e: unknown) {
-            const msg = axios.isAxiosError(e) ? e.response?.data?.error : "Failed to link";
-            toast.error(msg);
+            toast.error(extractApiError(e, "Failed to link"));
         }
     };
 

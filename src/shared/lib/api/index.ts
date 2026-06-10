@@ -7,4 +7,7 @@ export {
 } from "./parsePagination";
 export { prismaUniqueError } from "./prismaUniqueError";
 export { handleApiError } from "./handleApiError";
+export { extractApiError } from "./extractApiError";
+export { parseIdParam } from "./parseIdParam";
+export { pickDefined } from "./pickDefined";
 export { generateNextOpaqueId } from "./generateNextOpaqueId";

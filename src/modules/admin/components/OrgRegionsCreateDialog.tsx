@@ -13,6 +13,7 @@
 import { useMemo, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
+import { extractApiError } from "@/shared/lib/api";
 import { Building2, Layers, Briefcase, Landmark } from "lucide-react";
 import {
     Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -108,8 +109,7 @@ function BranchForm({
             toast.success(`${isHq ? "HQ" : "Branch"} ${name} created`);
             onDone();
         } catch (err: unknown) {
-            const msg = axios.isAxiosError(err) ? (err.response?.data?.error ?? err.message) : "Failed to create branch";
-            toast.error(msg);
+            toast.error(extractApiError(err, "Failed to create branch"));
         } finally {
             setBusy(false);
         }
@@ -196,8 +196,7 @@ function DepartmentForm({
             toast.success(`Department ${name} created`);
             onDone();
         } catch (err: unknown) {
-            const msg = axios.isAxiosError(err) ? (err.response?.data?.error ?? err.message) : "Failed to create department";
-            toast.error(msg);
+            toast.error(extractApiError(err, "Failed to create department"));
         } finally {
             setBusy(false);
         }
@@ -297,8 +296,7 @@ function PositionForm({
             toast.success(`Position ${title} created`);
             onDone();
         } catch (err: unknown) {
-            const msg = axios.isAxiosError(err) ? (err.response?.data?.error ?? err.message) : "Failed to create position";
-            toast.error(msg);
+            toast.error(extractApiError(err, "Failed to create position"));
         } finally {
             setBusy(false);
         }

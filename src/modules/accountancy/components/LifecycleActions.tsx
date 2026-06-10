@@ -14,6 +14,7 @@
 import { useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
+import { extractApiError } from "@/shared/lib/api";
 import { useRouter } from "next/navigation";
 import { Loader2, XCircle, Trash2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -60,8 +61,7 @@ export function LifecycleActions({
             toast.success(successMsg);
             onChanged();
         } catch (err: unknown) {
-            const msg = axios.isAxiosError(err) ? err.response?.data?.error : "Failed";
-            toast.error(msg ?? "Failed");
+            toast.error(extractApiError(err, "Failed"));
         } finally {
             setBusy(null);
         }
@@ -138,8 +138,7 @@ export function LifecycleActions({
                                 toast.success(`${label} removed (restorable from the Recycle Bin)`);
                                 router.push(listPath);
                             } catch (err: unknown) {
-                                const msg = axios.isAxiosError(err) ? err.response?.data?.error : "Failed";
-                                toast.error(msg ?? "Failed");
+                                toast.error(extractApiError(err, "Failed"));
                                 setBusy(null);
                             }
                         }}>

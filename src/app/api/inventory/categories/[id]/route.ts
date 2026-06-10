@@ -4,14 +4,16 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { invCategoryUpdateSchema } from "@/shared/lib/schemas/inventorySchemas";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { parseIdParam } from "@/shared/lib/api";
+import { pickDefined } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { response } = await requirePermission(PERMISSIONS.INVENTORY_MANAGE);
     if (response) return response;
     try {
-        const id = Number((await params).id);
-        if (!Number.isFinite(id)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+        const { id, error: idError } = await parseIdParam(params);
+        if (idError) return idError;
         const { data, error } = await validateRequest(req, invCategoryUpdateSchema);
         if (error) return error;
         const b = data;
@@ -26,12 +28,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         }
         const row = await prisma.invCategory.update({
             where: { id },
-            data: {
-                ...(b.name !== undefined ? { name: b.name } : {}),
-                ...(b.slug !== undefined ? { slug: b.slug } : {}),
-                ...(b.parentId !== undefined ? { parentId: b.parentId } : {}),
-                ...(b.isActive !== undefined ? { isActive: b.isActive } : {}),
-            },
+            data: pickDefined({
+                name: b.name,
+                slug: b.slug,
+                parentId: b.parentId,
+                isActive: b.isActive,
+            }),
         });
         return NextResponse.json(row);
     } catch (e) {
@@ -43,8 +45,8 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
     const { response } = await requirePermission(PERMISSIONS.INVENTORY_MANAGE);
     if (response) return response;
     try {
-        const id = Number((await params).id);
-        if (!Number.isFinite(id)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+        const { id, error } = await parseIdParam(params);
+        if (error) return error;
         const childCount = await prisma.invCategory.count({ where: { parentId: id } });
         if (childCount > 0) {
             return NextResponse.json({ error: "Cannot delete category with child categories." }, { status: 400 });

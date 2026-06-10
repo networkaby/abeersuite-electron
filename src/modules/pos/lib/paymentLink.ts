@@ -10,6 +10,7 @@
 // company-level (COMPANY_DETAILS.upi.payeeName).
 
 import { COMPANY_DETAILS } from "@/utils/constants-company-details";
+import { formatInr } from "@/shared/lib/format";
 
 /// Runtime payment identity for the active counter.
 export type PaymentContext = {
@@ -36,8 +37,6 @@ export type PaymentLinkProvider = {
     /** Build the shareable link string (a `upi://`, `https://`, …) for an amount. */
     build(ctx: PaymentContext, args: PaymentLinkArgs): string;
 };
-
-const fmtINR = (n: number) => `₹${n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 /// UPI deep link to this counter's own VPA. Opens any UPI app pre-filled with the
 /// payee + amount; the same string also encodes cleanly into a scannable QR.
@@ -102,7 +101,7 @@ export function paymentLinkMessage(opts: {
     const lines = [
         `Hello${partyName ? ` ${partyName}` : ""},`,
         ``,
-        `Please pay ${fmtINR(amountRupees)}${billRef ? ` for ${billRef}` : ""}.`,
+        `Please pay ${formatInr(amountRupees)}${billRef ? ` for ${billRef}` : ""}.`,
         ``,
         `${payToLabel}: ${payTo}`,
         `(or scan the QR I've shared)`,

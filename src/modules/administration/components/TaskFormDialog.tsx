@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
+import { extractApiError } from "@/shared/lib/api";
+import { toDateTimeLocalInput } from "@/shared/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,14 +21,6 @@ import type { TaskDto, TaskPriority, TaskPositionOption } from "../lib/types";
 
 const PRIORITIES: TaskPriority[] = ["LOW", "MEDIUM", "HIGH", "URGENT"];
 const UNASSIGNED = "__none__";
-
-/** ISO string → `yyyy-MM-ddThh:mm` for a datetime-local input (local tz). */
-function toLocalInput(iso: string | null): string {
-    if (!iso) return "";
-    const d = new Date(iso);
-    const pad = (n: number) => String(n).padStart(2, "0");
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
 
 export default function TaskFormDialog({
     open,
@@ -59,7 +53,7 @@ export default function TaskFormDialog({
         setCategory(task?.category ?? "");
         setPriority(task?.priority ?? "MEDIUM");
         setAssignedPositionId(task?.assignedPositionId ?? UNASSIGNED);
-        setDueDate(toLocalInput(task?.dueDate ?? null));
+        setDueDate(toDateTimeLocalInput(task?.dueDate ?? null));
     }, [open, task]);
 
     const handleSave = async () => {
@@ -87,8 +81,7 @@ export default function TaskFormDialog({
             onOpenChange(false);
             onSaved();
         } catch (err) {
-            const msg = axios.isAxiosError(err) ? err.response?.data?.error : null;
-            toast.error(msg ?? "Failed to save task");
+            toast.error(extractApiError(err, "Failed to save task"));
         } finally {
             setSaving(false);
         }

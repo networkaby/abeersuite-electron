@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
+import { extractApiError } from "@/shared/lib/api";
+import { parseDecimalInput } from "@/shared/lib/format";
 import { Loader2, RefreshCw, ShoppingCart, AlertCircle, FolderOpen, Eye, Check, Ban, Package, MapPin, CheckCircle2, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -92,8 +94,7 @@ export function OrdersBoard() {
             await axios.patch(`/api/orders/${o.source}/${o.id}/status`, { statusId });
         } catch (e) {
             setOrders(prev);
-            const msg = axios.isAxiosError(e) ? (e.response?.data as { error?: string })?.error : null;
-            toast.error(msg || "That move isn't allowed");
+            toast.error(extractApiError(e, "That move isn't allowed"));
         }
     }
 
@@ -123,8 +124,7 @@ export function OrdersBoard() {
             setFulfilTarget(null);
             load();
         } catch (e) {
-            const msg = axios.isAxiosError(e) ? (e.response?.data as { error?: string })?.error : null;
-            setFulfilErr(msg || "Fulfil failed");
+            setFulfilErr(extractApiError(e, "Fulfil failed"));
         } finally {
             setFulfilling(false);
         }
@@ -163,8 +163,7 @@ export function OrdersBoard() {
             setViewTarget(null);
             load();
         } catch (e) {
-            const msg = axios.isAxiosError(e) ? (e.response?.data as { error?: string })?.error : null;
-            toast.error(msg || "That action isn't allowed");
+            toast.error(extractApiError(e, "That action isn't allowed"));
         } finally {
             setReviewBusy(false);
         }
@@ -315,7 +314,7 @@ export function OrdersBoard() {
                                         inputMode="decimal"
                                         placeholder="0.00"
                                         value={payAmount}
-                                        onChange={(e) => setPayAmount(e.target.value.replace(/[^\d.]/g, ""))}
+                                        onChange={(e) => setPayAmount(parseDecimalInput(e.target.value))}
                                     />
                                 </div>
                                 <p className="text-[11px] text-muted-foreground">

@@ -14,6 +14,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
+import { extractApiError } from "@/shared/lib/api";
 import { http } from "@/shared/lib/http";
 import { BranchRequired } from "@/shared/components/BranchRequired";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -421,8 +422,7 @@ export function ManufacturingJournalPage() {
                 isDirtyRef.current = false;
             }
         } catch (err: unknown) {
-            const msg = axios.isAxiosError(err) ? err.response?.data?.error : "Failed";
-            toast.error(msg ?? "Failed");
+            toast.error(extractApiError(err, "Failed"));
         } finally {
             setSaving(false);
         }

@@ -10,6 +10,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
+import { extractApiError } from "@/shared/lib/api";
 import { Loader2, User, Building2, X, UserPlus, Search } from "lucide-react";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { Button } from "@/components/ui/button";
@@ -306,10 +307,7 @@ function CreatePartyDialog({
                 phone:     res.data.phone,
             });
         } catch (err: unknown) {
-            const msg = axios.isAxiosError(err)
-                ? (err.response?.data as { error?: string } | undefined)?.error
-                : undefined;
-            const finalMsg = msg ?? "Failed to create";
+            const finalMsg = extractApiError(err, "Failed to create");
             setServerError(finalMsg);
             toast.error(finalMsg);
         } finally {

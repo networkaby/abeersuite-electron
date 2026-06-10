@@ -1,7 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
-import { handleApiError, prismaUniqueError, validateRequest } from "@/shared/lib/api";
+import { handleApiError, prismaUniqueError, validateRequest, parseIdParam, pickDefined } from "@/shared/lib/api";
 import { revalidateTag } from "next/cache";
 import { GST_RATES_TAG } from "../route";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -18,18 +18,18 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const { response } = await requirePermission(PERMISSIONS.INVENTORY_MANAGE);
     if (response) return response;
     try {
-        const id = Number((await params).id);
-        if (!Number.isFinite(id)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+        const { id, error: idError } = await parseIdParam(params);
+        if (idError) return idError;
         const { data, error } = await validateRequest(req, updateSchema);
         if (error) return error;
         const row = await prisma.gstRate.update({
             where: { id },
-            data: {
-                ...(data.rate        !== undefined ? { rate: data.rate }               : {}),
-                ...(data.label       !== undefined ? { label: data.label }             : {}),
-                ...(data.description !== undefined ? { description: data.description } : {}),
-                ...(data.isActive    !== undefined ? { isActive: data.isActive }       : {}),
-            },
+            data: pickDefined({
+                rate: data.rate,
+                label: data.label,
+                description: data.description,
+                isActive: data.isActive,
+            }),
         });
         revalidateTag(GST_RATES_TAG, { expire: 0 });
         return NextResponse.json(row);
@@ -44,8 +44,8 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
     const { response } = await requirePermission(PERMISSIONS.INVENTORY_MANAGE);
     if (response) return response;
     try {
-        const id = Number((await params).id);
-        if (!Number.isFinite(id)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+        const { id, error } = await parseIdParam(params);
+        if (error) return error;
         await prisma.gstRate.delete({ where: { id } });
         revalidateTag(GST_RATES_TAG, { expire: 0 });
         return NextResponse.json({ success: true });

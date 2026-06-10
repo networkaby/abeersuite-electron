@@ -2,7 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { invBomUpdateSchema } from "@/shared/lib/schemas/bomSchemas";
-import { handleApiError, validateRequest } from "@/shared/lib/api";
+import { handleApiError, validateRequest, parseIdParam } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 type Params = { params: Promise<{ id: string }> };
@@ -11,8 +11,8 @@ export async function GET(_req: Request, { params }: Params) {
     const { response } = await requirePermission(PERMISSIONS.INVENTORY_MANAGE);
     if (response) return response;
     try {
-        const id = Number((await params).id);
-        if (!Number.isFinite(id)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+        const { id, error } = await parseIdParam(params);
+        if (error) return error;
         const row = await prisma.invBom.findUnique({
             where: { id },
             include: {
@@ -31,8 +31,8 @@ export async function PATCH(req: Request, { params }: Params) {
     const { response } = await requirePermission(PERMISSIONS.INVENTORY_MANAGE);
     if (response) return response;
     try {
-        const id = Number((await params).id);
-        if (!Number.isFinite(id)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+        const { id, error: idError } = await parseIdParam(params);
+        if (idError) return idError;
         const { data, error } = await validateRequest(req, invBomUpdateSchema);
         if (error) return error;
         const b = data;
@@ -69,8 +69,8 @@ export async function DELETE(_req: Request, { params }: Params) {
     const { response } = await requirePermission(PERMISSIONS.INVENTORY_MANAGE);
     if (response) return response;
     try {
-        const id = Number((await params).id);
-        if (!Number.isFinite(id)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+        const { id, error } = await parseIdParam(params);
+        if (error) return error;
         // Refuse to delete BOMs that have been used on any voucher so the
         // audit trail (InvVoucher.bomId) doesn't dangle. Cancelled/draft
         // vouchers still count — operators can deactivate instead.

@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import axios from "axios";
 import { toast } from "sonner";
+import { extractApiError } from "@/shared/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import {
@@ -74,7 +75,7 @@ export default function PortalAccountSwitcher() {
             });
             toast.success("Switched account profile");
         } catch (error) {
-            toast.error(axios.isAxiosError(error) ? error.response?.data?.error ?? "Switch failed" : "Switch failed");
+            toast.error(extractApiError(error, "Switch failed"));
         } finally {
             setLoading(false);
         }

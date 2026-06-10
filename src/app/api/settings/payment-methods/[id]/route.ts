@@ -3,7 +3,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requirePermission } from "@/shared/lib/auth/permissions";
-import { validateRequest, handleApiError } from "@/shared/lib/api";
+import { validateRequest, handleApiError, pickDefined } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import {
     getGatewayProvider,
@@ -67,21 +67,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         const updated = await prisma.$transaction(async (tx) => {
             const row = await tx.paymentGateway.update({
                 where: { id },
-                data: {
-                    ...(data.displayName !== undefined ? { displayName: data.displayName } : {}),
-                    ...(data.environment !== undefined ? { environment: data.environment } : {}),
-                    ...(data.enabledForCounter !== undefined
-                        ? { enabledForCounter: data.enabledForCounter }
-                        : {}),
-                    ...(data.enabledForOnline !== undefined
-                        ? { enabledForOnline: data.enabledForOnline }
-                        : {}),
-                    ...(data.configJson !== undefined
-                        ? { configJson: data.configJson as Prisma.InputJsonValue }
-                        : {}),
-                    ...(data.sortOrder !== undefined ? { sortOrder: data.sortOrder } : {}),
-                    ...(data.isActive !== undefined ? { isActive: data.isActive } : {}),
-                },
+                data: pickDefined({
+                    displayName: data.displayName,
+                    environment: data.environment,
+                    enabledForCounter: data.enabledForCounter,
+                    enabledForOnline: data.enabledForOnline,
+                    configJson: data.configJson as Prisma.InputJsonValue | undefined,
+                    sortOrder: data.sortOrder,
+                    isActive: data.isActive,
+                }),
             });
             if (row.enabledForOnline) {
                 await clearOnlineSiblings(tx, nextEnvironment, row.id);

@@ -29,9 +29,7 @@ import {
     paymentLinkMessage,
     type PaymentContext,
 } from "@/modules/pos/lib/paymentLink";
-
-const fmtINR = (n: number) =>
-    `₹${n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+import { formatInr } from "@/shared/lib/format";
 
 // Load a data-URL into an <img> so it can be drawn onto a canvas.
 function loadImage(src: string): Promise<HTMLImageElement> {
@@ -182,7 +180,7 @@ export function PaymentLinkDialog({
         const build = async (): Promise<File | null> => {
             if (!link || amount <= 0) return null;
             const hiRes = await QRCode.toDataURL(link, { width: 512, margin: 2, errorCorrectionLevel: "M" });
-            const blob = await composeQrCard(hiRes, fmtINR(amount), ctx.payeeName);
+            const blob = await composeQrCard(hiRes, formatInr(amount), ctx.payeeName);
             return new File([blob], `payment-qr-${amount.toFixed(2)}.png`, { type: "image/png" });
         };
         build()
@@ -334,7 +332,7 @@ export function PaymentLinkDialog({
                                     : "QR appears once a UPI ID is set for this counter"}
                             </div>
                         )}
-                        {canShare && <div className="text-sm font-semibold">{fmtINR(amount)}</div>}
+                        {canShare && <div className="text-sm font-semibold">{formatInr(amount)}</div>}
                     </div>
 
                     {/* Actions */}

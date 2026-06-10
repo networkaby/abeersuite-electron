@@ -22,6 +22,7 @@ import { useEffect, useState, type KeyboardEvent as ReactKeyboardEvent } from "r
 import axios from "axios";
 import { toast } from "sonner";
 import { generateSku } from "@/modules/inventory/lib/sku";
+import { parseDecimalInput } from "@/shared/lib/format";
 import { getOrgDefaults } from "@/shared/lib/orgDefaults";
 import { primaryBarcode } from "@/shared/lib/inventory";
 import { Loader2, RefreshCw, AlertCircle } from "lucide-react";
@@ -264,7 +265,7 @@ export function NewProductDialog({ open, onOpenChange, initialName = "", onCreat
                             type="text"
                             inputMode="decimal"
                             value={salePrice}
-                            onChange={(e) => setSalePrice(e.target.value.replace(/[^\d.]/g, ""))}
+                            onChange={(e) => setSalePrice(parseDecimalInput(e.target.value))}
                             onKeyDown={onEnterToSave}
                             placeholder="0.00"
                             className="tabular-nums text-right"

@@ -5,6 +5,8 @@ import { invProductGroupUpdateSchema } from "@/shared/lib/schemas/inventorySchem
 import { prismaUniqueError } from "@/shared/lib/api";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { parseIdParam } from "@/shared/lib/api";
+import { pickDefined } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const groupInclude = {
@@ -34,8 +36,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const { response } = await requirePermission(PERMISSIONS.INVENTORY_MANAGE);
     if (response) return response;
     try {
-        const id = Number((await params).id);
-        if (!Number.isFinite(id)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+        const { id, error: idError } = await parseIdParam(params);
+        if (idError) return idError;
         const { data, error } = await validateRequest(req, invProductGroupUpdateSchema);
         if (error) return error;
         const b = data;
@@ -53,14 +55,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         }
         const row = await prisma.invProductGroup.update({
             where: { id },
-            data: {
-                ...(b.name       !== undefined ? { name: b.name } : {}),
-                ...(b.isActive   !== undefined ? { isActive: b.isActive } : {}),
-                ...(b.parentId   !== undefined ? { parentId:   b.parentId   } : {}),
-                ...(b.gstRateId  !== undefined ? { gstRateId:  b.gstRateId  } : {}),
-                ...(b.hsnCode    !== undefined ? { hsnCode:    b.hsnCode    } : {}),
-                ...(b.taxability !== undefined ? { taxability: b.taxability } : {}),
-            },
+            data: pickDefined({
+                name: b.name,
+                isActive: b.isActive,
+                parentId: b.parentId,
+                gstRateId: b.gstRateId,
+                hsnCode: b.hsnCode,
+                taxability: b.taxability,
+            }),
             include: groupInclude,
         });
         return NextResponse.json(row);
@@ -75,8 +77,8 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
     const { response } = await requirePermission(PERMISSIONS.INVENTORY_MANAGE);
     if (response) return response;
     try {
-        const id = Number((await params).id);
-        if (!Number.isFinite(id)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+        const { id, error } = await parseIdParam(params);
+        if (error) return error;
         const n = await prisma.invProduct.count({ where: { groupId: id } });
         if (n > 0) {
             return NextResponse.json({ error: "Cannot delete group while products reference it." }, { status: 400 });

@@ -29,6 +29,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { fmt } from "@/utils/constants";
 import { getOrgDefaults } from "@/shared/lib/orgDefaults";
+import { extractApiError } from "@/shared/lib/api";
+import { parseDigitsInput } from "@/shared/lib/format";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -103,7 +105,7 @@ export function ShiftCloseDialog({
     const [denoms, setDenoms] = useState<Record<number, string>>({});
     const denomTotal = denomList.reduce((s, d) => s + d * (parseInt(denoms[d] || "0", 10) || 0), 0);
     const setDenom = (d: number, raw: string) => {
-        const v = raw.replace(/[^\d]/g, "");
+        const v = parseDigitsInput(raw);
         const next = { ...denoms, [d]: v };
         setDenoms(next);
         const total = denomList.reduce((s, dd) => s + dd * (parseInt(next[dd] || "0", 10) || 0), 0);
@@ -179,8 +181,7 @@ export function ShiftCloseDialog({
             onClosed();          // refresh parent (clears ActiveShiftBar)
             setReport(data);     // swap form → report
         } catch (e: unknown) {
-            const msg = axios.isAxiosError(e) ? (e.response?.data as { error?: string })?.error : undefined;
-            toast.error(msg ?? "Failed to close shift");
+            toast.error(extractApiError(e, "Failed to close shift"));
         } finally {
             setSubmitting(false);
         }
@@ -202,8 +203,7 @@ export function ShiftCloseDialog({
             onClosed();
             onOpenChange(false);
         } catch (e: unknown) {
-            const msg = axios.isAxiosError(e) ? (e.response?.data as { error?: string })?.error : undefined;
-            toast.error(msg ?? "Failed to initiate handover");
+            toast.error(extractApiError(e, "Failed to initiate handover"));
         } finally {
             setSubmitting(false);
         }

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requirePermission } from "@/shared/lib/auth/permissions";
-import { validateRequest, handleApiError } from "@/shared/lib/api";
+import { validateRequest, handleApiError, parseIdParam } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { giftCardIssueSchema } from "@/shared/lib/schemas/giftCardSchemas";
 import { nextRefFromSeries, balanceDelta } from "@/modules/accountancy/lib/balance";
@@ -13,8 +13,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const { user, response } = await requirePermission(PERMISSIONS.COUPONS_MANAGE);
     if (response) return response;
 
-    const id = Number((await params).id);
-    if (!Number.isFinite(id)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+    const { id, error: idError } = await parseIdParam(params);
+    if (idError) return idError;
 
     const { data, error } = await validateRequest(req, giftCardIssueSchema);
     if (error) return error;

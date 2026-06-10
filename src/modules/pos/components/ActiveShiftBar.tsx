@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { fmt } from "@/utils/constants";
 import { CashDropDialog } from "@/modules/pos/components/CashDropDialog";
 import { ShiftCloseDialog } from "@/modules/pos/components/ShiftCloseDialog";
+import { extractApiError } from "@/shared/lib/api";
 
 export type ActiveShift = {
     id: number;
@@ -90,8 +91,7 @@ export function ActiveShiftBar({
             await axios.delete(`/api/pos/shifts/${shift.id}/handover`);
             onHandoverCancelled?.();
         } catch (e: unknown) {
-            const msg = axios.isAxiosError(e) ? (e.response?.data as { error?: string })?.error : undefined;
-            import("sonner").then(({ toast }) => toast.error(msg ?? "Failed to cancel handover"));
+            import("sonner").then(({ toast }) => toast.error(extractApiError(e, "Failed to cancel handover")));
         } finally {
             setCancelling(false);
         }

@@ -5,9 +5,9 @@
 // surface payment mode, party billing, and other SALE-specific UX.
 
 import { useEffect, useState } from "react";
-import axios from "axios";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { extractApiError } from "@/shared/lib/api";
 import { Loader2, Trash2, Building2 } from "lucide-react";
 import { useActiveBranchStore } from "@/store/activeBranchStore";
 import { Button } from "@/components/ui/button";
@@ -128,8 +128,7 @@ export function InvVoucherForm({ type, redirectTo }: { type: InvVoucherKind; red
             }
             router.push(redirectTo);
         } catch (err: unknown) {
-            const msg = axios.isAxiosError(err) ? err.response?.data?.error : "Failed";
-            toast.error(msg ?? "Failed");
+            toast.error(extractApiError(err, "Failed"));
         } finally {
             setSaving(false);
         }

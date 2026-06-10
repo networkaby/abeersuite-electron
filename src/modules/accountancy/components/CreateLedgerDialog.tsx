@@ -8,6 +8,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
+import { extractApiError } from "@/shared/lib/api";
 import { Loader2 } from "lucide-react";
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
@@ -99,8 +100,7 @@ export function CreateLedgerDialog({
             onCreated(r.data);
             onOpenChange(false);
         } catch (err: unknown) {
-            const msg = axios.isAxiosError(err) ? err.response?.data?.error : "Failed";
-            toast.error(msg ?? "Failed to create ledger");
+            toast.error(extractApiError(err, "Failed to create ledger"));
         } finally {
             setSaving(false);
         }

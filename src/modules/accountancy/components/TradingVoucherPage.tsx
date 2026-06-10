@@ -67,6 +67,8 @@ import { consumeDuplicate } from "@/modules/accountancy/lib/duplicate";
 import { ParentVoucherPicker } from "@/modules/inventory/components/ParentVoucherPicker";
 import { Switch } from "@/components/ui/switch";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
+import { extractApiError } from "@/shared/lib/api";
+import { parseDecimalInput } from "@/shared/lib/format";
 import { fmt } from "@/utils/constants";
 import { LifecycleActions } from "@/modules/accountancy/components/LifecycleActions";
 import { VoucherTopBar } from "@/modules/accountancy/components/VoucherTopBar";
@@ -135,13 +137,9 @@ function calcLine(l: LineState, opts: CalcOpts = {}) {
 // number-spinner UI; we filter keystrokes to digits + a single decimal
 // point. `numSigned` additionally permits a leading minus (used for
 // round-off which can legitimately be negative).
-function num(s: string): string {
-    // Strip non-numeric, collapse multiple decimal points to one.
-    return s.replace(/[^\d.]/g, "").replace(/(\..*)\./g, "$1");
-}
 function numSigned(s: string): string {
     const sign = s.trimStart().startsWith("-") ? "-" : "";
-    return sign + num(s);
+    return sign + parseDecimalInput(s);
 }
 
 // ── Per-kind config — UI labels + behaviour swaps ──────────────────────────
@@ -1641,7 +1639,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                 .catch(() => { /* keep last value */ });
             router.refresh();
         } catch (err: unknown) {
-            toast.error(axios.isAxiosError(err) ? err.response?.data?.error : "Save failed");
+            toast.error(extractApiError(err, "Save failed"));
         } finally {
             setSaving(false);
         }
@@ -1978,7 +1976,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                                                             type="text"
                                                             inputMode="decimal"
                                                             value={line.mrpRupees}
-                                                            onChange={(e) => updateLine(line.id, { mrpRupees: num(e.target.value) })}
+                                                            onChange={(e) => updateLine(line.id, { mrpRupees: parseDecimalInput(e.target.value) })}
                                                             placeholder="—"
                                                             className={cell}
                                                             tabIndex={-1}
@@ -1995,7 +1993,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                                                     type="text"
                                                     inputMode="decimal"
                                                     value={line.quantity}
-                                                    onChange={(e) => setLineQtyOrRate(line.id, { quantity: num(e.target.value) })}
+                                                    onChange={(e) => setLineQtyOrRate(line.id, { quantity: parseDecimalInput(e.target.value) })}
                                                     className={cell}
                                                 />
                                             </td>
@@ -2005,7 +2003,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                                                         type="text"
                                                         inputMode="decimal"
                                                         value={line.freeQty}
-                                                        onChange={(e) => updateLine(line.id, { freeQty: num(e.target.value) })}
+                                                        onChange={(e) => updateLine(line.id, { freeQty: parseDecimalInput(e.target.value) })}
                                                         className={cell}
                                                         tabIndex={-1}
                                                     />
@@ -2019,7 +2017,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                                                     type="text"
                                                     inputMode="decimal"
                                                     value={line.rate}
-                                                    onChange={(e) => setLineQtyOrRate(line.id, { rate: num(e.target.value) })}
+                                                    onChange={(e) => setLineQtyOrRate(line.id, { rate: parseDecimalInput(e.target.value) })}
                                                     className={cell}
                                                 />
                                             </td>
@@ -2030,7 +2028,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                                                             type="text"
                                                             inputMode="decimal"
                                                             value={line.discountPct}
-                                                            onChange={(e) => setLineDiscountPct(line.id, num(e.target.value))}
+                                                            onChange={(e) => setLineDiscountPct(line.id, parseDecimalInput(e.target.value))}
                                                             className={cell}
                                                         />
                                                     </td>
@@ -2039,7 +2037,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                                                             type="text"
                                                             inputMode="decimal"
                                                             value={line.discountAmt}
-                                                            onChange={(e) => setLineDiscountAmt(line.id, num(e.target.value))}
+                                                            onChange={(e) => setLineDiscountAmt(line.id, parseDecimalInput(e.target.value))}
                                                             className={cell}
                                                             tabIndex={-1}
                                                         />
@@ -2053,7 +2051,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                                                             type="text"
                                                             inputMode="decimal"
                                                             value={line.taxRate}
-                                                            onChange={(e) => setLineTaxRate(line.id, num(e.target.value))}
+                                                            onChange={(e) => setLineTaxRate(line.id, parseDecimalInput(e.target.value))}
                                                             className={cell}
                                                             tabIndex={line.taxRate ? -1 : 0}
                                                         />
@@ -2063,7 +2061,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                                                             type="text"
                                                             inputMode="decimal"
                                                             value={line.taxAmount}
-                                                            onChange={(e) => setLineTaxAmount(line.id, num(e.target.value))}
+                                                            onChange={(e) => setLineTaxAmount(line.id, parseDecimalInput(e.target.value))}
                                                             className={cell}
                                                             tabIndex={-1}
                                                         />
@@ -2079,7 +2077,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                                                         updateLine(line.id, { amountInput: c.amount > 0 ? c.amount.toFixed(2) : "" });
                                                         e.target.select();
                                                     }}
-                                                    onChange={(e) => setLineAmount(line.id, num(e.target.value))}
+                                                    onChange={(e) => setLineAmount(line.id, parseDecimalInput(e.target.value))}
                                                     onBlur={() => updateLine(line.id, { amountInput: "" })}
                                                     onKeyDown={(e) => {
                                                         // Tally-style rapid entry: Enter on the LAST row's Amount
@@ -2424,7 +2422,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                                         type="text"
                                         inputMode="decimal"
                                         value={header.discountPct}
-                                        onChange={(e) => handleDiscountPctChange(num(e.target.value))}
+                                        onChange={(e) => handleDiscountPctChange(parseDecimalInput(e.target.value))}
                                         className="h-8 w-20 text-xs text-right"
                                         placeholder="%"
                                     />
@@ -2432,7 +2430,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                                         type="text"
                                         inputMode="decimal"
                                         value={header.discountAmt}
-                                        onChange={(e) => handleDiscountAmtChange(num(e.target.value))}
+                                        onChange={(e) => handleDiscountAmtChange(parseDecimalInput(e.target.value))}
                                         className="h-8 w-28 text-xs text-right"
                                         placeholder="₹"
                                     />
@@ -2444,7 +2442,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                                     type="text"
                                     inputMode="decimal"
                                     value={header.shippingAmt}
-                                    onChange={(e) => setHeader((h) => ({ ...h, shippingAmt: num(e.target.value) }))}
+                                    onChange={(e) => setHeader((h) => ({ ...h, shippingAmt: parseDecimalInput(e.target.value) }))}
                                     className="h-8 w-20 text-xs text-right"
                                     placeholder="0"
                                 />
@@ -2510,7 +2508,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                                                 type="text"
                                                 inputMode="decimal"
                                                 value={t.amount}
-                                                onChange={(e) => setTenders((rows) => rows.map((r, i) => i === idx ? { ...r, amount: num(e.target.value) } : r))}
+                                                onChange={(e) => setTenders((rows) => rows.map((r, i) => i === idx ? { ...r, amount: parseDecimalInput(e.target.value) } : r))}
                                                 className="h-8 w-24 text-xs text-right"
                                                 placeholder="0"
                                             />

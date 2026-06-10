@@ -3,6 +3,7 @@
 import { useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
+import { extractApiError } from "@/shared/lib/api";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -65,11 +66,7 @@ export default function OrderStatusActions({ orderId, onUpdated, statusId, nextS
                 toast.success(`Order moved to ${toStatus.label}`);
                 onUpdated();
             } catch (e: unknown) {
-                const msg =
-                    axios.isAxiosError(e) && e.response?.data && typeof e.response.data === "object"
-                        ? (e.response.data as { error?: string }).error
-                        : "Update failed";
-                toast.error(msg ?? "Update failed");
+                toast.error(extractApiError(e, "Update failed"));
             } finally {
                 setBusy(false);
             }
@@ -144,11 +141,7 @@ export default function OrderStatusActions({ orderId, onUpdated, statusId, nextS
             toast.success("Order updated");
             onUpdated();
         } catch (e: unknown) {
-            const msg =
-                axios.isAxiosError(e) && e.response?.data && typeof e.response.data === "object"
-                    ? (e.response.data as { error?: string }).error
-                    : "Update failed";
-            toast.error(msg ?? "Update failed");
+            toast.error(extractApiError(e, "Update failed"));
         } finally {
             setBusy(false);
         }
