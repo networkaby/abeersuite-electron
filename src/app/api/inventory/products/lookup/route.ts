@@ -5,6 +5,7 @@ import { resolveProductTaxBatch } from "@/modules/inventory/lib/gstResolver";
 import { loadLastInwardCostMap } from "@/modules/inventory/lib/valuation";
 import { buildRulesIndex, resolveRedeemCapPct } from "@/modules/loyalty/lib";
 import { barcodeTagPaise, normalizeBarcodeBands } from "@/shared/lib/pricing/barcodePrice";
+import { primaryBarcode } from "@/shared/lib/inventory";
 
 /// Per-product loyalty redeem-cap OVERRIDE (% of the item's value redeemable with
 /// points). Returns a Map<productId, number> holding only products an enabled
@@ -44,8 +45,8 @@ async function loadRedeemCapOverrides(products: { id: number; groupId: number | 
  *    finance user can search products when entering vouchers.
  *
  * 2. **Single-code mode** — `?code=<sku|barcode|ean|upc>` returns at most one
- *    product whose `sku`, `barcode1-3`, `ean1-3`, or `upc1-3` matches the
- *    given code exactly. Used by the scan-to-add inputs on PhysicalStockPage
+ *    product whose `sku` or any `InvProductCode.value` matches the given code
+ *    exactly. Used by the scan-to-add inputs on PhysicalStockPage
  *    and ManufacturingJournalPage. Returns `null` (200) when there's no
  *    match — callers branch on the response without needing an exception.
  */
@@ -63,40 +64,30 @@ export async function GET(req: NextRequest) {
     const barcodeBands = normalizeBarcodeBands(orgDefaults?.barcodeBandsJson);
 
     if (code) {
-        const product = await prisma.invProduct.findFirst({
-            where: {
-                isActive: true,
-                OR: [
-                    { sku:      code },
-                    { barcode1: code },
-                    { barcode2: code },
-                    { barcode3: code },
-                    { ean1:     code },
-                    { ean2:     code },
-                    { ean3:     code },
-                    { upc1:     code },
-                    { upc2:     code },
-                    { upc3:     code },
-                ],
-            },
-            select: {
-                id:                true,
-                sku:               true,
-                name:              true,
-                stock:             true,
-                reserved:          true,
-                lowStockThreshold: true,
-                effectiveSalePricePaise: true,
-                mrpPaise:          true,
-                savedSalePricePaise: true,
-                barcode1:          true,
-                groupId:           true,
-                categoryId:        true,
-                unit:         { select: { code: true } },
-                brand:        { select: { name: true } },
-                warrantyTerm: { select: { name: true, durationDays: true } },
-            },
-        });
+        const scanSelect = {
+            id:                true,
+            sku:               true,
+            name:              true,
+            stock:             true,
+            reserved:          true,
+            lowStockThreshold: true,
+            effectiveSalePricePaise: true,
+            mrpPaise:          true,
+            savedSalePricePaise: true,
+            codes:        { select: { kind: true, value: true }, orderBy: { sortOrder: "asc" as const } },
+            groupId:           true,
+            categoryId:        true,
+            unit:         { select: { code: true } },
+            brand:        { select: { name: true } },
+            warrantyTerm: { select: { name: true, durationDays: true } },
+        };
+        // Deterministic resolution: an exact SKU match wins, then fall back to a
+        // scannable code. Both spaces are kept disjoint by the write-time guard
+        // (see findSkuCodeCollision), so this only ever matters as belt-and-braces.
+        // Each branch is a single indexed equality (replaces the old 9-column OR).
+        const product =
+            (await prisma.invProduct.findFirst({ where: { isActive: true, sku: code }, select: scanSelect }))
+            ?? (await prisma.invProduct.findFirst({ where: { isActive: true, codes: { some: { value: code } } }, select: scanSelect }));
         if (!product) return NextResponse.json(null);
         const { products: taxByProduct } = await resolveProductTaxBatch({ productIds: [product.id] });
         const resolved = taxByProduct.get(product.id);
@@ -104,6 +95,9 @@ export async function GET(req: NextRequest) {
         const capMap = await loadRedeemCapOverrides([{ id: product.id, groupId: product.groupId, categoryId: product.categoryId }]);
         return NextResponse.json({
             ...product,
+            // Derived primary barcode for label/display consumers (replaces the
+            // old stored barcode1 column). `codes` (spread above) is the full set.
+            barcode1: primaryBarcode(product.codes),
             // The response already carries `effectiveSalePricePaise` (selected +
             // spread above) — POS reads that column name directly. We ALSO expose
             // it under the legacy `pricePaise` alias for the not-yet-renamed
@@ -134,7 +128,7 @@ export async function GET(req: NextRequest) {
             effectiveSalePricePaise: true,
             mrpPaise:          true,
             savedSalePricePaise: true,
-            barcode1:          true,
+            codes:        { select: { kind: true, value: true }, orderBy: { sortOrder: "asc" } },
             groupId:           true,
             categoryId:        true,
             unit:         { select: { code: true } },
@@ -166,6 +160,8 @@ export async function GET(req: NextRequest) {
         const r = taxByProduct.get(p.id);
         return {
             ...p,
+            // Derived primary barcode for display consumers (full set is `codes`).
+            barcode1: primaryBarcode(p.codes),
             // The response already carries `effectiveSalePricePaise` (selected +
             // spread above) — POS reads that column name directly. We ALSO expose
             // it under the legacy `pricePaise` alias for the not-yet-renamed

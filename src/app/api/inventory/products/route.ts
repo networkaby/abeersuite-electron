@@ -3,6 +3,8 @@ import { Prisma } from "@/generated/prisma/client";
 import { NextResponse, type NextRequest } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { invProductCreateSchema } from "@/shared/lib/schemas/inventorySchemas";
+import { normalizeProductCodes, primaryBarcode } from "@/shared/lib/inventory";
+import { findSkuCodeCollision, skuCodeCollisionMessage } from "@/shared/lib/inventory/codeCollision";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -21,6 +23,7 @@ const productInclude = {
     brand: { select: { id: true, name: true } },
     warrantyTerm: { select: { id: true, name: true } },
     gstRate: { select: { id: true, rate: true, label: true } },
+    codes: { select: { id: true, kind: true, value: true, sortOrder: true }, orderBy: { sortOrder: "asc" } },
 } as const;
 
 async function assertProductFks(data: {
@@ -90,7 +93,9 @@ export async function GET(req: NextRequest) {
             const branchStock = activeBranchId
                 ? (branchStocks[0]?.stock ?? 0)
                 : branchStocks.reduce((s, b) => s + b.stock, 0);
-            return { ...r, stock: branchStock };
+            // Derived primary barcode for list display/search/sort (the full set
+            // is `codes`, included above).
+            return { ...r, stock: branchStock, barcode1: primaryBarcode(r.codes) };
         });
 
         return NextResponse.json(enriched);
@@ -109,6 +114,10 @@ export async function POST(req: Request) {
         const sku = b.sku.trim().toUpperCase();
         const existing = await prisma.invProduct.findUnique({ where: { sku } });
         if (existing) return NextResponse.json({ error: "SKU already exists" }, { status: 409 });
+        // Keep the scannable space (SKUs ∪ code values) disjoint so a scan resolves
+        // to exactly one product.
+        const collision = await findSkuCodeCollision({ sku, codeValues: (b.codes ?? []).map((c) => c.value) });
+        if (collision) return NextResponse.json({ error: skuCodeCollisionMessage(collision) }, { status: 409 });
         await assertProductFks({
             unitId: b.unitId,
             categoryId: b.categoryId ?? null,
@@ -128,15 +137,9 @@ export async function POST(req: Request) {
                 brandId: b.brandId ?? null,
                 warrantyTermId: b.warrantyTermId ?? null,
                 modelNo: b.modelNo ?? null,
-                barcode1: b.barcode1 ?? null,
-                barcode2: b.barcode2 ?? null,
-                barcode3: b.barcode3 ?? null,
-                ean1: b.ean1 ?? null,
-                ean2: b.ean2 ?? null,
-                ean3: b.ean3 ?? null,
-                upc1: b.upc1 ?? null,
-                upc2: b.upc2 ?? null,
-                upc3: b.upc3 ?? null,
+                ...(b.codes && b.codes.length > 0
+                    ? { codes: { create: normalizeProductCodes(b.codes).map((c, i) => ({ kind: c.kind, value: c.value, sortOrder: i })) } }
+                    : {}),
                 notes: b.notes ?? null,
                 isActive: b.isActive ?? true,
                 shopSubheading: b.shopSubheading ?? null,
@@ -171,6 +174,11 @@ export async function POST(req: Request) {
         });
         return NextResponse.json(row, { status: 201 });
     } catch (e) {
+        // Global-unique clash on InvProductCode.value (a barcode/EAN/UPC already
+        // used by another product) — sku clashes are caught above.
+        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+            return NextResponse.json({ error: "A product code (barcode / EAN / UPC) is already in use." }, { status: 409 });
+        }
         const msg = e instanceof Error ? e.message : "";
         if (msg === "Unit not found" || msg.endsWith("not found")) {
             return NextResponse.json({ error: msg }, { status: 400 });

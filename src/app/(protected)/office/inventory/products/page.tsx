@@ -53,6 +53,7 @@ import {
 } from "@/components/ui/breadcrumb";
 import { BreadcrumbBar } from "@/shared/components/BreadcrumbBar";
 import { useEscape } from "@/shared/hooks";
+import { type ProductCode, primaryBarcode, withPrimaryBarcode } from "@/shared/lib/inventory";
 
 type Opt = { id: number; name?: string; code?: string; label?: string };
 type GstRateOpt = { id: number; rate: string | number; label: string; isActive?: boolean };
@@ -66,7 +67,10 @@ type Row = {
     stock: number | null;
     lowStockThreshold: number;
     modelNo: string | null;
+    /** Derived primary barcode (first BARCODE code) — for display/search/sort. */
     barcode1: string | null;
+    /** Full scannable code set — the source of truth for inline barcode edits. */
+    codes: ProductCode[];
     unitId: number;
     categoryId: number | null;
     groupId: number | null;
@@ -84,7 +88,7 @@ type Patch = Partial<{
     name: string;
     namePart: string | null;
     modelNo: string | null;
-    barcode1: string | null;
+    codes: ProductCode[];
     isActive: boolean;
     unitId: number;
     categoryId: number | null;
@@ -831,12 +835,12 @@ export default function InventoryProductsPage() {
                                             <TableCell className={isEdit ? "min-w-32 font-mono align-top whitespace-nowrap" : "font-mono text-sm align-top whitespace-nowrap"}>
                                                 {isEdit ? (
                                                     <Input
-                                                        value={(val(r, "barcode1") as string | null) ?? ""}
-                                                        onChange={(e) => patch(r.id, { barcode1: e.target.value.trim() === "" ? null : e.target.value })}
+                                                        value={primaryBarcode(val(r, "codes")) ?? ""}
+                                                        onChange={(e) => patch(r.id, { codes: withPrimaryBarcode(val(r, "codes") ?? [], e.target.value) })}
                                                         className="h-8 font-mono"
                                                     />
                                                 ) : (
-                                                    r.barcode1 ?? "—"
+                                                    primaryBarcode(r.codes) ?? "—"
                                                 )}
                                             </TableCell>
 

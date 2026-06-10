@@ -483,7 +483,8 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
             brandId: v.data.brandId,
             warrantyTermId: v.data.warrantyTermId,
             modelNo: v.data.modelNo,
-            barcode1: v.data.barcode1,
+            // Codes can't ride createMany (no nested writes) — attached after
+            // insert from v.data.barcode1, keyed by SKU. See the tx block below.
             hsnCode: v.data.hsnCode,
             gstRateId: v.data.gstRateId,
             taxability: v.data.taxability,
@@ -515,7 +516,14 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
         if (p.has("brand")) out.brandId = v.data.brandId;
         if (p.has("warrantyTerm")) out.warrantyTermId = v.data.warrantyTermId;
         if (p.has("modelNo")) out.modelNo = v.data.modelNo;
-        if (p.has("barcode1")) out.barcode1 = v.data.barcode1;
+        if (p.has("barcode1")) {
+            // Replace the primary barcode code (keeps the column-style single-code
+            // import semantics). Blank value clears it.
+            const bc = v.data.barcode1?.trim();
+            out.codes = bc
+                ? { deleteMany: {}, create: [{ kind: "BARCODE", value: bc, sortOrder: 0 }] }
+                : { deleteMany: {} };
+        }
         if (p.has("hsnCode")) out.hsnCode = v.data.hsnCode;
         if (p.has("gstRate")) out.gstRateId = v.data.gstRateId;
         if (p.has("taxability")) out.taxability = v.data.taxability;
@@ -551,6 +559,38 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
         async (tx) => {
             for (let i = 0; i < newRows.length; i += CHUNK) {
                 await tx.invProduct.createMany({ data: newRows.slice(i, i + CHUNK) });
+            }
+            // Attach barcodes for create-mode rows: createMany can't write nested
+            // InvProductCode rows, so resolve the new ids by (unique) SKU and bulk
+            // -insert the codes. skipDuplicates tolerates a code already in use.
+            const codeRows = validRows.filter((v) => v.existingId == null && v.data.barcode1?.trim());
+            if (codeRows.length > 0) {
+                const skuToId = new Map(
+                    (await tx.invProduct.findMany({
+                        where: { sku: { in: codeRows.map((v) => v.data.sku) } },
+                        select: { id: true, sku: true },
+                    })).map((p) => [p.sku, p.id] as const),
+                );
+                const codeData = codeRows
+                    .map((v) => {
+                        const productId = skuToId.get(v.data.sku);
+                        return productId != null
+                            ? { productId, kind: "BARCODE" as const, value: v.data.barcode1!.trim(), sortOrder: 0 }
+                            : null;
+                    })
+                    .filter((c): c is NonNullable<typeof c> => c != null);
+                // Cross-namespace guard: a barcode that collides with an existing
+                // SKU would make scans ambiguous — drop it (like a duplicate code).
+                const skuClashes = new Set(
+                    (await tx.invProduct.findMany({
+                        where: { sku: { in: [...new Set(codeData.map((c) => c.value))] } },
+                        select: { sku: true },
+                    })).map((p) => p.sku),
+                );
+                const safeCodeData = codeData.filter((c) => !skuClashes.has(c.value));
+                for (let i = 0; i < safeCodeData.length; i += CHUNK) {
+                    await tx.invProductCode.createMany({ data: safeCodeData.slice(i, i + CHUNK), skipDuplicates: true });
+                }
             }
             for (const v of updateRows) {
                 await tx.invProduct.update({ where: { id: v.existingId! }, data: writeOne(v) });

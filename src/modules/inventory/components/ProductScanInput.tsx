@@ -34,15 +34,8 @@ export type ScannedProduct = {
 };
 
 type Option = ScannedProduct & {
-    barcode1?: string | null;
-    barcode2?: string | null;
-    barcode3?: string | null;
-    ean1?:     string | null;
-    ean2?:     string | null;
-    ean3?:     string | null;
-    upc1?:     string | null;
-    upc2?:     string | null;
-    upc3?:     string | null;
+    /** Scannable codes (barcode / EAN / UPC) matched client-side on scan. */
+    codes?: { kind: string; value: string }[];
 };
 
 const MAX_RESULTS = 8;
@@ -70,8 +63,8 @@ export function ProductScanInput({
     const [browseAll, setBrowseAll] = useState(false);
 
     // Preload all active products (same pattern POS uses). The lookup
-    // endpoint without ?code= returns the full list with all barcode /
-    // EAN / UPC columns so we can match scan codes client-side.
+    // endpoint without ?code= returns the full list with each product's
+    // scannable `codes` so we can match scans client-side.
     useEffect(() => {
         let cancelled = false;
         axios.get<Option[]>("/api/inventory/products/lookup")
@@ -98,14 +91,9 @@ export function ProductScanInput({
                 if (p.sku.toLowerCase() === q) return true;       // exact SKU/barcode hits win
                 if (p.sku.toLowerCase().includes(q)) return true;
                 if (p.name.toLowerCase().includes(q)) return true;
-                // barcode / EAN / UPC columns — exact match only (these
-                // are scan codes, not human-typed identifiers).
-                const codes = [
-                    p.barcode1, p.barcode2, p.barcode3,
-                    p.ean1, p.ean2, p.ean3,
-                    p.upc1, p.upc2, p.upc3,
-                ];
-                return codes.some((c) => c && c.toLowerCase() === q);
+                // Scannable codes — exact match only (these are scan codes,
+                // not human-typed identifiers).
+                return (p.codes ?? []).some((c) => c.value.toLowerCase() === q);
             })
             // Stable sort: exact SKU/barcode matches first, then prefix matches on SKU, then everything else.
             .sort((a, b) => {
@@ -162,7 +150,7 @@ export function ProductScanInput({
                 axios.get<ScannedProduct | null>("/api/inventory/products/lookup", { params: { code } })
                     .then((r) => {
                         if (r.data) {
-                            pick({ ...r.data, lastPurchasePaise: r.data.lastPurchasePaise ?? null, barcode1: null });
+                            pick({ ...r.data, lastPurchasePaise: r.data.lastPurchasePaise ?? null });
                         } else {
                             toast.error(`No product matches "${code}"`);
                             inputRef.current?.select();

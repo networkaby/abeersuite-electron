@@ -23,6 +23,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import { generateSku } from "@/modules/inventory/lib/sku";
 import { getOrgDefaults } from "@/shared/lib/orgDefaults";
+import { primaryBarcode } from "@/shared/lib/inventory";
 import { Loader2, RefreshCw, AlertCircle } from "lucide-react";
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -159,7 +160,7 @@ export function NewProductDialog({ open, onOpenChange, initialName = "", onCreat
                 pricePaise: number | null; mrpPaise: number | null;
                 unit: { code: string };
                 brand: { name: string } | null;
-                barcode1?: string | null;
+                codes?: { kind: string; value: string }[];
             };
             // Fresh product has no purchase history yet → lastPurchasePaise=null.
             // The combobox will pick it up via lookup on next refresh.
@@ -169,7 +170,7 @@ export function NewProductDialog({ open, onOpenChange, initialName = "", onCreat
                 pricePaise: p.pricePaise, lastPurchasePaise: null, mrpPaise: p.mrpPaise,
                 unit: { code: p.unit.code },
                 brand: p.brand,
-                barcode1: p.barcode1 ?? null,
+                barcode1: primaryBarcode(p.codes),
             });
             toast.success(`Created ${p.name}`);
             onOpenChange(false);

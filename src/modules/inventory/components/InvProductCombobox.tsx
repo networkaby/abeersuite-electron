@@ -20,6 +20,7 @@ import { createPortal } from "react-dom";
 import axios from "axios";
 import { Plus } from "lucide-react";
 import { useComboboxNav } from "@/shared/hooks";
+import { primaryBarcode } from "@/shared/lib/inventory";
 import { NewProductDialog, type AdvancedDefaults, type CreatedProductOption } from "./NewProductDialog";
 import { InvProductDialog, type InvProductCreatedRow } from "./InvProductDialog";
 import type { InvProductFormState } from "./InvProductFormFields";
@@ -409,7 +410,7 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
                             mrpPaise: raw.mrpPaise,
                             unit: { code: raw.unit.code },
                             brand: raw.brand,
-                            barcode1: raw.barcode1,
+                            barcode1: primaryBarcode(raw.codes),
                         };
                         setProducts((ps) => [...ps, np]);
                         setQuery(np.name);

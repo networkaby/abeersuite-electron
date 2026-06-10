@@ -156,6 +156,17 @@ enum InvVoucherDeliveryMode {
   SHIPPED
 }
 
+// ── Inventory product enums ───────────────────────────────────────────────────
+
+// Kind of a scannable product code (InvProductCode). Replaces the former
+// repeating barcode1-3 / ean1-3 / upc1-3 columns on InvProduct — each code is
+// now one child row, so a product can carry any number of codes per kind.
+enum InvProductCodeKind {
+  BARCODE
+  EAN
+  UPC
+}
+
 // ── GST enums ─────────────────────────────────────────────────────────────────
 
 enum GstRegType {

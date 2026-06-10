@@ -9,6 +9,7 @@ import { loadLastSaleAgeDays } from "@/modules/pricing-strategy/lib/matchStrateg
 import { resolveProductTaxBatch } from "@/modules/inventory/lib/gstResolver";
 import { valueStockBatch } from "@/modules/inventory/lib/valuation";
 import { getCurrentAdditionalCostByProduct } from "@/modules/pricing-strategy/lib/costPool";
+import { primaryBarcode } from "@/shared/lib/inventory";
 
 export interface PricingItem {
     id:               number;
@@ -61,7 +62,7 @@ export interface PricingItem {
     appliedRoundingPaise: number;
     /** Resolved GST rate % (0 when no tax set anywhere in the cascade). */
     gstRatePct:           number;
-    /** Primary scannable barcode (InvProduct.barcode1). null = none set. */
+    /** Primary scannable barcode (first BARCODE InvProductCode). null = none set. */
     barcode:              string | null;
     /** Days since the last SALE/POS. null = never sold. Only populated with ?withSaleAge=1. */
     daysSinceLastSale:    number | null;
@@ -102,7 +103,7 @@ export async function GET(req: Request) {
                     costMethod:       true,
                     marginPercent:    true,
                     priceOverridden:  true,
-                    barcode1:         true,
+                    codes:            { select: { kind: true, value: true }, orderBy: { sortOrder: "asc" } },
                     effectiveSalePriceSource: true,
                     savedSalePricePaise: true,
                     salePriceFrozenAt:   true,
@@ -203,7 +204,7 @@ export async function GET(req: Request) {
                 appliedFlatPaise:      0,
                 appliedRoundingPaise:  0,
                 gstRatePct,
-                barcode:               p.barcode1 ?? null,
+                barcode:               primaryBarcode(p.codes),
                 daysSinceLastSale:     lastSaleAge.get(p.id) ?? null,
                 savedSalePricePaise:   p.savedSalePricePaise,
                 effectiveSalePriceSource: p.effectiveSalePriceSource,

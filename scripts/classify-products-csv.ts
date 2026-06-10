@@ -22,6 +22,7 @@
  */
 
 import { PrismaClient } from "../src/generated/prisma/client";
+import { primaryBarcode } from "../src/shared/lib/inventory/productCodes";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import * as dotenv from "dotenv";
@@ -295,7 +296,8 @@ async function main() {
     const products = await prisma.invProduct.findMany({
         select: {
             id: true, sku: true, name: true,
-            modelNo: true, barcode1: true,
+            modelNo: true,
+            codes: { select: { kind: true, value: true }, orderBy: { sortOrder: "asc" } },
             hsnCode: true, taxability: true,
             effectiveSalePricePaise: true, mrpPaise: true,
             openingStock: true, openingRate: true, openingStockDate: true,
@@ -339,7 +341,7 @@ async function main() {
             proposedGroup,
             p.warrantyTerm?.name ?? "",
             p.modelNo ?? "",
-            p.barcode1 ?? "",
+            primaryBarcode(p.codes) ?? "",
             proposedHsn,
             proposedGst,
             p.taxability ?? "",

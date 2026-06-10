@@ -3,6 +3,8 @@ import { Prisma } from "@/generated/prisma/client";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { invProductUpdateSchema } from "@/shared/lib/schemas/inventorySchemas";
+import { normalizeProductCodes } from "@/shared/lib/inventory";
+import { findSkuCodeCollision, skuCodeCollisionMessage } from "@/shared/lib/inventory/codeCollision";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -20,6 +22,7 @@ const productInclude = {
     brand: { select: { id: true, name: true } },
     warrantyTerm: { select: { id: true, name: true } },
     gstRate: { select: { id: true, rate: true, label: true } },
+    codes: { select: { id: true, kind: true, value: true, sortOrder: true }, orderBy: { sortOrder: "asc" } },
 } as const;
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -93,6 +96,16 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             }
         }
 
+        // Keep the scannable space (SKUs ∪ code values) disjoint. Check the new
+        // SKU (only when it's changing) and any replacement code set, ignoring
+        // this product's own rows.
+        const collision = await findSkuCodeCollision({
+            sku: b.sku !== undefined && sku !== current.sku ? sku : null,
+            codeValues: b.codes !== undefined ? b.codes.map((c) => c.value) : [],
+            excludeProductId: id,
+        });
+        if (collision) return NextResponse.json({ error: skuCodeCollisionMessage(collision) }, { status: 409 });
+
         const row = await prisma.invProduct.update({
             where: { id },
             data: {
@@ -105,15 +118,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 ...(b.brandId !== undefined ? { brandId: b.brandId } : {}),
                 ...(b.warrantyTermId !== undefined ? { warrantyTermId: b.warrantyTermId } : {}),
                 ...(b.modelNo !== undefined ? { modelNo: b.modelNo } : {}),
-                ...(b.barcode1 !== undefined ? { barcode1: b.barcode1 } : {}),
-                ...(b.barcode2 !== undefined ? { barcode2: b.barcode2 } : {}),
-                ...(b.barcode3 !== undefined ? { barcode3: b.barcode3 } : {}),
-                ...(b.ean1 !== undefined ? { ean1: b.ean1 } : {}),
-                ...(b.ean2 !== undefined ? { ean2: b.ean2 } : {}),
-                ...(b.ean3 !== undefined ? { ean3: b.ean3 } : {}),
-                ...(b.upc1 !== undefined ? { upc1: b.upc1 } : {}),
-                ...(b.upc2 !== undefined ? { upc2: b.upc2 } : {}),
-                ...(b.upc3 !== undefined ? { upc3: b.upc3 } : {}),
+                // Codes are a full replace-set: wipe existing rows, recreate from
+                // the payload. Undefined = leave codes untouched.
+                ...(b.codes !== undefined
+                    ? { codes: { deleteMany: {}, create: normalizeProductCodes(b.codes).map((c, i) => ({ kind: c.kind, value: c.value, sortOrder: i })) } }
+                    : {}),
                 ...(b.notes !== undefined ? { notes: b.notes } : {}),
                 ...(b.isActive !== undefined ? { isActive: b.isActive } : {}),
                 ...(b.shopSubheading !== undefined ? { shopSubheading: b.shopSubheading } : {}),
@@ -152,6 +161,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         }
         return NextResponse.json(row);
     } catch (e) {
+        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+            return NextResponse.json({ error: "A product code (barcode / EAN / UPC) is already in use." }, { status: 409 });
+        }
         return handleApiError(e, "Failed to update product");
     }
 }

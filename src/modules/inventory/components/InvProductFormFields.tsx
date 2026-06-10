@@ -31,6 +31,7 @@ import {
     type NamingConfigShape,
     type NamingMasters,
 } from "@/modules/inventory/lib/productName";
+import { PRODUCT_CODE_KINDS, type ProductCode, type ProductCodeKind } from "@/shared/lib/inventory";
 
 export type InvProductFormState = {
     sku: string;
@@ -49,15 +50,9 @@ export type InvProductFormState = {
     brandId: string;
     warrantyTermId: string;
     modelNo: string;
-    barcode1: string;
-    barcode2: string;
-    barcode3: string;
-    ean1: string;
-    ean2: string;
-    ean3: string;
-    upc1: string;
-    upc2: string;
-    upc3: string;
+    /** Scannable codes (barcode / EAN / UPC) — replaces the old barcode1-3 /
+     *  ean1-3 / upc1-3 fields with a dynamic list. */
+    codes: ProductCode[];
     notes: string;
     isActive: boolean;
     // Pricing — entered in rupees, converted to paise on submit.
@@ -91,15 +86,7 @@ export const emptyInvProductForm: InvProductFormState = {
     brandId: "",
     warrantyTermId: "",
     modelNo: "",
-    barcode1: "",
-    barcode2: "",
-    barcode3: "",
-    ean1: "",
-    ean2: "",
-    ean3: "",
-    upc1: "",
-    upc2: "",
-    upc3: "",
+    codes: [],
     notes: "",
     isActive: true,
     costRupees:  "",
@@ -600,46 +587,63 @@ export function InvProductFormFields({
             </TabsContent>
 
             <TabsContent value="stock" className={tabPanel}>
-                <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="space-y-2 sm:col-span-2">
-                        <p className="text-sm font-semibold">Barcodes</p>
-                        <div className="grid gap-2 sm:grid-cols-3">
-                            <div className="space-y-1">
-                                <Label className="text-xs text-muted-foreground">1</Label>
-                                <Input value={form.barcode1} onChange={(e) => setForm((f) => ({ ...f, barcode1: e.target.value }))} />
-                            </div>
-                            <div className="space-y-1">
-                                <Label className="text-xs text-muted-foreground">2</Label>
-                                <Input value={form.barcode2} onChange={(e) => setForm((f) => ({ ...f, barcode2: e.target.value }))} />
-                            </div>
-                            <div className="space-y-1">
-                                <Label className="text-xs text-muted-foreground">3</Label>
-                                <Input value={form.barcode3} onChange={(e) => setForm((f) => ({ ...f, barcode3: e.target.value }))} />
-                            </div>
-                        </div>
+                <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                        <p className="text-sm font-semibold">Scannable codes</p>
+                        <p className="text-[11px] text-muted-foreground">Barcode / EAN / UPC — each must be unique across products.</p>
                     </div>
-                    <div className="space-y-2 sm:col-span-2">
-                        <p className="text-sm font-semibold">EAN</p>
-                        <div className="grid gap-2 sm:grid-cols-3">
-                            {(["ean1", "ean2", "ean3"] as const).map((k, i) => (
-                                <div key={k} className="space-y-1">
-                                    <Label className="text-xs text-muted-foreground">{i + 1}</Label>
-                                    <Input inputMode="numeric" value={form[k]} onChange={(e) => setForm((f) => ({ ...f, [k]: e.target.value }))} />
+                    {form.codes.length > 0 && (
+                        <div className="space-y-1.5">
+                            {form.codes.map((c, i) => (
+                                <div key={i} className="flex items-center gap-2">
+                                    <Select
+                                        value={c.kind}
+                                        onValueChange={(v) => {
+                                            const next = form.codes.slice();
+                                            next[i] = { ...c, kind: v as ProductCodeKind };
+                                            setForm((f) => ({ ...f, codes: next }));
+                                        }}
+                                    >
+                                        <SelectTrigger className="w-32">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {PRODUCT_CODE_KINDS.map((k) => (
+                                                <SelectItem key={k} value={k}>{k}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <Input
+                                        className="flex-1 font-mono"
+                                        inputMode={c.kind === "BARCODE" ? undefined : "numeric"}
+                                        value={c.value}
+                                        onChange={(e) => {
+                                            const next = form.codes.slice();
+                                            next[i] = { ...c, value: e.target.value };
+                                            setForm((f) => ({ ...f, codes: next }));
+                                        }}
+                                        placeholder={c.kind === "EAN" ? "8–13 digits" : c.kind === "UPC" ? "12 digits" : "code"}
+                                    />
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="icon-sm"
+                                        onClick={() => setForm((f) => ({ ...f, codes: f.codes.filter((_, idx) => idx !== i) }))}
+                                    >
+                                        <Trash2 className="size-4" />
+                                    </Button>
                                 </div>
                             ))}
                         </div>
-                    </div>
-                    <div className="space-y-2 sm:col-span-2">
-                        <p className="text-sm font-semibold">UPC</p>
-                        <div className="grid gap-2 sm:grid-cols-3">
-                            {(["upc1", "upc2", "upc3"] as const).map((k, i) => (
-                                <div key={k} className="space-y-1">
-                                    <Label className="text-xs text-muted-foreground">{i + 1}</Label>
-                                    <Input inputMode="numeric" value={form[k]} onChange={(e) => setForm((f) => ({ ...f, [k]: e.target.value }))} />
-                                </div>
-                            ))}
-                        </div>
-                    </div>
+                    )}
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setForm((f) => ({ ...f, codes: [...f.codes, { kind: "BARCODE", value: "" } satisfies ProductCode] }))}
+                    >
+                        + Add code
+                    </Button>
                 </div>
             </TabsContent>
 

@@ -12,9 +12,21 @@ export const zOptStr = (maxLen: number) =>
             return t.slice(0, maxLen);
         });
 
-const barcodeSlot = zOptStr(64);
-const eanSlot = zOptStr(13).refine((s) => !s || (/^\d+$/.test(s) && s.length >= 8 && s.length <= 13), "EAN must be 8–13 digits");
-const upcSlot = zOptStr(12).refine((s) => !s || (/^\d+$/.test(s) && s.length === 12), "UPC must be 12 digits");
+// Scannable product codes — barcode / EAN / UPC. Replaces the former
+// barcode1-3 / ean1-3 / upc1-3 slot columns with a normalized array (one entry
+// per code → InvProductCode rows). EAN/UPC keep their digit-length rules.
+const PRODUCT_CODE_KINDS = ["BARCODE", "EAN", "UPC"] as const;
+const productCodeSchema = z
+    .object({
+        kind: z.enum(PRODUCT_CODE_KINDS),
+        value: z.string().trim().min(1).max(64),
+    })
+    .superRefine((c, ctx) => {
+        if (c.kind === "EAN" && !/^\d{8,13}$/.test(c.value))
+            ctx.addIssue({ code: "custom", message: "EAN must be 8–13 digits", path: ["value"] });
+        if (c.kind === "UPC" && !/^\d{12}$/.test(c.value))
+            ctx.addIssue({ code: "custom", message: "UPC must be 12 digits", path: ["value"] });
+    });
 
 export const invUnitCreateSchema = z.object({
     code: z.string().trim().min(1).max(32),
@@ -57,15 +69,9 @@ export const invWarrantyTermUpdateSchema = invWarrantyTermCreateSchema.partial()
 
 const productIdentifiers = {
     modelNo: zOptStr(200),
-    barcode1: barcodeSlot,
-    barcode2: barcodeSlot,
-    barcode3: barcodeSlot,
-    ean1: eanSlot,
-    ean2: eanSlot,
-    ean3: eanSlot,
-    upc1: upcSlot,
-    upc2: upcSlot,
-    upc3: upcSlot,
+    // Full replace-set of scannable codes. Omit (undefined) on update to leave
+    // existing codes untouched; an empty array clears them.
+    codes: z.array(productCodeSchema).max(30).optional(),
     notes: zOptStr(5000),
 };
 

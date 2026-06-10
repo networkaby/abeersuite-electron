@@ -34,6 +34,7 @@ import {
     DEFAULT_NAMING_CONFIG,
     type NamingConfigShape,
 } from "@/modules/inventory/lib/productName";
+import type { ProductCode } from "@/shared/lib/inventory";
 
 type Opt = { id: number; name?: string; code?: string; label?: string };
 
@@ -53,9 +54,7 @@ export type InvProductRow = {
     groupId: number | null;
     brandId: number | null;
     warrantyTermId: number | null;
-    barcode1: string | null; barcode2: string | null; barcode3: string | null;
-    ean1: string | null; ean2: string | null; ean3: string | null;
-    upc1: string | null; upc2: string | null; upc3: string | null;
+    codes: ProductCode[];
     notes: string | null;
     /** Last inward rate (paise) from the ledger walk — read-only on the dialog. PR 3 dropped the costPaise column. */
     lastPurchasePaise?: number | null;
@@ -107,15 +106,7 @@ function rowToForm(p: InvProductRow): InvProductFormState {
         brandId: p.brandId != null ? String(p.brandId) : "",
         warrantyTermId: p.warrantyTermId != null ? String(p.warrantyTermId) : "",
         modelNo: p.modelNo ?? "",
-        barcode1: p.barcode1 ?? "",
-        barcode2: p.barcode2 ?? "",
-        barcode3: p.barcode3 ?? "",
-        ean1: p.ean1 ?? "",
-        ean2: p.ean2 ?? "",
-        ean3: p.ean3 ?? "",
-        upc1: p.upc1 ?? "",
-        upc2: p.upc2 ?? "",
-        upc3: p.upc3 ?? "",
+        codes: (p.codes ?? []).map((c) => ({ kind: c.kind, value: c.value })),
         notes: p.notes ?? "",
         isActive: p.isActive,
         // Cost input removed in PR 4 — cost is set via Opening tab (openingRate)
@@ -144,7 +135,7 @@ export type InvProductCreatedRow = {
     effectiveSalePricePaise: number | null; mrpPaise: number | null;
     /** PR 4 enriches the products POST response with this from a LAST_INWARD walk. */
     lastPurchasePaise: number | null;
-    unit: { code: string }; brand: { name: string } | null; barcode1: string | null;
+    unit: { code: string }; brand: { name: string } | null; codes: ProductCode[];
 };
 
 interface Props {
@@ -294,15 +285,10 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
             brandId: optionalId(form.brandId),
             warrantyTermId: optionalId(form.warrantyTermId),
             modelNo: optionalStr(form.modelNo),
-            barcode1: optionalStr(form.barcode1),
-            barcode2: optionalStr(form.barcode2),
-            barcode3: optionalStr(form.barcode3),
-            ean1: optionalStr(form.ean1),
-            ean2: optionalStr(form.ean2),
-            ean3: optionalStr(form.ean3),
-            upc1: optionalStr(form.upc1),
-            upc2: optionalStr(form.upc2),
-            upc3: optionalStr(form.upc3),
+            // Full replace-set of scannable codes; drop blank rows.
+            codes: form.codes
+                .map((c) => ({ kind: c.kind, value: c.value.trim() }))
+                .filter((c) => c.value !== ""),
             notes: optionalStr(form.notes),
             isActive: form.isActive,
             // costPaise removed in PR 3; no longer sent.

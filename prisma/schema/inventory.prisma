@@ -181,15 +181,6 @@ model InvProduct {
   brandId        Int?
   warrantyTermId Int?
   modelNo        String?
-  barcode1       String?
-  barcode2       String?
-  barcode3       String?
-  ean1           String?
-  ean2           String?
-  ean3           String?
-  upc1           String?
-  upc2           String?
-  upc3           String?
   notes          String?
   isActive       Boolean  @default(true)
   createdAt      DateTime @default(now())
@@ -284,6 +275,7 @@ model InvProduct {
   brand        InvBrand?        @relation(fields: [brandId], references: [id], onDelete: SetNull)
   warrantyTerm InvWarrantyTerm? @relation(fields: [warrantyTermId], references: [id], onDelete: SetNull)
 
+  codes        InvProductCode[]
   orderLines   ShopOrderLine[]
   voucherLines InvVoucherLine[]
   stockEntries InvStockLedger[]
@@ -304,6 +296,25 @@ model InvProduct {
   @@index([warrantyTermId])
   @@index([gstRateId])
   @@index([isListedInShop])
+}
+
+/// Scannable product code — one row per barcode / EAN / UPC. Replaces the old
+/// repeating barcode1-3 / ean1-3 / upc1-3 columns on InvProduct (1NF fix). A
+/// product carries any number of codes; `value` is globally unique so a scanned
+/// string resolves to exactly one product (the scan-lookup hot path is a single
+/// indexed equality instead of a 9-column OR). `sortOrder` preserves entry order;
+/// the first BARCODE-kind row is treated as the "primary" code for label/display.
+model InvProductCode {
+  id        Int                @id @default(autoincrement())
+  productId Int
+  product   InvProduct         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  kind      InvProductCodeKind
+  value     String             @unique
+  sortOrder Int                @default(0)
+  createdAt DateTime           @default(now())
+
+  @@index([productId])
+  @@map("inv_product_codes")
 }
 
 /// Per-branch stock balance — replaces global InvProduct.stock for multi-branch
