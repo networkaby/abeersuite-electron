@@ -18,6 +18,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
+import { readPartyName } from "@/shared/lib/accountancy/partySnapshot";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -39,11 +40,11 @@ export async function POST(req: Request, { params }: Params) {
     const [settling, source] = await Promise.all([
         prisma.invVoucher.findUnique({
             where:  { id: settlingId },
-            select: { id: true, status: true, refVoucherId: true, partyId: true, partyName: true },
+            select: { id: true, status: true, refVoucherId: true, partyId: true, partyJson: true },
         }),
         prisma.invVoucher.findUnique({
             where:  { id: refVoucherId },
-            select: { id: true, status: true, partyId: true, partyName: true },
+            select: { id: true, status: true, partyId: true, partyJson: true },
         }),
     ]);
 
@@ -62,10 +63,10 @@ export async function POST(req: Request, { params }: Params) {
                 { error: "Party mismatch — settling voucher belongs to a different customer/supplier" },
                 { status: 409 },
             );
-    } else if (source.partyName) {
-        // Fallback: compare free-text names (case-insensitive).
-        const srcName  = source.partyName.trim().toLowerCase();
-        const settName = (settling.partyName ?? "").trim().toLowerCase();
+    } else if (readPartyName(source.partyJson)) {
+        // Fallback: compare frozen snapshot names (case-insensitive).
+        const srcName  = (readPartyName(source.partyJson) ?? "").trim().toLowerCase();
+        const settName = (readPartyName(settling.partyJson) ?? "").trim().toLowerCase();
         if (srcName && settName && srcName !== settName)
             return NextResponse.json(
                 { error: "Party mismatch — settling voucher belongs to a different customer/supplier" },

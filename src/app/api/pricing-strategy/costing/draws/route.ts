@@ -5,6 +5,7 @@ import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { costPoolDrawCreateSchema } from "@/shared/lib/schemas/costPoolSchemas";
 import { getEntryRemainingPaise, resolveSourceVoucherRefs } from "@/modules/pricing-strategy/lib/costPool";
+import { readPartyName } from "@/shared/lib/accountancy/partySnapshot";
 
 // GET /api/pricing-strategy/costing/draws — draw history.
 //   ?productId=N            → allocations for one product
@@ -48,7 +49,7 @@ export async function GET(req: Request) {
                     },
                 },
                 sourceInvVoucherId: true,
-                sourceInvVoucher: { select: { reference: true, type: true, partyName: true } },
+                sourceInvVoucher: { select: { reference: true, type: true, partyJson: true } },
                 createdBy: { select: { name: true } },
             },
         });
@@ -77,7 +78,7 @@ export async function GET(req: Request) {
             invVoucherId: r.sourceInvVoucherId,
             invVoucherRef: r.sourceInvVoucher?.reference ?? null,
             invVoucherType: r.sourceInvVoucher?.type ?? null,
-            invVoucherParty: r.sourceInvVoucher?.partyName ?? null,
+            invVoucherParty: readPartyName(r.sourceInvVoucher?.partyJson),
             createdByName: r.createdBy?.name ?? null,
             // The source entry was cancelled/deleted after this draw was made.
             orphaned:

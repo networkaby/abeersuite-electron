@@ -8,7 +8,8 @@ import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recom
 import { postInvVoucherToGl } from "@/modules/accountancy/lib/postInvVoucher";
 import { postReceiptVoucher } from "@/modules/accountancy/lib/postReceiptVoucher";
 import { channelToPaymentMethod } from "@/modules/pos/lib/counterTenders";
-import type { PaymentMethod } from "@/generated/prisma/client";
+import { Prisma, type PaymentMethod } from "@/generated/prisma/client";
+import { buildPartyJson } from "@/shared/lib/accountancy/partySnapshot";
 import { getOpenSaleBillsForFifo } from "@/modules/accountancy/lib/outstandings";
 import { getVoucherTemplate } from "@/shared/lib/print/voucherTemplate";
 import * as Sentry from "@sentry/nextjs";
@@ -549,7 +550,7 @@ export async function POST(req: Request) {
                     status:         "POSTED",
                     postedAt:       new Date(),
                     accountId:      customerAccount.id,
-                    partyName,
+                    partyJson:      buildPartyJson({ name: partyName }) ?? Prisma.DbNull,
                     partyType,
                     partyId,
                     deliveryMode:   "COUNTER",
@@ -613,9 +614,7 @@ export async function POST(req: Request) {
                     reference:   voucher.reference,
                     date:        voucher.date,
                     description: voucher.description,
-                    partyName:   voucher.partyName,
-                    partyType:   voucher.partyType,
-                    partyId:     voucher.partyId,
+                    partyJson:   voucher.partyJson,
                     subtotal:    voucher.subtotal,
                     taxAmount:   voucher.taxAmount,
                     shippingAmt: voucher.shippingAmt,

@@ -23,8 +23,10 @@
 // manual JE + parallel InvVoucher) — see Layer 2c of the plan.
 
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { Prisma } from "@/generated/prisma/client";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { buildPartyJson, readPartyName } from "@/shared/lib/accountancy/partySnapshot";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -163,7 +165,7 @@ export async function POST(req: Request) {
                     status:         "POSTED",
                     postedAt:       today,
                     accountId:      original.accountId,
-                    partyName:      original.account?.name ?? original.partyName,
+                    partyJson:      buildPartyJson({ name: original.account?.name ?? readPartyName(original.partyJson) }) ?? Prisma.DbNull,
                     partyType,
                     partyId,
                     refNumber:      original.reference,
@@ -222,9 +224,7 @@ export async function POST(req: Request) {
                     reference:   voucher.reference,
                     date:        voucher.date,
                     description: voucher.description,
-                    partyName:   voucher.partyName,
-                    partyType:   voucher.partyType,
-                    partyId:     voucher.partyId,
+                    partyJson:   voucher.partyJson,
                     subtotal:    voucher.subtotal,
                     taxAmount:   voucher.taxAmount,
                     shippingAmt: voucher.shippingAmt,

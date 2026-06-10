@@ -5,6 +5,7 @@ import { toNumber } from "@/modules/accountancy/lib/balance";
 import { handleApiError } from "@/shared/lib/api";
 import { resolveActiveBranchId } from "@/shared/lib/auth/activeBranch";
 import { auth } from "@/auth";
+import { readPartyName } from "@/shared/lib/accountancy/partySnapshot";
 
 // GET /api/inventory/stock-ledger/[productId]?from=YYYY-MM-DD&to=YYYY-MM-DD&branchId=BR-HQ|all
 export async function GET(req: NextRequest, { params }: { params: Promise<{ productId: string }> }) {
@@ -65,7 +66,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ prod
             orderBy: [{ date: "asc" }, { id: "asc" }],
             include: {
                 voucher: {
-                    select: { id: true, reference: true, type: true, description: true, partyName: true },
+                    select: { id: true, reference: true, type: true, description: true, partyJson: true },
                 },
             },
         });
@@ -82,7 +83,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ prod
                 reference:   e.voucher.reference,
                 voucherType: e.voucher.type,
                 description: e.voucher.description,
-                partyName:   e.voucher.partyName,
+                partyName:   readPartyName(e.voucher.partyJson),
                 inQty:       inQ  > 0 ? inQ  : null,
                 outQty:      outQ > 0 ? outQ : null,
                 rate:        toNumber(e.rate),

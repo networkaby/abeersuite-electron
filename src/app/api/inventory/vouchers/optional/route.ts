@@ -8,6 +8,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { InvVoucherType, type Prisma } from "@/generated/prisma/client";
+import { readPartyName } from "@/shared/lib/accountancy/partySnapshot";
 
 const OPTIONAL_TYPES: InvVoucherType[] = [
     InvVoucherType.SALES_ORDER,
@@ -58,7 +59,8 @@ export async function GET(req: Request) {
         where.OR = [
             { reference:   { contains: search, mode: "insensitive" } },
             { description: { contains: search, mode: "insensitive" } },
-            { partyName:   { contains: search, mode: "insensitive" } },
+            { account: { is: { name: { contains: search, mode: "insensitive" } } } },
+            { partyJson: { path: ["name"], string_contains: search } },
         ];
     }
 
@@ -87,7 +89,7 @@ export async function GET(req: Request) {
         type:        v.type,
         reference:   v.reference,
         description: v.description,
-        partyName:   v.partyName,
+        partyName:   readPartyName(v.partyJson),
         partyType:   v.partyType,
         partyId:     v.partyId,
         status:      v.status,

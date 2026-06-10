@@ -1,4 +1,5 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { Prisma } from "@/generated/prisma/client";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
@@ -43,11 +44,10 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                     date:             today,
                     description:      source.description,
                     status:           "DRAFT",
-                    partyName:        source.partyName,
+                    accountId:        source.accountId,
+                    partyJson:        source.partyJson ?? Prisma.DbNull,
                     partyType:        source.partyType,
                     partyId:          source.partyId,
-                    partyPhone:       source.partyPhone,
-                    partyAddress:     source.partyAddress,
                     creditPeriodDays: source.creditPeriodDays,
                     placeOfSupply:    source.placeOfSupply,
                     discountPct:      source.discountPct,

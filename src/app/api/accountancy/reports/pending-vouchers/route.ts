@@ -15,6 +15,7 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { InvVoucherType, VoucherStatus, type Prisma } from "@/generated/prisma/client";
 import { requireBranchAccess, BranchAccessError } from "@/shared/lib/auth/activeBranch";
 import { auth } from "@/auth";
+import { readPartyName } from "@/shared/lib/accountancy/partySnapshot";
 
 type PendingType =
     | "CHALLAN" | "GRN" | "REJECTION_IN" | "REJECTION_OUT";
@@ -92,7 +93,10 @@ export async function GET(req: NextRequest) {
                 OR: [
                     { reference:   { contains: search, mode: "insensitive" } },
                     { description: { contains: search, mode: "insensitive" } },
-                    { partyName:   { contains: search, mode: "insensitive" } },
+                    // Party search: live ledger name (case-insensitive) OR the frozen
+                    // snapshot name (for walk-ins with no account).
+                    { account: { is: { name: { contains: search, mode: "insensitive" } } } },
+                    { partyJson: { path: ["name"], string_contains: search } },
                 ],
             }],
         }),
@@ -128,7 +132,7 @@ export async function GET(req: NextRequest) {
             date:        v.date,
             partyId:     v.partyId,
             partyType:   v.partyType,
-            partyName:   v.partyName,
+            partyName:   readPartyName(v.partyJson),
             description: v.description,
             totalAmount: Number(v.totalAmount),
             lineCount:   v._count.lines,

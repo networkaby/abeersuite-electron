@@ -6,6 +6,7 @@ import { handleApiError } from "@/shared/lib/api";
 import { toNumber } from "@/modules/accountancy/lib/balance";
 import { calcLineTotals, calcVoucherTotals } from "@/modules/inventory/lib/stock";
 import { ORDER_STAGE } from "@/modules/order/lib/orderPipeline";
+import { readPartyName } from "@/shared/lib/accountancy/partySnapshot";
 
 // GET  /api/orders/[source]/[id]      → order detail (lines) for the detail/edit view
 // PATCH/api/orders/[source]/[id]      → edit the order's lines (G2): drop a damaged
@@ -26,7 +27,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ source:
         const v = await prisma.invVoucher.findUnique({
             where: { id },
             select: {
-                id: true, reference: true, type: true, orderStatusId: true, partyName: true, accountId: true,
+                id: true, reference: true, type: true, orderStatusId: true, partyJson: true, accountId: true,
                 subtotal: true, taxAmount: true, discountAmt: true, discountPct: true, totalAmount: true,
                 // sku/name let the POS screen rebuild cart rows when an order is reopened
                 // in edit mode (the line description alone embeds them but isn't reliable).
@@ -49,7 +50,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ source:
         }
 
         return NextResponse.json({
-            id: v.id, ref: v.reference, customer: v.partyName, statusId: v.orderStatusId, accountId: v.accountId,
+            id: v.id, ref: v.reference, customer: readPartyName(v.partyJson), statusId: v.orderStatusId, accountId: v.accountId,
             address,
             // Estimates are GL-silent quotes → always editable; orders only at New / Under-Review.
             editable: v.type === "POS_ESTIMATE" ? true : (v.orderStatusId != null && EDITABLE_STAGES.includes(v.orderStatusId)),

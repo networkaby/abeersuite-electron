@@ -9,6 +9,7 @@ import {
 } from "@/shared/lib/print/voucherTemplateDefaults";
 import { toNumber } from "@/modules/accountancy/lib/balance";
 import { loadEstimateDiscountVisibility } from "@/shared/lib/pos/estimateDiscountVisibility";
+import { readPartyName } from "@/shared/lib/accountancy/partySnapshot";
 
 // ── Cross-source receipt sample builder ─────────────────────────────────────
 //
@@ -106,7 +107,7 @@ async function buildInvSample(id: number): Promise<VoucherReceiptData> {
     const sample: ThermalReceiptSample = {
         reference:  v.reference,
         date:       isoDate(v.date),
-        partyName:  party.name ?? v.partyName ?? "Walk-in",
+        partyName:  party.name ?? readPartyName(v.partyJson) ?? "Walk-in",
         partyPhone: party.phone,
         partyGstin: party.gstin,
         lines,

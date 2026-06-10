@@ -4,6 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { getRefundPipeline } from "@/modules/refund/lib/refund";
+import { readPartyName } from "@/shared/lib/accountancy/partySnapshot";
 
 // GET /api/refunds → { stages, refunds } for the Refund board (P9).
 export async function GET() {
@@ -21,9 +22,9 @@ export async function GET() {
         // Resolve the order reference/customer for each refund (inv vouchers in one batch).
         const invIds = refunds.filter((r) => r.orderSource === "inv").map((r) => r.orderId);
         const invs = invIds.length
-            ? await prisma.invVoucher.findMany({ where: { id: { in: invIds } }, select: { id: true, reference: true, partyName: true } })
+            ? await prisma.invVoucher.findMany({ where: { id: { in: invIds } }, select: { id: true, reference: true, partyJson: true } })
             : [];
-        const refMap = new Map(invs.map((v) => [v.id, { ref: v.reference, customer: v.partyName }]));
+        const refMap = new Map(invs.map((v) => [v.id, { ref: v.reference, customer: readPartyName(v.partyJson) }]));
 
         const stages = (pipeline?.statuses ?? []).map((s) => ({
             id: s.id, label: s.label, color: s.color, order: s.order, isTerminal: s.isTerminal, isEntryPoint: s.isEntryPoint,

@@ -7,6 +7,7 @@ import { toNumber } from "@/modules/accountancy/lib/balance";
 import { ORDER_STAGE } from "@/modules/order/lib/orderPipeline";
 import { checkCreditLimit, CreditLimitError } from "@/shared/lib/accountancy/checkCreditLimit";
 import { executeRedemptions } from "@/modules/order/lib/redemptionHold";
+import { readPartyName } from "@/shared/lib/accountancy/partySnapshot";
 
 // POST /api/orders/[source]/[id]/fulfil
 //
@@ -41,7 +42,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ sou
             select: {
                 id: true, type: true, reference: true, branchId: true, orderStatusId: true,
                 accountId: true, totalAmount: true,
-                partyName: true, partyType: true, partyId: true,
+                partyJson: true, partyType: true, partyId: true,
                 discountAmt: true, discountPct: true, shippingAmt: true, roundOff: true,
                 lines: { select: { productId: true, quantity: true, rate: true, taxRate: true, mrpPaise: true } },
             },
@@ -93,7 +94,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ sou
                 date: today,
                 description: `Sale — fulfil ${order.reference}`,
                 branchId: order.branchId,
-                partyName: order.partyName,
+                partyName: readPartyName(order.partyJson),
                 partyType: order.partyType,
                 partyId: order.partyId,
                 discountAmt: order.discountAmt != null ? Number(order.discountAmt) : undefined,

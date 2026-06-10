@@ -1,5 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { notFound } from "next/navigation";
+import { readPartyName } from "@/shared/lib/accountancy/partySnapshot";
 import ReceiptButtons from "@/shared/components/ReceiptButtons";
 import ThermalAutoPrint from "@/modules/pos/components/ThermalAutoPrint";
 import ReceiptPreview from "@/shared/components/print/ReceiptPreview";
@@ -54,7 +55,7 @@ export default async function PosReceiptPage({
     if (!voucher) notFound();
 
     const owner = voucher.account?.person ?? voucher.account?.company ?? null;
-    const partyName  = owner?.name ?? voucher.account?.name ?? voucher.partyName ?? "Walk-in";
+    const partyName  = owner?.name ?? voucher.account?.name ?? readPartyName(voucher.partyJson) ?? "Walk-in";
     const partyPhone = owner?.phones[0]?.phone ?? null;
     const partyGstin = owner?.gstin ?? null;   // B2B tax invoice prints the buyer GSTIN
 

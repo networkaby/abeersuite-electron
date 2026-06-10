@@ -2,7 +2,8 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { invNextRef, calcLineTotals, calcVoucherTotals } from "@/modules/inventory/lib/stock";
-import { InvVoucherType, type InvVoucherDeliveryMode } from "@/generated/prisma/client";
+import { InvVoucherType, Prisma, type InvVoucherDeliveryMode } from "@/generated/prisma/client";
+import { buildPartyJson, readPartyName, readPartyPhone, readPartyAddress } from "@/shared/lib/accountancy/partySnapshot";
 import { resolveActiveBranchId, requireBranchAccess, BranchAccessError } from "@/shared/lib/auth/activeBranch";
 import { auth } from "@/auth";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -119,8 +120,11 @@ export async function GET(req: NextRequest) {
         if (a.companyId != null) companyToAccount.set(a.companyId, a.id);
     }
     const enriched = vouchers.map((v) => {
+        // Derived party display fields from the frozen snapshot so list/register
+        // clients keep reading `partyName` / `partyPhone` unchanged.
+        const partyDisplay = { partyName: readPartyName(v.partyJson), partyPhone: readPartyPhone(v.partyJson), partyAddress: readPartyAddress(v.partyJson) };
         if (v.partyId == null) {
-            return { ...v, partyAccountId: null, partyPersonId: null, partyCompanyId: null };
+            return { ...v, ...partyDisplay, partyAccountId: null, partyPersonId: null, partyCompanyId: null };
         }
         // Same partyId may resolve as either a Person or a Company id depending
         // on which lookup matches. Person wins when both are set (shouldn't
@@ -131,6 +135,7 @@ export async function GET(req: NextRequest) {
         const accFromCompany = companyToAccount.get(v.partyId);
         return {
             ...v,
+            ...partyDisplay,
             partyAccountId:  accFromPerson ?? accFromCompany ?? null,
             partyPersonId:   accFromPerson  != null ? v.partyId : null,
             partyCompanyId:  accFromPerson  == null && accFromCompany != null ? v.partyId : null,
@@ -413,6 +418,16 @@ export async function POST(req: NextRequest) {
 
     const userId = user!.id;
 
+    // Resolve the canonical ledger account from the party identity so accountId is
+    // always populated — not just the legacy partyType/partyId pair. (Account.personId
+    // / companyId are unique.)
+    let resolvedAccountId: number | null = null;
+    if (partyType === "customer" && partyId) {
+        resolvedAccountId = (await prisma.account.findUnique({ where: { personId: partyId }, select: { id: true } }))?.id ?? null;
+    } else if (partyType === "company" && partyId) {
+        resolvedAccountId = (await prisma.account.findUnique({ where: { companyId: partyId }, select: { id: true } }))?.id ?? null;
+    }
+
     // Office SALES_ORDER rides the unified Orders pipeline (P7) so it shows on the
     // Orders board alongside counter + online orders.
     let orderPipelineId: string | null = null;
@@ -435,11 +450,10 @@ export async function POST(req: NextRequest) {
                     orderStatusId,
                     date:         new Date(date),
                     description:  description.trim(),
-                    partyName:    partyName  || null,
+                    accountId:    resolvedAccountId,
+                    partyJson:    buildPartyJson({ name: partyName, phone: partyPhone, address: partyAddress }) ?? Prisma.DbNull,
                     partyType:    partyType  || null,
                     partyId:      partyId    || null,
-                    partyPhone:   partyPhone || null,
-                    partyAddress: partyAddress || null,
                     creditPeriodDays: creditPeriodDays ?? null,
                     refNumber:       refNumber || null,
                     refDate:         refDate ? new Date(refDate) : null,

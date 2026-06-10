@@ -1,5 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { toNumber } from "@/modules/accountancy/lib/balance";
+import { readPartyName } from "@/shared/lib/accountancy/partySnapshot";
 
 // The unified Order is polymorphic (lightweight model — no new table): an "order"
 // is either an order-type InvVoucher (POS_ORDER / SALES_ORDER) or a ShopOrder,
@@ -38,7 +39,7 @@ export async function listOrders(opts?: { statusId?: string }): Promise<Normaliz
                 deletedAt: null,
             },
             select: {
-                id: true, reference: true, type: true, partyName: true, accountId: true,
+                id: true, reference: true, type: true, partyJson: true, accountId: true,
                 totalAmount: true, orderStatusId: true, branchId: true, dealId: true, createdAt: true,
             },
             orderBy: { createdAt: "desc" },
@@ -74,7 +75,7 @@ export async function listOrders(opts?: { statusId?: string }): Promise<Normaliz
             id: v.id,
             ref: v.reference,
             kind: v.type as "POS_ORDER" | "SALES_ORDER",
-            customerName: v.partyName ?? null,
+            customerName: readPartyName(v.partyJson),
             total,
             statusId: v.orderStatusId,
             branchId: v.branchId,

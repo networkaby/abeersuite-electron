@@ -13,6 +13,7 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { InvVoucherType, VoucherStatus } from "@/generated/prisma/client";
 import { resolveActiveBranchId, BranchAccessError } from "@/shared/lib/auth/activeBranch";
 import { auth } from "@/auth";
+import { readPartyName } from "@/shared/lib/accountancy/partySnapshot";
 
 const VALID_TYPES = new Set(Object.values(InvVoucherType));
 
@@ -45,14 +46,15 @@ export async function GET(req: NextRequest) {
     const partyNameParam = searchParams.get("partyName");
     type PartyFilter = {
         partyId?: number;
-        partyName?: { contains: string; mode: "insensitive" };
+        partyJson?: { path: string[]; string_contains: string };
     };
     let partyFilter: PartyFilter = {};
     if (partyIdParam) {
         const partyId = Number(partyIdParam);
         if (!isNaN(partyId)) partyFilter = { partyId };
     } else if (partyNameParam) {
-        partyFilter = { partyName: { contains: partyNameParam, mode: "insensitive" } };
+        // CASH vouchers (no partyId): match the frozen snapshot name.
+        partyFilter = { partyJson: { path: ["name"], string_contains: partyNameParam } };
     }
 
     const rows = await prisma.invVoucher.findMany({
@@ -72,12 +74,12 @@ export async function GET(req: NextRequest) {
             type:        true,
             date:        true,
             partyId:     true,
-            partyName:   true,
+            partyJson:   true,
             totalAmount: true,
         },
     });
 
     return NextResponse.json({
-        rows: rows.map((r) => ({ ...r, totalAmount: Number(r.totalAmount) })),
+        rows: rows.map((r) => ({ ...r, partyName: readPartyName(r.partyJson), totalAmount: Number(r.totalAmount) })),
     });
 }

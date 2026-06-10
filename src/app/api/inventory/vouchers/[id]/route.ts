@@ -8,6 +8,8 @@ import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recom
 import { postInvVoucherToGl } from "@/modules/accountancy/lib/postInvVoucher";
 import * as Sentry from "@sentry/nextjs";
 import { handleApiError } from "@/shared/lib/api";
+import { Prisma } from "@/generated/prisma/client";
+import { buildPartyJson, readPartyName, readPartyPhone, readPartyAddress } from "@/shared/lib/accountancy/partySnapshot";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -47,7 +49,14 @@ export async function GET(_req: Request, { params }: Params) {
         },
     });
     if (!voucher) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    return NextResponse.json(voucher);
+    // Derive party display fields from the frozen snapshot so the detail page +
+    // form edit-load keep reading partyName / partyPhone / partyAddress.
+    return NextResponse.json({
+        ...voucher,
+        partyName:    readPartyName(voucher.partyJson),
+        partyPhone:   readPartyPhone(voucher.partyJson),
+        partyAddress: readPartyAddress(voucher.partyJson),
+    });
 }
 
 // PATCH /api/inventory/vouchers/[id]
@@ -330,6 +339,14 @@ export async function PATCH(req: Request, { params }: Params) {
             if (tenders !== undefined) {
                 await tx.invVoucherTender.deleteMany({ where: { voucherId: id } });
             }
+            // Resolve the canonical ledger account from the (possibly updated)
+            // party identity so accountId tracks the routing pair.
+            let patchAccountId: number | null = null;
+            if (partyId != null && partyType === "customer") {
+                patchAccountId = (await tx.account.findUnique({ where: { personId: partyId }, select: { id: true } }))?.id ?? null;
+            } else if (partyId != null && partyType === "company") {
+                patchAccountId = (await tx.account.findUnique({ where: { companyId: partyId }, select: { id: true } }))?.id ?? null;
+            }
             // Status stays POSTED for posted edits; the re-post below sets a
             // fresh journalEntryId. For draft edits the row is unchanged.
             await tx.invVoucher.update({
@@ -337,11 +354,14 @@ export async function PATCH(req: Request, { params }: Params) {
                 data: {
                     ...(date        ? { date: new Date(date) } : {}),
                     ...(description ? { description: description.trim() } : {}),
-                    ...(partyName        !== undefined ? { partyName:        partyName        || null } : {}),
+                    // Party display fields move together as one frozen snapshot.
+                    ...(partyName !== undefined || partyPhone !== undefined || partyAddress !== undefined
+                        ? { partyJson: buildPartyJson({ name: partyName, phone: partyPhone, address: partyAddress }) ?? Prisma.DbNull }
+                        : {}),
                     ...(partyType        !== undefined ? { partyType:        partyType        || null } : {}),
                     ...(partyId          !== undefined ? { partyId:          partyId          || null } : {}),
-                    ...(partyPhone       !== undefined ? { partyPhone:       partyPhone       || null } : {}),
-                    ...(partyAddress     !== undefined ? { partyAddress:     partyAddress     || null } : {}),
+                    // Keep the canonical FK in step with the routing pair.
+                    ...(partyId !== undefined ? { accountId: patchAccountId } : {}),
                     ...(creditPeriodDays  !== undefined ? { creditPeriodDays:  creditPeriodDays ?? null } : {}),
                     ...(refNumber        !== undefined ? { refNumber:        refNumber        || null } : {}),
                     ...(refDate          !== undefined ? { refDate:          refDate ? new Date(refDate) : null } : {}),

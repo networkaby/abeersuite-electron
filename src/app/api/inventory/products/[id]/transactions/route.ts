@@ -4,6 +4,7 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { toNumber } from "@/modules/accountancy/lib/balance";
 import { loadLastInwardCostMap } from "@/modules/inventory/lib/valuation";
+import { readPartyName } from "@/shared/lib/accountancy/partySnapshot";
 
 
 // GET /api/inventory/products/[id]/transactions?from=YYYY-MM-DD&to=YYYY-MM-DD
@@ -70,7 +71,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
                         reference: true,
                         type: true,
                         date: true,
-                        partyName: true,
+                        partyJson: true,
                         partyType: true,
                         partyId: true,
                         totalAmount: true,
@@ -103,7 +104,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
             type: line.voucher.type,
             reference: line.voucher.reference,
             date: line.voucher.date,
-            partyName: line.voucher.partyName,
+            partyName: readPartyName(line.voucher.partyJson),
             partyType: line.voucher.partyType,
             partyId: line.voucher.partyId,
             quantity: toNumber(line.quantity),

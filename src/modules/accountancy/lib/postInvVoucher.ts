@@ -28,6 +28,7 @@ import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { balanceDelta, nextRefFromSeries, toNumber } from "./balance";
 import { defaultNormalBalanceForGroupType } from "./groupNature";
 import { computeGstSplit } from "@/shared/lib/gst/computeGstSplit";
+import { readPartyName } from "@/shared/lib/accountancy/partySnapshot";
 
 type Tx = Prisma.TransactionClient | PrismaClient;
 
@@ -107,9 +108,8 @@ export type PostVoucherInput = {
         reference: string;
         date: Date;
         description: string;
-        partyName: string | null;
-        partyType: string | null;
-        partyId:   number | null;
+        /// Frozen party snapshot — name used for JE descriptions (read via readPartyName).
+        partyJson: Prisma.JsonValue | null;
         subtotal:    Prisma.Decimal | number;
         taxAmount:   Prisma.Decimal | number;
         shippingAmt: Prisma.Decimal | number;
@@ -171,6 +171,8 @@ export type PostVoucherResult = {
 export async function postInvVoucherToGl(tx: Tx, input: PostVoucherInput): Promise<PostVoucherResult> {
     const { voucher, userId } = input;
     const notes: string[] = [];
+    // Party name for JE descriptions comes from the frozen snapshot (partyJson).
+    const partyName = readPartyName(voucher.partyJson);
 
     // Four GL-posting kinds, in two direction-shapes:
     //   "sale shape"     — counter (party/cash) Dr, body Cr, tax Cr
@@ -374,7 +376,7 @@ export async function postInvVoucherToGl(tx: Tx, input: PostVoucherInput): Promi
             accountId:   t.accountId,
             type:        counterType,
             amount:      amt,
-            description: voucher.partyName ?? voucher.description,
+            description: partyName ?? voucher.description,
         });
         if (t.account) {
             extraLedgers.push({
@@ -479,7 +481,7 @@ export async function postInvVoucherToGl(tx: Tx, input: PostVoucherInput): Promi
         data: {
             date:        voucher.date,
             reference:   ref,
-            description: `${voucher.type} ${voucher.reference}: ${voucher.partyName ?? voucher.description}`,
+            description: `${voucher.type} ${voucher.reference}: ${partyName ?? voucher.description}`,
             status:      "POSTED",
             postedAt:    new Date(),
             createdById: userId,

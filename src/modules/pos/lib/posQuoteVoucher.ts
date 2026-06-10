@@ -11,7 +11,8 @@
 // Server-only (imports the prisma singleton). Reuses the same line/total helpers
 // as the office trading-voucher route so the math matches.
 
-import type { Prisma } from "@/generated/prisma/client";
+import { Prisma } from "@/generated/prisma/client";
+import { buildPartyJson } from "@/shared/lib/accountancy/partySnapshot";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { invNextRef, calcLineTotals, calcVoucherTotals } from "@/modules/inventory/lib/stock";
 import { getDealsPipeline, findOpenDealForParty } from "@/modules/deals/lib/dealsPipeline";
@@ -130,10 +131,9 @@ export async function createPosQuoteVoucher(opts: {
                 date: body.date ? new Date(body.date) : new Date(),
                 description,
                 accountId: body.accountId ?? null,
-                partyName: body.partyName || null,
+                partyJson: buildPartyJson({ name: body.partyName, phone: body.partyPhone }) ?? Prisma.DbNull,
                 partyType: body.partyType || null,
                 partyId: body.partyId || null,
-                partyPhone: body.partyPhone || null,
                 deliveryMode: "COUNTER",
                 orderPipelineId: orderPipeline?.id ?? null,
                 orderStatusId,

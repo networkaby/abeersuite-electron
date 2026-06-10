@@ -408,11 +408,17 @@ model InvVoucher {
   /// party.
   accountId           Int?
   account             Account?       @relation("InvVoucherAccount", fields: [accountId], references: [id])
-  partyName           String?
+  /// Frozen party snapshot — { name, phone, address } as-of the transaction
+  /// (immutable on a tax invoice). Replaced the partyName / partyPhone /
+  /// partyAddress scalar columns (2026-06-10). `accountId` above is the canonical
+  /// LIVE party link; this is the display snapshot. See src/shared/lib/accountancy/partySnapshot.ts.
+  partyJson           Json?
+  /// Legacy routing keys (still used by outstandings / bill-wise link + linkable
+  /// to resolve/match the party for rows where accountId isn't relied on). Slated
+  /// to be dropped once accountId is the sole link — see task "Full-normalize
+  /// InvVoucher party".
   partyType           String? // "supplier" | "customer" | "account"
   partyId             Int?
-  partyPhone          String?
-  partyAddress        String?
   /// Supplier-issued bill number on a PURCHASE (we don't generate it — the
   /// supplier does). Also reused as the "original invoice / bill number"
   /// on SALE_RETURN / PURCHASE_RETURN to back-reference the source voucher.
