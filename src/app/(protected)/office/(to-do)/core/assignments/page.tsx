@@ -87,15 +87,19 @@ function toCard(t: RawTicket, worksById: Record<string, { label: string; color: 
 }
 
 // ── Stat card ─────────────────────────────────────────────────────────────────
+// `color` is a tailwind "bg-… text-…" pair (a Work's colour); the left bar uses
+// the bg, the count uses the text colour.
 function StatCard({
-    label, value, icon, textColor,
-}: { label: string; value: number; icon: React.ReactNode; textColor: string }) {
+    label, value, color,
+}: { label: string; value: number; color: string }) {
+    const bgClass = color.split(" ").find((c) => c.startsWith("bg-")) ?? "bg-muted";
+    const textClass = color.split(" ").find((c) => c.startsWith("text-")) ?? "text-foreground";
     return (
-        <div className="flex items-center gap-3 rounded-lg border border-border bg-card p-4 shadow">
-            <div className={textColor}>{icon}</div>
-            <div>
-                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{label}</p>
-                <p className={`text-2xl font-bold ${textColor}`}>{value}</p>
+        <div className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 shadow-sm">
+            <span className={`h-9 w-1.5 shrink-0 rounded-full ${bgClass}`} aria-hidden />
+            <div className="min-w-0">
+                <p className="truncate text-xs text-muted-foreground font-medium uppercase tracking-wide">{label}</p>
+                <p className={`text-2xl font-bold leading-tight ${textClass}`}>{value}</p>
             </div>
         </div>
     );
@@ -119,6 +123,8 @@ export default async function AssignmentsPage({
     const permissions: string[] = sessionUser?.permissions ?? [];
     const isAdminUser = permissions.includes(PERMISSIONS.ADMIN_BYPASS);
 
+    // TODO(perm): tab visibility is permission-only for now; scope-aware gating
+    // is deferred to the broader permission pass.
     const canViewTeam = permissions.includes(PERMISSIONS.ASSIGNMENTS_VIEW_TEAM) || isAdminUser;
     const canViewOrg = permissions.includes(PERMISSIONS.ASSIGNMENTS_VIEW_ORG_LEGACY) || isAdminUser;
 
@@ -259,19 +265,10 @@ export default async function AssignmentsPage({
 
             {/* Stats */}
             <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-4 mb-6">
-                <StatCard label="Total" value={total} icon={<AlertCircle size={20} />} textColor="text-muted-foreground" />
-                {works.map((w) => {
-                    const textColor = w.color.split(" ").find((c) => c.startsWith("text-")) ?? "text-muted-foreground";
-                    return (
-                        <StatCard
-                            key={w.id}
-                            label={w.label}
-                            value={workCounts[w.id] ?? 0}
-                            icon={<Circle size={20} className={textColor} />}
-                            textColor={textColor}
-                        />
-                    );
-                })}
+                <StatCard label="Total" value={total} color="bg-muted text-foreground" />
+                {works.map((w) => (
+                    <StatCard key={w.id} label={w.label} value={workCounts[w.id] ?? 0} color={w.color} />
+                ))}
             </div>
 
             {/* Sections — me scope */}
