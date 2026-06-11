@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { formatDate, formatDateTime } from "@/shared/lib/format/formatDate";
 import {
     ArrowLeft, Clock, User, Building2, AlertTriangle,
-    Printer, Lock, Eye, NotebookPen, ArrowRightLeft,
+    Printer, Lock, Eye, NotebookPen, ArrowRightLeft, CheckCircle2,
 } from "lucide-react";
 import Link from "next/link";
 import { PRIORITY_META } from "@/utils/constants";
@@ -19,6 +19,7 @@ import WarrantyConvertModal from "@/modules/repairing/components/WarrantyConvert
 import TicketOwnershipPanel from "@/modules/repairing/components/TicketOwnershipPanel";
 import PipelineTransferModal from "@/modules/repairing/components/PipelineTransferModal";
 import TicketInvoicesPanel from "@/modules/repairing/components/TicketInvoicesPanel";
+import WorkActions from "@/modules/repairing/components/WorkActions";
 import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,7 +30,7 @@ interface Ticket {
     subStatusId?: string;
     pipelineId?: string | null;
     pipeline?: { id: string; label: string; color: string } | null;
-    ticketSubStatus?: { id: string; label: string; color: string } | null;
+    ticketSubStatus?: { id: string; label: string; color: string; actionLabel?: string | null; work?: { label: string; color: string } | null } | null;
     priority: string;
     notes?: string;
     accessInfo?: string;
@@ -87,6 +88,7 @@ export default function TicketDetailPage() {
     const [showRefEdit, setShowRefEdit] = useState(false);
     const [refValue, setRefValue] = useState("");
     const [savingRef, setSavingRef] = useState(false);
+    const [closing, setClosing] = useState(false);
     const { data: session } = useSession();
     const sessionUser = session?.user as { id?: string } | undefined;
     const currentUserId = Number(sessionUser?.id ?? "0");
@@ -128,6 +130,31 @@ export default function TicketDetailPage() {
     if (!ticket) return <p className="text-muted-foreground">Ticket not found.</p>;
 
     const actionBtnBase = "w-full border border-border py-2 text-sm flex items-center justify-center gap-2 transition-colors hover:bg-muted rounded-md";
+
+    const closeWork = async () => {
+        setClosing(true);
+        try {
+            await axios.delete(`/api/tickets/${ticket.id}/sub-status`);
+            toast.success("Closed — sub-status cleared");
+            fetchTicket();
+        } catch {
+            toast.error("Failed to close");
+        } finally {
+            setClosing(false);
+        }
+    };
+
+    // Derived "information received" highlight: the current ask sub-status carries a
+    // Work and a ✓ finish note has been logged since it was set.
+    const askSubStatus = ticket.ticketSubStatus?.work ? ticket.ticketSubStatus : null;
+    const setLog = askSubStatus ? ticket.logs.find((l) => l.subStatusId === askSubStatus.id) : undefined;
+    const answerLog = askSubStatus
+        ? ticket.logs.find((l) =>
+            !l.subStatusId &&
+            l.note?.includes(" finished — ") &&
+            (!setLog || new Date(l.createdAt) >= new Date(setLog.createdAt)))
+        : undefined;
+    const answerText = answerLog?.note?.split(" finished — ").slice(1).join(" finished — ") || answerLog?.note || "";
 
     return (
         <div className="max-w-5xl mx-auto">
@@ -317,6 +344,51 @@ export default function TicketDetailPage() {
 
                 {/* Right Column — Actions */}
                 <div className="space-y-4">
+                    {ticket.ticketSubStatus?.work && (
+                        <div className="space-y-3 rounded-lg border border-border bg-card p-4 shadow">
+                            <h2 className="text-sm font-semibold text-foreground">Current work</h2>
+                            <div className="flex flex-wrap items-center gap-2">
+                                <span className={`rounded-md px-2 py-0.5 text-xs font-medium ${ticket.ticketSubStatus.work.color}`}>
+                                    {ticket.ticketSubStatus.work.label}
+                                </span>
+                                <span className={`rounded-md px-2 py-0.5 text-xs font-medium ${ticket.ticketSubStatus.color}`}>
+                                    {ticket.ticketSubStatus.label}
+                                </span>
+                            </div>
+                            {ticket.ticketSubStatus.actionLabel && (
+                                <p className="text-xs font-medium text-primary">→ {ticket.ticketSubStatus.actionLabel}</p>
+                            )}
+                            {ticket.primaryOwner && (
+                                <p className="text-xs text-muted-foreground">
+                                    Started by {ticket.primaryOwner.name}
+                                    {ticket.primaryOwner.id === currentUserId && <span className="ml-1 text-primary">(you)</span>}
+                                </p>
+                            )}
+                            <div className="flex flex-wrap gap-2">
+                                <WorkActions
+                                    ticketId={ticket.id}
+                                    workLabel={ticket.ticketSubStatus.work.label}
+                                    isOwned={!!ticket.primaryOwner}
+                                    isOwnerMe={ticket.primaryOwner?.id === currentUserId}
+                                    onChanged={fetchTicket}
+                                />
+                            </div>
+                            {answerLog && (
+                                <div className="space-y-2 rounded-md border border-primary/30 bg-primary/5 p-3">
+                                    <p className="flex items-center gap-1 text-xs font-semibold text-primary">
+                                        <CheckCircle2 size={13} /> Information received
+                                    </p>
+                                    <p className="text-sm text-foreground">{answerText}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                        by {answerLog.changedBy.name} · {formatDateTime(answerLog.createdAt)}
+                                    </p>
+                                    <Button onClick={closeWork} disabled={closing} size="sm" variant="outline" className="w-full">
+                                        {closing ? "Closing…" : "Close — clear sub-status"}
+                                    </Button>
+                                </div>
+                            )}
+                        </div>
+                    )}
                     <TicketOwnershipPanel
                         ticketId={ticket.id}
                         primaryOwner={ticket.primaryOwner}

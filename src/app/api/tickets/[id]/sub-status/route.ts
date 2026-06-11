@@ -133,3 +133,47 @@ export async function PATCH(
         return handleApiError(e, "Failed to update sub-status");
     }
 }
+
+// DELETE /api/tickets/[id]/sub-status
+// Clears the current sub-status ("Close" the ask). Open to any authenticated
+// staff (permission gating deferred to the later permission pass). Logs the
+// closure so it lands in the ticket activity.
+export async function DELETE(
+    _req: Request,
+    { params }: { params: Promise<{ id: string }> }
+) {
+    try {
+        const { user, response } = await requireAuth();
+        if (response) return response;
+
+        const { id } = await params;
+        const ticketId = Number(id);
+
+        const ticket = await prisma.ticket.findUnique({
+            where: { id: ticketId },
+            include: { ticketSubStatus: { select: { label: true } } },
+        });
+        if (!ticket) return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
+        if (!ticket.subStatusId) return NextResponse.json({ ok: true }); // already clear
+
+        const label = ticket.ticketSubStatus?.label ?? "Sub-status";
+        await prisma.$transaction(async (tx) => {
+            await tx.ticket.update({
+                where: { id: ticketId },
+                data: { subStatusId: null, updatedAt: new Date() },
+            });
+            await tx.ticketLog.create({
+                data: {
+                    ticketId,
+                    status: ticket.status,
+                    note: `✓ ${label} closed — information acknowledged`,
+                    userId: user.id,
+                },
+            });
+        });
+
+        return NextResponse.json({ ok: true });
+    } catch (e) {
+        return handleApiError(e, "Failed to close sub-status");
+    }
+}
