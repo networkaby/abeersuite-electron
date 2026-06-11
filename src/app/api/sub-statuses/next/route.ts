@@ -31,7 +31,7 @@ export async function GET(req: Request) {
         const transitions = await prisma.subStatusTransition.findMany({
             where: { fromSubStatusId: entryOnly || !fromSubStatusId ? null : fromSubStatusId },
             include: { to: { include: { work: { select: { permissionId: true } } } } },
-            orderBy: { id: "asc" },
+            orderBy: { to: { order: "asc" } },
         });
 
         const seen = new Set<string>();
