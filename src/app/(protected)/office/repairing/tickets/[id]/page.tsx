@@ -130,6 +130,10 @@ export default function TicketDetailPage() {
 
     const actionBtnBase = "w-full border border-border py-2 text-sm flex items-center justify-center gap-2 transition-colors hover:bg-muted rounded-md";
 
+    // Work is "in progress" when the ticket has an owner AND an active work sub-status.
+    // When true: StatusNav is locked, all Actions except Add Note are locked.
+    const workInProgress = !!ticket.primaryOwner && !!ticket.ticketSubStatus?.work;
+
     // Single "Back" = the previous distinct step in this ticket's history (an undo of
     // the last move) — prefer the prior sub-status, else the prior main status.
     const backTarget = (() => {
@@ -389,6 +393,7 @@ export default function TicketDetailPage() {
                             subStatusId={ticket.subStatusId ?? null}
                             isWarranty={ticket.isWarranty}
                             started={!!ticket.primaryOwner}
+                            locked={workInProgress}
                             nextStatuses={ticket.ticketStatus.fromTransitions.map((t) => t.to)}
                             backTarget={backTarget}
                             onChanged={fetchTicket}
@@ -408,20 +413,20 @@ export default function TicketDetailPage() {
                             </Button>
 
                             {canTransfer && !ticket.ticketStatus.isTerminal && (
-                                <Button onClick={() => setShowTransferModal(true)} variant="outline" className={actionBtnBase}>
+                                <Button onClick={() => setShowTransferModal(true)} variant="outline" className={actionBtnBase} disabled={workInProgress}>
                                     <ArrowRightLeft size={15} /> Transfer Pipeline
                                 </Button>
                             )}
 
                             {canConvertWarranty && ticket.status !== "S7" && ticket.status !== "S8" && (
-                                <Button onClick={() => setShowWarrantyModal(true)} variant="outline" className={actionBtnBase}>
+                                <Button onClick={() => setShowWarrantyModal(true)} variant="outline" className={actionBtnBase} disabled={workInProgress}>
                                     {ticket.isWarranty ? "⚙ Manage Warranty" : "⚙ Mark as Warranty"}
                                 </Button>
                             )}
 
                             {!ticket.escalated && !ticket.ticketStatus.isTerminal &&
                                 ticket.ticketStatus.fromTransitions.some(t => t.to.id === "S4") && (
-                                    <Button onClick={() => setShowEscalation(true)} variant="outline" className={actionBtnBase}>
+                                    <Button onClick={() => setShowEscalation(true)} variant="outline" className={actionBtnBase} disabled={workInProgress}>
                                         <AlertTriangle size={15} /> Escalate to Service Centre
                                     </Button>
                                 )}

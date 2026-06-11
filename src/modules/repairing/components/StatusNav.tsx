@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { ArrowRight, ArrowLeft, Lock, Eye } from "lucide-react";
+import { ArrowRight, ArrowLeft, Lock, Eye, LockKeyhole } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
@@ -17,13 +17,15 @@ interface Props {
     subStatusId: string | null;
     isWarranty: boolean;
     started: boolean;
+    /** Lock all nav buttons — shown when work is in progress. */
+    locked?: boolean;
     nextStatuses: NavTarget[];
     backTarget: { kind: "sub" | "status"; id: string; label: string } | null;
     onChanged: () => void;
 }
 
 export default function StatusNav({
-    ticketId, statusId, subStatusId, isWarranty, started, nextStatuses, backTarget, onChanged,
+    ticketId, statusId, subStatusId, isWarranty, started, locked = false, nextStatuses, backTarget, onChanged,
 }: Props) {
     const [nextSubs, setNextSubs] = useState<NavTarget[]>([]);
     const [pending, setPending] = useState<Pending | null>(null);
@@ -97,27 +99,36 @@ export default function StatusNav({
         <div className="space-y-3 rounded-lg border border-border bg-card p-4 shadow">
             <h2 className="text-sm font-semibold text-foreground">Move ticket</h2>
 
-            {hasNext ? (
-                <div className="space-y-1.5">
-                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Next</p>
-                    <div className="flex flex-col gap-1.5">
-                        {nextSubs.map((t) => navBtn(t, "sub", "next"))}
-                        {nextStatuses.map((t) => navBtn(t, "status", "next"))}
-                    </div>
-                </div>
+            {locked ? (
+                <p className="flex items-center gap-1.5 rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
+                    <LockKeyhole size={13} className="shrink-0" />
+                    Complete or abandon current work to move this ticket.
+                </p>
             ) : (
-                <p className="text-xs text-muted-foreground">No next step configured.</p>
-            )}
+                <>
+                    {hasNext ? (
+                        <div className="space-y-1.5">
+                            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Next</p>
+                            <div className="flex flex-col gap-1.5">
+                                {nextSubs.map((t) => navBtn(t, "sub", "next"))}
+                                {nextStatuses.map((t) => navBtn(t, "status", "next"))}
+                            </div>
+                        </div>
+                    ) : (
+                        <p className="text-xs text-muted-foreground">No next step configured.</p>
+                    )}
 
-            {backTarget && (
-                <Button
-                    onClick={() => setPending({ kind: backTarget.kind, id: backTarget.id, label: backTarget.label, dir: "back" })}
-                    size="sm" variant="ghost"
-                    className="w-full justify-start gap-1.5 border border-dashed border-border text-muted-foreground"
-                >
-                    <ArrowLeft size={13} />
-                    <span className="truncate">Back to {backTarget.label}</span>
-                </Button>
+                    {backTarget && (
+                        <Button
+                            onClick={() => setPending({ kind: backTarget.kind, id: backTarget.id, label: backTarget.label, dir: "back" })}
+                            size="sm" variant="ghost"
+                            className="w-full justify-start gap-1.5 border border-dashed border-border text-muted-foreground"
+                        >
+                            <ArrowLeft size={13} />
+                            <span className="truncate">Back to {backTarget.label}</span>
+                        </Button>
+                    )}
+                </>
             )}
 
             {pending && (
