@@ -6,6 +6,7 @@ import { Priority } from "@/generated/prisma/enums";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
+import { findEntrySubStatus } from "@/modules/repairing/lib/entrySubStatus";
 
 const createTicketSchema = z.object({
     sourceShopOrderId: z.coerce.number().int().positive().optional(),
@@ -157,11 +158,7 @@ export async function POST(req: Request) {
         // Auto-enter the entry-point sub-status for this status (a fromSubStatusId=null
         // transition whose target applies to the status), so a new ticket is immediately
         // a workable item rather than a bare status. Lowest order wins.
-        const entryRows = await prisma.subStatusTransition.findMany({
-            where: { fromSubStatusId: null, to: { applicableStatusIds: { has: ticket.status } } },
-            include: { to: { select: { id: true, label: true, order: true } } },
-        });
-        const entrySub = entryRows.map((r) => r.to).sort((a, b) => a.order - b.order)[0];
+        const entrySub = await findEntrySubStatus(ticket.status);
         if (entrySub) {
             await prisma.ticket.update({ where: { id: ticket.id }, data: { subStatusId: entrySub.id } });
             await prisma.ticketLog.create({

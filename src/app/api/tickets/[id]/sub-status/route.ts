@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { passesWorkGate } from "@/modules/repairing/lib/workGate";
+import { findEntrySubStatus } from "@/modules/repairing/lib/entrySubStatus";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
@@ -57,7 +58,11 @@ export async function PATCH(
         const triggerMap = (subStatus.triggerMap ?? {}) as Record<string, string>;
         const triggerStatusId = triggerMap[ticket.status] ?? null;
         const newMainStatus = triggerStatusId ?? ticket.status;
-        const newSubStatusId = triggerStatusId ? null : subStatusId;
+        // On auto-advance to a new status, apply that status's entry sub-status
+        // (mirrors ticket create + PUT status change). Without this the ticket
+        // would land in the new status with no work sub-status / inbox item.
+        const entrySub = triggerStatusId ? await findEntrySubStatus(triggerStatusId) : null;
+        const newSubStatusId = triggerStatusId ? (entrySub?.id ?? null) : subStatusId;
 
         // ── Transaction: update ticket + auto-revert old participants ───────────
         await prisma.$transaction(async (tx) => {
@@ -111,7 +116,7 @@ export async function PATCH(
                 },
             });
 
-            // 4. Log auto-advance if triggered
+            // 4. Log auto-advance if triggered (+ the entry sub-status it landed in)
             if (triggerStatusId) {
                 await tx.ticketLog.create({
                     data: {
@@ -121,6 +126,17 @@ export async function PATCH(
                         userId,
                     },
                 });
+                if (entrySub) {
+                    await tx.ticketLog.create({
+                        data: {
+                            ticketId,
+                            status: triggerStatusId,
+                            subStatusId: entrySub.id,
+                            note: `Entered: ${entrySub.label}`,
+                            userId,
+                        },
+                    });
+                }
             }
         });
 

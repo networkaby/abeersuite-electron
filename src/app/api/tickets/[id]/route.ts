@@ -5,6 +5,7 @@ import { z } from "zod";
 import { Priority } from "@/generated/prisma/enums";
 import { resolvedUserFromSession } from "@/shared/lib/auth/permissions";
 import { passesWorkGate } from "@/modules/repairing/lib/workGate";
+import { findEntrySubStatus } from "@/modules/repairing/lib/entrySubStatus";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
@@ -203,11 +204,7 @@ export async function PUT(
 
                 // Auto-apply entry sub-status for the new status (same logic as ticket creation).
                 // Clears primaryOwner so the work item appears as "To do" in the inbox.
-                const entryRows = await prisma.subStatusTransition.findMany({
-                    where: { fromSubStatusId: null, to: { applicableStatusIds: { has: body.status } } },
-                    include: { to: { select: { id: true, label: true, order: true } } },
-                });
-                const entrySub = entryRows.map((r) => r.to).sort((a, b) => a.order - b.order)[0];
+                const entrySub = await findEntrySubStatus(body.status);
                 if (entrySub) {
                     await prisma.ticket.update({
                         where: { id: ticket.id },
