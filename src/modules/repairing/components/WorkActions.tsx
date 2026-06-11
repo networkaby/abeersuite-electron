@@ -4,12 +4,13 @@ import { useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import { Play, CheckCircle, Lock, Eye, X, ArrowRight, ThumbsUp, ThumbsDown } from "lucide-react";
+import { Play, Check, X, CheckCircle, Lock, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 
 interface RouteTarget { id: string; label: string }
+interface Pending { target: RouteTarget | null; kind: string; done: string }
 
 interface Props {
     ticketId: number;
@@ -26,17 +27,18 @@ interface Props {
     /** Called after a successful Start/Complete (defaults to router.refresh()). */
     onChanged?: () => void;
     size?: "sm" | "default";
-    /** Hide the Complete action (e.g. new-ticket cards that only claim). */
+    /** Hide the outcome actions (e.g. new-ticket cards that only claim). */
     showComplete?: boolean;
 }
 
 /**
- * Start / Complete for a ticket's current work, reused on the Work Inbox board and
- * the ticket page. Start = claim (sets primaryOwner, so nobody double-works).
- * Complete = the caller picks Success or Unsuccess and the ticket moves to the
- * sub-status that the *current* sub-status routes that outcome to (configured on
- * the source sub-status). The move goes through the sub-status PATCH (which
- * auto-advances the main status via triggerMap and logs the feedback note).
+ * Start / outcome actions for a ticket's current work, reused on the Work Inbox
+ * board and the ticket page. Start = claim (sets primaryOwner, no double-work).
+ * When you own it, the two outcomes show directly as colour-coded buttons —
+ * green Success / red Unsuccess — that move the ticket to the sub-status the
+ * *current* sub-status routes that outcome to (configured on the source). A quick
+ * note box captures the feedback (→ ticket activity) before the move. Works with
+ * no routing fall back to a single neutral Complete (clear).
  */
 export default function WorkActions({
     ticketId, workLabel, successTarget, failTarget,
@@ -44,11 +46,12 @@ export default function WorkActions({
 }: Props) {
     const router = useRouter();
     const [busy, setBusy] = useState(false);
-    const [open, setOpen] = useState(false);
+    const [pending, setPending] = useState<Pending | null>(null);
     const [note, setNote] = useState("");
     const [visibility, setVisibility] = useState<"INTERNAL" | "PUBLIC">("INTERNAL");
 
     const refresh = () => { if (onChanged) onChanged(); else router.refresh(); };
+    const close = () => { setPending(null); setNote(""); };
 
     const start = async () => {
         setBusy(true);
@@ -61,22 +64,24 @@ export default function WorkActions({
         } finally { setBusy(false); }
     };
 
-    const moveTo = async (target: RouteTarget | null, kind: string) => {
+    const submit = async () => {
+        if (!pending) return;
         setBusy(true);
         try {
-            if (target) {
-                await axios.patch(`/api/tickets/${ticketId}/sub-status`, { subStatusId: target.id, note: note.trim() || undefined, visibility });
-                toast.success(`${kind} → ${target.label}`);
+            if (pending.target) {
+                await axios.patch(`/api/tickets/${ticketId}/sub-status`, { subStatusId: pending.target.id, note: note.trim() || undefined, visibility });
             } else {
                 await axios.delete(`/api/tickets/${ticketId}/sub-status`);
-                toast.success("Marked done");
             }
-            setOpen(false); setNote("");
+            toast.success(pending.done);
+            close();
             refresh();
         } catch (err: unknown) {
             toast.error((err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Failed to complete");
         } finally { setBusy(false); }
     };
+
+    const hasRouting = !!(successTarget || failTarget);
 
     return (
         <>
@@ -85,27 +90,53 @@ export default function WorkActions({
                     <Play size={13} /> Start
                 </Button>
             )}
-            {showComplete && isOwnerMe && (
-                <Button onClick={() => setOpen(true)} disabled={busy} size={size} variant="outline">
+            {showComplete && isOwnerMe && (hasRouting ? (
+                <>
+                    {successTarget && (
+                        <Button
+                            onClick={() => setPending({ target: successTarget, kind: "Success", done: `Success → ${successTarget.label}` })}
+                            disabled={busy} size={size} variant="outline" title={`Success → ${successTarget.label}`}
+                            className="border-green-300 bg-green-50 text-green-700 hover:bg-green-100 dark:border-green-800 dark:bg-green-950 dark:text-green-300"
+                        >
+                            <Check size={13} /> Success
+                        </Button>
+                    )}
+                    {failTarget && (
+                        <Button
+                            onClick={() => setPending({ target: failTarget, kind: "Unsuccess", done: `Unsuccess → ${failTarget.label}` })}
+                            disabled={busy} size={size} variant="outline" title={`Unsuccess → ${failTarget.label}`}
+                            className="border-red-300 bg-red-50 text-red-700 hover:bg-red-100 dark:border-red-800 dark:bg-red-950 dark:text-red-300"
+                        >
+                            <X size={13} /> Unsuccess
+                        </Button>
+                    )}
+                </>
+            ) : (
+                <Button onClick={() => setPending({ target: null, kind: "Done", done: "Marked done" })} disabled={busy} size={size} variant="outline">
                     <CheckCircle size={13} /> Complete
                 </Button>
-            )}
+            ))}
 
-            {open && (
-                <Dialog open onOpenChange={(o) => { if (!o) setOpen(false); }}>
+            {pending && (
+                <Dialog open onOpenChange={(o) => { if (!o) close(); }}>
                     <DialogContent className="sm:max-w-md">
                         <DialogHeader className="flex-row items-center justify-between space-y-0">
-                            <DialogTitle>Complete — {workLabel}</DialogTitle>
-                            <Button onClick={() => setOpen(false)} variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-foreground">
+                            <DialogTitle>{pending.target ? `${pending.kind} — ${workLabel}` : `Complete — ${workLabel}`}</DialogTitle>
+                            <Button onClick={close} variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-foreground">
                                 <X size={20} />
                             </Button>
                         </DialogHeader>
 
                         <div className="space-y-4">
+                            {pending.target && (
+                                <p className="text-sm text-muted-foreground">
+                                    Moves this ticket to <span className="font-medium text-foreground">{pending.target.label}</span>.
+                                </p>
+                            )}
                             <Textarea
                                 autoFocus rows={3} value={note}
                                 onChange={(e) => setNote(e.target.value)}
-                                placeholder={`Feedback / outcome for ${workLabel}…`}
+                                placeholder={`Feedback for ${workLabel}…`}
                                 className="resize-none"
                             />
                             <div>
@@ -121,32 +152,14 @@ export default function WorkActions({
                                     </Button>
                                 </div>
                             </div>
-                            <div>
-                                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Outcome</p>
-                                {!successTarget && !failTarget ? (
-                                    <Button onClick={() => moveTo(null, "Done")} disabled={busy} variant="outline" className="w-full justify-between">
-                                        Mark done (clear sub-status) <ArrowRight size={14} />
-                                    </Button>
-                                ) : (
-                                    <div className="space-y-2">
-                                        {successTarget && (
-                                            <Button onClick={() => moveTo(successTarget, "Success")} disabled={busy} variant="outline"
-                                                className="w-full justify-between border-green-300 text-green-700 hover:bg-green-50 dark:border-green-800 dark:text-green-300">
-                                                <span className="flex items-center gap-2"><ThumbsUp size={14} /> Success → {successTarget.label}</span>
-                                                <ArrowRight size={14} />
-                                            </Button>
-                                        )}
-                                        {failTarget && (
-                                            <Button onClick={() => moveTo(failTarget, "Unsuccess")} disabled={busy} variant="outline"
-                                                className="w-full justify-between border-red-300 text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-300">
-                                                <span className="flex items-center gap-2"><ThumbsDown size={14} /> Unsuccess → {failTarget.label}</span>
-                                                <ArrowRight size={14} />
-                                            </Button>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
                         </div>
+
+                        <DialogFooter className="mt-2 border-t border-border pt-4">
+                            <Button onClick={close} variant="outline" className="flex-1">Cancel</Button>
+                            <Button onClick={submit} disabled={busy} className="flex-1">
+                                {busy ? "Saving…" : pending.target ? `Move → ${pending.target.label}` : "Mark done"}
+                            </Button>
+                        </DialogFooter>
                     </DialogContent>
                 </Dialog>
             )}
