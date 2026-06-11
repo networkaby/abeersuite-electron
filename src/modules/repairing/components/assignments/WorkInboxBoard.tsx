@@ -117,8 +117,7 @@ export default function WorkInboxBoard({
                         <div key={it.id} className="rounded-lg border border-border bg-card px-3 py-2 shadow-sm">
                             <div className="flex items-center gap-2 text-xs">
                                 <span className={`shrink-0 rounded-full px-2 py-0.5 font-medium ${pill.cls}`}>{pill.label}</span>
-                                <span className="inline-flex shrink-0 items-center gap-1 text-muted-foreground">
-                                    <span className={`h-1.5 w-1.5 rounded-full ${dotClass(it.workColor)}`} aria-hidden />
+                                <span className={`shrink-0 rounded-md px-2 py-0.5 text-[11px] font-medium ${it.workColor}`}>
                                     {it.workLabel}
                                 </span>
                                 <Link href={`/office/repairing/tickets/${it.ticketId}`} className="shrink-0 text-sm font-semibold hover:underline">
