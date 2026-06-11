@@ -507,7 +507,7 @@ type SubStatusSeed = {
     workId: string; applicableStatusIds: string[];
     pipelineId: string;
     triggerMap?: Record<string, string>;
-    warrantyScope?: string; actionLabel?: string;
+    warrantyScope?: string; actionLabel?: string; outcome?: "SUCCESS" | "FAIL" | "NEUTRAL";
 };
 
 const SUB_STATUSES: SubStatusSeed[] = [
@@ -857,8 +857,8 @@ async function main() {
     for (const ss of SUB_STATUSES) {
         await prisma.ticketSubStatus.upsert({
             where:  { id: ss.id },
-            update: { label: ss.label, color: ss.color, order: ss.order, applicableStatusIds: ss.applicableStatusIds, triggerMap: ss.triggerMap ?? {}, actionLabel: ss.actionLabel ?? null, autoRevertOnClear: true, warrantyScope: ss.warrantyScope ?? "any", workId: ss.workId, pipelineId: ss.pipelineId },
-            create: { id: ss.id, label: ss.label, color: ss.color, order: ss.order, applicableStatusIds: ss.applicableStatusIds, triggerMap: ss.triggerMap ?? {}, actionLabel: ss.actionLabel ?? null, autoRevertOnClear: true, warrantyScope: ss.warrantyScope ?? "any", workId: ss.workId, pipelineId: ss.pipelineId },
+            update: { label: ss.label, color: ss.color, order: ss.order, applicableStatusIds: ss.applicableStatusIds, triggerMap: ss.triggerMap ?? {}, actionLabel: ss.actionLabel ?? null, autoRevertOnClear: true, warrantyScope: ss.warrantyScope ?? "any", outcome: ss.outcome ?? "NEUTRAL", workId: ss.workId, pipelineId: ss.pipelineId },
+            create: { id: ss.id, label: ss.label, color: ss.color, order: ss.order, applicableStatusIds: ss.applicableStatusIds, triggerMap: ss.triggerMap ?? {}, actionLabel: ss.actionLabel ?? null, autoRevertOnClear: true, warrantyScope: ss.warrantyScope ?? "any", outcome: ss.outcome ?? "NEUTRAL", workId: ss.workId, pipelineId: ss.pipelineId },
         });
     }
     for (const t of STATUS_TRANSITIONS) {

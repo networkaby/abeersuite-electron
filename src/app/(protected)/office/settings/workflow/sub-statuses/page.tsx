@@ -51,6 +51,7 @@ interface SubStatus {
     triggerMap: Record<string, string>;
     actionLabel: string | null;
     warrantyScope?: string;
+    outcome?: string;
     autoRevertOnClear: boolean;
     isEntryPoint: boolean;
     fromTransitions: { to: { id: string; label: string; color: string } }[];
@@ -73,6 +74,7 @@ type FormValues = {
     triggerMap: Record<string, string>;
     actionLabel: string;
     warrantyScope: string;
+    outcome: string;
     autoRevertOnClear: boolean;
     isEntryPoint: boolean;
 };
@@ -86,6 +88,7 @@ const BLANK_FORM: FormValues = {
     triggerMap: {},
     actionLabel: "",
     warrantyScope: "any",
+    outcome: "NEUTRAL",
     autoRevertOnClear: true,
     isEntryPoint: true,
 };
@@ -181,6 +184,23 @@ function SubStatusFormModal({
                                 </SelectContent>
                             </Select>
                         </div>
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label>Work outcome</Label>
+                        <Select value={form.outcome} onValueChange={(value) => setForm({ ...form, outcome: value })}>
+                            <SelectTrigger className="w-full">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="NEUTRAL">Neutral — forward step</SelectItem>
+                                <SelectItem value="SUCCESS">Success (green)</SelectItem>
+                                <SelectItem value="FAIL">Unsuccess (red)</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">
+                            Colours the “Complete → move to” button on the Work Inbox.
+                        </p>
                     </div>
 
                     <div className="space-y-2">
@@ -350,6 +370,7 @@ export default function SubStatusesPage() {
         triggerMap: form.triggerMap,
         actionLabel: form.actionLabel || null,
         warrantyScope: form.warrantyScope,
+        outcome: form.outcome,
         autoRevertOnClear: form.autoRevertOnClear,
         isEntryPoint: form.isEntryPoint,
     });
@@ -379,6 +400,7 @@ export default function SubStatusesPage() {
             triggerMap: (subStatus.triggerMap ?? {}) as Record<string, string>,
             actionLabel: subStatus.actionLabel ?? "",
             warrantyScope: subStatus.warrantyScope ?? "any",
+            outcome: subStatus.outcome ?? "NEUTRAL",
             autoRevertOnClear: subStatus.autoRevertOnClear ?? true,
             isEntryPoint: subStatus.isEntryPoint ?? false,
         });

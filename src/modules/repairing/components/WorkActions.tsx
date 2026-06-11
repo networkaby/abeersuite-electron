@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 
-interface NextStep { id: string; label: string; color?: string }
+interface NextStep { id: string; label: string; color?: string; outcome?: "SUCCESS" | "FAIL" | "NEUTRAL" }
 
 interface Props {
     ticketId: number;
@@ -99,6 +99,11 @@ export default function WorkActions({
     };
 
     const dotOf = (color?: string) => color?.split(" ").find((c) => c.startsWith("bg-")) ?? "bg-muted-foreground";
+    const outcomeCls = (o?: string) =>
+        o === "SUCCESS" ? "border-green-300 text-green-700 hover:bg-green-50 dark:border-green-800 dark:text-green-300"
+        : o === "FAIL" ? "border-red-300 text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-300"
+        : "";
+    const rank = (o?: string) => (o === "SUCCESS" ? 0 : o === "FAIL" ? 2 : 1);
 
     return (
         <>
@@ -153,8 +158,8 @@ export default function WorkActions({
                                     </Button>
                                 ) : (
                                     <div className="space-y-2">
-                                        {steps.map((s) => (
-                                            <Button key={s.id} onClick={() => moveTo(s)} disabled={busy} variant="outline" className="w-full justify-between">
+                                        {[...steps].sort((a, b) => rank(a.outcome) - rank(b.outcome)).map((s) => (
+                                            <Button key={s.id} onClick={() => moveTo(s)} disabled={busy} variant="outline" className={`w-full justify-between ${outcomeCls(s.outcome)}`}>
                                                 <span className="flex items-center gap-2">
                                                     <span className={`h-2 w-2 rounded-full ${dotOf(s.color)}`} aria-hidden />
                                                     {s.label}

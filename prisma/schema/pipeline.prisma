@@ -60,6 +60,7 @@ model TicketSubStatus {
   actionLabel         String?
   autoRevertOnClear   Boolean               @default(true)
   warrantyScope       String                @default("any")
+  outcome             SubStatusOutcome      @default(NEUTRAL)
   workId              String?
   work                Work?                 @relation(fields: [workId], references: [id], onDelete: SetNull)
   pipelineId          String?
@@ -69,6 +70,15 @@ model TicketSubStatus {
   tickets             Ticket[]
   logs                TicketLog[]
   participants        TicketParticipant[]   @relation("ParticipantSubStatus")
+}
+
+// Whether reaching a sub-status represents a successful or failed work outcome
+// (drives the green / red "Complete → move to" buttons in the Work Inbox).
+// NEUTRAL = a plain forward step, neither success nor failure.
+enum SubStatusOutcome {
+  SUCCESS
+  FAIL
+  NEUTRAL
 }
 
 // A unit of work a status/sub-status represents (calling, parts, qc…). Each
