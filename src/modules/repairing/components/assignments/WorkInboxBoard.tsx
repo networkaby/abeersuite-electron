@@ -17,7 +17,10 @@ import WorkActions from "../WorkActions";
 export interface WorkInboxItem {
     id: string;
     ticketId: number;
-    /** "ask" = a work sub-status (Start→Finish→Close); "new" = a brand-new ticket riding its status' Work (claim + open, then graduates). */
+    statusId: string;
+    subStatusId: string | null;
+    isWarranty: boolean;
+    /** "ask" = a work sub-status (Start→Complete along the flow); "new" = a brand-new ticket riding its status' Work (claim + open, then graduates). */
     kind: "ask" | "new";
     workId: string;
     workLabel: string;
@@ -161,9 +164,12 @@ export default function WorkInboxBoard({
                                         <WorkActions
                                             ticketId={it.ticketId}
                                             workLabel={it.workLabel}
+                                            statusId={it.statusId}
+                                            subStatusId={it.subStatusId}
+                                            isWarranty={it.isWarranty}
                                             isOwned={it.status !== "todo"}
                                             isOwnerMe={mine}
-                                            showFinish={false}
+                                            showComplete={false}
                                         />
                                     ) : answered ? (
                                         <Button onClick={() => closeWork(it)} disabled={closingId === it.id} size="sm" variant="outline">
@@ -173,6 +179,9 @@ export default function WorkInboxBoard({
                                         <WorkActions
                                             ticketId={it.ticketId}
                                             workLabel={it.workLabel}
+                                            statusId={it.statusId}
+                                            subStatusId={it.subStatusId}
+                                            isWarranty={it.isWarranty}
                                             isOwned={it.status !== "todo"}
                                             isOwnerMe={mine}
                                         />

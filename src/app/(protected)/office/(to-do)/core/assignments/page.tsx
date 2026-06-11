@@ -61,6 +61,9 @@ export default async function AssignmentsPage() {
         return {
             id: String(t.id),
             ticketId: t.id,
+            statusId: t.status,
+            subStatusId: t.subStatusId ?? null,
+            isWarranty: t.isWarranty,
             kind: isStatusWork ? "new" : "ask",
             workId: work?.id ?? "",
             workLabel: work?.label ?? "Work",

@@ -368,6 +368,9 @@ export default function TicketDetailPage() {
                                 <WorkActions
                                     ticketId={ticket.id}
                                     workLabel={ticket.ticketSubStatus.work.label}
+                                    statusId={ticket.status}
+                                    subStatusId={ticket.subStatusId ?? null}
+                                    isWarranty={ticket.isWarranty}
                                     isOwned={!!ticket.primaryOwner}
                                     isOwnerMe={ticket.primaryOwner?.id === currentUserId}
                                     onChanged={fetchTicket}
