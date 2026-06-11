@@ -484,10 +484,12 @@ export default function SubStatusesPage() {
 
     const modalSubStatus = subStatuses.find((subStatus) => subStatus.id === transitionModalId);
     const transitionCandidates = modalSubStatus
-        ? subStatuses.filter((subStatus) =>
-            subStatus.id !== modalSubStatus.id &&
-            subStatus.applicableStatusIds.some((statusId) => modalSubStatus.applicableStatusIds.includes(statusId))
-        )
+        ? subStatuses
+            .filter((subStatus) =>
+                subStatus.id !== modalSubStatus.id &&
+                subStatus.applicableStatusIds.some((statusId) => modalSubStatus.applicableStatusIds.includes(statusId))
+            )
+            .sort((a, b) => a.order - b.order)
         : [];
 
     const statusLabelMap = Object.fromEntries(statuses.map((status) => [status.id, status.label]));

@@ -50,7 +50,10 @@ export async function GET(req: Request) {
                 return true;
             });
 
-        return NextResponse.json(result);
+        // When no current sub-status: show only the entry-point winner (the one that
+        // auto-applies on entry = lowest order). Showing all entry points would offer
+        // parallel options that aren't connected by transitions to the current state.
+        return NextResponse.json(entryOnly ? result.slice(0, 1) : result);
     } catch (e) {
         return handleApiError(e, "Failed to fetch next sub-statuses");
     }
