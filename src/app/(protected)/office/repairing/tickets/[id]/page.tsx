@@ -6,10 +6,11 @@ import axios from "axios";
 import { toast } from "sonner";
 import { formatDate, formatDateTime } from "@/shared/lib/format/formatDate";
 import {
-    ArrowLeft, Clock, User, Building2, AlertTriangle,
+    Clock, User, Building2, AlertTriangle,
     Printer, Lock, Eye, NotebookPen, ArrowRightLeft,
 } from "lucide-react";
 import Link from "next/link";
+import { PathBreadcrumb } from "@/shared/components/PathBreadcrumb";
 import { PRIORITY_META } from "@/utils/constants";
 import TicketEscalation from "@/modules/repairing/components/TicketEscalation";
 import StatusUpdateCombined from "@/modules/repairing/components/StatusUpdateCombined";
@@ -30,7 +31,7 @@ interface Ticket {
     subStatusId?: string;
     pipelineId?: string | null;
     pipeline?: { id: string; label: string; color: string } | null;
-    ticketSubStatus?: { id: string; label: string; color: string; actionLabel?: string | null; work?: { label: string; color: string } | null } | null;
+    ticketSubStatus?: { id: string; label: string; color: string; actionLabel?: string | null; work?: { label: string; color: string } | null; successSubStatus?: { id: string; label: string } | null; failSubStatus?: { id: string; label: string } | null } | null;
     priority: string;
     notes?: string;
     accessInfo?: string;
@@ -131,35 +132,13 @@ export default function TicketDetailPage() {
     const actionBtnBase = "w-full border border-border py-2 text-sm flex items-center justify-center gap-2 transition-colors hover:bg-muted rounded-md";
 
     return (
-        <div className="max-w-5xl mx-auto">
-            {/* Header */}
-            <div className="flex items-center gap-4 mb-6">
-                <Link href="/office/repairing/tickets" className="text-muted-foreground hover:text-foreground">
-                    <ArrowLeft size={20} />
-                </Link>
-                <div className="flex-1">
-                    <h1 className="text-2xl font-bold">Ticket #{ticket.id}</h1>
-                    <p className="text-muted-foreground text-sm">Created {formatDateTime(ticket.createdAt)}</p>
-                </div>
-                <div className="flex gap-2 flex-wrap">
-                    {ticket.pipeline && (
-                    <span className={`rounded-md border border-border px-3 py-1 text-xs font-medium ${ticket.pipeline.color}`}>
-                            {ticket.pipeline.label}
-                        </span>
-                    )}
-                    <span className={`rounded-md border border-border px-3 py-1 text-xs font-medium ${PRIORITY_META[ticket.priority]?.color ?? ""}`}>
-                        {PRIORITY_META[ticket.priority]?.label ?? ticket.priority}
-                    </span>
-                    <span className={`rounded-md border border-border px-3 py-1 text-xs font-medium ${ticket.ticketStatus.color}`}>
-                        {ticket.ticketStatus.label}
-                    </span>
-                    {ticket.ticketSubStatus && (
-                        <span className={`rounded-md border border-border px-3 py-1 text-xs font-medium ${ticket.ticketSubStatus.color}`}>
-                            {ticket.ticketSubStatus.label}
-                        </span>
-                    )}
-                </div>
-            </div>
+        <div className="flex h-full flex-col">
+            <PathBreadcrumb
+                root={{ href: "/office/repairing/tickets", label: "Tickets" }}
+                escapeBack
+                labels={{ tickets: "Tickets" }}
+            />
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
 
             {/* Warranty banner */}
             {ticket.isWarranty && (
@@ -178,12 +157,37 @@ export default function TicketDetailPage() {
                 </div>
             )}
 
-            <div className="grid grid-cols-3 gap-6">
-                {/* Left Column */}
-                <div className="col-span-2 space-y-6">
+            <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
+                {/* Left Column — main */}
+                <div className="min-w-0 space-y-5">
 
-                    {/* Customer & Device */}
+                    {/* Ticket header + Customer & Device */}
                     <div className="rounded-lg border border-border bg-card p-6 shadow">
+                        {/* Header row: ticket no + created + status badges */}
+                        <div className="mb-5 flex flex-wrap items-start justify-between gap-3 border-b border-border pb-4">
+                            <div>
+                                <h1 className="text-2xl font-bold">Ticket #{ticket.id}</h1>
+                                <p className="text-muted-foreground text-sm">Created {formatDateTime(ticket.createdAt)}</p>
+                            </div>
+                            <div className="flex flex-wrap justify-end gap-2">
+                                {ticket.pipeline && (
+                                    <span className={`rounded-md border border-border px-3 py-1 text-xs font-medium ${ticket.pipeline.color}`}>
+                                        {ticket.pipeline.label}
+                                    </span>
+                                )}
+                                <span className={`rounded-md border border-border px-3 py-1 text-xs font-medium ${PRIORITY_META[ticket.priority]?.color ?? ""}`}>
+                                    {PRIORITY_META[ticket.priority]?.label ?? ticket.priority}
+                                </span>
+                                <span className={`rounded-md border border-border px-3 py-1 text-xs font-medium ${ticket.ticketStatus.color}`}>
+                                    {ticket.ticketStatus.label}
+                                </span>
+                                {ticket.ticketSubStatus && (
+                                    <span className={`rounded-md border border-border px-3 py-1 text-xs font-medium ${ticket.ticketSubStatus.color}`}>
+                                        {ticket.ticketSubStatus.label}
+                                    </span>
+                                )}
+                            </div>
+                        </div>
                         <h2 className="font-semibold text-foreground mb-4 flex items-center gap-2">
                             <User size={16} /> Customer & Device
                         </h2>
@@ -259,12 +263,7 @@ export default function TicketDetailPage() {
                         </div>
                     )}
 
-                    {/* Invoices linked to this ticket (was TicketPart panel; tickets are info-only — bill via Invoice.ticketId) */}
-                    <div className="rounded-lg border border-border bg-card p-6 shadow">
-                        <TicketInvoicesPanel ticketId={ticket.id} />
-                    </div>
-
-                    {/* Timeline */}
+                    {/* Timeline — one card per log entry */}
                     <div className="rounded-lg border border-border bg-card p-6 shadow">
                         <h2 className="font-semibold text-foreground mb-4 flex items-center gap-2">
                             <Clock size={16} /> Timeline
@@ -272,42 +271,48 @@ export default function TicketDetailPage() {
                         {ticket.logs.length === 0 ? (
                             <p className="text-muted-foreground text-sm">No history yet.</p>
                         ) : (
-                            <div className="space-y-4">
+                            <div className="space-y-3">
                                 {ticket.logs.map((log) => {
                                     const isNoteOnly = !log.subStatusId && log.note && log.status === ticket.status;
                                     return (
-                                        <div key={log.id} className="flex gap-3">
-                                            <div className={`w-2 h-2 mt-2 shrink-0 ${
-                                                log.subStatusId ? "bg-accent" : isNoteOnly ? "bg-primary" : "bg-muted-foreground"
-                                            }`} />
-                                            <div className="flex-1">
-                                                <div className="flex items-center gap-2 flex-wrap">
-                                                    <span className={`px-2 py-0.5 text-xs font-medium ${log.ticketStatus.color}`}>
+                                        <div
+                                            key={log.id}
+                                            className={`rounded-md border border-border border-l-4 bg-background p-3 ${
+                                                log.subStatusId ? "border-l-accent" : isNoteOnly ? "border-l-primary" : "border-l-muted-foreground"
+                                            }`}
+                                        >
+                                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    <span className={`rounded px-2 py-0.5 text-xs font-medium ${log.ticketStatus.color}`}>
                                                         {log.ticketStatus.label}
                                                     </span>
                                                     {log.ticketSubStatus && (
-                                                        <span className={`px-2 py-0.5 text-xs font-medium ${log.ticketSubStatus.color}`}>
+                                                        <span className={`rounded px-2 py-0.5 text-xs font-medium ${log.ticketSubStatus.color}`}>
                                                             {log.ticketSubStatus.label}
                                                         </span>
                                                     )}
-                                                    <span className="text-xs text-muted-foreground">by {log.changedBy.name}</span>
-                                                    <span className="text-xs text-muted-foreground">{formatDateTime(log.createdAt)}</span>
                                                 </div>
-                                                {log.note && (
-                                                    <div className="flex items-start gap-2 mt-1">
-                                                        <p className="text-sm text-foreground flex-1">{log.note}</p>
-                                                        {log.visibility === "public" ? (
-                                                            <span className="flex items-center gap-1 text-xs text-primary bg-primary/10 px-1.5 py-0.5 shrink-0">
-                                                                <Eye size={10} /> Public
-                                                            </span>
-                                                        ) : (
-                                                            <span className="flex items-center gap-1 text-xs text-muted-foreground bg-muted px-1.5 py-0.5 shrink-0">
-                                                                <Lock size={10} /> Internal
-                                                            </span>
-                                                        )}
-                                                    </div>
+                                                {log.visibility === "public" ? (
+                                                    <span className="flex items-center gap-1 rounded bg-primary/10 px-1.5 py-0.5 text-xs text-primary">
+                                                        <Eye size={10} /> Public
+                                                    </span>
+                                                ) : (
+                                                    <span className="flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                                                        <Lock size={10} /> Internal
+                                                    </span>
                                                 )}
                                             </div>
+                                            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                                                <span className="flex items-center gap-1">
+                                                    <User size={11} /> {log.changedBy.name}
+                                                </span>
+                                                <span className="flex items-center gap-1">
+                                                    <Clock size={11} /> {formatDateTime(log.createdAt)}
+                                                </span>
+                                            </div>
+                                            {log.note && (
+                                                <p className="mt-2 text-sm text-foreground">{log.note}</p>
+                                            )}
                                         </div>
                                     );
                                 })}
@@ -345,9 +350,8 @@ export default function TicketDetailPage() {
                                 <WorkActions
                                     ticketId={ticket.id}
                                     workLabel={ticket.ticketSubStatus.work.label}
-                                    statusId={ticket.status}
-                                    subStatusId={ticket.subStatusId ?? null}
-                                    isWarranty={ticket.isWarranty}
+                                    successTarget={ticket.ticketSubStatus.successSubStatus ?? null}
+                                    failTarget={ticket.ticketSubStatus.failSubStatus ?? null}
                                     isOwned={!!ticket.primaryOwner}
                                     isOwnerMe={ticket.primaryOwner?.id === currentUserId}
                                     onChanged={fetchTicket}
@@ -364,6 +368,11 @@ export default function TicketDetailPage() {
                         isTerminal={ticket.ticketStatus.isTerminal}
                         onChanged={fetchTicket}
                     />
+
+                    {/* Invoices linked to this ticket (tickets are info-only — bill via Invoice.ticketId) */}
+                    <div className="rounded-lg border border-border bg-card p-4 shadow">
+                        <TicketInvoicesPanel ticketId={ticket.id} />
+                    </div>
 
                     {/* Actions */}
                     <div className="space-y-2 rounded-lg border border-border bg-card p-4 shadow">
@@ -439,6 +448,7 @@ export default function TicketDetailPage() {
                         </Link>
                     </div>
                 </div>
+            </div>
             </div>
 
             {/* Modals */}

@@ -76,7 +76,7 @@ export async function GET(
                         },
                     },
                 },
-                ticketSubStatus: { select: { id: true, label: true, color: true, actionLabel: true, work: { select: { label: true, color: true } } } },
+                ticketSubStatus: { select: { id: true, label: true, color: true, actionLabel: true, work: { select: { label: true, color: true } }, successSubStatus: { select: { id: true, label: true } }, failSubStatus: { select: { id: true, label: true } } } },
                 pipeline:        { select: { id: true, label: true, color: true } },
                 participants: {
                     where: { removedAt: null },

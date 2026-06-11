@@ -4,22 +4,21 @@ import { useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import { Play, CheckCircle, Lock, Eye, X, ArrowRight } from "lucide-react";
+import { Play, CheckCircle, Lock, Eye, X, ArrowRight, ThumbsUp, ThumbsDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 
-interface NextStep { id: string; label: string; color?: string; outcome?: "SUCCESS" | "FAIL" | "NEUTRAL" }
+interface RouteTarget { id: string; label: string }
 
 interface Props {
     ticketId: number;
     /** The work being done (for the dialog title). */
     workLabel: string;
-    /** Ticket's current main status id (for the flow's next-step lookup). */
-    statusId: string;
-    /** Current sub-status id, or null when the ticket has none yet (entry). */
-    subStatusId?: string | null;
-    isWarranty?: boolean;
+    /** Where this sub-status routes on a successful outcome (null = none configured). */
+    successTarget?: RouteTarget | null;
+    /** Where it routes on an unsuccessful outcome. */
+    failTarget?: RouteTarget | null;
     /** Whether the ticket is already claimed (started) by anyone. */
     isOwned: boolean;
     /** Whether the current user is the owner (can complete). */
@@ -34,13 +33,13 @@ interface Props {
 /**
  * Start / Complete for a ticket's current work, reused on the Work Inbox board and
  * the ticket page. Start = claim (sets primaryOwner, so nobody double-works).
- * Complete = move the sub-status along the configured flow — "success" and
- * "unsuccess" are just different next-steps (e.g. "Ready" vs "Customer Unreachable")
- * — carrying a feedback note into the ticket activity. Reuses the sub-status PATCH
- * (which auto-advances the main status via triggerMap and logs the move).
+ * Complete = the caller picks Success or Unsuccess and the ticket moves to the
+ * sub-status that the *current* sub-status routes that outcome to (configured on
+ * the source sub-status). The move goes through the sub-status PATCH (which
+ * auto-advances the main status via triggerMap and logs the feedback note).
  */
 export default function WorkActions({
-    ticketId, workLabel, statusId, subStatusId, isWarranty = false,
+    ticketId, workLabel, successTarget, failTarget,
     isOwned, isOwnerMe, onChanged, size = "sm", showComplete = true,
 }: Props) {
     const router = useRouter();
@@ -48,7 +47,6 @@ export default function WorkActions({
     const [open, setOpen] = useState(false);
     const [note, setNote] = useState("");
     const [visibility, setVisibility] = useState<"INTERNAL" | "PUBLIC">("INTERNAL");
-    const [steps, setSteps] = useState<NextStep[] | null>(null); // null = loading
 
     const refresh = () => { if (onChanged) onChanged(); else router.refresh(); };
 
@@ -63,47 +61,22 @@ export default function WorkActions({
         } finally { setBusy(false); }
     };
 
-    const openComplete = async () => {
-        setOpen(true);
-        setSteps(null);
-        try {
-            const params = new URLSearchParams({ statusId, isWarranty: String(isWarranty) });
-            if (subStatusId) params.set("fromSubStatusId", subStatusId);
-            else params.set("entryOnly", "true");
-            const res = await axios.get(`/api/sub-statuses/next?${params.toString()}`);
-            setSteps(res.data as NextStep[]);
-        } catch {
-            setSteps([]);
-        }
-    };
-
-    const moveTo = async (target: NextStep | null) => {
+    const moveTo = async (target: RouteTarget | null, kind: string) => {
         setBusy(true);
         try {
             if (target) {
-                await axios.patch(`/api/tickets/${ticketId}/sub-status`, {
-                    subStatusId: target.id,
-                    note: note.trim() || undefined,
-                    visibility,
-                });
-                toast.success(`Moved to ${target.label}`);
+                await axios.patch(`/api/tickets/${ticketId}/sub-status`, { subStatusId: target.id, note: note.trim() || undefined, visibility });
+                toast.success(`${kind} → ${target.label}`);
             } else {
-                await axios.delete(`/api/tickets/${ticketId}/sub-status`); // no next step → just clear
+                await axios.delete(`/api/tickets/${ticketId}/sub-status`);
                 toast.success("Marked done");
             }
-            setOpen(false); setNote(""); setSteps(null);
+            setOpen(false); setNote("");
             refresh();
         } catch (err: unknown) {
             toast.error((err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Failed to complete");
         } finally { setBusy(false); }
     };
-
-    const dotOf = (color?: string) => color?.split(" ").find((c) => c.startsWith("bg-")) ?? "bg-muted-foreground";
-    const outcomeCls = (o?: string) =>
-        o === "SUCCESS" ? "border-green-300 text-green-700 hover:bg-green-50 dark:border-green-800 dark:text-green-300"
-        : o === "FAIL" ? "border-red-300 text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-300"
-        : "";
-    const rank = (o?: string) => (o === "SUCCESS" ? 0 : o === "FAIL" ? 2 : 1);
 
     return (
         <>
@@ -113,13 +86,13 @@ export default function WorkActions({
                 </Button>
             )}
             {showComplete && isOwnerMe && (
-                <Button onClick={openComplete} disabled={busy} size={size} variant="outline">
+                <Button onClick={() => setOpen(true)} disabled={busy} size={size} variant="outline">
                     <CheckCircle size={13} /> Complete
                 </Button>
             )}
 
             {open && (
-                <Dialog open onOpenChange={(o) => { if (!o) { setOpen(false); setSteps(null); } }}>
+                <Dialog open onOpenChange={(o) => { if (!o) setOpen(false); }}>
                     <DialogContent className="sm:max-w-md">
                         <DialogHeader className="flex-row items-center justify-between space-y-0">
                             <DialogTitle>Complete — {workLabel}</DialogTitle>
@@ -149,24 +122,27 @@ export default function WorkActions({
                                 </div>
                             </div>
                             <div>
-                                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Outcome — move to</p>
-                                {steps === null ? (
-                                    <p className="text-sm text-muted-foreground">Loading next steps…</p>
-                                ) : steps.length === 0 ? (
-                                    <Button onClick={() => moveTo(null)} disabled={busy} variant="outline" className="w-full justify-between">
+                                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Outcome</p>
+                                {!successTarget && !failTarget ? (
+                                    <Button onClick={() => moveTo(null, "Done")} disabled={busy} variant="outline" className="w-full justify-between">
                                         Mark done (clear sub-status) <ArrowRight size={14} />
                                     </Button>
                                 ) : (
                                     <div className="space-y-2">
-                                        {[...steps].sort((a, b) => rank(a.outcome) - rank(b.outcome)).map((s) => (
-                                            <Button key={s.id} onClick={() => moveTo(s)} disabled={busy} variant="outline" className={`w-full justify-between ${outcomeCls(s.outcome)}`}>
-                                                <span className="flex items-center gap-2">
-                                                    <span className={`h-2 w-2 rounded-full ${dotOf(s.color)}`} aria-hidden />
-                                                    {s.label}
-                                                </span>
+                                        {successTarget && (
+                                            <Button onClick={() => moveTo(successTarget, "Success")} disabled={busy} variant="outline"
+                                                className="w-full justify-between border-green-300 text-green-700 hover:bg-green-50 dark:border-green-800 dark:text-green-300">
+                                                <span className="flex items-center gap-2"><ThumbsUp size={14} /> Success → {successTarget.label}</span>
                                                 <ArrowRight size={14} />
                                             </Button>
-                                        ))}
+                                        )}
+                                        {failTarget && (
+                                            <Button onClick={() => moveTo(failTarget, "Unsuccess")} disabled={busy} variant="outline"
+                                                className="w-full justify-between border-red-300 text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-300">
+                                                <span className="flex items-center gap-2"><ThumbsDown size={14} /> Unsuccess → {failTarget.label}</span>
+                                                <ArrowRight size={14} />
+                                            </Button>
+                                        )}
                                     </div>
                                 )}
                             </div>

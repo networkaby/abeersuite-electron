@@ -15,7 +15,8 @@ const subStatusPatchSchema = z.object({
     triggerMap: z.record(z.string(), z.string()).optional(),
     actionLabel: z.string().optional().nullable(),
     warrantyScope: z.enum(["any", "warranty_only", "non_warranty_only"]).optional(),
-    outcome: z.enum(["SUCCESS", "FAIL", "NEUTRAL"]).optional(),
+    successSubStatusId: z.string().trim().optional().nullable(),
+    failSubStatusId: z.string().trim().optional().nullable(),
     autoRevertOnClear: z.boolean().optional(),
     isEntryPoint: z.boolean().optional(),
 });
@@ -69,7 +70,8 @@ export async function PATCH(
                 ...("triggerMap"         in body && { triggerMap:        body.triggerMap }),
                 ...("actionLabel"        in body && { actionLabel:       body.actionLabel ?? null }),
                 ...("warrantyScope"      in body && { warrantyScope:     body.warrantyScope }),
-                ...("outcome"            in body && { outcome:           body.outcome }),
+                ...("successSubStatusId" in body && { successSubStatusId: body.successSubStatusId ?? null }),
+                ...("failSubStatusId"    in body && { failSubStatusId:    body.failSubStatusId ?? null }),
                 ...("autoRevertOnClear"  in body && { autoRevertOnClear: body.autoRevertOnClear }),
             },
         });

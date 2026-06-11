@@ -17,10 +17,9 @@ import WorkActions from "../WorkActions";
 export interface WorkInboxItem {
     id: string;
     ticketId: number;
-    statusId: string;
-    subStatusId: string | null;
-    isWarranty: boolean;
-    /** "ask" = a work sub-status (Start→Complete along the flow); "new" = a brand-new ticket riding its status' Work (claim + open, then graduates). */
+    successTarget: { id: string; label: string } | null;
+    failTarget: { id: string; label: string } | null;
+    /** "ask" = a work sub-status (Start→Complete branches success/fail); "new" = a brand-new ticket riding its status' Work (claim + open, then graduates). */
     kind: "ask" | "new";
     workId: string;
     workLabel: string;
@@ -164,9 +163,8 @@ export default function WorkInboxBoard({
                                         <WorkActions
                                             ticketId={it.ticketId}
                                             workLabel={it.workLabel}
-                                            statusId={it.statusId}
-                                            subStatusId={it.subStatusId}
-                                            isWarranty={it.isWarranty}
+                                            successTarget={it.successTarget}
+                                            failTarget={it.failTarget}
                                             isOwned={it.status !== "todo"}
                                             isOwnerMe={mine}
                                             showComplete={false}
@@ -179,9 +177,8 @@ export default function WorkInboxBoard({
                                         <WorkActions
                                             ticketId={it.ticketId}
                                             workLabel={it.workLabel}
-                                            statusId={it.statusId}
-                                            subStatusId={it.subStatusId}
-                                            isWarranty={it.isWarranty}
+                                            successTarget={it.successTarget}
+                                            failTarget={it.failTarget}
                                             isOwned={it.status !== "todo"}
                                             isOwnerMe={mine}
                                         />

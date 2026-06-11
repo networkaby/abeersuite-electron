@@ -36,7 +36,13 @@ export default async function AssignmentsPage() {
                 },
                 primaryOwner: { select: { id: true, name: true } },
                 ticketStatus: { select: { label: true, actionLabel: true, workId: true } },
-                ticketSubStatus: { select: { id: true, label: true, actionLabel: true, workId: true } },
+                ticketSubStatus: {
+                    select: {
+                        id: true, label: true, actionLabel: true, workId: true,
+                        successSubStatus: { select: { id: true, label: true } },
+                        failSubStatus: { select: { id: true, label: true } },
+                    },
+                },
                 logs: {
                     where: { note: { contains: " finished — " } },
                     orderBy: { createdAt: "desc" },
@@ -61,9 +67,8 @@ export default async function AssignmentsPage() {
         return {
             id: String(t.id),
             ticketId: t.id,
-            statusId: t.status,
-            subStatusId: t.subStatusId ?? null,
-            isWarranty: t.isWarranty,
+            successTarget: t.ticketSubStatus?.successSubStatus ?? null,
+            failTarget: t.ticketSubStatus?.failSubStatus ?? null,
             kind: isStatusWork ? "new" : "ask",
             workId: work?.id ?? "",
             workLabel: work?.label ?? "Work",

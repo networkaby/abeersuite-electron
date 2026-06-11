@@ -51,7 +51,8 @@ interface SubStatus {
     triggerMap: Record<string, string>;
     actionLabel: string | null;
     warrantyScope?: string;
-    outcome?: string;
+    successSubStatusId?: string | null;
+    failSubStatusId?: string | null;
     autoRevertOnClear: boolean;
     isEntryPoint: boolean;
     fromTransitions: { to: { id: string; label: string; color: string } }[];
@@ -74,7 +75,8 @@ type FormValues = {
     triggerMap: Record<string, string>;
     actionLabel: string;
     warrantyScope: string;
-    outcome: string;
+    successSubStatusId: string;
+    failSubStatusId: string;
     autoRevertOnClear: boolean;
     isEntryPoint: boolean;
 };
@@ -88,7 +90,8 @@ const BLANK_FORM: FormValues = {
     triggerMap: {},
     actionLabel: "",
     warrantyScope: "any",
-    outcome: "NEUTRAL",
+    successSubStatusId: "",
+    failSubStatusId: "",
     autoRevertOnClear: true,
     isEntryPoint: true,
 };
@@ -103,6 +106,7 @@ function SubStatusFormModal({
     saving,
     statuses,
     works,
+    subStatuses,
 }: {
     open: boolean;
     title: string;
@@ -113,6 +117,7 @@ function SubStatusFormModal({
     saving: boolean;
     statuses: StatusItem[];
     works: Work[];
+    subStatuses: SubStatus[];
 }) {
     const toggleApplicable = (value: string) =>
         setForm({
@@ -186,22 +191,31 @@ function SubStatusFormModal({
                         </div>
                     </div>
 
-                    <div className="space-y-2">
-                        <Label>Work outcome</Label>
-                        <Select value={form.outcome} onValueChange={(value) => setForm({ ...form, outcome: value })}>
-                            <SelectTrigger className="w-full">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="NEUTRAL">Neutral — forward step</SelectItem>
-                                <SelectItem value="SUCCESS">Success (green)</SelectItem>
-                                <SelectItem value="FAIL">Unsuccess (red)</SelectItem>
-                            </SelectContent>
-                        </Select>
-                        <p className="text-xs text-muted-foreground">
-                            Colours the “Complete → move to” button on the Work Inbox.
-                        </p>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label>On success → move to</Label>
+                            <Select value={form.successSubStatusId || "__none__"} onValueChange={(value) => setForm({ ...form, successSubStatusId: value === "__none__" ? "" : value })}>
+                                <SelectTrigger className="w-full"><SelectValue placeholder="— none —" /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="__none__">— none —</SelectItem>
+                                    {subStatuses.map((s) => (<SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-2">
+                            <Label>On unsuccess → move to</Label>
+                            <Select value={form.failSubStatusId || "__none__"} onValueChange={(value) => setForm({ ...form, failSubStatusId: value === "__none__" ? "" : value })}>
+                                <SelectTrigger className="w-full"><SelectValue placeholder="— none —" /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="__none__">— none —</SelectItem>
+                                    {subStatuses.map((s) => (<SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>))}
+                                </SelectContent>
+                            </Select>
+                        </div>
                     </div>
+                    <p className="-mt-3 text-xs text-muted-foreground">
+                        When the caller completes this work they pick Success or Unsuccess; the ticket moves to the chosen sub-status (green / red on the Work Inbox).
+                    </p>
 
                     <div className="space-y-2">
                         <Label>Action label</Label>
@@ -370,7 +384,8 @@ export default function SubStatusesPage() {
         triggerMap: form.triggerMap,
         actionLabel: form.actionLabel || null,
         warrantyScope: form.warrantyScope,
-        outcome: form.outcome,
+        successSubStatusId: form.successSubStatusId || null,
+        failSubStatusId: form.failSubStatusId || null,
         autoRevertOnClear: form.autoRevertOnClear,
         isEntryPoint: form.isEntryPoint,
     });
@@ -400,7 +415,8 @@ export default function SubStatusesPage() {
             triggerMap: (subStatus.triggerMap ?? {}) as Record<string, string>,
             actionLabel: subStatus.actionLabel ?? "",
             warrantyScope: subStatus.warrantyScope ?? "any",
-            outcome: subStatus.outcome ?? "NEUTRAL",
+            successSubStatusId: subStatus.successSubStatusId ?? "",
+            failSubStatusId: subStatus.failSubStatusId ?? "",
             autoRevertOnClear: subStatus.autoRevertOnClear ?? true,
             isEntryPoint: subStatus.isEntryPoint ?? false,
         });
@@ -630,6 +646,7 @@ export default function SubStatusesPage() {
                 saving={creating}
                 statuses={statuses}
                 works={works}
+                subStatuses={subStatuses}
             />
 
             <SubStatusFormModal
@@ -642,6 +659,7 @@ export default function SubStatusesPage() {
                 saving={editing}
                 statuses={statuses}
                 works={works}
+                subStatuses={subStatuses}
             />
 
             {/* Transitions dialog */}
