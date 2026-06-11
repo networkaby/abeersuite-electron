@@ -313,6 +313,9 @@ function SubStatusFormModal({
                             onChange={(e) => setForm({ ...form, order: e.target.value })}
                             placeholder="Auto-assigned if blank"
                         />
+                        <p className="text-xs text-muted-foreground">
+                            Sort position — lower numbers show first (in lists and the ticket’s “Move” buttons). Leave blank to add at the end.
+                        </p>
                     </div>
                 </div>
 
@@ -651,7 +654,7 @@ export default function SubStatusesPage() {
 
             <SubStatusFormModal
                 open={!!editId}
-                title={`Edit — ${subStatuses.find((subStatus) => subStatus.id === editId)?.id ?? ""}`}
+                title={`Edit — ${subStatuses.find((subStatus) => subStatus.id === editId)?.label ?? ""}`}
                 form={editForm}
                 setForm={setEditForm}
                 onSave={handleEdit}
