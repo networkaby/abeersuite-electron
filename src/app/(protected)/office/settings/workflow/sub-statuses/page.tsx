@@ -96,6 +96,9 @@ const BLANK_FORM: FormValues = {
     isEntryPoint: true,
 };
 
+/** Pull the `bg-*` class out of a color string for a small swatch dot. */
+const bgClass = (color: string) => color.split(" ").find((c) => c.startsWith("bg-")) ?? "bg-muted";
+
 function SubStatusFormModal({
     open,
     title,
@@ -551,7 +554,7 @@ export default function SubStatusesPage() {
                                     const work = subStatus.workId ? worksById[subStatus.workId] : undefined;
                                     return (
                                     <div key={subStatus.id} className="flex items-start gap-3 border-b px-6 py-4 last:border-b-0">
-                                        <Badge className={subStatus.color}>{subStatus.id}</Badge>
+                                        <span className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${bgClass(subStatus.color)}`} aria-hidden />
 
                                         <div className="min-w-0 flex-1">
                                             <div className="flex flex-wrap items-center gap-2">
@@ -627,7 +630,7 @@ export default function SubStatusesPage() {
                             <CardContent className="space-y-0 px-0 pt-0">
                                 {unassigned.map((subStatus) => (
                                     <div key={subStatus.id} className="flex items-center gap-3 border-b px-6 py-4 last:border-b-0">
-                                        <Badge className={subStatus.color}>{subStatus.id}</Badge>
+                                        <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${bgClass(subStatus.color)}`} aria-hidden />
                                         <span className="flex-1 text-sm">{subStatus.label}</span>
                                         <div className="flex items-center gap-2">
                                             <Button type="button" size="sm" variant="outline" onClick={() => openEdit(subStatus)}>
