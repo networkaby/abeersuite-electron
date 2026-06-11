@@ -11,7 +11,7 @@ import { labelColorSchema } from "@/shared/lib/schemas/commonSchemas";
 const subStatusSchema = labelColorSchema.extend({
     workId: z.string().trim().optional().nullable(),
     order: z.coerce.number().int().nonnegative().optional(),
-    applicableStatusIds: z.array(z.string().trim()).optional(),
+    statusId: z.string().trim().nullable().optional(),
     triggerMap: z.record(z.string(), z.string()).optional(),
     actionLabel: z.string().optional().nullable(),
     warrantyScope: z.enum(["any", "warranty_only", "non_warranty_only"]).optional(),
@@ -19,7 +19,6 @@ const subStatusSchema = labelColorSchema.extend({
     failSubStatusId: z.string().trim().optional().nullable(),
     autoRevertOnClear: z.boolean().optional(),
     pipelineId: z.string().optional().nullable(),
-    isEntryPoint: z.boolean().optional(),
 });
 
 // GET /api/sub-statuses?statusId=S3&pipelineId=P1
@@ -31,26 +30,17 @@ export async function GET(req: Request) {
         const statusId = searchParams.get("statusId");
         const pipelineId = searchParams.get("pipelineId");
 
-        const [all, entryPoints] = await Promise.all([
-            prisma.ticketSubStatus.findMany({
-                where: pipelineId ? { pipelineId } : undefined,
-                orderBy: { order: "asc" },
-                include: {
-                    fromTransitions: {
-                        include: { to: { select: { id: true, label: true, color: true } } },
-                    },
+        const all = await prisma.ticketSubStatus.findMany({
+            where: pipelineId ? { pipelineId } : undefined,
+            orderBy: { order: "asc" },
+            include: {
+                fromTransitions: {
+                    include: { to: { select: { id: true, label: true, color: true } } },
                 },
-            }),
-            prisma.subStatusTransition.findMany({
-                where: { fromSubStatusId: null },
-                select: { toSubStatusId: true },
-            }),
-        ]);
+            },
+        });
 
-        const entrySet = new Set(entryPoints.map((e) => e.toSubStatusId));
-
-        const result = (statusId ? all.filter((ss) => ss.applicableStatusIds.includes(statusId)) : all)
-            .map((ss) => ({ ...ss, isEntryPoint: entrySet.has(ss.id) }));
+        const result = statusId ? all.filter((ss) => ss.statusId === statusId) : all;
 
         return NextResponse.json(result);
     } catch (e) {
@@ -76,7 +66,7 @@ export async function POST(req: Request) {
                 color: body.color ?? "bg-gray-100 text-gray-600",
                 workId: body.workId ?? null,
                 order: body.order ?? nextOrder,
-                applicableStatusIds: body.applicableStatusIds ?? [],
+                statusId:           body.statusId ?? null,
                 triggerMap:         body.triggerMap ?? {},
                 actionLabel:        body.actionLabel ?? null,
                 warrantyScope:      body.warrantyScope ?? "any",
@@ -86,12 +76,6 @@ export async function POST(req: Request) {
                 pipelineId:         body.pipelineId ?? null,
             },
         });
-
-        if (body.isEntryPoint) {
-            await prisma.subStatusTransition.create({
-                data: { fromSubStatusId: null, toSubStatusId: newId },
-            });
-        }
 
         return NextResponse.json(created, { status: 201 });
     } catch (e) {

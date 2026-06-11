@@ -11,14 +11,13 @@ const subStatusPatchSchema = z.object({
     color: z.string().trim().min(1).optional(),
     workId: z.string().trim().optional().nullable(),
     order: z.coerce.number().int().nonnegative().optional(),
-    applicableStatusIds: z.array(z.string().trim()).optional(),
+    statusId: z.string().trim().nullable().optional(),
     triggerMap: z.record(z.string(), z.string()).optional(),
     actionLabel: z.string().optional().nullable(),
     warrantyScope: z.enum(["any", "warranty_only", "non_warranty_only"]).optional(),
     successSubStatusId: z.string().trim().optional().nullable(),
     failSubStatusId: z.string().trim().optional().nullable(),
     autoRevertOnClear: z.boolean().optional(),
-    isEntryPoint: z.boolean().optional(),
 });
 
 // DELETE /api/sub-statuses/[id]
@@ -66,7 +65,7 @@ export async function PATCH(
                 ...(body.color !== undefined              && { color: body.color }),
                 ...("workId"  in body                    && { workId: body.workId ?? null }),
                 ...(body.order !== undefined              && { order: body.order }),
-                ...(body.applicableStatusIds !== undefined && { applicableStatusIds: body.applicableStatusIds }),
+                ...("statusId" in body && { statusId: body.statusId ?? null }),
                 ...("triggerMap"         in body && { triggerMap:        body.triggerMap }),
                 ...("actionLabel"        in body && { actionLabel:       body.actionLabel ?? null }),
                 ...("warrantyScope"      in body && { warrantyScope:     body.warrantyScope }),
@@ -75,24 +74,6 @@ export async function PATCH(
                 ...("autoRevertOnClear"  in body && { autoRevertOnClear: body.autoRevertOnClear }),
             },
         });
-
-        // Manage the null → id entry-point transition.
-        // Prisma's upsert can't reliably match WHERE fromSubStatusId IS NULL through
-        // a compound unique key, so use findFirst + create instead.
-        if (body.isEntryPoint === true) {
-            const exists = await prisma.subStatusTransition.findFirst({
-                where: { fromSubStatusId: null, toSubStatusId: id },
-            });
-            if (!exists) {
-                await prisma.subStatusTransition.create({
-                    data: { fromSubStatusId: null, toSubStatusId: id },
-                });
-            }
-        } else if (body.isEntryPoint === false) {
-            await prisma.subStatusTransition.deleteMany({
-                where: { fromSubStatusId: null, toSubStatusId: id },
-            });
-        }
 
         return NextResponse.json(updated);
     } catch (e) {

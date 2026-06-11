@@ -37,9 +37,9 @@ export default async function SettingsLayout({ children }: { children: React.Rea
                 escapeBack
                 labels={SETTINGS_CRUMB_LABELS}
             />
-            <div className="flex-none px-6">
+            {/* <div className="flex-none px-6">
                 <SettingsNav permissions={permissions} />
-            </div>
+            </div> */}
             <div className="min-h-0 flex-1 overflow-hidden">
                 {children}
             </div>

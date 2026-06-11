@@ -36,6 +36,12 @@ model TicketStatus {
   warrantyScope   String             @default("any")
   workId          String?
   work            Work?              @relation(fields: [workId], references: [id], onDelete: SetNull)
+  // The sub-status auto-applied when a ticket ENTERS this status — hand-picked per
+  // status (replaces the old global "lowest-order entry-point wins" heuristic). FK
+  // SetNull so deleting that sub-status just clears the start, never blocks.
+  startSubStatusId String?
+  startSubStatus   TicketSubStatus?  @relation("StatusStartSub", fields: [startSubStatusId], references: [id], onDelete: SetNull)
+  subStatuses     TicketSubStatus[]  @relation("StatusSubStatuses")
   pipelineId      String?
   pipeline        Pipeline?          @relation(fields: [pipelineId], references: [id])
   fromTransitions StatusTransition[] @relation("FromStatus")
@@ -55,7 +61,10 @@ model TicketSubStatus {
   label               String
   color               String                @default("bg-gray-100 text-gray-600")
   order               Int
-  applicableStatusIds String[]
+  // Each sub-status belongs to exactly ONE parent status (no sharing). SetNull so
+  // deleting a status leaves its sub-statuses as "unassigned" rather than deleting them.
+  statusId            String?
+  status              TicketStatus?         @relation("StatusSubStatuses", fields: [statusId], references: [id], onDelete: SetNull)
   triggerMap          Json                  @default("{}")
   actionLabel         String?
   autoRevertOnClear   Boolean               @default(true)
@@ -72,6 +81,7 @@ model TicketSubStatus {
   pipeline            Pipeline?             @relation(fields: [pipelineId], references: [id])
   fromTransitions     SubStatusTransition[] @relation("FromSubStatus")
   toTransitions       SubStatusTransition[] @relation("ToSubStatus")
+  startOfStatuses     TicketStatus[]        @relation("StatusStartSub")
   tickets             Ticket[]
   logs                TicketLog[]
   participants        TicketParticipant[]   @relation("ParticipantSubStatus")

@@ -25,35 +25,48 @@ export async function GET(req: Request) {
             return NextResponse.json({ error: "statusId required" }, { status: 400 });
         }
 
-        // Forward transitions leaving the current sub-status (or entry points when the
-        // ticket has no sub-status yet). Back navigation is history-based on the client,
-        // so this route is forward-only.
-        const transitions = await prisma.subStatusTransition.findMany({
-            where: { fromSubStatusId: entryOnly || !fromSubStatusId ? null : fromSubStatusId },
-            include: { to: { include: { work: { select: { permissionId: true } } } } },
-            orderBy: { to: { order: "asc" } },
-        });
+        // No current sub-status → the only "next" is the status's hand-picked start
+        // sub-status (TicketStatus.startSubStatusId), if any. Still subject to the
+        // work-gate + warranty filters below.
+        const fromId = entryOnly || !fromSubStatusId ? null : fromSubStatusId;
+
+        let candidates: Array<{
+            id: string; label: string; statusId: string | null;
+            warrantyScope: string | null; work: { permissionId: string | null } | null;
+        }>;
+
+        if (fromId === null) {
+            const status = await prisma.ticketStatus.findUnique({
+                where: { id: statusId },
+                select: { startSubStatus: { select: { id: true, label: true, statusId: true, warrantyScope: true, work: { select: { permissionId: true } } } } },
+            });
+            candidates = status?.startSubStatus ? [status.startSubStatus] : [];
+        } else {
+            // Forward transitions leaving the current sub-status. Back navigation is
+            // history-based on the client, so this route is forward-only.
+            const transitions = await prisma.subStatusTransition.findMany({
+                where: { fromSubStatusId: fromId },
+                include: { to: { select: { id: true, label: true, statusId: true, warrantyScope: true, work: { select: { permissionId: true } } } } },
+                orderBy: { to: { order: "asc" } },
+            });
+            candidates = transitions.map((t) => t.to);
+        }
 
         const seen = new Set<string>();
-        const result = transitions
-            .map((t) => t.to)
-            .filter((ss) => {
-                if (seen.has(ss.id)) return false;
-                seen.add(ss.id);
-                if (!ss.applicableStatusIds.includes(statusId)) return false;
-                if (!passesWorkGate(user, ss.work)) return false;
-                const scope = ss.warrantyScope ?? "any";
-                if (scope !== "any") {
-                    if (scope === "warranty_only" && !isWarranty) return false;
-                    if (scope === "non_warranty_only" && isWarranty) return false;
-                }
-                return true;
-            });
+        const result = candidates.filter((ss) => {
+            if (seen.has(ss.id)) return false;
+            seen.add(ss.id);
+            if (ss.statusId !== statusId) return false;
+            if (!passesWorkGate(user, ss.work)) return false;
+            const scope = ss.warrantyScope ?? "any";
+            if (scope !== "any") {
+                if (scope === "warranty_only" && !isWarranty) return false;
+                if (scope === "non_warranty_only" && isWarranty) return false;
+            }
+            return true;
+        });
 
-        // When no current sub-status: show only the entry-point winner (the one that
-        // auto-applies on entry = lowest order). Showing all entry points would offer
-        // parallel options that aren't connected by transitions to the current state.
-        return NextResponse.json(entryOnly ? result.slice(0, 1) : result);
+        return NextResponse.json(result.map((ss) => ({ id: ss.id, label: ss.label })));
     } catch (e) {
         return handleApiError(e, "Failed to fetch next sub-statuses");
     }

@@ -14,6 +14,7 @@ const ticketStatusPatchSchema = z.object({
     order: z.coerce.number().int().nonnegative().optional(),
     isTerminal: z.boolean().optional(),
     isEntryPoint: z.boolean().optional(),
+    startSubStatusId: z.string().trim().nullable().optional(),
     workId: z.string().trim().optional().nullable(),
     actionLabel: z.string().optional().nullable(),
     warrantyScope: z.enum(["any", "warranty_only", "non_warranty_only"]).optional(),
@@ -28,6 +29,20 @@ export async function PATCH(req: Request, { params }: Params) {
         if (error) return error;
         const body = data;
 
+        // A chosen start sub-status must actually be applicable to this status.
+        if ("startSubStatusId" in body && body.startSubStatusId) {
+            const sub = await prisma.ticketSubStatus.findUnique({
+                where: { id: body.startSubStatusId },
+                select: { statusId: true },
+            });
+            if (!sub || sub.statusId !== id) {
+                return NextResponse.json(
+                    { error: "That sub-status isn't applicable to this status." },
+                    { status: 422 }
+                );
+            }
+        }
+
         const status = await prisma.ticketStatus.update({
             where: { id },
             data: {
@@ -36,6 +51,7 @@ export async function PATCH(req: Request, { params }: Params) {
                 order: body.order !== undefined ? Number(body.order) : undefined,
                 isTerminal: body.isTerminal !== undefined ? body.isTerminal : undefined,
                 isEntryPoint: body.isEntryPoint !== undefined ? body.isEntryPoint : undefined,
+                startSubStatusId: "startSubStatusId" in body ? (body.startSubStatusId ?? null) : undefined,
                 workId: "workId" in body ? (body.workId ?? null) : undefined,
                 actionLabel: "actionLabel" in body ? (body.actionLabel ?? null) : undefined,
                 warrantyScope: body.warrantyScope !== undefined ? body.warrantyScope : undefined,

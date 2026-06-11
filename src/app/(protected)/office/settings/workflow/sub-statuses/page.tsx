@@ -39,6 +39,7 @@ interface StatusItem {
     label: string;
     color: string;
     order: number;
+    startSubStatusId?: string | null;
 }
 
 interface SubStatus {
@@ -47,14 +48,13 @@ interface SubStatus {
     color: string;
     workId?: string | null;
     order: number;
-    applicableStatusIds: string[];
+    statusId: string | null;
     triggerMap: Record<string, string>;
     actionLabel: string | null;
     warrantyScope?: string;
     successSubStatusId?: string | null;
     failSubStatusId?: string | null;
     autoRevertOnClear: boolean;
-    isEntryPoint: boolean;
     fromTransitions: { to: { id: string; label: string; color: string } }[];
 }
 
@@ -71,14 +71,13 @@ type FormValues = {
     color: string;
     workId: string;
     order: string;
-    applicableStatusIds: string[];
+    statusId: string;
     triggerMap: Record<string, string>;
     actionLabel: string;
     warrantyScope: string;
     successSubStatusId: string;
     failSubStatusId: string;
     autoRevertOnClear: boolean;
-    isEntryPoint: boolean;
 };
 
 const BLANK_FORM: FormValues = {
@@ -86,14 +85,13 @@ const BLANK_FORM: FormValues = {
     color: "bg-gray-100 text-gray-600",
     workId: "",
     order: "",
-    applicableStatusIds: [],
+    statusId: "",
     triggerMap: {},
     actionLabel: "",
     warrantyScope: "any",
     successSubStatusId: "",
     failSubStatusId: "",
     autoRevertOnClear: true,
-    isEntryPoint: true,
 };
 
 /** Pull the `bg-*` class out of a color string for a small swatch dot. */
@@ -122,22 +120,25 @@ function SubStatusFormModal({
     works: Work[];
     subStatuses: SubStatus[];
 }) {
-    const toggleApplicable = (value: string) =>
-        setForm({
-            ...form,
-            applicableStatusIds: form.applicableStatusIds.includes(value)
-                ? form.applicableStatusIds.filter((item) => item !== value)
-                : [...form.applicableStatusIds, value],
-        });
+    // A sub-status belongs to exactly one parent status. Changing it re-keys the
+    // single auto-advance entry (triggerMap) onto the new status.
+    const setParentStatus = (value: string) => {
+        const prev = form.statusId;
+        const target = prev ? form.triggerMap[prev] : undefined;
+        const next: Record<string, string> = {};
+        if (value && target) next[value] = target;
+        setForm({ ...form, statusId: value, triggerMap: next });
+    };
 
-    const setTrigger = (statusId: string, targetId: string) => {
-        const next = { ...form.triggerMap };
-        if (targetId) next[statusId] = targetId;
-        else delete next[statusId];
+    const setAutoAdvance = (targetId: string) => {
+        if (!form.statusId) return;
+        const next: Record<string, string> = {};
+        if (targetId) next[form.statusId] = targetId;
         setForm({ ...form, triggerMap: next });
     };
 
     const selectedWork = works.find((w) => w.id === form.workId);
+    const autoAdvanceTarget = form.statusId ? (form.triggerMap[form.statusId] ?? "") : "";
 
     return (
         <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose(); }}>
@@ -255,56 +256,48 @@ function SubStatusFormModal({
                                 />
                                 Auto-remove participant on clear
                             </label>
-                            <label className="flex items-center gap-2 text-sm">
-                                <Checkbox
-                                    checked={form.isEntryPoint}
-                                    onCheckedChange={(checked) => setForm({ ...form, isEntryPoint: checked === true })}
-                                />
-                                Entry point
-                            </label>
+                            <p className="text-xs text-muted-foreground">
+                                The sub-status auto-applied on entry is set per status — pick it
+                                with the <span className="font-medium">Set start</span> button on each status card.
+                            </p>
                         </div>
                     </div>
 
-                    <div className="space-y-3">
-                        <Label>Applies to (main status)</Label>
-                        {statuses.length === 0 ? (
-                            <p className="text-xs text-muted-foreground">Loading statuses…</p>
-                        ) : (
-                            <div className="space-y-2">
-                                {statuses.map((status) => (
-                                    <div key={status.id} className="rounded-md border border-border p-3">
-                                        <div className="flex flex-wrap items-center gap-3">
-                                            <label className="flex items-center gap-2 text-sm">
-                                                <Checkbox
-                                                    checked={form.applicableStatusIds.includes(status.id)}
-                                                    onCheckedChange={() => toggleApplicable(status.id)}
-                                                />
-                                                <Badge className={status.color}>{status.label}</Badge>
-                                            </label>
-                                            {form.applicableStatusIds.includes(status.id) && (
-                                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                                    <span>Auto-advance to</span>
-                                                    <Select
-                                                        value={form.triggerMap[status.id] ?? "__none__"}
-                                                        onValueChange={(value) => setTrigger(status.id, value === "__none__" ? "" : value)}
-                                                    >
-                                                        <SelectTrigger className="w-48">
-                                                            <SelectValue />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            <SelectItem value="__none__">— none —</SelectItem>
-                                                            {statuses.filter((candidate) => candidate.id !== status.id).map((candidate) => (
-                                                                <SelectItem key={candidate.id} value={candidate.id}>{candidate.label}</SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label>Parent status</Label>
+                            <Select value={form.statusId || "__none__"} onValueChange={(value) => setParentStatus(value === "__none__" ? "" : value)}>
+                                <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="Select status" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="__none__">— unassigned —</SelectItem>
+                                    {statuses.map((status) => (
+                                        <SelectItem key={status.id} value={status.id}>{status.label}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <p className="text-xs text-muted-foreground">
+                                This sub-status belongs to exactly one status.
+                            </p>
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Auto-advance status to</Label>
+                            <Select value={autoAdvanceTarget || "__none__"} onValueChange={(value) => setAutoAdvance(value === "__none__" ? "" : value)} disabled={!form.statusId}>
+                                <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="— none —" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="__none__">— none —</SelectItem>
+                                    {statuses.filter((candidate) => candidate.id !== form.statusId).map((candidate) => (
+                                        <SelectItem key={candidate.id} value={candidate.id}>{candidate.label}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <p className="text-xs text-muted-foreground">
+                                When set here, the ticket jumps to that status.
+                            </p>
+                        </div>
                     </div>
 
                     <div className="space-y-2">
@@ -386,14 +379,13 @@ export default function SubStatusesPage() {
         color: form.color,
         workId: form.workId || null,
         order: form.order ? Number(form.order) : undefined,
-        applicableStatusIds: form.applicableStatusIds,
+        statusId: form.statusId || null,
         triggerMap: form.triggerMap,
         actionLabel: form.actionLabel || null,
         warrantyScope: form.warrantyScope,
         successSubStatusId: form.successSubStatusId || null,
         failSubStatusId: form.failSubStatusId || null,
         autoRevertOnClear: form.autoRevertOnClear,
-        isEntryPoint: form.isEntryPoint,
     });
 
     const handleCreate = async () => {
@@ -417,14 +409,13 @@ export default function SubStatusesPage() {
             color: subStatus.color,
             workId: subStatus.workId ?? "",
             order: String(subStatus.order),
-            applicableStatusIds: subStatus.applicableStatusIds,
+            statusId: subStatus.statusId ?? "",
             triggerMap: (subStatus.triggerMap ?? {}) as Record<string, string>,
             actionLabel: subStatus.actionLabel ?? "",
             warrantyScope: subStatus.warrantyScope ?? "any",
             successSubStatusId: subStatus.successSubStatusId ?? "",
             failSubStatusId: subStatus.failSubStatusId ?? "",
             autoRevertOnClear: subStatus.autoRevertOnClear ?? true,
-            isEntryPoint: subStatus.isEntryPoint ?? false,
         });
         setEditId(subStatus.id);
     };
@@ -458,6 +449,19 @@ export default function SubStatusesPage() {
         }
     };
 
+    // Hand-pick which sub-status auto-applies when a ticket ENTERS this status.
+    // Persists to TicketStatus.startSubStatusId (per status, not global).
+    const setStart = async (statusId: string, subStatusId: string) => {
+        try {
+            await axios.patch(`/api/ticket-statuses/${statusId}`, { startSubStatusId: subStatusId });
+            toast.success("Start sub-status updated");
+            loadAll(activePipelineId);
+        } catch (err) {
+            const message = axios.isAxiosError(err) ? err.response?.data?.error : "Failed to set start";
+            toast.error(message ?? "Failed to set start");
+        }
+    };
+
     const openTransitionModal = (id: string) => {
         const subStatus = subStatuses.find((item) => item.id === id);
         setSelectedToIds(subStatus?.fromTransitions.map((transition) => transition.to.id) ?? []);
@@ -482,26 +486,32 @@ export default function SubStatusesPage() {
     const toggleTo = (id: string) =>
         setSelectedToIds((prev) => prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]);
 
+    // Open the create modal pre-scoped to a parent status.
+    const openCreateFor = (statusId: string) => { setCreateForm({ ...BLANK_FORM, statusId }); setShowCreate(true); };
+
     const modalSubStatus = subStatuses.find((subStatus) => subStatus.id === transitionModalId);
+    // Transitions can only connect sub-statuses within the SAME parent status.
     const transitionCandidates = modalSubStatus
         ? subStatuses
             .filter((subStatus) =>
                 subStatus.id !== modalSubStatus.id &&
-                subStatus.applicableStatusIds.some((statusId) => modalSubStatus.applicableStatusIds.includes(statusId))
+                subStatus.statusId != null &&
+                subStatus.statusId === modalSubStatus.statusId
             )
             .sort((a, b) => a.order - b.order)
         : [];
 
     const statusLabelMap = Object.fromEntries(statuses.map((status) => [status.id, status.label]));
 
+    // One card per status (shown even when empty, so each has its own create button).
     const byParent = statuses.map((status) => ({
         status,
         children: subStatuses
-            .filter((subStatus) => subStatus.applicableStatusIds.includes(status.id))
+            .filter((subStatus) => subStatus.statusId === status.id)
             .sort((a, b) => a.order - b.order),
-    })).filter((entry) => entry.children.length > 0);
+    }));
 
-    const unassigned = subStatuses.filter((subStatus) => subStatus.applicableStatusIds.length === 0);
+    const unassigned = subStatuses.filter((subStatus) => subStatus.statusId == null);
 
     return (
         <ScrollArea className="h-full" type="always">
@@ -510,12 +520,9 @@ export default function SubStatusesPage() {
                 <div>
                     <h1 className="text-2xl font-bold">Sub-Statuses</h1>
                     <p className="mt-1 text-sm text-muted-foreground">
-                        Organised by main status, showing which sub-statuses apply at each stage.
+                        Each sub-status belongs to one parent status — add them per status below.
                     </p>
                 </div>
-                <Button type="button" onClick={() => { setCreateForm(BLANK_FORM); setShowCreate(true); }}>
-                    <Plus size={16} /> Add Sub-Status
-                </Button>
             </div>
 
             <div className="flex flex-wrap gap-2">
@@ -537,9 +544,8 @@ export default function SubStatusesPage() {
             ) : (
                 <div className="space-y-5">
                     {byParent.map(({ status, children }) => {
-                        // children are order-asc, so the first entry-point child is the
-                        // lowest-order one — the sub-status that auto-applies on entry to this status.
-                        const entryWinnerId = children.find((c) => c.isEntryPoint)?.id ?? null;
+                        // The sub-status hand-picked to auto-apply on entry to this status.
+                        const startId = status.startSubStatusId ?? null;
                         return (
                         <Card key={status.id}>
                             <CardHeader className="border-b">
@@ -549,9 +555,15 @@ export default function SubStatusesPage() {
                                     <CardDescription className="ml-auto">
                                         {children.length} sub-status{children.length !== 1 ? "es" : ""}
                                     </CardDescription>
+                                    <Button type="button" size="sm" onClick={() => openCreateFor(status.id)}>
+                                        <Plus size={14} /> Add sub-status
+                                    </Button>
                                 </div>
                             </CardHeader>
                             <CardContent className="space-y-0 px-0 pt-0">
+                                {children.length === 0 && (
+                                    <p className="px-6 py-4 text-xs text-muted-foreground">No sub-statuses yet — add one for this status.</p>
+                                )}
                                 {children.map((subStatus) => {
                                     const work = subStatus.workId ? worksById[subStatus.workId] : undefined;
                                     return (
@@ -567,14 +579,10 @@ export default function SubStatusesPage() {
                                                         {work.label}
                                                     </Badge>
                                                 )}
-                                                {subStatus.isEntryPoint && (
-                                                    subStatus.id === entryWinnerId ? (
-                                                        <Badge className="bg-green-100 text-green-700">
-                                                            <Zap size={11} className="mr-1" />Auto-applied on entry
-                                                        </Badge>
-                                                    ) : (
-                                                        <Badge className="bg-amber-100 text-amber-700">Entry point</Badge>
-                                                    )
+                                                {subStatus.id === startId && (
+                                                    <Badge className="bg-green-100 text-green-700">
+                                                        <Zap size={11} className="mr-1" />Auto-applied on entry
+                                                    </Badge>
                                                 )}
                                                 {subStatus.triggerMap[status.id] && (
                                                     <Badge className="bg-orange-100 text-orange-700">
@@ -597,6 +605,15 @@ export default function SubStatusesPage() {
                                         </div>
 
                                         <div className="flex shrink-0 items-center gap-2">
+                                            {subStatus.id !== startId && (
+                                                <Button
+                                                    type="button" size="sm" variant="outline"
+                                                    onClick={() => setStart(status.id, subStatus.id)}
+                                                    title="Auto-apply this sub-status when a ticket enters this status"
+                                                >
+                                                    <Zap size={13} /> Set start
+                                                </Button>
+                                            )}
                                             <Button type="button" size="sm" variant="outline" onClick={() => openTransitionModal(subStatus.id)}>
                                                 <GitMerge size={13} /> Flow
                                             </Button>
