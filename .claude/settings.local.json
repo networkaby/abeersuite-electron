@@ -195,7 +195,9 @@
       "PowerShell(Get-ChildItem -Path 'D:\\\\our-own-website\\\\service-mgmt-experiment\\\\src\\\\components' -Directory -ErrorAction SilentlyContinue | ForEach-Object { $_.Name })",
       "Bash(grep -iE \"account-groups|masters/ledgers|masters\\\\\\\\\\\\\\\\ledgers|GroupCombobox\")",
       "Bash(echo \"tsc exit: $?\")",
-      "Bash(echo \"exit: $?\")"
+      "Bash(echo \"exit: $?\")",
+      "Bash(Get-ChildItem -Path \"D:\\\\AbeerSuite\\\\service-mgmt-experiment\" -Recurse -Directory -Name)",
+      "Bash(Select-Object -First 30)"
     ]
   }
 }

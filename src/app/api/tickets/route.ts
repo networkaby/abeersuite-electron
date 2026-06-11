@@ -154,7 +154,22 @@ export async function POST(req: Request) {
             },
         });
 
-        return NextResponse.json(ticket);
+        // Auto-enter the entry-point sub-status for this status (a fromSubStatusId=null
+        // transition whose target applies to the status), so a new ticket is immediately
+        // a workable item rather than a bare status. Lowest order wins.
+        const entryRows = await prisma.subStatusTransition.findMany({
+            where: { fromSubStatusId: null, to: { applicableStatusIds: { has: ticket.status } } },
+            include: { to: { select: { id: true, label: true, order: true } } },
+        });
+        const entrySub = entryRows.map((r) => r.to).sort((a, b) => a.order - b.order)[0];
+        if (entrySub) {
+            await prisma.ticket.update({ where: { id: ticket.id }, data: { subStatusId: entrySub.id } });
+            await prisma.ticketLog.create({
+                data: { ticketId: ticket.id, status: ticket.status, subStatusId: entrySub.id, note: `Entered: ${entrySub.label}`, userId: user.id },
+            });
+        }
+
+        return NextResponse.json({ ...ticket, subStatusId: entrySub?.id ?? null });
     } catch (e) {
         return handleApiError(e, "Failed to create ticket");
     }

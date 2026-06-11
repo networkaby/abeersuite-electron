@@ -25,6 +25,9 @@ export async function GET(req: Request) {
             return NextResponse.json({ error: "statusId required" }, { status: 400 });
         }
 
+        // Forward transitions leaving the current sub-status (or entry points when the
+        // ticket has no sub-status yet). Back navigation is history-based on the client,
+        // so this route is forward-only.
         const transitions = await prisma.subStatusTransition.findMany({
             where: { fromSubStatusId: entryOnly || !fromSubStatusId ? null : fromSubStatusId },
             include: { to: { include: { work: { select: { permissionId: true } } } } },

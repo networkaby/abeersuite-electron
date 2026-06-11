@@ -19,8 +19,6 @@ export interface WorkInboxItem {
     ticketId: number;
     successTarget: { id: string; label: string } | null;
     failTarget: { id: string; label: string } | null;
-    /** "ask" = a work sub-status (Start→Complete branches success/fail); "new" = a brand-new ticket riding its status' Work (claim + open, then graduates). */
-    kind: "ask" | "new";
     workId: string;
     workLabel: string;
     workColor: string;
@@ -159,17 +157,7 @@ export default function WorkInboxBoard({
                                             </span>
                                         </span>
                                     )}
-                                    {it.kind === "new" ? (
-                                        <WorkActions
-                                            ticketId={it.ticketId}
-                                            workLabel={it.workLabel}
-                                            successTarget={it.successTarget}
-                                            failTarget={it.failTarget}
-                                            isOwned={it.status !== "todo"}
-                                            isOwnerMe={mine}
-                                            showComplete={false}
-                                        />
-                                    ) : answered ? (
+                                    {answered ? (
                                         <Button onClick={() => closeWork(it)} disabled={closingId === it.id} size="sm" variant="outline">
                                             {closingId === it.id ? "Closing…" : "Close"}
                                         </Button>

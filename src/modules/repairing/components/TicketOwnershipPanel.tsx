@@ -17,10 +17,12 @@ interface Props {
     canManage: boolean;
     isTerminal: boolean;
     onChanged: () => void;
+    /** Render bare (no card wrapper) for embedding inside another card. */
+    embedded?: boolean;
 }
 
 export default function TicketOwnershipPanel({
-    ticketId, primaryOwner, participants, currentUserId, canManage, isTerminal, onChanged,
+    ticketId, primaryOwner, participants, currentUserId, canManage, isTerminal, onChanged, embedded = false,
 }: Props) {
     const [allUsers, setAllUsers] = useState<{ id: number; name: string; role: string }[]>([]);
     const [showReassign, setShowReassign] = useState(false);
@@ -83,7 +85,7 @@ export default function TicketOwnershipPanel({
         }`;
 
     return (
-        <div className="space-y-3 rounded-lg border border-border bg-card p-4 shadow">
+        <div className={embedded ? "space-y-3" : "space-y-3 rounded-lg border border-border bg-card p-4 shadow"}>
             <h2 className="font-semibold text-foreground text-sm flex items-center gap-2">
                 <UserCheck size={15} /> Ownership
             </h2>

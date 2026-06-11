@@ -179,8 +179,26 @@ export async function PUT(
                     userId,
                 },
             });
-            // TODO(notify): ticket status notifications detached — re-add a
-            // notification system decoupled from the repair module later.
+
+            // Auto-apply entry sub-status for the new status (same logic as ticket creation).
+            // Clears primaryOwner so the work item appears as "To do" in the inbox.
+            const entryRows = await prisma.subStatusTransition.findMany({
+                where: { fromSubStatusId: null, to: { applicableStatusIds: { has: body.status } } },
+                include: { to: { select: { id: true, label: true, order: true } } },
+            });
+            const entrySub = entryRows.map((r) => r.to).sort((a, b) => a.order - b.order)[0];
+            if (entrySub) {
+                await prisma.ticket.update({
+                    where: { id: ticket.id },
+                    data: { subStatusId: entrySub.id, primaryOwnerId: null },
+                });
+                await prisma.ticketLog.create({
+                    data: { ticketId: ticket.id, status: body.status, subStatusId: entrySub.id, note: `Entered: ${entrySub.label}`, userId },
+                });
+            } else {
+                // No entry sub-status configured — clear current sub-status so stale work doesn't linger.
+                await prisma.ticket.update({ where: { id: ticket.id }, data: { subStatusId: null, primaryOwnerId: null } });
+            }
         }
 
         return NextResponse.json(ticket);

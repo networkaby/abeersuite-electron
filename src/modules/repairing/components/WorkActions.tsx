@@ -47,11 +47,12 @@ export default function WorkActions({
     const router = useRouter();
     const [busy, setBusy] = useState(false);
     const [pending, setPending] = useState<Pending | null>(null);
-    const [note, setNote] = useState("");
-    const [visibility, setVisibility] = useState<"INTERNAL" | "PUBLIC">("INTERNAL");
+    const [privateNote, setPrivateNote] = useState("");
+    const [publicNote, setPublicNote] = useState("");
+    const [publicEnabled, setPublicEnabled] = useState(false);
 
     const refresh = () => { if (onChanged) onChanged(); else router.refresh(); };
-    const close = () => { setPending(null); setNote(""); };
+    const close = () => { setPending(null); setPrivateNote(""); setPublicNote(""); setPublicEnabled(false); };
 
     const start = async () => {
         setBusy(true);
@@ -69,9 +70,16 @@ export default function WorkActions({
         setBusy(true);
         try {
             if (pending.target) {
-                await axios.patch(`/api/tickets/${ticketId}/sub-status`, { subStatusId: pending.target.id, note: note.trim() || undefined, visibility });
+                await axios.patch(`/api/tickets/${ticketId}/sub-status`, {
+                    subStatusId: pending.target.id,
+                    note: privateNote.trim() || undefined,
+                    visibility: "INTERNAL",
+                });
             } else {
                 await axios.delete(`/api/tickets/${ticketId}/sub-status`);
+            }
+            if (publicEnabled && publicNote.trim()) {
+                await axios.post(`/api/tickets/${ticketId}/notes`, { note: publicNote.trim(), visibility: "PUBLIC" });
             }
             toast.success(pending.done);
             close();
@@ -120,37 +128,49 @@ export default function WorkActions({
             {pending && (
                 <Dialog open onOpenChange={(o) => { if (!o) close(); }}>
                     <DialogContent className="sm:max-w-md">
-                        <DialogHeader className="flex-row items-center justify-between space-y-0">
+                        <DialogHeader>
                             <DialogTitle>{pending.target ? `${pending.kind} — ${workLabel}` : `Complete — ${workLabel}`}</DialogTitle>
-                            <Button onClick={close} variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-foreground">
-                                <X size={20} />
-                            </Button>
                         </DialogHeader>
 
                         <div className="space-y-4">
                             {pending.target && (
                                 <p className="text-sm text-muted-foreground">
-                                    Moves this ticket to <span className="font-medium text-foreground">{pending.target.label}</span>.
+                                    Moves to <span className="font-medium text-foreground">{pending.target.label}</span>.
                                 </p>
                             )}
-                            <Textarea
-                                autoFocus rows={3} value={note}
-                                onChange={(e) => setNote(e.target.value)}
-                                placeholder={`Feedback for ${workLabel}…`}
-                                className="resize-none"
-                            />
-                            <div>
-                                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Visibility</p>
-                                <div className="flex gap-2">
-                                    <Button type="button" onClick={() => setVisibility("INTERNAL")} variant="outline"
-                                        className={`h-auto flex-1 items-center gap-2 px-3 py-2 text-sm font-medium ${visibility === "INTERNAL" ? "border-border bg-muted text-foreground" : "border-border text-muted-foreground hover:bg-muted"}`}>
-                                        <Lock size={13} /> Internal
-                                    </Button>
-                                    <Button type="button" onClick={() => setVisibility("PUBLIC")} variant="outline"
-                                        className={`h-auto flex-1 items-center gap-2 px-3 py-2 text-sm font-medium ${visibility === "PUBLIC" ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-muted"}`}>
-                                        <Eye size={13} /> Public
-                                    </Button>
-                                </div>
+                            <div className="space-y-1.5">
+                                <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                                    <Lock size={12} /> Private note (internal only)
+                                </p>
+                                <Textarea
+                                    autoFocus rows={2} value={privateNote}
+                                    onChange={(e) => setPrivateNote(e.target.value)}
+                                    placeholder="Team-only note (optional)…"
+                                    className="resize-none"
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="flex cursor-pointer items-center gap-2">
+                                    <input
+                                        type="checkbox"
+                                        checked={publicEnabled}
+                                        onChange={(e) => {
+                                            setPublicEnabled(e.target.checked);
+                                            if (!e.target.checked) setPublicNote("");
+                                        }}
+                                        className="h-4 w-4"
+                                    />
+                                    <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                                        <Eye size={12} /> Send public note to customer
+                                    </span>
+                                </label>
+                                <Textarea
+                                    rows={2} value={publicNote}
+                                    onChange={(e) => setPublicNote(e.target.value)}
+                                    placeholder="Message for the customer…"
+                                    disabled={!publicEnabled}
+                                    className={`resize-none transition-opacity ${!publicEnabled ? "opacity-40" : ""}`}
+                                />
                             </div>
                         </div>
 
