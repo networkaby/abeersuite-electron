@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { ChevronRight, GitMerge, Lock, Pencil, Plus, Trash2 } from "lucide-react";
+import { ChevronRight, GitMerge, Lock, Pencil, Plus, Trash2, Zap } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -531,7 +531,11 @@ export default function SubStatusesPage() {
                 <p className="text-sm text-muted-foreground">Loading...</p>
             ) : (
                 <div className="space-y-5">
-                    {byParent.map(({ status, children }) => (
+                    {byParent.map(({ status, children }) => {
+                        // children are order-asc, so the first entry-point child is the
+                        // lowest-order one — the sub-status that auto-applies on entry to this status.
+                        const entryWinnerId = children.find((c) => c.isEntryPoint)?.id ?? null;
+                        return (
                         <Card key={status.id}>
                             <CardHeader className="border-b">
                                 <div className="flex items-center gap-3">
@@ -558,7 +562,15 @@ export default function SubStatusesPage() {
                                                         {work.label}
                                                     </Badge>
                                                 )}
-                                                {subStatus.isEntryPoint && <Badge className="bg-green-100 text-green-700">Entry point</Badge>}
+                                                {subStatus.isEntryPoint && (
+                                                    subStatus.id === entryWinnerId ? (
+                                                        <Badge className="bg-green-100 text-green-700">
+                                                            <Zap size={11} className="mr-1" />Auto-applied on entry
+                                                        </Badge>
+                                                    ) : (
+                                                        <Badge className="bg-amber-100 text-amber-700">Entry point</Badge>
+                                                    )
+                                                )}
                                                 {subStatus.triggerMap[status.id] && (
                                                     <Badge className="bg-orange-100 text-orange-700">
                                                         <ChevronRight size={11} />
@@ -601,7 +613,8 @@ export default function SubStatusesPage() {
                                 })}
                             </CardContent>
                         </Card>
-                    ))}
+                        );
+                    })}
 
                     {unassigned.length > 0 && (
                         <Card>
