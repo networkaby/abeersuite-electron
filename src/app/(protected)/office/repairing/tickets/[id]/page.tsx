@@ -134,16 +134,22 @@ export default function TicketDetailPage() {
     // When true: StatusNav is locked, all Actions except Add Note are locked.
     const workInProgress = !!ticket.primaryOwner && !!ticket.ticketSubStatus?.work;
 
-    // Single "Back" = the previous distinct step in this ticket's history (an undo of
-    // the last move) — prefer the prior sub-status, else the prior main status.
+    // Single "Back" = true undo — the previous (status, sub-status) pair from history.
+    // Single pass: first log that differs from current state AND has a valid ticketStatus
+    // (skip stale logs whose status ID no longer exists in the DB).
     const backTarget = (() => {
         for (const log of ticket.logs) {
-            if (log.subStatusId && log.subStatusId !== ticket.subStatusId)
-                return { kind: "sub" as const, id: log.subStatusId, label: log.ticketSubStatus?.label ?? "previous step" };
-        }
-        for (const log of ticket.logs) {
-            if (log.status && log.status !== ticket.status)
-                return { kind: "status" as const, id: log.status, label: log.ticketStatus?.label ?? log.status };
+            if (!log.ticketStatus) continue;
+            if (log.status !== ticket.status || (log.subStatusId ?? null) !== (ticket.subStatusId ?? null)) {
+                const subLabel = log.ticketSubStatus?.label;
+                return {
+                    statusId:    log.status,
+                    subStatusId: log.subStatusId ?? null,
+                    label: subLabel
+                        ? `${log.ticketStatus.label} › ${subLabel}`
+                        : log.ticketStatus.label,
+                };
+            }
         }
         return null;
     })();

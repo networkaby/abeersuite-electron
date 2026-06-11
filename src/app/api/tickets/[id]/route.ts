@@ -30,6 +30,8 @@ const ticketUpdateSchema = z.object({
     purchaseDate: z.string().optional().nullable(),
     logNote: z.string().optional(),
     visibility: z.enum(["INTERNAL", "PUBLIC"]).optional(),
+    // Undo/back restore: when present, skip auto-entry-sub-status and set this directly.
+    restoreSubStatusId: z.string().nullable().optional(),
 });
 
 export async function GET(
@@ -170,34 +172,54 @@ export async function PUT(
         });
 
         if (body.status) {
-            await prisma.ticketLog.create({
-                data: {
-                    ticketId:   ticket.id,
-                    status:     body.status,
-                    note:       body.logNote || null,
-                    visibility: body.visibility === "PUBLIC" ? "PUBLIC" : "INTERNAL",
-                    userId,
-                },
-            });
-
-            // Auto-apply entry sub-status for the new status (same logic as ticket creation).
-            // Clears primaryOwner so the work item appears as "To do" in the inbox.
-            const entryRows = await prisma.subStatusTransition.findMany({
-                where: { fromSubStatusId: null, to: { applicableStatusIds: { has: body.status } } },
-                include: { to: { select: { id: true, label: true, order: true } } },
-            });
-            const entrySub = entryRows.map((r) => r.to).sort((a, b) => a.order - b.order)[0];
-            if (entrySub) {
+            if ("restoreSubStatusId" in body) {
+                // Undo/back: restore the exact previous (status, sub-status) pair.
+                // Skip auto-entry-sub-status — we're going to a specific known state.
                 await prisma.ticket.update({
                     where: { id: ticket.id },
-                    data: { subStatusId: entrySub.id, primaryOwnerId: null },
+                    data: { subStatusId: body.restoreSubStatusId ?? null, primaryOwnerId: null },
                 });
                 await prisma.ticketLog.create({
-                    data: { ticketId: ticket.id, status: body.status, subStatusId: entrySub.id, note: `Entered: ${entrySub.label}`, userId },
+                    data: {
+                        ticketId:   ticket.id,
+                        status:     body.status,
+                        subStatusId: body.restoreSubStatusId ?? null,
+                        note:       body.logNote || null,
+                        visibility: body.visibility === "PUBLIC" ? "PUBLIC" : "INTERNAL",
+                        userId,
+                    },
                 });
             } else {
-                // No entry sub-status configured — clear current sub-status so stale work doesn't linger.
-                await prisma.ticket.update({ where: { id: ticket.id }, data: { subStatusId: null, primaryOwnerId: null } });
+                // Normal status change: log it, then auto-apply entry sub-status.
+                await prisma.ticketLog.create({
+                    data: {
+                        ticketId:   ticket.id,
+                        status:     body.status,
+                        note:       body.logNote || null,
+                        visibility: body.visibility === "PUBLIC" ? "PUBLIC" : "INTERNAL",
+                        userId,
+                    },
+                });
+
+                // Auto-apply entry sub-status for the new status (same logic as ticket creation).
+                // Clears primaryOwner so the work item appears as "To do" in the inbox.
+                const entryRows = await prisma.subStatusTransition.findMany({
+                    where: { fromSubStatusId: null, to: { applicableStatusIds: { has: body.status } } },
+                    include: { to: { select: { id: true, label: true, order: true } } },
+                });
+                const entrySub = entryRows.map((r) => r.to).sort((a, b) => a.order - b.order)[0];
+                if (entrySub) {
+                    await prisma.ticket.update({
+                        where: { id: ticket.id },
+                        data: { subStatusId: entrySub.id, primaryOwnerId: null },
+                    });
+                    await prisma.ticketLog.create({
+                        data: { ticketId: ticket.id, status: body.status, subStatusId: entrySub.id, note: `Entered: ${entrySub.label}`, userId },
+                    });
+                } else {
+                    // No entry sub-status configured — clear current sub-status so stale work doesn't linger.
+                    await prisma.ticket.update({ where: { id: ticket.id }, data: { subStatusId: null, primaryOwnerId: null } });
+                }
             }
         }
 

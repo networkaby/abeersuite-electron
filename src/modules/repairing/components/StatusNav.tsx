@@ -9,7 +9,9 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Textarea } from "@/components/ui/textarea";
 
 interface NavTarget { id: string; label: string }
-type Pending = { kind: "sub" | "status"; id: string; label: string; dir: "next" | "back" };
+type Pending =
+    | { dir: "next"; kind: "sub" | "status"; id: string; label: string }
+    | { dir: "back"; statusId: string; subStatusId: string | null; label: string };
 
 interface Props {
     ticketId: number;
@@ -20,7 +22,7 @@ interface Props {
     /** Lock all nav buttons — shown when work is in progress. */
     locked?: boolean;
     nextStatuses: NavTarget[];
-    backTarget: { kind: "sub" | "status"; id: string; label: string } | null;
+    backTarget: { statusId: string; subStatusId: string | null; label: string } | null;
     onChanged: () => void;
 }
 
@@ -51,8 +53,15 @@ export default function StatusNav({
         if (!pending) return;
         setBusy(true);
         try {
-            // Do the move with the private (internal) note
-            if (pending.kind === "sub") {
+            if (pending.dir === "back") {
+                // True undo: restore exact previous (status, sub-status) pair.
+                await axios.put(`/api/tickets/${ticketId}`, {
+                    status: pending.statusId,
+                    restoreSubStatusId: pending.subStatusId,
+                    logNote: privateNote.trim() || undefined,
+                    visibility: "INTERNAL",
+                });
+            } else if (pending.kind === "sub") {
                 await axios.patch(`/api/tickets/${ticketId}/sub-status`, {
                     subStatusId: pending.id,
                     note: privateNote.trim() || undefined,
@@ -72,7 +81,7 @@ export default function StatusNav({
                     visibility: "PUBLIC",
                 });
             }
-            toast.success(`Moved to ${pending.label}`);
+            toast.success(pending.dir === "back" ? `Reverted to ${pending.label}` : `Moved to ${pending.label}`);
             close();
             onChanged();
         } catch (err: unknown) {
@@ -80,14 +89,14 @@ export default function StatusNav({
         } finally { setBusy(false); }
     };
 
-    const navBtn = (t: NavTarget, kind: Pending["kind"], dir: Pending["dir"]) => (
+    const navBtn = (t: NavTarget, kind: "sub" | "status") => (
         <Button
-            key={`${dir}-${kind}-${t.id}`}
-            onClick={() => setPending({ kind, id: t.id, label: t.label, dir })}
+            key={`next-${kind}-${t.id}`}
+            onClick={() => setPending({ dir: "next", kind, id: t.id, label: t.label })}
             size="sm" variant="outline"
-            className={`w-full justify-start gap-1.5 ${dir === "back" ? "border-dashed text-muted-foreground" : ""}`}
+            className="w-full justify-start gap-1.5"
         >
-            {dir === "back" ? <ArrowLeft size={13} /> : <ArrowRight size={13} />}
+            <ArrowRight size={13} />
             <span className="truncate">{t.label}</span>
             <span className="ml-auto rounded bg-muted px-1.5 text-[10px] text-muted-foreground">{kind === "sub" ? "sub" : "status"}</span>
         </Button>
@@ -110,8 +119,8 @@ export default function StatusNav({
                         <div className="space-y-1.5">
                             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Next</p>
                             <div className="flex flex-col gap-1.5">
-                                {nextSubs.map((t) => navBtn(t, "sub", "next"))}
-                                {nextStatuses.map((t) => navBtn(t, "status", "next"))}
+                                {nextSubs.map((t) => navBtn(t, "sub"))}
+                                {nextStatuses.map((t) => navBtn(t, "status"))}
                             </div>
                         </div>
                     ) : (
@@ -120,7 +129,7 @@ export default function StatusNav({
 
                     {backTarget && (
                         <Button
-                            onClick={() => setPending({ kind: backTarget.kind, id: backTarget.id, label: backTarget.label, dir: "back" })}
+                            onClick={() => setPending({ dir: "back", statusId: backTarget.statusId, subStatusId: backTarget.subStatusId, label: backTarget.label })}
                             size="sm" variant="ghost"
                             className="w-full justify-start gap-1.5 border border-dashed border-border text-muted-foreground"
                         >
@@ -135,7 +144,9 @@ export default function StatusNav({
                 <Dialog open onOpenChange={(o) => { if (!o) close(); }}>
                     <DialogContent className="sm:max-w-md">
                         <DialogHeader>
-                            <DialogTitle>Move → {pending.label}</DialogTitle>
+                            <DialogTitle>
+                                {pending.dir === "back" ? `← Back to ${pending.label}` : `Move → ${pending.label}`}
+                            </DialogTitle>
                         </DialogHeader>
                         <div className="space-y-4">
                             {started && (
@@ -183,7 +194,9 @@ export default function StatusNav({
                         </div>
                         <DialogFooter className="mt-2 border-t border-border pt-4">
                             <Button onClick={close} variant="outline" className="flex-1">Cancel</Button>
-                            <Button onClick={submit} disabled={busy} className="flex-1">{busy ? "Saving…" : "Move →"}</Button>
+                            <Button onClick={submit} disabled={busy} className="flex-1">
+                                {busy ? "Saving…" : pending.dir === "back" ? "← Revert" : "Move →"}
+                            </Button>
                         </DialogFooter>
                     </DialogContent>
                 </Dialog>
