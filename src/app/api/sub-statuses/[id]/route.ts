@@ -76,13 +76,18 @@ export async function PATCH(
             },
         });
 
-        // Manage the null → id entry-point transition
+        // Manage the null → id entry-point transition.
+        // Prisma's upsert can't reliably match WHERE fromSubStatusId IS NULL through
+        // a compound unique key, so use findFirst + create instead.
         if (body.isEntryPoint === true) {
-            await prisma.subStatusTransition.upsert({
-                where: { fromSubStatusId_toSubStatusId: { fromSubStatusId: null as unknown as string, toSubStatusId: id } },
-                update: {},
-                create: { fromSubStatusId: null, toSubStatusId: id },
+            const exists = await prisma.subStatusTransition.findFirst({
+                where: { fromSubStatusId: null, toSubStatusId: id },
             });
+            if (!exists) {
+                await prisma.subStatusTransition.create({
+                    data: { fromSubStatusId: null, toSubStatusId: id },
+                });
+            }
         } else if (body.isEntryPoint === false) {
             await prisma.subStatusTransition.deleteMany({
                 where: { fromSubStatusId: null, toSubStatusId: id },

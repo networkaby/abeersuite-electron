@@ -25,6 +25,10 @@ const pool = new Pool({ connectionString: rawUrl, ssl: /@(localhost|127\.0\.0\.1
 
 // Ordered for clarity. CASCADE handles cross-table FKs (e.g. ShopOrder.invoiceId).
 const TABLES = [
+    // Repair tickets
+    "TicketLog",
+    "TicketParticipant",
+    "Ticket",
     // GL side
     "JournalLine",
     "JournalEntry",
