@@ -81,6 +81,17 @@ export async function GET(
                 },
                 ticketSubStatus: { select: { id: true, label: true, color: true, actionLabel: true, work: { select: { label: true, color: true } }, successSubStatus: { select: { id: true, label: true } }, failSubStatus: { select: { id: true, label: true } } } },
                 pipeline:        { select: { id: true, label: true, color: true } },
+                // Spawned child sub-pipelines (5th power) — mirrored on the parent.
+                children: {
+                    orderBy: { createdAt: "desc" },
+                    select: {
+                        id: true, parentSubStatusId: true,
+                        pipeline:        { select: { id: true, label: true, color: true } },
+                        ticketStatus:    { select: { label: true, color: true, isTerminal: true } },
+                        ticketSubStatus: { select: { label: true, color: true } },
+                    },
+                },
+                parent: { select: { id: true } },
                 participants: {
                     where: { removedAt: null },
                     include: { user: { select: { id: true, name: true, role: true } } },

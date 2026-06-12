@@ -9,6 +9,7 @@ import {
     Clock, User, Building2, AlertTriangle,
     Printer, Lock, Eye, NotebookPen, ArrowRightLeft,
     Check, X, MessageSquare, RefreshCw, ArrowRight, CornerUpLeft, Flag,
+    GitBranch, ExternalLink,
     type LucideIcon,
 } from "lucide-react";
 import { timeAgo } from "@/shared/lib/format/timeAgo";
@@ -65,6 +66,14 @@ interface Ticket {
         problem: string;
         account: { name: string; phone?: string | null; email?: string | null } | null;
     };
+    parent?: { id: number } | null;
+    children?: {
+        id: number;
+        parentSubStatusId?: string | null;
+        pipeline?: { id: string; label: string; color: string } | null;
+        ticketStatus: { label: string; color: string; isTerminal: boolean };
+        ticketSubStatus?: { label: string; color: string } | null;
+    }[];
     primaryOwner?: { id: number; name: string };
     participants?: { user: { id: number; name: string; role: string }; addedForRole?: string | null }[];
     serviceCenter?: { id: number; name: string };
@@ -458,6 +467,45 @@ export default function TicketDetailPage() {
                                         onChanged={fetchTicket}
                                     />
                                 </div>
+                            </div>
+                        )}
+                        {ticket.parent && (
+                            <Link href={`/office/repairing/tickets/${ticket.parent.id}`} className="flex items-center gap-1.5 rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground hover:bg-muted">
+                                <CornerUpLeft size={13} className="shrink-0" /> Child of ticket <span className="font-medium text-foreground">#{ticket.parent.id}</span>
+                            </Link>
+                        )}
+                        {ticket.children && ticket.children.length > 0 && (
+                            <div className="space-y-2 rounded-lg border border-border bg-card p-4 shadow">
+                                <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                                    <GitBranch size={14} /> Sub-pipelines
+                                </h2>
+                                {ticket.children.map((c) => (
+                                    <div key={c.id} className="rounded-md border border-border p-2.5">
+                                        <div className="flex items-center gap-2">
+                                            {c.pipeline && (
+                                                <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${badgeColor(c.pipeline.color).className}`} style={badgeColor(c.pipeline.color).style}>
+                                                    {c.pipeline.label}
+                                                </span>
+                                            )}
+                                            <Link href={`/office/repairing/tickets/${c.id}`} className="ml-auto inline-flex items-center gap-1 text-xs text-primary hover:underline">
+                                                Open #{c.id} <ExternalLink size={11} />
+                                            </Link>
+                                        </div>
+                                        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                                            <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${badgeColor(c.ticketStatus.color).className}`} style={badgeColor(c.ticketStatus.color).style}>
+                                                {c.ticketStatus.label}
+                                            </span>
+                                            {c.ticketSubStatus && (
+                                                <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${badgeColor(c.ticketSubStatus.color).className}`} style={badgeColor(c.ticketSubStatus.color).style}>
+                                                    {c.ticketSubStatus.label}
+                                                </span>
+                                            )}
+                                            {c.ticketStatus.isTerminal && (
+                                                <span className="inline-flex items-center gap-1 text-[11px] text-green-700 dark:text-green-400"><Check size={11} /> done</span>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
                         )}
                         <StatusNav
