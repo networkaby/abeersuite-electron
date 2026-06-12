@@ -9,29 +9,29 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 
-/** A sub-status hand-off — stays in the current stage, routes the work elsewhere. */
+/** A worker hand-off — stays in the current stage, routes the work elsewhere. */
 interface SubTarget { id: string; label: string; work: { label: string; color: string } | null }
 /** A real stage change. `isTerminal` = a close-out (Closed / Cancelled). */
 interface StatusTarget { id: string; label: string; color?: string; isTerminal?: boolean }
 type Pending =
     | { dir: "next"; kind: "sub" | "status"; id: string; label: string }
-    | { dir: "back"; statusId: string; subStatusId: string | null; label: string };
+    | { dir: "back"; statusId: string; workerId: string | null; label: string };
 
 interface Props {
     ticketId: number;
     statusId: string;
-    subStatusId: string | null;
+    workerId: string | null;
     isWarranty: boolean;
     started: boolean;
     /** Lock all nav buttons — shown when work is in progress. */
     locked?: boolean;
     nextStatuses: StatusTarget[];
-    backTarget: { statusId: string; subStatusId: string | null; label: string } | null;
+    backTarget: { statusId: string; workerId: string | null; label: string } | null;
     onChanged: () => void;
 }
 
 export default function StatusNav({
-    ticketId, statusId, subStatusId, isWarranty, started, locked = false, nextStatuses, backTarget, onChanged,
+    ticketId, statusId, workerId, isWarranty, started, locked = false, nextStatuses, backTarget, onChanged,
 }: Props) {
     const [nextSubs, setNextSubs] = useState<SubTarget[]>([]);
     const [pending, setPending] = useState<Pending | null>(null);
@@ -42,12 +42,12 @@ export default function StatusNav({
 
     const load = useCallback(async () => {
         const fwd = new URLSearchParams({ statusId, isWarranty: String(isWarranty) });
-        if (subStatusId) fwd.set("fromSubStatusId", subStatusId); else fwd.set("entryOnly", "true");
+        if (workerId) fwd.set("fromWorkerId", workerId); else fwd.set("entryOnly", "true");
         try {
-            const r = await axios.get(`/api/sub-statuses/next?${fwd}`);
+            const r = await axios.get(`/api/workers/next?${fwd}`);
             setNextSubs((r.data as SubTarget[]).map((s) => ({ id: s.id, label: s.label, work: s.work ?? null })));
         } catch { setNextSubs([]); }
-    }, [statusId, subStatusId, isWarranty]);
+    }, [statusId, workerId, isWarranty]);
 
     useEffect(() => { load(); }, [load]);
 
@@ -58,16 +58,16 @@ export default function StatusNav({
         setBusy(true);
         try {
             if (pending.dir === "back") {
-                // True undo: restore exact previous (status, sub-status) pair.
+                // True undo: restore exact previous (status, worker) pair.
                 await axios.put(`/api/tickets/${ticketId}`, {
                     status: pending.statusId,
-                    restoreSubStatusId: pending.subStatusId,
+                    restoreWorkerId: pending.workerId,
                     logNote: privateNote.trim() || undefined,
                     visibility: "INTERNAL",
                 });
             } else if (pending.kind === "sub") {
-                await axios.patch(`/api/tickets/${ticketId}/sub-status`, {
-                    subStatusId: pending.id,
+                await axios.patch(`/api/tickets/${ticketId}/worker`, {
+                    workerId: pending.id,
                     note: privateNote.trim() || undefined,
                     visibility: "INTERNAL",
                 });
@@ -181,7 +181,7 @@ export default function StatusNav({
 
                     {backTarget && (
                         <Button
-                            onClick={() => setPending({ dir: "back", statusId: backTarget.statusId, subStatusId: backTarget.subStatusId, label: backTarget.label })}
+                            onClick={() => setPending({ dir: "back", statusId: backTarget.statusId, workerId: backTarget.workerId, label: backTarget.label })}
                             size="sm" variant="ghost"
                             className="w-full justify-start gap-1.5 border border-dashed border-border text-muted-foreground"
                         >

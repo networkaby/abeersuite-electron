@@ -8,7 +8,7 @@ import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { labelColorSchema } from "@/shared/lib/schemas/commonSchemas";
 
-const subStatusSchema = labelColorSchema.extend({
+const workerSchema = labelColorSchema.extend({
     publicLabel: z.string().trim().optional().nullable(),
     workId: z.string().trim().optional().nullable(),
     order: z.coerce.number().int().nonnegative().optional(),
@@ -16,8 +16,8 @@ const subStatusSchema = labelColorSchema.extend({
     triggerMap: z.record(z.string(), z.string()).optional(),
     actionLabel: z.string().optional().nullable(),
     warrantyScope: z.enum(["any", "warranty_only", "non_warranty_only"]).optional(),
-    successSubStatusId: z.string().trim().optional().nullable(),
-    failSubStatusId: z.string().trim().optional().nullable(),
+    successWorkerId: z.string().trim().optional().nullable(),
+    failWorkerId: z.string().trim().optional().nullable(),
     autoRevertOnClear: z.boolean().optional(),
     retrySchedule: z.array(z.object({
         unit: z.enum(["minute", "hour", "day", "week", "month", "year"]),
@@ -29,7 +29,7 @@ const subStatusSchema = labelColorSchema.extend({
     pipelineId: z.string().optional().nullable(),
 });
 
-// GET /api/sub-statuses?statusId=S3&pipelineId=P1
+// GET /api/workers?statusId=S3&pipelineId=P1
 export async function GET(req: Request) {
     const { response } = await requireAuth();
     if (response) return response;
@@ -38,7 +38,7 @@ export async function GET(req: Request) {
         const statusId = searchParams.get("statusId");
         const pipelineId = searchParams.get("pipelineId");
 
-        const all = await prisma.ticketSubStatus.findMany({
+        const all = await prisma.ticketWorker.findMany({
             where: pipelineId ? { pipelineId } : undefined,
             orderBy: { order: "asc" },
             include: {
@@ -52,22 +52,22 @@ export async function GET(req: Request) {
 
         return NextResponse.json(result);
     } catch (e) {
-        return handleApiError(e, "Failed to fetch sub-statuses");
+        return handleApiError(e, "Failed to fetch workers");
     }
 }
 
-// POST /api/sub-statuses
+// POST /api/workers
 export async function POST(req: Request) {
     const { response } = await requirePermission(PERMISSIONS.SETTINGS_STATUSES);
     if (response) return response;
     try {
-        const { data, error } = await validateRequest(req, subStatusSchema);
+        const { data, error } = await validateRequest(req, workerSchema);
         if (error) return error;
         const body = data;
 
-        const { id: newId, n: nextOrder } = await generateNextOpaqueId(prisma.ticketSubStatus, "SS");
+        const { id: newId, n: nextOrder } = await generateNextOpaqueId(prisma.ticketWorker, "SS");
 
-        const created = await prisma.ticketSubStatus.create({
+        const created = await prisma.ticketWorker.create({
             data: {
                 id: newId,
                 label: body.label,
@@ -79,8 +79,8 @@ export async function POST(req: Request) {
                 triggerMap:         body.triggerMap ?? {},
                 actionLabel:        body.actionLabel ?? null,
                 warrantyScope:      body.warrantyScope ?? "any",
-                successSubStatusId: body.successSubStatusId ?? null,
-                failSubStatusId:    body.failSubStatusId ?? null,
+                successWorkerId: body.successWorkerId ?? null,
+                failWorkerId:    body.failWorkerId ?? null,
                 autoRevertOnClear:  body.autoRevertOnClear ?? true,
                 retrySchedule:      body.retrySchedule ?? [],
                 spawnPipelineId:    body.spawnPipelineId ?? null,
@@ -91,6 +91,6 @@ export async function POST(req: Request) {
 
         return NextResponse.json(created, { status: 201 });
     } catch (e) {
-        return handleApiError(e, "Failed to create sub-status");
+        return handleApiError(e, "Failed to create worker");
     }
 }

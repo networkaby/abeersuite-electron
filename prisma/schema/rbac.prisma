@@ -1,15 +1,15 @@
 // ── RBAC ──────────────────────────────────────────────────────────────────────
 
 model Role {
-  id             String           @id
-  label          String
-  color          String
-  rank           Int              @default(0)
-  isSystem       Boolean          @default(false)
-  users          User[]
+  id                 String           @id
+  label              String
+  color              String
+  rank               Int              @default(0)
+  isSystem           Boolean          @default(false)
+  users              User[]
   templatedPositions Position[]
-  permissions    RolePermission[]
-  chatRooms      ChatRoom[]
+  permissions        RolePermission[]
+  chatRooms          ChatRoom[]
 }
 
 model Permission {

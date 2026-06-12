@@ -16,18 +16,18 @@ model Pipeline {
   entityType  String   @default("ticket")
   createdAt   DateTime @default(now())
 
-  statuses    TicketStatus[]
-  subStatuses TicketSubStatus[]
-  tickets     Ticket[]
-  deals       Deal[]
-  shopOrders  ShopOrder[]
-  tasks       Task[]
+  statuses      TicketStatus[]
+  workers       TicketWorker[]
+  tickets       Ticket[]
+  deals         Deal[]
+  shopOrders    ShopOrder[]
+  tasks         Task[]
   // Order-type InvVouchers (POS_ORDER / SALES_ORDER) riding this pipeline (O2C P7).
-  orderVouchers InvVoucher[] @relation("OrderVoucherPipeline")
+  orderVouchers InvVoucher[]   @relation("OrderVoucherPipeline")
   // Deliveries riding this pipeline (O2C P8).
-  deliveries    Delivery[]   @relation("DeliveryPipeline")
+  deliveries    Delivery[]     @relation("DeliveryPipeline")
   // Refunds riding this pipeline (O2C P9).
-  refunds       Refund[]     @relation("RefundPipeline")
+  refunds       Refund[]       @relation("RefundPipeline")
 }
 
 model TicketStatus {
@@ -44,9 +44,9 @@ model TicketStatus {
   // The sub-status auto-applied when a ticket ENTERS this status — hand-picked per
   // status (replaces the old global "lowest-order entry-point wins" heuristic). FK
   // SetNull so deleting that sub-status just clears the start, never blocks.
-  startSubStatusId String?
-  startSubStatus   TicketSubStatus?  @relation("StatusStartSub", fields: [startSubStatusId], references: [id], onDelete: SetNull)
-  subStatuses     TicketSubStatus[]  @relation("StatusSubStatuses")
+  startWorkerId   String?
+  startWorker     TicketWorker?      @relation("StatusStartSub", fields: [startWorkerId], references: [id], onDelete: SetNull)
+  workers         TicketWorker[]     @relation("StatusWorkers")
   pipelineId      String?
   pipeline        Pipeline?          @relation(fields: [pipelineId], references: [id])
   fromTransitions StatusTransition[] @relation("FromStatus")
@@ -56,33 +56,33 @@ model TicketStatus {
   deals           Deal[]
   shopOrders      ShopOrder[]
   tasks           Task[]
-  orderVouchers   InvVoucher[] @relation("OrderVoucherStatus")
-  deliveries      Delivery[]   @relation("DeliveryStatus")
-  refunds         Refund[]     @relation("RefundStatus")
+  orderVouchers   InvVoucher[]       @relation("OrderVoucherStatus")
+  deliveries      Delivery[]         @relation("DeliveryStatus")
+  refunds         Refund[]           @relation("RefundStatus")
 }
 
-model TicketSubStatus {
-  id                  String                @id
-  label               String
+model TicketWorker {
+  id                String              @id
+  label             String
   // Customer-facing label shown on the portal ("My Repairs"). The internal `label`
   // and staff `actionLabel` stay private. Null = fall back to the parent status name.
-  publicLabel         String?
-  color               String                @default("bg-gray-100 text-gray-600")
-  order               Int
+  publicLabel       String?
+  color             String              @default("bg-gray-100 text-gray-600")
+  order             Int
   // Each sub-status belongs to exactly ONE parent status (no sharing). SetNull so
   // deleting a status leaves its sub-statuses as "unassigned" rather than deleting them.
-  statusId            String?
-  status              TicketStatus?         @relation("StatusSubStatuses", fields: [statusId], references: [id], onDelete: SetNull)
-  triggerMap          Json                  @default("{}")
-  actionLabel         String?
-  autoRevertOnClear   Boolean               @default(true)
-  warrantyScope       String                @default("any")
-  successSubStatusId  String?
-  successSubStatus    TicketSubStatus?      @relation("SubStatusSuccess", fields: [successSubStatusId], references: [id], onDelete: SetNull)
-  failSubStatusId     String?
-  failSubStatus       TicketSubStatus?      @relation("SubStatusFail", fields: [failSubStatusId], references: [id], onDelete: SetNull)
-  successRoutedFrom   TicketSubStatus[]     @relation("SubStatusSuccess")
-  failRoutedFrom      TicketSubStatus[]     @relation("SubStatusFail")
+  statusId          String?
+  status            TicketStatus?       @relation("StatusWorkers", fields: [statusId], references: [id], onDelete: SetNull)
+  triggerMap        Json                @default("{}")
+  actionLabel       String?
+  autoRevertOnClear Boolean             @default(true)
+  warrantyScope     String              @default("any")
+  successWorkerId   String?
+  successWorker     TicketWorker?       @relation("WorkerSuccess", fields: [successWorkerId], references: [id], onDelete: SetNull)
+  failWorkerId      String?
+  failWorker        TicketWorker?       @relation("WorkerFail", fields: [failWorkerId], references: [id], onDelete: SetNull)
+  successRoutedFrom TicketWorker[]      @relation("WorkerSuccess")
+  failRoutedFrom    TicketWorker[]      @relation("WorkerFail")
   // ── Hybrid retry schedule ("attempt channels") ─────────────────────────────
   // A "waiting" sub-status (Unreachable, Awaiting-parts) re-arms its work on a
   // front-loaded schedule. The FIRST attempt is immediate — landing here from
@@ -91,52 +91,52 @@ model TicketSubStatus {
   // setting wakeAt and dropping it into the Work Inbox "Waiting" tab until due.
   // retrySchedule is an ordered list of phases: [{ unit, every, times }] where
   // unit ∈ "minute"|"hour"|"day"|"week"|"month"|"year". Total attempts = 1 + Σtimes;
-  // [] = no retry. After the last phase's last attempt, route to failSubStatus
+  // [] = no retry. After the last phase's last attempt, route to failWorker
   // (the "On unsuccess → move to" target doubles as the give-up destination).
-  retrySchedule       Json                  @default("[]")
+  retrySchedule     Json                @default("[]")
   // 5th power: entering this sub-status spawns a CHILD ticket on this pipeline
   // (e.g. inbound parts courier). The parent mirrors the child and advances via
   // success/fail when the child terminates. Plain id (no FK) — keep it simple.
-  spawnPipelineId     String?
+  spawnPipelineId   String?
   // Child-side report-back: when a CHILD ticket reaches this sub-status it signals
   // its parent — "success" fires the parent spawning sub-status' Success route,
   // "fail" fires Unsuccess. Parent-agnostic so the child pipeline is reusable.
   // null = no signal. (Future: "checkpoint:<label>" for mid-journey nudges.)
-  parentSignal        String?
-  workId              String?
-  work                Work?                 @relation(fields: [workId], references: [id], onDelete: SetNull)
-  pipelineId          String?
-  pipeline            Pipeline?             @relation(fields: [pipelineId], references: [id])
-  fromTransitions     SubStatusTransition[] @relation("FromSubStatus")
-  toTransitions       SubStatusTransition[] @relation("ToSubStatus")
-  startOfStatuses     TicketStatus[]        @relation("StatusStartSub")
-  tickets             Ticket[]
-  logs                TicketLog[]
-  participants        TicketParticipant[]   @relation("ParticipantSubStatus")
+  parentSignal      String?
+  workId            String?
+  work              Work?               @relation(fields: [workId], references: [id], onDelete: SetNull)
+  pipelineId        String?
+  pipeline          Pipeline?           @relation(fields: [pipelineId], references: [id])
+  fromTransitions   WorkerTransition[]  @relation("FromWorker")
+  toTransitions     WorkerTransition[]  @relation("ToWorker")
+  startOfStatuses   TicketStatus[]      @relation("StatusStartSub")
+  tickets           Ticket[]
+  logs              TicketLog[]
+  participants      TicketParticipant[] @relation("ParticipantWorker")
 }
 
 // A unit of work a status/sub-status represents (calling, parts, qc…). Each
 // gated Work mints a permission ("work:<id>") that gates who can set statuses
-// /sub-statuses carrying it. Generalizes the former SubStatusGroup.
+// /sub-statuses carrying it. Generalizes the former WorkerGroup.
 model Work {
-  id           String            @id
+  id           String         @id
   label        String
-  color        String            @default("bg-gray-100 text-gray-600")
-  order        Int               @default(0)
+  color        String         @default("bg-gray-100 text-gray-600")
+  order        Int            @default(0)
   permissionId String?
-  permission   Permission?       @relation(fields: [permissionId], references: [id])
+  permission   Permission?    @relation(fields: [permissionId], references: [id])
   statuses     TicketStatus[]
-  subStatuses  TicketSubStatus[]
+  workers      TicketWorker[]
 }
 
-model SubStatusTransition {
-  id              Int              @id @default(autoincrement())
-  fromSubStatusId String?
-  toSubStatusId   String
-  from            TicketSubStatus? @relation("FromSubStatus", fields: [fromSubStatusId], references: [id], onDelete: Cascade)
-  to              TicketSubStatus  @relation("ToSubStatus", fields: [toSubStatusId], references: [id], onDelete: Cascade)
+model WorkerTransition {
+  id           Int           @id @default(autoincrement())
+  fromWorkerId String?
+  toWorkerId   String
+  from         TicketWorker? @relation("FromWorker", fields: [fromWorkerId], references: [id], onDelete: Cascade)
+  to           TicketWorker  @relation("ToWorker", fields: [toWorkerId], references: [id], onDelete: Cascade)
 
-  @@unique([fromSubStatusId, toSubStatusId])
+  @@unique([fromWorkerId, toWorkerId])
 }
 
 model StatusTransition {

@@ -32,10 +32,10 @@ model Person {
 
   // ── GST profile (optional; only meaningful for B2B parties) ──────────────
   /// 15-char GSTIN. Indian format: 2 digits state + 10 PAN + entity + Z + check
-  gstin        String?
+  gstin             String?
   /// State code (first two digits of GSTIN, also used for place-of-supply)
-  gstStateCode String?
-  gstRegType   GstRegType?
+  gstStateCode      String?
+  gstRegType        GstRegType?
   /// Default destination state for couriered B2C sales (place-of-supply
   /// when the voucher's deliveryMode = SHIPPED and the customer has no
   /// GSTIN). Ignored on COUNTER pickups — those use the branch state per
@@ -47,7 +47,7 @@ model Person {
   portalCredential PersonPortalCredential?
   shopOrders       ShopOrder[]
   deals            Deal[]
-  owner            Position?       @relation("PersonOwnerPosition", fields: [ownerPositionId], references: [id])
+  owner            Position?               @relation("PersonOwnerPosition", fields: [ownerPositionId], references: [id])
   phones           Phone[]
   emails           Email[]
 
@@ -56,17 +56,17 @@ model Person {
   // later hard-delete from the Trash view; on hard-delete the back-link
   // from the active partner simply dangles (no onDelete).
   convertedToCompanyId Int?
-  convertedToCompany   Company?   @relation("PersonConvertedTo", fields: [convertedToCompanyId], references: [id])
+  convertedToCompany   Company?  @relation("PersonConvertedTo", fields: [convertedToCompanyId], references: [id])
   convertedAt          DateTime?
-  convertedFromCompany Company[]  @relation("CompanyConvertedTo")
+  convertedFromCompany Company[] @relation("CompanyConvertedTo")
 
   // Set when this row was soft-deleted via the Merge tool. The merged-into row
   // is the winner; this Person row is the loser whose ledger/contacts/links
   // were re-pointed onto the winner. Same Trash + hard-delete surface as the
   // converter tombstones — see /office/settings/customer-tools.
   mergedIntoPersonId Int?
-  mergedIntoPerson   Person?  @relation("PersonMergedInto", fields: [mergedIntoPersonId], references: [id])
-  mergedFromPerson   Person[] @relation("PersonMergedInto")
+  mergedIntoPerson   Person?   @relation("PersonMergedInto", fields: [mergedIntoPersonId], references: [id])
+  mergedFromPerson   Person[]  @relation("PersonMergedInto")
   mergedAt           DateTime?
 }
 
@@ -86,9 +86,9 @@ model Company {
 
   // ── GST profile ──────────────────────────────────────────────────────────
   /// 15-char GSTIN
-  gstin        String?
-  gstStateCode String?
-  gstRegType   GstRegType?
+  gstin             String?
+  gstStateCode      String?
+  gstRegType        GstRegType?
   /// Default destination state for couriered B2C sales — see Person.shippingStateCode.
   shippingStateCode String?
 
@@ -97,18 +97,18 @@ model Company {
   financialYearFrom  DateTime? @db.Date
   booksBeginningFrom DateTime? @db.Date
 
-  account  Account? // enforced at app level; FK lives on Account.companyId
-  persons  PersonCompany[]
-  deals    Deal[]
-  owner    Position? @relation("CompanyOwnerPosition", fields: [ownerPositionId], references: [id])
-  phones   Phone[]
-  emails   Email[]
+  account Account? // enforced at app level; FK lives on Account.companyId
+  persons PersonCompany[]
+  deals   Deal[]
+  owner   Position?       @relation("CompanyOwnerPosition", fields: [ownerPositionId], references: [id])
+  phones  Phone[]
+  emails  Email[]
 
   // Mirror of Person.convertedToCompanyId — see comment there.
   convertedToPersonId Int?
-  convertedToPerson   Person?  @relation("CompanyConvertedTo", fields: [convertedToPersonId], references: [id])
+  convertedToPerson   Person?   @relation("CompanyConvertedTo", fields: [convertedToPersonId], references: [id])
   convertedAt         DateTime?
-  convertedFromPerson Person[] @relation("PersonConvertedTo")
+  convertedFromPerson Person[]  @relation("PersonConvertedTo")
 
   // Mirror of Person.mergedIntoPersonId — same merge-tool semantics.
   mergedIntoCompanyId Int?

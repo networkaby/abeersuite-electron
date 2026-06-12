@@ -5,22 +5,22 @@
 // actual pay-back (a Payment voucher reversing the advance Receipt) is posted when
 // staff mark it Refunded — that GL wiring is the follow-up; this tracks the process.
 model Refund {
-  id          Int     @id @default(autoincrement())
-  orderSource String  // "inv" | "shop"
-  orderId     Int
-  pipelineId  String?
-  statusId    String?
-  amountPaise Int     @default(0) // advance amount to refund (paise)
-  reason      String?
+  id              Int      @id @default(autoincrement())
+  orderSource     String // "inv" | "shop"
+  orderId         Int
+  pipelineId      String?
+  statusId        String?
+  amountPaise     Int      @default(0) // advance amount to refund (paise)
+  reason          String?
   // The advance Receipt voucher this refund pays back (accountancy Voucher.id) — for
   // the GL pay-back step + audit. Null when it couldn't be resolved.
   sourceVoucherId Int?
   // The Payment voucher posted when this refund is marked Refunded (reverses the
   // advance Receipt). Set once → idempotency guard + audit link. Null until paid.
   payoutVoucherId Int?
-  createdBy   Json     @default("{}") // ActorSnapshot
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdBy       Json     @default("{}") // ActorSnapshot
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   pipeline     Pipeline?     @relation("RefundPipeline", fields: [pipelineId], references: [id])
   refundStatus TicketStatus? @relation("RefundStatus", fields: [statusId], references: [id])

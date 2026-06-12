@@ -38,7 +38,7 @@ model Ticket {
   receivedBackAt    DateTime?
   externalRef       String?
   serviceCenterId   Int?
-  subStatusId       String?
+  workerId          String?
   isWarranty        Boolean         @default(false)
   warrantyStatus    WarrantyStatus  @default(NONE)
   warrantyRef       String?
@@ -58,29 +58,29 @@ model Ticket {
   // A sub-status with spawnPipelineId creates a CHILD ticket on another pipeline
   // (e.g. inbound parts courier). The child carries parentTicketId back; the
   // parent's sub-status mirrors the child's status and advances when the child
-  // hits a terminal. parentSubStatusId = which sub-status of the parent is waiting
+  // hits a terminal. parentWorkerId = which sub-status of the parent is waiting
   // on this child (where to fire success/fail when it resolves). context = soft,
   // unstructured data (device snapshot, participants, ownership, parts) — kept in
   // JSON for now, rewire to columns later if needed.
   parentTicketId    Int?
-  parentSubStatusId String?
+  parentWorkerId    String?
   context           Json?
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
 
-  shopOrder       ShopOrder?          @relation(fields: [sourceShopOrderId], references: [id])
-  pipeline        Pipeline?           @relation(fields: [pipelineId], references: [id])
-  device          Device              @relation(fields: [deviceId], references: [id])
-  primaryOwner    User?               @relation(fields: [primaryOwnerId], references: [id])
-  billingAccount  Account?            @relation("TicketBillingAccount", fields: [billingAccountId], references: [id])
-  serviceCenter   ServiceCenter?      @relation(fields: [serviceCenterId], references: [id])
-  ticketStatus    TicketStatus        @relation(fields: [status], references: [id])
-  ticketSubStatus TicketSubStatus?    @relation(fields: [subStatusId], references: [id])
-  parent          Ticket?             @relation("TicketChildren", fields: [parentTicketId], references: [id])
-  children        Ticket[]            @relation("TicketChildren")
-  logs            TicketLog[]
-  participants    TicketParticipant[]
-  invVouchers     InvVoucher[]        @relation("TicketInvVouchers")
+  shopOrder      ShopOrder?          @relation(fields: [sourceShopOrderId], references: [id])
+  pipeline       Pipeline?           @relation(fields: [pipelineId], references: [id])
+  device         Device              @relation(fields: [deviceId], references: [id])
+  primaryOwner   User?               @relation(fields: [primaryOwnerId], references: [id])
+  billingAccount Account?            @relation("TicketBillingAccount", fields: [billingAccountId], references: [id])
+  serviceCenter  ServiceCenter?      @relation(fields: [serviceCenterId], references: [id])
+  ticketStatus   TicketStatus        @relation(fields: [status], references: [id])
+  ticketWorker   TicketWorker?       @relation(fields: [workerId], references: [id])
+  parent         Ticket?             @relation("TicketChildren", fields: [parentTicketId], references: [id])
+  children       Ticket[]            @relation("TicketChildren")
+  logs           TicketLog[]
+  participants   TicketParticipant[]
+  invVouchers    InvVoucher[]        @relation("TicketInvVouchers")
 
   @@index([parentTicketId])
   @@index([status])
@@ -94,38 +94,38 @@ model Ticket {
 }
 
 model TicketParticipant {
-  id                   Int              @id @default(autoincrement())
-  ticketId             Int
-  userId               Int
-  addedById            Int
-  addedForRole         String?
-  addedBySubStatusId   String?
-  removedAt            DateTime?
-  removedBySubStatusId String?
-  createdAt            DateTime         @default(now())
-  addedBy              User             @relation("ParticipantAddedBy", fields: [addedById], references: [id])
-  addedBySubStatus     TicketSubStatus? @relation("ParticipantSubStatus", fields: [addedBySubStatusId], references: [id])
-  ticket               Ticket           @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  user                 User             @relation("ParticipantUser", fields: [userId], references: [id])
+  id                Int           @id @default(autoincrement())
+  ticketId          Int
+  userId            Int
+  addedById         Int
+  addedForRole      String?
+  addedByWorkerId   String?
+  removedAt         DateTime?
+  removedByWorkerId String?
+  createdAt         DateTime      @default(now())
+  addedBy           User          @relation("ParticipantAddedBy", fields: [addedById], references: [id])
+  addedByWorker     TicketWorker? @relation("ParticipantWorker", fields: [addedByWorkerId], references: [id])
+  ticket            Ticket        @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  user              User          @relation("ParticipantUser", fields: [userId], references: [id])
 
-  @@unique([ticketId, userId, addedBySubStatusId])
+  @@unique([ticketId, userId, addedByWorkerId])
   @@index([ticketId])
   @@index([userId])
 }
 
 model TicketLog {
-  id              Int              @id @default(autoincrement())
-  ticketId        Int
-  status          String
-  note            String?
-  userId          Int
-  subStatusId     String?
-  visibility      LogVisibility    @default(INTERNAL)
-  createdAt       DateTime         @default(now())
-  ticketStatus    TicketStatus     @relation(fields: [status], references: [id])
-  ticketSubStatus TicketSubStatus? @relation(fields: [subStatusId], references: [id])
-  ticket          Ticket           @relation(fields: [ticketId], references: [id])
-  changedBy       User             @relation(fields: [userId], references: [id])
+  id           Int           @id @default(autoincrement())
+  ticketId     Int
+  status       String
+  note         String?
+  userId       Int
+  workerId     String?
+  visibility   LogVisibility @default(INTERNAL)
+  createdAt    DateTime      @default(now())
+  ticketStatus TicketStatus  @relation(fields: [status], references: [id])
+  ticketWorker TicketWorker? @relation(fields: [workerId], references: [id])
+  ticket       Ticket        @relation(fields: [ticketId], references: [id])
+  changedBy    User          @relation(fields: [userId], references: [id])
 
   @@index([ticketId])
   @@index([userId])

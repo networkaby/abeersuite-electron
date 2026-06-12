@@ -42,7 +42,7 @@ interface Work {
     order: number;
     permissionId: string | null;
     statuses: UsingItem[];
-    subStatuses: UsingItem[];
+    workers: UsingItem[];
 }
 
 interface Pipeline {
@@ -166,7 +166,7 @@ export default function WorksPage() {
                 <div>
                     <h1 className="text-2xl font-bold">Works</h1>
                     <p className="mt-1 text-sm text-muted-foreground">
-                        The activity each status / sub-status represents. A <span className="font-medium">gated</span> work mints a permission you can grant from Roles; an ungated work is open to any staff.
+                        The activity each status / worker represents. A <span className="font-medium">gated</span> work mints a permission you can grant from Roles; an ungated work is open to any staff.
                     </p>
                 </div>
                 <Button type="button" onClick={() => { setCreateForm({ ...BLANK }); setShowCreate(true); }}>
@@ -181,7 +181,7 @@ export default function WorksPage() {
             ) : (
                 <div className="space-y-4">
                     {works.map((work) => {
-                        const usageCount = work.statuses.length + work.subStatuses.length;
+                        const usageCount = work.statuses.length + work.workers.length;
                         return (
                             <Card key={work.id}>
                                 <CardHeader className="border-b">
@@ -207,7 +207,7 @@ export default function WorksPage() {
                                                 variant="destructive"
                                                 onClick={() => handleDelete(work.id)}
                                                 disabled={deletingId === work.id}
-                                                title={usageCount > 0 ? "Deleting detaches it from its statuses / sub-statuses" : "Delete"}
+                                                title={usageCount > 0 ? "Deleting detaches it from its statuses / workers" : "Delete"}
                                             >
                                                 <Trash2 size={13} />
                                             </Button>
@@ -216,7 +216,7 @@ export default function WorksPage() {
                                 </CardHeader>
                                 <CardContent className="space-y-3 pt-4">
                                     {usageCount === 0 ? (
-                                        <p className="text-sm text-muted-foreground">Not used by any status or sub-status yet.</p>
+                                        <p className="text-sm text-muted-foreground">Not used by any status or worker yet.</p>
                                     ) : (
                                         <>
                                             {work.statuses.length > 0 && (
@@ -225,10 +225,10 @@ export default function WorksPage() {
                                                     {usageBadges(work.statuses)}
                                                 </div>
                                             )}
-                                            {work.subStatuses.length > 0 && (
+                                            {work.workers.length > 0 && (
                                                 <div className="space-y-1">
-                                                    <p className="text-xs font-medium text-foreground">Sub-statuses ({work.subStatuses.length})</p>
-                                                    {usageBadges(work.subStatuses)}
+                                                    <p className="text-xs font-medium text-foreground">Workers ({work.workers.length})</p>
+                                                    {usageBadges(work.workers)}
                                                 </div>
                                             )}
                                         </>

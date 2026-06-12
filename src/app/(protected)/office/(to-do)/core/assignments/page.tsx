@@ -4,9 +4,9 @@ import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
 import { timeAgo, timeUntil } from "@/shared/lib/format/timeAgo";
 import WorkInboxBoard, { type WorkInboxItem } from "@/modules/repairing/components/assignments/WorkInboxBoard";
 
-// The Work Inbox: every active ticket sitting in a work-bearing sub-status, as one
+// The Work Inbox: every active ticket sitting in a work-bearing worker, as one
 // mixed list (longest-waiting first). New tickets enter their status' entry
-// sub-status on creation, so they appear here immediately. Status is derived from
+// worker on creation, so they appear here immediately. Status is derived from
 // the current plumbing — an interim source that swaps to a WorkItem record later.
 export default async function AssignmentsPage() {
     const session = await auth();
@@ -21,17 +21,17 @@ export default async function AssignmentsPage() {
         prisma.ticket.findMany({
             where: {
                 ticketStatus: { isTerminal: false },
-                ticketSubStatus: { workId: { not: null } },
+                ticketWorker: { workId: { not: null } },
             },
             orderBy: { updatedAt: "asc" },
             include: {
                 device: { include: { account: { include: customerPhones } } },
                 primaryOwner: { select: { id: true, name: true } },
-                ticketSubStatus: {
+                ticketWorker: {
                     select: {
                         id: true, label: true, actionLabel: true, workId: true, retrySchedule: true,
-                        successSubStatus: { select: { id: true, label: true } },
-                        failSubStatus: { select: { id: true, label: true } },
+                        successWorker: { select: { id: true, label: true } },
+                        failWorker: { select: { id: true, label: true } },
                     },
                 },
                 logs: {
@@ -50,7 +50,7 @@ export default async function AssignmentsPage() {
             select: {
                 id: true, note: true, createdAt: true,
                 changedBy: { select: { name: true } },
-                ticketSubStatus: { select: { label: true, work: { select: { id: true, label: true, color: true } } } },
+                ticketWorker: { select: { label: true, work: { select: { id: true, label: true, color: true } } } },
                 ticket: { select: { id: true, device: { select: { brand: true, model: true, account: { select: customerPhones } } } } },
             },
         }),
@@ -69,29 +69,29 @@ export default async function AssignmentsPage() {
     // eslint-disable-next-line react-hooks/purity
     const now = Date.now();
     const openItems: WorkInboxItem[] = tickets.map((t) => {
-        const work = t.ticketSubStatus?.workId ? worksById[t.ticketSubStatus.workId] : undefined;
+        const work = t.ticketWorker?.workId ? worksById[t.ticketWorker.workId] : undefined;
         const acct = t.device.account;
         const noteLog = t.logs.find((l) => l.note && !SYSTEM_NOTE.test(l.note));
         // Snoozed = this waiting work is deferred until wakeAt; it drops out of the
         // active queues into the "Waiting" tab and re-surfaces as due when wakeAt passes.
         const snoozed = !!t.wakeAt && t.wakeAt.getTime() > now;
-        // A scheduled sub-status owns its retry loop: Unsuccess re-arms it per the
+        // A scheduled worker owns its retry loop: Unsuccess re-arms it per the
         // schedule (the route keeps it here), so always offer that action — fall back
         // to a self-target when no explicit ✗→ route is set.
-        const scheduled = Array.isArray(t.ticketSubStatus?.retrySchedule) && (t.ticketSubStatus.retrySchedule as unknown[]).length > 0;
-        const selfTarget = t.ticketSubStatus ? { id: t.ticketSubStatus.id, label: t.ticketSubStatus.label } : null;
+        const scheduled = Array.isArray(t.ticketWorker?.retrySchedule) && (t.ticketWorker.retrySchedule as unknown[]).length > 0;
+        const selfTarget = t.ticketWorker ? { id: t.ticketWorker.id, label: t.ticketWorker.label } : null;
         return {
             id: String(t.id),
             ticketId: t.id,
-            successTarget: t.ticketSubStatus?.successSubStatus ?? null,
-            failTarget: t.ticketSubStatus?.failSubStatus ?? (scheduled ? selfTarget : null),
+            successTarget: t.ticketWorker?.successWorker ?? null,
+            failTarget: t.ticketWorker?.failWorker ?? (scheduled ? selfTarget : null),
             retryScheduled: scheduled,
             workId: work?.id ?? "",
             workLabel: work?.label ?? "Work",
             workColor: work?.color ?? "bg-muted text-muted-foreground",
             status: t.primaryOwner ? "progress" : "todo",
-            coverLabel: t.ticketSubStatus?.label ?? "",
-            ask: t.ticketSubStatus?.actionLabel ?? null,
+            coverLabel: t.ticketWorker?.label ?? "",
+            ask: t.ticketWorker?.actionLabel ?? null,
             problem: t.device.problem?.trim() || null,
             lastNote: noteLog?.note ?? null,
             lastNoteBy: noteLog?.changedBy?.name ?? null,
@@ -109,7 +109,7 @@ export default async function AssignmentsPage() {
 
     // Finished works, read from the completion stamps (most recent first).
     const finishedItems: WorkInboxItem[] = doneLogs.map((l) => {
-        const work = l.ticketSubStatus?.work;
+        const work = l.ticketWorker?.work;
         const acct = l.ticket.device.account;
         const unsuccess = !!l.note?.includes("· Unsuccess");
         const userNote = l.note?.split(" — ").slice(1).join(" — ").trim() || null;
@@ -120,10 +120,10 @@ export default async function AssignmentsPage() {
             failTarget: null,
             retryScheduled: false,
             workId: work?.id ?? "",
-            workLabel: work?.label ?? l.ticketSubStatus?.label ?? "Work",
+            workLabel: work?.label ?? l.ticketWorker?.label ?? "Work",
             workColor: work?.color ?? "bg-muted text-muted-foreground",
             status: "answered",
-            coverLabel: l.ticketSubStatus?.label ?? "",
+            coverLabel: l.ticketWorker?.label ?? "",
             ask: null,
             problem: null,
             lastNote: null,

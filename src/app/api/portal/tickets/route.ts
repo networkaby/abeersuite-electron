@@ -20,7 +20,7 @@ export async function GET() {
             createdAt: true,
             device: { select: { brand: true, model: true, type: true } },
             ticketStatus: { select: { label: true } },
-            ticketSubStatus: { select: { publicLabel: true } },
+            ticketWorker: { select: { publicLabel: true } },
         },
     });
 

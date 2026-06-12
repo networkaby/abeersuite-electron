@@ -5,10 +5,10 @@
 // not a User FK. Associates to a contact (Person/Company).
 
 model Deal {
-  id          Int      @id @default(autoincrement())
-  pipelineId  String // P6 "deals"
-  status      String // TicketStatus stage (S35 Lead … S41 Lost)
-  title       String
+  id         Int    @id @default(autoincrement())
+  pipelineId String // P6 "deals"
+  status     String // TicketStatus stage (S35 Lead … S41 Lost)
+  title      String
 
   // Contact + association (link to an existing customer ledger, HubSpot-style)
   contactName String?
@@ -29,16 +29,16 @@ model Deal {
 
   // Ownership = seat, not user; actor = frozen JSON snapshot
   assignedPositionId String?
-  createdBy          Json   @default("{}") // ActorSnapshot
+  createdBy          Json    @default("{}") // ActorSnapshot
 
-  notes     String?  @db.Text
+  notes          String?  @db.Text
   // Spawn back-link — set when this Deal was spawned as a sub-pipeline child of a
   // repair Ticket (uniform with Ticket/Task/Delivery/Refund). context = soft payload.
-  parentTicketId    Int?
-  parentSubStatusId String?
-  context           Json?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  parentTicketId Int?
+  parentWorkerId String?
+  context        Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   pipeline         Pipeline       @relation(fields: [pipelineId], references: [id])
   ticketStatus     TicketStatus   @relation(fields: [status], references: [id])

@@ -6,13 +6,13 @@
 // domain; `category` allows light tagging.
 
 model Task {
-  id          String    @id @default(cuid())
-  title       String
-  description String?
-  category    String? // light tag, e.g. "HR", "Finance"
-  priority    Priority  @default(MEDIUM) // enum defined in tickets.prisma
-  pipelineId  String // FK Pipeline (Administration board defaults to P4)
-  status      String // FK TicketStatus — a stage of that pipeline
+  id                 String    @id @default(cuid())
+  title              String
+  description        String?
+  category           String? // light tag, e.g. "HR", "Finance"
+  priority           Priority  @default(MEDIUM) // enum defined in tickets.prisma
+  pipelineId         String // FK Pipeline (Administration board defaults to P4)
+  status             String // FK TicketStatus — a stage of that pipeline
   // Ownership is the SEAT, not the person: a task is assigned to a Position.
   // Whoever currently holds that position (UserPosition) is the effective
   // owner, so when staff resign / transfer the new holder inherits open work.
@@ -20,23 +20,23 @@ model Task {
   // Actor audit snapshot (frozen at create time) — NOT a User FK, so history
   // survives staff turnover. Shape: { userId, userName, avatarUrl, positionId,
   // positionTitle }. See TaskActor in src/modules/administration/lib/types.ts.
-  createdBy   Json      @default("{}")
-  dueDate     DateTime?
-  completedAt DateTime?
-  order       Int       @default(0) // ordering within a column
+  createdBy          Json      @default("{}")
+  dueDate            DateTime?
+  completedAt        DateTime?
+  order              Int       @default(0) // ordering within a column
   // Spawn back-link — set when this Task was spawned as a sub-pipeline child of a
   // repair Ticket. Uniform with Ticket/Deal/Delivery/Refund so the parent can
   // mirror children of any type with one indexed lookup. context = soft payload
   // ({ spawnedFrom: {...} }). Plain scalars (no FK) — keep it simple.
-  parentTicketId    Int?
-  parentSubStatusId String?
-  context           Json?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  parentTicketId     Int?
+  parentWorkerId     String?
+  context            Json?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
-  pipeline         Pipeline     @relation(fields: [pipelineId], references: [id])
-  ticketStatus     TicketStatus @relation(fields: [status], references: [id])
-  assignedPosition Position?    @relation("TaskAssignedPosition", fields: [assignedPositionId], references: [id])
+  pipeline         Pipeline      @relation(fields: [pipelineId], references: [id])
+  ticketStatus     TicketStatus  @relation(fields: [status], references: [id])
+  assignedPosition Position?     @relation("TaskAssignedPosition", fields: [assignedPositionId], references: [id])
   comments         TaskComment[]
 
   @@index([pipelineId, status])

@@ -18,7 +18,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 
-interface SubStatus {
+interface Worker {
     id: string;
     label: string;
     color: string;
@@ -32,35 +32,35 @@ interface Props {
     onClose: () => void;
 }
 
-type FormData = { subStatusId: string; note: string };
+type FormData = { workerId: string; note: string };
 
-export default function SubStatusUpdate({ ticket, onClose }: Props) {
+export default function WorkerUpdate({ ticket, onClose }: Props) {
     const { register, handleSubmit, watch, setValue, formState: { isSubmitting } } = useForm<FormData>({
-        defaultValues: { subStatusId: "", note: "" },
+        defaultValues: { workerId: "", note: "" },
     });
 
-    const [subStatuses, setSubStatuses] = useState<SubStatus[]>([]);
+    const [workers, setWorkers] = useState<Worker[]>([]);
     const [groupLabels, setGroupLabels] = useState<Record<string, string>>({});
     const [loading, setLoading] = useState(true);
 
     // eslint-disable-next-line react-hooks/incompatible-library
-    const selectedId = watch("subStatusId");
+    const selectedId = watch("workerId");
 
     useEffect(() => {
         Promise.all([
-            axios.get(`/api/sub-statuses?statusId=${ticket.status}`),
+            axios.get(`/api/workers?statusId=${ticket.status}`),
             axios.get("/api/works"),
         ]).then(([ssRes, grRes]) => {
-            setSubStatuses(ssRes.data);
+            setWorkers(ssRes.data);
             const groupMap: Record<string, string> = {};
             for (const g of grRes.data) groupMap[g.id] = g.label;
             setGroupLabels(groupMap);
         }).catch(() => {
-            toast.error("Failed to load sub-statuses");
+            toast.error("Failed to load workers");
         }).finally(() => setLoading(false));
     }, [ticket.status]);
 
-    const grouped = subStatuses.reduce<Record<string, SubStatus[]>>((acc, ss) => {
+    const grouped = workers.reduce<Record<string, Worker[]>>((acc, ss) => {
         const key = ss.workId ?? "__none__";
         if (!acc[key]) acc[key] = [];
         acc[key].push(ss);
@@ -69,24 +69,24 @@ export default function SubStatusUpdate({ ticket, onClose }: Props) {
 
     const onSubmit = async (data: FormData) => {
         try {
-            await axios.post(`/api/tickets/${ticket.id}/sub-status`, {
-                subStatusId: data.subStatusId || null,
+            await axios.post(`/api/tickets/${ticket.id}/worker`, {
+                workerId: data.workerId || null,
                 note: data.note,
             });
-            toast.success("Sub-status updated");
+            toast.success("Worker updated");
             onClose();
         } catch {
-            toast.error("Failed to update sub-status");
+            toast.error("Failed to update worker");
         }
     };
 
-    const selected = subStatuses.find((ss) => ss.id === selectedId);
+    const selected = workers.find((ss) => ss.id === selectedId);
 
     return (
         <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
             <DialogContent className="sm:max-w-lg">
                 <DialogHeader>
-                    <DialogTitle>Update Sub-Status</DialogTitle>
+                    <DialogTitle>Update Worker</DialogTitle>
                     <DialogDescription>Choose the current work stage for this ticket.</DialogDescription>
                 </DialogHeader>
 
@@ -98,12 +98,12 @@ export default function SubStatusUpdate({ ticket, onClose }: Props) {
                             <Button
                                 type="button"
                                 variant="outline"
-                                onClick={() => setValue("subStatusId", "")}
+                                onClick={() => setValue("workerId", "")}
                                 className={`h-auto w-full justify-start gap-2 px-3 py-2 text-sm ${
                                     selectedId === "" ? "border-primary bg-primary/10 hover:bg-primary/10" : ""
                                 }`}
                             >
-                                <span className="text-muted-foreground">— Clear sub-status —</span>
+                                <span className="text-muted-foreground">— Clear worker —</span>
                             </Button>
 
                             {Object.entries(grouped).map(([groupKey, items]) => (
@@ -116,7 +116,7 @@ export default function SubStatusUpdate({ ticket, onClose }: Props) {
                                             key={ss.id}
                                             type="button"
                                             variant="outline"
-                                            onClick={() => setValue("subStatusId", ss.id)}
+                                            onClick={() => setValue("workerId", ss.id)}
                                             className={`h-auto w-full justify-start gap-2 px-3 py-2 text-sm ${
                                                 selectedId === ss.id ? "border-primary bg-primary/10 hover:bg-primary/10" : ""
                                             }`}

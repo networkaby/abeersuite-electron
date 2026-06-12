@@ -16,7 +16,7 @@ export interface WorkInboxItem {
     ticketId: number;
     successTarget: { id: string; label: string } | null;
     failTarget: { id: string; label: string } | null;
-    /** Current sub-status owns a retry schedule — Unsuccess re-arms it (snooze loop). */
+    /** Current worker owns a retry schedule — Unsuccess re-arms it (snooze loop). */
     retryScheduled: boolean;
     workId: string;
     workLabel: string;

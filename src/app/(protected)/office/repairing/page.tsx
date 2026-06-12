@@ -47,7 +47,7 @@ export default async function RepairingDashboardPage() {
                 },
                 primaryOwner: { select: { name: true } },
                 ticketStatus: { select: { label: true, color: true } },
-                ticketSubStatus: { select: { label: true, color: true } },
+                ticketWorker: { select: { label: true, color: true } },
             },
         }),
     ]);
@@ -130,9 +130,9 @@ export default async function RepairingDashboardPage() {
                                             <span className={`text-xs px-2 py-0.5 font-medium ${t.ticketStatus.color}`}>
                                                 {t.ticketStatus.label}
                                             </span>
-                                            {t.ticketSubStatus && (
-                                                <span className={`text-xs px-2 py-0.5 font-medium ${badgeColor(t.ticketSubStatus.color).className}`} style={badgeColor(t.ticketSubStatus.color).style}>
-                                                    {t.ticketSubStatus.label}
+                                            {t.ticketWorker && (
+                                                <span className={`text-xs px-2 py-0.5 font-medium ${badgeColor(t.ticketWorker.color).className}`} style={badgeColor(t.ticketWorker.color).style}>
+                                                    {t.ticketWorker.label}
                                                 </span>
                                             )}
                                             <span className="text-xs text-muted-foreground">{timeAgo(t.updatedAt)}</span>

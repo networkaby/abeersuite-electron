@@ -8,7 +8,7 @@ import { cn } from "@/shared/lib/format/utils";
 
 const WORKFLOW_TABS = [
     { href: "/office/settings/workflow/statuses", label: "Statuses", icon: Settings },
-    { href: "/office/settings/workflow/sub-statuses", label: "Sub-Statuses", icon: Settings },
+    { href: "/office/settings/workflow/workers", label: "Workers", icon: Settings },
     { href: "/office/settings/workflow/pipelines", label: "Pipelines", icon: GitBranch },
     { href: "/office/settings/workflow/works", label: "Works", icon: Briefcase },
 ];

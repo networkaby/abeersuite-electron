@@ -49,7 +49,7 @@ type DeviceTicketPayload = {
         createdAt: string;
         updatedAt: string;
         status: { label: string; color: string };
-        subStatus?: { label: string; color: string } | null;
+        worker?: { label: string; color: string } | null;
     }>;
 };
 
@@ -230,7 +230,7 @@ export default function SearchSlNoPage() {
                                             <TableRow>
                                                 <TableHead>Ticket #</TableHead>
                                                 <TableHead>Status</TableHead>
-                                                <TableHead>Sub-Status</TableHead>
+                                                <TableHead>Worker</TableHead>
                                                 <TableHead>Created</TableHead>
                                                 <TableHead>Updated</TableHead>
                                                 <TableHead>Action</TableHead>
@@ -244,8 +244,8 @@ export default function SearchSlNoPage() {
                                                         <Badge className={ticket.status.color}>{ticket.status.label}</Badge>
                                                     </TableCell>
                                                     <TableCell>
-                                                        {ticket.subStatus ? (
-                                                            <Badge {...badgeColor(ticket.subStatus.color)}>{ticket.subStatus.label}</Badge>
+                                                        {ticket.worker ? (
+                                                            <Badge {...badgeColor(ticket.worker.color)}>{ticket.worker.label}</Badge>
                                                         ) : (
                                                             "-"
                                                         )}

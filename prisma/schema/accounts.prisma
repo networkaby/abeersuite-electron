@@ -53,36 +53,36 @@ model Account {
   openingBalanceType EntryType?
   openingBalanceDate DateTime?  @db.Date
 
-  parent                 Account?                @relation("AccountHierarchy", fields: [parentId], references: [id])
-  children               Account[]               @relation("AccountHierarchy")
-  group                  AccountGroup?           @relation(fields: [groupId], references: [id])
-  person                 Person?                 @relation(fields: [personId], references: [id])
-  company                Company?                @relation(fields: [companyId], references: [id])
-  lines                  JournalLine[]
-  voucherLines           VoucherLine[]
-  billedTickets          Ticket[]                @relation("TicketBillingAccount")
-  devices                Device[]
-  shopOrders             ShopOrder[]
-  voucherParty           Voucher[]               @relation("VoucherPartyAccount")
-  invVouchers            InvVoucher[]            @relation("InvVoucherAccount")
-  invVoucherCharges      InvVoucherCharge[]      @relation("InvVoucherChargeAccount")
-  invVoucherTenders      InvVoucherTender[]      @relation("InvVoucherTenderAccount")
+  parent                   Account?                   @relation("AccountHierarchy", fields: [parentId], references: [id])
+  children                 Account[]                  @relation("AccountHierarchy")
+  group                    AccountGroup?              @relation(fields: [groupId], references: [id])
+  person                   Person?                    @relation(fields: [personId], references: [id])
+  company                  Company?                   @relation(fields: [companyId], references: [id])
+  lines                    JournalLine[]
+  voucherLines             VoucherLine[]
+  billedTickets            Ticket[]                   @relation("TicketBillingAccount")
+  devices                  Device[]
+  shopOrders               ShopOrder[]
+  voucherParty             Voucher[]                  @relation("VoucherPartyAccount")
+  invVouchers              InvVoucher[]               @relation("InvVoucherAccount")
+  invVoucherCharges        InvVoucherCharge[]         @relation("InvVoucherChargeAccount")
+  invVoucherTenders        InvVoucherTender[]         @relation("InvVoucherTenderAccount")
   // POS reverse rels
-  branchVaults           Branch[]                @relation("BranchVaultAccount")
-  counterTills           PosCounter[]            @relation("CounterTill")
+  branchVaults             Branch[]                   @relation("BranchVaultAccount")
+  counterTills             PosCounter[]               @relation("CounterTill")
   // Counter non-cash payment accounts (UPI/Card/gateway…) that settle to this ledger.
-  posPaymentAccounts     PosCounterPaymentAccount[] @relation("PosPayAccountLedger")
+  posPaymentAccounts       PosCounterPaymentAccount[] @relation("PosPayAccountLedger")
   // Loyalty reverse rels
-  loyalty                LoyaltyAccount?         @relation("AccountLoyalty")
-  loyaltyRedeemConfig    LoyaltyConfig[]         @relation("LoyaltyRedeemLedger")
-  loyaltyMilestoneAwards LoyaltyMilestoneAward[] @relation("AccountLoyaltyMilestoneAwards")
+  loyalty                  LoyaltyAccount?            @relation("AccountLoyalty")
+  loyaltyRedeemConfig      LoyaltyConfig[]            @relation("LoyaltyRedeemLedger")
+  loyaltyMilestoneAwards   LoyaltyMilestoneAward[]    @relation("AccountLoyaltyMilestoneAwards")
   // Coupon reverse rels
-  couponsOwned             Coupon[]           @relation("CouponOwner")
-  couponRedemptions        CouponRedemption[] @relation("AccountCouponRedemptions")
-  couponExpenseConfigs     CouponConfig[]     @relation("CouponExpenseLedger")
-  giftCardLiabilityConfigs CouponConfig[]     @relation("GiftCardLiabilityLedger")
-  giftCardBreakageConfigs  CouponConfig[]     @relation("GiftCardBreakageLedger")
-  giftCards                GiftCard[]         @relation("AccountGiftCards")
+  couponsOwned             Coupon[]                   @relation("CouponOwner")
+  couponRedemptions        CouponRedemption[]         @relation("AccountCouponRedemptions")
+  couponExpenseConfigs     CouponConfig[]             @relation("CouponExpenseLedger")
+  giftCardLiabilityConfigs CouponConfig[]             @relation("GiftCardLiabilityLedger")
+  giftCardBreakageConfigs  CouponConfig[]             @relation("GiftCardBreakageLedger")
+  giftCards                GiftCard[]                 @relation("AccountGiftCards")
 
   @@index([isActive])
   @@index([personId])
@@ -96,7 +96,7 @@ model Account {
 /// and edit the threshold + %. Configured at /office/customer-retention/customer-tiers.
 model CustomerTier {
   id          Int      @id @default(autoincrement())
-  name        String   // display name + POS badge label (e.g. Bronze / Gold / VIP)
+  name        String // display name + POS badge label (e.g. Bronze / Gold / VIP)
   /// Lifetime spend (₹) required to reach this tier.
   minSpend    Decimal  @db.Decimal(14, 2)
   /// Automatic discount % applied on pre-GST goods at this tier.

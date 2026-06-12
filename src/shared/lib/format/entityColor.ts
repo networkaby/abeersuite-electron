@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 
-// Sub-status / work colors are stored either as a legacy Tailwind class string
+// Worker / work colors are stored either as a legacy Tailwind class string
 // ("bg-blue-100 text-blue-600") or as a raw hex ("#D442D7"). Hex can't be a Tailwind
 // class (purged at build), so it renders via inline style. These helpers keep both
 // working — spread the result's className + style onto the element.
@@ -25,10 +25,10 @@ export function badgeColor(color?: string | null): { className: string; style?: 
 export function dotColor(color?: string | null): { className: string; style?: CSSProperties } {
     return isHex(color)
         ? { className: "", style: { backgroundColor: color } }
-        : { className: color?.split(" ").find((c) => c.startsWith("bg-")) ?? "bg-muted" };
+        : { className: (color ?? "").split(" ").find((c) => c.startsWith("bg-")) ?? "bg-muted" };
 }
 
-// Random pleasant hex (random hue, fixed mid saturation/lightness) for new sub-statuses.
+// Random pleasant hex (random hue, fixed mid saturation/lightness) for new workers.
 export function randomHexColor(rand: number): string {
     const h = Math.floor(rand * 360), s = 0.62, l = 0.55;
     const k = (n: number) => (n + h / 30) % 12;

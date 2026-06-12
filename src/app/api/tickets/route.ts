@@ -6,7 +6,7 @@ import { Priority } from "@/generated/prisma/enums";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
-import { findEntrySubStatus } from "@/modules/repairing/lib/entrySubStatus";
+import { findEntryWorker } from "@/modules/repairing/lib/entryWorker";
 
 const createTicketSchema = z.object({
     sourceShopOrderId: z.coerce.number().int().positive().optional(),
@@ -76,7 +76,7 @@ export async function GET(req: Request) {
                 primaryOwner: true,
                 serviceCenter: true,
                 ticketStatus:    { select: { label: true, color: true } },
-                ticketSubStatus: { select: { label: true, color: true } },
+                ticketWorker: { select: { label: true, color: true } },
                 pipeline:        { select: { id: true, label: true, color: true } },
             },
         });
@@ -155,18 +155,18 @@ export async function POST(req: Request) {
             },
         });
 
-        // Auto-enter the entry-point sub-status for this status (a fromSubStatusId=null
+        // Auto-enter the entry-point worker for this status (a fromWorkerId=null
         // transition whose target applies to the status), so a new ticket is immediately
         // a workable item rather than a bare status. Lowest order wins.
-        const entrySub = await findEntrySubStatus(ticket.status);
+        const entrySub = await findEntryWorker(ticket.status);
         if (entrySub) {
-            await prisma.ticket.update({ where: { id: ticket.id }, data: { subStatusId: entrySub.id } });
+            await prisma.ticket.update({ where: { id: ticket.id }, data: { workerId: entrySub.id } });
             await prisma.ticketLog.create({
-                data: { ticketId: ticket.id, status: ticket.status, subStatusId: entrySub.id, note: `Entered: ${entrySub.label}`, userId: user.id },
+                data: { ticketId: ticket.id, status: ticket.status, workerId: entrySub.id, note: `Entered: ${entrySub.label}`, userId: user.id },
             });
         }
 
-        return NextResponse.json({ ...ticket, subStatusId: entrySub?.id ?? null });
+        return NextResponse.json({ ...ticket, workerId: entrySub?.id ?? null });
     } catch (e) {
         return handleApiError(e, "Failed to create ticket");
     }

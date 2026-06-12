@@ -16,7 +16,7 @@ import { z } from "zod";
 
 /**
  * `label` (required, trimmed) + `color` (optional). Used by ticket-statuses,
- * sub-statuses, and any other settings-style row that carries a Tailwind
+ * workers, and any other settings-style row that carries a Tailwind
  * color-class string for UI display.
  *
  * Routes whose `color` is required (e.g. roles) keep their inline schema.

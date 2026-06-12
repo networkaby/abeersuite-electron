@@ -36,7 +36,7 @@ pnpm prisma db seed       # 2. runs bootstrap-seed.ts
 `bootstrap-seed.ts` is **idempotent** — safe to re-run. It seeds:
 
 - **RBAC** — 7 roles (prefixed `Role-`), 80+ permissions, RolePermission grants
-- **Workflow** — 6 pipelines, 49 ticket statuses, 7 sub-status groups, 38 sub-statuses, transitions
+- **Workflow** — 6 pipelines, 49 ticket statuses, 7 worker groups, 38 workers, transitions
 - **Org structure** — 2 branches (HQ + Online), 7 cross-branch departments, role ranks
 - **Chart of accounts** — 28 AccountGroups (Tally tree, 15 primary + 13 sub) + ~50 GL ledgers; per-branch Vault accounts + POS counter till accounts
 - **Inventory Unit master** — 13 units (PCS, NOS, BOX, SET, UNIT, MTR, ROLL, PKT, PAIR, KG, BAG, REAM, DAY)
@@ -128,7 +128,7 @@ Future fixtures (dummy customer lists, voucher fixtures, etc.) go here too rathe
 | Change | Update |
 |---|---|
 | Add / rename / drop a column on a **Prisma model** | `bootstrap-seed.ts` AND any `dummy-*.ts` that writes to the table — same commit as the schema change |
-| Add a new permission / role / pipeline / status / sub-status | `bootstrap-seed.ts` |
+| Add a new permission / role / pipeline / status / worker | `bootstrap-seed.ts` |
 | Add a new account group or default GL ledger | `bootstrap-seed.ts` |
 | Add a new tax / payment method / business invariant | `bootstrap-seed.ts` |
 | Add a new demo user / customer / product type | the relevant `dummy-*.ts` |

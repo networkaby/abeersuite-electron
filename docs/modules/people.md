@@ -96,7 +96,7 @@ Same rules apply to emails.
 
 - **Account is one table, two roles** — chart-of-accounts entries and party ledgers share the same table. The `glAccountType` enum distinguishes.
 - **Customer portal session shape** — the session token still uses `kind: "customer"` and `customerId: string` for back-compat with existing portal code; only the underlying Prisma model name changed.
-- **Deal reuses TicketStatus** — same status model, different consumer. Leads have no device, no `TicketLog`, no sub-statuses.
+- **Deal reuses TicketStatus** — same status model, different consumer. Leads have no device, no `TicketLog`, no workers.
 - **GST drift** — `gstin`, `gstStateCode`, `gstRegType` were originally added via `db push`; same caveat as inventory GST fields.
 - **XOR CHECK constraint** — Prisma DSL can't express XOR; the constraint is applied via raw SQL inside `prisma/seeds/bootstrap-seed.ts` (Section 6 — DB constraints), which is idempotent and re-runs after every `prisma db seed`.
 

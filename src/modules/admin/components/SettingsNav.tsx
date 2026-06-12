@@ -16,7 +16,7 @@ type Props = { permissions: string[] };
 const GROUP_SLUGS: string[][] = [
     ["org-defaults", "year-ending"],           // org config
     ["ecommerce"],                             // shop
-    ["workflow"], // workflow (Statuses / Sub-statuses / Pipelines / Works as sub-tabs)
+    ["workflow"], // workflow (Statuses / Workers / Pipelines / Works as sub-tabs)
     ["naming-convention"],                     // inventory
     ["printer-settings", "qr-display-settings"], // hardware
 ];

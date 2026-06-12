@@ -18,7 +18,7 @@ async function mintWorkPermission(id: string, label: string): Promise<string> {
     await prisma.permission.upsert({
         where:  { id: permissionId },
         update: { label: `Work: ${label}`, module: "tickets" },
-        create: { id: permissionId, label: `Work: ${label}`, module: "tickets", description: `Set ${label} statuses / sub-statuses on a ticket.` },
+        create: { id: permissionId, label: `Work: ${label}`, module: "tickets", description: `Set ${label} statuses / workers on a ticket.` },
     });
     return permissionId;
 }
@@ -67,7 +67,7 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
     if (response) return response;
     try {
         const { id } = await params;
-        // Deleting a Work detaches it from any statuses / sub-statuses using it
+        // Deleting a Work detaches it from any statuses / workers using it
         // (their workId is set to null via the FK's onDelete: SetNull).
         await prisma.work.delete({ where: { id } });
         return NextResponse.json({ ok: true });

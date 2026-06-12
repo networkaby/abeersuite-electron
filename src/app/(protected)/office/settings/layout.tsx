@@ -3,14 +3,14 @@ import { SettingsNav } from "@/modules/admin/components/SettingsNav";
 import { PathBreadcrumb } from "@/shared/components/PathBreadcrumb";
 
 // Slug → human label for breadcrumb segments. Keeps multi-word and acronym
-// slugs (sub-statuses, qr-display-settings, …) from being naively title-cased.
+// slugs (workers, qr-display-settings, …) from being naively title-cased.
 // Mirrors the labels in SETTINGS_NAV (utils/constants.ts).
 const SETTINGS_CRUMB_LABELS: Record<string, string> = {
     organisation: "Organisation",
     "org-defaults": "Org Defaults",
     ecommerce: "E-Commerce",
     statuses: "Statuses",
-    "sub-statuses": "Sub-Statuses",
+    "workers": "Workers",
     works: "Works",
     pipelines: "Pipelines",
     workflow: "Workflow",

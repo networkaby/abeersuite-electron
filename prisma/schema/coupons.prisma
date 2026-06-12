@@ -16,14 +16,14 @@
 // milestone-issued coupons are Phases 4-5.
 
 enum CouponType {
-  PERCENT   // % off the eligible subtotal, optionally capped at maxDiscountAmt
-  FLAT      // flat ₹ off the bill
+  PERCENT // % off the eligible subtotal, optionally capped at maxDiscountAmt
+  FLAT // flat ₹ off the bill
   FREE_ITEM // free / discounted specific item (Phase 2)
-  BOGO      // buy X get Y (Phase 3)
+  BOGO // buy X get Y (Phase 3)
 }
 
 enum CouponChannel {
-  POS  // in-store POS only
+  POS // in-store POS only
   SHOP // online shop only
   BOTH // valid in both channels
 }
@@ -34,21 +34,21 @@ enum CouponApplyMode {
 }
 
 enum CouponEligibility {
-  ANY        // any customer
-  NEW        // first-time buyers only (lifetime invoice count = 0)
-  RETURNING  // existing customers only
+  ANY // any customer
+  NEW // first-time buyers only (lifetime invoice count = 0)
+  RETURNING // existing customers only
 }
 
 enum GiftCardStatus {
-  DRAFT    // generated in the UI, NOT yet sold — no GL posting; freely deletable
-  ACTIVE   // issued/sold — Gift Card Liability posted; redeemable
+  DRAFT // generated in the UI, NOT yet sold — no GL posting; freely deletable
+  ACTIVE // issued/sold — Gift Card Liability posted; redeemable
   REDEEMED // balance hit 0
-  EXPIRED  // past expiry with balance left — recognised as breakage income
-  VOID     // cancelled by admin (liability reversed)
+  EXPIRED // past expiry with balance left — recognised as breakage income
+  VOID // cancelled by admin (liability reversed)
 }
 
 enum GiftCardTxnType {
-  ISSUE  // +balance, Cr Gift Card Liability (on sale)
+  ISSUE // +balance, Cr Gift Card Liability (on sale)
   REDEEM // −balance, Dr Gift Card Liability (POS tender)
   REFUND // +balance restored on a return
   EXPIRE // −balance, Dr Gift Card Liability / Cr "Gift Card Breakage" (income)
@@ -60,7 +60,7 @@ model Coupon {
   /// Redemption code. null for AUTO coupons (no code to type). Unique among
   /// non-null codes (Postgres allows multiple nulls).
   code        String?         @unique
-  name        String          // admin label
+  name        String // admin label
   description String?
   type        CouponType
   channels    CouponChannel   @default(BOTH)
@@ -68,42 +68,42 @@ model Coupon {
 
   // ── Mechanic values (only the fields relevant to `type` are populated) ──
   /// PERCENT: % off the eligible subtotal.
-  percentOff      Decimal? @db.Decimal(5, 2)
+  percentOff      Decimal?    @db.Decimal(5, 2)
   /// PERCENT: max ₹ discount cap (null = uncapped).
-  maxDiscountAmt  Decimal? @db.Decimal(14, 2)
+  maxDiscountAmt  Decimal?    @db.Decimal(14, 2)
   /// FLAT: flat ₹ off.
-  flatAmt         Decimal? @db.Decimal(14, 2)
+  flatAmt         Decimal?    @db.Decimal(14, 2)
   /// FREE_ITEM / BOGO "get" product + qty + discount (100 = free). (Phases 2-3)
   freeProductId   Int?
   freeProduct     InvProduct? @relation("CouponFreeProduct", fields: [freeProductId], references: [id], onDelete: SetNull)
-  freeQty         Decimal? @db.Decimal(10, 3)
-  freeDiscountPct Decimal? @db.Decimal(5, 2)
+  freeQty         Decimal?    @db.Decimal(10, 3)
+  freeDiscountPct Decimal?    @db.Decimal(5, 2)
   /// BOGO "buy" product (null = any) + thresholds. (Phase 3)
   buyProductId    Int?
   buyProduct      InvProduct? @relation("CouponBuyProduct", fields: [buyProductId], references: [id], onDelete: SetNull)
-  buyQty          Decimal? @db.Decimal(10, 3)
-  getQty          Decimal? @db.Decimal(10, 3)
+  buyQty          Decimal?    @db.Decimal(10, 3)
+  getQty          Decimal?    @db.Decimal(10, 3)
 
   // ── Constraints ──
   startsAt         DateTime?
   endsAt           DateTime?
-  minBillValue     Decimal? @db.Decimal(14, 2)
+  minBillValue     Decimal?          @db.Decimal(14, 2)
   /// Max ₹ a single redemption can take (independent of percent cap; null = none).
-  totalUsageLimit  Int?     // N across all customers (null = unlimited)
-  perCustomerLimit Int?     // per-account cap (null = unlimited)
-  singleUse        Boolean  @default(false) // unique one-time code (≡ totalUsageLimit 1)
+  totalUsageLimit  Int? // N across all customers (null = unlimited)
+  perCustomerLimit Int? // per-account cap (null = unlimited)
+  singleUse        Boolean           @default(false) // unique one-time code (≡ totalUsageLimit 1)
   eligibility      CouponEligibility @default(ANY)
 
   // ── Stacking ──
   /// OFF = coupon is the ONLY discount on the bill (replaces spend-tier discount
   /// and blocks loyalty redemption). ON = stacks with tier + loyalty (still
   /// subject to the global CouponConfig.maxTotalDiscountPct guard).
-  stackable        Boolean  @default(false)
+  stackable Boolean @default(false)
 
   // ── Targeting ──
   /// Bind a coupon to one customer account (customer-specific / milestone-issued).
-  ownerAccountId   Int?
-  ownerAccount     Account? @relation("CouponOwner", fields: [ownerAccountId], references: [id], onDelete: SetNull)
+  ownerAccountId      Int?
+  ownerAccount        Account?           @relation("CouponOwner", fields: [ownerAccountId], references: [id], onDelete: SetNull)
   /// Set on a LIVE coupon instance auto-issued when a loyalty milestone was crossed.
   issuedByMilestoneId Int?
   issuedByMilestone   LoyaltyMilestone?  @relation("MilestoneIssuedCoupons", fields: [issuedByMilestoneId], references: [id], onDelete: SetNull)
@@ -132,7 +132,7 @@ model CouponProductRule {
   id         Int          @id @default(autoincrement())
   couponId   Int
   coupon     Coupon       @relation(fields: [couponId], references: [id], onDelete: Cascade)
-  kind       String       // "INCLUDE" | "EXCLUDE"
+  kind       String // "INCLUDE" | "EXCLUDE"
   productId  Int?
   product    InvProduct?  @relation("CouponRuleProduct", fields: [productId], references: [id], onDelete: Cascade)
   categoryId Int?

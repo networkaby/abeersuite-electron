@@ -84,7 +84,7 @@ export async function POST(
                 data: {
                     pipelineId: targetPipelineId,
                     status: landingStatusId,
-                    subStatusId: null,
+                    workerId: null,
                 },
             }),
             prisma.ticketLog.create({

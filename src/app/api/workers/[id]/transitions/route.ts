@@ -6,13 +6,13 @@ import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
-const subStatusTransitionsSchema = z.object({
+const workerTransitionsSchema = z.object({
     toIds: z.array(z.string().trim()),
 });
 
-// PUT /api/sub-statuses/[id]/transitions
+// PUT /api/workers/[id]/transitions
 // Body: { toIds: (string | null)[] }  — null means "entry point" transition
-// Replaces all outgoing transitions for this sub-status
+// Replaces all outgoing transitions for this worker
 export async function PUT(
     req: Request,
     { params }: { params: Promise<{ id: string }> }
@@ -21,14 +21,14 @@ export async function PUT(
     if (response) return response;
     try {
         const { id } = await params;
-        const { data, error } = await validateRequest(req, subStatusTransitionsSchema);
+        const { data, error } = await validateRequest(req, workerTransitionsSchema);
         if (error) return error;
         const { toIds } = data;
 
         await prisma.$transaction([
-            prisma.subStatusTransition.deleteMany({ where: { fromSubStatusId: id } }),
-            prisma.subStatusTransition.createMany({
-                data: toIds.map((toId) => ({ fromSubStatusId: id, toSubStatusId: toId })),
+            prisma.workerTransition.deleteMany({ where: { fromWorkerId: id } }),
+            prisma.workerTransition.createMany({
+                data: toIds.map((toId) => ({ fromWorkerId: id, toWorkerId: toId })),
                 skipDuplicates: true,
             }),
         ]);

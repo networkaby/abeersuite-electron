@@ -22,25 +22,25 @@
 // ── POS Counter (physical billing station) ────────────────────────────────────
 
 model PosCounter {
-  id            Int        @id @default(autoincrement())
-  branchId      String
-  branch        Branch     @relation("BranchCounters", fields: [branchId], references: [id])
-  name          String // "Counter 1", "Billing Desk", "Service Counter"
-  tillAccountId Int        @unique
-  tillAccount   Account    @relation("CounterTill", fields: [tillAccountId], references: [id])
+  id                       Int                        @id @default(autoincrement())
+  branchId                 String
+  branch                   Branch                     @relation("BranchCounters", fields: [branchId], references: [id])
+  name                     String // "Counter 1", "Billing Desk", "Service Counter"
+  tillAccountId            Int                        @unique
+  tillAccount              Account                    @relation("CounterTill", fields: [tillAccountId], references: [id])
   // Non-cash payment accounts are a flexible LIST (paymentAccounts below) — each
   // a {channel, label, bank ledger, VPA?}. CASH always routes to tillAccountId
   // above; the list covers UPI (possibly several: UPI 1 → HDFC, UPI 2 → SBI),
   // Card, Cheque, Wallet, Bank Transfer, and gateway channels (Razorpay/Cashfree).
   // User-managed via /office/admin/counters.
-  paymentAccounts PosCounterPaymentAccount[]
+  paymentAccounts          PosCounterPaymentAccount[]
   // POS Expenditure (Exp button) — which EXPENSE-group ledgers this counter may
   // spend to. Empty array = no restriction (all expense ledgers allowed). When
   // non-empty, only these account ids appear in the Exp dialog and the API
   // rejects anything else. Shape: number[] (Account ids).
-  allowedExpenseAccountIds Json @default("[]")
-  isActive      Boolean    @default(true)
-  shifts        PosShift[]
+  allowedExpenseAccountIds Json                       @default("[]")
+  isActive                 Boolean                    @default(true)
+  shifts                   PosShift[]
 
   @@unique([branchId, name])
   @@index([branchId])
@@ -56,31 +56,31 @@ model PosCounter {
 // drives the shared "Scan to Pay" QR. `channel` is the method dropdown; the
 // InvVoucherTender's PaymentMethod is derived from it (see counterTenders.ts).
 model PosCounterPaymentAccount {
-  id        Int          @id @default(autoincrement())
-  counterId Int
-  counter   PosCounter   @relation(fields: [counterId], references: [id], onDelete: Cascade)
-  channel   PosPayChannel
+  id             Int             @id @default(autoincrement())
+  counterId      Int
+  counter        PosCounter      @relation(fields: [counterId], references: [id], onDelete: Cascade)
+  channel        PosPayChannel
   // Cashier-facing name shown on the checkout row, e.g. "UPI 1", "PhonePe", "HDFC UPI".
-  label     String
+  label          String
   // The GL ledger that gets debited when money is collected via this account.
-  accountId Int
-  account   Account      @relation("PosPayAccountLedger", fields: [accountId], references: [id])
+  accountId      Int
+  account        Account         @relation("PosPayAccountLedger", fields: [accountId], references: [id])
   // UPI/gateway pay-to id (VPA), e.g. "networkservice@okhdfcbank". Drives the QR.
-  vpa       String?
+  vpa            String?
   // Reserved for future method-specific config (gateway merchant id / keys ref).
-  configJson Json        @default("{}")
-  sortOrder Int          @default(0)
-  isActive  Boolean      @default(true)
+  configJson     Json            @default("{}")
+  sortOrder      Int             @default(0)
+  isActive       Boolean         @default(true)
   // Show this account as a checkout row by default (like the old fixed UPI row).
   // Off = available only via "Add payment line". Set per account in the counters UI.
-  defaultVisible Boolean @default(false)
+  defaultVisible Boolean         @default(false)
   // Optional link to a configured gateway from the global catalog (PaymentGateway),
   // set in the counters UI when channel = GATEWAY (e.g. this counter collects via
   // Razorpay). The GL ledger debited is still `accountId` above — the gateway is
   // metadata for which provider the cashier collects through, NOT a GL change.
   // Nullable + SetNull so deleting a catalog entry just clears this pointer.
-  gatewayId Int?
-  gateway   PaymentGateway? @relation("PayAccountGateway", fields: [gatewayId], references: [id], onDelete: SetNull)
+  gatewayId      Int?
+  gateway        PaymentGateway? @relation("PayAccountGateway", fields: [gatewayId], references: [id], onDelete: SetNull)
 
   @@index([counterId])
   @@index([accountId])
@@ -102,22 +102,22 @@ model PosCounterPaymentAccount {
 // (src/modules/pos/lib/paymentGateways.ts) so new providers (PayU, PayPal) need
 // no migration. See docs/modules/pos.md.
 model PaymentGateway {
-  id          Int      @id @default(autoincrement())
+  id                Int      @id @default(autoincrement())
   // Registry key: "razorpay" | "cashfree" | "manual_upi" | future "payu"/"paypal".
-  provider    String
-  displayName String
+  provider          String
+  displayName       String
   // "TEST" | "LIVE" — validated in the API; drives which env-var set is checked.
-  environment String   @default("TEST")
+  environment       String   @default("TEST")
   // Selectable as a collection rail on a counter (PosCounterPaymentAccount.gatewayId).
-  enabledForCounter Boolean @default(true)
+  enabledForCounter Boolean  @default(true)
   // The active online-checkout gateway. API enforces ≤1 enabled per environment.
-  enabledForOnline  Boolean @default(false)
+  enabledForOnline  Boolean  @default(false)
   // NON-SECRET config only (e.g. { "vpa": "shop@okhdfcbank" } for manual UPI).
-  configJson  Json     @default("{}")
-  sortOrder   Int      @default(0)
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  configJson        Json     @default("{}")
+  sortOrder         Int      @default(0)
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   counterAccounts PosCounterPaymentAccount[] @relation("PayAccountGateway")
 
@@ -242,15 +242,15 @@ model PosExpenditure {
 // receipts a cashier took on which shift). The cash is already folded into the
 // shift's cash sales via sumShiftCashSalesPaise, so this row is log/audit only.
 model PosReceipt {
-  id           Int      @id @default(autoincrement())
-  shiftId      Int
-  shift        PosShift @relation(fields: [shiftId], references: [id], onDelete: Cascade)
-  amountPaise  BigInt
-  accountId    Int      // party AR ledger credited
-  note         String?
-  voucherId    Int?     @unique
-  createdById  Int
-  createdAt    DateTime @default(now())
+  id          Int      @id @default(autoincrement())
+  shiftId     Int
+  shift       PosShift @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  amountPaise BigInt
+  accountId   Int // party AR ledger credited
+  note        String?
+  voucherId   Int?     @unique
+  createdById Int
+  createdAt   DateTime @default(now())
 
   @@index([shiftId, createdAt])
   @@map("pos_receipts")

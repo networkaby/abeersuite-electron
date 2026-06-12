@@ -16,7 +16,7 @@
 //   • Admin user (admin@networkservice.in)
 //   • Roles, Permissions, RolePermissions
 //   • Branches, Departments, UserPositions
-//   • Pipelines, TicketStatus, TicketSubStatus, transitions
+//   • Pipelines, TicketStatus, TicketWorker, transitions
 //   • AccountGroup tree + pure-GL Account chart
 //   • Account.openingBalance / openingBalanceType / openingBalanceDate
 //     (user-set config — survives clean)

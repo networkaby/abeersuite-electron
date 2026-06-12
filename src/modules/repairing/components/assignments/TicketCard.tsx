@@ -19,11 +19,11 @@ export interface TicketCardData {
     primaryOwner: { id: number; name: string } | null;
     serviceCenter: { name: string } | null;
     ticketStatus: { label: string; color: string; actionLabel: string | null };
-    ticketSubStatus: { id: string; label: string; color: string; actionLabel: string | null } | null;
-    /** Work the current sub-status belongs to (null when no sub-status). */
-    subStatusWorkId?: string | null;
+    ticketWorker: { id: string; label: string; color: string; actionLabel: string | null } | null;
+    /** Work the current worker belongs to (null when no worker). */
+    workerWorkId?: string | null;
     /** The Work's display label + colour, for the card badge. */
-    subStatusWork?: { label: string; color: string } | null;
+    workerWork?: { label: string; color: string } | null;
     activeParticipants?: { user: { id: number; name: string } }[];
 }
 
@@ -81,18 +81,18 @@ export default function TicketCard({ ticket, type, currentUserId, isPrimaryOwner
                         <Link href={`/office/repairing/tickets/${ticket.id}`} className="text-sm font-semibold text-primary hover:underline">
                             Ticket #{ticket.id}
                         </Link>
-                        {ticket.ticketSubStatus ? (
-                            <span className={`text-xs px-2 py-0.5 font-medium ${badgeColor(ticket.ticketSubStatus.color).className}`} style={badgeColor(ticket.ticketSubStatus.color).style}>
-                                {ticket.ticketSubStatus.label}
+                        {ticket.ticketWorker ? (
+                            <span className={`text-xs px-2 py-0.5 font-medium ${badgeColor(ticket.ticketWorker.color).className}`} style={badgeColor(ticket.ticketWorker.color).style}>
+                                {ticket.ticketWorker.label}
                             </span>
                         ) : (
                             <span className={`text-xs px-2 py-0.5 font-medium ${ticket.ticketStatus.color}`}>
                                 {ticket.ticketStatus.label}
                             </span>
                         )}
-                        {ticket.subStatusWork && (
-                            <span className={`text-xs px-2 py-0.5 font-medium ${badgeColor(ticket.subStatusWork.color).className}`} style={badgeColor(ticket.subStatusWork.color).style}>
-                                {ticket.subStatusWork.label}
+                        {ticket.workerWork && (
+                            <span className={`text-xs px-2 py-0.5 font-medium ${badgeColor(ticket.workerWork.color).className}`} style={badgeColor(ticket.workerWork.color).style}>
+                                {ticket.workerWork.label}
                             </span>
                         )}
                         <span className="text-xs text-muted-foreground">{timeAgo(ticket.updatedAt)}</span>
@@ -121,9 +121,9 @@ export default function TicketCard({ ticket, type, currentUserId, isPrimaryOwner
                     {ticket.serviceCenter && (
                         <p className="mt-0.5 text-xs text-muted-foreground">Service Centre: {ticket.serviceCenter.name}</p>
                     )}
-                    {(ticket.ticketSubStatus?.actionLabel || ticket.ticketStatus.actionLabel) && (
+                    {(ticket.ticketWorker?.actionLabel || ticket.ticketStatus.actionLabel) && (
                         <p className="mt-1 text-xs font-medium text-primary">
-                            → {ticket.ticketSubStatus?.actionLabel || ticket.ticketStatus.actionLabel}
+                            → {ticket.ticketWorker?.actionLabel || ticket.ticketStatus.actionLabel}
                         </p>
                     )}
                 </div>

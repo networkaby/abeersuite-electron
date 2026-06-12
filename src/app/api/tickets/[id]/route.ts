@@ -5,7 +5,7 @@ import { z } from "zod";
 import { Priority } from "@/generated/prisma/enums";
 import { resolvedUserFromSession } from "@/shared/lib/auth/permissions";
 import { passesWorkGate } from "@/modules/repairing/lib/workGate";
-import { findEntrySubStatus } from "@/modules/repairing/lib/entrySubStatus";
+import { findEntryWorker } from "@/modules/repairing/lib/entryWorker";
 import { reconcileParentFromChild } from "@/modules/repairing/lib/spawnChild";
 import { listAllChildren } from "@/modules/repairing/lib/childEntities";
 import { validateRequest } from "@/shared/lib/api";
@@ -33,8 +33,8 @@ const ticketUpdateSchema = z.object({
     purchaseDate: z.string().optional().nullable(),
     logNote: z.string().optional(),
     visibility: z.enum(["INTERNAL", "PUBLIC"]).optional(),
-    // Undo/back restore: when present, skip auto-entry-sub-status and set this directly.
-    restoreSubStatusId: z.string().nullable().optional(),
+    // Undo/back restore: when present, skip auto-entry-worker and set this directly.
+    restoreWorkerId: z.string().nullable().optional(),
 });
 
 export async function GET(
@@ -81,7 +81,7 @@ export async function GET(
                         },
                     },
                 },
-                ticketSubStatus: { select: { id: true, label: true, color: true, actionLabel: true, work: { select: { label: true, color: true } }, successSubStatus: { select: { id: true, label: true } }, failSubStatus: { select: { id: true, label: true } } } },
+                ticketWorker: { select: { id: true, label: true, color: true, actionLabel: true, work: { select: { label: true, color: true } }, successWorker: { select: { id: true, label: true } }, failWorker: { select: { id: true, label: true } } } },
                 pipeline:        { select: { id: true, label: true, color: true } },
                 // Spawned child sub-pipelines (5th power) are gathered across ALL entity
                 // tables below via listAllChildren — not just the Ticket self-relation.
@@ -95,7 +95,7 @@ export async function GET(
                     include: {
                         changedBy: true,
                         ticketStatus:    { select: { label: true, color: true } },
-                        ticketSubStatus: { select: { label: true, color: true } },
+                        ticketWorker: { select: { label: true, color: true } },
                     },
                     orderBy: { createdAt: "desc" },
                 },
@@ -182,25 +182,25 @@ export async function PUT(
         });
 
         if (body.status) {
-            if ("restoreSubStatusId" in body) {
-                // Undo/back: restore the exact previous (status, sub-status) pair.
-                // Skip auto-entry-sub-status — we're going to a specific known state.
+            if ("restoreWorkerId" in body) {
+                // Undo/back: restore the exact previous (status, worker) pair.
+                // Skip auto-entry-worker — we're going to a specific known state.
                 await prisma.ticket.update({
                     where: { id: ticket.id },
-                    data: { subStatusId: body.restoreSubStatusId ?? null, primaryOwnerId: null, wakeAt: null, retryCount: 0, retryKeyId: null },
+                    data: { workerId: body.restoreWorkerId ?? null, primaryOwnerId: null, wakeAt: null, retryCount: 0, retryKeyId: null },
                 });
                 await prisma.ticketLog.create({
                     data: {
                         ticketId:   ticket.id,
                         status:     body.status,
-                        subStatusId: body.restoreSubStatusId ?? null,
+                        workerId: body.restoreWorkerId ?? null,
                         note:       body.logNote || null,
                         visibility: body.visibility === "PUBLIC" ? "PUBLIC" : "INTERNAL",
                         userId,
                     },
                 });
             } else {
-                // Normal status change: log it, then auto-apply entry sub-status.
+                // Normal status change: log it, then auto-apply entry worker.
                 await prisma.ticketLog.create({
                     data: {
                         ticketId:   ticket.id,
@@ -211,23 +211,23 @@ export async function PUT(
                     },
                 });
 
-                // Auto-apply entry sub-status for the new status (same logic as ticket creation).
+                // Auto-apply entry worker for the new status (same logic as ticket creation).
                 // Clears primaryOwner so the work item appears as "To do" in the inbox.
-                const entrySub = await findEntrySubStatus(body.status);
+                const entrySub = await findEntryWorker(body.status);
                 if (entrySub) {
                     await prisma.ticket.update({
                         where: { id: ticket.id },
-                        data: { subStatusId: entrySub.id, primaryOwnerId: null, wakeAt: null, retryCount: 0, retryKeyId: null },
+                        data: { workerId: entrySub.id, primaryOwnerId: null, wakeAt: null, retryCount: 0, retryKeyId: null },
                     });
                     await prisma.ticketLog.create({
-                        data: { ticketId: ticket.id, status: body.status, subStatusId: entrySub.id, note: `Entered: ${entrySub.label}`, userId },
+                        data: { ticketId: ticket.id, status: body.status, workerId: entrySub.id, note: `Entered: ${entrySub.label}`, userId },
                     });
                 } else {
-                    // No entry sub-status configured — clear current sub-status so stale work doesn't linger.
-                    await prisma.ticket.update({ where: { id: ticket.id }, data: { subStatusId: null, primaryOwnerId: null, wakeAt: null, retryCount: 0, retryKeyId: null } });
+                    // No entry worker configured — clear current worker so stale work doesn't linger.
+                    await prisma.ticket.update({ where: { id: ticket.id }, data: { workerId: null, primaryOwnerId: null, wakeAt: null, retryCount: 0, retryKeyId: null } });
                 }
             }
-            // If this change took a CHILD ticket onto a sub-status that signals its
+            // If this change took a CHILD ticket onto a worker that signals its
             // parent, reconcile the parent (fire its Success / Unsuccess route).
             await reconcileParentFromChild(ticket.id, userId).catch(() => { /* best-effort */ });
         }

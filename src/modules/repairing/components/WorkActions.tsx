@@ -16,11 +16,11 @@ interface Props {
     ticketId: number;
     /** The work being done (for the dialog title). */
     workLabel: string;
-    /** Where this sub-status routes on a successful outcome (null = none configured). */
+    /** Where this worker routes on a successful outcome (null = none configured). */
     successTarget?: RouteTarget | null;
     /** Where it routes on an unsuccessful outcome. */
     failTarget?: RouteTarget | null;
-    /** Current sub-status owns a retry schedule — Unsuccess re-arms it (waits, then retries). */
+    /** Current worker owns a retry schedule — Unsuccess re-arms it (waits, then retries). */
     retryScheduled?: boolean;
     /** Whether the ticket is already claimed (started) by anyone. */
     isOwned: boolean;
@@ -37,8 +37,8 @@ interface Props {
  * Start / outcome actions for a ticket's current work, reused on the Work Inbox
  * board and the ticket page. Start = claim (sets primaryOwner, no double-work).
  * When you own it, the two outcomes show directly as colour-coded buttons —
- * green Success / red Unsuccess — that move the ticket to the sub-status the
- * *current* sub-status routes that outcome to (configured on the source). A quick
+ * green Success / red Unsuccess — that move the ticket to the worker the
+ * *current* worker routes that outcome to (configured on the source). A quick
  * note box captures the feedback (→ ticket activity) before the move. Works with
  * no routing fall back to a single neutral Complete (clear).
  */
@@ -74,14 +74,14 @@ export default function WorkActions({
             // Tag the completion outcome so it lands in the Work Inbox "Finished" list.
             const outcome = pending.kind === "Success" ? "success" : pending.kind === "Unsuccess" ? "unsuccess" : undefined;
             if (pending.target) {
-                await axios.patch(`/api/tickets/${ticketId}/sub-status`, {
-                    subStatusId: pending.target.id,
+                await axios.patch(`/api/tickets/${ticketId}/worker`, {
+                    workerId: pending.target.id,
                     note: privateNote.trim() || undefined,
                     visibility: "INTERNAL",
                     outcome,
                 });
             } else {
-                await axios.delete(`/api/tickets/${ticketId}/sub-status`);
+                await axios.delete(`/api/tickets/${ticketId}/worker`);
             }
             if (publicEnabled && publicNote.trim()) {
                 await axios.post(`/api/tickets/${ticketId}/notes`, { note: publicNote.trim(), visibility: "PUBLIC" });

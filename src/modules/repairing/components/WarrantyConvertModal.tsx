@@ -80,10 +80,10 @@ export default function WarrantyConvertModal({ ticketId, isWarranty, warrantySta
 
                     <div className="rounded-md border border-border bg-muted px-4 py-3 text-sm text-foreground">
                         {isVoidAction
-                            ? "Warranty will be voided. Sub-status will switch to SS36 — customer approval required."
+                            ? "Warranty will be voided. Worker will switch to SS36 — customer approval required."
                             : toWarranty
-                            ? "Ticket will be flagged as warranty claim. Sub-status will switch to SS37 — notify customer no charge."
-                            : "Warranty flag will be removed. Any warranty-only sub-status steps will be cleared."}
+                            ? "Ticket will be flagged as warranty claim. Worker will switch to SS37 — notify customer no charge."
+                            : "Warranty flag will be removed. Any warranty-only worker steps will be cleared."}
                     </div>
 
                     {isVoidAction && (

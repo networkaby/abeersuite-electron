@@ -10,7 +10,7 @@ import { handleApiError } from "@/shared/lib/api";
 const participantSchema = z.object({
     userId: z.coerce.number().int().positive("userId required"),
     addedForRole: z.string().trim().optional(),
-    addedBySubStatusId: z.string().trim().optional(),
+    addedByWorkerId: z.string().trim().optional(),
 });
 
 export async function GET(
@@ -78,7 +78,7 @@ export async function POST(
                 userId: body.userId,
                 addedById: user.id,
                 addedForRole: body.addedForRole ?? null,
-                addedBySubStatusId: body.addedBySubStatusId ?? null,
+                addedByWorkerId: body.addedByWorkerId ?? null,
             },
             include: { user: { select: { id: true, name: true, role: true } } },
         });

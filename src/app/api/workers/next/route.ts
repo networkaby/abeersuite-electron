@@ -4,12 +4,12 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { passesWorkGate } from "@/modules/repairing/lib/workGate";
 import { handleApiError } from "@/shared/lib/api";
 
-// GET /api/sub-statuses/next?statusId=S3&fromSubStatusId=SS10
-// GET /api/sub-statuses/next?statusId=S3&entryOnly=true  (no current sub-status)
+// GET /api/workers/next?statusId=S3&fromWorkerId=SS10
+// GET /api/workers/next?statusId=S3&entryOnly=true  (no current worker)
 //
-// Returns the next allowed sub-statuses for a ticket given its current main status
-// and current sub-status (or entry points when there is no sub-status yet).
-// Only returns sub-statuses the calling user's role is permitted to set.
+// Returns the next allowed workers for a ticket given its current main status
+// and current worker (or entry points when there is no worker yet).
+// Only returns workers the calling user's role is permitted to set.
 export async function GET(req: Request) {
     const { user, response } = await requireAuth();
     if (response) return response;
@@ -17,7 +17,7 @@ export async function GET(req: Request) {
     try {
         const { searchParams } = new URL(req.url);
         const statusId = searchParams.get("statusId");
-        const fromSubStatusId = searchParams.get("fromSubStatusId");
+        const fromWorkerId = searchParams.get("fromWorkerId");
         const entryOnly = searchParams.get("entryOnly") === "true";
         const isWarranty = searchParams.get("isWarranty") === "true";
 
@@ -25,10 +25,10 @@ export async function GET(req: Request) {
             return NextResponse.json({ error: "statusId required" }, { status: 400 });
         }
 
-        // No current sub-status → the only "next" is the status's hand-picked start
-        // sub-status (TicketStatus.startSubStatusId), if any. Still subject to the
+        // No current worker → the only "next" is the status's hand-picked start
+        // worker (TicketStatus.startWorkerId), if any. Still subject to the
         // work-gate + warranty filters below.
-        const fromId = entryOnly || !fromSubStatusId ? null : fromSubStatusId;
+        const fromId = entryOnly || !fromWorkerId ? null : fromWorkerId;
 
         let candidates: Array<{
             id: string; label: string; statusId: string | null;
@@ -40,14 +40,14 @@ export async function GET(req: Request) {
         if (fromId === null) {
             const status = await prisma.ticketStatus.findUnique({
                 where: { id: statusId },
-                select: { startSubStatus: { select: subSelect } },
+                select: { startWorker: { select: subSelect } },
             });
-            candidates = status?.startSubStatus ? [status.startSubStatus] : [];
+            candidates = status?.startWorker ? [status.startWorker] : [];
         } else {
-            // Forward transitions leaving the current sub-status. Back navigation is
+            // Forward transitions leaving the current worker. Back navigation is
             // history-based on the client, so this route is forward-only.
-            const transitions = await prisma.subStatusTransition.findMany({
-                where: { fromSubStatusId: fromId },
+            const transitions = await prisma.workerTransition.findMany({
+                where: { fromWorkerId: fromId },
                 include: { to: { select: subSelect } },
                 orderBy: { to: { order: "asc" } },
             });
@@ -74,6 +74,6 @@ export async function GET(req: Request) {
             work: ss.work ? { label: ss.work.label, color: ss.work.color } : null,
         })));
     } catch (e) {
-        return handleApiError(e, "Failed to fetch next sub-statuses");
+        return handleApiError(e, "Failed to fetch next workers");
     }
 }

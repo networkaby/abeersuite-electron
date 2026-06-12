@@ -1,6 +1,6 @@
 # Permissions & Opaque IDs
 
-> Single source of reference for the permission key catalogue and the opaque IDs (statuses, sub-statuses, roles, pipelines) that the seed bakes in. **The authoritative list lives in code** — this doc points at it and explains conventions.
+> Single source of reference for the permission key catalogue and the opaque IDs (statuses, workers, roles, pipelines) that the seed bakes in. **The authoritative list lives in code** — this doc points at it and explains conventions.
 
 ## Authoritative sources
 
@@ -53,7 +53,7 @@ The constant name mirrors the string: `INVENTORY_VOUCHER_HARD_DELETE = "inventor
 | `R1` | Admin / Owner | 100 | Every non-`systemOnly` permission (~111 keys). `admin:bypass` is **not** in this set — see Env super admin below. |
 | `R2` | Technician | 70 | `tickets:*:own/branch`, `inventory:view:branch`, repair-side ops |
 | `R3` | Front Desk | 40 | `tickets:create`, `customers:*`, `pos:shift:*`, `inventory:view:branch`, `inventory:edit:branch` |
-| `R4` | Despatch | 20 | `tickets:edit:branch` (despatch sub-statuses), `pos:shift:open` |
+| `R4` | Despatch | 20 | `tickets:edit:branch` (despatch workers), `pos:shift:open` |
 
 > Read the actual `Role` + `RolePermission` rows in `bootstrap-seed.ts` (sections 2–3) for the canonical assignment matrix.
 
@@ -93,7 +93,7 @@ These string IDs are stable across the codebase. Renaming any of them is a break
 | Priorities | `P1`–`P4` | `P1` Low, `P2` Normal, `P3` High, `P4` Urgent |
 | Pipelines | `P-<AREA>` | `P-REPAIR`, `P-SALES`, plus seeded P2/P4/P6 for helpdesk/admin/CRM intake |
 | Ticket statuses | `S1`–`S10` | `S1` Received, `S2` Diagnosing, … `S10` Returned |
-| Sub-statuses | `SS1`–`SS37` | Per-pipeline handoff states |
+| Workers | `SS1`–`SS37` | Per-pipeline handoff states |
 | Departments | `DEP-<NAME>` | `DEP-REPAIR`, `DEP-SALES`, `DEP-DESK`, `DEP-FIN`, `DEP-IT`, `DEP-HR`, `DEP-DESP` |
 | Branches | `BR-<NAME>` | `BR-HQ`, plus seeded regionals |
 

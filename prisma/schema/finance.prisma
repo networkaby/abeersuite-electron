@@ -44,8 +44,8 @@ model JournalEntry {
 // rebuilt from its snapshot via the recycle-bin restore.
 model AuditLog {
   id           Int       @id @default(autoincrement())
-  entityType   String    // "INV_VOUCHER" | "GL_VOUCHER" | "JOURNAL_ENTRY"
-  subtype      String?   // the removed voucher's concrete type (e.g. POS_ESTIMATE, SALE, PAYMENT) for a readable label; null for journal entries
+  entityType   String // "INV_VOUCHER" | "GL_VOUCHER" | "JOURNAL_ENTRY"
+  subtype      String? // the removed voucher's concrete type (e.g. POS_ESTIMATE, SALE, PAYMENT) for a readable label; null for journal entries
   originalId   Int
   originalRef  String
   action       String
@@ -144,7 +144,6 @@ model VoucherLine {
   @@index([voucherId])
   @@index([accountId])
 }
-
 
 // ── Bill-wise allocation (free-form linking) ─────────────────────────────
 // Polymorphic: any voucher (target) can be settled by any other voucher (source),

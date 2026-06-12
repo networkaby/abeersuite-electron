@@ -6,7 +6,7 @@ import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
-const subStatusPatchSchema = z.object({
+const workerPatchSchema = z.object({
     label: z.string().trim().min(1).optional(),
     publicLabel: z.string().trim().optional().nullable(),
     color: z.string().trim().min(1).optional(),
@@ -16,8 +16,8 @@ const subStatusPatchSchema = z.object({
     triggerMap: z.record(z.string(), z.string()).optional(),
     actionLabel: z.string().optional().nullable(),
     warrantyScope: z.enum(["any", "warranty_only", "non_warranty_only"]).optional(),
-    successSubStatusId: z.string().trim().optional().nullable(),
-    failSubStatusId: z.string().trim().optional().nullable(),
+    successWorkerId: z.string().trim().optional().nullable(),
+    failWorkerId: z.string().trim().optional().nullable(),
     autoRevertOnClear: z.boolean().optional(),
     retrySchedule: z.array(z.object({
         unit: z.enum(["minute", "hour", "day", "week", "month", "year"]),
@@ -28,7 +28,7 @@ const subStatusPatchSchema = z.object({
     parentSignal: z.enum(["success", "fail"]).optional().nullable(),
 });
 
-// DELETE /api/sub-statuses/[id]
+// DELETE /api/workers/[id]
 export async function DELETE(
     _: Request,
     { params }: { params: Promise<{ id: string }> }
@@ -38,22 +38,22 @@ export async function DELETE(
     try {
         const { id } = await params;
 
-        const inUse = await prisma.ticket.count({ where: { subStatusId: id } });
+        const inUse = await prisma.ticket.count({ where: { workerId: id } });
         if (inUse > 0) {
             return NextResponse.json(
-                { error: `Cannot delete — ${inUse} ticket(s) currently use this sub-status.` },
+                { error: `Cannot delete — ${inUse} ticket(s) currently use this worker.` },
                 { status: 409 }
             );
         }
 
-        await prisma.ticketSubStatus.delete({ where: { id } });
+        await prisma.ticketWorker.delete({ where: { id } });
         return NextResponse.json({ ok: true });
     } catch (e) {
-        return handleApiError(e, "Failed to delete sub-status");
+        return handleApiError(e, "Failed to delete worker");
     }
 }
 
-// PATCH /api/sub-statuses/[id]
+// PATCH /api/workers/[id]
 export async function PATCH(
     req: Request,
     { params }: { params: Promise<{ id: string }> }
@@ -62,11 +62,11 @@ export async function PATCH(
     if (response) return response;
     try {
         const { id } = await params;
-        const { data, error } = await validateRequest(req, subStatusPatchSchema);
+        const { data, error } = await validateRequest(req, workerPatchSchema);
         if (error) return error;
         const body = data;
 
-        const updated = await prisma.ticketSubStatus.update({
+        const updated = await prisma.ticketWorker.update({
             where: { id },
             data: {
                 ...(body.label !== undefined              && { label: body.label }),
@@ -78,8 +78,8 @@ export async function PATCH(
                 ...("triggerMap"         in body && { triggerMap:        body.triggerMap }),
                 ...("actionLabel"        in body && { actionLabel:       body.actionLabel ?? null }),
                 ...("warrantyScope"      in body && { warrantyScope:     body.warrantyScope }),
-                ...("successSubStatusId" in body && { successSubStatusId: body.successSubStatusId ?? null }),
-                ...("failSubStatusId"    in body && { failSubStatusId:    body.failSubStatusId ?? null }),
+                ...("successWorkerId" in body && { successWorkerId: body.successWorkerId ?? null }),
+                ...("failWorkerId"    in body && { failWorkerId:    body.failWorkerId ?? null }),
                 ...("autoRevertOnClear"  in body && { autoRevertOnClear: body.autoRevertOnClear }),
                 ...("retrySchedule"        in body && { retrySchedule:        body.retrySchedule ?? [] }),
                 ...("spawnPipelineId"      in body && { spawnPipelineId:      body.spawnPipelineId ?? null }),
@@ -89,6 +89,6 @@ export async function PATCH(
 
         return NextResponse.json(updated);
     } catch (e) {
-        return handleApiError(e, "Failed to update sub-status");
+        return handleApiError(e, "Failed to update worker");
     }
 }

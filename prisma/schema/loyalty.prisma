@@ -22,10 +22,10 @@
 //   LoyaltyLedger    — immutable audit trail of every points movement.
 
 enum LoyaltyReason {
-  EARN_SALE       // points accrued on a POS sale (net goods value)
-  REDEEM_SALE     // points spent as a discount on a POS sale
+  EARN_SALE // points accrued on a POS sale (net goods value)
+  REDEEM_SALE // points spent as a discount on a POS sale
   REVERSAL_RETURN // claw-back of earn / restore of redeem on a SALE_RETURN
-  ADMIN_ADJUST    // manual correction by a staff member with loyalty:manage
+  ADMIN_ADJUST // manual correction by a staff member with loyalty:manage
   MILESTONE_BONUS // one-time bonus points for crossing a lifetime-spend milestone
 }
 
@@ -56,7 +56,7 @@ model LoyaltyConfig {
   minRedeemInvoiceValue  Decimal? @db.Decimal(14, 2)
   /// Optional guardrails (null = no limit).
   minRedeemPoints        Int?
-  maxRedeemPctOfBill      Decimal? @db.Decimal(5, 2)
+  maxRedeemPctOfBill     Decimal? @db.Decimal(5, 2)
   /// Dedicated expense ledger redemption posts to (Dr on a sale).
   redeemExpenseAccountId Int?
   redeemExpenseAccount   Account? @relation("LoyaltyRedeemLedger", fields: [redeemExpenseAccountId], references: [id])
@@ -64,21 +64,21 @@ model LoyaltyConfig {
 }
 
 model LoyaltyEarnRule {
-  id         Int              @id @default(autoincrement())
-  scope      LoyaltyRuleScope
-  categoryId Int?
-  groupId    Int?
-  productId  Int?
+  id           Int              @id @default(autoincrement())
+  scope        LoyaltyRuleScope
+  categoryId   Int?
+  groupId      Int?
+  productId    Int?
   /// Multiplier on the global earn rate. 0 = no earn (e.g. loss-making items),
   /// 2 = double. Resolution precedence: product → group → category → global(1).
-  multiplier Decimal          @default(1.0) @db.Decimal(6, 3)
+  multiplier   Decimal          @default(1.0) @db.Decimal(6, 3)
   /// Max % of THIS item's value payable with points (null = inherit the global
   /// LoyaltyConfig.maxRedeemPctOfBill; 0 = points can't be redeemed against it).
   /// Same resolution precedence as `multiplier`: product → group → category → global.
-  redeemCapPct Decimal?        @db.Decimal(5, 2)
-  enabled    Boolean          @default(true)
-  createdAt  DateTime         @default(now())
-  updatedAt  DateTime         @updatedAt
+  redeemCapPct Decimal?         @db.Decimal(5, 2)
+  enabled      Boolean          @default(true)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
 
   category InvCategory?     @relation("InvCategoryLoyaltyRules", fields: [categoryId], references: [id], onDelete: Cascade)
   group    InvProductGroup? @relation("InvProductGroupLoyaltyRules", fields: [groupId], references: [id], onDelete: Cascade)
@@ -89,23 +89,23 @@ model LoyaltyEarnRule {
 }
 
 model LoyaltyMilestone {
-  id          Int      @id @default(autoincrement())
+  id                     Int      @id @default(autoincrement())
   /// Lifetime spend (₹, Σ POSTED SALE/POS vouchers) the customer must reach.
-  threshold   Decimal  @db.Decimal(14, 2)
+  threshold              Decimal  @db.Decimal(14, 2)
   /// One-time bonus points granted the first time the threshold is crossed.
-  bonusPoints Int
+  bonusPoints            Int
   /// Optional admin label shown in the hub + on the customer's ledger.
-  label       String?
-  enabled     Boolean  @default(true)
+  label                  String?
+  enabled                Boolean  @default(true)
   /// When set, crossing this milestone auto-issues a unique single-use coupon
   /// (cloned from this inactive template) to the customer at POS checkout.
   issuesCouponTemplateId Int?
-  issuesCouponTemplate   Coupon? @relation("MilestoneCouponTemplate", fields: [issuesCouponTemplateId], references: [id], onDelete: SetNull)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  issuesCouponTemplate   Coupon?  @relation("MilestoneCouponTemplate", fields: [issuesCouponTemplateId], references: [id], onDelete: SetNull)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
 
   awards        LoyaltyMilestoneAward[]
-  issuedCoupons Coupon[]               @relation("MilestoneIssuedCoupons")
+  issuedCoupons Coupon[]                @relation("MilestoneIssuedCoupons")
 
   @@index([enabled])
 }

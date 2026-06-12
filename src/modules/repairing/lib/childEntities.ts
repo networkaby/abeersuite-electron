@@ -2,13 +2,13 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 
 // ── Child-entity registry ─────────────────────────────────────────────────────
-// A sub-status' spawnPipelineId resolves a target Pipeline; that pipeline's
+// A worker' spawnPipelineId resolves a target Pipeline; that pipeline's
 // `entityType` selects which TABLE the spawned child row is created in. Every
 // entity that rides the shared Pipeline/TicketStatus spine registers a creator
 // here, so spawn is data-driven (no hardcoded `ticket.create`).
 //
 // The parent is always a repair Ticket; each child carries the uniform back-link
-// (parentTicketId, parentSubStatusId, context) so the parent can mirror children
+// (parentTicketId, parentWorkerId, context) so the parent can mirror children
 // of any type with one indexed query per table.
 //
 // NOT registered (intentional no-op): "voucher" (P7 InvVoucher), "delivery" (P8) and
@@ -21,10 +21,10 @@ export type ChildEntityType = "ticket" | "task" | "deal";
 
 export type SpawnArgs = {
     parentTicketId: number;
-    parentSubStatusId: string;
+    parentWorkerId: string;
     pipelineId: string;
     entryStatusId: string;             // entry-point status of the target pipeline
-    startSubStatusId: string | null;   // entry sub-status (tickets only; others ride status)
+    startWorkerId: string | null;   // entry worker (tickets only; others ride status)
     deviceId: number;                  // parent's device — a ticket child inherits it
     userId: number;
 };
@@ -38,7 +38,7 @@ export type MirrorChild = {
     statusId: string | null;
     statusLabel: string | null;
     statusColor: string | null;
-    subLabel: string | null;           // sub-status label (tickets only)
+    subLabel: string | null;           // worker label (tickets only)
     subColor: string | null;
     isTerminal: boolean;
     title: string | null;              // task/deal title (tickets show device instead)
@@ -46,12 +46,12 @@ export type MirrorChild = {
 
 type Registry = {
     create: (a: SpawnArgs) => Promise<string>;
-    hasOpenChild: (parentTicketId: number, parentSubStatusId: string) => Promise<boolean>;
+    hasOpenChild: (parentTicketId: number, parentWorkerId: string) => Promise<boolean>;
     listChildren: (parentTicketId: number) => Promise<MirrorChild[]>;
 };
 
 const spawnContext = (a: SpawnArgs) => ({
-    spawnedFrom: { ticketId: a.parentTicketId, subStatusId: a.parentSubStatusId },
+    spawnedFrom: { ticketId: a.parentTicketId, workerId: a.parentWorkerId },
 });
 const childTitle = (a: SpawnArgs) => `Spawned from ticket #${a.parentTicketId}`;
 
@@ -65,17 +65,17 @@ export const CHILD_ENTITIES: Record<ChildEntityType, Registry> = {
         async create(a) {
             const row = await prisma.ticket.create({
                 data: {
-                    pipelineId: a.pipelineId, status: a.entryStatusId, subStatusId: a.startSubStatusId,
-                    deviceId: a.deviceId, parentTicketId: a.parentTicketId, parentSubStatusId: a.parentSubStatusId,
+                    pipelineId: a.pipelineId, status: a.entryStatusId, workerId: a.startWorkerId,
+                    deviceId: a.deviceId, parentTicketId: a.parentTicketId, parentWorkerId: a.parentWorkerId,
                     context: spawnContext(a),
                 },
                 select: { id: true },
             });
             return String(row.id);
         },
-        async hasOpenChild(parentTicketId, parentSubStatusId) {
+        async hasOpenChild(parentTicketId, parentWorkerId) {
             return (await prisma.ticket.count({
-                where: { parentTicketId, parentSubStatusId, ticketStatus: { isTerminal: false } },
+                where: { parentTicketId, parentWorkerId, ticketStatus: { isTerminal: false } },
             })) > 0;
         },
         async listChildren(parentTicketId) {
@@ -83,12 +83,12 @@ export const CHILD_ENTITIES: Record<ChildEntityType, Registry> = {
                 where: { parentTicketId },
                 orderBy: { createdAt: "desc" },
                 select: { id: true, pipeline: pipelineSel, status: true,
-                    ticketStatus: statusSel, ticketSubStatus: { select: { label: true, color: true } } },
+                    ticketStatus: statusSel, ticketWorker: { select: { label: true, color: true } } },
             });
             return rows.map((r) => ({ type: "ticket" as const, id: String(r.id),
                 pipelineId: r.pipeline?.id ?? null, pipelineLabel: r.pipeline?.label ?? null, pipelineColor: r.pipeline?.color ?? null,
                 statusId: r.status, statusLabel: r.ticketStatus?.label ?? null, statusColor: r.ticketStatus?.color ?? null,
-                subLabel: r.ticketSubStatus?.label ?? null, subColor: r.ticketSubStatus?.color ?? null,
+                subLabel: r.ticketWorker?.label ?? null, subColor: r.ticketWorker?.color ?? null,
                 isTerminal: r.ticketStatus?.isTerminal ?? false, title: null }));
         },
     },
@@ -100,15 +100,15 @@ export const CHILD_ENTITIES: Record<ChildEntityType, Registry> = {
                 data: {
                     pipelineId: a.pipelineId, status: a.entryStatusId, title: childTitle(a),
                     createdBy: await buildActorSnapshot(a.userId),
-                    parentTicketId: a.parentTicketId, parentSubStatusId: a.parentSubStatusId, context: spawnContext(a),
+                    parentTicketId: a.parentTicketId, parentWorkerId: a.parentWorkerId, context: spawnContext(a),
                 },
                 select: { id: true },
             });
             return row.id;
         },
-        async hasOpenChild(parentTicketId, parentSubStatusId) {
+        async hasOpenChild(parentTicketId, parentWorkerId) {
             return (await prisma.task.count({
-                where: { parentTicketId, parentSubStatusId, ticketStatus: { isTerminal: false } },
+                where: { parentTicketId, parentWorkerId, ticketStatus: { isTerminal: false } },
             })) > 0;
         },
         async listChildren(parentTicketId) {
@@ -131,15 +131,15 @@ export const CHILD_ENTITIES: Record<ChildEntityType, Registry> = {
                 data: {
                     pipelineId: a.pipelineId, status: a.entryStatusId, title: childTitle(a),
                     createdBy: await buildActorSnapshot(a.userId),
-                    parentTicketId: a.parentTicketId, parentSubStatusId: a.parentSubStatusId, context: spawnContext(a),
+                    parentTicketId: a.parentTicketId, parentWorkerId: a.parentWorkerId, context: spawnContext(a),
                 },
                 select: { id: true },
             });
             return String(row.id);
         },
-        async hasOpenChild(parentTicketId, parentSubStatusId) {
+        async hasOpenChild(parentTicketId, parentWorkerId) {
             return (await prisma.deal.count({
-                where: { parentTicketId, parentSubStatusId, ticketStatus: { isTerminal: false } },
+                where: { parentTicketId, parentWorkerId, ticketStatus: { isTerminal: false } },
             })) > 0;
         },
         async listChildren(parentTicketId) {

@@ -33,10 +33,10 @@ import { Input } from "@/components/ui/input";
 interface Ticket {
     id: number;
     status: string;
-    subStatusId?: string;
+    workerId?: string;
     pipelineId?: string | null;
     pipeline?: { id: string; label: string; color: string } | null;
-    ticketSubStatus?: { id: string; label: string; color: string; actionLabel?: string | null; work?: { label: string; color: string } | null; successSubStatus?: { id: string; label: string } | null; failSubStatus?: { id: string; label: string } | null } | null;
+    ticketWorker?: { id: string; label: string; color: string; actionLabel?: string | null; work?: { label: string; color: string } | null; successWorker?: { id: string; label: string } | null; failWorker?: { id: string; label: string } | null } | null;
     priority: string;
     notes?: string;
     accessInfo?: string;
@@ -87,13 +87,13 @@ interface Ticket {
     logs: {
         id: number;
         status: string;
-        subStatusId?: string;
+        workerId?: string;
         note?: string;
         visibility: string;
         createdAt: string;
         changedBy: { name: string };
         ticketStatus: { label: string; color: string };
-        ticketSubStatus?: { label: string; color: string } | null;
+        ticketWorker?: { label: string; color: string } | null;
     }[];
 }
 
@@ -104,7 +104,7 @@ type LogKind = "success" | "fail" | "note" | "entered" | "advanced" | "retry" | 
 const SYSTEM_NOTE_RE = /^(Ticket created|Claimed by|Passed to|Returned to unassigned|Secondary owner|Reopened from|Transferred|Escalat|✓ )/;
 
 function classifyLog(note?: string): LogKind {
-    if (!note) return "system";                              // bare status / sub-status change
+    if (!note) return "system";                              // bare status / worker change
     if (note.startsWith("Work done · Success")) return "success";
     if (note.startsWith("Work done · Unsuccess")) return "fail";
     if (note.startsWith("Entered:")) return "entered";
@@ -130,7 +130,7 @@ const KIND_META: Record<LogKind, { icon: LucideIcon; dot: string; lead?: string 
 function timelineText(note: string | undefined, kind: LogKind): string | null {
     if (!note) return null;
     if (kind === "success" || kind === "fail") return note.split(" — ").slice(1).join(" — ").trim() || null;
-    if (kind === "entered" || kind === "advanced") return null;   // the sub-status badge already conveys it
+    if (kind === "entered" || kind === "advanced") return null;   // the worker badge already conveys it
     if (kind === "retry") return null;                            // the lead label conveys it
     return note;                                                  // note / system / revert
 }
@@ -188,31 +188,31 @@ export default function TicketDetailPage() {
 
     const actionBtnBase = "w-full border border-border py-2 text-sm flex items-center justify-center gap-2 transition-colors hover:bg-muted rounded-md";
 
-    // Work is "in progress" when the ticket has an owner AND an active work sub-status.
+    // Work is "in progress" when the ticket has an owner AND an active work worker.
     // When true: StatusNav is locked, all Actions except Add Note are locked.
-    const workInProgress = !!ticket.primaryOwner && !!ticket.ticketSubStatus?.work;
+    const workInProgress = !!ticket.primaryOwner && !!ticket.ticketWorker?.work;
 
-    // Single "Back" = true undo — the previous *resting* (status, sub-status) pair
+    // Single "Back" = true undo — the previous *resting* (status, worker) pair
     // from history. Single pass over logs (newest first), returning the first that:
     //   • has a valid ticketStatus (skip stale logs whose status ID is gone), and
     //   • isn't the current state, and
     //   • isn't the transient "bare arrival" of the current status — when a ticket
     //     auto-advances into a status it briefly sits at `status/no-sub` for a
-    //     fraction of a second before the entry sub-status is applied. That
+    //     fraction of a second before the entry worker is applied. That
     //     intermediate is never a real rest point; returning it gives a useless
     //     "back to self" (e.g. "Back to Diagnosing" while already in Diagnosing).
     const curStatus = ticket.status;
-    const curSub = ticket.subStatusId ?? null;
+    const curSub = ticket.workerId ?? null;
     const backTarget = (() => {
         for (const log of ticket.logs) {
             if (!log.ticketStatus) continue;
-            const logSub = log.subStatusId ?? null;
+            const logSub = log.workerId ?? null;
             if (log.status === curStatus && logSub === curSub) continue;        // current state
             if (log.status === curStatus && logSub === null) continue;          // bare-arrival artifact
-            const subLabel = log.ticketSubStatus?.label;
+            const subLabel = log.ticketWorker?.label;
             return {
                 statusId:    log.status,
-                subStatusId: logSub,
+                workerId: logSub,
                 label: subLabel
                     ? `${log.ticketStatus.label} › ${subLabel}`
                     : log.ticketStatus.label,
@@ -270,9 +270,9 @@ export default function TicketDetailPage() {
                                     <span className={`rounded-md border border-border px-3 py-1 text-xs font-medium ${ticket.ticketStatus.color}`}>
                                         {ticket.ticketStatus.label}
                                     </span>
-                                    {ticket.ticketSubStatus && (
-                                        <span className={`rounded-md border border-border px-3 py-1 text-xs font-medium ${badgeColor(ticket.ticketSubStatus.color).className}`} style={badgeColor(ticket.ticketSubStatus.color).style}>
-                                            {ticket.ticketSubStatus.label}
+                                    {ticket.ticketWorker && (
+                                        <span className={`rounded-md border border-border px-3 py-1 text-xs font-medium ${badgeColor(ticket.ticketWorker.color).className}`} style={badgeColor(ticket.ticketWorker.color).style}>
+                                            {ticket.ticketWorker.label}
                                         </span>
                                     )}
                                 </div>
@@ -403,9 +403,9 @@ export default function TicketDetailPage() {
                                                 <div className="min-w-0 flex-1">
                                                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                                                         {meta.lead && <span className="text-sm font-medium text-foreground">{meta.lead}</span>}
-                                                        {log.ticketSubStatus ? (
-                                                            <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${badgeColor(log.ticketSubStatus.color).className}`} style={badgeColor(log.ticketSubStatus.color).style}>
-                                                                {log.ticketSubStatus.label}
+                                                        {log.ticketWorker ? (
+                                                            <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${badgeColor(log.ticketWorker.color).className}`} style={badgeColor(log.ticketWorker.color).style}>
+                                                                {log.ticketWorker.label}
                                                             </span>
                                                         ) : (kind === "note" && !meta.lead && (
                                                             <span className="text-sm font-medium text-foreground">Note</span>
@@ -446,29 +446,29 @@ export default function TicketDetailPage() {
 
                     {/* Right Column — Actions */}
                     <div className="space-y-4">
-                        {ticket.ticketSubStatus?.work && (
+                        {ticket.ticketWorker?.work && (
                             <div className="space-y-3 rounded-lg border border-border bg-card p-4 shadow">
                                 <h2 className="text-sm font-semibold text-foreground">Current work</h2>
                                 <div className="flex flex-wrap items-center gap-2">
                                     <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${ticket.primaryOwner ? "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300" : "bg-muted text-muted-foreground"}`}>
                                         {ticket.primaryOwner ? "In progress" : "To do"}
                                     </span>
-                                    <span className={`rounded-md px-2 py-0.5 text-xs font-medium ${badgeColor(ticket.ticketSubStatus.work.color).className}`} style={badgeColor(ticket.ticketSubStatus.work.color).style}>
-                                        {ticket.ticketSubStatus.work.label}
+                                    <span className={`rounded-md px-2 py-0.5 text-xs font-medium ${badgeColor(ticket.ticketWorker.work.color).className}`} style={badgeColor(ticket.ticketWorker.work.color).style}>
+                                        {ticket.ticketWorker.work.label}
                                     </span>
-                                    <span className={`rounded-md px-2 py-0.5 text-xs font-medium ${badgeColor(ticket.ticketSubStatus.color).className}`} style={badgeColor(ticket.ticketSubStatus.color).style}>
-                                        {ticket.ticketSubStatus.label}
+                                    <span className={`rounded-md px-2 py-0.5 text-xs font-medium ${badgeColor(ticket.ticketWorker.color).className}`} style={badgeColor(ticket.ticketWorker.color).style}>
+                                        {ticket.ticketWorker.label}
                                     </span>
                                 </div>
-                                {ticket.ticketSubStatus.actionLabel && (
-                                    <p className="text-xs font-medium text-primary">→ {ticket.ticketSubStatus.actionLabel}</p>
+                                {ticket.ticketWorker.actionLabel && (
+                                    <p className="text-xs font-medium text-primary">→ {ticket.ticketWorker.actionLabel}</p>
                                 )}
                                 <div className="flex flex-wrap gap-2">
                                     <WorkActions
                                         ticketId={ticket.id}
-                                        workLabel={ticket.ticketSubStatus.work.label}
-                                        successTarget={ticket.ticketSubStatus.successSubStatus ?? null}
-                                        failTarget={ticket.ticketSubStatus.failSubStatus ?? null}
+                                        workLabel={ticket.ticketWorker.work.label}
+                                        successTarget={ticket.ticketWorker.successWorker ?? null}
+                                        failTarget={ticket.ticketWorker.failWorker ?? null}
                                         isOwned={!!ticket.primaryOwner}
                                         isOwnerMe={ticket.primaryOwner?.id === currentUserId}
                                         onChanged={fetchTicket}
@@ -527,7 +527,7 @@ export default function TicketDetailPage() {
                         <StatusNav
                             ticketId={ticket.id}
                             statusId={ticket.status}
-                            subStatusId={ticket.subStatusId ?? null}
+                            workerId={ticket.workerId ?? null}
                             isWarranty={ticket.isWarranty}
                             started={!!ticket.primaryOwner}
                             locked={workInProgress}

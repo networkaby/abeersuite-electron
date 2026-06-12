@@ -29,7 +29,7 @@ interface Ticket {
     warrantyStatus: string;
     createdAt: string;
     ticketStatus: { label: string; color: string };
-    ticketSubStatus?: { label: string; color: string } | null;
+    ticketWorker?: { label: string; color: string } | null;
     device: {
         type: string;
         brand: string;
@@ -257,9 +257,9 @@ export default function TicketsPage() {
                                             <span className={`px-2 py-0.5 text-xs font-medium w-fit ${t.ticketStatus.color}`}>
                                                 {t.ticketStatus.label}
                                             </span>
-                                            {t.ticketSubStatus && (
-                                                <span className={`px-2 py-0.5 text-xs font-medium w-fit ${badgeColor(t.ticketSubStatus.color).className}`} style={badgeColor(t.ticketSubStatus.color).style}>
-                                                    {t.ticketSubStatus.label}
+                                            {t.ticketWorker && (
+                                                <span className={`px-2 py-0.5 text-xs font-medium w-fit ${badgeColor(t.ticketWorker.color).className}`} style={badgeColor(t.ticketWorker.color).style}>
+                                                    {t.ticketWorker.label}
                                                 </span>
                                             )}
                                             <WarrantyBadge isWarranty={t.isWarranty} warrantyStatus={t.warrantyStatus} />

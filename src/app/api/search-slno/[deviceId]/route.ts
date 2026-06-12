@@ -35,7 +35,7 @@ export async function GET(
                 createdAt: true,
                 updatedAt: true,
                 ticketStatus: { select: { label: true, color: true } },
-                ticketSubStatus: { select: { label: true, color: true } },
+                ticketWorker: { select: { label: true, color: true } },
                 device: {
                     select: {
                         id: true,
@@ -91,7 +91,7 @@ export async function GET(
                 createdAt: t.createdAt.toISOString(),
                 updatedAt: t.updatedAt.toISOString(),
                 status: t.ticketStatus,
-                subStatus: t.ticketSubStatus,
+                worker: t.ticketWorker,
             })),
         });
     } catch (e) {

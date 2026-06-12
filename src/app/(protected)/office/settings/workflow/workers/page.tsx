@@ -31,7 +31,7 @@ import { COLOR_OPTIONS, WARRANTY_SCOPE_OPTIONS } from "@/utils/constants";
 import { badgeColor, dotColor, randomHexColor } from "@/shared/lib/format/entityColor";
 
 // Retry-schedule channels, densest → sparsest. Each is an optional row in the
-// sub-status dialog's "Attempts" tab; a filled row (every N × T times) becomes a phase.
+// worker dialog's "Attempts" tab; a filled row (every N × T times) becomes a phase.
 const RETRY_UNITS = [
     { key: "minute", label: "Minute", abbr: "m" },
     { key: "hour", label: "Hour", abbr: "h" },
@@ -46,7 +46,7 @@ type RetryRows = Record<RetryUnit, RetryRow>;
 const BLANK_RETRY_ROWS = (): RetryRows =>
     Object.fromEntries(RETRY_UNITS.map((u) => [u.key, { every: "", times: "" }])) as RetryRows;
 
-// New sub-statuses get a random (unlimited) hex color so the workflow reads at a
+// New workers get a random (unlimited) hex color so the workflow reads at a
 // glance; the picker / hex box / preset swatches let you override it manually.
 const randomColor = () => randomHexColor(Math.random());
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
@@ -62,10 +62,10 @@ interface StatusItem {
     label: string;
     color: string;
     order: number;
-    startSubStatusId?: string | null;
+    startWorkerId?: string | null;
 }
 
-interface SubStatus {
+interface Worker {
     id: string;
     label: string;
     publicLabel?: string | null;
@@ -76,8 +76,8 @@ interface SubStatus {
     triggerMap: Record<string, string>;
     actionLabel: string | null;
     warrantyScope?: string;
-    successSubStatusId?: string | null;
-    failSubStatusId?: string | null;
+    successWorkerId?: string | null;
+    failWorkerId?: string | null;
     autoRevertOnClear: boolean;
     retrySchedule?: { unit: string; every: number; times: number }[] | null;
     spawnPipelineId?: string | null;
@@ -103,8 +103,8 @@ type FormValues = {
     triggerMap: Record<string, string>;
     actionLabel: string;
     warrantyScope: string;
-    successSubStatusId: string;
-    failSubStatusId: string;
+    successWorkerId: string;
+    failWorkerId: string;
     autoRevertOnClear: boolean;
     retryRows: RetryRows;
     spawnPipelineId: string;
@@ -121,8 +121,8 @@ const BLANK_FORM: FormValues = {
     triggerMap: {},
     actionLabel: "",
     warrantyScope: "any",
-    successSubStatusId: "",
-    failSubStatusId: "",
+    successWorkerId: "",
+    failWorkerId: "",
     autoRevertOnClear: true,
     retryRows: BLANK_RETRY_ROWS(),
     spawnPipelineId: "",
@@ -153,7 +153,7 @@ const summarizeRows = (rows: RetryRows) => {
     return `1 now → ${phases.map((p) => `${p.times}×${p.every}${abbrOf(p.unit)}`).join(" → ")} · ${total} attempts`;
 };
 
-function SubStatusFormModal({
+function WorkerFormModal({
     open,
     title,
     form,
@@ -163,7 +163,7 @@ function SubStatusFormModal({
     saving,
     statuses,
     works,
-    subStatuses,
+    workers,
     pipelines,
 }: {
     open: boolean;
@@ -175,10 +175,10 @@ function SubStatusFormModal({
     saving: boolean;
     statuses: StatusItem[];
     works: Work[];
-    subStatuses: SubStatus[];
+    workers: Worker[];
     pipelines: Pipeline[];
 }) {
-    // A sub-status belongs to exactly one parent status. Changing it re-keys the
+    // A worker belongs to exactly one parent status. Changing it re-keys the
     // single auto-advance entry (triggerMap) onto the new status.
     const setParentStatus = (value: string) => {
         const prev = form.statusId;
@@ -198,11 +198,11 @@ function SubStatusFormModal({
     const selectedWork = works.find((w) => w.id === form.workId);
     const autoAdvanceTarget = form.statusId ? (form.triggerMap[form.statusId] ?? "") : "";
 
-    // Outcome routing stays WITHIN the stage: a sub-status's success / unsuccess
-    // target is another sub-status of the SAME parent status. Jumping to another
+    // Outcome routing stays WITHIN the stage: a worker's success / unsuccess
+    // target is another worker of the SAME parent status. Jumping to another
     // stage is done via "Auto-advance status to", never by a cross-status target
-    // (which would leave the ticket's status and sub-status inconsistent).
-    const sameStatusSubs = form.statusId ? subStatuses.filter((s) => s.statusId === form.statusId) : [];
+    // (which would leave the ticket's status and worker inconsistent).
+    const sameStatusSubs = form.statusId ? workers.filter((s) => s.statusId === form.statusId) : [];
 
     // Update a single channel-row field (digits only, per the no-number-input rule).
     const setRetry = (unit: RetryUnit, field: keyof RetryRow, value: string) =>
@@ -216,7 +216,7 @@ function SubStatusFormModal({
                 <DialogHeader>
                     <DialogTitle>{title}</DialogTitle>
                     <DialogDescription>
-                        Configure where this sub-status appears and which work it represents.
+                        Configure where this worker appears and which work it represents.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -264,7 +264,7 @@ function SubStatusFormModal({
                             <p className="text-xs text-muted-foreground">
                                 {selectedWork?.permissionId
                                     ? `Only staff with the “${selectedWork.label}” work permission can set this.`
-                                    : "Ungated work — any staff can set this sub-status."}
+                                    : "Ungated work — any staff can set this worker."}
                             </p>
                         </div>
                         <div className="space-y-2">
@@ -285,7 +285,7 @@ function SubStatusFormModal({
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label>On success → move to</Label>
-                            <Select value={form.successSubStatusId || "__none__"} onValueChange={(value) => setForm({ ...form, successSubStatusId: value === "__none__" ? "" : value })}>
+                            <Select value={form.successWorkerId || "__none__"} onValueChange={(value) => setForm({ ...form, successWorkerId: value === "__none__" ? "" : value })}>
                                 <SelectTrigger className="w-full"><SelectValue placeholder="— none —" /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="__none__">— none —</SelectItem>
@@ -295,7 +295,7 @@ function SubStatusFormModal({
                         </div>
                         <div className="space-y-2">
                             <Label>On unsuccess → move to</Label>
-                            <Select value={form.failSubStatusId || "__none__"} onValueChange={(value) => setForm({ ...form, failSubStatusId: value === "__none__" ? "" : value })}>
+                            <Select value={form.failWorkerId || "__none__"} onValueChange={(value) => setForm({ ...form, failWorkerId: value === "__none__" ? "" : value })}>
                                 <SelectTrigger className="w-full"><SelectValue placeholder="— none —" /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="__none__">— none —</SelectItem>
@@ -305,7 +305,7 @@ function SubStatusFormModal({
                         </div>
                     </div>
                     <p className="-mt-3 text-xs text-muted-foreground">
-                        On completing this work the caller picks Success or Unsuccess; the ticket moves to the chosen sub-status <span className="font-medium">within this stage</span> (green / red on the Work Inbox). If this sub-status has a retry schedule (Attempts tab), Unsuccess <span className="font-medium">retries first</span> and only moves to the “unsuccess” target once the schedule runs out (give-up). To jump to another stage, use “Auto-advance status to” below.
+                        On completing this work the caller picks Success or Unsuccess; the ticket moves to the chosen worker <span className="font-medium">within this stage</span> (green / red on the Work Inbox). If this worker has a retry schedule (Attempts tab), Unsuccess <span className="font-medium">retries first</span> and only moves to the “unsuccess” target once the schedule runs out (give-up). To jump to another stage, use “Auto-advance status to” below.
                     </p>
 
                     <div className="space-y-2">
@@ -368,7 +368,7 @@ function SubStatusFormModal({
                                 Auto-remove participant on clear
                             </label>
                             <p className="text-xs text-muted-foreground">
-                                The sub-status auto-applied on entry is set per status — pick it
+                                The worker auto-applied on entry is set per status — pick it
                                 with the <span className="font-medium">Set start</span> button on each status card.
                             </p>
                         </div>
@@ -389,7 +389,7 @@ function SubStatusFormModal({
                                 </SelectContent>
                             </Select>
                             <p className="text-xs text-muted-foreground">
-                                This sub-status belongs to exactly one status.
+                                This worker belongs to exactly one status.
                             </p>
                         </div>
                         <div className="space-y-2">
@@ -411,7 +411,7 @@ function SubStatusFormModal({
                         </div>
                     </div>
 
-                    {/* 5th power: entering this sub-status spawns a CHILD ticket on another
+                    {/* 5th power: entering this worker spawns a CHILD ticket on another
                         pipeline (e.g. inbound parts courier). The parent mirrors the child and
                         advances via its Success/Unsuccess route when the child terminates. */}
                     <div className="space-y-2">
@@ -424,12 +424,12 @@ function SubStatusFormModal({
                             </SelectContent>
                         </Select>
                         <p className="text-xs text-muted-foreground">
-                            Landing here opens a child ticket on that pipeline (linked back to this one). When the child reaches a sub-status that signals back, it fires this sub-status’s Success / Unsuccess route. Blank = no spawn.
+                            Landing here opens a child ticket on that pipeline (linked back to this one). When the child reaches a worker that signals back, it fires this worker’s Success / Unsuccess route. Blank = no spawn.
                         </p>
                     </div>
 
-                    {/* Child-side report-back: when THIS sub-status is reached on a CHILD ticket,
-                        signal the parent — fires the parent spawning sub-status' Success/Unsuccess. */}
+                    {/* Child-side report-back: when THIS worker is reached on a CHILD ticket,
+                        signal the parent — fires the parent spawning worker' Success/Unsuccess. */}
                     <div className="space-y-2">
                         <Label className="flex items-center gap-1.5"><CornerUpLeft size={13} /> Signal parent when reached</Label>
                         <Select value={form.parentSignal || "__none__"} onValueChange={(value) => setForm({ ...form, parentSignal: value === "__none__" ? "" : value })}>
@@ -441,7 +441,7 @@ function SubStatusFormModal({
                             </SelectContent>
                         </Select>
                         <p className="text-xs text-muted-foreground">
-                            Only matters when THIS sub-status is on a spawned child. Reaching it bumps the parent off its waiting sub-status. Blank = silent.
+                            Only matters when THIS worker is on a spawned child. Reaching it bumps the parent off its waiting worker. Blank = silent.
                         </p>
                     </div>
 
@@ -521,11 +521,11 @@ function SubStatusFormModal({
     );
 }
 
-export default function SubStatusesPage() {
+export default function WorkersPage() {
     const [pipelines, setPipelines] = useState<Pipeline[]>([]);
     const [activePipelineId, setActivePipelineId] = useState<string>("P1");
     const [statuses, setStatuses] = useState<StatusItem[]>([]);
-    const [subStatuses, setSubStatuses] = useState<SubStatus[]>([]);
+    const [workers, setWorkers] = useState<Worker[]>([]);
     const [works, setWorks] = useState<Work[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -548,14 +548,14 @@ export default function SubStatusesPage() {
     const loadAll = async (pipelineId: string) => {
         setLoading(true);
         try {
-            const [statusResponse, subStatusResponse, pipelineResponse, workResponse] = await Promise.all([
+            const [statusResponse, workerResponse, pipelineResponse, workResponse] = await Promise.all([
                 axios.get(`/api/ticket-statuses?pipelineId=${pipelineId}`),
-                axios.get(`/api/sub-statuses?pipelineId=${pipelineId}`),
+                axios.get(`/api/workers?pipelineId=${pipelineId}`),
                 axios.get("/api/pipelines"),
                 axios.get("/api/works"),
             ]);
             setStatuses((statusResponse.data as StatusItem[]).sort((a, b) => a.order - b.order));
-            setSubStatuses(subStatusResponse.data);
+            setWorkers(workerResponse.data);
             setPipelines(pipelineResponse.data);
             setWorks(workResponse.data);
         } catch {
@@ -567,7 +567,7 @@ export default function SubStatusesPage() {
 
     useEffect(() => { loadAll(activePipelineId); }, [activePipelineId]);
 
-    const subStatusPayload = (form: FormValues) => ({
+    const workerPayload = (form: FormValues) => ({
         label: form.label,
         publicLabel: form.publicLabel.trim() || null,
         color: form.color,
@@ -577,8 +577,8 @@ export default function SubStatusesPage() {
         triggerMap: form.triggerMap,
         actionLabel: form.actionLabel || null,
         warrantyScope: form.warrantyScope,
-        successSubStatusId: form.successSubStatusId || null,
-        failSubStatusId: form.failSubStatusId || null,
+        successWorkerId: form.successWorkerId || null,
+        failWorkerId: form.failWorkerId || null,
         autoRevertOnClear: form.autoRevertOnClear,
         retrySchedule: rowsToSchedule(form.retryRows),
         spawnPipelineId: form.spawnPipelineId || null,
@@ -588,13 +588,13 @@ export default function SubStatusesPage() {
     const handleCreate = async () => {
         setCreating(true);
         try {
-            const res = await axios.post("/api/sub-statuses", { ...subStatusPayload(createForm), pipelineId: activePipelineId });
-            toast.success("Sub-status created");
+            const res = await axios.post("/api/workers", { ...workerPayload(createForm), pipelineId: activePipelineId });
+            toast.success("Worker created");
             setShowCreate(false);
             setCreateForm(BLANK_FORM);
             // Optimistic: append the new record in place — no full reload (avoids the
             // blink + scroll-jump). The render groups/sorts by status + order.
-            setSubStatuses((prev) => [...prev, { ...(res.data as SubStatus), fromTransitions: [] }]);
+            setWorkers((prev) => [...prev, { ...(res.data as Worker), fromTransitions: [] }]);
         } catch {
             toast.error("Failed to create");
         } finally {
@@ -602,30 +602,30 @@ export default function SubStatusesPage() {
         }
     };
 
-    const openEdit = (subStatus: SubStatus) => {
+    const openEdit = (worker: Worker) => {
         setEditForm({
-            label: subStatus.label,
-            publicLabel: subStatus.publicLabel ?? "",
-            color: subStatus.color,
-            workId: subStatus.workId ?? "",
-            order: String(subStatus.order),
-            statusId: subStatus.statusId ?? "",
-            triggerMap: (subStatus.triggerMap ?? {}) as Record<string, string>,
-            actionLabel: subStatus.actionLabel ?? "",
-            warrantyScope: subStatus.warrantyScope ?? "any",
-            successSubStatusId: subStatus.successSubStatusId ?? "",
-            failSubStatusId: subStatus.failSubStatusId ?? "",
-            autoRevertOnClear: subStatus.autoRevertOnClear ?? true,
-            retryRows: scheduleToRows(subStatus.retrySchedule),
-            spawnPipelineId: subStatus.spawnPipelineId ?? "",
-            parentSignal: subStatus.parentSignal ?? "",
+            label: worker.label,
+            publicLabel: worker.publicLabel ?? "",
+            color: worker.color,
+            workId: worker.workId ?? "",
+            order: String(worker.order),
+            statusId: worker.statusId ?? "",
+            triggerMap: (worker.triggerMap ?? {}) as Record<string, string>,
+            actionLabel: worker.actionLabel ?? "",
+            warrantyScope: worker.warrantyScope ?? "any",
+            successWorkerId: worker.successWorkerId ?? "",
+            failWorkerId: worker.failWorkerId ?? "",
+            autoRevertOnClear: worker.autoRevertOnClear ?? true,
+            retryRows: scheduleToRows(worker.retrySchedule),
+            spawnPipelineId: worker.spawnPipelineId ?? "",
+            parentSignal: worker.parentSignal ?? "",
         });
-        setEditId(subStatus.id);
+        setEditId(worker.id);
     };
 
-    // Clone: pre-fill the create modal from an existing sub-status (label suffixed
+    // Clone: pre-fill the create modal from an existing worker (label suffixed
     // "(copy)", order auto-assigned) so the user can tweak and save a duplicate.
-    const cloneSubStatus = (s: SubStatus) => {
+    const cloneWorker = (s: Worker) => {
         setCreateForm({
             label: `${s.label} (copy)`,
             publicLabel: s.publicLabel ?? "",
@@ -636,8 +636,8 @@ export default function SubStatusesPage() {
             triggerMap: (s.triggerMap ?? {}) as Record<string, string>,
             actionLabel: s.actionLabel ?? "",
             warrantyScope: s.warrantyScope ?? "any",
-            successSubStatusId: s.successSubStatusId ?? "",
-            failSubStatusId: s.failSubStatusId ?? "",
+            successWorkerId: s.successWorkerId ?? "",
+            failWorkerId: s.failWorkerId ?? "",
             autoRevertOnClear: s.autoRevertOnClear ?? true,
             retryRows: scheduleToRows(s.retrySchedule),
             spawnPipelineId: s.spawnPipelineId ?? "",
@@ -650,13 +650,13 @@ export default function SubStatusesPage() {
         if (!editId) return;
         setEditing(true);
         try {
-            const res = await axios.patch(`/api/sub-statuses/${editId}`, subStatusPayload(editForm));
-            toast.success("Sub-status updated");
+            const res = await axios.patch(`/api/workers/${editId}`, workerPayload(editForm));
+            toast.success("Worker updated");
             const id = editId;
             setEditId(null);
             // Optimistic: overlay the updated scalars onto the existing row (keeps its
             // fromTransitions) — no full reload, so scroll position is preserved.
-            setSubStatuses((prev) => prev.map((s) => s.id === id ? { ...s, ...(res.data as Partial<SubStatus>) } : s));
+            setWorkers((prev) => prev.map((s) => s.id === id ? { ...s, ...(res.data as Partial<Worker>) } : s));
         } catch {
             toast.error("Failed to update");
         } finally {
@@ -667,12 +667,12 @@ export default function SubStatusesPage() {
     const handleDelete = async (id: string) => {
         setDeletingId(id);
         try {
-            await axios.delete(`/api/sub-statuses/${id}`);
-            toast.success("Sub-status deleted");
-            // Optimistic: drop the row, and clear it as any status's start sub-status
+            await axios.delete(`/api/workers/${id}`);
+            toast.success("Worker deleted");
+            // Optimistic: drop the row, and clear it as any status's start worker
             // (mirrors the DB SetNull) — no full reload.
-            setSubStatuses((prev) => prev.filter((s) => s.id !== id));
-            setStatuses((prev) => prev.map((st) => st.startSubStatusId === id ? { ...st, startSubStatusId: null } : st));
+            setWorkers((prev) => prev.filter((s) => s.id !== id));
+            setStatuses((prev) => prev.map((st) => st.startWorkerId === id ? { ...st, startWorkerId: null } : st));
         } catch (err) {
             const message = axios.isAxiosError(err) ? err.response?.data?.error : "Failed to delete";
             toast.error(message ?? "Failed to delete");
@@ -681,14 +681,14 @@ export default function SubStatusesPage() {
         }
     };
 
-    // Hand-pick which sub-status auto-applies when a ticket ENTERS this status.
-    // Persists to TicketStatus.startSubStatusId (per status, not global).
-    const setStart = async (statusId: string, subStatusId: string) => {
+    // Hand-pick which worker auto-applies when a ticket ENTERS this status.
+    // Persists to TicketStatus.startWorkerId (per status, not global).
+    const setStart = async (statusId: string, workerId: string) => {
         try {
-            await axios.patch(`/api/ticket-statuses/${statusId}`, { startSubStatusId: subStatusId });
-            toast.success("Start sub-status updated");
+            await axios.patch(`/api/ticket-statuses/${statusId}`, { startWorkerId: workerId });
+            toast.success("Start worker updated");
             // Optimistic: flip the start marker on that status in place — no full reload.
-            setStatuses((prev) => prev.map((st) => st.id === statusId ? { ...st, startSubStatusId: subStatusId } : st));
+            setStatuses((prev) => prev.map((st) => st.id === statusId ? { ...st, startWorkerId: workerId } : st));
         } catch (err) {
             const message = axios.isAxiosError(err) ? err.response?.data?.error : "Failed to set start";
             toast.error(message ?? "Failed to set start");
@@ -696,8 +696,8 @@ export default function SubStatusesPage() {
     };
 
     const openTransitionModal = (id: string) => {
-        const subStatus = subStatuses.find((item) => item.id === id);
-        setSelectedToIds(subStatus?.fromTransitions.map((transition) => transition.to.id) ?? []);
+        const worker = workers.find((item) => item.id === id);
+        setSelectedToIds(worker?.fromTransitions.map((transition) => transition.to.id) ?? []);
         setTransitionModalId(id);
     };
 
@@ -705,14 +705,14 @@ export default function SubStatusesPage() {
         if (!transitionModalId) return;
         setSavingTransitions(true);
         try {
-            await axios.put(`/api/sub-statuses/${transitionModalId}/transitions`, { toIds: selectedToIds });
+            await axios.put(`/api/workers/${transitionModalId}/transitions`, { toIds: selectedToIds });
             toast.success("Transitions saved");
             const id = transitionModalId;
             const picks = selectedToIds;
             setTransitionModalId(null);
             // Optimistic: rebuild this row's fromTransitions from the picked ids
             // (label/color looked up from current rows) — no full reload.
-            setSubStatuses((prev) => prev.map((s) => s.id === id
+            setWorkers((prev) => prev.map((s) => s.id === id
                 ? { ...s, fromTransitions: picks.map((tid) => { const t = prev.find((x) => x.id === tid); return { to: { id: tid, label: t?.label ?? tid, color: t?.color ?? "bg-muted" } }; }) }
                 : s));
         } catch {
@@ -728,40 +728,40 @@ export default function SubStatusesPage() {
     // Open the create modal pre-scoped to a parent status.
     const openCreateFor = (statusId: string) => { setCreateForm({ ...BLANK_FORM, statusId, color: randomColor() }); setShowCreate(true); };
 
-    const modalSubStatus = subStatuses.find((subStatus) => subStatus.id === transitionModalId);
-    // Transitions can only connect sub-statuses within the SAME parent status.
-    const transitionCandidates = modalSubStatus
-        ? subStatuses
-            .filter((subStatus) =>
-                subStatus.id !== modalSubStatus.id &&
-                subStatus.statusId != null &&
-                subStatus.statusId === modalSubStatus.statusId
+    const modalWorker = workers.find((worker) => worker.id === transitionModalId);
+    // Transitions can only connect workers within the SAME parent status.
+    const transitionCandidates = modalWorker
+        ? workers
+            .filter((worker) =>
+                worker.id !== modalWorker.id &&
+                worker.statusId != null &&
+                worker.statusId === modalWorker.statusId
             )
             .sort((a, b) => a.order - b.order)
         : [];
 
     const statusLabelMap = Object.fromEntries(statuses.map((status) => [status.id, status.label]));
-    const subLabelMap = Object.fromEntries(subStatuses.map((s) => [s.id, s.label]));
+    const subLabelMap = Object.fromEntries(workers.map((s) => [s.id, s.label]));
     const pipelineLabelMap = Object.fromEntries(pipelines.map((p) => [p.id, p.label]));
 
     // One card per status (shown even when empty, so each has its own create button).
     const byParent = statuses.map((status) => ({
         status,
-        children: subStatuses
-            .filter((subStatus) => subStatus.statusId === status.id)
+        children: workers
+            .filter((worker) => worker.statusId === status.id)
             .sort((a, b) => a.order - b.order),
     }));
 
-    const unassigned = subStatuses.filter((subStatus) => subStatus.statusId == null);
+    const unassigned = workers.filter((worker) => worker.statusId == null);
 
     return (
         <ScrollArea className="h-full" type="always">
         <div className="mx-auto max-w-5xl space-y-6 px-6 pt-3 pb-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold">Sub-Statuses</h1>
+                    <h1 className="text-2xl font-bold">Workers</h1>
                     <p className="mt-1 text-sm text-muted-foreground">
-                        Each sub-status belongs to one parent status — add them per status below.
+                        Each worker belongs to one parent status — add them per status below.
                     </p>
                 </div>
             </div>
@@ -785,8 +785,8 @@ export default function SubStatusesPage() {
             ) : (
                 <div className="space-y-5">
                     {byParent.map(({ status, children }) => {
-                        // The sub-status hand-picked to auto-apply on entry to this status.
-                        const startId = status.startSubStatusId ?? null;
+                        // The worker hand-picked to auto-apply on entry to this status.
+                        const startId = status.startWorkerId ?? null;
                         return (
                         <Card key={status.id}>
                             <CardHeader className="border-b">
@@ -794,94 +794,94 @@ export default function SubStatusesPage() {
                                     <Badge className={status.color}>{status.id}</Badge>
                                     <CardTitle>{status.label}</CardTitle>
                                     <CardDescription className="ml-auto">
-                                        {children.length} sub-status{children.length !== 1 ? "es" : ""}
+                                        {children.length} worker{children.length !== 1 ? "es" : ""}
                                     </CardDescription>
                                     <Button type="button" size="sm" onClick={() => openCreateFor(status.id)}>
-                                        <Plus size={14} /> Add sub-status
+                                        <Plus size={14} /> Add worker
                                     </Button>
                                 </div>
                             </CardHeader>
                             <CardContent className="space-y-0 px-0 pt-0">
                                 {children.length === 0 && (
-                                    <p className="px-6 py-4 text-xs text-muted-foreground">No sub-statuses yet — add one for this status.</p>
+                                    <p className="px-6 py-4 text-xs text-muted-foreground">No workers yet — add one for this status.</p>
                                 )}
-                                {children.map((subStatus) => {
-                                    const work = subStatus.workId ? worksById[subStatus.workId] : undefined;
-                                    const sc = badgeColor(subStatus.color);
+                                {children.map((worker) => {
+                                    const work = worker.workId ? worksById[worker.workId] : undefined;
+                                    const sc = badgeColor(worker.color);
                                     return (
-                                    <div key={subStatus.id} className="flex items-start gap-3 border-b px-6 py-4 last:border-b-0">
+                                    <div key={worker.id} className="flex items-start gap-3 border-b px-6 py-4 last:border-b-0">
                                         <span
                                             className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-medium tabular-nums ${sc.className}`}
                                             style={sc.style}
-                                            title={`Sort order ${subStatus.order}`}
+                                            title={`Sort order ${worker.order}`}
                                         >
-                                            {subStatus.order}
+                                            {worker.order}
                                         </span>
 
                                         <div className="min-w-0 flex-1">
                                             <div className="flex flex-wrap items-center gap-2">
-                                                <span className="text-sm font-medium">{subStatus.label}</span>
+                                                <span className="text-sm font-medium">{worker.label}</span>
                                                 {work && (
                                                     <Badge {...badgeColor(work.color)}>
                                                         {work.permissionId && <Lock size={10} className="mr-1" />}
                                                         {work.label}
                                                     </Badge>
                                                 )}
-                                                {subStatus.id === startId && (
+                                                {worker.id === startId && (
                                                     <Badge className="bg-green-100 text-green-700">
                                                         <Zap size={11} className="mr-1" />Auto-applied on entry
                                                     </Badge>
                                                 )}
-                                                {subStatus.triggerMap[status.id] && (
+                                                {worker.triggerMap[status.id] && (
                                                     <Badge className="bg-orange-100 text-orange-700">
                                                         <ChevronRight size={11} />
-                                                        {statusLabelMap[subStatus.triggerMap[status.id]] ?? subStatus.triggerMap[status.id]}
+                                                        {statusLabelMap[worker.triggerMap[status.id]] ?? worker.triggerMap[status.id]}
                                                     </Badge>
                                                 )}
-                                                {!!subStatus.retrySchedule?.length && (
+                                                {!!worker.retrySchedule?.length && (
                                                     <Badge className="bg-amber-100 text-amber-700">
                                                         <RefreshCw size={10} className="mr-1" />
-                                                        {subStatus.retrySchedule.map((p) => `${p.times}×${p.every}${RETRY_UNITS.find((u) => u.key === p.unit)?.abbr ?? p.unit}`).join(" → ")}
+                                                        {worker.retrySchedule.map((p) => `${p.times}×${p.every}${RETRY_UNITS.find((u) => u.key === p.unit)?.abbr ?? p.unit}`).join(" → ")}
                                                     </Badge>
                                                 )}
-                                                {subStatus.spawnPipelineId && (
+                                                {worker.spawnPipelineId && (
                                                     <Badge className="bg-indigo-100 text-indigo-700">
                                                         <GitBranch size={10} className="mr-1" />
-                                                        spawns {pipelineLabelMap[subStatus.spawnPipelineId] ?? subStatus.spawnPipelineId}
+                                                        spawns {pipelineLabelMap[worker.spawnPipelineId] ?? worker.spawnPipelineId}
                                                     </Badge>
                                                 )}
-                                                {subStatus.parentSignal && (
-                                                    <Badge className={subStatus.parentSignal === "fail" ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}>
+                                                {worker.parentSignal && (
+                                                    <Badge className={worker.parentSignal === "fail" ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}>
                                                         <CornerUpLeft size={10} className="mr-1" />
-                                                        parent: {subStatus.parentSignal === "fail" ? "Unsuccess" : "Success"}
+                                                        parent: {worker.parentSignal === "fail" ? "Unsuccess" : "Success"}
                                                     </Badge>
                                                 )}
                                             </div>
 
                                             {/* Work-result movement — what Success / Unsuccess do, visible without opening Edit. */}
-                                            {(subStatus.successSubStatusId || subStatus.failSubStatusId || !!subStatus.retrySchedule?.length) && (
+                                            {(worker.successWorkerId || worker.failWorkerId || !!worker.retrySchedule?.length) && (
                                                 <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
-                                                    {subStatus.successSubStatusId && (
+                                                    {worker.successWorkerId && (
                                                         <span className="inline-flex items-center gap-1 text-green-700 dark:text-green-400">
-                                                            <Check size={12} className="shrink-0" /> Success → {subLabelMap[subStatus.successSubStatusId] ?? subStatus.successSubStatusId}
+                                                            <Check size={12} className="shrink-0" /> Success → {subLabelMap[worker.successWorkerId] ?? worker.successWorkerId}
                                                         </span>
                                                     )}
-                                                    {subStatus.retrySchedule?.length ? (
+                                                    {worker.retrySchedule?.length ? (
                                                         <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-400">
-                                                            <X size={12} className="shrink-0" /> Unsuccess → <RefreshCw size={11} className="shrink-0" /> retries{subStatus.failSubStatusId ? `, give up → ${subLabelMap[subStatus.failSubStatusId] ?? subStatus.failSubStatusId}` : ""}
+                                                            <X size={12} className="shrink-0" /> Unsuccess → <RefreshCw size={11} className="shrink-0" /> retries{worker.failWorkerId ? `, give up → ${subLabelMap[worker.failWorkerId] ?? worker.failWorkerId}` : ""}
                                                         </span>
-                                                    ) : subStatus.failSubStatusId ? (
+                                                    ) : worker.failWorkerId ? (
                                                         <span className="inline-flex items-center gap-1 text-red-700 dark:text-red-400">
-                                                            <X size={12} className="shrink-0" /> Unsuccess → {subLabelMap[subStatus.failSubStatusId] ?? subStatus.failSubStatusId}
+                                                            <X size={12} className="shrink-0" /> Unsuccess → {subLabelMap[worker.failWorkerId] ?? worker.failWorkerId}
                                                         </span>
                                                     ) : null}
                                                 </div>
                                             )}
 
-                                            {subStatus.fromTransitions.length > 0 && (
+                                            {worker.fromTransitions.length > 0 && (
                                                 <div className="mt-2 flex flex-wrap items-center gap-1.5">
                                                     <span className="text-xs text-muted-foreground">Next:</span>
-                                                    {subStatus.fromTransitions.map((transition) => (
+                                                    {worker.fromTransitions.map((transition) => (
                                                         <Badge key={transition.to.id} {...badgeColor(transition.to.color)}>
                                                             {transition.to.label}
                                                         </Badge>
@@ -891,30 +891,30 @@ export default function SubStatusesPage() {
                                         </div>
 
                                         <div className="flex shrink-0 items-center gap-2">
-                                            {subStatus.id !== startId && (
+                                            {worker.id !== startId && (
                                                 <Button
                                                     type="button" size="sm" variant="outline"
-                                                    onClick={() => setStart(status.id, subStatus.id)}
-                                                    title="Auto-apply this sub-status when a ticket enters this status"
+                                                    onClick={() => setStart(status.id, worker.id)}
+                                                    title="Auto-apply this worker when a ticket enters this status"
                                                 >
                                                     <Zap size={13} /> Set start
                                                 </Button>
                                             )}
-                                            <Button type="button" size="sm" variant="outline" onClick={() => openTransitionModal(subStatus.id)}>
+                                            <Button type="button" size="sm" variant="outline" onClick={() => openTransitionModal(worker.id)}>
                                                 <GitMerge size={13} /> Flow
                                             </Button>
-                                            <Button type="button" size="sm" variant="outline" onClick={() => openEdit(subStatus)}>
+                                            <Button type="button" size="sm" variant="outline" onClick={() => openEdit(worker)}>
                                                 <Pencil size={13} /> Edit
                                             </Button>
-                                            <Button type="button" size="icon-sm" variant="outline" onClick={() => cloneSubStatus(subStatus)} title="Clone this sub-status">
+                                            <Button type="button" size="icon-sm" variant="outline" onClick={() => cloneWorker(worker)} title="Clone this worker">
                                                 <Copy size={13} />
                                             </Button>
                                             <Button
                                                 type="button"
                                                 size="icon-sm"
                                                 variant="destructive"
-                                                onClick={() => handleDelete(subStatus.id)}
-                                                disabled={deletingId === subStatus.id}
+                                                onClick={() => handleDelete(worker.id)}
+                                                disabled={deletingId === worker.id}
                                             >
                                                 <Trash2 size={13} />
                                             </Button>
@@ -936,29 +936,29 @@ export default function SubStatusesPage() {
                                 </div>
                             </CardHeader>
                             <CardContent className="space-y-0 px-0 pt-0">
-                                {unassigned.map((subStatus) => (
-                                    <div key={subStatus.id} className="flex items-center gap-3 border-b px-6 py-4 last:border-b-0">
+                                {unassigned.map((worker) => (
+                                    <div key={worker.id} className="flex items-center gap-3 border-b px-6 py-4 last:border-b-0">
                                         <span
-                                            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-medium tabular-nums ${badgeColor(subStatus.color).className}`}
-                                            style={badgeColor(subStatus.color).style}
-                                            title={`Sort order ${subStatus.order}`}
+                                            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-medium tabular-nums ${badgeColor(worker.color).className}`}
+                                            style={badgeColor(worker.color).style}
+                                            title={`Sort order ${worker.order}`}
                                         >
-                                            {subStatus.order}
+                                            {worker.order}
                                         </span>
-                                        <span className="flex-1 text-sm">{subStatus.label}</span>
+                                        <span className="flex-1 text-sm">{worker.label}</span>
                                         <div className="flex items-center gap-2">
-                                            <Button type="button" size="sm" variant="outline" onClick={() => openEdit(subStatus)}>
+                                            <Button type="button" size="sm" variant="outline" onClick={() => openEdit(worker)}>
                                                 <Pencil size={13} /> Edit
                                             </Button>
-                                            <Button type="button" size="icon-sm" variant="outline" onClick={() => cloneSubStatus(subStatus)} title="Clone this sub-status">
+                                            <Button type="button" size="icon-sm" variant="outline" onClick={() => cloneWorker(worker)} title="Clone this worker">
                                                 <Copy size={13} />
                                             </Button>
                                             <Button
                                                 type="button"
                                                 size="icon-sm"
                                                 variant="destructive"
-                                                onClick={() => handleDelete(subStatus.id)}
-                                                disabled={deletingId === subStatus.id}
+                                                onClick={() => handleDelete(worker.id)}
+                                                disabled={deletingId === worker.id}
                                             >
                                                 <Trash2 size={13} />
                                             </Button>
@@ -971,10 +971,10 @@ export default function SubStatusesPage() {
                 </div>
             )}
 
-            {/* Sub-status modals */}
-            <SubStatusFormModal
+            {/* Worker modals */}
+            <WorkerFormModal
                 open={showCreate}
-                title="Add Sub-Status"
+                title="Add Worker"
                 form={createForm}
                 setForm={setCreateForm}
                 onSave={handleCreate}
@@ -982,13 +982,13 @@ export default function SubStatusesPage() {
                 saving={creating}
                 statuses={statuses}
                 works={works}
-                subStatuses={subStatuses}
+                workers={workers}
                 pipelines={pipelines}
             />
 
-            <SubStatusFormModal
+            <WorkerFormModal
                 open={!!editId}
-                title={`Edit — ${subStatuses.find((subStatus) => subStatus.id === editId)?.label ?? ""}`}
+                title={`Edit — ${workers.find((worker) => worker.id === editId)?.label ?? ""}`}
                 form={editForm}
                 setForm={setEditForm}
                 onSave={handleEdit}
@@ -996,23 +996,23 @@ export default function SubStatusesPage() {
                 saving={editing}
                 statuses={statuses}
                 works={works}
-                subStatuses={subStatuses}
+                workers={workers}
                 pipelines={pipelines}
             />
 
             {/* Transitions dialog */}
-            <Dialog open={!!transitionModalId && !!modalSubStatus} onOpenChange={(isOpen) => { if (!isOpen) setTransitionModalId(null); }}>
+            <Dialog open={!!transitionModalId && !!modalWorker} onOpenChange={(isOpen) => { if (!isOpen) setTransitionModalId(null); }}>
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader>
                         <DialogTitle>Step Flow</DialogTitle>
                         <DialogDescription>
-                            {modalSubStatus ? `Choose which sub-statuses can come after ${modalSubStatus.label}.` : ""}
+                            {modalWorker ? `Choose which workers can come after ${modalWorker.label}.` : ""}
                         </DialogDescription>
                     </DialogHeader>
 
                     <div className="max-h-72 space-y-2 overflow-y-auto">
                         {transitionCandidates.length === 0 ? (
-                            <p className="text-sm text-muted-foreground">No compatible sub-statuses in the same stage.</p>
+                            <p className="text-sm text-muted-foreground">No compatible workers in the same stage.</p>
                         ) : (
                             transitionCandidates.map((candidate) => (
                                 <label key={candidate.id} className="flex items-center gap-3 rounded-md border border-border px-3 py-2">

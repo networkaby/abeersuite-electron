@@ -37,7 +37,7 @@ Cross-cutting code lives in `src/shared/`. App-level shadcn primitives live in `
 
 Every directory under `src/app/(protected)/office/` is a real URL segment — URLs mirror the source layout 1:1.
 
-- `admin/` — users, role permission matrix, branches, departments, posts, org-chart, pipelines, statuses, sub-statuses, counters, naming-convention, year-ending.
+- `admin/` — users, role permission matrix, branches, departments, posts, org-chart, pipelines, statuses, workers, counters, naming-convention, year-ending.
 - `core/` — accounts, assignments, call-log, search-slno.
 - `customers/` — customers, companies, unified "all" view, transactions tab.
 - `crm/` — leads list + detail.
@@ -72,8 +72,8 @@ Grouped under `src/app/(external)`:
 
 ### Staff API
 
-- `/api/tickets/*` — lifecycle, sub-status, notes, reopen, assign, transfer.
-- `/api/ticket-statuses/*`, `/api/sub-statuses/*`, `/api/sub-status-groups/*` — workflow config.
+- `/api/tickets/*` — lifecycle, worker, notes, reopen, assign, transfer.
+- `/api/ticket-statuses/*`, `/api/workers/*`, `/api/worker-groups/*` — workflow config.
 - `/api/users/*` — CRUD, roles, permissions, activity, wall posts, password.
 - `/api/roles/*`, `/api/permissions/*` — RBAC.
 - `/api/branches/*`, `/api/departments/*`, `/api/posts/*`, `/api/org-chart/*` — org structure.
@@ -133,7 +133,7 @@ Prisma split schema (`prisma.config.ts` → `prisma/schema/`):
 
 ## 7) Design rules
 
-- Ticket workflow = primary status + sub-status handoffs.
+- Ticket workflow = primary status + worker handoffs.
 - Ownership = primary owner + participant helpers.
 - Pipeline model supports multiple workflows (repair, sales, etc.).
 - Customer and Company are separated; `Account` is a legacy bridge.

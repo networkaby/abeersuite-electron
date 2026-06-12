@@ -36,10 +36,10 @@ enum ShopOutOfStockPolicy {
 //  model in coupons.prisma, managed under Customer Retention.)
 
 model ShopOrder {
-  id                Int             @id @default(autoincrement())
+  id                Int               @id @default(autoincrement())
   // Legacy enum status — kept for Razorpay webhook compat; pipeline statusId is source of truth
-  status            ShopOrderStatus @default(DRAFT)
-  orderSource       OrderSource     @default(ONLINE)
+  status            ShopOrderStatus   @default(DRAFT)
+  orderSource       OrderSource       @default(ONLINE)
   // Payment method. COD = collect on delivery (the only live method); ONLINE parked.
   paymentMethod     ShopPaymentMethod @default(COD)
   // Pipeline-based workflow (same pattern as CrmLead)
@@ -53,8 +53,8 @@ model ShopOrder {
   guestPhone        String?
   shippingName      String?
   shippingAddress   Json?
-  totalPaise        Int             @default(0)
-  razorpayOrderId   String?         @unique
+  totalPaise        Int               @default(0)
+  razorpayOrderId   String?           @unique
   razorpayPaymentId String?
   courier           String?
   trackingNumber    String?
@@ -63,16 +63,16 @@ model ShopOrder {
   shippedAt         DateTime?
   deliveredAt       DateTime?
   refundedAt        DateTime?
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
 
-  account      Account?        @relation(fields: [accountId], references: [id])
-  person       Person?         @relation(fields: [personId], references: [id])
-  pipeline     Pipeline?       @relation(fields: [pipelineId], references: [id])
-  orderStatus  TicketStatus?   @relation(fields: [statusId], references: [id])
-  invVoucher   InvVoucher?     @relation("OrderInvVoucher")
-  lines        ShopOrderLine[]
-  tickets      Ticket[]
+  account     Account?        @relation(fields: [accountId], references: [id])
+  person      Person?         @relation(fields: [personId], references: [id])
+  pipeline    Pipeline?       @relation(fields: [pipelineId], references: [id])
+  orderStatus TicketStatus?   @relation(fields: [statusId], references: [id])
+  invVoucher  InvVoucher?     @relation("OrderInvVoucher")
+  lines       ShopOrderLine[]
+  tickets     Ticket[]
 
   @@index([accountId])
   @@index([personId])

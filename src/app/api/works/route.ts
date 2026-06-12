@@ -20,7 +20,7 @@ async function mintWorkPermission(id: string, label: string): Promise<string> {
     await prisma.permission.upsert({
         where:  { id: permissionId },
         update: { label: `Work: ${label}`, module: "tickets" },
-        create: { id: permissionId, label: `Work: ${label}`, module: "tickets", description: `Set ${label} statuses / sub-statuses on a ticket.` },
+        create: { id: permissionId, label: `Work: ${label}`, module: "tickets", description: `Set ${label} statuses / workers on a ticket.` },
     });
     return permissionId;
 }
@@ -34,7 +34,7 @@ export async function GET() {
             orderBy: { order: "asc" },
             include: {
                 statuses: { select: { id: true, label: true, color: true, pipelineId: true }, orderBy: { order: "asc" } },
-                subStatuses: { select: { id: true, label: true, color: true, pipelineId: true }, orderBy: { order: "asc" } },
+                workers: { select: { id: true, label: true, color: true, pipelineId: true }, orderBy: { order: "asc" } },
             },
         });
         return NextResponse.json(works);
@@ -51,7 +51,7 @@ export async function POST(req: Request) {
         const { data, error } = await validateRequest(req, createSchema);
         if (error) return error;
         const { label, color, order, gated } = data;
-        // Opaque, hidden id (W1, W2, …) like statuses (S#) / sub-statuses (SS#),
+        // Opaque, hidden id (W1, W2, …) like statuses (S#) / workers (SS#),
         // so the id never encodes the label and renames stay comfortable.
         const { id, n } = await generateNextOpaqueId(prisma.work, "W");
         const maxOrder = order ?? n;

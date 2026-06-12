@@ -30,7 +30,7 @@ export async function POST(req: Request, { params }: Params) {
 
         const ticket = await prisma.ticket.findUnique({
             where: { id: ticketId },
-            select: { isWarranty: true, warrantyStatus: true, subStatusId: true, ticketSubStatus: { select: { warrantyScope: true } } },
+            select: { isWarranty: true, warrantyStatus: true, workerId: true, ticketWorker: { select: { warrantyScope: true } } },
         });
         if (!ticket) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
@@ -38,21 +38,21 @@ export async function POST(req: Request, { params }: Params) {
         const toStatus = body.warrantyStatus ?? (toWarranty ? "CLAIMED" : "NONE");
         const voidReason: string | null = body.voidReason ?? null;
 
-        // Clear sub-status if it won't apply to the new warranty state
-        let clearSubStatus = false;
-        if (ticket.subStatusId && ticket.ticketSubStatus) {
-            const scope = ticket.ticketSubStatus.warrantyScope;
+        // Clear worker if it won't apply to the new warranty state
+        let clearWorker = false;
+        if (ticket.workerId && ticket.ticketWorker) {
+            const scope = ticket.ticketWorker.warrantyScope;
             if (scope !== "any") {
                 const scopeMatchesWarranty = scope === "warranty_only" && !toWarranty;
                 const scopeMatchesNonWarranty = scope === "non_warranty_only" && toWarranty;
                 if (scopeMatchesWarranty || scopeMatchesNonWarranty) {
-                    clearSubStatus = true;
+                    clearWorker = true;
                 }
             }
         }
 
-        // Pick bridge sub-status: SS36 for void, SS37 for warranty confirmation
-        const bridgeSubStatusId = voidReason ? "SS36" : (toWarranty ? "SS37" : null);
+        // Pick bridge worker: SS36 for void, SS37 for warranty confirmation
+        const bridgeWorkerId = voidReason ? "SS36" : (toWarranty ? "SS37" : null);
 
         const updated = await prisma.ticket.update({
             where: { id: ticketId },
@@ -62,7 +62,7 @@ export async function POST(req: Request, { params }: Params) {
                 voidReason: voidReason,
                 warrantyRef: body.warrantyRef ?? undefined,
                 purchaseDate: body.purchaseDate ? new Date(body.purchaseDate) : undefined,
-                ...(clearSubStatus || bridgeSubStatusId ? { subStatusId: bridgeSubStatusId } : {}),
+                ...(clearWorker || bridgeWorkerId ? { workerId: bridgeWorkerId } : {}),
             },
         });
 

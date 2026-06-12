@@ -1,71 +1,71 @@
 // ── Users ─────────────────────────────────────────────────────────────────────
 
 model User {
-  id                      Int                 @id @default(autoincrement())
-  name                    String
-  email                   String              @unique
-  password                String
+  id                               Int                        @id @default(autoincrement())
+  name                             String
+  email                            String                     @unique
+  password                         String
   // Authority is granted via Position appointments — `role` is only populated
   // when a user holds a Position whose roleTemplate matches. New users start
   // with `role = null` (no operational permissions). The canonical source for
   // effective permissions is `userPositions[].position.roleTemplate.permissions`.
-  role                    String?
-  title                   String?
-  scope                   UserScope           @default(OWN)
-  createdAt               DateTime            @default(now())
+  role                             String?
+  title                            String?
+  scope                            UserScope                  @default(OWN)
+  createdAt                        DateTime                   @default(now())
   /// Server-side session revocation. Any JWT whose login time is BEFORE this
   /// instant is rejected by the auth `jwt` callback. Bumped on sign-out (= log
   /// out of every tab/device at once) and available for password-change / admin
   /// force-logout later. null = never revoked.
-  tokensValidFrom         DateTime?
-  managerId               Int?
+  tokensValidFrom                  DateTime?
+  managerId                        Int?
   // public profile
-  avatarUrl               String?
-  coverUrl                String?
-  phone                   String?
-  birthday                DateTime?
-  bio                     String?
-  linkedIn                String?
-  twitter                 String?
-  instagram               String?
-  facebook                String?
-  ownedTickets            Ticket[]
-  ticketLogs              TicketLog[]
-  participantAdded        TicketParticipant[] @relation("ParticipantAddedBy")
-  participantEntries      TicketParticipant[] @relation("ParticipantUser")
-  manager                 User?               @relation("UserHierarchy", fields: [managerId], references: [id])
-  reports                 User[]              @relation("UserHierarchy")
-  userRole                Role?               @relation(fields: [role], references: [id])
-  journalEntries          JournalEntry[]      @relation("JournalCreatedBy")
-  journalEntriesCancelled JournalEntry[]      @relation("JournalCancelledBy")
-  journalEntriesDeleted   JournalEntry[]      @relation("JournalDeletedBy")
-  vouchers                Voucher[]           @relation("VoucherCreatedBy")
-  vouchersCancelled       Voucher[]           @relation("VoucherCancelledBy")
-  vouchersDeleted         Voucher[]           @relation("VoucherDeletedBy")
-  voucherAllocations      VoucherAllocation[] @relation("VoucherAllocationCreatedBy")
-  invVouchers             InvVoucher[]        @relation("InvVoucherCreatedBy")
-  invVouchersCancelled    InvVoucher[]        @relation("InvVoucherCancelledBy")
-  invVouchersDeleted      InvVoucher[]        @relation("InvVoucherDeletedBy")
-  auditLogs               AuditLog[]          @relation("AuditLogActor")
-  auditLogsRestored       AuditLog[]          @relation("AuditLogRestoredBy")
-  ownedChatRooms          ChatRoom[]          @relation("OwnedChatRooms")
-  chatRoomMembers         ChatRoomMember[]
-  chatMessages            ChatMessage[]
-  wallPosts               WallPost[]          @relation("WallPosts")
-  authoredPosts           WallPost[]          @relation("AuthoredPosts")
-  userPositions           UserPosition[]
-  userPermissions         UserPermission[]
+  avatarUrl                        String?
+  coverUrl                         String?
+  phone                            String?
+  birthday                         DateTime?
+  bio                              String?
+  linkedIn                         String?
+  twitter                          String?
+  instagram                        String?
+  facebook                         String?
+  ownedTickets                     Ticket[]
+  ticketLogs                       TicketLog[]
+  participantAdded                 TicketParticipant[]        @relation("ParticipantAddedBy")
+  participantEntries               TicketParticipant[]        @relation("ParticipantUser")
+  manager                          User?                      @relation("UserHierarchy", fields: [managerId], references: [id])
+  reports                          User[]                     @relation("UserHierarchy")
+  userRole                         Role?                      @relation(fields: [role], references: [id])
+  journalEntries                   JournalEntry[]             @relation("JournalCreatedBy")
+  journalEntriesCancelled          JournalEntry[]             @relation("JournalCancelledBy")
+  journalEntriesDeleted            JournalEntry[]             @relation("JournalDeletedBy")
+  vouchers                         Voucher[]                  @relation("VoucherCreatedBy")
+  vouchersCancelled                Voucher[]                  @relation("VoucherCancelledBy")
+  vouchersDeleted                  Voucher[]                  @relation("VoucherDeletedBy")
+  voucherAllocations               VoucherAllocation[]        @relation("VoucherAllocationCreatedBy")
+  invVouchers                      InvVoucher[]               @relation("InvVoucherCreatedBy")
+  invVouchersCancelled             InvVoucher[]               @relation("InvVoucherCancelledBy")
+  invVouchersDeleted               InvVoucher[]               @relation("InvVoucherDeletedBy")
+  auditLogs                        AuditLog[]                 @relation("AuditLogActor")
+  auditLogsRestored                AuditLog[]                 @relation("AuditLogRestoredBy")
+  ownedChatRooms                   ChatRoom[]                 @relation("OwnedChatRooms")
+  chatRoomMembers                  ChatRoomMember[]
+  chatMessages                     ChatMessage[]
+  wallPosts                        WallPost[]                 @relation("WallPosts")
+  authoredPosts                    WallPost[]                 @relation("AuthoredPosts")
+  userPositions                    UserPosition[]
+  userPermissions                  UserPermission[]
   // POS shift relations
-  posShifts               PosShift[]          @relation("PosShiftUser")
-  posShiftsOpenedBy       PosShift[]          @relation("PosShiftOpenedBy")
-  posShiftsClosedBy       PosShift[]          @relation("PosShiftClosedBy")
-  posCashDrops            PosCashDrop[]       @relation("PosCashDropBy")
-  handoversReceived       PosHandover[]       @relation("HandoverToUser")
-  quickNotes              QuickNote[]
-  loyaltyLedgerEntries    LoyaltyLedger[]     @relation("LoyaltyLedgerCreatedBy")
-  couponsCreated          Coupon[]            @relation("CouponCreatedBy")
-  giftCardsCreated        GiftCard[]          @relation("GiftCardCreatedBy")
-  giftCardTxnsCreated     GiftCardTxn[]       @relation("GiftCardTxnCreatedBy")
+  posShifts                        PosShift[]                 @relation("PosShiftUser")
+  posShiftsOpenedBy                PosShift[]                 @relation("PosShiftOpenedBy")
+  posShiftsClosedBy                PosShift[]                 @relation("PosShiftClosedBy")
+  posCashDrops                     PosCashDrop[]              @relation("PosCashDropBy")
+  handoversReceived                PosHandover[]              @relation("HandoverToUser")
+  quickNotes                       QuickNote[]
+  loyaltyLedgerEntries             LoyaltyLedger[]            @relation("LoyaltyLedgerCreatedBy")
+  couponsCreated                   Coupon[]                   @relation("CouponCreatedBy")
+  giftCardsCreated                 GiftCard[]                 @relation("GiftCardCreatedBy")
+  giftCardTxnsCreated              GiftCardTxn[]              @relation("GiftCardTxnCreatedBy")
   additionalCostAllocationsCreated AdditionalCostAllocation[] @relation("AdditionalCostAllocationCreatedBy")
 }
 

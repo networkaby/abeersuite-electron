@@ -147,7 +147,7 @@ export default function PipelinesPage() {
                 <div>
                     <h1 className="text-3xl font-bold">Pipelines</h1>
                     <p className="text-sm text-muted-foreground mt-1">
-                        Each pipeline has its own independent set of statuses, sub-statuses, and workflow graph.
+                        Each pipeline has its own independent set of statuses, workers, and workflow graph.
                     </p>
                 </div>
                 <Button onClick={() => setShowCreate(true)}>

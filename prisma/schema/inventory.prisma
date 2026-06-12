@@ -165,9 +165,9 @@ model InvNamingConfig {
 }
 
 model InvProduct {
-  id             Int      @id @default(autoincrement())
-  sku            String   @unique
-  name           String
+  id   Int    @id @default(autoincrement())
+  sku  String @unique
+  name String
 
   /// Free-text user portion that survives name regeneration. Rendered
   /// wherever the InvNamingConfig places the `userPart` token. Lets the
@@ -188,50 +188,50 @@ model InvProduct {
 
   // ── Ecommerce / storefront fields (null = not listed in shop) ──────────────
   /// URL-safe handle for /shop/product/[handle]
-  slug              String? @unique
-  shopSubheading    String?
-  shopDescription   String?
+  slug                    String? @unique
+  shopSubheading          String?
+  shopDescription         String?
   /// Display category label for storefront (falls back to InvCategory.name)
-  shopCategory      String?
+  shopCategory            String?
   /// Materialized "effective sale price" (paise, GST-inclusive). The single value
   /// every sale transaction (POS + Sale voucher) charges. Rewritten from the chosen
   /// `effectiveSalePriceSource` by the recompute trigger after each transaction and
   /// immediately on Freeze. null = not priced / not listed in shop.
   effectiveSalePricePaise Int?
-  mrpPaise          Int?
-  shopBadge         String?
-  imageUrl          String?
+  mrpPaise                Int?
+  shopBadge               String?
+  imageUrl                String?
   /// JSON array of image URLs for gallery
-  galleryJson       Json?
+  galleryJson             Json?
   /// JSON object of label → value for specs tab
-  specsJson         Json?
+  specsJson               Json?
   /// Free-form custom attributes — flat { key: value } pairs used for SEO-rich
   /// naming convention tokens and additional product info (colour, storage, OS, …).
-  attrsJson         Json?
+  attrsJson               Json?
   /// Cached running stock balance — updated atomically on every voucher post/cancel
   /// (mirrors Account.balance pattern from GL module). null = stock not tracked.
-  stock             Int?
+  stock                   Int?
   /// O2C reservation: units HELD by confirmed-but-not-yet-fulfilled orders.
   /// available-to-sell = stock − reserved. Incremented when an order is Confirmed,
   /// decremented on Cancel/Return; converted to a real stock-out at Fulfil.
-  reserved          Int     @default(0)
-  lowStockThreshold Int     @default(5)
-  isListedInShop    Boolean @default(false)
+  reserved                Int     @default(0)
+  lowStockThreshold       Int     @default(5)
+  isListedInShop          Boolean @default(false)
   /// Per-product override of the org out-of-stock policy: when true the shop
   /// accepts orders for this product even at zero stock (backorder / procure later).
-  allowBackorder    Boolean @default(false)
+  allowBackorder          Boolean @default(false)
 
   // ── Pricing strategy (cost basis + per-item overrides) ─────────────────────
   /// Per-item cost-basis method consumed by the pricing-strategy resolver +
   /// BS valuation. See `enum CostMethod`. Null = inherit from the matched
   /// strategy (which itself may inherit to OrgDefaults.valuationMethod).
   /// Resolution: product.costMethod ?? strategy.costMethod ?? OrgDefaults.valuationMethod.
-  costMethod        CostMethod?
+  costMethod      CostMethod?
   /// Per-item margin override in percent (e.g. 18.50 = +18.5%). null = walk the
   /// PricingStrategy chain (BRAND → GROUP → CATEGORY → ORG).
-  marginPercent     Decimal?   @db.Decimal(6, 2)
+  marginPercent   Decimal?    @db.Decimal(6, 2)
   /// True when a user has manually set effectiveSalePricePaise — bulk recompute skips this row.
-  priceOverridden   Boolean    @default(false)
+  priceOverridden Boolean     @default(false)
 
   // ── Saved "Sale Price" (the human sale price — barcode source) ──────────────
   /// Which source materializes effectiveSalePricePaise. SAVED = the frozen
@@ -243,12 +243,12 @@ model InvProduct {
   /// save time. Single source of truth for the printed barcode, and the value that
   /// materializes into effectiveSalePricePaise when effectiveSalePriceSource = SAVED.
   /// Written by Edit Product, Item Import, and the Update & Print Labels "Sale Price" column.
-  savedSalePricePaise Int?
+  savedSalePricePaise      Int?
   /// When savedSalePricePaise was last frozen — drives the printed barcode date code.
-  salePriceFrozenAt   DateTime?
+  salePriceFrozenAt        DateTime?
   /// After-tax profit (paise) decided at freeze time — basis for the drift /
   /// profit-gap filter on the labels page (current profit vs this snapshot).
-  savedProfitPaise  Int?
+  savedProfitPaise         Int?
 
   // ── Tally-style opening stock — entered on the master, dated at booksBeginningFrom.
   // Mismatch between Σ(openingValue) and the "Stock-in-Hand" line on the
@@ -275,18 +275,18 @@ model InvProduct {
   brand        InvBrand?        @relation(fields: [brandId], references: [id], onDelete: SetNull)
   warrantyTerm InvWarrantyTerm? @relation(fields: [warrantyTermId], references: [id], onDelete: SetNull)
 
-  codes        InvProductCode[]
-  orderLines   ShopOrderLine[]
-  voucherLines InvVoucherLine[]
-  stockEntries InvStockLedger[]
-  branchStocks InvProductBranch[]
-  reservations StockReservation[]
-  bomOutputs   InvBom[]           @relation("BomOutput")
-  bomConsume   InvBomLine[]       @relation("BomConsume")
-  loyaltyEarnRules LoyaltyEarnRule[]  @relation("InvProductLoyaltyRules")
-  couponFreeProducts Coupon[]            @relation("CouponFreeProduct")
-  couponBuyProducts  Coupon[]            @relation("CouponBuyProduct")
-  couponRules        CouponProductRule[] @relation("CouponRuleProduct")
+  codes                     InvProductCode[]
+  orderLines                ShopOrderLine[]
+  voucherLines              InvVoucherLine[]
+  stockEntries              InvStockLedger[]
+  branchStocks              InvProductBranch[]
+  reservations              StockReservation[]
+  bomOutputs                InvBom[]                   @relation("BomOutput")
+  bomConsume                InvBomLine[]               @relation("BomConsume")
+  loyaltyEarnRules          LoyaltyEarnRule[]          @relation("InvProductLoyaltyRules")
+  couponFreeProducts        Coupon[]                   @relation("CouponFreeProduct")
+  couponBuyProducts         Coupon[]                   @relation("CouponBuyProduct")
+  couponRules               CouponProductRule[]        @relation("CouponRuleProduct")
   additionalCostAllocations AdditionalCostAllocation[]
 
   @@index([unitId])
@@ -342,7 +342,7 @@ model InvProductBranch {
 /// RELEASED = order cancelled/returned. InvProduct.reserved = Σ HELD qty.
 model StockReservation {
   id          Int      @id @default(autoincrement())
-  orderSource String   // "inv" | "shop"
+  orderSource String // "inv" | "shop"
   orderId     Int
   productId   Int
   quantity    Int
@@ -366,15 +366,15 @@ model StockReservation {
 /// the actual ledger/wallet effect happens on the Sale at Fulfil, not here.
 model RedemptionHold {
   id          Int      @id @default(autoincrement())
-  orderSource String   // "inv" | "shop"
+  orderSource String // "inv" | "shop"
   orderId     Int
-  rewardType  String   // LOYALTY | COUPON | GIFT_CARD
-  rewardRef   String?  // coupon code / gift-card code (null for loyalty)
-  rewardId    Int?     // Coupon.id / GiftCard.id (null for loyalty wallet)
-  accountId   Int?     // customer ledger account the reward belongs to
-  points      Int?     // loyalty points held (null for coupon/gift-card)
+  rewardType  String // LOYALTY | COUPON | GIFT_CARD
+  rewardRef   String? // coupon code / gift-card code (null for loyalty)
+  rewardId    Int? // Coupon.id / GiftCard.id (null for loyalty wallet)
+  accountId   Int? // customer ledger account the reward belongs to
+  points      Int? // loyalty points held (null for coupon/gift-card)
   amount      Decimal  @default(0) @db.Decimal(14, 2) // rupee value held
-  meta        Json?    // reward-specific plan (e.g. loyalty FIFO lot consumption)
+  meta        Json? // reward-specific plan (e.g. loyalty FIFO lot consumption)
   status      String   @default("HELD") // HELD | EXECUTED | RELEASED
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -387,18 +387,18 @@ model RedemptionHold {
 // ── Stock Vouchers (Purchase / Sale) ─────────────────────────────────────────
 
 model InvVoucher {
-  id                  Int            @id @default(autoincrement())
+  id                  Int                    @id @default(autoincrement())
   type                InvVoucherType
   /// Auto-generated: PV-2026-0001 for PURCHASE, SV-2026-0001 for SALE
-  reference           String         @unique
+  reference           String                 @unique
   /// Branch where this voucher originates — drives per-branch stock balance,
   /// list filtering, and reporting. Required on every new voucher.
   branchId            String
-  branch              Branch         @relation("InvVoucherBranch", fields: [branchId], references: [id])
-  date                DateTime       @db.Date
+  branch              Branch                 @relation("InvVoucherBranch", fields: [branchId], references: [id])
+  date                DateTime               @db.Date
   description         String
   /// Reuses VoucherStatus enum: DRAFT → POSTED → CANCELLED
-  status              VoucherStatus  @default(DRAFT)
+  status              VoucherStatus          @default(DRAFT)
   /// Single FK to the party's ledger account. Required at the
   /// application layer for trading vouchers (SALE / PURCHASE / POS /
   /// SALE_RETURN / PURCHASE_RETURN) — replaces the legacy
@@ -407,7 +407,7 @@ model InvVoucher {
   /// BRANCH_TRANSFER, GRN, CHALLAN, REJECTION_*) legitimately have no
   /// party.
   accountId           Int?
-  account             Account?       @relation("InvVoucherAccount", fields: [accountId], references: [id])
+  account             Account?               @relation("InvVoucherAccount", fields: [accountId], references: [id])
   /// Frozen party snapshot — { name, phone, address } as-of the transaction
   /// (immutable on a tax invoice). Replaced the partyName / partyPhone /
   /// partyAddress scalar columns (2026-06-10). `accountId` above is the canonical
@@ -423,13 +423,13 @@ model InvVoucher {
   /// supplier does). Also reused as the "original invoice / bill number"
   /// on SALE_RETURN / PURCHASE_RETURN to back-reference the source voucher.
   refNumber           String?
-  refDate             DateTime?      @db.Date
+  refDate             DateTime?              @db.Date
   /// Optional FK back to the source InvVoucher being returned against —
   /// lets a SALE_RETURN link to the original SALE (and PURCHASE_RETURN to
   /// the original PURCHASE) so the detail page can show the relationship.
   refVoucherId        Int?
-  refVoucher          InvVoucher?    @relation("InvVoucherRef", fields: [refVoucherId], references: [id])
-  refReturns          InvVoucher[]   @relation("InvVoucherRef")
+  refVoucher          InvVoucher?            @relation("InvVoucherRef", fields: [refVoucherId], references: [id])
+  refReturns          InvVoucher[]           @relation("InvVoucherRef")
   /// Number of days from voucher date until payment is due. Only for CREDIT mode.
   creditPeriodDays    Int?
   /// State code where the supply happens — drives intra/inter-state GST split.
@@ -442,28 +442,28 @@ model InvVoucher {
   /// customer's shippingStateCode (or GSTIN state for B2B).
   /// POS sales are always COUNTER (hardcoded in /api/pos/sale).
   deliveryMode        InvVoucherDeliveryMode @default(COUNTER)
-  discountPct         Decimal?       @db.Decimal(5, 2)
-  discountAmt         Decimal?       @db.Decimal(14, 2)
-  shippingAmt         Decimal        @default(0) @db.Decimal(14, 2)
-  roundOff            Decimal        @default(0) @db.Decimal(14, 2)
-  subtotal            Decimal        @db.Decimal(14, 2)
-  taxAmount           Decimal        @default(0) @db.Decimal(14, 2)
-  totalAmount         Decimal        @db.Decimal(14, 2)
+  discountPct         Decimal?               @db.Decimal(5, 2)
+  discountAmt         Decimal?               @db.Decimal(14, 2)
+  shippingAmt         Decimal                @default(0) @db.Decimal(14, 2)
+  roundOff            Decimal                @default(0) @db.Decimal(14, 2)
+  subtotal            Decimal                @db.Decimal(14, 2)
+  taxAmount           Decimal                @default(0) @db.Decimal(14, 2)
+  totalAmount         Decimal                @db.Decimal(14, 2)
   /// Linked GL journal entry — auto-created on post
   journalEntryId      Int?
   postedAt            DateTime?
   // Toggle on Challan vouchers — when false, printed challan hides rate/amount columns.
-  showPrices          Boolean        @default(true)
+  showPrices          Boolean                @default(true)
   /// Optional FK to InvBom — only set for MANUFACTURING_JOURNAL vouchers
   /// generated from a recipe (stamped for audit / reporting).
   bomId               Int?
-  bom                 InvBom?        @relation(fields: [bomId], references: [id])
+  bom                 InvBom?                @relation(fields: [bomId], references: [id])
   /// Destination branch — only set for BRANCH_TRANSFER. The source branch
   /// is the standard `branchId` field; this column carries the partner
   /// branch the stock is moving into. Two `InvStockLedger` rows are written
   /// per transfer line at post time (one OUT on source, one IN on dest).
   destinationBranchId String?
-  destinationBranch   Branch?        @relation("InvVoucherDestBranch", fields: [destinationBranchId], references: [id])
+  destinationBranch   Branch?                @relation("InvVoucherDestBranch", fields: [destinationBranchId], references: [id])
 
   /// Back-link to an ecommerce order this voucher was raised against.
   /// Unique because one shop order produces at most one sale voucher.
@@ -499,23 +499,23 @@ model InvVoucher {
   deletedById   Int?
   deleteReason  String?
 
-  createdById  Int
-  createdBy    User                    @relation("InvVoucherCreatedBy", fields: [createdById], references: [id])
-  cancelledBy  User?                   @relation("InvVoucherCancelledBy", fields: [cancelledById], references: [id])
-  deletedBy    User?                   @relation("InvVoucherDeletedBy", fields: [deletedById], references: [id])
-  lines         InvVoucherLine[]
-  charges       InvVoucherCharge[]
-  tenders       InvVoucherTender[]
-  stockEntries  InvStockLedger[]
-  loyaltyLots   LoyaltyLot[]            @relation("InvVoucherLoyaltyLots")
-  loyaltyLedger LoyaltyLedger[]         @relation("InvVoucherLoyaltyLedger")
-  loyaltyMilestoneAwards LoyaltyMilestoneAward[] @relation("InvVoucherLoyaltyMilestoneAwards")
-  couponRedemptions      CouponRedemption[]      @relation("InvVoucherCouponRedemptions")
-  giftCardTxns           GiftCardTxn[]           @relation("InvVoucherGiftCardTxns")
+  createdById               Int
+  createdBy                 User                       @relation("InvVoucherCreatedBy", fields: [createdById], references: [id])
+  cancelledBy               User?                      @relation("InvVoucherCancelledBy", fields: [cancelledById], references: [id])
+  deletedBy                 User?                      @relation("InvVoucherDeletedBy", fields: [deletedById], references: [id])
+  lines                     InvVoucherLine[]
+  charges                   InvVoucherCharge[]
+  tenders                   InvVoucherTender[]
+  stockEntries              InvStockLedger[]
+  loyaltyLots               LoyaltyLot[]               @relation("InvVoucherLoyaltyLots")
+  loyaltyLedger             LoyaltyLedger[]            @relation("InvVoucherLoyaltyLedger")
+  loyaltyMilestoneAwards    LoyaltyMilestoneAward[]    @relation("InvVoucherLoyaltyMilestoneAwards")
+  couponRedemptions         CouponRedemption[]         @relation("InvVoucherCouponRedemptions")
+  giftCardTxns              GiftCardTxn[]              @relation("InvVoucherGiftCardTxns")
   // Pricing-strategy additional-cost allocations sourced from this purchase/GRN.
   additionalCostAllocations AdditionalCostAllocation[] @relation("AdditionalCostAllocationInvVoucher")
-  createdAt    DateTime                @default(now())
-  updatedAt    DateTime                @updatedAt
+  createdAt                 DateTime                   @default(now())
+  updatedAt                 DateTime                   @updatedAt
 
   @@index([type, status])
   @@index([date])
@@ -528,29 +528,28 @@ model InvVoucher {
   @@index([orderStatusId])
 }
 
-
 model InvVoucherLine {
-  id          Int        @id @default(autoincrement())
-  voucherId   Int
-  voucher     InvVoucher @relation(fields: [voucherId], references: [id], onDelete: Cascade)
-  productId   Int
-  product     InvProduct @relation(fields: [productId], references: [id])
-  description String?
+  id                  Int        @id @default(autoincrement())
+  voucherId           Int
+  voucher             InvVoucher @relation(fields: [voucherId], references: [id], onDelete: Cascade)
+  productId           Int
+  product             InvProduct @relation(fields: [productId], references: [id])
+  description         String?
   /// "CONSUME" | "PRODUCE" for MANUFACTURING_JOURNAL lines; null for every
   /// other voucher type. Drives the stock IN/OUT direction on post.
-  direction   String?
-  quantity    Decimal    @db.Decimal(10, 3)
+  direction           String?
+  quantity            Decimal    @db.Decimal(10, 3)
   /// Free / complimentary quantity — flows out of stock alongside `quantity`
   /// but contributes ₹ 0 to revenue (line.amount). Used for "buy 2 get 1 free"
   /// style schemes. Optional; defaults to 0 at the application layer.
-  freeQty     Decimal?   @db.Decimal(10, 3)
-  rate        Decimal    @db.Decimal(14, 2)
+  freeQty             Decimal?   @db.Decimal(10, 3)
+  rate                Decimal    @db.Decimal(14, 2)
   /// MRP (Maximum Retail Price) at the time of the transaction — paise.
   /// Populated on PURCHASE voucher lines by the form; used to update
   /// InvProduct.mrpPaise on POST so the product catalog stays current.
   /// Also snapshotted on POS/SALE lines at sale time so the customer-facing
   /// "Today's discount" price ladder can show MRP on a reprint.
-  mrpPaise    Int?
+  mrpPaise            Int?
   /// Printed barcode TAG price at the time of the sale — paise. This is the
   /// public, on-the-label price DERIVED from the product's saved sale price + MRP
   /// via the org barcode bands (see src/shared/lib/pricing/barcodePrice.ts), NOT
@@ -558,12 +557,12 @@ model InvVoucherLine {
   /// bill shows the barcode line + the "Counter discount" (barcode − effective)
   /// without re-reading the product or re-deriving the tag (prices/bands drift).
   savedSalePricePaise Int?
-  discountPct Decimal    @default(0) @db.Decimal(5, 2)
-  discountAmt Decimal    @default(0) @db.Decimal(14, 2)
-  taxRate     Decimal    @default(0) @db.Decimal(5, 2)
-  taxAmount   Decimal    @default(0) @db.Decimal(14, 2)
+  discountPct         Decimal    @default(0) @db.Decimal(5, 2)
+  discountAmt         Decimal    @default(0) @db.Decimal(14, 2)
+  taxRate             Decimal    @default(0) @db.Decimal(5, 2)
+  taxAmount           Decimal    @default(0) @db.Decimal(14, 2)
   /// (qty × rate) − discountAmt + taxAmount
-  amount      Decimal    @db.Decimal(14, 2)
+  amount              Decimal    @db.Decimal(14, 2)
 
   @@index([voucherId])
   @@index([productId])
