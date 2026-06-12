@@ -521,6 +521,7 @@ type SubStatusSeed = {
     retrySchedule?: { unit: string; every: number; times: number }[];
     successSubStatusId?: string;   // outcome routing (set in a second pass; self/forward FK)
     failSubStatusId?: string;
+    spawnPipelineId?: string;      // 5th power: entering here spawns a child ticket on this pipeline
 };
 
 const SUB_STATUSES: SubStatusSeed[] = [
@@ -856,7 +857,7 @@ async function main() {
         });
     }
     for (const ss of SUB_STATUSES) {
-        const retry = { retrySchedule: ss.retrySchedule ?? [], publicLabel: ss.publicLabel ?? null };
+        const retry = { retrySchedule: ss.retrySchedule ?? [], publicLabel: ss.publicLabel ?? null, spawnPipelineId: ss.spawnPipelineId ?? null };
         await prisma.ticketSubStatus.upsert({
             where:  { id: ss.id },
             update: { label: ss.label, color: ss.color, order: ss.order, statusId: ss.statusId, triggerMap: ss.triggerMap ?? {}, actionLabel: ss.actionLabel ?? null, autoRevertOnClear: true, warrantyScope: ss.warrantyScope ?? "any", workId: ss.workId, pipelineId: ss.pipelineId, ...retry },

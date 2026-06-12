@@ -54,6 +54,17 @@ model Ticket {
   wakeAt            DateTime?
   retryCount        Int             @default(0)
   retryKeyId        String?
+  // ── Spawned child sub-pipeline ("5th power") ───────────────────────────────
+  // A sub-status with spawnPipelineId creates a CHILD ticket on another pipeline
+  // (e.g. inbound parts courier). The child carries parentTicketId back; the
+  // parent's sub-status mirrors the child's status and advances when the child
+  // hits a terminal. parentSubStatusId = which sub-status of the parent is waiting
+  // on this child (where to fire success/fail when it resolves). context = soft,
+  // unstructured data (device snapshot, participants, ownership, parts) — kept in
+  // JSON for now, rewire to columns later if needed.
+  parentTicketId    Int?
+  parentSubStatusId String?
+  context           Json?
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
 
@@ -65,10 +76,13 @@ model Ticket {
   serviceCenter   ServiceCenter?      @relation(fields: [serviceCenterId], references: [id])
   ticketStatus    TicketStatus        @relation(fields: [status], references: [id])
   ticketSubStatus TicketSubStatus?    @relation(fields: [subStatusId], references: [id])
+  parent          Ticket?             @relation("TicketChildren", fields: [parentTicketId], references: [id])
+  children        Ticket[]            @relation("TicketChildren")
   logs            TicketLog[]
   participants    TicketParticipant[]
   invVouchers     InvVoucher[]        @relation("TicketInvVouchers")
 
+  @@index([parentTicketId])
   @@index([status])
   @@index([pipelineId, status])
   @@index([primaryOwnerId])

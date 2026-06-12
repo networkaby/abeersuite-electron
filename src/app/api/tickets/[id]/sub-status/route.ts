@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { passesWorkGate } from "@/modules/repairing/lib/workGate";
 import { findEntrySubStatus } from "@/modules/repairing/lib/entrySubStatus";
+import { spawnChildTicket } from "@/modules/repairing/lib/spawnChild";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
@@ -283,6 +284,25 @@ export async function PATCH(
                 }
             }
         });
+
+        // 5th power — if the landing sub-status spawns a child pipeline, open the
+        // child ticket (idempotent; best-effort so it never blocks the move).
+        if (newSubStatusId) {
+            const landing = await prisma.ticketSubStatus.findUnique({
+                where: { id: newSubStatusId },
+                select: { spawnPipelineId: true },
+            });
+            if (landing?.spawnPipelineId) {
+                await spawnChildTicket({
+                    parentId: ticketId,
+                    parentStatus: newMainStatus,
+                    parentSubStatusId: newSubStatusId,
+                    spawnPipelineId: landing.spawnPipelineId,
+                    deviceId: ticket.deviceId,
+                    userId,
+                }).catch(() => { /* spawn failure must not fail the move */ });
+            }
+        }
 
         // TODO(rbac): handoffRole auto-assignment removed (it looked staff up by the
         // legacy User.role). Re-add Position-based handoff when RBAC is re-wired.

@@ -89,6 +89,10 @@ model TicketSubStatus {
   // [] = no retry. After the last phase's last attempt, route to failSubStatus
   // (the "On unsuccess → move to" target doubles as the give-up destination).
   retrySchedule       Json                  @default("[]")
+  // 5th power: entering this sub-status spawns a CHILD ticket on this pipeline
+  // (e.g. inbound parts courier). The parent mirrors the child and advances via
+  // success/fail when the child terminates. Plain id (no FK) — keep it simple.
+  spawnPipelineId     String?
   workId              String?
   work                Work?                 @relation(fields: [workId], references: [id], onDelete: SetNull)
   pipelineId          String?

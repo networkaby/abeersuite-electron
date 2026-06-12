@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Check, ChevronRight, Copy, GitMerge, Lock, Pencil, Plus, RefreshCw, Trash2, X, Zap } from "lucide-react";
+import { Check, ChevronRight, Copy, GitBranch, GitMerge, Lock, Pencil, Plus, RefreshCw, Trash2, X, Zap } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -80,6 +80,7 @@ interface SubStatus {
     failSubStatusId?: string | null;
     autoRevertOnClear: boolean;
     retrySchedule?: { unit: string; every: number; times: number }[] | null;
+    spawnPipelineId?: string | null;
     fromTransitions: { to: { id: string; label: string; color: string } }[];
 }
 
@@ -105,6 +106,7 @@ type FormValues = {
     failSubStatusId: string;
     autoRevertOnClear: boolean;
     retryRows: RetryRows;
+    spawnPipelineId: string;
 };
 
 const BLANK_FORM: FormValues = {
@@ -121,6 +123,7 @@ const BLANK_FORM: FormValues = {
     failSubStatusId: "",
     autoRevertOnClear: true,
     retryRows: BLANK_RETRY_ROWS(),
+    spawnPipelineId: "",
 };
 
 // Build the ordered retrySchedule payload from the dialog rows (densest first).
@@ -158,6 +161,7 @@ function SubStatusFormModal({
     statuses,
     works,
     subStatuses,
+    pipelines,
 }: {
     open: boolean;
     title: string;
@@ -169,6 +173,7 @@ function SubStatusFormModal({
     statuses: StatusItem[];
     works: Work[];
     subStatuses: SubStatus[];
+    pipelines: Pipeline[];
 }) {
     // A sub-status belongs to exactly one parent status. Changing it re-keys the
     // single auto-advance entry (triggerMap) onto the new status.
@@ -403,6 +408,23 @@ function SubStatusFormModal({
                         </div>
                     </div>
 
+                    {/* 5th power: entering this sub-status spawns a CHILD ticket on another
+                        pipeline (e.g. inbound parts courier). The parent mirrors the child and
+                        advances via its Success/Unsuccess route when the child terminates. */}
+                    <div className="space-y-2">
+                        <Label className="flex items-center gap-1.5"><GitBranch size={13} /> Spawn child pipeline on entry</Label>
+                        <Select value={form.spawnPipelineId || "__none__"} onValueChange={(value) => setForm({ ...form, spawnPipelineId: value === "__none__" ? "" : value })}>
+                            <SelectTrigger className="w-full"><SelectValue placeholder="— none —" /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="__none__">— none —</SelectItem>
+                                {pipelines.map((p) => (<SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>))}
+                            </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">
+                            Landing here opens a child ticket on that pipeline (linked back to this one). When the child reaches a terminal it fires this sub-status’s Success / Unsuccess route. Blank = no spawn.
+                        </p>
+                    </div>
+
                     <div className="space-y-2">
                         <Label>Order</Label>
                         <Input
@@ -539,6 +561,7 @@ export default function SubStatusesPage() {
         failSubStatusId: form.failSubStatusId || null,
         autoRevertOnClear: form.autoRevertOnClear,
         retrySchedule: rowsToSchedule(form.retryRows),
+        spawnPipelineId: form.spawnPipelineId || null,
     });
 
     const handleCreate = async () => {
@@ -573,6 +596,7 @@ export default function SubStatusesPage() {
             failSubStatusId: subStatus.failSubStatusId ?? "",
             autoRevertOnClear: subStatus.autoRevertOnClear ?? true,
             retryRows: scheduleToRows(subStatus.retrySchedule),
+            spawnPipelineId: subStatus.spawnPipelineId ?? "",
         });
         setEditId(subStatus.id);
     };
@@ -594,6 +618,7 @@ export default function SubStatusesPage() {
             failSubStatusId: s.failSubStatusId ?? "",
             autoRevertOnClear: s.autoRevertOnClear ?? true,
             retryRows: scheduleToRows(s.retrySchedule),
+            spawnPipelineId: s.spawnPipelineId ?? "",
         });
         setShowCreate(true);
     };
@@ -694,6 +719,7 @@ export default function SubStatusesPage() {
 
     const statusLabelMap = Object.fromEntries(statuses.map((status) => [status.id, status.label]));
     const subLabelMap = Object.fromEntries(subStatuses.map((s) => [s.id, s.label]));
+    const pipelineLabelMap = Object.fromEntries(pipelines.map((p) => [p.id, p.label]));
 
     // One card per status (shown even when empty, so each has its own create button).
     const byParent = statuses.map((status) => ({
@@ -793,6 +819,12 @@ export default function SubStatusesPage() {
                                                     <Badge className="bg-amber-100 text-amber-700">
                                                         <RefreshCw size={10} className="mr-1" />
                                                         {subStatus.retrySchedule.map((p) => `${p.times}×${p.every}${RETRY_UNITS.find((u) => u.key === p.unit)?.abbr ?? p.unit}`).join(" → ")}
+                                                    </Badge>
+                                                )}
+                                                {subStatus.spawnPipelineId && (
+                                                    <Badge className="bg-indigo-100 text-indigo-700">
+                                                        <GitBranch size={10} className="mr-1" />
+                                                        spawns {pipelineLabelMap[subStatus.spawnPipelineId] ?? subStatus.spawnPipelineId}
                                                     </Badge>
                                                 )}
                                             </div>
@@ -922,6 +954,7 @@ export default function SubStatusesPage() {
                 statuses={statuses}
                 works={works}
                 subStatuses={subStatuses}
+                pipelines={pipelines}
             />
 
             <SubStatusFormModal
@@ -935,6 +968,7 @@ export default function SubStatusesPage() {
                 statuses={statuses}
                 works={works}
                 subStatuses={subStatuses}
+                pipelines={pipelines}
             />
 
             {/* Transitions dialog */}
