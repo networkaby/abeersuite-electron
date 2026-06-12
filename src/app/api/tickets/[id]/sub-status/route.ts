@@ -117,7 +117,7 @@ export async function PATCH(
                 ? subStatus
                 : await prisma.ticketSubStatus.findUnique({
                     where: { id: prevSubStatusId },
-                    select: { id: true, label: true, retrySchedule: true, exhaustedSubStatusId: true },
+                    select: { id: true, label: true, retrySchedule: true, failSubStatusId: true },
                 }))
             : null;
         const currentPhases = parseSchedule(currentSub?.retrySchedule);
@@ -136,8 +136,8 @@ export async function PATCH(
                 retryCount = fails;
                 retryKeyId = currentSub.id;
                 wakeAt = addInterval(phase.unit, phase.every);
-            } else if (currentSub.exhaustedSubStatusId) {
-                landingSubStatusId = currentSub.exhaustedSubStatusId;  // give up → route onward
+            } else if (currentSub.failSubStatusId) {
+                landingSubStatusId = currentSub.failSubStatusId;  // schedule exhausted → the unsuccess route (give up)
                 exhaustedFrom = currentSub.label;
             } else {
                 landingSubStatusId = currentSub.id;          // exhausted, no target → stay, stop re-arming

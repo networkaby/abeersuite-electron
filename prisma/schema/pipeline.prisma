@@ -86,11 +86,9 @@ model TicketSubStatus {
   // setting wakeAt and dropping it into the Work Inbox "Waiting" tab until due.
   // retrySchedule is an ordered list of phases: [{ unit, every, times }] where
   // unit ∈ "minute"|"hour"|"day"|"week"|"month"|"year". Total attempts = 1 + Σtimes;
-  // [] = no retry. After the last phase's last attempt, route to exhaustedSubStatus.
+  // [] = no retry. After the last phase's last attempt, route to failSubStatus
+  // (the "On unsuccess → move to" target doubles as the give-up destination).
   retrySchedule       Json                  @default("[]")
-  exhaustedSubStatusId String?
-  exhaustedSubStatus  TicketSubStatus?      @relation("SubStatusExhausted", fields: [exhaustedSubStatusId], references: [id], onDelete: SetNull)
-  exhaustedRoutedFrom TicketSubStatus[]     @relation("SubStatusExhausted")
   workId              String?
   work                Work?                 @relation(fields: [workId], references: [id], onDelete: SetNull)
   pipelineId          String?

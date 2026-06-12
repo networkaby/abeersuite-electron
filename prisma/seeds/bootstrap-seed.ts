@@ -512,15 +512,16 @@ type SubStatusSeed = {
     warrantyScope?: string; actionLabel?: string;
     // Hybrid retry schedule: a "waiting" sub-status re-arms its work on a front-loaded
     // schedule (1st attempt immediate, then densest phase first). After the last
-    // phase's last attempt it routes to exhaustedSubStatusId (give-up). [] = no retry.
+    // phase's last attempt it routes to failSubStatusId (the unsuccess route = give-up).
+    // [] = no retry.
     retrySchedule?: { unit: string; every: number; times: number }[];
-    exhaustedSubStatusId?: string;
+    failSubStatusId?: string;
 };
 
 const SUB_STATUSES: SubStatusSeed[] = [
     { id: "SS1",  label: "Waiting: Customer Info", order: 1, color: "bg-yellow-50 text-yellow-700", workId: "W1", statusId: "S2", pipelineId: "P1", publicLabel: "We need some details from you" },
     { id: "SS2",  label: "Waiting: Customer to Bring Item", order: 2, color: "bg-yellow-50 text-yellow-700", workId: "W1", statusId: "S2", pipelineId: "P1", publicLabel: "Please bring in your device" },
-    { id: "SS3",  label: "Customer Unreachable", order: 3, color: "bg-red-50 text-red-600", workId: "W1", statusId: "S2", pipelineId: "P1", publicLabel: "We're trying to reach you", retrySchedule: [{ unit: "minute", every: 15, times: 4 }, { unit: "day", every: 1, times: 5 }], exhaustedSubStatusId: "SS9" },
+    { id: "SS3",  label: "Customer Unreachable", order: 3, color: "bg-red-50 text-red-600", workId: "W1", statusId: "S2", pipelineId: "P1", publicLabel: "We're trying to reach you", retrySchedule: [{ unit: "minute", every: 15, times: 4 }, { unit: "day", every: 1, times: 5 }], failSubStatusId: "SS9" },
     { id: "SS4",  label: "Customer Responded", order: 4, color: "bg-green-50 text-green-700", workId: "W1", statusId: "S2", pipelineId: "P1" },
     { id: "SS5",  label: "Quote Prepared", order: 5, color: "bg-blue-50 text-blue-600", workId: "W2", statusId: "S2", pipelineId: "P1", publicLabel: "Your repair quote is ready" },
     { id: "SS6",  label: "Awaiting Customer Approval", order: 6, color: "bg-yellow-50 text-yellow-700", workId: "W2", statusId: "S2", pipelineId: "P1", publicLabel: "Awaiting your approval" },
@@ -881,11 +882,11 @@ async function main() {
     for (const [statusId, subStatusId] of Object.entries(STATUS_STARTS)) {
         await prisma.ticketStatus.update({ where: { id: statusId }, data: { startSubStatusId: subStatusId } });
     }
-    // Give-up routing target — set in a second pass (self-FK; the target sub-status
-    // may be defined later in SUB_STATUSES than the waiting one that points at it).
+    // Unsuccess route / give-up target — set in a second pass (self-FK; the target
+    // sub-status may be defined later in SUB_STATUSES than the one pointing at it).
     for (const ss of SUB_STATUSES) {
-        if (ss.exhaustedSubStatusId) {
-            await prisma.ticketSubStatus.update({ where: { id: ss.id }, data: { exhaustedSubStatusId: ss.exhaustedSubStatusId } });
+        if (ss.failSubStatusId) {
+            await prisma.ticketSubStatus.update({ where: { id: ss.id }, data: { failSubStatusId: ss.failSubStatusId } });
         }
     }
     for (const t of STATUS_TRANSITIONS) {

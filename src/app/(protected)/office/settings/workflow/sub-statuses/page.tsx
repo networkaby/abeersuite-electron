@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Check, ChevronRight, GitMerge, Lock, Pencil, Plus, RefreshCw, Trash2, X, Zap } from "lucide-react";
+import { Check, ChevronRight, Copy, GitMerge, Lock, Pencil, Plus, RefreshCw, Trash2, X, Zap } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -74,7 +74,6 @@ interface SubStatus {
     failSubStatusId?: string | null;
     autoRevertOnClear: boolean;
     retrySchedule?: { unit: string; every: number; times: number }[] | null;
-    exhaustedSubStatusId?: string | null;
     fromTransitions: { to: { id: string; label: string; color: string } }[];
 }
 
@@ -100,7 +99,6 @@ type FormValues = {
     failSubStatusId: string;
     autoRevertOnClear: boolean;
     retryRows: RetryRows;
-    exhaustedSubStatusId: string;
 };
 
 const BLANK_FORM: FormValues = {
@@ -117,7 +115,6 @@ const BLANK_FORM: FormValues = {
     failSubStatusId: "",
     autoRevertOnClear: true,
     retryRows: BLANK_RETRY_ROWS(),
-    exhaustedSubStatusId: "",
 };
 
 // Build the ordered retrySchedule payload from the dialog rows (densest first).
@@ -294,7 +291,7 @@ function SubStatusFormModal({
                         </div>
                     </div>
                     <p className="-mt-3 text-xs text-muted-foreground">
-                        On completing this work the caller picks Success or Unsuccess; the ticket moves to the chosen sub-status <span className="font-medium">within this stage</span> (green / red on the Work Inbox). To jump to another stage, use “Auto-advance status to” below.
+                        On completing this work the caller picks Success or Unsuccess; the ticket moves to the chosen sub-status <span className="font-medium">within this stage</span> (green / red on the Work Inbox). If this sub-status has a retry schedule (Attempts tab), Unsuccess <span className="font-medium">retries first</span> and only moves to the “unsuccess” target once the schedule runs out (give-up). To jump to another stage, use “Auto-advance status to” below.
                     </p>
 
                     <div className="space-y-2">
@@ -426,29 +423,16 @@ function SubStatusFormModal({
                         </div>
 
                         {scheduleSummary && (
-                            <div className="flex items-center gap-2 rounded-md bg-muted px-2.5 py-2 text-xs text-muted-foreground">
-                                <ChevronRight size={13} className="shrink-0" />
-                                <span>{scheduleSummary}, then give up</span>
+                            <div className="rounded-md bg-muted px-2.5 py-2 text-xs text-muted-foreground">
+                                <div className="flex items-center gap-2">
+                                    <ChevronRight size={13} className="shrink-0" />
+                                    <span>{scheduleSummary}, then give up</span>
+                                </div>
+                                <p className="mt-1 pl-[21px]">
+                                    Give-up goes to the <span className="font-medium text-foreground">On unsuccess → move to</span> target (set on the Details tab).
+                                </p>
                             </div>
                         )}
-
-                        <div className="space-y-2">
-                            <Label className="text-xs text-muted-foreground">When attempts run out → route to</Label>
-                            <Select
-                                value={form.exhaustedSubStatusId || "__none__"}
-                                onValueChange={(value) => setForm({ ...form, exhaustedSubStatusId: value === "__none__" ? "" : value })}
-                                disabled={!hasSchedule}
-                            >
-                                <SelectTrigger className="w-full"><SelectValue placeholder="— none —" /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="__none__">— none (stop retrying, stay here) —</SelectItem>
-                                    {sameStatusSubs.map((s) => (<SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>))}
-                                </SelectContent>
-                            </Select>
-                            <p className="text-xs text-muted-foreground">
-                                After the last attempt the ticket routes here — often a shim that escalates or closes. Leave empty to simply stop re-arming.
-                            </p>
-                        </div>
                     </TabsContent>
                 </Tabs>
 
@@ -525,7 +509,6 @@ export default function SubStatusesPage() {
         failSubStatusId: form.failSubStatusId || null,
         autoRevertOnClear: form.autoRevertOnClear,
         retrySchedule: rowsToSchedule(form.retryRows),
-        exhaustedSubStatusId: rowsToSchedule(form.retryRows).length ? (form.exhaustedSubStatusId || null) : null,
     });
 
     const handleCreate = async () => {
@@ -560,9 +543,29 @@ export default function SubStatusesPage() {
             failSubStatusId: subStatus.failSubStatusId ?? "",
             autoRevertOnClear: subStatus.autoRevertOnClear ?? true,
             retryRows: scheduleToRows(subStatus.retrySchedule),
-            exhaustedSubStatusId: subStatus.exhaustedSubStatusId ?? "",
         });
         setEditId(subStatus.id);
+    };
+
+    // Clone: pre-fill the create modal from an existing sub-status (label suffixed
+    // "(copy)", order auto-assigned) so the user can tweak and save a duplicate.
+    const cloneSubStatus = (s: SubStatus) => {
+        setCreateForm({
+            label: `${s.label} (copy)`,
+            publicLabel: s.publicLabel ?? "",
+            color: s.color,
+            workId: s.workId ?? "",
+            order: "",
+            statusId: s.statusId ?? "",
+            triggerMap: (s.triggerMap ?? {}) as Record<string, string>,
+            actionLabel: s.actionLabel ?? "",
+            warrantyScope: s.warrantyScope ?? "any",
+            successSubStatusId: s.successSubStatusId ?? "",
+            failSubStatusId: s.failSubStatusId ?? "",
+            autoRevertOnClear: s.autoRevertOnClear ?? true,
+            retryRows: scheduleToRows(s.retrySchedule),
+        });
+        setShowCreate(true);
     };
 
     const handleEdit = async () => {
@@ -772,7 +775,7 @@ export default function SubStatusesPage() {
                                                     )}
                                                     {subStatus.retrySchedule?.length ? (
                                                         <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-400">
-                                                            <X size={12} className="shrink-0" /> Unsuccess → <RefreshCw size={11} className="shrink-0" /> retries{subStatus.exhaustedSubStatusId ? `, give up → ${subLabelMap[subStatus.exhaustedSubStatusId] ?? subStatus.exhaustedSubStatusId}` : ""}
+                                                            <X size={12} className="shrink-0" /> Unsuccess → <RefreshCw size={11} className="shrink-0" /> retries{subStatus.failSubStatusId ? `, give up → ${subLabelMap[subStatus.failSubStatusId] ?? subStatus.failSubStatusId}` : ""}
                                                         </span>
                                                     ) : subStatus.failSubStatusId ? (
                                                         <span className="inline-flex items-center gap-1 text-red-700 dark:text-red-400">
@@ -809,6 +812,9 @@ export default function SubStatusesPage() {
                                             </Button>
                                             <Button type="button" size="sm" variant="outline" onClick={() => openEdit(subStatus)}>
                                                 <Pencil size={13} /> Edit
+                                            </Button>
+                                            <Button type="button" size="icon-sm" variant="outline" onClick={() => cloneSubStatus(subStatus)} title="Clone this sub-status">
+                                                <Copy size={13} />
                                             </Button>
                                             <Button
                                                 type="button"
@@ -849,6 +855,9 @@ export default function SubStatusesPage() {
                                         <div className="flex items-center gap-2">
                                             <Button type="button" size="sm" variant="outline" onClick={() => openEdit(subStatus)}>
                                                 <Pencil size={13} /> Edit
+                                            </Button>
+                                            <Button type="button" size="icon-sm" variant="outline" onClick={() => cloneSubStatus(subStatus)} title="Clone this sub-status">
+                                                <Copy size={13} />
                                             </Button>
                                             <Button
                                                 type="button"
