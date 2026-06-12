@@ -1,56 +1,70 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { CHILD_ENTITIES, isSupportedEntityType, type ChildEntityType } from "./childEntities";
 
-// 5th power: a sub-status with spawnPipelineId opens a CHILD ticket on another
-// pipeline (e.g. an inbound parts courier) when a ticket lands on it. The child
-// rides that pipeline with the full sub-status engine; it links back via
-// parentTicketId / parentSubStatusId so the parent can mirror it and (later)
-// advance when the child terminates.
+// 5th power: a sub-status with spawnPipelineId opens a CHILD on another pipeline
+// (inbound parts courier, an internal task, a delivery…). The TARGET pipeline's
+// `entityType` decides which table the child is created in — dispatched through the
+// CHILD_ENTITIES registry, not a hardcoded ticket.create. The child links back via
+// parentTicketId / parentSubStatusId so the parent can mirror it and (for ticket
+// children) advance when the child terminates.
 //
-// Idempotent: one OPEN child per (parent, spawning sub-status) — re-entering the
-// same sub-status (e.g. a retry loop) does not spawn duplicates.
-export async function spawnChildTicket(args: {
+// Idempotent: one OPEN child per (parent, spawning sub-status) per table —
+// re-entering the same sub-status (e.g. a retry loop) does not spawn duplicates.
+//
+// Returns the child's id (string — ids differ per table: Int vs cuid) and the
+// entityType, or null when nothing was created (unsupported entityType, no entry
+// status, or an open child already exists).
+export async function spawnChild(args: {
     parentId: number;
     parentStatus: string;          // the parent's status at spawn time (for the log)
     parentSubStatusId: string;     // the sub-status that spawned it (resolve target)
     spawnPipelineId: string;       // pipeline to create the child on
-    deviceId: number;              // child inherits the parent's device (simple link)
+    deviceId: number;              // a ticket child inherits the parent's device
     userId: number;
-}): Promise<number | null> {
+}): Promise<{ id: string; type: ChildEntityType } | null> {
     const { parentId, parentStatus, parentSubStatusId, spawnPipelineId, deviceId, userId } = args;
-
-    const existing = await prisma.ticket.findFirst({
-        where: { parentTicketId: parentId, parentSubStatusId, ticketStatus: { isTerminal: false } },
-        select: { id: true },
-    });
-    if (existing) return null;  // already has an open child from this sub-status
 
     const pipeline = await prisma.pipeline.findUnique({
         where: { id: spawnPipelineId },
-        select: { statuses: { where: { isEntryPoint: true }, select: { id: true, startSubStatusId: true }, take: 1 } },
+        select: { entityType: true, statuses: { where: { isEntryPoint: true }, select: { id: true, startSubStatusId: true }, take: 1 } },
     });
-    const entry = pipeline?.statuses[0];
+    if (!pipeline) return null;
+
+    if (!isSupportedEntityType(pipeline.entityType)) {
+        // e.g. "voucher" (protected accounting core) or "none" — log and no-op rather
+        // than fabricate a malformed row in a table we don't own.
+        await prisma.ticketLog.create({
+            data: { ticketId: parentId, status: parentStatus, subStatusId: parentSubStatusId,
+                note: `Spawn skipped — ${spawnPipelineId} has no spawnable entity (${pipeline.entityType})`, userId },
+        });
+        return null;
+    }
+    const reg = CHILD_ENTITIES[pipeline.entityType];
+
+    if (await reg.hasOpenChild(parentId, parentSubStatusId)) return null;  // already has an open child
+
+    const entry = pipeline.statuses[0];
     if (!entry) return null;  // target pipeline has no entry status — nothing to spawn into
 
-    const child = await prisma.ticket.create({
-        data: {
-            pipelineId: spawnPipelineId,
-            status: entry.id,
-            subStatusId: entry.startSubStatusId ?? null,
-            deviceId,
-            parentTicketId: parentId,
-            parentSubStatusId,
-            context: { spawnedFrom: { ticketId: parentId, subStatusId: parentSubStatusId } },
-        },
-        select: { id: true },
+    const childId = await reg.create({
+        parentTicketId: parentId, parentSubStatusId, pipelineId: spawnPipelineId,
+        entryStatusId: entry.id, startSubStatusId: entry.startSubStatusId ?? null, deviceId, userId,
     });
 
-    await prisma.ticketLog.createMany({
-        data: [
-            { ticketId: parentId, status: parentStatus, subStatusId: parentSubStatusId, note: `Spawned child #${child.id} on ${spawnPipelineId}`, userId },
-            { ticketId: child.id, status: entry.id, subStatusId: entry.startSubStatusId ?? null, note: `Created from ticket #${parentId}`, userId },
-        ],
+    // Log on the PARENT ticket (always). The child-side log only exists for ticket
+    // children (TicketLog is ticket-scoped); task/deal/delivery/refund keep their own
+    // activity trails, logged by their own modules later.
+    await prisma.ticketLog.create({
+        data: { ticketId: parentId, status: parentStatus, subStatusId: parentSubStatusId,
+            note: `Spawned ${pipeline.entityType} child #${childId} on ${spawnPipelineId}`, userId },
     });
-    return child.id;
+    if (pipeline.entityType === "ticket") {
+        await prisma.ticketLog.create({
+            data: { ticketId: Number(childId), status: entry.id, subStatusId: entry.startSubStatusId ?? null,
+                note: `Created from ticket #${parentId}`, userId },
+        });
+    }
+    return { id: childId, type: pipeline.entityType };
 }
 
 // Child-side report-back: when a CHILD ticket reaches a sub-status carrying a

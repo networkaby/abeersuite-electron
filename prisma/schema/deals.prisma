@@ -32,6 +32,11 @@ model Deal {
   createdBy          Json   @default("{}") // ActorSnapshot
 
   notes     String?  @db.Text
+  // Spawn back-link — set when this Deal was spawned as a sub-pipeline child of a
+  // repair Ticket (uniform with Ticket/Task/Delivery/Refund). context = soft payload.
+  parentTicketId    Int?
+  parentSubStatusId String?
+  context           Json?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -47,6 +52,7 @@ model Deal {
   @@index([pipelineId, status])
   @@index([assignedPositionId])
   @@index([createdAt])
+  @@index([parentTicketId])
 }
 
 // HubSpot-style record timeline: notes, logged calls/meetings, follow-up tasks,

@@ -67,12 +67,19 @@ interface Ticket {
         account: { name: string; phone?: string | null; email?: string | null } | null;
     };
     parent?: { id: number } | null;
+    // Spawned sub-pipeline children, gathered across ALL entity tables (MirrorChild).
     children?: {
-        id: number;
-        parentSubStatusId?: string | null;
-        pipeline?: { id: string; label: string; color: string } | null;
-        ticketStatus: { label: string; color: string; isTerminal: boolean };
-        ticketSubStatus?: { label: string; color: string } | null;
+        type: "ticket" | "task" | "deal";
+        id: string;
+        pipelineId: string | null;
+        pipelineLabel: string | null;
+        pipelineColor: string | null;
+        statusLabel: string | null;
+        statusColor: string | null;
+        subLabel: string | null;
+        subColor: string | null;
+        isTerminal: boolean;
+        title: string | null;
     }[];
     primaryOwner?: { id: number; name: string };
     participants?: { user: { id: number; name: string; role: string }; addedForRole?: string | null }[];
@@ -480,27 +487,36 @@ export default function TicketDetailPage() {
                                     <GitBranch size={14} /> Sub-pipelines
                                 </h2>
                                 {ticket.children.map((c) => (
-                                    <div key={c.id} className="rounded-md border border-border p-2.5">
+                                    <div key={`${c.type}-${c.id}`} className="rounded-md border border-border p-2.5">
                                         <div className="flex items-center gap-2">
-                                            {c.pipeline && (
-                                                <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${badgeColor(c.pipeline.color).className}`} style={badgeColor(c.pipeline.color).style}>
-                                                    {c.pipeline.label}
+                                            <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                                {c.type}
+                                            </span>
+                                            {c.pipelineLabel && (
+                                                <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${badgeColor(c.pipelineColor).className}`} style={badgeColor(c.pipelineColor).style}>
+                                                    {c.pipelineLabel}
                                                 </span>
                                             )}
-                                            <Link href={`/office/repairing/tickets/${c.id}`} className="ml-auto inline-flex items-center gap-1 text-xs text-primary hover:underline">
-                                                Open #{c.id} <ExternalLink size={11} />
-                                            </Link>
+                                            {c.type === "ticket" ? (
+                                                <Link href={`/office/repairing/tickets/${c.id}`} className="ml-auto inline-flex items-center gap-1 text-xs text-primary hover:underline">
+                                                    Open #{c.id} <ExternalLink size={11} />
+                                                </Link>
+                                            ) : (
+                                                <span className="ml-auto text-xs text-muted-foreground">#{c.id}</span>
+                                            )}
                                         </div>
                                         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                                            <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${badgeColor(c.ticketStatus.color).className}`} style={badgeColor(c.ticketStatus.color).style}>
-                                                {c.ticketStatus.label}
-                                            </span>
-                                            {c.ticketSubStatus && (
-                                                <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${badgeColor(c.ticketSubStatus.color).className}`} style={badgeColor(c.ticketSubStatus.color).style}>
-                                                    {c.ticketSubStatus.label}
+                                            {c.statusLabel && (
+                                                <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${badgeColor(c.statusColor).className}`} style={badgeColor(c.statusColor).style}>
+                                                    {c.statusLabel}
                                                 </span>
                                             )}
-                                            {c.ticketStatus.isTerminal && (
+                                            {c.subLabel && (
+                                                <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${badgeColor(c.subColor).className}`} style={badgeColor(c.subColor).style}>
+                                                    {c.subLabel}
+                                                </span>
+                                            )}
+                                            {c.isTerminal && (
                                                 <span className="inline-flex items-center gap-1 text-[11px] text-green-700 dark:text-green-400"><Check size={11} /> done</span>
                                             )}
                                         </div>

@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { passesWorkGate } from "@/modules/repairing/lib/workGate";
 import { findEntrySubStatus } from "@/modules/repairing/lib/entrySubStatus";
-import { spawnChildTicket, reconcileParentFromChild } from "@/modules/repairing/lib/spawnChild";
+import { spawnChild, reconcileParentFromChild } from "@/modules/repairing/lib/spawnChild";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
@@ -286,14 +286,15 @@ export async function PATCH(
         });
 
         // 5th power — if the landing sub-status spawns a child pipeline, open the
-        // child ticket (idempotent; best-effort so it never blocks the move).
+        // child on whatever entity that pipeline rides (ticket/task/deal/…), via the
+        // CHILD_ENTITIES registry (idempotent; best-effort so it never blocks the move).
         if (newSubStatusId) {
             const landing = await prisma.ticketSubStatus.findUnique({
                 where: { id: newSubStatusId },
                 select: { spawnPipelineId: true },
             });
             if (landing?.spawnPipelineId) {
-                await spawnChildTicket({
+                await spawnChild({
                     parentId: ticketId,
                     parentStatus: newMainStatus,
                     parentSubStatusId: newSubStatusId,

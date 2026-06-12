@@ -355,6 +355,9 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
 type PipelineSeed = {
     id: string; name: string; label: string; description: string;
     color: string; order: number; isDefault?: boolean;
+    // Which entity table rides this pipeline — dispatch key for spawn-child.
+    // "ticket" | "task" | "deal" | "delivery" | "refund" | "voucher" | "none".
+    entityType: string;
     statuses: Array<{
         id: string; label: string; color: string; order: number;
         isEntryPoint: boolean; isTerminal: boolean; pipelineId: string;
@@ -366,7 +369,7 @@ const PIPELINES: PipelineSeed[] = [
     {
         id: "P1", name: "service", label: "Service & Repair",
         description: "Electronics repair and service workflow",
-        color: "bg-blue-100 text-blue-600", order: 0, isDefault: true,
+        color: "bg-blue-100 text-blue-600", order: 0, isDefault: true, entityType: "ticket",
         statuses: [
             { id: "S1", label: "Received", color: "bg-gray-100 text-gray-600", order: 1, isEntryPoint: true, isTerminal: false, pipelineId: "P1" },
             { id: "S2", label: "Diagnosing", color: "bg-yellow-100 text-yellow-700", order: 2, isEntryPoint: false, isTerminal: false, pipelineId: "P1" },
@@ -385,7 +388,7 @@ const PIPELINES: PipelineSeed[] = [
     {
         id: "P2", name: "customer-support", label: "Customer Support",
         description: "General customer support tickets not related to repairs",
-        color: "bg-teal-100 text-teal-700", order: 2,
+        color: "bg-teal-100 text-teal-700", order: 2, entityType: "ticket",
         statuses: [
             { id: "S10", label: "New Request", color: "bg-gray-100 text-gray-600", order: 1, isEntryPoint: true,  isTerminal: false, pipelineId: "P2" },
             { id: "S11", label: "In Triage", color: "bg-yellow-100 text-yellow-700", order: 2, isEntryPoint: false, isTerminal: false, pipelineId: "P2" },
@@ -399,7 +402,7 @@ const PIPELINES: PipelineSeed[] = [
     {
         id: "P3", name: "sales", label: "Sales",
         description: "Sales pipeline for new customers and upsell opportunities",
-        color: "bg-green-100 text-green-700", order: 3,
+        color: "bg-green-100 text-green-700", order: 3, entityType: "deal",
         statuses: [
             { id: "S17", label: "Lead", color: "bg-gray-100 text-gray-600", order: 1, isEntryPoint: true,  isTerminal: false, pipelineId: "P3" },
             { id: "S18", label: "Contacted", color: "bg-blue-100 text-blue-600", order: 2, isEntryPoint: false, isTerminal: false, pipelineId: "P3" },
@@ -413,7 +416,7 @@ const PIPELINES: PipelineSeed[] = [
     {
         id: "P4", name: "internal-management", label: "Internal Management",
         description: "Internal tasks, HR, admin, and operational workflows",
-        color: "bg-purple-100 text-purple-700", order: 4,
+        color: "bg-purple-100 text-purple-700", order: 4, entityType: "task",
         statuses: [
             { id: "S24", label: "Open", color: "bg-gray-100 text-gray-600", order: 1, isEntryPoint: true,  isTerminal: false, pipelineId: "P4" },
             { id: "S25", label: "In Review", color: "bg-yellow-100 text-yellow-700", order: 2, isEntryPoint: false, isTerminal: false, pipelineId: "P4" },
@@ -425,7 +428,7 @@ const PIPELINES: PipelineSeed[] = [
     {
         id: "P5", name: "marketing", label: "Marketing",
         description: "Marketing campaigns, content, and outreach initiatives",
-        color: "bg-pink-100 text-pink-700", order: 5,
+        color: "bg-pink-100 text-pink-700", order: 5, entityType: "deal",
         statuses: [
             { id: "S29", label: "Idea", color: "bg-gray-100 text-gray-600", order: 1, isEntryPoint: true,  isTerminal: false, pipelineId: "P5" },
             { id: "S30", label: "Planning", color: "bg-yellow-100 text-yellow-700", order: 2, isEntryPoint: false, isTerminal: false, pipelineId: "P5" },
@@ -438,7 +441,7 @@ const PIPELINES: PipelineSeed[] = [
     {
         id: "P7", name: "sales-orders", label: "Sales Orders",
         description: "Order processing pipeline — online, in-store, phone, and WhatsApp orders",
-        color: "bg-amber-100 text-amber-800", order: 7,
+        color: "bg-amber-100 text-amber-800", order: 7, entityType: "voucher",
         statuses: [
             { id: "S42", label: "New", color: "bg-gray-100 text-gray-600", order: 1, isEntryPoint: true,  isTerminal: false, pipelineId: "P7" },
             { id: "S43", label: "Under Review", color: "bg-yellow-100 text-yellow-700", order: 2, isEntryPoint: false, isTerminal: false, pipelineId: "P7", actionLabel: "Mark Under Review" },
@@ -453,7 +456,7 @@ const PIPELINES: PipelineSeed[] = [
     {
         id: "P8", name: "delivery", label: "Delivery",
         description: "Delivery / dispatch sub-pipeline — carrier dispatch & tracking for confirmed orders",
-        color: "bg-sky-100 text-sky-800", order: 8,
+        color: "bg-sky-100 text-sky-800", order: 8, entityType: "delivery",
         statuses: [
             { id: "S50", label: "To Dispatch", color: "bg-gray-100 text-gray-600", order: 1, isEntryPoint: true,  isTerminal: false, pipelineId: "P8" },
             { id: "S51", label: "Carrier Assigned", color: "bg-blue-100 text-blue-700", order: 2, isEntryPoint: false, isTerminal: false, pipelineId: "P8", actionLabel: "Assign Carrier" },
@@ -467,7 +470,7 @@ const PIPELINES: PipelineSeed[] = [
     {
         id: "P9", name: "refund", label: "Refund",
         description: "Refund sub-pipeline — pay back advances on rejected / cancelled orders",
-        color: "bg-rose-100 text-rose-800", order: 9,
+        color: "bg-rose-100 text-rose-800", order: 9, entityType: "refund",
         statuses: [
             { id: "S57", label: "Requested", color: "bg-gray-100 text-gray-600", order: 1, isEntryPoint: true,  isTerminal: false, pipelineId: "P9" },
             { id: "S58", label: "Approved", color: "bg-amber-100 text-amber-700", order: 2, isEntryPoint: false, isTerminal: false, pipelineId: "P9", actionLabel: "Approve Refund" },
@@ -478,7 +481,7 @@ const PIPELINES: PipelineSeed[] = [
     {
         id: "P6", name: "deals", label: "Deals",
         description: "Sales deal pipeline (revenue opportunities); stages shared with pipeline settings",
-        color: "bg-cyan-100 text-cyan-800", order: 6,
+        color: "bg-cyan-100 text-cyan-800", order: 6, entityType: "deal",
         statuses: [
             { id: "S35", label: "Lead", color: "bg-gray-100 text-gray-600", order: 1, isEntryPoint: true,  isTerminal: false, pipelineId: "P6" },
             { id: "S36", label: "Contacted", color: "bg-blue-100 text-blue-600", order: 2, isEntryPoint: false, isTerminal: false, pipelineId: "P6" },
@@ -838,8 +841,8 @@ async function main() {
     for (const pl of PIPELINES) {
         await prisma.pipeline.upsert({
             where:  { id: pl.id },
-            update: { name: pl.name, label: pl.label, description: pl.description, color: pl.color, isDefault: pl.isDefault ?? false, isActive: true, order: pl.order },
-            create: { id: pl.id, name: pl.name, label: pl.label, description: pl.description, color: pl.color, isDefault: pl.isDefault ?? false, isActive: true, order: pl.order },
+            update: { name: pl.name, label: pl.label, description: pl.description, color: pl.color, isDefault: pl.isDefault ?? false, isActive: true, order: pl.order, entityType: pl.entityType },
+            create: { id: pl.id, name: pl.name, label: pl.label, description: pl.description, color: pl.color, isDefault: pl.isDefault ?? false, isActive: true, order: pl.order, entityType: pl.entityType },
         });
         for (const s of pl.statuses) {
             await prisma.ticketStatus.upsert({

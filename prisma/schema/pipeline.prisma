@@ -9,6 +9,11 @@ model Pipeline {
   isDefault   Boolean  @default(false)
   isActive    Boolean  @default(true)
   order       Int      @default(0)
+  // Which entity table RIDES this pipeline — the dispatch key for spawn-child.
+  // "ticket" | "task" | "deal" | "delivery" | "refund" | "voucher" | "none".
+  // A sub-status' spawnPipelineId resolves the target pipeline, then this decides
+  // which table the child row is created in (see lib/childEntities.ts registry).
+  entityType  String   @default("ticket")
   createdAt   DateTime @default(now())
 
   statuses    TicketStatus[]

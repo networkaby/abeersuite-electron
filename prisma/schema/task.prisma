@@ -24,6 +24,13 @@ model Task {
   dueDate     DateTime?
   completedAt DateTime?
   order       Int       @default(0) // ordering within a column
+  // Spawn back-link — set when this Task was spawned as a sub-pipeline child of a
+  // repair Ticket. Uniform with Ticket/Deal/Delivery/Refund so the parent can
+  // mirror children of any type with one indexed lookup. context = soft payload
+  // ({ spawnedFrom: {...} }). Plain scalars (no FK) — keep it simple.
+  parentTicketId    Int?
+  parentSubStatusId String?
+  context           Json?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -35,6 +42,7 @@ model Task {
   @@index([pipelineId, status])
   @@index([assignedPositionId])
   @@index([status])
+  @@index([parentTicketId])
 }
 
 model TaskComment {

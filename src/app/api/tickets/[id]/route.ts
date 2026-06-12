@@ -7,6 +7,7 @@ import { resolvedUserFromSession } from "@/shared/lib/auth/permissions";
 import { passesWorkGate } from "@/modules/repairing/lib/workGate";
 import { findEntrySubStatus } from "@/modules/repairing/lib/entrySubStatus";
 import { reconcileParentFromChild } from "@/modules/repairing/lib/spawnChild";
+import { listAllChildren } from "@/modules/repairing/lib/childEntities";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
@@ -82,16 +83,8 @@ export async function GET(
                 },
                 ticketSubStatus: { select: { id: true, label: true, color: true, actionLabel: true, work: { select: { label: true, color: true } }, successSubStatus: { select: { id: true, label: true } }, failSubStatus: { select: { id: true, label: true } } } },
                 pipeline:        { select: { id: true, label: true, color: true } },
-                // Spawned child sub-pipelines (5th power) — mirrored on the parent.
-                children: {
-                    orderBy: { createdAt: "desc" },
-                    select: {
-                        id: true, parentSubStatusId: true,
-                        pipeline:        { select: { id: true, label: true, color: true } },
-                        ticketStatus:    { select: { label: true, color: true, isTerminal: true } },
-                        ticketSubStatus: { select: { label: true, color: true } },
-                    },
-                },
+                // Spawned child sub-pipelines (5th power) are gathered across ALL entity
+                // tables below via listAllChildren — not just the Ticket self-relation.
                 parent: { select: { id: true } },
                 participants: {
                     where: { removedAt: null },
@@ -111,8 +104,12 @@ export async function GET(
 
         if (!ticket) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
+        // Spawned children across every entity table (ticket/task/deal/delivery/refund).
+        const children = await listAllChildren(ticket.id);
+
         return NextResponse.json({
             ...ticket,
+            children,
             device: {
                 ...ticket.device,
                 account: ticket.device.account ? {
