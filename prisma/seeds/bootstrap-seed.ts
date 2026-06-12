@@ -12,8 +12,8 @@
 //
 // What this seeds (kept on hard-clean):
 //   • RBAC: 7 Roles, 80+ Permissions, RolePermission grants
-//   • Workflow: 9 Pipelines, 60 TicketStatuses, 7 Works (4 gated → work:*
-//     permissions), 37 SubStatuses, status + sub-status transitions
+//   • Workflow: 9 Pipelines, 63 TicketStatuses, 8 Works (1 gated → work:*
+//     permissions), 43 SubStatuses, status + sub-status transitions
 //   • Org structure: 2 Branches (HQ + Online), 7 Departments, Role ranks
 //   • Chart of accounts: 28 AccountGroups (Tally tree) + ~50 GL ledgers
 //     **Stock-in-Hand group is intentionally empty** — closing-stock value is
@@ -368,15 +368,18 @@ const PIPELINES: PipelineSeed[] = [
         description: "Electronics repair and service workflow",
         color: "bg-blue-100 text-blue-600", order: 0, isDefault: true,
         statuses: [
-            { id: "S1", label: "Received", color: "bg-gray-100 text-gray-600", order: 1, isEntryPoint: true,  isTerminal: false, pipelineId: "P1" },
+            { id: "S1", label: "Received", color: "bg-gray-100 text-gray-600", order: 1, isEntryPoint: true, isTerminal: false, pipelineId: "P1" },
             { id: "S2", label: "Diagnosing", color: "bg-yellow-100 text-yellow-700", order: 2, isEntryPoint: false, isTerminal: false, pipelineId: "P1" },
             { id: "S3", label: "Repairing", color: "bg-blue-100 text-blue-700", order: 3, isEntryPoint: false, isTerminal: false, pipelineId: "P1" },
-            { id: "S4", label: "Escalated", color: "bg-orange-100 text-orange-700", order: 4, isEntryPoint: false, isTerminal: false, pipelineId: "P1" },
+            { id: "S61", label: "Need Help", color: "bg-gray-100 text-gray-600", order: 4, isEntryPoint: false, isTerminal: false, pipelineId: "P1" },
+            { id: "S62", label: "Escalated - Send to service", color: "bg-gray-100 text-gray-600", order: 5, isEntryPoint: false, isTerminal: false, pipelineId: "P1" },
             { id: "S5", label: "Received Back", color: "bg-purple-100 text-purple-700", order: 5, isEntryPoint: false, isTerminal: false, pipelineId: "P1" },
+            { id: "S4", label: "Escalated -Visit", color: "bg-orange-100 text-orange-700", order: 5, isEntryPoint: false, isTerminal: false, pipelineId: "P1" },
             { id: "S6", label: "Ready", color: "bg-green-100 text-green-700", order: 6, isEntryPoint: false, isTerminal: false, pipelineId: "P1" },
-            { id: "S7", label: "Returned", color: "bg-gray-200 text-gray-500", order: 7, isEntryPoint: false, isTerminal: true,  pipelineId: "P1" },
-            { id: "S8", label: "Closed - No Fix", color: "bg-red-100 text-red-600", order: 8, isEntryPoint: false, isTerminal: true,  pipelineId: "P1" },
-            { id: "S9", label: "Cancelled", color: "bg-gray-100 text-gray-400", order: 9, isEntryPoint: false, isTerminal: true,  pipelineId: "P1" },
+            { id: "S7", label: "Returned", color: "bg-gray-200 text-gray-500", order: 7, isEntryPoint: false, isTerminal: true, pipelineId: "P1" },
+            { id: "S8", label: "Closed - No Fix", color: "bg-red-100 text-red-600", order: 8, isEntryPoint: false, isTerminal: true, pipelineId: "P1" },
+            { id: "S9", label: "Cancelled", color: "bg-gray-100 text-gray-400", order: 9, isEntryPoint: false, isTerminal: true, pipelineId: "P1" },
+            { id: "S63", label: "Scrap", color: "bg-gray-100 text-gray-600", order: 12, isEntryPoint: false, isTerminal: true, pipelineId: "P1" },
         ],
     },
     {
@@ -493,18 +496,19 @@ const PIPELINES: PipelineSeed[] = [
 // state-like works (escalated / ready / no_fix) stay ungated (any staff).
 // Opaque ids (W1…W7) so the id never encodes the label — renames stay safe.
 const WORKS = [
-    { id: "W1", label: "Call",      order: 1, color: "bg-blue-100 text-blue-600",     gated: true  },
-    { id: "W2", label: "Quote",     order: 2, color: "bg-yellow-100 text-yellow-700",  gated: true  },
-    { id: "W3", label: "Parts",     order: 3, color: "bg-orange-100 text-orange-600",  gated: true  },
-    { id: "W4", label: "QC",        order: 4, color: "bg-teal-100 text-teal-600",      gated: true  },
-    { id: "W5", label: "Escalated", order: 5, color: "bg-red-100 text-red-600",        gated: false },
-    { id: "W6", label: "Ready",     order: 6, color: "bg-green-100 text-green-700",    gated: false },
-    { id: "W7", label: "No Fix",    order: 7, color: "bg-gray-100 text-gray-600",      gated: false },
+    { id: "W1", label: "Tele Calling", order: 1, color: "bg-blue-100 text-blue-600", gated: true },
+    { id: "W2", label: "Repairing", order: 2, color: "bg-green-100 text-green-700", gated: false },
+    { id: "W3", label: "Admin Approval", order: 3, color: "bg-orange-100 text-orange-600", gated: false },
+    { id: "W4", label: "Order Parts", order: 4, color: "bg-purple-100 text-purple-600", gated: false },
+    { id: "W5", label: "Waiting & Follow Up", order: 5, color: "bg-teal-100 text-teal-600", gated: false },
+    { id: "W6", label: "Escalated To EC", order: 6, color: "bg-red-100 text-red-600", gated: false },
+    { id: "W7", label: "Incoming Courier", order: 7, color: "bg-orange-100 text-orange-600", gated: false },
+    { id: "W8", label: "Order", order: 8, color: "bg-orange-100 text-orange-600", gated: false },
 ] as const;
 
 type SubStatusSeed = {
-    id: string; label: string; order: number; color: string;
-    workId: string; statusId: string | null;
+    id: string; label: string; order: number; color: string;  // color is a Tailwind class OR a #hex
+    workId: string | null; statusId: string | null;
     pipelineId: string;
     publicLabel?: string;   // customer-portal label; omit to fall back to the status name
 
@@ -515,65 +519,62 @@ type SubStatusSeed = {
     // phase's last attempt it routes to failSubStatusId (the unsuccess route = give-up).
     // [] = no retry.
     retrySchedule?: { unit: string; every: number; times: number }[];
+    successSubStatusId?: string;   // outcome routing (set in a second pass; self/forward FK)
     failSubStatusId?: string;
 };
 
 const SUB_STATUSES: SubStatusSeed[] = [
-    { id: "SS1",  label: "Waiting: Customer Info", order: 1, color: "bg-yellow-50 text-yellow-700", workId: "W1", statusId: "S2", pipelineId: "P1", publicLabel: "We need some details from you" },
-    { id: "SS2",  label: "Waiting: Customer to Bring Item", order: 2, color: "bg-yellow-50 text-yellow-700", workId: "W1", statusId: "S2", pipelineId: "P1", publicLabel: "Please bring in your device" },
-    { id: "SS3",  label: "Customer Unreachable", order: 3, color: "bg-red-50 text-red-600", workId: "W1", statusId: "S2", pipelineId: "P1", publicLabel: "We're trying to reach you", retrySchedule: [{ unit: "minute", every: 15, times: 4 }, { unit: "day", every: 1, times: 5 }], failSubStatusId: "SS9" },
-    { id: "SS4",  label: "Customer Responded", order: 4, color: "bg-green-50 text-green-700", workId: "W1", statusId: "S2", pipelineId: "P1" },
-    { id: "SS5",  label: "Quote Prepared", order: 5, color: "bg-blue-50 text-blue-600", workId: "W2", statusId: "S2", pipelineId: "P1", publicLabel: "Your repair quote is ready" },
-    { id: "SS6",  label: "Awaiting Customer Approval", order: 6, color: "bg-yellow-50 text-yellow-700", workId: "W2", statusId: "S2", pipelineId: "P1", publicLabel: "Awaiting your approval" },
-    { id: "SS7",  label: "Awaiting Insurance / Warranty", order: 7, color: "bg-purple-50 text-purple-600", workId: "W2", statusId: "S2", pipelineId: "P1" },
-    { id: "SS8",  label: "Customer Approved", order: 8, color: "bg-green-50 text-green-700", workId: "W2", statusId: "S2", pipelineId: "P1", triggerMap: { S2: "S3" } },
-    { id: "SS9",  label: "Customer Declined", order: 9, color: "bg-red-50 text-red-600", workId: "W2", statusId: "S2", pipelineId: "P1", triggerMap: { S2: "S8" } },
-    { id: "SS10", label: "Awaiting Parts", order: 10, color: "bg-orange-50 text-orange-600", workId: "W3", statusId: "S3", pipelineId: "P1", publicLabel: "Awaiting spare parts", retrySchedule: [{ unit: "day", every: 1, times: 7 }, { unit: "week", every: 1, times: 4 }] },
-    { id: "SS11", label: "Parts Delayed", order: 11, color: "bg-orange-50 text-orange-600", workId: "W3", statusId: "S3", pipelineId: "P1" },
-    { id: "SS12", label: "Parts Issue", order: 12, color: "bg-red-50 text-red-600", workId: "W3", statusId: "S3", pipelineId: "P1" },
-    { id: "SS13", label: "Parts Arrived", order: 13, color: "bg-green-50 text-green-700", workId: "W3", statusId: "S3", pipelineId: "P1" },
-    { id: "SS14", label: "QC In Progress", order: 14, color: "bg-blue-50 text-blue-600", workId: "W4", statusId: "S3", pipelineId: "P1" },
-    { id: "SS15", label: "QC Passed", order: 15, color: "bg-green-50 text-green-700", workId: "W4", statusId: "S3", pipelineId: "P1", triggerMap: { S3: "S6" } },
-    { id: "SS16", label: "QC Failed", order: 16, color: "bg-red-50 text-red-600", workId: "W4", statusId: "S3", pipelineId: "P1" },
-    { id: "SS17", label: "Partial Fix", order: 17, color: "bg-yellow-50 text-yellow-700", workId: "W4", statusId: "S3", pipelineId: "P1" },
-    { id: "SS18", label: "Engineer Visit Requested", order: 18, color: "bg-orange-50 text-orange-600", workId: "W5", statusId: "S4", pipelineId: "P1" },
-    { id: "SS19", label: "Engineer Visit Scheduled", order: 19, color: "bg-blue-50 text-blue-600", workId: "W5", statusId: "S4", pipelineId: "P1" },
-    { id: "SS20", label: "Engineer On-Site", order: 20, color: "bg-blue-50 text-blue-600", workId: "W5", statusId: "S4", pipelineId: "P1" },
-    { id: "SS21", label: "Engineer Work Complete", order: 21, color: "bg-green-50 text-green-700", workId: "W5", statusId: "S4", pipelineId: "P1", triggerMap: { S4: "S3" } },
-    { id: "SS22", label: "Pending Despatch", order: 22, color: "bg-orange-50 text-orange-700", workId: "W5", statusId: "S4", pipelineId: "P1" },
-    { id: "SS23", label: "Dispatched", order: 23, color: "bg-blue-50 text-blue-600", workId: "W5", statusId: "S4", pipelineId: "P1" },
-    { id: "SS24", label: "Received by Service Centre", order: 24, color: "bg-blue-50 text-blue-600", workId: "W5", statusId: "S4", pipelineId: "P1" },
-    { id: "SS25", label: "Being Repaired", order: 25, color: "bg-blue-50 text-blue-600", workId: "W5", statusId: "S4", pipelineId: "P1" },
-    { id: "SS26", label: "Service Centre Delayed", order: 26, color: "bg-red-50 text-red-600", workId: "W5", statusId: "S4", pipelineId: "P1" },
-    { id: "SS27", label: "Shipped Back to Us", order: 27, color: "bg-purple-50 text-purple-600", workId: "W5", statusId: "S4", pipelineId: "P1" },
-    { id: "SS28", label: "Received by Us", order: 28, color: "bg-green-50 text-green-700", workId: "W5", statusId: "S4", pipelineId: "P1", triggerMap: { S4: "S5" } },
-    { id: "SS29", label: "Customer Notified", order: 29, color: "bg-green-50 text-green-700", workId: "W6", statusId: "S6", pipelineId: "P1", publicLabel: "Ready for collection" },
-    { id: "SS30", label: "Reminder Sent", order: 30, color: "bg-yellow-50 text-yellow-700", workId: "W6", statusId: "S6", pipelineId: "P1", publicLabel: "Ready for collection" },
-    { id: "SS31", label: "Uncollected - Action Needed", order: 31, color: "bg-red-50 text-red-600", workId: "W6", statusId: "S6", pipelineId: "P1" },
-    { id: "SS32", label: "Beyond Economical Repair", order: 32, color: "bg-red-50 text-red-600", workId: "W7", statusId: "S8", pipelineId: "P1" },
-    { id: "SS33", label: "Customer Informed", order: 33, color: "bg-gray-50 text-gray-600", workId: "W7", statusId: "S8", pipelineId: "P1" },
-    { id: "SS34", label: "Collecting Unrepaired", order: 34, color: "bg-gray-50 text-gray-600", workId: "W7", statusId: "S8", pipelineId: "P1", triggerMap: { S8: "S7" } },
-    { id: "SS35", label: "Scrapped with Consent", order: 35, color: "bg-gray-50 text-gray-600", workId: "W7", statusId: "S8", pipelineId: "P1" },
-    { id: "SS36", label: "Warranty Voided - Customer Approval Needed", order: 36, color: "bg-red-100 text-red-600", workId: "W1", statusId: null, pipelineId: "P1", warrantyScope: "any", actionLabel: "Call customer - warranty void, confirm paid repair" },
-    { id: "SS37", label: "Confirmed Under Warranty - Proceeding", order: 37, color: "bg-green-100 text-green-700", workId: "W1", statusId: null, pipelineId: "P1", warrantyScope: "any", actionLabel: "Inform customer - covered under warranty, no charge" },
+    { id: "SS45", label: "Working", order: 1, color: "bg-gray-100 text-gray-600", workId: null, statusId: "S3", pipelineId: "P1" },
+    { id: "SS38", label: "New Repair Wating", order: 1, color: "bg-gray-100 text-gray-600", workId: "W2", statusId: "S1", pipelineId: "P1", actionLabel: "Dear Technician, Accept or Reject this ticket as per device condition, down waste time !! ", successSubStatusId: "SS39", failSubStatusId: "SS40" },
+    { id: "SS1", label: "Working", order: 1, color: "bg-yellow-50 text-yellow-700", workId: null, statusId: "S2", pipelineId: "P1" },
+    { id: "SS47", label: "Call Log", order: 1, color: "bg-gray-100 text-gray-600", workId: null, statusId: "S4", pipelineId: "P1" },
+    { id: "SS39", label: "Start", order: 2, color: "bg-gray-100 text-gray-600", workId: null, statusId: "S1", pipelineId: "P1", triggerMap: {"S1":"S2"} },
+    { id: "SS40", label: "Reject", order: 3, color: "bg-gray-100 text-gray-600", workId: null, statusId: "S1", pipelineId: "P1", triggerMap: {"S1":"S8"} },
+    { id: "SS42", label: "Calling: Customer Info", order: 11, color: "bg-gray-100 text-gray-600", workId: "W1", statusId: "S2", pipelineId: "P1", actionLabel: "Dear Tele Caller, Please Call the Customer Reason given in Note !!", retrySchedule: [{"unit":"minute","every":60,"times":1},{"unit":"hour","every":6,"times":2},{"unit":"day","every":1,"times":3},{"unit":"week","every":1,"times":3},{"unit":"month","every":1,"times":3},{"unit":"year","every":1,"times":2}], successSubStatusId: "SS4", failSubStatusId: "SS3" },
+    { id: "SS10", label: "Need Parts", order: 11, color: "#B5D345", workId: "W6", statusId: "S3", pipelineId: "P1", actionLabel: "Hi, Dear Manager, Service need 3rd Party Help. Should we proceed or Reject and close ?", retrySchedule: [{"unit":"hour","every":3,"times":100}], successSubStatusId: "SS58", failSubStatusId: "SS51" },
+    { id: "SS58", label: "Order Parts", order: 12, color: "bg-orange-50 text-orange-600", workId: "W4", statusId: "S3", pipelineId: "P1", actionLabel: "Dear Purchase Manager, Please order the item need for complete the repair  . ", retrySchedule: [{"unit":"hour","every":3,"times":100}], successSubStatusId: "SS50", failSubStatusId: "SS51" },
+    { id: "SS3", label: "Unreachable: Customer Info", order: 12, color: "bg-red-50 text-red-600", workId: null, statusId: "S2", pipelineId: "P1", actionLabel: "Dear Tele Caller, Please Call the Customer Reason given in Note !!", triggerMap: {"S2":"S8"}, successSubStatusId: "SS4", failSubStatusId: "SS3" },
+    { id: "SS4", label: "Customer Responded", order: 13, color: "bg-green-50 text-green-700", workId: "W2", statusId: "S2", pipelineId: "P1", actionLabel: "Dear Technician, Customer Responded if Happy Start Work Again, if Not Happy Close the Ticket !!", successSubStatusId: "SS1", failSubStatusId: "SS3" },
+    { id: "SS50", label: "Waiting for parts", order: 13, color: "bg-teal-100 text-teal-600", workId: "W5", statusId: "S3", pipelineId: "P1", successSubStatusId: "SS52", failSubStatusId: "SS50" },
+    { id: "SS18", label: "Engineer Visit Requested", order: 18, color: "bg-orange-50 text-orange-600", workId: null, statusId: "S4", pipelineId: "P1" },
+    { id: "SS19", label: "Engineer Visit Scheduled", order: 19, color: "bg-blue-50 text-blue-600", workId: null, statusId: "S4", pipelineId: "P1" },
+    { id: "SS20", label: "Engineer On-Site", order: 20, color: "bg-blue-50 text-blue-600", workId: null, statusId: "S4", pipelineId: "P1" },
+    { id: "SS21", label: "Engineer Work Complete", order: 21, color: "bg-green-50 text-green-700", workId: null, statusId: "S4", pipelineId: "P1", triggerMap: {"S4":"S3"} },
+    { id: "SS43", label: "Calling: Customer to Bring Accessories", order: 21, color: "bg-gray-100 text-gray-600", workId: "W1", statusId: "S2", pipelineId: "P1", publicLabel: "Calling: Customer to Bring Accessories", actionLabel: "Calling: Customer to Bring Accessories", retrySchedule: [{"unit":"minute","every":60,"times":1},{"unit":"hour","every":6,"times":2},{"unit":"day","every":1,"times":3},{"unit":"week","every":1,"times":3},{"unit":"month","every":1,"times":3},{"unit":"year","every":1,"times":2}], successSubStatusId: "SS2", failSubStatusId: "SS53" },
+    { id: "SS2", label: "Waiting: Customer to Bring Accessories", order: 22, color: "bg-orange-100 text-orange-600", workId: "W5", statusId: "S2", pipelineId: "P1", retrySchedule: [{"unit":"day","every":1,"times":3}], successSubStatusId: "SS1", failSubStatusId: "SS54" },
+    { id: "SS22", label: "Pending Despatch", order: 22, color: "bg-orange-50 text-orange-700", workId: null, statusId: "S4", pipelineId: "P1" },
+    { id: "SS54", label: "Calling: Customer to Bring Accessories 2nd Attempt", order: 23, color: "bg-gray-100 text-gray-600", workId: "W1", statusId: "S2", pipelineId: "P1", publicLabel: "Calling: Customer to Bring Accessories", actionLabel: "Calling: Customer to Bring Accessories", retrySchedule: [{"unit":"minute","every":60,"times":1},{"unit":"hour","every":6,"times":2},{"unit":"day","every":1,"times":3},{"unit":"week","every":1,"times":3},{"unit":"month","every":1,"times":3},{"unit":"year","every":1,"times":2}], successSubStatusId: "SS55", failSubStatusId: "SS53" },
+    { id: "SS23", label: "Dispatched", order: 23, color: "bg-blue-50 text-blue-600", workId: null, statusId: "S4", pipelineId: "P1" },
+    { id: "SS24", label: "Received by Service Centre", order: 24, color: "bg-blue-50 text-blue-600", workId: null, statusId: "S4", pipelineId: "P1" },
+    { id: "SS25", label: "Being Repaired", order: 25, color: "bg-blue-50 text-blue-600", workId: null, statusId: "S4", pipelineId: "P1" },
+    { id: "SS55", label: "Waiting: Customer to Bring Accessories 2nd Attempt", order: 25, color: "bg-yellow-50 text-yellow-700", workId: "W5", statusId: "S2", pipelineId: "P1", retrySchedule: [{"unit":"day","every":1,"times":3}], successSubStatusId: "SS1", failSubStatusId: "SS56" },
+    { id: "SS26", label: "Service Centre Delayed", order: 26, color: "bg-red-50 text-red-600", workId: null, statusId: "S4", pipelineId: "P1" },
+    { id: "SS56", label: "Calling: Customer to Bring Accessories 3rd Attempt", order: 26, color: "bg-gray-100 text-gray-600", workId: "W1", statusId: "S2", pipelineId: "P1", publicLabel: "Calling: Customer to Bring Accessories", actionLabel: "Calling: Customer to Bring Accessories", retrySchedule: [{"unit":"minute","every":60,"times":1},{"unit":"hour","every":6,"times":2},{"unit":"day","every":1,"times":3},{"unit":"week","every":1,"times":3},{"unit":"month","every":1,"times":3},{"unit":"year","every":1,"times":2}], successSubStatusId: "SS57", failSubStatusId: "SS53" },
+    { id: "SS27", label: "Shipped Back to Us", order: 27, color: "bg-purple-50 text-purple-600", workId: null, statusId: "S4", pipelineId: "P1" },
+    { id: "SS57", label: "Waiting: Customer to Bring Accessories 3rd Attempt", order: 27, color: "bg-yellow-50 text-yellow-700", workId: "W5", statusId: "S2", pipelineId: "P1", retrySchedule: [{"unit":"year","every":2,"times":1}], successSubStatusId: "SS1", failSubStatusId: "SS53" },
+    { id: "SS28", label: "Received by Us", order: 28, color: "bg-green-50 text-green-700", workId: null, statusId: "S4", pipelineId: "P1", triggerMap: {"S4":"S5"} },
+    { id: "SS29", label: "Customer Notified", order: 29, color: "bg-green-50 text-green-700", workId: null, statusId: "S6", pipelineId: "P1" },
+    { id: "SS30", label: "Reminder Sent", order: 30, color: "bg-yellow-50 text-yellow-700", workId: null, statusId: "S6", pipelineId: "P1" },
+    { id: "SS53", label: "move to scrap", order: 31, color: "bg-gray-100 text-gray-600", workId: null, statusId: "S2", pipelineId: "P1", triggerMap: {"S2":"S63"} },
+    { id: "SS31", label: "Uncollected - Action Needed", order: 31, color: "bg-red-50 text-red-600", workId: null, statusId: "S6", pipelineId: "P1" },
+    { id: "SS32", label: "Beyond Economical Repair", order: 32, color: "bg-red-50 text-red-600", workId: null, statusId: "S8", pipelineId: "P1" },
+    { id: "SS33", label: "Customer Informed", order: 33, color: "bg-gray-50 text-gray-600", workId: null, statusId: "S8", pipelineId: "P1" },
+    { id: "SS34", label: "Collecting Unrepaired", order: 34, color: "bg-gray-50 text-gray-600", workId: null, statusId: "S8", pipelineId: "P1", triggerMap: {"S8":"S7"} },
+    { id: "SS35", label: "Scrapped with Consent", order: 35, color: "bg-gray-50 text-gray-600", workId: null, statusId: "S8", pipelineId: "P1" },
+    { id: "SS36", label: "Warranty Voided - Customer Approval Needed", order: 36, color: "bg-red-100 text-red-600", workId: "W1", statusId: null, pipelineId: "P1", actionLabel: "Call customer - warranty void, confirm paid repair" },
+    { id: "SS37", label: "Confirmed Under Warranty - Proceeding", order: 37, color: "bg-green-100 text-green-700", workId: "W1", statusId: null, pipelineId: "P1", actionLabel: "Inform customer - covered under warranty, no charge" },
+    { id: "SS46", label: "Need 3rd Party Help", order: 46, color: "bg-gray-100 text-gray-600", workId: null, statusId: "S3", pipelineId: "P1", triggerMap: {"S3":"S61"} },
+    { id: "SS48", label: "Find Help and Call Log", order: 48, color: "bg-gray-100 text-gray-600", workId: null, statusId: "S61", pipelineId: "P1" },
+    { id: "SS52", label: "End Wait", order: 52, color: "bg-gray-100 text-gray-600", workId: "W5", statusId: "S3", pipelineId: "P1", successSubStatusId: "SS45", failSubStatusId: "SS51" },
+    { id: "SS51", label: "Parts Not Avilable - Close", order: 100, color: "bg-gray-100 text-gray-600", workId: null, statusId: "S3", pipelineId: "P1", triggerMap: {"S3":"S8"} },
 ];
 
 const STATUS_TRANSITIONS = [
-    { fromStatusId: "S1", toStatusId: "S2" },
-    { fromStatusId: "S1", toStatusId: "S9" },
+    // P1 service (captured from the live workflow)
     { fromStatusId: "S2", toStatusId: "S3" },
-    { fromStatusId: "S2", toStatusId: "S4" },
-    { fromStatusId: "S2", toStatusId: "S8" },
     { fromStatusId: "S2", toStatusId: "S9" },
-    { fromStatusId: "S3", toStatusId: "S4" },
-    { fromStatusId: "S3", toStatusId: "S6" },
-    { fromStatusId: "S3", toStatusId: "S8" },
-    { fromStatusId: "S4", toStatusId: "S5" },
-    { fromStatusId: "S5", toStatusId: "S3" },
-    { fromStatusId: "S5", toStatusId: "S6" },
-    { fromStatusId: "S6", toStatusId: "S7" },
-    { fromStatusId: "S7", toStatusId: "S1" },
-    { fromStatusId: "S8", toStatusId: "S1" },
+    { fromStatusId: "S3", toStatusId: "S61" },
+    { fromStatusId: "S3", toStatusId: "S9" },
     { fromStatusId: "S42", toStatusId: "S43" },
     // New → Confirmed directly: the board's Review popup confirms a New order in one
     // click (skipping the manual Under Review hop). Under Review → Confirmed still exists.
@@ -608,29 +609,6 @@ const STATUS_TRANSITIONS = [
 // status) is no longer encoded as a `null →` row — it's hand-picked per status via
 // TicketStatus.startSubStatusId (see STATUS_STARTS below).
 const SUB_STATUS_TRANSITIONS = [
-    { fromSubStatusId: "SS1", toSubStatusId: "SS3" },
-    { fromSubStatusId: "SS1", toSubStatusId: "SS4" },
-    { fromSubStatusId: "SS2", toSubStatusId: "SS3" },
-    { fromSubStatusId: "SS2", toSubStatusId: "SS4" },
-    { fromSubStatusId: "SS3", toSubStatusId: "SS4" },
-    { fromSubStatusId: "SS5", toSubStatusId: "SS6" },
-    { fromSubStatusId: "SS6", toSubStatusId: "SS7" },
-    { fromSubStatusId: "SS6", toSubStatusId: "SS8" },
-    { fromSubStatusId: "SS6", toSubStatusId: "SS9" },
-    { fromSubStatusId: "SS7", toSubStatusId: "SS8" },
-    { fromSubStatusId: "SS7", toSubStatusId: "SS9" },
-    { fromSubStatusId: "SS10", toSubStatusId: "SS11" },
-    { fromSubStatusId: "SS10", toSubStatusId: "SS12" },
-    { fromSubStatusId: "SS10", toSubStatusId: "SS13" },
-    { fromSubStatusId: "SS11", toSubStatusId: "SS12" },
-    { fromSubStatusId: "SS11", toSubStatusId: "SS13" },
-    { fromSubStatusId: "SS12", toSubStatusId: "SS13" },
-    { fromSubStatusId: "SS14", toSubStatusId: "SS15" },
-    { fromSubStatusId: "SS14", toSubStatusId: "SS16" },
-    { fromSubStatusId: "SS14", toSubStatusId: "SS17" },
-    { fromSubStatusId: "SS16", toSubStatusId: "SS14" },
-    { fromSubStatusId: "SS17", toSubStatusId: "SS15" },
-    { fromSubStatusId: "SS17", toSubStatusId: "SS16" },
     { fromSubStatusId: "SS18", toSubStatusId: "SS19" },
     { fromSubStatusId: "SS19", toSubStatusId: "SS20" },
     { fromSubStatusId: "SS20", toSubStatusId: "SS21" },
@@ -646,6 +624,12 @@ const SUB_STATUS_TRANSITIONS = [
     { fromSubStatusId: "SS32", toSubStatusId: "SS33" },
     { fromSubStatusId: "SS33", toSubStatusId: "SS34" },
     { fromSubStatusId: "SS33", toSubStatusId: "SS35" },
+    { fromSubStatusId: "SS2", toSubStatusId: "SS1" },
+    { fromSubStatusId: "SS1", toSubStatusId: "SS42" },
+    { fromSubStatusId: "SS1", toSubStatusId: "SS43" },
+    { fromSubStatusId: "SS50", toSubStatusId: "SS45" },
+    { fromSubStatusId: "SS45", toSubStatusId: "SS10" },
+    { fromSubStatusId: "SS45", toSubStatusId: "SS46" },
 ] as const;
 
 // Hand-picked start sub-status per parent status — the one auto-applied on entry.
@@ -654,11 +638,13 @@ const SUB_STATUS_TRANSITIONS = [
 // Statuses absent here (S1/S5/S7/S9, and all of P2–P9) have no applicable sub-status,
 // so they start with none. Applied in a pass AFTER sub-statuses exist (FK ordering).
 const STATUS_STARTS: Record<string, string> = {
-    S2: "SS1",   // Diagnosing → Waiting: Customer Info (W1 Call)
-    S3: "SS10",  // Repairing  → Awaiting Parts          (W3 Parts)
-    S4: "SS18",  // Escalated  → Engineer Visit Requested (W5 Escalated)
-    S6: "SS29",  // Ready      → Customer Notified        (W6 Ready)
-    S8: "SS32",  // No Fix     → Beyond Economical Repair (W7 No Fix)
+    S1: "SS38",  // Received   → New Repair Wating
+    S2: "SS1",   // Diagnosing → Working
+    S3: "SS45",  // Repairing  → Working
+    S4: "SS47",  // Escalated  → Call Log
+    S6: "SS29",  // Ready      → Customer Notified
+    S8: "SS32",  // No Fix     → Beyond Economical Repair
+    S61: "SS48", // Need Help  → Find Help and Call Log
 };
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -882,11 +868,17 @@ async function main() {
     for (const [statusId, subStatusId] of Object.entries(STATUS_STARTS)) {
         await prisma.ticketStatus.update({ where: { id: statusId }, data: { startSubStatusId: subStatusId } });
     }
-    // Unsuccess route / give-up target — set in a second pass (self-FK; the target
-    // sub-status may be defined later in SUB_STATUSES than the one pointing at it).
+    // Outcome routing (success / unsuccess give-up target) — set in a second pass
+    // (self-FK; the target may be defined later in SUB_STATUSES than the source).
     for (const ss of SUB_STATUSES) {
-        if (ss.failSubStatusId) {
-            await prisma.ticketSubStatus.update({ where: { id: ss.id }, data: { failSubStatusId: ss.failSubStatusId } });
+        if (ss.successSubStatusId || ss.failSubStatusId) {
+            await prisma.ticketSubStatus.update({
+                where: { id: ss.id },
+                data: {
+                    ...(ss.successSubStatusId && { successSubStatusId: ss.successSubStatusId }),
+                    ...(ss.failSubStatusId && { failSubStatusId: ss.failSubStatusId }),
+                },
+            });
         }
     }
     for (const t of STATUS_TRANSITIONS) {
