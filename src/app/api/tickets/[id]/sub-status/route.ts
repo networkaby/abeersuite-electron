@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { passesWorkGate } from "@/modules/repairing/lib/workGate";
 import { findEntrySubStatus } from "@/modules/repairing/lib/entrySubStatus";
-import { spawnChildTicket } from "@/modules/repairing/lib/spawnChild";
+import { spawnChildTicket, reconcileParentFromChild } from "@/modules/repairing/lib/spawnChild";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
@@ -303,6 +303,10 @@ export async function PATCH(
                 }).catch(() => { /* spawn failure must not fail the move */ });
             }
         }
+
+        // If this move took a CHILD ticket onto a sub-status that signals its parent,
+        // reconcile the parent (fire its Success / Unsuccess route).
+        await reconcileParentFromChild(ticketId, userId).catch(() => { /* best-effort */ });
 
         // TODO(rbac): handoffRole auto-assignment removed (it looked staff up by the
         // legacy User.role). Re-add Position-based handoff when RBAC is re-wired.

@@ -25,6 +25,7 @@ const subStatusSchema = labelColorSchema.extend({
         times: z.coerce.number().int().positive(),
     })).optional(),
     spawnPipelineId: z.string().trim().optional().nullable(),
+    parentSignal: z.enum(["success", "fail"]).optional().nullable(),
     pipelineId: z.string().optional().nullable(),
 });
 
@@ -83,6 +84,7 @@ export async function POST(req: Request) {
                 autoRevertOnClear:  body.autoRevertOnClear ?? true,
                 retrySchedule:      body.retrySchedule ?? [],
                 spawnPipelineId:    body.spawnPipelineId ?? null,
+                parentSignal:       body.parentSignal ?? null,
                 pipelineId:         body.pipelineId ?? null,
             },
         });

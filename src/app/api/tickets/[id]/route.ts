@@ -6,6 +6,7 @@ import { Priority } from "@/generated/prisma/enums";
 import { resolvedUserFromSession } from "@/shared/lib/auth/permissions";
 import { passesWorkGate } from "@/modules/repairing/lib/workGate";
 import { findEntrySubStatus } from "@/modules/repairing/lib/entrySubStatus";
+import { reconcileParentFromChild } from "@/modules/repairing/lib/spawnChild";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
@@ -229,6 +230,9 @@ export async function PUT(
                     await prisma.ticket.update({ where: { id: ticket.id }, data: { subStatusId: null, primaryOwnerId: null, wakeAt: null, retryCount: 0, retryKeyId: null } });
                 }
             }
+            // If this change took a CHILD ticket onto a sub-status that signals its
+            // parent, reconcile the parent (fire its Success / Unsuccess route).
+            await reconcileParentFromChild(ticket.id, userId).catch(() => { /* best-effort */ });
         }
 
         return NextResponse.json(ticket);

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Check, ChevronRight, Copy, GitBranch, GitMerge, Lock, Pencil, Plus, RefreshCw, Trash2, X, Zap } from "lucide-react";
+import { Check, ChevronRight, Copy, CornerUpLeft, GitBranch, GitMerge, Lock, Pencil, Plus, RefreshCw, Trash2, X, Zap } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -81,6 +81,7 @@ interface SubStatus {
     autoRevertOnClear: boolean;
     retrySchedule?: { unit: string; every: number; times: number }[] | null;
     spawnPipelineId?: string | null;
+    parentSignal?: string | null;
     fromTransitions: { to: { id: string; label: string; color: string } }[];
 }
 
@@ -107,6 +108,7 @@ type FormValues = {
     autoRevertOnClear: boolean;
     retryRows: RetryRows;
     spawnPipelineId: string;
+    parentSignal: string;
 };
 
 const BLANK_FORM: FormValues = {
@@ -124,6 +126,7 @@ const BLANK_FORM: FormValues = {
     autoRevertOnClear: true,
     retryRows: BLANK_RETRY_ROWS(),
     spawnPipelineId: "",
+    parentSignal: "",
 };
 
 // Build the ordered retrySchedule payload from the dialog rows (densest first).
@@ -421,7 +424,24 @@ function SubStatusFormModal({
                             </SelectContent>
                         </Select>
                         <p className="text-xs text-muted-foreground">
-                            Landing here opens a child ticket on that pipeline (linked back to this one). When the child reaches a terminal it fires this sub-status’s Success / Unsuccess route. Blank = no spawn.
+                            Landing here opens a child ticket on that pipeline (linked back to this one). When the child reaches a sub-status that signals back, it fires this sub-status’s Success / Unsuccess route. Blank = no spawn.
+                        </p>
+                    </div>
+
+                    {/* Child-side report-back: when THIS sub-status is reached on a CHILD ticket,
+                        signal the parent — fires the parent spawning sub-status' Success/Unsuccess. */}
+                    <div className="space-y-2">
+                        <Label className="flex items-center gap-1.5"><CornerUpLeft size={13} /> Signal parent when reached</Label>
+                        <Select value={form.parentSignal || "__none__"} onValueChange={(value) => setForm({ ...form, parentSignal: value === "__none__" ? "" : value })}>
+                            <SelectTrigger className="w-full"><SelectValue placeholder="— none —" /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="__none__">— none —</SelectItem>
+                                <SelectItem value="success">Success — resume the parent (its Success route)</SelectItem>
+                                <SelectItem value="fail">Unsuccess — fail the parent (its Unsuccess route)</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">
+                            Only matters when THIS sub-status is on a spawned child. Reaching it bumps the parent off its waiting sub-status. Blank = silent.
                         </p>
                     </div>
 
@@ -562,6 +582,7 @@ export default function SubStatusesPage() {
         autoRevertOnClear: form.autoRevertOnClear,
         retrySchedule: rowsToSchedule(form.retryRows),
         spawnPipelineId: form.spawnPipelineId || null,
+        parentSignal: form.parentSignal || null,
     });
 
     const handleCreate = async () => {
@@ -597,6 +618,7 @@ export default function SubStatusesPage() {
             autoRevertOnClear: subStatus.autoRevertOnClear ?? true,
             retryRows: scheduleToRows(subStatus.retrySchedule),
             spawnPipelineId: subStatus.spawnPipelineId ?? "",
+            parentSignal: subStatus.parentSignal ?? "",
         });
         setEditId(subStatus.id);
     };
@@ -619,6 +641,7 @@ export default function SubStatusesPage() {
             autoRevertOnClear: s.autoRevertOnClear ?? true,
             retryRows: scheduleToRows(s.retrySchedule),
             spawnPipelineId: s.spawnPipelineId ?? "",
+            parentSignal: s.parentSignal ?? "",
         });
         setShowCreate(true);
     };
@@ -825,6 +848,12 @@ export default function SubStatusesPage() {
                                                     <Badge className="bg-indigo-100 text-indigo-700">
                                                         <GitBranch size={10} className="mr-1" />
                                                         spawns {pipelineLabelMap[subStatus.spawnPipelineId] ?? subStatus.spawnPipelineId}
+                                                    </Badge>
+                                                )}
+                                                {subStatus.parentSignal && (
+                                                    <Badge className={subStatus.parentSignal === "fail" ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}>
+                                                        <CornerUpLeft size={10} className="mr-1" />
+                                                        parent: {subStatus.parentSignal === "fail" ? "Unsuccess" : "Success"}
                                                     </Badge>
                                                 )}
                                             </div>

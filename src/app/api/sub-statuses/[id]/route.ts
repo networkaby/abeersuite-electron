@@ -25,6 +25,7 @@ const subStatusPatchSchema = z.object({
         times: z.coerce.number().int().positive(),
     })).optional(),
     spawnPipelineId: z.string().trim().optional().nullable(),
+    parentSignal: z.enum(["success", "fail"]).optional().nullable(),
 });
 
 // DELETE /api/sub-statuses/[id]
@@ -82,6 +83,7 @@ export async function PATCH(
                 ...("autoRevertOnClear"  in body && { autoRevertOnClear: body.autoRevertOnClear }),
                 ...("retrySchedule"        in body && { retrySchedule:        body.retrySchedule ?? [] }),
                 ...("spawnPipelineId"      in body && { spawnPipelineId:      body.spawnPipelineId ?? null }),
+                ...("parentSignal"         in body && { parentSignal:         body.parentSignal ?? null }),
             },
         });
 

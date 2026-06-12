@@ -93,6 +93,11 @@ model TicketSubStatus {
   // (e.g. inbound parts courier). The parent mirrors the child and advances via
   // success/fail when the child terminates. Plain id (no FK) — keep it simple.
   spawnPipelineId     String?
+  // Child-side report-back: when a CHILD ticket reaches this sub-status it signals
+  // its parent — "success" fires the parent spawning sub-status' Success route,
+  // "fail" fires Unsuccess. Parent-agnostic so the child pipeline is reusable.
+  // null = no signal. (Future: "checkpoint:<label>" for mid-journey nudges.)
+  parentSignal        String?
   workId              String?
   work                Work?                 @relation(fields: [workId], references: [id], onDelete: SetNull)
   pipelineId          String?

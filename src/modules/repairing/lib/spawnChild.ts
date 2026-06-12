@@ -52,3 +52,47 @@ export async function spawnChildTicket(args: {
     });
     return child.id;
 }
+
+// Child-side report-back: when a CHILD ticket reaches a sub-status carrying a
+// parentSignal ("success" / "fail"), bump the parent off its spawning sub-status
+// via that sub-status' Success / Unsuccess route. Reads the child's CURRENT
+// sub-status (state-based, so it's tolerant of the child running ahead) and is
+// called on every child change. No-op unless the child carries a signal, has a
+// parent link, and the parent is still on the spawning sub-status.
+export async function reconcileParentFromChild(childId: number, userId: number): Promise<void> {
+    const child = await prisma.ticket.findUnique({
+        where: { id: childId },
+        select: {
+            id: true, parentTicketId: true, parentSubStatusId: true,
+            ticketSubStatus: { select: { label: true, parentSignal: true } },
+        },
+    });
+    const signal = child?.ticketSubStatus?.parentSignal;
+    if (!child?.parentTicketId || !child.parentSubStatusId || (signal !== "success" && signal !== "fail")) return;
+
+    const parent = await prisma.ticket.findUnique({
+        where: { id: child.parentTicketId },
+        select: { id: true, status: true, subStatusId: true },
+    });
+    if (!parent || parent.subStatusId !== child.parentSubStatusId) return;  // already moved on
+
+    const spawningSub = await prisma.ticketSubStatus.findUnique({
+        where: { id: child.parentSubStatusId },
+        select: { successSubStatusId: true, failSubStatusId: true },
+    });
+    const fail = signal === "fail";
+    const target = fail ? spawningSub?.failSubStatusId : spawningSub?.successSubStatusId;
+    if (!target) return;  // no route configured for this outcome — leave the parent put
+
+    await prisma.ticket.update({
+        where: { id: parent.id },
+        data: { subStatusId: target, wakeAt: null, retryCount: 0, retryKeyId: null, updatedAt: new Date() },
+    });
+    await prisma.ticketLog.create({
+        data: {
+            ticketId: parent.id, status: parent.status, subStatusId: target,
+            note: `Child #${child.id} signalled ${fail ? "Unsuccess" : "Success"} (${child.ticketSubStatus?.label ?? ""}) — resumed`,
+            userId,
+        },
+    });
+}
