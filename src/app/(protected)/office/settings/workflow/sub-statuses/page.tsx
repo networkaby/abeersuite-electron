@@ -62,6 +62,7 @@ interface StatusItem {
 interface SubStatus {
     id: string;
     label: string;
+    publicLabel?: string | null;
     color: string;
     workId?: string | null;
     order: number;
@@ -87,6 +88,7 @@ interface Work {
 
 type FormValues = {
     label: string;
+    publicLabel: string;
     color: string;
     workId: string;
     order: string;
@@ -103,6 +105,7 @@ type FormValues = {
 
 const BLANK_FORM: FormValues = {
     label: "",
+    publicLabel: "",
     color: "bg-gray-100 text-gray-600",
     workId: "",
     order: "",
@@ -140,9 +143,6 @@ const summarizeRows = (rows: RetryRows) => {
     const total = phases.reduce((s, p) => s + p.times, 0) + 1;
     return `1 now → ${phases.map((p) => `${p.times}×${p.every}${abbrOf(p.unit)}`).join(" → ")} · ${total} attempts`;
 };
-
-/** Pull the `bg-*` class out of a color string for a small swatch dot. */
-const bgClass = (color: string) => color.split(" ").find((c) => c.startsWith("bg-")) ?? "bg-muted";
 
 function SubStatusFormModal({
     open,
@@ -216,13 +216,24 @@ function SubStatusFormModal({
                     </TabsList>
 
                     <TabsContent value="details" className="space-y-5">
-                    <div className="space-y-2">
-                        <Label>Label</Label>
-                        <Input
-                            value={form.label}
-                            onChange={(e) => setForm({ ...form, label: e.target.value })}
-                            placeholder="e.g. Waiting for Parts"
-                        />
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label>Label <span className="text-xs font-normal text-muted-foreground">(internal)</span></Label>
+                            <Input
+                                value={form.label}
+                                onChange={(e) => setForm({ ...form, label: e.target.value })}
+                                placeholder="e.g. Waiting for Parts"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Public label <span className="text-xs font-normal text-muted-foreground">(customer portal)</span></Label>
+                            <Input
+                                value={form.publicLabel}
+                                onChange={(e) => setForm({ ...form, publicLabel: e.target.value })}
+                                placeholder="e.g. Awaiting spare parts"
+                            />
+                            <p className="text-xs text-muted-foreground">What the customer sees. Blank → the status name is shown.</p>
+                        </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
@@ -502,6 +513,7 @@ export default function SubStatusesPage() {
 
     const subStatusPayload = (form: FormValues) => ({
         label: form.label,
+        publicLabel: form.publicLabel.trim() || null,
         color: form.color,
         workId: form.workId || null,
         order: form.order ? Number(form.order) : undefined,
@@ -519,11 +531,13 @@ export default function SubStatusesPage() {
     const handleCreate = async () => {
         setCreating(true);
         try {
-            await axios.post("/api/sub-statuses", { ...subStatusPayload(createForm), pipelineId: activePipelineId });
+            const res = await axios.post("/api/sub-statuses", { ...subStatusPayload(createForm), pipelineId: activePipelineId });
             toast.success("Sub-status created");
             setShowCreate(false);
             setCreateForm(BLANK_FORM);
-            loadAll(activePipelineId);
+            // Optimistic: append the new record in place — no full reload (avoids the
+            // blink + scroll-jump). The render groups/sorts by status + order.
+            setSubStatuses((prev) => [...prev, { ...(res.data as SubStatus), fromTransitions: [] }]);
         } catch {
             toast.error("Failed to create");
         } finally {
@@ -534,6 +548,7 @@ export default function SubStatusesPage() {
     const openEdit = (subStatus: SubStatus) => {
         setEditForm({
             label: subStatus.label,
+            publicLabel: subStatus.publicLabel ?? "",
             color: subStatus.color,
             workId: subStatus.workId ?? "",
             order: String(subStatus.order),
@@ -554,10 +569,13 @@ export default function SubStatusesPage() {
         if (!editId) return;
         setEditing(true);
         try {
-            await axios.patch(`/api/sub-statuses/${editId}`, subStatusPayload(editForm));
+            const res = await axios.patch(`/api/sub-statuses/${editId}`, subStatusPayload(editForm));
             toast.success("Sub-status updated");
+            const id = editId;
             setEditId(null);
-            loadAll(activePipelineId);
+            // Optimistic: overlay the updated scalars onto the existing row (keeps its
+            // fromTransitions) — no full reload, so scroll position is preserved.
+            setSubStatuses((prev) => prev.map((s) => s.id === id ? { ...s, ...(res.data as Partial<SubStatus>) } : s));
         } catch {
             toast.error("Failed to update");
         } finally {
@@ -570,7 +588,10 @@ export default function SubStatusesPage() {
         try {
             await axios.delete(`/api/sub-statuses/${id}`);
             toast.success("Sub-status deleted");
-            loadAll(activePipelineId);
+            // Optimistic: drop the row, and clear it as any status's start sub-status
+            // (mirrors the DB SetNull) — no full reload.
+            setSubStatuses((prev) => prev.filter((s) => s.id !== id));
+            setStatuses((prev) => prev.map((st) => st.startSubStatusId === id ? { ...st, startSubStatusId: null } : st));
         } catch (err) {
             const message = axios.isAxiosError(err) ? err.response?.data?.error : "Failed to delete";
             toast.error(message ?? "Failed to delete");
@@ -585,7 +606,8 @@ export default function SubStatusesPage() {
         try {
             await axios.patch(`/api/ticket-statuses/${statusId}`, { startSubStatusId: subStatusId });
             toast.success("Start sub-status updated");
-            loadAll(activePipelineId);
+            // Optimistic: flip the start marker on that status in place — no full reload.
+            setStatuses((prev) => prev.map((st) => st.id === statusId ? { ...st, startSubStatusId: subStatusId } : st));
         } catch (err) {
             const message = axios.isAxiosError(err) ? err.response?.data?.error : "Failed to set start";
             toast.error(message ?? "Failed to set start");
@@ -604,8 +626,14 @@ export default function SubStatusesPage() {
         try {
             await axios.put(`/api/sub-statuses/${transitionModalId}/transitions`, { toIds: selectedToIds });
             toast.success("Transitions saved");
+            const id = transitionModalId;
+            const picks = selectedToIds;
             setTransitionModalId(null);
-            loadAll(activePipelineId);
+            // Optimistic: rebuild this row's fromTransitions from the picked ids
+            // (label/color looked up from current rows) — no full reload.
+            setSubStatuses((prev) => prev.map((s) => s.id === id
+                ? { ...s, fromTransitions: picks.map((tid) => { const t = prev.find((x) => x.id === tid); return { to: { id: tid, label: t?.label ?? tid, color: t?.color ?? "bg-muted" } }; }) }
+                : s));
         } catch {
             toast.error("Failed to save transitions");
         } finally {
@@ -699,7 +727,12 @@ export default function SubStatusesPage() {
                                     const work = subStatus.workId ? worksById[subStatus.workId] : undefined;
                                     return (
                                     <div key={subStatus.id} className="flex items-start gap-3 border-b px-6 py-4 last:border-b-0">
-                                        <span className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${bgClass(subStatus.color)}`} aria-hidden />
+                                        <span
+                                            className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-medium tabular-nums ${subStatus.color}`}
+                                            title={`Sort order ${subStatus.order}`}
+                                        >
+                                            {subStatus.order}
+                                        </span>
 
                                         <div className="min-w-0 flex-1">
                                             <div className="flex flex-wrap items-center gap-2">
@@ -806,7 +839,12 @@ export default function SubStatusesPage() {
                             <CardContent className="space-y-0 px-0 pt-0">
                                 {unassigned.map((subStatus) => (
                                     <div key={subStatus.id} className="flex items-center gap-3 border-b px-6 py-4 last:border-b-0">
-                                        <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${bgClass(subStatus.color)}`} aria-hidden />
+                                        <span
+                                            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-medium tabular-nums ${subStatus.color}`}
+                                            title={`Sort order ${subStatus.order}`}
+                                        >
+                                            {subStatus.order}
+                                        </span>
                                         <span className="flex-1 text-sm">{subStatus.label}</span>
                                         <div className="flex items-center gap-2">
                                             <Button type="button" size="sm" variant="outline" onClick={() => openEdit(subStatus)}>
