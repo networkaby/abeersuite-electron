@@ -8,7 +8,10 @@ import { formatDate, formatDateTime } from "@/shared/lib/format/formatDate";
 import {
     Clock, User, Building2, AlertTriangle,
     Printer, Lock, Eye, NotebookPen, ArrowRightLeft,
+    Check, X, MessageSquare, RefreshCw, ArrowRight, CornerUpLeft, Flag,
+    type LucideIcon,
 } from "lucide-react";
+import { timeAgo } from "@/shared/lib/format/timeAgo";
 import Link from "next/link";
 import { PathBreadcrumb } from "@/shared/components/PathBreadcrumb";
 import { PRIORITY_META } from "@/utils/constants";
@@ -75,6 +78,44 @@ interface Ticket {
         ticketStatus: { label: string; color: string };
         ticketSubStatus?: { label: string; color: string } | null;
     }[];
+}
+
+type LogEntry = Ticket["logs"][number];
+type LogKind = "success" | "fail" | "note" | "entered" | "advanced" | "retry" | "revert" | "system";
+
+// System-generated notes that aren't outcomes/entries — shown muted in the timeline.
+const SYSTEM_NOTE_RE = /^(Ticket created|Claimed by|Passed to|Returned to unassigned|Secondary owner|Reopened from|Transferred|Escalat|✓ )/;
+
+function classifyLog(note?: string): LogKind {
+    if (!note) return "system";                              // bare status / sub-status change
+    if (note.startsWith("Work done · Success")) return "success";
+    if (note.startsWith("Work done · Unsuccess")) return "fail";
+    if (note.startsWith("Entered:")) return "entered";
+    if (note.startsWith("Auto-advanced")) return "advanced";
+    if (note.startsWith("Retry limit")) return "retry";
+    if (note.startsWith("Reverted")) return "revert";
+    if (SYSTEM_NOTE_RE.test(note)) return "system";
+    return "note";                                           // human free-text
+}
+
+const KIND_META: Record<LogKind, { icon: LucideIcon; dot: string; lead?: string }> = {
+    success:  { icon: Check,          dot: "bg-green-100 text-green-600 dark:bg-green-950 dark:text-green-400", lead: "Success" },
+    fail:     { icon: X,              dot: "bg-red-100 text-red-600 dark:bg-red-950 dark:text-red-400", lead: "Unsuccess" },
+    note:     { icon: MessageSquare,  dot: "bg-blue-100 text-blue-600 dark:bg-blue-950 dark:text-blue-400" },
+    entered:  { icon: ArrowRight,     dot: "bg-muted text-muted-foreground" },
+    advanced: { icon: ArrowRightLeft, dot: "bg-amber-100 text-amber-600 dark:bg-amber-950 dark:text-amber-400", lead: "Auto-advanced" },
+    retry:    { icon: RefreshCw,      dot: "bg-amber-100 text-amber-600 dark:bg-amber-950 dark:text-amber-400", lead: "Retry limit reached" },
+    revert:   { icon: CornerUpLeft,   dot: "bg-muted text-muted-foreground", lead: "Reverted" },
+    system:   { icon: Flag,           dot: "bg-muted text-muted-foreground" },
+};
+
+// Strip the machine prefix so the row reads cleanly beside its icon.
+function timelineText(note: string | undefined, kind: LogKind): string | null {
+    if (!note) return null;
+    if (kind === "success" || kind === "fail") return note.split(" — ").slice(1).join(" — ").trim() || null;
+    if (kind === "entered" || kind === "advanced") return null;   // the sub-status badge already conveys it
+    if (kind === "retry") return null;                            // the lead label conveys it
+    return note;                                                  // note / system / revert
 }
 
 export default function TicketDetailPage() {
@@ -313,55 +354,71 @@ export default function TicketDetailPage() {
                             </div>
                         )}
 
-                        {/* Timeline — one card per log entry */}
+                        {/* Timeline — vertical activity rail (newest first) */}
                         <div className="rounded-lg border border-border bg-card p-6 shadow">
-                            <h2 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+                            <h2 className="mb-4 flex items-center gap-2 font-semibold text-foreground">
                                 <Clock size={16} /> Timeline
+                                {ticket.logs.length > 0 && (
+                                    <span className="text-xs font-normal text-muted-foreground">· {ticket.logs.length}</span>
+                                )}
                             </h2>
                             {ticket.logs.length === 0 ? (
-                                <p className="text-muted-foreground text-sm">No history yet.</p>
+                                <p className="text-sm text-muted-foreground">No history yet.</p>
                             ) : (
-                                <div className="space-y-3">
-                                    {ticket.logs.map((log) => {
-                                        const isNoteOnly = !log.subStatusId && log.note && log.status === ticket.status;
+                                <div className="relative">
+                                    {ticket.logs.map((log, idx) => {
+                                        const kind = classifyLog(log.note);
+                                        const meta = KIND_META[kind];
+                                        const Icon = meta.icon;
+                                        const text = timelineText(log.note, kind);
+                                        // Text a human actually typed (a note, or the remark on an
+                                        // outcome) is the signal — highlight it; system text stays quiet.
+                                        const isHuman = kind === "note" || ((kind === "success" || kind === "fail") && !!text);
+                                        const prev = ticket.logs[idx - 1];                       // newer entry above
+                                        const showStatus = !prev || prev.status !== log.status;  // collapse repeated stage label
+                                        const isLast = idx === ticket.logs.length - 1;
                                         return (
-                                            <div
-                                                key={log.id}
-                                                className={`rounded-md border border-border border-l-4 bg-background p-3 ${log.subStatusId ? "border-l-accent" : isNoteOnly ? "border-l-primary" : "border-l-muted-foreground"
-                                                    }`}
-                                            >
-                                                <div className="flex flex-wrap items-center justify-between gap-2">
-                                                    <div className="flex flex-wrap items-center gap-2">
-                                                        <span className={`rounded px-2 py-0.5 text-xs font-medium ${log.ticketStatus.color}`}>
-                                                            {log.ticketStatus.label}
-                                                        </span>
-                                                        {log.ticketSubStatus && (
-                                                            <span className={`rounded px-2 py-0.5 text-xs font-medium ${log.ticketSubStatus.color}`}>
+                                            <div key={log.id} className="relative flex gap-3 pb-4 last:pb-0">
+                                                {!isLast && <span className="absolute bottom-0 left-[13px] top-7 w-px bg-border" aria-hidden />}
+                                                <span className={`relative z-10 mt-0.5 flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full ${meta.dot}`}>
+                                                    <Icon size={13} />
+                                                </span>
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                                        {meta.lead && <span className="text-sm font-medium text-foreground">{meta.lead}</span>}
+                                                        {log.ticketSubStatus ? (
+                                                            <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${log.ticketSubStatus.color}`}>
                                                                 {log.ticketSubStatus.label}
                                                             </span>
+                                                        ) : (kind === "note" && !meta.lead && (
+                                                            <span className="text-sm font-medium text-foreground">Note</span>
+                                                        ))}
+                                                        {showStatus && (
+                                                            <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${log.ticketStatus.color}`}>
+                                                                {log.ticketStatus.label}
+                                                            </span>
                                                         )}
+                                                        <span className="ml-auto flex items-center gap-1.5 whitespace-nowrap text-xs text-muted-foreground">
+                                                            {log.visibility === "public"
+                                                                ? <Eye size={11} className="text-primary" aria-label="Public" />
+                                                                : <Lock size={11} aria-label="Internal" />}
+                                                            <span>{log.changedBy.name}</span>
+                                                            <span title={formatDateTime(log.createdAt)}>· {timeAgo(log.createdAt)}</span>
+                                                        </span>
                                                     </div>
-                                                    {log.visibility === "public" ? (
-                                                        <span className="flex items-center gap-1 rounded bg-primary/10 px-1.5 py-0.5 text-xs text-primary">
-                                                            <Eye size={10} /> Public
-                                                        </span>
+                                                    {text && (isHuman ? (
+                                                        <div className={`mt-1.5 rounded-md border px-3 py-2 text-sm text-foreground ${log.visibility === "public" ? "border-primary/30 bg-primary/5" : "border-border bg-muted/50"}`}>
+                                                            {log.visibility === "public" && (
+                                                                <span className="mb-1 flex items-center gap-1 text-[11px] font-medium text-primary">
+                                                                    <Eye size={11} /> Sent to customer
+                                                                </span>
+                                                            )}
+                                                            {text}
+                                                        </div>
                                                     ) : (
-                                                        <span className="flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
-                                                            <Lock size={10} /> Internal
-                                                        </span>
-                                                    )}
+                                                        <p className="mt-1 text-sm text-muted-foreground">{text}</p>
+                                                    ))}
                                                 </div>
-                                                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                                                    <span className="flex items-center gap-1">
-                                                        <User size={11} /> {log.changedBy.name}
-                                                    </span>
-                                                    <span className="flex items-center gap-1">
-                                                        <Clock size={11} /> {formatDateTime(log.createdAt)}
-                                                    </span>
-                                                </div>
-                                                {log.note && (
-                                                    <p className="mt-2 text-sm text-foreground">{log.note}</p>
-                                                )}
                                             </div>
                                         );
                                     })}
