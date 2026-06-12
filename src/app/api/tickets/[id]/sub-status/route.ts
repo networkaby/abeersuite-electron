@@ -102,32 +102,33 @@ export async function PATCH(
             (s?.triggerMap ?? {}) as Record<string, string>;
 
         // ── Hybrid retry schedule resolution ───────────────────────────────────
-        // A "waiting" sub-status (retrySchedule non-empty) makes the FIRST attempt
-        // immediate: arriving here from elsewhere leaves wakeAt null, so it shows as
-        // due now. Only a failed attempt that loops back onto THIS same sub-status
-        // (prev === target) schedules the next attempt — wakeAt = now + the interval
-        // of the phase that attempt falls in, densest first, dropping it into the
-        // Waiting tab. Past the last phase's last attempt it redirects to the
-        // exhausted target (give-up). The counter is keyed by the sub-status so the
+        // A "waiting" sub-status (retrySchedule non-empty) waits before the NEXT
+        // attempt whenever an attempt just FAILED — i.e. this move carries an
+        // Unsuccess outcome (a reject). That covers both shapes: a separate calling
+        // sub-status routing its Unsuccess here, and a self-loop reject on this sub.
+        // wakeAt = now + the interval of the phase the failure count falls in,
+        // densest first, dropping it into the Waiting tab. Arriving WITHOUT a reject
+        // (entered the status / routed here on Success) leaves wakeAt null → the
+        // first attempt is due now. Past the last phase it redirects to the exhausted
+        // target (give-up). retryCount = failures so far, keyed by sub-status so the
         // calling loop and parts loop count independently.
         const phases = parseSchedule(subStatus.retrySchedule);
+        const carried = ticket.retryKeyId === subStatus.id ? ticket.retryCount : 0;
         let landingSubStatusId: string = subStatusId;
         let wakeAt: Date | null = null;
         let retryCount = 0;
         let retryKeyId: string | null = null;
         let exhaustedFrom: string | null = null;
         if (phases.length > 0) {
-            const isRetry = prevSubStatusId === subStatus.id;  // self-loop = an attempt failed
-            if (!isRetry) {
-                // First arrival → attempt 1 is actionable now (no wait).
-                retryCount = 1;
+            const failed = outcome === "unsuccess";  // a reject just happened → wait for next attempt
+            if (!failed) {
+                // Fresh arrival (no reject) → attempt 1 is actionable now (no wait).
                 retryKeyId = subStatus.id;
             } else {
-                const done = ticket.retryKeyId === subStatus.id ? ticket.retryCount : 0;
-                const next = done + 1;
-                const phase = phaseForAttempt(phases, next);
+                const fails = carried + 1;
+                const phase = phaseForAttempt(phases, fails);
                 if (phase) {
-                    retryCount = next;
+                    retryCount = fails;
                     retryKeyId = subStatus.id;
                     wakeAt = addInterval(phase.unit, phase.every);
                 } else if (subStatus.exhaustedSubStatusId) {
@@ -135,7 +136,7 @@ export async function PATCH(
                     exhaustedFrom = subStatus.label;
                 } else {
                     // Schedule exhausted, no give-up target → stays due, stops re-arming.
-                    retryCount = done;
+                    retryCount = carried;
                     retryKeyId = subStatus.id;
                 }
             }
