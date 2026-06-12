@@ -74,7 +74,7 @@ export async function GET(
                 ticketStatus: {
                     include: {
                         fromTransitions: {
-                            include: { to: { select: { id: true, label: true } } },
+                            include: { to: { select: { id: true, label: true, color: true, isTerminal: true } } },
                             orderBy: { toStatusId: "asc" },
                         },
                     },

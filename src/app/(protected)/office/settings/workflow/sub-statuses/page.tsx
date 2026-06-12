@@ -140,6 +140,12 @@ function SubStatusFormModal({
     const selectedWork = works.find((w) => w.id === form.workId);
     const autoAdvanceTarget = form.statusId ? (form.triggerMap[form.statusId] ?? "") : "";
 
+    // Outcome routing stays WITHIN the stage: a sub-status's success / unsuccess
+    // target is another sub-status of the SAME parent status. Jumping to another
+    // stage is done via "Auto-advance status to", never by a cross-status target
+    // (which would leave the ticket's status and sub-status inconsistent).
+    const sameStatusSubs = form.statusId ? subStatuses.filter((s) => s.statusId === form.statusId) : [];
+
     return (
         <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose(); }}>
             <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
@@ -202,7 +208,7 @@ function SubStatusFormModal({
                                 <SelectTrigger className="w-full"><SelectValue placeholder="— none —" /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="__none__">— none —</SelectItem>
-                                    {subStatuses.map((s) => (<SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>))}
+                                    {sameStatusSubs.map((s) => (<SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>))}
                                 </SelectContent>
                             </Select>
                         </div>
@@ -212,13 +218,13 @@ function SubStatusFormModal({
                                 <SelectTrigger className="w-full"><SelectValue placeholder="— none —" /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="__none__">— none —</SelectItem>
-                                    {subStatuses.map((s) => (<SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>))}
+                                    {sameStatusSubs.map((s) => (<SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>))}
                                 </SelectContent>
                             </Select>
                         </div>
                     </div>
                     <p className="-mt-3 text-xs text-muted-foreground">
-                        When the caller completes this work they pick Success or Unsuccess; the ticket moves to the chosen sub-status (green / red on the Work Inbox).
+                        On completing this work the caller picks Success or Unsuccess; the ticket moves to the chosen sub-status <span className="font-medium">within this stage</span> (green / red on the Work Inbox). To jump to another stage, use “Auto-advance status to” below.
                     </p>
 
                     <div className="space-y-2">

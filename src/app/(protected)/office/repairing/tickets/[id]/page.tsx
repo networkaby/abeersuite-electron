@@ -52,7 +52,7 @@ interface Ticket {
         label: string;
         color: string;
         isTerminal: boolean;
-        fromTransitions: { to: { id: string; label: string } }[];
+        fromTransitions: { to: { id: string; label: string; color?: string; isTerminal?: boolean } }[];
     };
     device: {
         type: string;
@@ -134,22 +134,31 @@ export default function TicketDetailPage() {
     // When true: StatusNav is locked, all Actions except Add Note are locked.
     const workInProgress = !!ticket.primaryOwner && !!ticket.ticketSubStatus?.work;
 
-    // Single "Back" = true undo — the previous (status, sub-status) pair from history.
-    // Single pass: first log that differs from current state AND has a valid ticketStatus
-    // (skip stale logs whose status ID no longer exists in the DB).
+    // Single "Back" = true undo — the previous *resting* (status, sub-status) pair
+    // from history. Single pass over logs (newest first), returning the first that:
+    //   • has a valid ticketStatus (skip stale logs whose status ID is gone), and
+    //   • isn't the current state, and
+    //   • isn't the transient "bare arrival" of the current status — when a ticket
+    //     auto-advances into a status it briefly sits at `status/no-sub` for a
+    //     fraction of a second before the entry sub-status is applied. That
+    //     intermediate is never a real rest point; returning it gives a useless
+    //     "back to self" (e.g. "Back to Diagnosing" while already in Diagnosing).
+    const curStatus = ticket.status;
+    const curSub = ticket.subStatusId ?? null;
     const backTarget = (() => {
         for (const log of ticket.logs) {
             if (!log.ticketStatus) continue;
-            if (log.status !== ticket.status || (log.subStatusId ?? null) !== (ticket.subStatusId ?? null)) {
-                const subLabel = log.ticketSubStatus?.label;
-                return {
-                    statusId:    log.status,
-                    subStatusId: log.subStatusId ?? null,
-                    label: subLabel
-                        ? `${log.ticketStatus.label} › ${subLabel}`
-                        : log.ticketStatus.label,
-                };
-            }
+            const logSub = log.subStatusId ?? null;
+            if (log.status === curStatus && logSub === curSub) continue;        // current state
+            if (log.status === curStatus && logSub === null) continue;          // bare-arrival artifact
+            const subLabel = log.ticketSubStatus?.label;
+            return {
+                statusId:    log.status,
+                subStatusId: logSub,
+                label: subLabel
+                    ? `${log.ticketStatus.label} › ${subLabel}`
+                    : log.ticketStatus.label,
+            };
         }
         return null;
     })();

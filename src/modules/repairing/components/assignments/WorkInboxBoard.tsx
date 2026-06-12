@@ -2,11 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import axios from "axios";
-import { toast } from "sonner";
-import { useRouter } from "next/navigation";
-import { Wrench, Clock, CheckCircle2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Wrench, Clock, CheckCircle2, XCircle, MessageSquare } from "lucide-react";
 import WorkActions from "../WorkActions";
 
 /**
@@ -25,10 +21,15 @@ export interface WorkInboxItem {
     status: "todo" | "progress" | "answered";
     coverLabel: string;
     ask: string | null;
+    problem: string | null;
+    lastNote: string | null;
+    lastNoteBy: string | null;
     customer: string;
     phone: string | null;
     device: string;
     assignee: { id: number; name: string } | null;
+    /** Finished rows only — the recorded outcome. */
+    outcome?: "success" | "unsuccess";
     answer: string | null;
     answeredBy: string | null;
     ageLabel: string;
@@ -37,7 +38,7 @@ export interface WorkInboxItem {
 const STATUS_PILL: Record<WorkInboxItem["status"], { label: string; cls: string }> = {
     todo: { label: "To do", cls: "bg-muted text-muted-foreground" },
     progress: { label: "In progress", cls: "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300" },
-    answered: { label: "Answered", cls: "bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300" },
+    answered: { label: "Done", cls: "bg-muted text-muted-foreground" },
 };
 
 const dotClass = (workColor: string) => workColor.split(" ").find((c) => c.startsWith("bg-")) ?? "bg-muted-foreground";
@@ -49,31 +50,20 @@ export default function WorkInboxBoard({
     works: { id: string; label: string; color: string }[];
     currentUserId: number;
 }) {
-    const router = useRouter();
     const [filter, setFilter] = useState<string>("all");
-    const [closingId, setClosingId] = useState<string | null>(null);
 
+    // Finished (answered) rows are historical completion stamps — they live ONLY under
+    // the Finished tab, never in the active "all / mine / per-work" queues.
     const matches = (it: WorkInboxItem, f: string) =>
-        f === "all" ? true
+        f === "finished" ? it.status === "answered"
+        : it.status === "answered" ? false
+        : f === "all" ? true
         : f === "mine" ? it.assignee?.id === currentUserId
-        : f === "finished" ? it.status === "answered"
         : it.workId === f;
 
     const shown = items.filter((it) => matches(it, filter));
     const count = (f: string) => items.filter((it) => matches(it, f)).length;
-
-    const closeWork = async (it: WorkInboxItem) => {
-        setClosingId(it.id);
-        try {
-            await axios.delete(`/api/tickets/${it.ticketId}/sub-status`);
-            toast.success("Closed");
-            router.refresh();
-        } catch {
-            toast.error("Failed to close");
-        } finally {
-            setClosingId(null);
-        }
-    };
+    const openCount = items.filter((it) => it.status !== "answered").length;
 
     const chip = (id: string, label: string, dot?: string) => (
         <button
@@ -97,7 +87,7 @@ export default function WorkInboxBoard({
                 <Wrench size={24} className="text-primary" />
                 <div>
                     <h1 className="text-2xl font-bold">Work inbox</h1>
-                    <p className="text-sm text-muted-foreground">{items.length} things to do · longest-waiting first</p>
+                    <p className="text-sm text-muted-foreground">{openCount} things to do · longest-waiting first</p>
                 </div>
             </div>
 
@@ -137,13 +127,29 @@ export default function WorkInboxBoard({
                                 {it.coverLabel && (
                                     <span className="shrink-0 rounded border border-border px-1.5 py-0.5 text-[11px] text-muted-foreground">{it.coverLabel}</span>
                                 )}
-                                {answered && it.answer ? (
-                                    <span className="flex min-w-0 flex-1 items-center gap-1 text-xs text-green-700 dark:text-green-300">
-                                        <CheckCircle2 size={12} className="shrink-0" />
-                                        <span className="truncate"><span className="font-medium">{it.answeredBy ?? "Answered"}:</span> {it.answer}</span>
+                                {answered ? (
+                                    <span className={`flex min-w-0 flex-1 items-center gap-1 text-xs ${it.outcome === "unsuccess" ? "text-red-700 dark:text-red-300" : "text-green-700 dark:text-green-300"}`}>
+                                        {it.outcome === "unsuccess" ? <XCircle size={12} className="shrink-0" /> : <CheckCircle2 size={12} className="shrink-0" />}
+                                        <span className="truncate">
+                                            <span className="font-medium">{it.outcome === "unsuccess" ? "Unsuccess" : "Success"}</span>
+                                            {it.answeredBy && <span className="text-muted-foreground"> · {it.answeredBy}</span>}
+                                            {it.answer && <> — {it.answer}</>}
+                                        </span>
                                     </span>
                                 ) : (
-                                    it.ask && <span className="min-w-0 flex-1 truncate text-sm text-foreground">{it.ask}</span>
+                                    <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                                        {it.ask && <span className="truncate text-sm font-medium text-foreground">{it.ask}</span>}
+                                        {it.lastNote && (
+                                            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                                                <MessageSquare size={11} className="shrink-0" />
+                                                <span className="truncate">{it.lastNoteBy ? `${it.lastNoteBy}: ` : ""}{it.lastNote}</span>
+                                            </span>
+                                        )}
+                                        {it.problem && <span className="truncate text-xs text-muted-foreground/80">Issue: {it.problem}</span>}
+                                        {!it.ask && !it.lastNote && !it.problem && (
+                                            <span className="text-xs italic text-muted-foreground/60">No context yet</span>
+                                        )}
+                                    </span>
                                 )}
                                 <span className="ml-auto flex shrink-0 items-center gap-2">
                                     {it.assignee && (
@@ -156,11 +162,7 @@ export default function WorkInboxBoard({
                                             </span>
                                         </span>
                                     )}
-                                    {answered ? (
-                                        <Button onClick={() => closeWork(it)} disabled={closingId === it.id} size="sm" variant="outline">
-                                            {closingId === it.id ? "Closing…" : "Close"}
-                                        </Button>
-                                    ) : (
+                                    {!answered && (
                                         <WorkActions
                                             ticketId={it.ticketId}
                                             workLabel={it.workLabel}

@@ -32,13 +32,15 @@ export async function GET(req: Request) {
 
         let candidates: Array<{
             id: string; label: string; statusId: string | null;
-            warrantyScope: string | null; work: { permissionId: string | null } | null;
+            warrantyScope: string | null; work: { permissionId: string | null; label: string; color: string } | null;
         }>;
+
+        const subSelect = { id: true, label: true, statusId: true, warrantyScope: true, work: { select: { permissionId: true, label: true, color: true } } } as const;
 
         if (fromId === null) {
             const status = await prisma.ticketStatus.findUnique({
                 where: { id: statusId },
-                select: { startSubStatus: { select: { id: true, label: true, statusId: true, warrantyScope: true, work: { select: { permissionId: true } } } } },
+                select: { startSubStatus: { select: subSelect } },
             });
             candidates = status?.startSubStatus ? [status.startSubStatus] : [];
         } else {
@@ -46,7 +48,7 @@ export async function GET(req: Request) {
             // history-based on the client, so this route is forward-only.
             const transitions = await prisma.subStatusTransition.findMany({
                 where: { fromSubStatusId: fromId },
-                include: { to: { select: { id: true, label: true, statusId: true, warrantyScope: true, work: { select: { permissionId: true } } } } },
+                include: { to: { select: subSelect } },
                 orderBy: { to: { order: "asc" } },
             });
             candidates = transitions.map((t) => t.to);
@@ -66,7 +68,11 @@ export async function GET(req: Request) {
             return true;
         });
 
-        return NextResponse.json(result.map((ss) => ({ id: ss.id, label: ss.label })));
+        return NextResponse.json(result.map((ss) => ({
+            id: ss.id,
+            label: ss.label,
+            work: ss.work ? { label: ss.work.label, color: ss.work.color } : null,
+        })));
     } catch (e) {
         return handleApiError(e, "Failed to fetch next sub-statuses");
     }

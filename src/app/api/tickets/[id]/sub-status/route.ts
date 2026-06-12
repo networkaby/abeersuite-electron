@@ -11,6 +11,9 @@ const subStatusUpdateSchema = z.object({
     subStatusId: z.string().trim().min(1, "Sub-status is required"),
     note: z.string().optional(),
     visibility: z.enum(["INTERNAL", "PUBLIC"]).optional(),
+    // Set by Success / Unsuccess on the Work Inbox — stamps the outgoing work as
+    // "done" with its outcome so it lands in the Finished list.
+    outcome: z.enum(["success", "unsuccess"]).optional(),
 });
 
 // PATCH /api/tickets/[id]/sub-status
@@ -29,7 +32,7 @@ export async function PATCH(
         const ticketId = Number(id);
         const { data, error } = await validateRequest(req, subStatusUpdateSchema);
         if (error) return error;
-        const { subStatusId, note, visibility } = data;
+        const { subStatusId, note, visibility, outcome } = data;
 
         const subStatus = await prisma.ticketSubStatus.findUnique({
             where: { id: subStatusId },
@@ -104,17 +107,33 @@ export async function PATCH(
                 }
             }
 
-            // 3. Log the sub-status change
+            // 3. Log the sub-status change (when an outcome is recorded, the note rides
+            //    on the completion stamp below instead, to avoid a duplicate line).
             await tx.ticketLog.create({
                 data: {
                     ticketId,
                     status: ticket.status,
                     subStatusId,
-                    note: note || null,
+                    note: outcome ? null : (note || null),
                     visibility: visibility === "PUBLIC" ? "PUBLIC" : "INTERNAL",
                     userId,
                 },
             });
+
+            // 3b. Completion stamp — marks the OUTGOING work (prevSubStatusId) done with
+            //     its outcome. The Work Inbox "Finished" list reads these (joins the
+            //     sub-status' Work, parses Success/Unsuccess from the note).
+            if (outcome && prevSubStatusId) {
+                await tx.ticketLog.create({
+                    data: {
+                        ticketId,
+                        status: ticket.status,
+                        subStatusId: prevSubStatusId,
+                        note: `Work done · ${outcome === "success" ? "Success" : "Unsuccess"}${note ? " — " + note : ""}`,
+                        userId,
+                    },
+                });
+            }
 
             // 4. Log auto-advance if triggered (+ the entry sub-status it landed in)
             if (triggerStatusId) {

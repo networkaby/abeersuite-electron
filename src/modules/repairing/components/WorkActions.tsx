@@ -69,11 +69,14 @@ export default function WorkActions({
         if (!pending) return;
         setBusy(true);
         try {
+            // Tag the completion outcome so it lands in the Work Inbox "Finished" list.
+            const outcome = pending.kind === "Success" ? "success" : pending.kind === "Unsuccess" ? "unsuccess" : undefined;
             if (pending.target) {
                 await axios.patch(`/api/tickets/${ticketId}/sub-status`, {
                     subStatusId: pending.target.id,
                     note: privateNote.trim() || undefined,
                     visibility: "INTERNAL",
+                    outcome,
                 });
             } else {
                 await axios.delete(`/api/tickets/${ticketId}/sub-status`);
@@ -95,7 +98,8 @@ export default function WorkActions({
         <>
             {!isOwned && (
                 <Button onClick={start} disabled={busy} size={size}>
-                    <Play size={13} /> Start
+                    <Play size={13} /> Reply
+                    {/* Start */}
                 </Button>
             )}
             {showComplete && isOwnerMe && (hasRouting ? (
@@ -106,7 +110,8 @@ export default function WorkActions({
                             disabled={busy} size={size} variant="outline" title={`Success → ${successTarget.label}`}
                             className="border-green-300 bg-green-50 text-green-700 hover:bg-green-100 dark:border-green-800 dark:bg-green-950 dark:text-green-300"
                         >
-                            <Check size={13} /> Success
+                            <Check size={20} className="text-green-500" />
+                            {/* Success */}
                         </Button>
                     )}
                     {failTarget && (
@@ -115,7 +120,8 @@ export default function WorkActions({
                             disabled={busy} size={size} variant="outline" title={`Unsuccess → ${failTarget.label}`}
                             className="border-red-300 bg-red-50 text-red-700 hover:bg-red-100 dark:border-red-800 dark:bg-red-950 dark:text-red-300"
                         >
-                            <X size={13} /> Unsuccess
+                            <X size={50} className="text-red-500" />
+                            {/* Unsuccess */}
                         </Button>
                     )}
                 </>
