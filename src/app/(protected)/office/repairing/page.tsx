@@ -1,5 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { auth } from "@/auth";
+import { badgeColor } from "@/shared/lib/format/entityColor";
 import Link from "next/link";
 import { Wrench, AlertCircle, UserX, Inbox } from "lucide-react";
 import { timeAgo } from "@/shared/lib/format/timeAgo";
@@ -130,7 +131,7 @@ export default async function RepairingDashboardPage() {
                                                 {t.ticketStatus.label}
                                             </span>
                                             {t.ticketSubStatus && (
-                                                <span className={`text-xs px-2 py-0.5 font-medium ${t.ticketSubStatus.color}`}>
+                                                <span className={`text-xs px-2 py-0.5 font-medium ${badgeColor(t.ticketSubStatus.color).className}`} style={badgeColor(t.ticketSubStatus.color).style}>
                                                     {t.ticketSubStatus.label}
                                                 </span>
                                             )}

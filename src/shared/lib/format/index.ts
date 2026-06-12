@@ -1,3 +1,4 @@
+export * from "./entityColor";
 export * from "./formatDate";
 export * from "./timeAgo";
 export * from "./moneyInr";

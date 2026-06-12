@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { ArrowRight, ArrowLeft, Lock, Eye, LockKeyhole, Share2, Flag } from "lucide-react";
+import { badgeColor } from "@/shared/lib/format/entityColor";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
@@ -103,7 +104,7 @@ export default function StatusNav({
             <Share2 size={13} className="shrink-0 text-muted-foreground" />
             <span className="truncate">{t.label}</span>
             {t.work && (
-                <span className={`ml-auto shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${t.work.color}`}>{t.work.label}</span>
+                <span className={`ml-auto shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${badgeColor(t.work.color).className}`} style={badgeColor(t.work.color).style}>{t.work.label}</span>
             )}
         </Button>
     );

@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Wrench, Clock, CheckCircle2, XCircle, MessageSquare } from "lucide-react";
 import WorkActions from "../WorkActions";
+import { badgeColor, dotColor } from "@/shared/lib/format/entityColor";
 
 /**
  * One row in the Work Inbox. Deliberately a *presentational* shape: the server
@@ -47,7 +48,6 @@ const STATUS_PILL: Record<WorkInboxItem["status"], { label: string; cls: string 
     answered: { label: "Done", cls: "bg-muted text-muted-foreground" },
 };
 
-const dotClass = (workColor: string) => workColor.split(" ").find((c) => c.startsWith("bg-")) ?? "bg-muted-foreground";
 
 export default function WorkInboxBoard({
     items, works, currentUserId,
@@ -74,21 +74,27 @@ export default function WorkInboxBoard({
     const count = (f: string) => items.filter((it) => matches(it, f)).length;
     const openCount = items.filter((it) => it.status !== "answered" && !it.snoozed).length;
 
-    const chip = (id: string, label: string, dot?: string) => (
-        <button
-            key={id}
-            onClick={() => setFilter(id)}
-            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-colors ${
-                filter === id
-                    ? "border-foreground/40 bg-muted font-medium text-foreground"
-                    : "border-border text-muted-foreground hover:bg-muted/50"
-            }`}
-        >
-            {dot && <span className={`h-1.5 w-1.5 rounded-full ${dot}`} aria-hidden />}
-            {label}
-            <span className="text-muted-foreground/70">{count(id)}</span>
-        </button>
-    );
+    const chip = (id: string, label: string, color?: string) => {
+        // Hide empty chips to cut clutter — but always keep "All" and the chip you're
+        // currently viewing (so an empty active filter doesn't vanish under you).
+        if (id !== "all" && filter !== id && count(id) === 0) return null;
+        const d = color ? dotColor(color) : null;
+        return (
+            <button
+                key={id}
+                onClick={() => setFilter(id)}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-colors ${
+                    filter === id
+                        ? "border-foreground/40 bg-muted font-medium text-foreground"
+                        : "border-border text-muted-foreground hover:bg-muted/50"
+                }`}
+            >
+                {d && <span className={`h-1.5 w-1.5 rounded-full ${d.className}`} style={d.style} aria-hidden />}
+                {label}
+                <span className="text-muted-foreground/70">{count(id)}</span>
+            </button>
+        );
+    };
 
     return (
         <div>
@@ -103,7 +109,7 @@ export default function WorkInboxBoard({
             <div className="mb-4 flex flex-wrap gap-2">
                 {chip("all", "All")}
                 {chip("mine", "Mine")}
-                {works.map((w) => chip(w.id, w.label, dotClass(w.color)))}
+                {works.map((w) => chip(w.id, w.label, w.color))}
                 {chip("waiting", "Waiting")}
                 {chip("finished", "Finished")}
             </div>
@@ -124,7 +130,7 @@ export default function WorkInboxBoard({
                                 ) : (
                                     <span className={`shrink-0 rounded-full px-2 py-0.5 font-medium ${pill.cls}`}>{pill.label}</span>
                                 )}
-                                <span className={`shrink-0 rounded-md px-2 py-0.5 text-[11px] font-medium ${it.workColor}`}>
+                                <span className={`shrink-0 rounded-md px-2 py-0.5 text-[11px] font-medium ${badgeColor(it.workColor).className}`} style={badgeColor(it.workColor).style}>
                                     {it.workLabel}
                                 </span>
                                 <Link href={`/office/repairing/tickets/${it.ticketId}`} className="shrink-0 text-sm font-semibold hover:underline">

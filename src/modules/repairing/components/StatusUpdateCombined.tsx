@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import axios from "axios";
+import { badgeColor } from "@/shared/lib/format/entityColor";
 import { toast } from "sonner";
 import { X, ChevronRight, Lock, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -117,7 +118,7 @@ export default function StatusUpdateCombined({ ticket, onClose }: Props) {
                             {ticket.ticketSubStatus && (
                                 <>
                                     <ChevronRight size={12} className="text-muted-foreground" />
-                                    <span className={`text-xs px-2 py-0.5 font-medium ${ticket.ticketSubStatus.color}`}>
+                                    <span className={`text-xs px-2 py-0.5 font-medium ${badgeColor(ticket.ticketSubStatus.color).className}`} style={badgeColor(ticket.ticketSubStatus.color).style}>
                                         {ticket.ticketSubStatus.label}
                                     </span>
                                 </>
@@ -169,7 +170,7 @@ export default function StatusUpdateCombined({ ticket, onClose }: Props) {
                                                     </span>
                                                 )}
                                             </div>
-                                            <span className={`text-xs px-2 py-0.5 shrink-0 ${ss.color}`}>{ss.id}</span>
+                                            <span className={`text-xs px-2 py-0.5 shrink-0 ${badgeColor(ss.color).className}`} style={badgeColor(ss.color).style}>{ss.id}</span>
                                         </Button>
                                     ))}
                                 </div>

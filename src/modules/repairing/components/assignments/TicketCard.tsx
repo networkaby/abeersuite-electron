@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import axios from "axios";
 import { toast } from "sonner";
+import { badgeColor } from "@/shared/lib/format/entityColor";
 import { useRouter } from "next/navigation";
 import { Phone, Package, CheckCircle, AlertCircle, UserCheck, Users } from "lucide-react";
 import { timeAgo } from "@/shared/lib/format/timeAgo";
@@ -81,7 +82,7 @@ export default function TicketCard({ ticket, type, currentUserId, isPrimaryOwner
                             Ticket #{ticket.id}
                         </Link>
                         {ticket.ticketSubStatus ? (
-                            <span className={`text-xs px-2 py-0.5 font-medium ${ticket.ticketSubStatus.color}`}>
+                            <span className={`text-xs px-2 py-0.5 font-medium ${badgeColor(ticket.ticketSubStatus.color).className}`} style={badgeColor(ticket.ticketSubStatus.color).style}>
                                 {ticket.ticketSubStatus.label}
                             </span>
                         ) : (
@@ -90,7 +91,7 @@ export default function TicketCard({ ticket, type, currentUserId, isPrimaryOwner
                             </span>
                         )}
                         {ticket.subStatusWork && (
-                            <span className={`text-xs px-2 py-0.5 font-medium ${ticket.subStatusWork.color}`}>
+                            <span className={`text-xs px-2 py-0.5 font-medium ${badgeColor(ticket.subStatusWork.color).className}`} style={badgeColor(ticket.subStatusWork.color).style}>
                                 {ticket.subStatusWork.label}
                             </span>
                         )}

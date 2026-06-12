@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { Loader2, Search, Smartphone } from "lucide-react";
 import { toast } from "sonner";
+import { badgeColor } from "@/shared/lib/format/entityColor";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
@@ -244,7 +245,7 @@ export default function SearchSlNoPage() {
                                                     </TableCell>
                                                     <TableCell>
                                                         {ticket.subStatus ? (
-                                                            <Badge className={ticket.subStatus.color}>{ticket.subStatus.label}</Badge>
+                                                            <Badge {...badgeColor(ticket.subStatus.color)}>{ticket.subStatus.label}</Badge>
                                                         ) : (
                                                             "-"
                                                         )}

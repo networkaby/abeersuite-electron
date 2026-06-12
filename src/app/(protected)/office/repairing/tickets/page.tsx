@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { Eye, Search, X } from "lucide-react";
+import { badgeColor } from "@/shared/lib/format/entityColor";
 import { toast } from "sonner";
 import Link from "next/link";
 import { formatDate } from "@/shared/lib/format/formatDate";
@@ -257,7 +258,7 @@ export default function TicketsPage() {
                                                 {t.ticketStatus.label}
                                             </span>
                                             {t.ticketSubStatus && (
-                                                <span className={`px-2 py-0.5 text-xs font-medium w-fit ${t.ticketSubStatus.color}`}>
+                                                <span className={`px-2 py-0.5 text-xs font-medium w-fit ${badgeColor(t.ticketSubStatus.color).className}`} style={badgeColor(t.ticketSubStatus.color).style}>
                                                     {t.ticketSubStatus.label}
                                                 </span>
                                             )}

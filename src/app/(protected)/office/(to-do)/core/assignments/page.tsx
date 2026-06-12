@@ -63,6 +63,10 @@ export default async function AssignmentsPage() {
     // are noise as "why" context — only surface free-text notes a human actually wrote.
     const SYSTEM_NOTE = /^(Entered:|Auto-advanced|Claimed by|Reverted|Transferred|Reassigned|Unassigned|Escalat|Work done)/;
 
+    // Per-request "now" for snooze (wakeAt) comparisons. This is an async Server
+    // Component — it renders once per request, so reading the clock here is stable;
+    // the purity rule targets re-rendering client components, not this case.
+    // eslint-disable-next-line react-hooks/purity
     const now = Date.now();
     const openItems: WorkInboxItem[] = tickets.map((t) => {
         const work = t.ticketSubStatus?.workId ? worksById[t.ticketSubStatus.workId] : undefined;

@@ -12,6 +12,7 @@ import {
     type LucideIcon,
 } from "lucide-react";
 import { timeAgo } from "@/shared/lib/format/timeAgo";
+import { badgeColor } from "@/shared/lib/format/entityColor";
 import Link from "next/link";
 import { PathBreadcrumb } from "@/shared/components/PathBreadcrumb";
 import { PRIORITY_META } from "@/utils/constants";
@@ -254,7 +255,7 @@ export default function TicketDetailPage() {
                                         {ticket.ticketStatus.label}
                                     </span>
                                     {ticket.ticketSubStatus && (
-                                        <span className={`rounded-md border border-border px-3 py-1 text-xs font-medium ${ticket.ticketSubStatus.color}`}>
+                                        <span className={`rounded-md border border-border px-3 py-1 text-xs font-medium ${badgeColor(ticket.ticketSubStatus.color).className}`} style={badgeColor(ticket.ticketSubStatus.color).style}>
                                             {ticket.ticketSubStatus.label}
                                         </span>
                                     )}
@@ -387,7 +388,7 @@ export default function TicketDetailPage() {
                                                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                                                         {meta.lead && <span className="text-sm font-medium text-foreground">{meta.lead}</span>}
                                                         {log.ticketSubStatus ? (
-                                                            <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${log.ticketSubStatus.color}`}>
+                                                            <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${badgeColor(log.ticketSubStatus.color).className}`} style={badgeColor(log.ticketSubStatus.color).style}>
                                                                 {log.ticketSubStatus.label}
                                                             </span>
                                                         ) : (kind === "note" && !meta.lead && (
@@ -436,10 +437,10 @@ export default function TicketDetailPage() {
                                     <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${ticket.primaryOwner ? "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300" : "bg-muted text-muted-foreground"}`}>
                                         {ticket.primaryOwner ? "In progress" : "To do"}
                                     </span>
-                                    <span className={`rounded-md px-2 py-0.5 text-xs font-medium ${ticket.ticketSubStatus.work.color}`}>
+                                    <span className={`rounded-md px-2 py-0.5 text-xs font-medium ${badgeColor(ticket.ticketSubStatus.work.color).className}`} style={badgeColor(ticket.ticketSubStatus.work.color).style}>
                                         {ticket.ticketSubStatus.work.label}
                                     </span>
-                                    <span className={`rounded-md px-2 py-0.5 text-xs font-medium ${ticket.ticketSubStatus.color}`}>
+                                    <span className={`rounded-md px-2 py-0.5 text-xs font-medium ${badgeColor(ticket.ticketSubStatus.color).className}`} style={badgeColor(ticket.ticketSubStatus.color).style}>
                                         {ticket.ticketSubStatus.label}
                                     </span>
                                 </div>

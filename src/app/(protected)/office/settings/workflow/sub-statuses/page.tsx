@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { COLOR_OPTIONS, WARRANTY_SCOPE_OPTIONS } from "@/utils/constants";
+import { badgeColor, dotColor, randomHexColor } from "@/shared/lib/format/entityColor";
 
 // Retry-schedule channels, densest → sparsest. Each is an optional row in the
 // sub-status dialog's "Attempts" tab; a filled row (every N × T times) becomes a phase.
@@ -44,6 +45,11 @@ type RetryRow = { every: string; times: string };
 type RetryRows = Record<RetryUnit, RetryRow>;
 const BLANK_RETRY_ROWS = (): RetryRows =>
     Object.fromEntries(RETRY_UNITS.map((u) => [u.key, { every: "", times: "" }])) as RetryRows;
+
+// New sub-statuses get a random (unlimited) hex color so the workflow reads at a
+// glance; the picker / hex box / preset swatches let you override it manually.
+const randomColor = () => randomHexColor(Math.random());
+const HEX_RE = /^#[0-9a-fA-F]{6}$/;
 
 interface Pipeline {
     id: string;
@@ -309,17 +315,41 @@ function SubStatusFormModal({
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label>Color</Label>
-                            <Select value={form.color} onValueChange={(value) => setForm({ ...form, color: value })}>
-                                <SelectTrigger className="w-full">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {COLOR_OPTIONS.map((color) => (
-                                        <SelectItem key={color.value} value={color.value}>{color.label}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                            <Badge className={form.color}>Preview</Badge>
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="color"
+                                    aria-label="Pick a custom color"
+                                    value={HEX_RE.test(form.color) ? form.color : "#7C9EF0"}
+                                    onChange={(e) => setForm({ ...form, color: e.target.value.toUpperCase() })}
+                                    className="h-9 w-10 shrink-0 cursor-pointer rounded-md border border-border bg-background p-0.5"
+                                />
+                                <Input
+                                    value={form.color}
+                                    onChange={(e) => setForm({ ...form, color: e.target.value })}
+                                    placeholder="#D442D7"
+                                    className="h-9 w-28 font-mono uppercase"
+                                />
+                                <Button type="button" size="sm" variant="outline" onClick={() => setForm({ ...form, color: randomColor() })} title="Random color">
+                                    <RefreshCw size={13} /> Random
+                                </Button>
+                                <Badge {...badgeColor(form.color)}>Preview</Badge>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-1.5">
+                                {COLOR_OPTIONS.map((c) => {
+                                    const selected = form.color === c.value;
+                                    return (
+                                        <button
+                                            key={c.value}
+                                            type="button"
+                                            title={c.label}
+                                            aria-label={c.label}
+                                            aria-pressed={selected}
+                                            onClick={() => setForm({ ...form, color: c.value })}
+                                            className={`h-6 w-6 rounded-full border border-border/60 ${dotColor(c.value).className} transition ${selected ? "ring-2 ring-foreground ring-offset-2 ring-offset-background" : "hover:scale-110"}`}
+                                        />
+                                    );
+                                })}
+                            </div>
                         </div>
                         <div className="space-y-3 pt-6">
                             <label className="flex items-center gap-2 text-sm">
@@ -648,7 +678,7 @@ export default function SubStatusesPage() {
         setSelectedToIds((prev) => prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]);
 
     // Open the create modal pre-scoped to a parent status.
-    const openCreateFor = (statusId: string) => { setCreateForm({ ...BLANK_FORM, statusId }); setShowCreate(true); };
+    const openCreateFor = (statusId: string) => { setCreateForm({ ...BLANK_FORM, statusId, color: randomColor() }); setShowCreate(true); };
 
     const modalSubStatus = subStatuses.find((subStatus) => subStatus.id === transitionModalId);
     // Transitions can only connect sub-statuses within the SAME parent status.
@@ -728,10 +758,12 @@ export default function SubStatusesPage() {
                                 )}
                                 {children.map((subStatus) => {
                                     const work = subStatus.workId ? worksById[subStatus.workId] : undefined;
+                                    const sc = badgeColor(subStatus.color);
                                     return (
                                     <div key={subStatus.id} className="flex items-start gap-3 border-b px-6 py-4 last:border-b-0">
                                         <span
-                                            className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-medium tabular-nums ${subStatus.color}`}
+                                            className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-medium tabular-nums ${sc.className}`}
+                                            style={sc.style}
                                             title={`Sort order ${subStatus.order}`}
                                         >
                                             {subStatus.order}
@@ -741,7 +773,7 @@ export default function SubStatusesPage() {
                                             <div className="flex flex-wrap items-center gap-2">
                                                 <span className="text-sm font-medium">{subStatus.label}</span>
                                                 {work && (
-                                                    <Badge className={work.color}>
+                                                    <Badge {...badgeColor(work.color)}>
                                                         {work.permissionId && <Lock size={10} className="mr-1" />}
                                                         {work.label}
                                                     </Badge>
@@ -789,7 +821,7 @@ export default function SubStatusesPage() {
                                                 <div className="mt-2 flex flex-wrap items-center gap-1.5">
                                                     <span className="text-xs text-muted-foreground">Next:</span>
                                                     {subStatus.fromTransitions.map((transition) => (
-                                                        <Badge key={transition.to.id} className={transition.to.color}>
+                                                        <Badge key={transition.to.id} {...badgeColor(transition.to.color)}>
                                                             {transition.to.label}
                                                         </Badge>
                                                     ))}
@@ -846,7 +878,8 @@ export default function SubStatusesPage() {
                                 {unassigned.map((subStatus) => (
                                     <div key={subStatus.id} className="flex items-center gap-3 border-b px-6 py-4 last:border-b-0">
                                         <span
-                                            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-medium tabular-nums ${subStatus.color}`}
+                                            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-medium tabular-nums ${badgeColor(subStatus.color).className}`}
+                                            style={badgeColor(subStatus.color).style}
                                             title={`Sort order ${subStatus.order}`}
                                         >
                                             {subStatus.order}
@@ -921,7 +954,7 @@ export default function SubStatusesPage() {
                             transitionCandidates.map((candidate) => (
                                 <label key={candidate.id} className="flex items-center gap-3 rounded-md border border-border px-3 py-2">
                                     <Checkbox checked={selectedToIds.includes(candidate.id)} onCheckedChange={() => toggleTo(candidate.id)} />
-                                    <Badge className={candidate.color}>{candidate.id}</Badge>
+                                    <Badge {...badgeColor(candidate.color)}>{candidate.id}</Badge>
                                     <span className="text-sm">{candidate.label}</span>
                                 </label>
                             ))

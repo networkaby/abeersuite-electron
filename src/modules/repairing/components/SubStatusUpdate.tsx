@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import axios from "axios";
 import { toast } from "sonner";
+import { badgeColor } from "@/shared/lib/format/entityColor";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -120,7 +121,7 @@ export default function SubStatusUpdate({ ticket, onClose }: Props) {
                                                 selectedId === ss.id ? "border-primary bg-primary/10 hover:bg-primary/10" : ""
                                             }`}
                                         >
-                                            <span className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium ${ss.color}`}>{ss.label}</span>
+                                            <span className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium ${badgeColor(ss.color).className}`} style={badgeColor(ss.color).style}>{ss.label}</span>
                                             {ss.triggerStatus && (
                                                 <span className="flex items-center gap-1 text-xs text-muted-foreground">
                                                     <ArrowRight size={12} /> {ss.triggerStatus.label}
