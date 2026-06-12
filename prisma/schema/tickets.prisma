@@ -46,6 +46,14 @@ model Ticket {
   voidReason        String?
   primaryOwnerId    Int?
   billingAccountId  Int?
+  // Retry-after-interval (snooze) runtime state. wakeAt = when the deferred work
+  // in the current "waiting" sub-status is due again; while wakeAt > now the
+  // ticket sits in the Work Inbox "Waiting" tab. retryCount/retryKeyId track how
+  // many times this particular waiting sub-status (retryKeyId) has been entered,
+  // so distinct loops (calling vs parts) count independently and bound correctly.
+  wakeAt            DateTime?
+  retryCount        Int             @default(0)
+  retryKeyId        String?
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
 
@@ -68,6 +76,7 @@ model Ticket {
   @@index([warrantyStatus])
   @@index([createdAt])
   @@index([sourceShopOrderId])
+  @@index([wakeAt])
 }
 
 model TicketParticipant {

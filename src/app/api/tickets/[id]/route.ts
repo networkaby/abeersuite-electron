@@ -178,7 +178,7 @@ export async function PUT(
                 // Skip auto-entry-sub-status — we're going to a specific known state.
                 await prisma.ticket.update({
                     where: { id: ticket.id },
-                    data: { subStatusId: body.restoreSubStatusId ?? null, primaryOwnerId: null },
+                    data: { subStatusId: body.restoreSubStatusId ?? null, primaryOwnerId: null, wakeAt: null, retryCount: 0, retryKeyId: null },
                 });
                 await prisma.ticketLog.create({
                     data: {
@@ -208,14 +208,14 @@ export async function PUT(
                 if (entrySub) {
                     await prisma.ticket.update({
                         where: { id: ticket.id },
-                        data: { subStatusId: entrySub.id, primaryOwnerId: null },
+                        data: { subStatusId: entrySub.id, primaryOwnerId: null, wakeAt: null, retryCount: 0, retryKeyId: null },
                     });
                     await prisma.ticketLog.create({
                         data: { ticketId: ticket.id, status: body.status, subStatusId: entrySub.id, note: `Entered: ${entrySub.label}`, userId },
                     });
                 } else {
                     // No entry sub-status configured — clear current sub-status so stale work doesn't linger.
-                    await prisma.ticket.update({ where: { id: ticket.id }, data: { subStatusId: null, primaryOwnerId: null } });
+                    await prisma.ticket.update({ where: { id: ticket.id }, data: { subStatusId: null, primaryOwnerId: null, wakeAt: null, retryCount: 0, retryKeyId: null } });
                 }
             }
         }

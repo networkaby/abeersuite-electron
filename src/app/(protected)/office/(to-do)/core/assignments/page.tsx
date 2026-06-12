@@ -1,7 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { auth } from "@/auth";
 import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
-import { timeAgo } from "@/shared/lib/format/timeAgo";
+import { timeAgo, timeUntil } from "@/shared/lib/format/timeAgo";
 import WorkInboxBoard, { type WorkInboxItem } from "@/modules/repairing/components/assignments/WorkInboxBoard";
 
 // The Work Inbox: every active ticket sitting in a work-bearing sub-status, as one
@@ -63,10 +63,14 @@ export default async function AssignmentsPage() {
     // are noise as "why" context — only surface free-text notes a human actually wrote.
     const SYSTEM_NOTE = /^(Entered:|Auto-advanced|Claimed by|Reverted|Transferred|Reassigned|Unassigned|Escalat|Work done)/;
 
+    const now = Date.now();
     const openItems: WorkInboxItem[] = tickets.map((t) => {
         const work = t.ticketSubStatus?.workId ? worksById[t.ticketSubStatus.workId] : undefined;
         const acct = t.device.account;
         const noteLog = t.logs.find((l) => l.note && !SYSTEM_NOTE.test(l.note));
+        // Snoozed = this waiting work is deferred until wakeAt; it drops out of the
+        // active queues into the "Waiting" tab and re-surfaces as due when wakeAt passes.
+        const snoozed = !!t.wakeAt && t.wakeAt.getTime() > now;
         return {
             id: String(t.id),
             ticketId: t.id,
@@ -87,6 +91,8 @@ export default async function AssignmentsPage() {
             assignee: t.primaryOwner ?? null,
             answer: null,
             answeredBy: null,
+            snoozed,
+            wakeLabel: snoozed && t.wakeAt ? timeUntil(t.wakeAt) : null,
             ageLabel: timeAgo(t.updatedAt),
         };
     });
@@ -118,6 +124,8 @@ export default async function AssignmentsPage() {
             outcome: unsuccess ? "unsuccess" : "success",
             answer: userNote,
             answeredBy: l.changedBy?.name ?? null,
+            snoozed: false,
+            wakeLabel: null,
             ageLabel: timeAgo(l.createdAt),
         };
     });

@@ -508,19 +508,24 @@ type SubStatusSeed = {
     pipelineId: string;
     triggerMap?: Record<string, string>;
     warrantyScope?: string; actionLabel?: string;
+    // Hybrid retry schedule: a "waiting" sub-status re-arms its work on a front-loaded
+    // schedule (1st attempt immediate, then densest phase first). After the last
+    // phase's last attempt it routes to exhaustedSubStatusId (give-up). [] = no retry.
+    retrySchedule?: { unit: string; every: number; times: number }[];
+    exhaustedSubStatusId?: string;
 };
 
 const SUB_STATUSES: SubStatusSeed[] = [
     { id: "SS1",  label: "Waiting: Customer Info", order: 1, color: "bg-yellow-50 text-yellow-700", workId: "W1", statusId: "S2", pipelineId: "P1" },
     { id: "SS2",  label: "Waiting: Customer to Bring Item", order: 2, color: "bg-yellow-50 text-yellow-700", workId: "W1", statusId: "S2", pipelineId: "P1" },
-    { id: "SS3",  label: "Customer Unreachable", order: 3, color: "bg-red-50 text-red-600", workId: "W1", statusId: "S2", pipelineId: "P1" },
+    { id: "SS3",  label: "Customer Unreachable", order: 3, color: "bg-red-50 text-red-600", workId: "W1", statusId: "S2", pipelineId: "P1", retrySchedule: [{ unit: "minute", every: 15, times: 4 }, { unit: "day", every: 1, times: 5 }], exhaustedSubStatusId: "SS9" },
     { id: "SS4",  label: "Customer Responded", order: 4, color: "bg-green-50 text-green-700", workId: "W1", statusId: "S2", pipelineId: "P1" },
     { id: "SS5",  label: "Quote Prepared", order: 5, color: "bg-blue-50 text-blue-600", workId: "W2", statusId: "S2", pipelineId: "P1" },
     { id: "SS6",  label: "Awaiting Customer Approval", order: 6, color: "bg-yellow-50 text-yellow-700", workId: "W2", statusId: "S2", pipelineId: "P1" },
     { id: "SS7",  label: "Awaiting Insurance / Warranty", order: 7, color: "bg-purple-50 text-purple-600", workId: "W2", statusId: "S2", pipelineId: "P1" },
     { id: "SS8",  label: "Customer Approved", order: 8, color: "bg-green-50 text-green-700", workId: "W2", statusId: "S2", pipelineId: "P1", triggerMap: { S2: "S3" } },
     { id: "SS9",  label: "Customer Declined", order: 9, color: "bg-red-50 text-red-600", workId: "W2", statusId: "S2", pipelineId: "P1", triggerMap: { S2: "S8" } },
-    { id: "SS10", label: "Awaiting Parts", order: 10, color: "bg-orange-50 text-orange-600", workId: "W3", statusId: "S3", pipelineId: "P1" },
+    { id: "SS10", label: "Awaiting Parts", order: 10, color: "bg-orange-50 text-orange-600", workId: "W3", statusId: "S3", pipelineId: "P1", retrySchedule: [{ unit: "day", every: 1, times: 7 }, { unit: "week", every: 1, times: 4 }] },
     { id: "SS11", label: "Parts Delayed", order: 11, color: "bg-orange-50 text-orange-600", workId: "W3", statusId: "S3", pipelineId: "P1" },
     { id: "SS12", label: "Parts Issue", order: 12, color: "bg-red-50 text-red-600", workId: "W3", statusId: "S3", pipelineId: "P1" },
     { id: "SS13", label: "Parts Arrived", order: 13, color: "bg-green-50 text-green-700", workId: "W3", statusId: "S3", pipelineId: "P1" },
@@ -862,16 +867,24 @@ async function main() {
         });
     }
     for (const ss of SUB_STATUSES) {
+        const retry = { retrySchedule: ss.retrySchedule ?? [] };
         await prisma.ticketSubStatus.upsert({
             where:  { id: ss.id },
-            update: { label: ss.label, color: ss.color, order: ss.order, statusId: ss.statusId, triggerMap: ss.triggerMap ?? {}, actionLabel: ss.actionLabel ?? null, autoRevertOnClear: true, warrantyScope: ss.warrantyScope ?? "any", workId: ss.workId, pipelineId: ss.pipelineId },
-            create: { id: ss.id, label: ss.label, color: ss.color, order: ss.order, statusId: ss.statusId, triggerMap: ss.triggerMap ?? {}, actionLabel: ss.actionLabel ?? null, autoRevertOnClear: true, warrantyScope: ss.warrantyScope ?? "any", workId: ss.workId, pipelineId: ss.pipelineId },
+            update: { label: ss.label, color: ss.color, order: ss.order, statusId: ss.statusId, triggerMap: ss.triggerMap ?? {}, actionLabel: ss.actionLabel ?? null, autoRevertOnClear: true, warrantyScope: ss.warrantyScope ?? "any", workId: ss.workId, pipelineId: ss.pipelineId, ...retry },
+            create: { id: ss.id, label: ss.label, color: ss.color, order: ss.order, statusId: ss.statusId, triggerMap: ss.triggerMap ?? {}, actionLabel: ss.actionLabel ?? null, autoRevertOnClear: true, warrantyScope: ss.warrantyScope ?? "any", workId: ss.workId, pipelineId: ss.pipelineId, ...retry },
         });
     }
     // Hand-picked start sub-status per status — set now that both statuses and
     // sub-statuses exist (FK TicketStatus.startSubStatusId → TicketSubStatus).
     for (const [statusId, subStatusId] of Object.entries(STATUS_STARTS)) {
         await prisma.ticketStatus.update({ where: { id: statusId }, data: { startSubStatusId: subStatusId } });
+    }
+    // Give-up routing target — set in a second pass (self-FK; the target sub-status
+    // may be defined later in SUB_STATUSES than the waiting one that points at it).
+    for (const ss of SUB_STATUSES) {
+        if (ss.exhaustedSubStatusId) {
+            await prisma.ticketSubStatus.update({ where: { id: ss.id }, data: { exhaustedSubStatusId: ss.exhaustedSubStatusId } });
+        }
     }
     for (const t of STATUS_TRANSITIONS) {
         await prisma.statusTransition.upsert({

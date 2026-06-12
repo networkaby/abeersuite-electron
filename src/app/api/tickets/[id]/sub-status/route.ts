@@ -16,6 +16,46 @@ const subStatusUpdateSchema = z.object({
     outcome: z.enum(["success", "unsuccess"]).optional(),
 });
 
+// ── Hybrid retry schedule helpers ──────────────────────────────────────────────
+// A waiting sub-status carries retrySchedule: an ordered list of phases that runs
+// densest-first (e.g. every 15 min ×4, then every 1 day ×5). Attempt 1 is immediate;
+// attempts 2..Σtimes are spaced by the phase that contains them.
+type RetryPhase = { unit: string; every: number; times: number };
+
+function parseSchedule(raw: unknown): RetryPhase[] {
+    if (!Array.isArray(raw)) return [];
+    return raw
+        .filter((p): p is RetryPhase =>
+            !!p && typeof p === "object"
+            && typeof (p as RetryPhase).unit === "string"
+            && Number((p as RetryPhase).every) > 0
+            && Number((p as RetryPhase).times) > 0)
+        .map((p) => ({ unit: p.unit, every: Number(p.every), times: Number(p.times) }));
+}
+
+// The phase whose cumulative attempt-range contains attempt k, or null if k is
+// past the schedule (→ give up).
+function phaseForAttempt(phases: RetryPhase[], k: number): RetryPhase | null {
+    let acc = 0;
+    for (const p of phases) { acc += p.times; if (k <= acc) return p; }
+    return null;
+}
+
+// Now + (every × unit), calendar-correct for month/year (not 30/365-day approximations).
+function addInterval(unit: string, every: number): Date {
+    const d = new Date();
+    switch (unit) {
+        case "minute": d.setMinutes(d.getMinutes() + every); break;
+        case "hour":   d.setHours(d.getHours() + every); break;
+        case "day":    d.setDate(d.getDate() + every); break;
+        case "week":   d.setDate(d.getDate() + every * 7); break;
+        case "month":  d.setMonth(d.getMonth() + every); break;
+        case "year":   d.setFullYear(d.getFullYear() + every); break;
+        default:       d.setMinutes(d.getMinutes() + every);
+    }
+    return d;
+}
+
 // PATCH /api/tickets/[id]/sub-status
 // Body: { subStatusId: string, note?: string, visibility?: string }
 // Returns { ok: true }
@@ -58,26 +98,96 @@ export async function PATCH(
         // Capture previous sub-status before update (needed for auto-revert)
         const prevSubStatusId = ticket.subStatusId;
 
-        const triggerMap = (subStatus.triggerMap ?? {}) as Record<string, string>;
-        const triggerStatusId = triggerMap[ticket.status] ?? null;
+        const triggerMapOf = (s: { triggerMap?: unknown } | null) =>
+            (s?.triggerMap ?? {}) as Record<string, string>;
+
+        // ── Hybrid retry schedule resolution ───────────────────────────────────
+        // A "waiting" sub-status (retrySchedule non-empty) makes the FIRST attempt
+        // immediate: arriving here from elsewhere leaves wakeAt null, so it shows as
+        // due now. Only a failed attempt that loops back onto THIS same sub-status
+        // (prev === target) schedules the next attempt — wakeAt = now + the interval
+        // of the phase that attempt falls in, densest first, dropping it into the
+        // Waiting tab. Past the last phase's last attempt it redirects to the
+        // exhausted target (give-up). The counter is keyed by the sub-status so the
+        // calling loop and parts loop count independently.
+        const phases = parseSchedule(subStatus.retrySchedule);
+        let landingSubStatusId: string = subStatusId;
+        let wakeAt: Date | null = null;
+        let retryCount = 0;
+        let retryKeyId: string | null = null;
+        let exhaustedFrom: string | null = null;
+        if (phases.length > 0) {
+            const isRetry = prevSubStatusId === subStatus.id;  // self-loop = an attempt failed
+            if (!isRetry) {
+                // First arrival → attempt 1 is actionable now (no wait).
+                retryCount = 1;
+                retryKeyId = subStatus.id;
+            } else {
+                const done = ticket.retryKeyId === subStatus.id ? ticket.retryCount : 0;
+                const next = done + 1;
+                const phase = phaseForAttempt(phases, next);
+                if (phase) {
+                    retryCount = next;
+                    retryKeyId = subStatus.id;
+                    wakeAt = addInterval(phase.unit, phase.every);
+                } else if (subStatus.exhaustedSubStatusId) {
+                    landingSubStatusId = subStatus.exhaustedSubStatusId;  // give up → route onward
+                    exhaustedFrom = subStatus.label;
+                } else {
+                    // Schedule exhausted, no give-up target → stays due, stops re-arming.
+                    retryCount = done;
+                    retryKeyId = subStatus.id;
+                }
+            }
+        }
+
+        // The sub-status we actually land on (the target, or the give-up redirect).
+        // Its triggerMap drives any auto-advance to a new STATUS — so a give-up
+        // target that is a shim (e.g. → Closed) transitions in this same request.
+        const landingSub = landingSubStatusId === subStatusId
+            ? subStatus
+            : await prisma.ticketSubStatus.findUnique({
+                where: { id: landingSubStatusId },
+                select: { id: true, label: true, triggerMap: true },
+            });
+        const triggerStatusId = triggerMapOf(landingSub)[ticket.status] ?? null;
         const newMainStatus = triggerStatusId ?? ticket.status;
         // On auto-advance to a new status, apply that status's entry sub-status
         // (mirrors ticket create + PUT status change). Without this the ticket
         // would land in the new status with no work sub-status / inbox item.
         const entrySub = triggerStatusId ? await findEntrySubStatus(triggerStatusId) : null;
-        const newSubStatusId = triggerStatusId ? (entrySub?.id ?? null) : subStatusId;
+        const newSubStatusId = triggerStatusId ? (entrySub?.id ?? null) : landingSubStatusId;
+        // Auto-advancing past a waiting state clears the snooze/retry runtime.
+        if (triggerStatusId) { wakeAt = null; retryCount = 0; retryKeyId = null; }
 
         // ── Transaction: update ticket + auto-revert old participants ───────────
         await prisma.$transaction(async (tx) => {
-            // 1. Update ticket
+            // 1. Update ticket (incl. snooze/retry runtime — wakeAt drives the
+            //    Work Inbox "Waiting" bucket; retryCount/retryKeyId bound the loop)
             await tx.ticket.update({
                 where: { id: ticketId },
                 data: {
                     subStatusId: newSubStatusId,
                     status: newMainStatus,
+                    wakeAt,
+                    retryCount,
+                    retryKeyId,
                     updatedAt: new Date(),
                 },
             });
+
+            // 1b. Give-up stamp — retry limit reached, routed off the waiting loop.
+            if (exhaustedFrom) {
+                await tx.ticketLog.create({
+                    data: {
+                        ticketId,
+                        status: newMainStatus,
+                        subStatusId: newSubStatusId,
+                        note: `Retry limit reached on "${exhaustedFrom}" — routed onward`,
+                        userId,
+                    },
+                });
+            }
 
             // 2. Auto-revert participants added by the outgoing sub-status
             if (prevSubStatusId && prevSubStatusId !== subStatusId) {
@@ -141,7 +251,7 @@ export async function PATCH(
                     data: {
                         ticketId,
                         status: triggerStatusId,
-                        note: `Auto-advanced by: ${subStatus.label}`,
+                        note: `Auto-advanced by: ${landingSub?.label ?? subStatus.label}`,
                         userId,
                     },
                 });

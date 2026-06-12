@@ -18,6 +18,12 @@ const subStatusPatchSchema = z.object({
     successSubStatusId: z.string().trim().optional().nullable(),
     failSubStatusId: z.string().trim().optional().nullable(),
     autoRevertOnClear: z.boolean().optional(),
+    retrySchedule: z.array(z.object({
+        unit: z.enum(["minute", "hour", "day", "week", "month", "year"]),
+        every: z.coerce.number().int().positive(),
+        times: z.coerce.number().int().positive(),
+    })).optional(),
+    exhaustedSubStatusId: z.string().trim().optional().nullable(),
 });
 
 // DELETE /api/sub-statuses/[id]
@@ -72,6 +78,8 @@ export async function PATCH(
                 ...("successSubStatusId" in body && { successSubStatusId: body.successSubStatusId ?? null }),
                 ...("failSubStatusId"    in body && { failSubStatusId:    body.failSubStatusId ?? null }),
                 ...("autoRevertOnClear"  in body && { autoRevertOnClear: body.autoRevertOnClear }),
+                ...("retrySchedule"        in body && { retrySchedule:        body.retrySchedule ?? [] }),
+                ...("exhaustedSubStatusId" in body && { exhaustedSubStatusId: body.exhaustedSubStatusId ?? null }),
             },
         });
 

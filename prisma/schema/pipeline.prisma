@@ -75,6 +75,19 @@ model TicketSubStatus {
   failSubStatus       TicketSubStatus?      @relation("SubStatusFail", fields: [failSubStatusId], references: [id], onDelete: SetNull)
   successRoutedFrom   TicketSubStatus[]     @relation("SubStatusSuccess")
   failRoutedFrom      TicketSubStatus[]     @relation("SubStatusFail")
+  // ── Hybrid retry schedule ("attempt channels") ─────────────────────────────
+  // A "waiting" sub-status (Unreachable, Awaiting-parts) re-arms its work on a
+  // front-loaded schedule. The FIRST attempt is immediate — landing here from
+  // elsewhere stays due now. Each Unsuccess that loops back onto this same
+  // sub-status schedules the next attempt per the schedule, densest phase first,
+  // setting wakeAt and dropping it into the Work Inbox "Waiting" tab until due.
+  // retrySchedule is an ordered list of phases: [{ unit, every, times }] where
+  // unit ∈ "minute"|"hour"|"day"|"week"|"month"|"year". Total attempts = 1 + Σtimes;
+  // [] = no retry. After the last phase's last attempt, route to exhaustedSubStatus.
+  retrySchedule       Json                  @default("[]")
+  exhaustedSubStatusId String?
+  exhaustedSubStatus  TicketSubStatus?      @relation("SubStatusExhausted", fields: [exhaustedSubStatusId], references: [id], onDelete: SetNull)
+  exhaustedRoutedFrom TicketSubStatus[]     @relation("SubStatusExhausted")
   workId              String?
   work                Work?                 @relation(fields: [workId], references: [id], onDelete: SetNull)
   pipelineId          String?

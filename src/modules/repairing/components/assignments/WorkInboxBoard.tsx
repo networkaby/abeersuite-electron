@@ -32,6 +32,10 @@ export interface WorkInboxItem {
     outcome?: "success" | "unsuccess";
     answer: string | null;
     answeredBy: string | null;
+    /** Snoozed = a deferred retry not yet due; lives in the "Waiting" tab. */
+    snoozed: boolean;
+    /** When the snoozed retry comes due, e.g. "in 2d" (snoozed rows only). */
+    wakeLabel: string | null;
     ageLabel: string;
 }
 
@@ -53,17 +57,20 @@ export default function WorkInboxBoard({
     const [filter, setFilter] = useState<string>("all");
 
     // Finished (answered) rows are historical completion stamps — they live ONLY under
-    // the Finished tab, never in the active "all / mine / per-work" queues.
+    // the Finished tab. Snoozed rows (deferred retries not yet due) live ONLY under the
+    // Waiting tab. Both are kept out of the active "all / mine / per-work" queues.
     const matches = (it: WorkInboxItem, f: string) =>
         f === "finished" ? it.status === "answered"
         : it.status === "answered" ? false
+        : f === "waiting" ? it.snoozed
+        : it.snoozed ? false
         : f === "all" ? true
         : f === "mine" ? it.assignee?.id === currentUserId
         : it.workId === f;
 
     const shown = items.filter((it) => matches(it, filter));
     const count = (f: string) => items.filter((it) => matches(it, f)).length;
-    const openCount = items.filter((it) => it.status !== "answered").length;
+    const openCount = items.filter((it) => it.status !== "answered" && !it.snoozed).length;
 
     const chip = (id: string, label: string, dot?: string) => (
         <button
@@ -95,6 +102,7 @@ export default function WorkInboxBoard({
                 {chip("all", "All")}
                 {chip("mine", "Mine")}
                 {works.map((w) => chip(w.id, w.label, dotClass(w.color)))}
+                {chip("waiting", "Waiting")}
                 {chip("finished", "Finished")}
             </div>
 
@@ -103,10 +111,17 @@ export default function WorkInboxBoard({
                     const pill = STATUS_PILL[it.status];
                     const mine = it.assignee?.id === currentUserId;
                     const answered = it.status === "answered";
+                    const snoozed = it.snoozed;
                     return (
                         <div key={it.id} className="rounded-lg border border-border bg-card px-3 py-2 shadow-sm">
                             <div className="flex items-center gap-2 text-xs">
-                                <span className={`shrink-0 rounded-full px-2 py-0.5 font-medium ${pill.cls}`}>{pill.label}</span>
+                                {snoozed ? (
+                                    <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                                        <Clock size={11} />Waiting{it.wakeLabel ? ` · ${it.wakeLabel}` : ""}
+                                    </span>
+                                ) : (
+                                    <span className={`shrink-0 rounded-full px-2 py-0.5 font-medium ${pill.cls}`}>{pill.label}</span>
+                                )}
                                 <span className={`shrink-0 rounded-md px-2 py-0.5 text-[11px] font-medium ${it.workColor}`}>
                                     {it.workLabel}
                                 </span>
@@ -162,7 +177,7 @@ export default function WorkInboxBoard({
                                             </span>
                                         </span>
                                     )}
-                                    {!answered && (
+                                    {!answered && !snoozed && (
                                         <WorkActions
                                             ticketId={it.ticketId}
                                             workLabel={it.workLabel}

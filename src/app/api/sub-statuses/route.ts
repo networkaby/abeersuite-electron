@@ -18,6 +18,12 @@ const subStatusSchema = labelColorSchema.extend({
     successSubStatusId: z.string().trim().optional().nullable(),
     failSubStatusId: z.string().trim().optional().nullable(),
     autoRevertOnClear: z.boolean().optional(),
+    retrySchedule: z.array(z.object({
+        unit: z.enum(["minute", "hour", "day", "week", "month", "year"]),
+        every: z.coerce.number().int().positive(),
+        times: z.coerce.number().int().positive(),
+    })).optional(),
+    exhaustedSubStatusId: z.string().trim().optional().nullable(),
     pipelineId: z.string().optional().nullable(),
 });
 
@@ -73,6 +79,8 @@ export async function POST(req: Request) {
                 successSubStatusId: body.successSubStatusId ?? null,
                 failSubStatusId:    body.failSubStatusId ?? null,
                 autoRevertOnClear:  body.autoRevertOnClear ?? true,
+                retrySchedule:      body.retrySchedule ?? [],
+                exhaustedSubStatusId: body.exhaustedSubStatusId ?? null,
                 pipelineId:         body.pipelineId ?? null,
             },
         });

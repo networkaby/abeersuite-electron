@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { ChevronRight, GitMerge, Lock, Pencil, Plus, Trash2, Zap } from "lucide-react";
+import { ChevronRight, GitMerge, Lock, Pencil, Plus, RefreshCw, Trash2, Zap } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,7 +26,24 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { COLOR_OPTIONS, WARRANTY_SCOPE_OPTIONS } from "@/utils/constants";
+
+// Retry-schedule channels, densest → sparsest. Each is an optional row in the
+// sub-status dialog's "Attempts" tab; a filled row (every N × T times) becomes a phase.
+const RETRY_UNITS = [
+    { key: "minute", label: "Minute", abbr: "m" },
+    { key: "hour", label: "Hour", abbr: "h" },
+    { key: "day", label: "Day", abbr: "d" },
+    { key: "week", label: "Week", abbr: "w" },
+    { key: "month", label: "Month", abbr: "mo" },
+    { key: "year", label: "Year", abbr: "y" },
+] as const;
+type RetryUnit = (typeof RETRY_UNITS)[number]["key"];
+type RetryRow = { every: string; times: string };
+type RetryRows = Record<RetryUnit, RetryRow>;
+const BLANK_RETRY_ROWS = (): RetryRows =>
+    Object.fromEntries(RETRY_UNITS.map((u) => [u.key, { every: "", times: "" }])) as RetryRows;
 
 interface Pipeline {
     id: string;
@@ -55,6 +72,8 @@ interface SubStatus {
     successSubStatusId?: string | null;
     failSubStatusId?: string | null;
     autoRevertOnClear: boolean;
+    retrySchedule?: { unit: string; every: number; times: number }[] | null;
+    exhaustedSubStatusId?: string | null;
     fromTransitions: { to: { id: string; label: string; color: string } }[];
 }
 
@@ -78,6 +97,8 @@ type FormValues = {
     successSubStatusId: string;
     failSubStatusId: string;
     autoRevertOnClear: boolean;
+    retryRows: RetryRows;
+    exhaustedSubStatusId: string;
 };
 
 const BLANK_FORM: FormValues = {
@@ -92,6 +113,32 @@ const BLANK_FORM: FormValues = {
     successSubStatusId: "",
     failSubStatusId: "",
     autoRevertOnClear: true,
+    retryRows: BLANK_RETRY_ROWS(),
+    exhaustedSubStatusId: "",
+};
+
+// Build the ordered retrySchedule payload from the dialog rows (densest first).
+const rowsToSchedule = (rows: RetryRows) =>
+    RETRY_UNITS
+        .filter((u) => rows[u.key].every.trim() && rows[u.key].times.trim())
+        .map((u) => ({ unit: u.key, every: Number(rows[u.key].every), times: Number(rows[u.key].times) }));
+
+// Decompose a saved schedule back into dialog rows for editing.
+const scheduleToRows = (schedule?: { unit: string; every: number; times: number }[] | null): RetryRows => {
+    const rows = BLANK_RETRY_ROWS();
+    for (const p of schedule ?? []) {
+        if (p.unit in rows) rows[p.unit as RetryUnit] = { every: String(p.every), times: String(p.times) };
+    }
+    return rows;
+};
+
+// One-line summary of a schedule, e.g. "1 now → 4×15m → 5×1d · 10 attempts".
+const summarizeRows = (rows: RetryRows) => {
+    const phases = rowsToSchedule(rows);
+    if (!phases.length) return null;
+    const abbrOf = (u: string) => RETRY_UNITS.find((x) => x.key === u)?.abbr ?? u;
+    const total = phases.reduce((s, p) => s + p.times, 0) + 1;
+    return `1 now → ${phases.map((p) => `${p.times}×${p.every}${abbrOf(p.unit)}`).join(" → ")} · ${total} attempts`;
 };
 
 /** Pull the `bg-*` class out of a color string for a small swatch dot. */
@@ -146,6 +193,12 @@ function SubStatusFormModal({
     // (which would leave the ticket's status and sub-status inconsistent).
     const sameStatusSubs = form.statusId ? subStatuses.filter((s) => s.statusId === form.statusId) : [];
 
+    // Update a single channel-row field (digits only, per the no-number-input rule).
+    const setRetry = (unit: RetryUnit, field: keyof RetryRow, value: string) =>
+        setForm({ ...form, retryRows: { ...form.retryRows, [unit]: { ...form.retryRows[unit], [field]: value.replace(/[^\d]/g, "") } } });
+    const scheduleSummary = summarizeRows(form.retryRows);
+    const hasSchedule = !!scheduleSummary;
+
     return (
         <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose(); }}>
             <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
@@ -156,7 +209,13 @@ function SubStatusFormModal({
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="space-y-5">
+                <Tabs defaultValue="details" className="w-full">
+                    <TabsList className="grid w-full grid-cols-2">
+                        <TabsTrigger value="details">Details</TabsTrigger>
+                        <TabsTrigger value="attempts">Attempts{hasSchedule ? " ·" : ""}</TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="details" className="space-y-5">
                     <div className="space-y-2">
                         <Label>Label</Label>
                         <Input
@@ -319,7 +378,68 @@ function SubStatusFormModal({
                             Sort position — lower numbers show first (in lists and the ticket’s “Move” buttons). Leave blank to add at the end.
                         </p>
                     </div>
-                </div>
+                    </TabsContent>
+
+                    <TabsContent value="attempts" className="space-y-4">
+                        <div className="flex items-start gap-2 rounded-md bg-blue-50 p-2.5 text-xs text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                            <Zap size={14} className="mt-0.5 shrink-0" />
+                            <span>
+                                First attempt is <span className="font-medium">immediate</span> (due now). After each <span className="font-medium">Unsuccess</span> it waits per the schedule below — densest first — then gives up. Leave a row blank to skip it.
+                            </span>
+                        </div>
+
+                        <div className="grid grid-cols-[80px_1fr_1fr] gap-2 px-1 text-[11px] text-muted-foreground">
+                            <span>Channel</span><span>Interval</span><span>Repeat</span>
+                        </div>
+                        <div className="space-y-1.5">
+                            {RETRY_UNITS.map((u) => {
+                                const row = form.retryRows[u.key];
+                                const active = !!(row.every.trim() && row.times.trim());
+                                return (
+                                    <div key={u.key} className={`grid grid-cols-[80px_1fr_1fr] items-center gap-2 rounded-md px-1 py-1 ${active ? "bg-muted/60" : ""}`}>
+                                        <span className={`text-sm ${active ? "font-medium" : "text-muted-foreground"}`}>{u.label}</span>
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="text-xs text-muted-foreground">every</span>
+                                            <Input type="text" inputMode="numeric" value={row.every} placeholder="—"
+                                                onChange={(e) => setRetry(u.key, "every", e.target.value)} className="h-8 w-16 text-center" />
+                                        </div>
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="text-xs text-muted-foreground">×</span>
+                                            <Input type="text" inputMode="numeric" value={row.times} placeholder="—"
+                                                onChange={(e) => setRetry(u.key, "times", e.target.value)} className="h-8 w-16 text-center" />
+                                            <span className="text-xs text-muted-foreground">times</span>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        {scheduleSummary && (
+                            <div className="flex items-center gap-2 rounded-md bg-muted px-2.5 py-2 text-xs text-muted-foreground">
+                                <ChevronRight size={13} className="shrink-0" />
+                                <span>{scheduleSummary}, then give up</span>
+                            </div>
+                        )}
+
+                        <div className="space-y-2">
+                            <Label className="text-xs text-muted-foreground">When attempts run out → route to</Label>
+                            <Select
+                                value={form.exhaustedSubStatusId || "__none__"}
+                                onValueChange={(value) => setForm({ ...form, exhaustedSubStatusId: value === "__none__" ? "" : value })}
+                                disabled={!hasSchedule}
+                            >
+                                <SelectTrigger className="w-full"><SelectValue placeholder="— none —" /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="__none__">— none (stop retrying, stay here) —</SelectItem>
+                                    {sameStatusSubs.map((s) => (<SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>))}
+                                </SelectContent>
+                            </Select>
+                            <p className="text-xs text-muted-foreground">
+                                After the last attempt the ticket routes here — often a shim that escalates or closes. Leave empty to simply stop re-arming.
+                            </p>
+                        </div>
+                    </TabsContent>
+                </Tabs>
 
                 <DialogFooter>
                     <Button type="button" variant="outline" onClick={onClose}>
@@ -392,6 +512,8 @@ export default function SubStatusesPage() {
         successSubStatusId: form.successSubStatusId || null,
         failSubStatusId: form.failSubStatusId || null,
         autoRevertOnClear: form.autoRevertOnClear,
+        retrySchedule: rowsToSchedule(form.retryRows),
+        exhaustedSubStatusId: rowsToSchedule(form.retryRows).length ? (form.exhaustedSubStatusId || null) : null,
     });
 
     const handleCreate = async () => {
@@ -422,6 +544,8 @@ export default function SubStatusesPage() {
             successSubStatusId: subStatus.successSubStatusId ?? "",
             failSubStatusId: subStatus.failSubStatusId ?? "",
             autoRevertOnClear: subStatus.autoRevertOnClear ?? true,
+            retryRows: scheduleToRows(subStatus.retrySchedule),
+            exhaustedSubStatusId: subStatus.exhaustedSubStatusId ?? "",
         });
         setEditId(subStatus.id);
     };
@@ -594,6 +718,12 @@ export default function SubStatusesPage() {
                                                     <Badge className="bg-orange-100 text-orange-700">
                                                         <ChevronRight size={11} />
                                                         {statusLabelMap[subStatus.triggerMap[status.id]] ?? subStatus.triggerMap[status.id]}
+                                                    </Badge>
+                                                )}
+                                                {!!subStatus.retrySchedule?.length && (
+                                                    <Badge className="bg-amber-100 text-amber-700">
+                                                        <RefreshCw size={10} className="mr-1" />
+                                                        {subStatus.retrySchedule.map((p) => `${p.times}×${p.every}${RETRY_UNITS.find((u) => u.key === p.unit)?.abbr ?? p.unit}`).join(" → ")}
                                                     </Badge>
                                                 )}
                                             </div>
