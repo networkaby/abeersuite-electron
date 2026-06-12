@@ -102,43 +102,55 @@ export async function PATCH(
             (s?.triggerMap ?? {}) as Record<string, string>;
 
         // ── Hybrid retry schedule resolution ───────────────────────────────────
-        // A "waiting" sub-status (retrySchedule non-empty) waits before the NEXT
-        // attempt whenever an attempt just FAILED — i.e. this move carries an
-        // Unsuccess outcome (a reject). That covers both shapes: a separate calling
-        // sub-status routing its Unsuccess here, and a self-loop reject on this sub.
+        // The retry schedule lives on the sub-status being ACTED ON (the one we're
+        // leaving). An Unsuccess on a scheduled sub-status means "this attempt
+        // failed" → keep the ticket ON that sub-status and schedule the next attempt
+        // (overriding the fail-route ✗→, which is only honoured for non-scheduled
+        // subs), or give up to its exhausted target once the schedule runs out.
         // wakeAt = now + the interval of the phase the failure count falls in,
-        // densest first, dropping it into the Waiting tab. Arriving WITHOUT a reject
-        // (entered the status / routed here on Success) leaves wakeAt null → the
-        // first attempt is due now. Past the last phase it redirects to the exhausted
-        // target (give-up). retryCount = failures so far, keyed by sub-status so the
+        // densest first → the ticket drops into the Waiting tab. Arriving at a
+        // scheduled sub WITHOUT a failure leaves wakeAt null → the first attempt is
+        // due now. retryCount = failures so far, keyed by the sub-status so the
         // calling loop and parts loop count independently.
-        const phases = parseSchedule(subStatus.retrySchedule);
-        const carried = ticket.retryKeyId === subStatus.id ? ticket.retryCount : 0;
+        const currentSub = prevSubStatusId
+            ? (prevSubStatusId === subStatusId
+                ? subStatus
+                : await prisma.ticketSubStatus.findUnique({
+                    where: { id: prevSubStatusId },
+                    select: { id: true, label: true, retrySchedule: true, exhaustedSubStatusId: true },
+                }))
+            : null;
+        const currentPhases = parseSchedule(currentSub?.retrySchedule);
         let landingSubStatusId: string = subStatusId;
         let wakeAt: Date | null = null;
         let retryCount = 0;
         let retryKeyId: string | null = null;
         let exhaustedFrom: string | null = null;
-        if (phases.length > 0) {
-            const failed = outcome === "unsuccess";  // a reject just happened → wait for next attempt
-            if (!failed) {
-                // Fresh arrival (no reject) → attempt 1 is actionable now (no wait).
-                retryKeyId = subStatus.id;
+        if (outcome === "unsuccess" && currentSub && currentPhases.length > 0) {
+            // Failed attempt on a scheduled sub → schedule the next attempt on it.
+            const carried = ticket.retryKeyId === currentSub.id ? ticket.retryCount : 0;
+            const fails = carried + 1;
+            const phase = phaseForAttempt(currentPhases, fails);
+            if (phase) {
+                landingSubStatusId = currentSub.id;          // stay put, snoozed until due
+                retryCount = fails;
+                retryKeyId = currentSub.id;
+                wakeAt = addInterval(phase.unit, phase.every);
+            } else if (currentSub.exhaustedSubStatusId) {
+                landingSubStatusId = currentSub.exhaustedSubStatusId;  // give up → route onward
+                exhaustedFrom = currentSub.label;
             } else {
-                const fails = carried + 1;
-                const phase = phaseForAttempt(phases, fails);
-                if (phase) {
-                    retryCount = fails;
-                    retryKeyId = subStatus.id;
-                    wakeAt = addInterval(phase.unit, phase.every);
-                } else if (subStatus.exhaustedSubStatusId) {
-                    landingSubStatusId = subStatus.exhaustedSubStatusId;  // give up → route onward
-                    exhaustedFrom = subStatus.label;
-                } else {
-                    // Schedule exhausted, no give-up target → stays due, stops re-arming.
-                    retryCount = carried;
-                    retryKeyId = subStatus.id;
-                }
+                landingSubStatusId = currentSub.id;          // exhausted, no target → stay, stop re-arming
+                retryCount = carried;
+                retryKeyId = currentSub.id;
+            }
+        } else {
+            // Arriving at a scheduled sub (no failure) → attempt 1 is due now; seed the
+            // counter key so the first Unsuccess counts from here.
+            const targetPhases = parseSchedule(subStatus.retrySchedule);
+            if (targetPhases.length > 0) {
+                retryKeyId = subStatus.id;
+                retryCount = ticket.retryKeyId === subStatus.id ? ticket.retryCount : 0;
             }
         }
 
@@ -190,8 +202,10 @@ export async function PATCH(
                 });
             }
 
-            // 2. Auto-revert participants added by the outgoing sub-status
-            if (prevSubStatusId && prevSubStatusId !== subStatusId) {
+            // 2. Auto-revert participants added by the outgoing sub-status. Compare
+            //    against the ACTUAL landing sub (newSubStatusId), not the requested
+            //    target — a snoozed retry stays put (prev === landing) and must NOT revert.
+            if (prevSubStatusId && prevSubStatusId !== newSubStatusId) {
                 const prevSub = await tx.ticketSubStatus.findUnique({
                     where: { id: prevSubStatusId },
                     select: { autoRevertOnClear: true },
@@ -204,7 +218,7 @@ export async function PATCH(
                     for (const p of toRevert) {
                         await tx.ticketParticipant.update({
                             where: { id: p.id },
-                            data: { removedAt: new Date(), removedBySubStatusId: subStatusId },
+                            data: { removedAt: new Date(), removedBySubStatusId: newSubStatusId },
                         });
                         await tx.ticketLog.create({
                             data: {
@@ -224,7 +238,7 @@ export async function PATCH(
                 data: {
                     ticketId,
                     status: ticket.status,
-                    subStatusId,
+                    subStatusId: newSubStatusId,
                     note: outcome ? null : (note || null),
                     visibility: visibility === "PUBLIC" ? "PUBLIC" : "INTERNAL",
                     userId,

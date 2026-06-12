@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { ChevronRight, GitMerge, Lock, Pencil, Plus, RefreshCw, Trash2, Zap } from "lucide-react";
+import { Check, ChevronRight, GitMerge, Lock, Pencil, Plus, RefreshCw, Trash2, X, Zap } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -632,6 +632,7 @@ export default function SubStatusesPage() {
         : [];
 
     const statusLabelMap = Object.fromEntries(statuses.map((status) => [status.id, status.label]));
+    const subLabelMap = Object.fromEntries(subStatuses.map((s) => [s.id, s.label]));
 
     // One card per status (shown even when empty, so each has its own create button).
     const byParent = statuses.map((status) => ({
@@ -727,6 +728,26 @@ export default function SubStatusesPage() {
                                                     </Badge>
                                                 )}
                                             </div>
+
+                                            {/* Work-result movement — what Success / Unsuccess do, visible without opening Edit. */}
+                                            {(subStatus.successSubStatusId || subStatus.failSubStatusId || !!subStatus.retrySchedule?.length) && (
+                                                <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+                                                    {subStatus.successSubStatusId && (
+                                                        <span className="inline-flex items-center gap-1 text-green-700 dark:text-green-400">
+                                                            <Check size={12} className="shrink-0" /> Success → {subLabelMap[subStatus.successSubStatusId] ?? subStatus.successSubStatusId}
+                                                        </span>
+                                                    )}
+                                                    {subStatus.retrySchedule?.length ? (
+                                                        <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-400">
+                                                            <X size={12} className="shrink-0" /> Unsuccess → <RefreshCw size={11} className="shrink-0" /> retries{subStatus.exhaustedSubStatusId ? `, give up → ${subLabelMap[subStatus.exhaustedSubStatusId] ?? subStatus.exhaustedSubStatusId}` : ""}
+                                                        </span>
+                                                    ) : subStatus.failSubStatusId ? (
+                                                        <span className="inline-flex items-center gap-1 text-red-700 dark:text-red-400">
+                                                            <X size={12} className="shrink-0" /> Unsuccess → {subLabelMap[subStatus.failSubStatusId] ?? subStatus.failSubStatusId}
+                                                        </span>
+                                                    ) : null}
+                                                </div>
+                                            )}
 
                                             {subStatus.fromTransitions.length > 0 && (
                                                 <div className="mt-2 flex flex-wrap items-center gap-1.5">

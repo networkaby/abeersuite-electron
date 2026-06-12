@@ -15,6 +15,8 @@ export interface WorkInboxItem {
     ticketId: number;
     successTarget: { id: string; label: string } | null;
     failTarget: { id: string; label: string } | null;
+    /** Current sub-status owns a retry schedule — Unsuccess re-arms it (snooze loop). */
+    retryScheduled: boolean;
     workId: string;
     workLabel: string;
     workColor: string;
@@ -183,6 +185,7 @@ export default function WorkInboxBoard({
                                             workLabel={it.workLabel}
                                             successTarget={it.successTarget}
                                             failTarget={it.failTarget}
+                                            retryScheduled={it.retryScheduled}
                                             isOwned={it.status !== "todo"}
                                             isOwnerMe={mine}
                                         />

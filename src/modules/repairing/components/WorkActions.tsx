@@ -20,6 +20,8 @@ interface Props {
     successTarget?: RouteTarget | null;
     /** Where it routes on an unsuccessful outcome. */
     failTarget?: RouteTarget | null;
+    /** Current sub-status owns a retry schedule — Unsuccess re-arms it (waits, then retries). */
+    retryScheduled?: boolean;
     /** Whether the ticket is already claimed (started) by anyone. */
     isOwned: boolean;
     /** Whether the current user is the owner (can complete). */
@@ -41,7 +43,7 @@ interface Props {
  * no routing fall back to a single neutral Complete (clear).
  */
 export default function WorkActions({
-    ticketId, workLabel, successTarget, failTarget,
+    ticketId, workLabel, successTarget, failTarget, retryScheduled = false,
     isOwned, isOwnerMe, onChanged, size = "sm", showComplete = true,
 }: Props) {
     const router = useRouter();
@@ -116,8 +118,8 @@ export default function WorkActions({
                     )}
                     {failTarget && (
                         <Button
-                            onClick={() => setPending({ target: failTarget, kind: "Unsuccess", done: `Unsuccess → ${failTarget.label}` })}
-                            disabled={busy} size={size} variant="outline" title={`Unsuccess → ${failTarget.label}`}
+                            onClick={() => setPending({ target: failTarget, kind: "Unsuccess", done: retryScheduled ? "Next attempt scheduled" : `Unsuccess → ${failTarget.label}` })}
+                            disabled={busy} size={size} variant="outline" title={retryScheduled ? "Couldn't — schedule next attempt" : `Unsuccess → ${failTarget.label}`}
                             className="border-red-300 bg-red-50 text-red-700 hover:bg-red-100 dark:border-red-800 dark:bg-red-950 dark:text-red-300"
                         >
                             <X size={50} className="text-red-500" />
@@ -140,9 +142,15 @@ export default function WorkActions({
 
                         <div className="space-y-4">
                             {pending.target && (
-                                <p className="text-sm text-muted-foreground">
-                                    Moves to <span className="font-medium text-foreground">{pending.target.label}</span>.
-                                </p>
+                                retryScheduled && pending.kind === "Unsuccess" ? (
+                                    <p className="text-sm text-muted-foreground">
+                                        This attempt is recorded as unsuccessful. The <span className="font-medium text-foreground">next attempt is scheduled automatically</span> — the ticket moves to <span className="font-medium text-foreground">Waiting</span> until it&apos;s due.
+                                    </p>
+                                ) : (
+                                    <p className="text-sm text-muted-foreground">
+                                        Moves to <span className="font-medium text-foreground">{pending.target.label}</span>.
+                                    </p>
+                                )
                             )}
                             <div className="space-y-1.5">
                                 <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
@@ -183,7 +191,7 @@ export default function WorkActions({
                         <DialogFooter className="mt-2 border-t border-border pt-4">
                             <Button onClick={close} variant="outline" className="flex-1">Cancel</Button>
                             <Button onClick={submit} disabled={busy} className="flex-1">
-                                {busy ? "Saving…" : pending.target ? `Move → ${pending.target.label}` : "Mark done"}
+                                {busy ? "Saving…" : retryScheduled && pending.kind === "Unsuccess" ? "Schedule retry" : pending.target ? `Move → ${pending.target.label}` : "Mark done"}
                             </Button>
                         </DialogFooter>
                     </DialogContent>

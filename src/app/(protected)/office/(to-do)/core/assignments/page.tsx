@@ -29,7 +29,7 @@ export default async function AssignmentsPage() {
                 primaryOwner: { select: { id: true, name: true } },
                 ticketSubStatus: {
                     select: {
-                        id: true, label: true, actionLabel: true, workId: true,
+                        id: true, label: true, actionLabel: true, workId: true, retrySchedule: true,
                         successSubStatus: { select: { id: true, label: true } },
                         failSubStatus: { select: { id: true, label: true } },
                     },
@@ -71,11 +71,17 @@ export default async function AssignmentsPage() {
         // Snoozed = this waiting work is deferred until wakeAt; it drops out of the
         // active queues into the "Waiting" tab and re-surfaces as due when wakeAt passes.
         const snoozed = !!t.wakeAt && t.wakeAt.getTime() > now;
+        // A scheduled sub-status owns its retry loop: Unsuccess re-arms it per the
+        // schedule (the route keeps it here), so always offer that action — fall back
+        // to a self-target when no explicit ✗→ route is set.
+        const scheduled = Array.isArray(t.ticketSubStatus?.retrySchedule) && (t.ticketSubStatus.retrySchedule as unknown[]).length > 0;
+        const selfTarget = t.ticketSubStatus ? { id: t.ticketSubStatus.id, label: t.ticketSubStatus.label } : null;
         return {
             id: String(t.id),
             ticketId: t.id,
             successTarget: t.ticketSubStatus?.successSubStatus ?? null,
-            failTarget: t.ticketSubStatus?.failSubStatus ?? null,
+            failTarget: t.ticketSubStatus?.failSubStatus ?? (scheduled ? selfTarget : null),
+            retryScheduled: scheduled,
             workId: work?.id ?? "",
             workLabel: work?.label ?? "Work",
             workColor: work?.color ?? "bg-muted text-muted-foreground",
@@ -108,6 +114,7 @@ export default async function AssignmentsPage() {
             ticketId: l.ticket.id,
             successTarget: null,
             failTarget: null,
+            retryScheduled: false,
             workId: work?.id ?? "",
             workLabel: work?.label ?? l.ticketSubStatus?.label ?? "Work",
             workColor: work?.color ?? "bg-muted text-muted-foreground",
