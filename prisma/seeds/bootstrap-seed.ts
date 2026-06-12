@@ -506,6 +506,8 @@ type SubStatusSeed = {
     id: string; label: string; order: number; color: string;
     workId: string; statusId: string | null;
     pipelineId: string;
+    publicLabel?: string;   // customer-portal label; omit to fall back to the status name
+
     triggerMap?: Record<string, string>;
     warrantyScope?: string; actionLabel?: string;
     // Hybrid retry schedule: a "waiting" sub-status re-arms its work on a front-loaded
@@ -516,16 +518,16 @@ type SubStatusSeed = {
 };
 
 const SUB_STATUSES: SubStatusSeed[] = [
-    { id: "SS1",  label: "Waiting: Customer Info", order: 1, color: "bg-yellow-50 text-yellow-700", workId: "W1", statusId: "S2", pipelineId: "P1" },
-    { id: "SS2",  label: "Waiting: Customer to Bring Item", order: 2, color: "bg-yellow-50 text-yellow-700", workId: "W1", statusId: "S2", pipelineId: "P1" },
-    { id: "SS3",  label: "Customer Unreachable", order: 3, color: "bg-red-50 text-red-600", workId: "W1", statusId: "S2", pipelineId: "P1", retrySchedule: [{ unit: "minute", every: 15, times: 4 }, { unit: "day", every: 1, times: 5 }], exhaustedSubStatusId: "SS9" },
+    { id: "SS1",  label: "Waiting: Customer Info", order: 1, color: "bg-yellow-50 text-yellow-700", workId: "W1", statusId: "S2", pipelineId: "P1", publicLabel: "We need some details from you" },
+    { id: "SS2",  label: "Waiting: Customer to Bring Item", order: 2, color: "bg-yellow-50 text-yellow-700", workId: "W1", statusId: "S2", pipelineId: "P1", publicLabel: "Please bring in your device" },
+    { id: "SS3",  label: "Customer Unreachable", order: 3, color: "bg-red-50 text-red-600", workId: "W1", statusId: "S2", pipelineId: "P1", publicLabel: "We're trying to reach you", retrySchedule: [{ unit: "minute", every: 15, times: 4 }, { unit: "day", every: 1, times: 5 }], exhaustedSubStatusId: "SS9" },
     { id: "SS4",  label: "Customer Responded", order: 4, color: "bg-green-50 text-green-700", workId: "W1", statusId: "S2", pipelineId: "P1" },
-    { id: "SS5",  label: "Quote Prepared", order: 5, color: "bg-blue-50 text-blue-600", workId: "W2", statusId: "S2", pipelineId: "P1" },
-    { id: "SS6",  label: "Awaiting Customer Approval", order: 6, color: "bg-yellow-50 text-yellow-700", workId: "W2", statusId: "S2", pipelineId: "P1" },
+    { id: "SS5",  label: "Quote Prepared", order: 5, color: "bg-blue-50 text-blue-600", workId: "W2", statusId: "S2", pipelineId: "P1", publicLabel: "Your repair quote is ready" },
+    { id: "SS6",  label: "Awaiting Customer Approval", order: 6, color: "bg-yellow-50 text-yellow-700", workId: "W2", statusId: "S2", pipelineId: "P1", publicLabel: "Awaiting your approval" },
     { id: "SS7",  label: "Awaiting Insurance / Warranty", order: 7, color: "bg-purple-50 text-purple-600", workId: "W2", statusId: "S2", pipelineId: "P1" },
     { id: "SS8",  label: "Customer Approved", order: 8, color: "bg-green-50 text-green-700", workId: "W2", statusId: "S2", pipelineId: "P1", triggerMap: { S2: "S3" } },
     { id: "SS9",  label: "Customer Declined", order: 9, color: "bg-red-50 text-red-600", workId: "W2", statusId: "S2", pipelineId: "P1", triggerMap: { S2: "S8" } },
-    { id: "SS10", label: "Awaiting Parts", order: 10, color: "bg-orange-50 text-orange-600", workId: "W3", statusId: "S3", pipelineId: "P1", retrySchedule: [{ unit: "day", every: 1, times: 7 }, { unit: "week", every: 1, times: 4 }] },
+    { id: "SS10", label: "Awaiting Parts", order: 10, color: "bg-orange-50 text-orange-600", workId: "W3", statusId: "S3", pipelineId: "P1", publicLabel: "Awaiting spare parts", retrySchedule: [{ unit: "day", every: 1, times: 7 }, { unit: "week", every: 1, times: 4 }] },
     { id: "SS11", label: "Parts Delayed", order: 11, color: "bg-orange-50 text-orange-600", workId: "W3", statusId: "S3", pipelineId: "P1" },
     { id: "SS12", label: "Parts Issue", order: 12, color: "bg-red-50 text-red-600", workId: "W3", statusId: "S3", pipelineId: "P1" },
     { id: "SS13", label: "Parts Arrived", order: 13, color: "bg-green-50 text-green-700", workId: "W3", statusId: "S3", pipelineId: "P1" },
@@ -544,8 +546,8 @@ const SUB_STATUSES: SubStatusSeed[] = [
     { id: "SS26", label: "Service Centre Delayed", order: 26, color: "bg-red-50 text-red-600", workId: "W5", statusId: "S4", pipelineId: "P1" },
     { id: "SS27", label: "Shipped Back to Us", order: 27, color: "bg-purple-50 text-purple-600", workId: "W5", statusId: "S4", pipelineId: "P1" },
     { id: "SS28", label: "Received by Us", order: 28, color: "bg-green-50 text-green-700", workId: "W5", statusId: "S4", pipelineId: "P1", triggerMap: { S4: "S5" } },
-    { id: "SS29", label: "Customer Notified", order: 29, color: "bg-green-50 text-green-700", workId: "W6", statusId: "S6", pipelineId: "P1" },
-    { id: "SS30", label: "Reminder Sent", order: 30, color: "bg-yellow-50 text-yellow-700", workId: "W6", statusId: "S6", pipelineId: "P1" },
+    { id: "SS29", label: "Customer Notified", order: 29, color: "bg-green-50 text-green-700", workId: "W6", statusId: "S6", pipelineId: "P1", publicLabel: "Ready for collection" },
+    { id: "SS30", label: "Reminder Sent", order: 30, color: "bg-yellow-50 text-yellow-700", workId: "W6", statusId: "S6", pipelineId: "P1", publicLabel: "Ready for collection" },
     { id: "SS31", label: "Uncollected - Action Needed", order: 31, color: "bg-red-50 text-red-600", workId: "W6", statusId: "S6", pipelineId: "P1" },
     { id: "SS32", label: "Beyond Economical Repair", order: 32, color: "bg-red-50 text-red-600", workId: "W7", statusId: "S8", pipelineId: "P1" },
     { id: "SS33", label: "Customer Informed", order: 33, color: "bg-gray-50 text-gray-600", workId: "W7", statusId: "S8", pipelineId: "P1" },
@@ -867,7 +869,7 @@ async function main() {
         });
     }
     for (const ss of SUB_STATUSES) {
-        const retry = { retrySchedule: ss.retrySchedule ?? [] };
+        const retry = { retrySchedule: ss.retrySchedule ?? [], publicLabel: ss.publicLabel ?? null };
         await prisma.ticketSubStatus.upsert({
             where:  { id: ss.id },
             update: { label: ss.label, color: ss.color, order: ss.order, statusId: ss.statusId, triggerMap: ss.triggerMap ?? {}, actionLabel: ss.actionLabel ?? null, autoRevertOnClear: true, warrantyScope: ss.warrantyScope ?? "any", workId: ss.workId, pipelineId: ss.pipelineId, ...retry },

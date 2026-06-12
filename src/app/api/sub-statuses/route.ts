@@ -9,6 +9,7 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { labelColorSchema } from "@/shared/lib/schemas/commonSchemas";
 
 const subStatusSchema = labelColorSchema.extend({
+    publicLabel: z.string().trim().optional().nullable(),
     workId: z.string().trim().optional().nullable(),
     order: z.coerce.number().int().nonnegative().optional(),
     statusId: z.string().trim().nullable().optional(),
@@ -69,6 +70,7 @@ export async function POST(req: Request) {
             data: {
                 id: newId,
                 label: body.label,
+                publicLabel: body.publicLabel ?? null,
                 color: body.color ?? "bg-gray-100 text-gray-600",
                 workId: body.workId ?? null,
                 order: body.order ?? nextOrder,

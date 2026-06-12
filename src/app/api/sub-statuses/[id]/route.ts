@@ -8,6 +8,7 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const subStatusPatchSchema = z.object({
     label: z.string().trim().min(1).optional(),
+    publicLabel: z.string().trim().optional().nullable(),
     color: z.string().trim().min(1).optional(),
     workId: z.string().trim().optional().nullable(),
     order: z.coerce.number().int().nonnegative().optional(),
@@ -68,6 +69,7 @@ export async function PATCH(
             where: { id },
             data: {
                 ...(body.label !== undefined              && { label: body.label }),
+                ...("publicLabel" in body                 && { publicLabel: body.publicLabel ?? null }),
                 ...(body.color !== undefined              && { color: body.color }),
                 ...("workId"  in body                    && { workId: body.workId ?? null }),
                 ...(body.order !== undefined              && { order: body.order }),

@@ -59,6 +59,9 @@ model TicketStatus {
 model TicketSubStatus {
   id                  String                @id
   label               String
+  // Customer-facing label shown on the portal ("My Repairs"). The internal `label`
+  // and staff `actionLabel` stay private. Null = fall back to the parent status name.
+  publicLabel         String?
   color               String                @default("bg-gray-100 text-gray-600")
   order               Int
   // Each sub-status belongs to exactly ONE parent status (no sharing). SetNull so

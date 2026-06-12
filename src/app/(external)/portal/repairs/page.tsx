@@ -39,6 +39,8 @@ export default async function PortalRepairsPage() {
         include: {
             device: { select: { type: true, brand: true, model: true } },
             ticketStatus: { select: { label: true } },
+            // Customer-facing sub-status label takes precedence over the status name.
+            ticketSubStatus: { select: { publicLabel: true } },
         },
     });
 
@@ -72,7 +74,7 @@ export default async function PortalRepairsPage() {
                                             <p className="font-medium">Ticket #{ticket.id}</p>
                                             <p className="text-xs text-muted-foreground">{ticket.device.brand} {ticket.device.model} · {ticket.device.type}</p>
                                         </div>
-                                        <Badge variant="secondary">{ticket.ticketStatus.label}</Badge>
+                                        <Badge variant="secondary">{ticket.ticketSubStatus?.publicLabel || ticket.ticketStatus.label}</Badge>
                                     </div>
                                     <p className="mt-3 text-xs text-muted-foreground">
                                         Last update: {new Date(ticket.updatedAt).toLocaleString("en-IN")}
