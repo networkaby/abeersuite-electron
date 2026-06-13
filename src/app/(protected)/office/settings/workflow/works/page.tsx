@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Lock, Pencil, Plus, Trash2 } from "lucide-react";
+import { Lock, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,14 +19,31 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
-import { COLOR_OPTIONS } from "@/utils/constants";
+import { badgeColor, randomHexColor } from "@/shared/lib/format/entityColor";
+
+// Random (unlimited) hex by default; the picker / hex box / Random button override.
+const randomColor = () => randomHexColor(Math.random());
+const HEX_RE = /^#[0-9a-fA-F]{6}$/;
+
+// Reusable hex color picker (input + hex box + Random + live preview).
+function ColorPicker({ value, onChange }: { value: string; onChange: (c: string) => void }) {
+    return (
+        <div className="flex items-center gap-2">
+            <input
+                type="color"
+                aria-label="Pick a custom color"
+                value={HEX_RE.test(value) ? value : "#7C9EF0"}
+                onChange={(e) => onChange(e.target.value.toUpperCase())}
+                className="h-9 w-10 shrink-0 cursor-pointer rounded-md border border-border bg-background p-0.5"
+            />
+            <Input value={value} onChange={(e) => onChange(e.target.value)} placeholder="#D442D7" className="h-9 w-28 font-mono uppercase" />
+            <Button type="button" size="sm" variant="outline" onClick={() => onChange(randomColor())} title="Random color">
+                <RefreshCw size={13} /> Random
+            </Button>
+            <Badge {...badgeColor(value)}>Preview</Badge>
+        </div>
+    );
+}
 
 interface UsingItem {
     id: string;
@@ -149,7 +166,7 @@ export default function WorksPage() {
     const usageBadges = (items: UsingItem[]) => (
         <div className="flex flex-wrap gap-1">
             {items.map((item) => (
-                <Badge key={item.id} className={item.color}>
+                <Badge key={item.id} {...badgeColor(item.color)}>
                     {item.label}
                     {item.pipelineId && pipelineLabel[item.pipelineId] && (
                         <span className="ml-1 opacity-60">· {pipelineLabel[item.pipelineId]}</span>
@@ -169,7 +186,7 @@ export default function WorksPage() {
                         The activity each status / worker represents. A <span className="font-medium">gated</span> work mints a permission you can grant from Roles; an ungated work is open to any staff.
                     </p>
                 </div>
-                <Button type="button" onClick={() => { setCreateForm({ ...BLANK }); setShowCreate(true); }}>
+                <Button type="button" onClick={() => { setCreateForm({ ...BLANK, color: randomColor() }); setShowCreate(true); }}>
                     <Plus size={16} /> Add Work
                 </Button>
             </div>
@@ -186,7 +203,7 @@ export default function WorksPage() {
                             <Card key={work.id}>
                                 <CardHeader className="border-b">
                                     <div className="flex items-center gap-3">
-                                        <Badge className={work.color}>{work.label}</Badge>
+                                        <Badge {...badgeColor(work.color)}>{work.label}</Badge>
                                         {work.permissionId ? (
                                             <Badge variant="outline" className="gap-1 text-amber-700">
                                                 <Lock size={11} /> Gated
@@ -254,15 +271,7 @@ export default function WorksPage() {
                         </div>
                         <div className="space-y-2">
                             <Label>Color</Label>
-                            <Select value={createForm.color} onValueChange={(value) => setCreateForm({ ...createForm, color: value })}>
-                                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                    {COLOR_OPTIONS.map((color) => (
-                                        <SelectItem key={color.value} value={color.value}>{color.label}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                            <Badge className={createForm.color}>Preview</Badge>
+                            <ColorPicker value={createForm.color} onChange={(c) => setCreateForm({ ...createForm, color: c })} />
                         </div>
                         <label className="flex items-center gap-2 text-sm">
                             <Checkbox checked={createForm.gated} onCheckedChange={(checked) => setCreateForm({ ...createForm, gated: checked === true })} />
@@ -296,15 +305,7 @@ export default function WorksPage() {
                         </div>
                         <div className="space-y-2">
                             <Label>Color</Label>
-                            <Select value={editForm.color} onValueChange={(value) => setEditForm({ ...editForm, color: value })}>
-                                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                    {COLOR_OPTIONS.map((color) => (
-                                        <SelectItem key={color.value} value={color.value}>{color.label}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                            <Badge className={editForm.color}>Preview</Badge>
+                            <ColorPicker value={editForm.color} onChange={(c) => setEditForm({ ...editForm, color: c })} />
                         </div>
                         <label className="flex items-center gap-2 text-sm">
                             <Checkbox checked={editForm.gated} onCheckedChange={(checked) => setEditForm({ ...editForm, gated: checked === true })} />

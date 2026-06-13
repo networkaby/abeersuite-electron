@@ -853,20 +853,25 @@ async function main() {
             });
         }
     }
+    // Colors are random hex (no legacy Tailwind-class presets). A class-valued color
+    // in the arrays is filled with a fresh random hex ("fill random for backward").
+    const seedColor = (c: string) => /^#/.test(c) ? c : "#" + Math.floor(Math.random() * 16777215).toString(16).padStart(6, "0").toUpperCase();
     for (const w of WORKS) {
         const permissionId = w.gated ? `work:${w.id}` : null;
+        const color = seedColor(w.color);
         await prisma.work.upsert({
             where:  { id: w.id },
-            update: { label: w.label, color: w.color, order: w.order, permissionId },
-            create: { id: w.id, label: w.label, color: w.color, order: w.order, permissionId },
+            update: { label: w.label, color, order: w.order, permissionId },
+            create: { id: w.id, label: w.label, color, order: w.order, permissionId },
         });
     }
     for (const ss of WORKERS_SEED) {
         const retry = { retrySchedule: ss.retrySchedule ?? [], publicLabel: ss.publicLabel ?? null, spawnPipelineId: ss.spawnPipelineId ?? null, parentSignal: ss.parentSignal ?? null, actions: (ss.actions ?? []) as unknown as Prisma.InputJsonValue };
+        const color = seedColor(ss.color);
         await prisma.ticketWorker.upsert({
             where:  { id: ss.id },
-            update: { label: ss.label, color: ss.color, order: ss.order, statusId: ss.statusId, triggerMap: ss.triggerMap ?? {}, actionLabel: ss.actionLabel ?? null, autoRevertOnClear: true, warrantyScope: ss.warrantyScope ?? "any", workId: ss.workId, pipelineId: ss.pipelineId, ...retry },
-            create: { id: ss.id, label: ss.label, color: ss.color, order: ss.order, statusId: ss.statusId, triggerMap: ss.triggerMap ?? {}, actionLabel: ss.actionLabel ?? null, autoRevertOnClear: true, warrantyScope: ss.warrantyScope ?? "any", workId: ss.workId, pipelineId: ss.pipelineId, ...retry },
+            update: { label: ss.label, color, order: ss.order, statusId: ss.statusId, triggerMap: ss.triggerMap ?? {}, actionLabel: ss.actionLabel ?? null, autoRevertOnClear: true, warrantyScope: ss.warrantyScope ?? "any", workId: ss.workId, pipelineId: ss.pipelineId, ...retry },
+            create: { id: ss.id, label: ss.label, color, order: ss.order, statusId: ss.statusId, triggerMap: ss.triggerMap ?? {}, actionLabel: ss.actionLabel ?? null, autoRevertOnClear: true, warrantyScope: ss.warrantyScope ?? "any", workId: ss.workId, pipelineId: ss.pipelineId, ...retry },
         });
     }
     // Hand-picked start worker per status — set now that both statuses and

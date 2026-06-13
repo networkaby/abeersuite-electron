@@ -27,8 +27,8 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { COLOR_OPTIONS, WARRANTY_SCOPE_OPTIONS } from "@/utils/constants";
-import { badgeColor, dotColor, randomHexColor } from "@/shared/lib/format/entityColor";
+import { WARRANTY_SCOPE_OPTIONS } from "@/utils/constants";
+import { badgeColor, randomHexColor } from "@/shared/lib/format/entityColor";
 import { ACTION_TYPES } from "@/modules/repairing/lib/actionTypes";
 
 // Retry-schedule channels, densest → sparsest. Each is an optional row in the
@@ -358,22 +358,6 @@ function WorkerFormModal({
                                     <RefreshCw size={13} /> Random
                                 </Button>
                                 <Badge {...badgeColor(form.color)}>Preview</Badge>
-                            </div>
-                            <div className="flex flex-wrap items-center gap-1.5">
-                                {COLOR_OPTIONS.map((c) => {
-                                    const selected = form.color === c.value;
-                                    return (
-                                        <button
-                                            key={c.value}
-                                            type="button"
-                                            title={c.label}
-                                            aria-label={c.label}
-                                            aria-pressed={selected}
-                                            onClick={() => setForm({ ...form, color: c.value })}
-                                            className={`h-6 w-6 rounded-full border border-border/60 ${dotColor(c.value).className} transition ${selected ? "ring-2 ring-foreground ring-offset-2 ring-offset-background" : "hover:scale-110"}`}
-                                        />
-                                    );
-                                })}
                             </div>
                         </div>
                         <div className="space-y-3 pt-6">
