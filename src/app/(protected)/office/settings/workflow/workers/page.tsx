@@ -29,6 +29,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { COLOR_OPTIONS, WARRANTY_SCOPE_OPTIONS } from "@/utils/constants";
 import { badgeColor, dotColor, randomHexColor } from "@/shared/lib/format/entityColor";
+import { ACTION_TYPES } from "@/modules/repairing/lib/actionTypes";
 
 // Retry-schedule channels, densest → sparsest. Each is an optional row in the
 // worker dialog's "Attempts" tab; a filled row (every N × T times) becomes a phase.
@@ -82,6 +83,7 @@ interface Worker {
     retrySchedule?: { unit: string; every: number; times: number }[] | null;
     spawnPipelineId?: string | null;
     parentSignal?: string | null;
+    actions?: WorkerActionForm[] | null;
     fromTransitions: { to: { id: string; label: string; color: string } }[];
 }
 
@@ -92,6 +94,10 @@ interface Work {
     order: number;
     permissionId: string | null;
 }
+
+// One entry in a worker's action chain (6th power): a code HOOK + when it fires +
+// the hook's arguments (config). The hook catalog is ACTION_TYPES (actionTypes.ts).
+type WorkerActionForm = { type: string; on: "success" | "fail" | "always"; config: Record<string, string> };
 
 type FormValues = {
     label: string;
@@ -109,6 +115,7 @@ type FormValues = {
     retryRows: RetryRows;
     spawnPipelineId: string;
     parentSignal: string;
+    actions: WorkerActionForm[];
 };
 
 const BLANK_FORM: FormValues = {
@@ -127,6 +134,7 @@ const BLANK_FORM: FormValues = {
     retryRows: BLANK_RETRY_ROWS(),
     spawnPipelineId: "",
     parentSignal: "",
+    actions: [],
 };
 
 // Build the ordered retrySchedule payload from the dialog rows (densest first).
@@ -210,6 +218,14 @@ function WorkerFormModal({
     const scheduleSummary = summarizeRows(form.retryRows);
     const hasSchedule = !!scheduleSummary;
 
+    // ── Action chain (6th power) editors — each entry = a hook + when + arguments ─
+    const addAction = () => setForm({ ...form, actions: [...form.actions, { type: ACTION_TYPES[0].type, on: "success", config: {} }] });
+    const updateAction = (i: number, patch: Partial<WorkerActionForm>) =>
+        setForm({ ...form, actions: form.actions.map((a, idx) => (idx === i ? { ...a, ...patch } : a)) });
+    const removeAction = (i: number) => setForm({ ...form, actions: form.actions.filter((_, idx) => idx !== i) });
+    const setActionConfig = (i: number, key: string, value: string) =>
+        updateAction(i, { config: { ...form.actions[i].config, [key]: value } });
+
     return (
         <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose(); }}>
             <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
@@ -221,9 +237,10 @@ function WorkerFormModal({
                 </DialogHeader>
 
                 <Tabs defaultValue="details" className="w-full">
-                    <TabsList className="grid w-full grid-cols-2">
+                    <TabsList className="grid w-full grid-cols-3">
                         <TabsTrigger value="details">Details</TabsTrigger>
                         <TabsTrigger value="attempts">Attempts{hasSchedule ? " ·" : ""}</TabsTrigger>
+                        <TabsTrigger value="actions">Actions{form.actions.length ? ` · ${form.actions.length}` : ""}</TabsTrigger>
                     </TabsList>
 
                     <TabsContent value="details" className="space-y-5">
@@ -506,6 +523,70 @@ function WorkerFormModal({
                             </div>
                         )}
                     </TabsContent>
+
+                    <TabsContent value="actions" className="space-y-3">
+                        <p className="text-xs text-muted-foreground">
+                            Action <span className="font-medium">hooks</span> that run when this worker is <span className="font-medium">completed</span>, in order, each filtered by outcome.
+                            Pick a hook and fill its arguments. See all hooks in <span className="font-medium">Workflow → Actions</span>.
+                        </p>
+                        {form.actions.length === 0 && (
+                            <div className="rounded-md border border-dashed border-border px-3 py-6 text-center text-xs text-muted-foreground">
+                                No actions — the worker just routes on Success / Unsuccess.
+                            </div>
+                        )}
+                        {form.actions.map((action, i) => {
+                            const def = ACTION_TYPES.find((t) => t.type === action.type);
+                            return (
+                                <div key={i} className="space-y-2.5 rounded-md border border-border p-3">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs font-medium text-muted-foreground">#{i + 1}</span>
+                                        <Select value={action.type} onValueChange={(v) => updateAction(i, { type: v, config: {} })}>
+                                            <SelectTrigger className="h-8 flex-1"><SelectValue /></SelectTrigger>
+                                            <SelectContent>
+                                                {ACTION_TYPES.map((t) => (<SelectItem key={t.type} value={t.type}>{t.label}</SelectItem>))}
+                                            </SelectContent>
+                                        </Select>
+                                        <Select value={action.on} onValueChange={(v) => updateAction(i, { on: v as WorkerActionForm["on"] })}>
+                                            <SelectTrigger className="h-8 w-36"><SelectValue /></SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="success">On success</SelectItem>
+                                                <SelectItem value="fail">On unsuccess</SelectItem>
+                                                <SelectItem value="always">Always</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                        <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => removeAction(i)}>
+                                            <X size={14} />
+                                        </Button>
+                                    </div>
+                                    {def?.fields.map((field) => (
+                                        <div key={field.key} className="flex items-center gap-2 pl-6">
+                                            <Label className="w-28 shrink-0 text-xs">{field.label}</Label>
+                                            {field.kind === "pipeline" ? (
+                                                <Select value={action.config[field.key] || "__none__"} onValueChange={(v) => setActionConfig(i, field.key, v === "__none__" ? "" : v)}>
+                                                    <SelectTrigger className="h-8 flex-1"><SelectValue placeholder="Pick a pipeline" /></SelectTrigger>
+                                                    <SelectContent>
+                                                        {pipelines.map((p) => (<SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>))}
+                                                    </SelectContent>
+                                                </Select>
+                                            ) : field.kind === "status" ? (
+                                                <Select value={action.config[field.key] || "__none__"} onValueChange={(v) => setActionConfig(i, field.key, v === "__none__" ? "" : v)}>
+                                                    <SelectTrigger className="h-8 flex-1"><SelectValue placeholder="Pick a status" /></SelectTrigger>
+                                                    <SelectContent>
+                                                        {statuses.map((s) => (<SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>))}
+                                                    </SelectContent>
+                                                </Select>
+                                            ) : (
+                                                <Input className="h-8 flex-1" value={action.config[field.key] ?? ""} onChange={(e) => setActionConfig(i, field.key, e.target.value)} placeholder={field.label} />
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            );
+                        })}
+                        <Button type="button" variant="outline" size="sm" onClick={addAction} className="w-full">
+                            <Plus size={14} className="mr-1" /> Add action
+                        </Button>
+                    </TabsContent>
                 </Tabs>
 
                 <DialogFooter>
@@ -583,6 +664,7 @@ export default function WorkersPage() {
         retrySchedule: rowsToSchedule(form.retryRows),
         spawnPipelineId: form.spawnPipelineId || null,
         parentSignal: form.parentSignal || null,
+        actions: form.actions,
     });
 
     const handleCreate = async () => {
@@ -619,6 +701,7 @@ export default function WorkersPage() {
             retryRows: scheduleToRows(worker.retrySchedule),
             spawnPipelineId: worker.spawnPipelineId ?? "",
             parentSignal: worker.parentSignal ?? "",
+            actions: (worker.actions as WorkerActionForm[] | undefined) ?? [],
         });
         setEditId(worker.id);
     };
@@ -642,6 +725,7 @@ export default function WorkersPage() {
             retryRows: scheduleToRows(s.retrySchedule),
             spawnPipelineId: s.spawnPipelineId ?? "",
             parentSignal: s.parentSignal ?? "",
+            actions: (s.actions as WorkerActionForm[] | undefined) ?? [],
         });
         setShowCreate(true);
     };
@@ -854,6 +938,12 @@ export default function WorkersPage() {
                                                     <Badge className={worker.parentSignal === "fail" ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}>
                                                         <CornerUpLeft size={10} className="mr-1" />
                                                         parent: {worker.parentSignal === "fail" ? "Unsuccess" : "Success"}
+                                                    </Badge>
+                                                )}
+                                                {!!worker.actions?.length && (
+                                                    <Badge className="bg-violet-100 text-violet-700">
+                                                        <Zap size={10} className="mr-1" />
+                                                        {worker.actions.length} action{worker.actions.length > 1 ? "s" : ""}
                                                     </Badge>
                                                 )}
                                             </div>

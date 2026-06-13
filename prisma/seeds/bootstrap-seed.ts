@@ -44,7 +44,7 @@
 //   • Sample vouchers → dummy-vouchers.ts
 //   • Opening balances on accounts/products → set via UI
 
-import { PrismaClient } from "../../src/generated/prisma/client";
+import { PrismaClient, Prisma } from "../../src/generated/prisma/client";
 import { seedVoucherSeries } from "../../src/modules/accountancy/lib/seedVoucherSeries";
 import {
     VOUCHER_TEMPLATE_KINDS,
@@ -526,6 +526,7 @@ type WorkerSeed = {
     failWorkerId?: string;
     spawnPipelineId?: string;      // 5th power: entering here spawns a child ticket on this pipeline
     parentSignal?: string;         // on a CHILD worker: "success"|"fail" report-back to the parent
+    actions?: { type: string; on?: "success" | "fail" | "always"; config?: Record<string, string> }[]; // 6th power: action hooks + args
 };
 
 const WORKERS_SEED: WorkerSeed[] = [
@@ -861,7 +862,7 @@ async function main() {
         });
     }
     for (const ss of WORKERS_SEED) {
-        const retry = { retrySchedule: ss.retrySchedule ?? [], publicLabel: ss.publicLabel ?? null, spawnPipelineId: ss.spawnPipelineId ?? null, parentSignal: ss.parentSignal ?? null };
+        const retry = { retrySchedule: ss.retrySchedule ?? [], publicLabel: ss.publicLabel ?? null, spawnPipelineId: ss.spawnPipelineId ?? null, parentSignal: ss.parentSignal ?? null, actions: (ss.actions ?? []) as unknown as Prisma.InputJsonValue };
         await prisma.ticketWorker.upsert({
             where:  { id: ss.id },
             update: { label: ss.label, color: ss.color, order: ss.order, statusId: ss.statusId, triggerMap: ss.triggerMap ?? {}, actionLabel: ss.actionLabel ?? null, autoRevertOnClear: true, warrantyScope: ss.warrantyScope ?? "any", workId: ss.workId, pipelineId: ss.pipelineId, ...retry },

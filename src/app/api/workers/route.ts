@@ -7,6 +7,7 @@ import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { labelColorSchema } from "@/shared/lib/schemas/commonSchemas";
+import { Prisma } from "@/generated/prisma/client";
 
 const workerSchema = labelColorSchema.extend({
     publicLabel: z.string().trim().optional().nullable(),
@@ -26,6 +27,11 @@ const workerSchema = labelColorSchema.extend({
     })).optional(),
     spawnPipelineId: z.string().trim().optional().nullable(),
     parentSignal: z.enum(["success", "fail"]).optional().nullable(),
+    actions: z.array(z.object({
+        type: z.string().trim().min(1),
+        on: z.enum(["success", "fail", "always"]).optional(),
+        config: z.record(z.string(), z.unknown()).optional(),
+    })).optional(),
     pipelineId: z.string().optional().nullable(),
 });
 
@@ -85,6 +91,7 @@ export async function POST(req: Request) {
                 retrySchedule:      body.retrySchedule ?? [],
                 spawnPipelineId:    body.spawnPipelineId ?? null,
                 parentSignal:       body.parentSignal ?? null,
+                actions:            (body.actions ?? []) as unknown as Prisma.InputJsonValue,
                 pipelineId:         body.pipelineId ?? null,
             },
         });

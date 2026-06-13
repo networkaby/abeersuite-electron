@@ -4,6 +4,7 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { passesWorkGate } from "@/modules/repairing/lib/workGate";
 import { findEntryWorker } from "@/modules/repairing/lib/entryWorker";
 import { spawnChild, reconcileParentFromChild } from "@/modules/repairing/lib/spawnChild";
+import { runWorkerActions } from "@/modules/repairing/lib/actions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
@@ -308,6 +309,20 @@ export async function PATCH(
         // If this move took a CHILD ticket onto a worker that signals its parent,
         // reconcile the parent (fire its Success / Unsuccess route).
         await reconcileParentFromChild(ticketId, userId).catch(() => { /* best-effort */ });
+
+        // 6th power — run the COMPLETED worker's action chain (filtered by the recorded
+        // outcome). Best-effort; never blocks the move. The completed worker is the one
+        // being left (prevWorkerId) — its on-success / on-fail / always actions fire here.
+        if (outcome && prevWorkerId) {
+            const completed = await prisma.ticketWorker.findUnique({
+                where: { id: prevWorkerId },
+                select: { actions: true },
+            });
+            await runWorkerActions(
+                { ticketId, status: newMainStatus, workerId: prevWorkerId, deviceId: ticket.deviceId, userId, outcome },
+                completed?.actions,
+            ).catch(() => { /* best-effort */ });
+        }
 
         // TODO(rbac): handoffRole auto-assignment removed (it looked staff up by the
         // legacy User.role). Re-add Position-based handoff when RBAC is re-wired.

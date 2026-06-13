@@ -5,6 +5,7 @@ import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { Prisma } from "@/generated/prisma/client";
 
 const workerPatchSchema = z.object({
     label: z.string().trim().min(1).optional(),
@@ -26,6 +27,11 @@ const workerPatchSchema = z.object({
     })).optional(),
     spawnPipelineId: z.string().trim().optional().nullable(),
     parentSignal: z.enum(["success", "fail"]).optional().nullable(),
+    actions: z.array(z.object({
+        type: z.string().trim().min(1),
+        on: z.enum(["success", "fail", "always"]).optional(),
+        config: z.record(z.string(), z.unknown()).optional(),
+    })).optional(),
 });
 
 // DELETE /api/workers/[id]
@@ -84,6 +90,7 @@ export async function PATCH(
                 ...("retrySchedule"        in body && { retrySchedule:        body.retrySchedule ?? [] }),
                 ...("spawnPipelineId"      in body && { spawnPipelineId:      body.spawnPipelineId ?? null }),
                 ...("parentSignal"         in body && { parentSignal:         body.parentSignal ?? null }),
+                ...("actions"              in body && { actions:              (body.actions ?? []) as unknown as Prisma.InputJsonValue }),
             },
         });
 

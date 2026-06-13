@@ -103,6 +103,13 @@ model TicketWorker {
   // "fail" fires Unsuccess. Parent-agnostic so the child pipeline is reusable.
   // null = no signal. (Future: "checkpoint:<label>" for mid-journey nudges.)
   parentSignal      String?
+  // 6th power: an ordered, chainable list of ACTIONS that fire when this worker is
+  // COMPLETED, filtered by outcome. Shape: [{ type, on, config }] where `type` is a
+  // read-only code HOOK (spawn|move_status|email|retry|… — see actionTypes.ts),
+  // `on` ∈ "success"|"fail"|"always", and `config` is that hook's arguments (e.g.
+  // move_status → { statusId }). Dispatched in src/modules/repairing/lib/actions.ts.
+  // [] = no actions.
+  actions           Json                @default("[]")
   workId            String?
   work              Work?               @relation(fields: [workId], references: [id], onDelete: SetNull)
   pipelineId        String?
