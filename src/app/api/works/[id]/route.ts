@@ -21,6 +21,7 @@ const patchSchema = z.object({
         kind: z.enum(["text", "number"]).optional(),
         on: z.enum(["success", "fail", "always"]).optional(),
     })).optional(),
+    groupId: z.string().trim().optional().nullable(),
 });
 
 async function mintWorkPermission(id: string, label: string): Promise<string> {
@@ -65,6 +66,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 ...("successLabel" in body && { successLabel: body.successLabel || null }),
                 ...("failLabel" in body && { failLabel: body.failLabel || null }),
                 ...("args" in body && { args: (body.args ?? []) as unknown as Prisma.InputJsonValue }),
+                ...("groupId" in body && { groupId: body.groupId || null }),
                 permissionId,
             },
         });

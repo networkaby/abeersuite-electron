@@ -494,19 +494,29 @@ const PIPELINES: PipelineSeed[] = [
     },
 ];
 
+// Work GROUPS — categories that bundle works (the Work Inbox organises group-wise).
+const WORK_GROUPS = [
+    { id: "G1", label: "Calling", order: 1, color: "bg-blue-100 text-blue-600" },
+    { id: "G2", label: "Repairing", order: 2, color: "bg-green-100 text-green-700" },
+    { id: "G3", label: "Admin", order: 3, color: "bg-orange-100 text-orange-600" },
+    { id: "G4", label: "Parts & Courier", order: 4, color: "bg-purple-100 text-purple-600" },
+    { id: "G5", label: "Orders", order: 5, color: "bg-amber-100 text-amber-700" },
+] as const;
+
 // Works — the activity each worker represents. Gated works mint a
 // permission ("work:<id>") that gates who may set their workers; the
 // state-like works (escalated / ready / no_fix) stay ungated (any staff).
 // Opaque ids (W1…W7) so the id never encodes the label — renames stay safe.
+// groupId → WorkGroup (above).
 const WORKS = [
-    { id: "W1", label: "Tele Calling", order: 1, color: "bg-blue-100 text-blue-600", gated: true, successLabel: "Reachable", failLabel: "Unreachable", args: [{ key: "number", label: "Call number", source: "customer.phone" }, { key: "reason", label: "Reason", source: "user", kind: "text", on: "fail" }] },
-    { id: "W2", label: "Repairing", order: 2, color: "bg-green-100 text-green-700", gated: false, successLabel: "Fixed", failLabel: "Can't fix", args: [] },
-    { id: "W3", label: "Admin Approval", order: 3, color: "bg-orange-100 text-orange-600", gated: false, successLabel: "Approved", failLabel: "Rejected", args: [] },
-    { id: "W4", label: "Order Parts", order: 4, color: "bg-purple-100 text-purple-600", gated: false, successLabel: "Ordered", failLabel: "Unavailable", args: [{ key: "part", label: "Part needed", source: "user", kind: "text" }] },
-    { id: "W5", label: "Waiting & Follow Up", order: 5, color: "bg-teal-100 text-teal-600", gated: false, successLabel: null, failLabel: null, args: [] },
-    { id: "W6", label: "Escalated To EC", order: 6, color: "bg-red-100 text-red-600", gated: false, successLabel: null, failLabel: null, args: [] },
-    { id: "W7", label: "Incoming Courier", order: 7, color: "bg-orange-100 text-orange-600", gated: false, successLabel: "Received", failLabel: "Lost", args: [{ key: "tracking", label: "Tracking #", source: "user", kind: "text", on: "success" }, { key: "lost_reason", label: "Lost reason", source: "user", kind: "text", on: "fail" }] },
-    { id: "W8", label: "Order", order: 8, color: "bg-orange-100 text-orange-600", gated: false, successLabel: null, failLabel: null, args: [] },
+    { id: "W1", label: "Tele Calling", order: 1, color: "bg-blue-100 text-blue-600", gated: true, groupId: "G1", successLabel: "Reachable", failLabel: "Unreachable", args: [{ key: "number", label: "Call number", source: "customer.phone" }, { key: "reason", label: "Reason", source: "user", kind: "text", on: "fail" }] },
+    { id: "W2", label: "Repairing", order: 2, color: "bg-green-100 text-green-700", gated: false, groupId: "G2", successLabel: "Fixed", failLabel: "Can't fix", args: [] },
+    { id: "W3", label: "Admin Approval", order: 3, color: "bg-orange-100 text-orange-600", gated: false, groupId: "G3", successLabel: "Approved", failLabel: "Rejected", args: [] },
+    { id: "W4", label: "Order Parts", order: 4, color: "bg-purple-100 text-purple-600", gated: false, groupId: "G4", successLabel: "Ordered", failLabel: "Unavailable", args: [{ key: "part", label: "Part needed", source: "user", kind: "text" }] },
+    { id: "W5", label: "Waiting & Follow Up", order: 5, color: "bg-teal-100 text-teal-600", gated: false, groupId: "G1", successLabel: null, failLabel: null, args: [] },
+    { id: "W6", label: "Escalated To EC", order: 6, color: "bg-red-100 text-red-600", gated: false, groupId: "G3", successLabel: null, failLabel: null, args: [] },
+    { id: "W7", label: "Incoming Courier", order: 7, color: "bg-orange-100 text-orange-600", gated: false, groupId: "G4", successLabel: "Received", failLabel: "Lost", args: [{ key: "tracking", label: "Tracking #", source: "user", kind: "text", on: "success" }, { key: "lost_reason", label: "Lost reason", source: "user", kind: "text", on: "fail" }] },
+    { id: "W8", label: "Order", order: 8, color: "bg-orange-100 text-orange-600", gated: false, groupId: "G5", successLabel: null, failLabel: null, args: [] },
 ] as const;
 
 type WorkerSeed = {
@@ -856,13 +866,20 @@ async function main() {
     // Colors are random hex (no legacy Tailwind-class presets). A class-valued color
     // in the arrays is filled with a fresh random hex ("fill random for backward").
     const seedColor = (c: string) => /^#/.test(c) ? c : "#" + Math.floor(Math.random() * 16777215).toString(16).padStart(6, "0").toUpperCase();
+    for (const g of WORK_GROUPS) {
+        await prisma.workGroup.upsert({
+            where:  { id: g.id },
+            update: { label: g.label, color: seedColor(g.color), order: g.order },
+            create: { id: g.id, label: g.label, color: seedColor(g.color), order: g.order },
+        });
+    }
     for (const w of WORKS) {
         const permissionId = w.gated ? `work:${w.id}` : null;
         const color = seedColor(w.color);
         await prisma.work.upsert({
             where:  { id: w.id },
-            update: { label: w.label, color, order: w.order, permissionId, successLabel: w.successLabel, failLabel: w.failLabel, args: w.args as unknown as Prisma.InputJsonValue },
-            create: { id: w.id, label: w.label, color, order: w.order, permissionId, successLabel: w.successLabel, failLabel: w.failLabel, args: w.args as unknown as Prisma.InputJsonValue },
+            update: { label: w.label, color, order: w.order, permissionId, groupId: w.groupId, successLabel: w.successLabel, failLabel: w.failLabel, args: w.args as unknown as Prisma.InputJsonValue },
+            create: { id: w.id, label: w.label, color, order: w.order, permissionId, groupId: w.groupId, successLabel: w.successLabel, failLabel: w.failLabel, args: w.args as unknown as Prisma.InputJsonValue },
         });
     }
     for (const ss of WORKERS_SEED) {

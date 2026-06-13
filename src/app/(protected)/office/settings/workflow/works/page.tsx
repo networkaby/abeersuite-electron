@@ -121,6 +121,7 @@ interface Work {
     successLabel: string | null;
     failLabel: string | null;
     args: WorkArg[] | null;
+    groupId: string | null;
     statuses: UsingItem[];
     workers: UsingItem[];
 }
@@ -130,11 +131,12 @@ interface Pipeline {
     label: string;
 }
 
-const BLANK = { label: "", color: "bg-gray-100 text-gray-600", gated: false, order: "", successLabel: "", failLabel: "", args: [] as WorkArg[] };
+const BLANK = { label: "", color: "bg-gray-100 text-gray-600", gated: false, order: "", successLabel: "", failLabel: "", args: [] as WorkArg[], groupId: "" };
 
 export default function WorksPage() {
     const [works, setWorks] = useState<Work[]>([]);
     const [pipelines, setPipelines] = useState<Pipeline[]>([]);
+    const [groups, setGroups] = useState<{ id: string; label: string; color: string }[]>([]);
     const [loading, setLoading] = useState(true);
 
     const [showCreate, setShowCreate] = useState(false);
@@ -150,12 +152,14 @@ export default function WorksPage() {
     const load = async () => {
         setLoading(true);
         try {
-            const [worksRes, pipelinesRes] = await Promise.all([
+            const [worksRes, pipelinesRes, groupsRes] = await Promise.all([
                 axios.get("/api/works"),
                 axios.get("/api/pipelines"),
+                axios.get("/api/work-groups"),
             ]);
             setWorks(worksRes.data);
             setPipelines(pipelinesRes.data);
+            setGroups(groupsRes.data);
         } catch {
             toast.error("Failed to load works");
         } finally {
@@ -176,6 +180,7 @@ export default function WorksPage() {
                 successLabel: createForm.successLabel || null,
                 failLabel: createForm.failLabel || null,
                 args: createForm.args,
+                groupId: createForm.groupId || null,
             });
             toast.success("Work created");
             setShowCreate(false);
@@ -191,7 +196,7 @@ export default function WorksPage() {
 
     const openEdit = (work: Work) => {
         setEditId(work.id);
-        setEditForm({ label: work.label, color: work.color, gated: !!work.permissionId, order: String(work.order), successLabel: work.successLabel ?? "", failLabel: work.failLabel ?? "", args: work.args ?? [] });
+        setEditForm({ label: work.label, color: work.color, gated: !!work.permissionId, order: String(work.order), successLabel: work.successLabel ?? "", failLabel: work.failLabel ?? "", args: work.args ?? [], groupId: work.groupId ?? "" });
     };
 
     const handleEdit = async () => {
@@ -206,6 +211,7 @@ export default function WorksPage() {
                 successLabel: editForm.successLabel || null,
                 failLabel: editForm.failLabel || null,
                 args: editForm.args,
+                groupId: editForm.groupId || null,
             });
             toast.success("Work updated");
             setEditId(null);
@@ -339,6 +345,16 @@ export default function WorksPage() {
                             <Input value={createForm.label} onChange={(e) => setCreateForm({ ...createForm, label: e.target.value })} placeholder="e.g. Cleaning" />
                         </div>
                         <div className="space-y-2">
+                            <Label>Group</Label>
+                            <Select value={createForm.groupId || "__none__"} onValueChange={(v) => setCreateForm({ ...createForm, groupId: v === "__none__" ? "" : v })}>
+                                <SelectTrigger className="w-full"><SelectValue placeholder="— none —" /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="__none__">— none —</SelectItem>
+                                    {groups.map((g) => (<SelectItem key={g.id} value={g.id}>{g.label}</SelectItem>))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-2">
                             <Label>Color</Label>
                             <ColorPicker value={createForm.color} onChange={(c) => setCreateForm({ ...createForm, color: c })} />
                         </div>
@@ -383,6 +399,16 @@ export default function WorksPage() {
                         <div className="space-y-2">
                             <Label>Label</Label>
                             <Input value={editForm.label} onChange={(e) => setEditForm({ ...editForm, label: e.target.value })} />
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Group</Label>
+                            <Select value={editForm.groupId || "__none__"} onValueChange={(v) => setEditForm({ ...editForm, groupId: v === "__none__" ? "" : v })}>
+                                <SelectTrigger className="w-full"><SelectValue placeholder="— none —" /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="__none__">— none —</SelectItem>
+                                    {groups.map((g) => (<SelectItem key={g.id} value={g.id}>{g.label}</SelectItem>))}
+                                </SelectContent>
+                            </Select>
                         </div>
                         <div className="space-y-2">
                             <Label>Color</Label>

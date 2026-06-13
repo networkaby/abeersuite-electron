@@ -17,7 +17,7 @@ export default async function AssignmentsPage() {
         company: { select: { name: true, phones: selectPrimaryPhone } },
     };
 
-    const [tickets, doneLogs, works] = await Promise.all([
+    const [tickets, doneLogs, works, groups] = await Promise.all([
         prisma.ticket.findMany({
             where: {
                 ticketStatus: { isTerminal: false },
@@ -54,7 +54,8 @@ export default async function AssignmentsPage() {
                 ticket: { select: { id: true, device: { select: { brand: true, model: true, account: { select: customerPhones } } } } },
             },
         }),
-        prisma.work.findMany({ orderBy: { order: "asc" }, select: { id: true, label: true, color: true, successLabel: true, failLabel: true } }),
+        prisma.work.findMany({ orderBy: { order: "asc" }, select: { id: true, label: true, color: true, successLabel: true, failLabel: true, groupId: true, group: { select: { id: true, label: true, color: true } } } }),
+        prisma.workGroup.findMany({ orderBy: { order: "asc" }, select: { id: true, label: true, color: true } }),
     ]);
 
     const worksById = Object.fromEntries(works.map((w) => [w.id, w]));
@@ -89,6 +90,9 @@ export default async function AssignmentsPage() {
             workId: work?.id ?? "",
             workLabel: work?.label ?? "Work",
             workColor: work?.color ?? "bg-muted text-muted-foreground",
+            groupId: work?.groupId ?? null,
+            groupLabel: work?.group?.label ?? null,
+            groupColor: work?.group?.color ?? null,
             successLabel: work?.successLabel ?? null,
             failLabel: work?.failLabel ?? null,
             status: t.primaryOwner ? "progress" : "todo",
@@ -124,6 +128,9 @@ export default async function AssignmentsPage() {
             workId: work?.id ?? "",
             workLabel: work?.label ?? l.ticketWorker?.label ?? "Work",
             workColor: work?.color ?? "bg-muted text-muted-foreground",
+            groupId: null,
+            groupLabel: null,
+            groupColor: null,
             status: "answered",
             coverLabel: l.ticketWorker?.label ?? "",
             ask: null,
@@ -143,5 +150,5 @@ export default async function AssignmentsPage() {
         };
     });
 
-    return <WorkInboxBoard items={[...openItems, ...finishedItems]} works={works} currentUserId={userId} />;
+    return <WorkInboxBoard items={[...openItems, ...finishedItems]} groups={groups} currentUserId={userId} />;
 }

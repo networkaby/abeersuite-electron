@@ -21,6 +21,9 @@ export interface WorkInboxItem {
     workId: string;
     workLabel: string;
     workColor: string;
+    groupId: string | null;
+    groupLabel: string | null;
+    groupColor: string | null;
     successLabel?: string | null;
     failLabel?: string | null;
     status: "todo" | "progress" | "answered";
@@ -52,10 +55,10 @@ const STATUS_PILL: Record<WorkInboxItem["status"], { label: string; cls: string 
 
 
 export default function WorkInboxBoard({
-    items, works, currentUserId,
+    items, groups, currentUserId,
 }: {
     items: WorkInboxItem[];
-    works: { id: string; label: string; color: string }[];
+    groups: { id: string; label: string; color: string }[];
     currentUserId: number;
 }) {
     const [filter, setFilter] = useState<string>("all");
@@ -70,7 +73,8 @@ export default function WorkInboxBoard({
         : it.snoozed ? false
         : f === "all" ? true
         : f === "mine" ? it.assignee?.id === currentUserId
-        : it.workId === f;
+        : f === "ungrouped" ? !it.groupId
+        : it.groupId === f;
 
     const shown = items.filter((it) => matches(it, filter));
     const count = (f: string) => items.filter((it) => matches(it, f)).length;
@@ -111,7 +115,8 @@ export default function WorkInboxBoard({
             <div className="mb-4 flex flex-wrap gap-2">
                 {chip("all", "All")}
                 {chip("mine", "Mine")}
-                {works.map((w) => chip(w.id, w.label, w.color))}
+                {groups.map((g) => chip(g.id, g.label, g.color))}
+                {chip("ungrouped", "Ungrouped")}
                 {chip("waiting", "Waiting")}
                 {chip("finished", "Finished")}
             </div>

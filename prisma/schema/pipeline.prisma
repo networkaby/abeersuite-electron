@@ -125,11 +125,24 @@ model TicketWorker {
 // A unit of work a status/sub-status represents (calling, parts, qc…). Each
 // gated Work mints a permission ("work:<id>") that gates who can set statuses
 // /sub-statuses carrying it. Generalizes the former WorkerGroup.
+// A WorkGroup categorises Works (e.g. "Calling" groups several calling works). The
+// Work Inbox organises GROUP-wise; a Work belongs to one group (or none).
+model WorkGroup {
+  id        String   @id
+  label     String
+  color     String   @default("bg-gray-100 text-gray-600")
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  works     Work[]
+}
+
 model Work {
   id           String         @id
   label        String
   color        String         @default("bg-gray-100 text-gray-600")
   order        Int            @default(0)
+  groupId      String?
+  group        WorkGroup?     @relation(fields: [groupId], references: [id], onDelete: SetNull)
   // Custom outcome-button labels — the Work owns the VOCABULARY (e.g. Tele Calling →
   // "Reachable" / "Unreachable"); the Worker owns the WIRING (success/failWorkerId).
   // null → fall back to generic "Success" / "Unsuccess" on the completion buttons.

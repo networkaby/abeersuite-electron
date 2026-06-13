@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Settings, GitBranch, Briefcase, Zap } from "lucide-react";
+import { Settings, GitBranch, Briefcase, Zap, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/shared/lib/format/utils";
 
@@ -10,6 +10,7 @@ const WORKFLOW_TABS = [
     { href: "/office/settings/workflow/statuses", label: "Statuses", icon: Settings },
     { href: "/office/settings/workflow/workers", label: "Workers", icon: Settings },
     { href: "/office/settings/workflow/pipelines", label: "Pipelines", icon: GitBranch },
+    { href: "/office/settings/workflow/groups", label: "Groups", icon: Layers },
     { href: "/office/settings/workflow/works", label: "Works", icon: Briefcase },
     { href: "/office/settings/workflow/actions", label: "Actions", icon: Zap },
 ];
