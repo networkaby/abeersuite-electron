@@ -19,7 +19,67 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { X } from "lucide-react";
 import { badgeColor, randomHexColor } from "@/shared/lib/format/entityColor";
+import { TICKET_SOURCES, USER_SOURCE, type WorkArg } from "@/modules/repairing/lib/ticketSources";
+
+// Distinct source groups for the dropdown (Customer / Device / Ticket / Input).
+const SOURCE_GROUPS = [...new Set(TICKET_SOURCES.map((s) => s.group))];
+
+// Editor for a Work's arguments — each row: label + source (a ticket field, or
+// "Ask the user") + kind for user-given. Shared by the create & edit dialogs.
+function ArgsEditor({ args, onChange }: { args: WorkArg[]; onChange: (a: WorkArg[]) => void }) {
+    const add = () => onChange([...args, { key: "", label: "", source: "customer.phone" }]);
+    const upd = (i: number, patch: Partial<WorkArg>) => onChange(args.map((a, idx) => (idx === i ? { ...a, ...patch } : a)));
+    const del = (i: number) => onChange(args.filter((_, idx) => idx !== i));
+    return (
+        <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+                <Label className="text-xs">Arguments <span className="font-normal text-muted-foreground">— inputs this work needs</span></Label>
+                <Button type="button" variant="ghost" size="sm" onClick={add} className="h-6 px-1.5 text-xs text-primary"><Plus size={12} className="mr-0.5" /> Add</Button>
+            </div>
+            {args.length === 0 && <p className="text-xs text-muted-foreground">None. Add an input the work needs (e.g. a number to call, a part to order).</p>}
+            {args.map((a, i) => (
+                <div key={i} className="flex items-center gap-1.5">
+                    <Input value={a.label} onChange={(e) => upd(i, { label: e.target.value })} placeholder="Label" className="h-8 w-32 shrink-0" />
+                    <span className="text-xs text-muted-foreground">←</span>
+                    <Select value={a.source} onValueChange={(v) => upd(i, { source: v })}>
+                        <SelectTrigger className="h-8 flex-1"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                            {SOURCE_GROUPS.map((g) => (
+                                <SelectGroup key={g}>
+                                    <SelectLabel>{g}</SelectLabel>
+                                    {TICKET_SOURCES.filter((s) => s.group === g).map((s) => (<SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>))}
+                                </SelectGroup>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    {a.source === USER_SOURCE && (
+                        <>
+                            <Select value={a.kind ?? "text"} onValueChange={(v) => upd(i, { kind: v as "text" | "number" })}>
+                                <SelectTrigger className="h-8 w-[68px] shrink-0"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="text">Text</SelectItem>
+                                    <SelectItem value="number">Number</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <Select value={a.on ?? "always"} onValueChange={(v) => upd(i, { on: v as "success" | "fail" | "always" })}>
+                                <SelectTrigger className="h-8 w-[112px] shrink-0" title="When to collect this input"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="always">Always</SelectItem>
+                                    <SelectItem value="success">On success</SelectItem>
+                                    <SelectItem value="fail">On unsuccess</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </>
+                    )}
+                    <Button type="button" variant="ghost" size="icon" className="h-8 w-7 shrink-0 text-muted-foreground" onClick={() => del(i)}><X size={14} /></Button>
+                </div>
+            ))}
+        </div>
+    );
+}
 
 // Random (unlimited) hex by default; the picker / hex box / Random button override.
 const randomColor = () => randomHexColor(Math.random());
@@ -58,6 +118,9 @@ interface Work {
     color: string;
     order: number;
     permissionId: string | null;
+    successLabel: string | null;
+    failLabel: string | null;
+    args: WorkArg[] | null;
     statuses: UsingItem[];
     workers: UsingItem[];
 }
@@ -67,7 +130,7 @@ interface Pipeline {
     label: string;
 }
 
-const BLANK = { label: "", color: "bg-gray-100 text-gray-600", gated: false, order: "" };
+const BLANK = { label: "", color: "bg-gray-100 text-gray-600", gated: false, order: "", successLabel: "", failLabel: "", args: [] as WorkArg[] };
 
 export default function WorksPage() {
     const [works, setWorks] = useState<Work[]>([]);
@@ -110,6 +173,9 @@ export default function WorksPage() {
                 color: createForm.color,
                 gated: createForm.gated,
                 order: createForm.order ? Number(createForm.order) : undefined,
+                successLabel: createForm.successLabel || null,
+                failLabel: createForm.failLabel || null,
+                args: createForm.args,
             });
             toast.success("Work created");
             setShowCreate(false);
@@ -125,7 +191,7 @@ export default function WorksPage() {
 
     const openEdit = (work: Work) => {
         setEditId(work.id);
-        setEditForm({ label: work.label, color: work.color, gated: !!work.permissionId, order: String(work.order) });
+        setEditForm({ label: work.label, color: work.color, gated: !!work.permissionId, order: String(work.order), successLabel: work.successLabel ?? "", failLabel: work.failLabel ?? "", args: work.args ?? [] });
     };
 
     const handleEdit = async () => {
@@ -137,6 +203,9 @@ export default function WorksPage() {
                 color: editForm.color,
                 gated: editForm.gated,
                 order: editForm.order ? Number(editForm.order) : undefined,
+                successLabel: editForm.successLabel || null,
+                failLabel: editForm.failLabel || null,
+                args: editForm.args,
             });
             toast.success("Work updated");
             setEditId(null);
@@ -259,7 +328,7 @@ export default function WorksPage() {
 
             {/* Create dialog */}
             <Dialog open={showCreate} onOpenChange={(isOpen) => { if (!isOpen) setShowCreate(false); }}>
-                <DialogContent className="sm:max-w-sm">
+                <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-2xl">
                     <DialogHeader>
                         <DialogTitle>Add Work</DialogTitle>
                         <DialogDescription>The work id is auto-generated from the label.</DialogDescription>
@@ -273,6 +342,18 @@ export default function WorksPage() {
                             <Label>Color</Label>
                             <ColorPicker value={createForm.color} onChange={(c) => setCreateForm({ ...createForm, color: c })} />
                         </div>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
+                                <Label className="text-xs text-green-700">Success button</Label>
+                                <Input value={createForm.successLabel} onChange={(e) => setCreateForm({ ...createForm, successLabel: e.target.value })} placeholder="e.g. Reachable" />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label className="text-xs text-red-700">Unsuccess button</Label>
+                                <Input value={createForm.failLabel} onChange={(e) => setCreateForm({ ...createForm, failLabel: e.target.value })} placeholder="e.g. Unreachable" />
+                            </div>
+                            <p className="col-span-2 text-xs text-muted-foreground">Custom labels for the two outcome buttons. Blank → generic Success / Unsuccess.</p>
+                        </div>
+                        <ArgsEditor args={createForm.args} onChange={(a) => setCreateForm({ ...createForm, args: a })} />
                         <label className="flex items-center gap-2 text-sm">
                             <Checkbox checked={createForm.gated} onCheckedChange={(checked) => setCreateForm({ ...createForm, gated: checked === true })} />
                             Gated (requires a permission to set)
@@ -293,7 +374,7 @@ export default function WorksPage() {
 
             {/* Edit dialog */}
             <Dialog open={!!editId} onOpenChange={(isOpen) => { if (!isOpen) setEditId(null); }}>
-                <DialogContent className="sm:max-w-sm">
+                <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-2xl">
                     <DialogHeader>
                         <DialogTitle>Edit Work</DialogTitle>
                         <DialogDescription>Rename, recolour, or change gating.</DialogDescription>
@@ -307,6 +388,18 @@ export default function WorksPage() {
                             <Label>Color</Label>
                             <ColorPicker value={editForm.color} onChange={(c) => setEditForm({ ...editForm, color: c })} />
                         </div>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
+                                <Label className="text-xs text-green-700">Success button</Label>
+                                <Input value={editForm.successLabel} onChange={(e) => setEditForm({ ...editForm, successLabel: e.target.value })} placeholder="e.g. Reachable" />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label className="text-xs text-red-700">Unsuccess button</Label>
+                                <Input value={editForm.failLabel} onChange={(e) => setEditForm({ ...editForm, failLabel: e.target.value })} placeholder="e.g. Unreachable" />
+                            </div>
+                            <p className="col-span-2 text-xs text-muted-foreground">Custom labels for the two outcome buttons. Blank → generic Success / Unsuccess.</p>
+                        </div>
+                        <ArgsEditor args={editForm.args} onChange={(a) => setEditForm({ ...editForm, args: a })} />
                         <label className="flex items-center gap-2 text-sm">
                             <Checkbox checked={editForm.gated} onCheckedChange={(checked) => setEditForm({ ...editForm, gated: checked === true })} />
                             Gated (requires a permission to set)

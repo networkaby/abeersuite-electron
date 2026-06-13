@@ -5,6 +5,7 @@ import { passesWorkGate } from "@/modules/repairing/lib/workGate";
 import { findEntryWorker } from "@/modules/repairing/lib/entryWorker";
 import { spawnChild, reconcileParentFromChild } from "@/modules/repairing/lib/spawnChild";
 import { runWorkerActions } from "@/modules/repairing/lib/actions";
+import { Prisma } from "@/generated/prisma/client";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
@@ -16,6 +17,8 @@ const workerUpdateSchema = z.object({
     // Set by Success / Unsuccess on the Work Inbox — stamps the outgoing work as
     // "done" with its outcome so it lands in the Finished list.
     outcome: z.enum(["success", "unsuccess"]).optional(),
+    // User-given Work arguments collected at completion → merged into Ticket.context.
+    args: z.record(z.string(), z.string()).optional(),
 });
 
 // ── Hybrid retry schedule helpers ──────────────────────────────────────────────
@@ -74,7 +77,7 @@ export async function PATCH(
         const ticketId = Number(id);
         const { data, error } = await validateRequest(req, workerUpdateSchema);
         if (error) return error;
-        const { workerId, note, visibility, outcome } = data;
+        const { workerId, note, visibility, outcome, args } = data;
 
         const worker = await prisma.ticketWorker.findUnique({
             where: { id: workerId },
@@ -179,11 +182,16 @@ export async function PATCH(
         await prisma.$transaction(async (tx) => {
             // 1. Update ticket (incl. snooze/retry runtime — wakeAt drives the
             //    Work Inbox "Waiting" bucket; retryCount/retryKeyId bound the loop)
+            // User-given work arguments collected at completion → merged into context.
+            const mergedContext = args && Object.keys(args).length
+                ? { ...((ticket.context as Record<string, unknown> | null) ?? {}), ...args }
+                : undefined;
             await tx.ticket.update({
                 where: { id: ticketId },
                 data: {
                     workerId: newWorkerId,
                     status: newMainStatus,
+                    ...(mergedContext && { context: mergedContext as Prisma.InputJsonValue }),
                     wakeAt,
                     retryCount,
                     retryKeyId,

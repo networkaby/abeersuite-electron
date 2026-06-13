@@ -5,12 +5,24 @@ import { z } from "zod";
 import { validateRequest, generateNextOpaqueId } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { Prisma } from "@/generated/prisma/client";
+
+const argSchema = z.array(z.object({
+    key: z.string().trim().optional(),
+    label: z.string().trim().min(1),
+    source: z.string().trim().min(1),
+    kind: z.enum(["text", "number"]).optional(),
+    on: z.enum(["success", "fail", "always"]).optional(),
+})).optional();
 
 const createSchema = z.object({
     label: z.string().trim().min(1, "Label is required"),
     color: z.string().trim().optional(),
     order: z.coerce.number().int().nonnegative().optional(),
     gated: z.boolean().optional(),
+    successLabel: z.string().trim().optional().nullable(),
+    failLabel: z.string().trim().optional().nullable(),
+    args: argSchema,
 });
 
 // A gated Work mints/links a `work:<id>` permission so it shows up in the roles
@@ -50,14 +62,14 @@ export async function POST(req: Request) {
     try {
         const { data, error } = await validateRequest(req, createSchema);
         if (error) return error;
-        const { label, color, order, gated } = data;
+        const { label, color, order, gated, successLabel, failLabel, args } = data;
         // Opaque, hidden id (W1, W2, …) like statuses (S#) / workers (SS#),
         // so the id never encodes the label and renames stay comfortable.
         const { id, n } = await generateNextOpaqueId(prisma.work, "W");
         const maxOrder = order ?? n;
         const permissionId = gated ? await mintWorkPermission(id, label) : null;
         const work = await prisma.work.create({
-            data: { id, label, color: color ?? "bg-gray-100 text-gray-600", order: maxOrder, permissionId },
+            data: { id, label, color: color ?? "bg-gray-100 text-gray-600", order: maxOrder, permissionId, successLabel: successLabel || null, failLabel: failLabel || null, args: (args ?? []) as unknown as Prisma.InputJsonValue },
         });
         return NextResponse.json(work, { status: 201 });
     } catch (e) {

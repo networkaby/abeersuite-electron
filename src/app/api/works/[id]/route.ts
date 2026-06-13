@@ -5,12 +5,22 @@ import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { Prisma } from "@/generated/prisma/client";
 
 const patchSchema = z.object({
     label: z.string().trim().min(1).optional(),
     color: z.string().trim().optional(),
     order: z.coerce.number().int().nonnegative().optional(),
     gated: z.boolean().optional(),
+    successLabel: z.string().trim().optional().nullable(),
+    failLabel: z.string().trim().optional().nullable(),
+    args: z.array(z.object({
+        key: z.string().trim().optional(),
+        label: z.string().trim().min(1),
+        source: z.string().trim().min(1),
+        kind: z.enum(["text", "number"]).optional(),
+        on: z.enum(["success", "fail", "always"]).optional(),
+    })).optional(),
 });
 
 async function mintWorkPermission(id: string, label: string): Promise<string> {
@@ -52,6 +62,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 ...(body.label !== undefined && { label: body.label }),
                 ...(body.color !== undefined && { color: body.color }),
                 ...(body.order !== undefined && { order: body.order }),
+                ...("successLabel" in body && { successLabel: body.successLabel || null }),
+                ...("failLabel" in body && { failLabel: body.failLabel || null }),
+                ...("args" in body && { args: (body.args ?? []) as unknown as Prisma.InputJsonValue }),
                 permissionId,
             },
         });

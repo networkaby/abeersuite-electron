@@ -499,14 +499,14 @@ const PIPELINES: PipelineSeed[] = [
 // state-like works (escalated / ready / no_fix) stay ungated (any staff).
 // Opaque ids (W1…W7) so the id never encodes the label — renames stay safe.
 const WORKS = [
-    { id: "W1", label: "Tele Calling", order: 1, color: "bg-blue-100 text-blue-600", gated: true },
-    { id: "W2", label: "Repairing", order: 2, color: "bg-green-100 text-green-700", gated: false },
-    { id: "W3", label: "Admin Approval", order: 3, color: "bg-orange-100 text-orange-600", gated: false },
-    { id: "W4", label: "Order Parts", order: 4, color: "bg-purple-100 text-purple-600", gated: false },
-    { id: "W5", label: "Waiting & Follow Up", order: 5, color: "bg-teal-100 text-teal-600", gated: false },
-    { id: "W6", label: "Escalated To EC", order: 6, color: "bg-red-100 text-red-600", gated: false },
-    { id: "W7", label: "Incoming Courier", order: 7, color: "bg-orange-100 text-orange-600", gated: false },
-    { id: "W8", label: "Order", order: 8, color: "bg-orange-100 text-orange-600", gated: false },
+    { id: "W1", label: "Tele Calling", order: 1, color: "bg-blue-100 text-blue-600", gated: true, successLabel: "Reachable", failLabel: "Unreachable", args: [{ key: "number", label: "Call number", source: "customer.phone" }, { key: "reason", label: "Reason", source: "user", kind: "text", on: "fail" }] },
+    { id: "W2", label: "Repairing", order: 2, color: "bg-green-100 text-green-700", gated: false, successLabel: "Fixed", failLabel: "Can't fix", args: [] },
+    { id: "W3", label: "Admin Approval", order: 3, color: "bg-orange-100 text-orange-600", gated: false, successLabel: "Approved", failLabel: "Rejected", args: [] },
+    { id: "W4", label: "Order Parts", order: 4, color: "bg-purple-100 text-purple-600", gated: false, successLabel: "Ordered", failLabel: "Unavailable", args: [{ key: "part", label: "Part needed", source: "user", kind: "text" }] },
+    { id: "W5", label: "Waiting & Follow Up", order: 5, color: "bg-teal-100 text-teal-600", gated: false, successLabel: null, failLabel: null, args: [] },
+    { id: "W6", label: "Escalated To EC", order: 6, color: "bg-red-100 text-red-600", gated: false, successLabel: null, failLabel: null, args: [] },
+    { id: "W7", label: "Incoming Courier", order: 7, color: "bg-orange-100 text-orange-600", gated: false, successLabel: "Received", failLabel: "Lost", args: [{ key: "tracking", label: "Tracking #", source: "user", kind: "text", on: "success" }, { key: "lost_reason", label: "Lost reason", source: "user", kind: "text", on: "fail" }] },
+    { id: "W8", label: "Order", order: 8, color: "bg-orange-100 text-orange-600", gated: false, successLabel: null, failLabel: null, args: [] },
 ] as const;
 
 type WorkerSeed = {
@@ -861,8 +861,8 @@ async function main() {
         const color = seedColor(w.color);
         await prisma.work.upsert({
             where:  { id: w.id },
-            update: { label: w.label, color, order: w.order, permissionId },
-            create: { id: w.id, label: w.label, color, order: w.order, permissionId },
+            update: { label: w.label, color, order: w.order, permissionId, successLabel: w.successLabel, failLabel: w.failLabel, args: w.args as unknown as Prisma.InputJsonValue },
+            create: { id: w.id, label: w.label, color, order: w.order, permissionId, successLabel: w.successLabel, failLabel: w.failLabel, args: w.args as unknown as Prisma.InputJsonValue },
         });
     }
     for (const ss of WORKERS_SEED) {

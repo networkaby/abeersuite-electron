@@ -26,6 +26,7 @@ import TicketOwnershipPanel from "@/modules/repairing/components/TicketOwnership
 import PipelineTransferModal from "@/modules/repairing/components/PipelineTransferModal";
 import TicketInvoicesPanel from "@/modules/repairing/components/TicketInvoicesPanel";
 import WorkActions from "@/modules/repairing/components/WorkActions";
+import { resolveTicketSource, type WorkArg } from "@/modules/repairing/lib/ticketSources";
 import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,7 +37,7 @@ interface Ticket {
     workerId?: string;
     pipelineId?: string | null;
     pipeline?: { id: string; label: string; color: string } | null;
-    ticketWorker?: { id: string; label: string; color: string; actionLabel?: string | null; work?: { label: string; color: string } | null; successWorker?: { id: string; label: string } | null; failWorker?: { id: string; label: string } | null } | null;
+    ticketWorker?: { id: string; label: string; color: string; actionLabel?: string | null; work?: { label: string; color: string; successLabel?: string | null; failLabel?: string | null; args?: WorkArg[] | null } | null; successWorker?: { id: string; label: string } | null; failWorker?: { id: string; label: string } | null } | null;
     priority: string;
     notes?: string;
     accessInfo?: string;
@@ -463,10 +464,24 @@ export default function TicketDetailPage() {
                                 {ticket.ticketWorker.actionLabel && (
                                     <p className="text-xs font-medium text-primary">→ {ticket.ticketWorker.actionLabel}</p>
                                 )}
+                                {/* Bound arguments — resolved live from the ticket, shown read-only. */}
+                                {(ticket.ticketWorker.work.args ?? []).some((a) => a.source !== "user") && (
+                                    <div className="flex flex-wrap gap-2">
+                                        {(ticket.ticketWorker.work.args ?? []).filter((a) => a.source !== "user").map((a) => (
+                                            <span key={a.key || a.label} className="rounded-md border border-border bg-muted/40 px-2 py-1 text-xs">
+                                                <span className="text-muted-foreground">{a.label}: </span>
+                                                <span className="font-medium text-foreground">{resolveTicketSource(a.source, ticket) ?? "—"}</span>
+                                            </span>
+                                        ))}
+                                    </div>
+                                )}
                                 <div className="flex flex-wrap gap-2">
                                     <WorkActions
                                         ticketId={ticket.id}
                                         workLabel={ticket.ticketWorker.work.label}
+                                        successLabel={ticket.ticketWorker.work.successLabel}
+                                        failLabel={ticket.ticketWorker.work.failLabel}
+                                        args={ticket.ticketWorker.work.args ?? []}
                                         successTarget={ticket.ticketWorker.successWorker ?? null}
                                         failTarget={ticket.ticketWorker.failWorker ?? null}
                                         isOwned={!!ticket.primaryOwner}

@@ -130,6 +130,16 @@ model Work {
   label        String
   color        String         @default("bg-gray-100 text-gray-600")
   order        Int            @default(0)
+  // Custom outcome-button labels — the Work owns the VOCABULARY (e.g. Tele Calling →
+  // "Reachable" / "Unreachable"); the Worker owns the WIRING (success/failWorkerId).
+  // null → fall back to generic "Success" / "Unsuccess" on the completion buttons.
+  successLabel String?
+  failLabel    String?
+  // Arguments the work needs — [{ key, label, source, kind }]. `source` is either a
+  // ticket-data path (e.g. "customer.phone", resolved LIVE & shown read-only) or
+  // "user" (collected from the operator at completion → saved into Ticket.context).
+  // See src/modules/repairing/lib/ticketSources.ts. [] = no arguments.
+  args         Json           @default("[]")
   permissionId String?
   permission   Permission?    @relation(fields: [permissionId], references: [id])
   statuses     TicketStatus[]

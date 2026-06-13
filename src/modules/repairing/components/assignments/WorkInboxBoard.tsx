@@ -21,6 +21,8 @@ export interface WorkInboxItem {
     workId: string;
     workLabel: string;
     workColor: string;
+    successLabel?: string | null;
+    failLabel?: string | null;
     status: "todo" | "progress" | "answered";
     coverLabel: string;
     ask: string | null;
@@ -189,6 +191,8 @@ export default function WorkInboxBoard({
                                         <WorkActions
                                             ticketId={it.ticketId}
                                             workLabel={it.workLabel}
+                                            successLabel={it.successLabel}
+                                            failLabel={it.failLabel}
                                             successTarget={it.successTarget}
                                             failTarget={it.failTarget}
                                             retryScheduled={it.retryScheduled}

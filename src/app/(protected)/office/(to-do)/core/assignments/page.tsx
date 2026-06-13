@@ -54,7 +54,7 @@ export default async function AssignmentsPage() {
                 ticket: { select: { id: true, device: { select: { brand: true, model: true, account: { select: customerPhones } } } } },
             },
         }),
-        prisma.work.findMany({ orderBy: { order: "asc" }, select: { id: true, label: true, color: true } }),
+        prisma.work.findMany({ orderBy: { order: "asc" }, select: { id: true, label: true, color: true, successLabel: true, failLabel: true } }),
     ]);
 
     const worksById = Object.fromEntries(works.map((w) => [w.id, w]));
@@ -89,6 +89,8 @@ export default async function AssignmentsPage() {
             workId: work?.id ?? "",
             workLabel: work?.label ?? "Work",
             workColor: work?.color ?? "bg-muted text-muted-foreground",
+            successLabel: work?.successLabel ?? null,
+            failLabel: work?.failLabel ?? null,
             status: t.primaryOwner ? "progress" : "todo",
             coverLabel: t.ticketWorker?.label ?? "",
             ask: t.ticketWorker?.actionLabel ?? null,
