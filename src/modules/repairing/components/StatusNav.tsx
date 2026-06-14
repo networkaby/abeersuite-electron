@@ -9,12 +9,14 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 
-/** A worker hand-off — stays in the current stage, routes the work elsewhere. */
-interface SubTarget { id: string; label: string; work: { label: string; color: string } | null }
+/** A worker hand-off — stays in the current stage, routes the work elsewhere.
+ *  skipNoteOnEntry hides the note popup (friction-free move); entryQuestion is the
+ *  guidance shown in that popup (the answer goes in the private/public note). */
+interface SubTarget { id: string; label: string; work: { label: string; color: string } | null; skipNoteOnEntry?: boolean; entryQuestion?: string | null }
 /** A real stage change. `isTerminal` = a close-out (Closed / Cancelled). */
 interface StatusTarget { id: string; label: string; color?: string; isTerminal?: boolean }
 type Pending =
-    | { dir: "next"; kind: "sub" | "status"; id: string; label: string }
+    | { dir: "next"; kind: "sub" | "status"; id: string; label: string; entryQuestion?: string | null }
     | { dir: "back"; statusId: string; workerId: string | null; label: string };
 
 interface Props {
@@ -48,7 +50,7 @@ export default function StatusNav({
         if (workerId) fwd.set("fromWorkerId", workerId); else fwd.set("entryOnly", "true");
         try {
             const r = await axios.get(`/api/workers/next?${fwd}`);
-            setNextSubs((r.data as SubTarget[]).map((s) => ({ id: s.id, label: s.label, work: s.work ?? null })));
+            setNextSubs((r.data as SubTarget[]).map((s) => ({ id: s.id, label: s.label, work: s.work ?? null, skipNoteOnEntry: !!s.skipNoteOnEntry, entryQuestion: s.entryQuestion ?? null })));
         } catch { setNextSubs([]); }
     }, [statusId, workerId, isWarranty]);
 
@@ -116,11 +118,30 @@ export default function StatusNav({
         else commitStatus(t.id, t.label);
     };
 
+    // Hand-off move. Frictionless when the target opts out of the note popup
+    // (skipNoteOnEntry); otherwise open the dialog so the operator can write a note,
+    // with the target's entryQuestion shown as guidance. The worker's transition note
+    // (if any) auto-posts on the server either way.
+    const commitSub = async (id: string, label: string) => {
+        setBusy(true);
+        try {
+            await axios.patch(`/api/tickets/${ticketId}/worker`, { workerId: id, visibility: "INTERNAL" });
+            toast.success(`Moved to ${label}`);
+            onChanged();
+        } catch (err: unknown) {
+            toast.error((err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Failed to move");
+        } finally { setBusy(false); }
+    };
+    const handOff = (t: SubTarget) => {
+        if (!t.skipNoteOnEntry) setPending({ dir: "next", kind: "sub", id: t.id, label: t.label, entryQuestion: t.entryQuestion ?? null });
+        else commitSub(t.id, t.label);
+    };
+
     // Hand-off: stays in the stage, routes the work to another team (the Work badge).
     const subBtn = (t: SubTarget) => (
         <Button
             key={`sub-${t.id}`}
-            onClick={() => setPending({ dir: "next", kind: "sub", id: t.id, label: t.label })}
+            onClick={() => handOff(t)}
             size="sm" variant="outline"
             className="w-full justify-start gap-2"
         >
@@ -233,6 +254,19 @@ export default function StatusNav({
                                         <p className="text-sm font-semibold text-foreground">{leavePrompt}</p>
                                         <p className="text-[11px] leading-tight text-muted-foreground">
                                             Answer in the notes below before moving.
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+                            {/* The target worker's entry question — guidance for what to write;
+                                the answer goes in the private/public note below. */}
+                            {pending.dir === "next" && pending.kind === "sub" && pending.entryQuestion && (
+                                <div className="flex gap-2.5 rounded-md border border-primary/30 bg-primary/5 px-3 py-2.5">
+                                    <HelpCircle size={16} className="mt-0.5 shrink-0 text-primary" />
+                                    <div className="space-y-0.5">
+                                        <p className="text-sm font-semibold text-foreground">{pending.entryQuestion}</p>
+                                        <p className="text-[11px] leading-tight text-muted-foreground">
+                                            Answer in the note below.
                                         </p>
                                     </div>
                                 </div>

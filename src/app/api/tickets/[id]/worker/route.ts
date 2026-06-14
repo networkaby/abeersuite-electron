@@ -255,6 +255,22 @@ export async function PATCH(
                 },
             });
 
+            // 3c. Auto transition note — the worker just ENTERED carries a fixed PUBLIC
+            //     message (TicketWorker.transitionNote) posted to the timeline with no
+            //     popup. Skipped on a self-loop (retry/snooze re-entry on the same worker).
+            if (newWorkerId && newWorkerId !== prevWorkerId) {
+                const landed = await tx.ticketWorker.findUnique({
+                    where: { id: newWorkerId },
+                    select: { transitionNote: true },
+                });
+                const tn = landed?.transitionNote?.trim();
+                if (tn) {
+                    await tx.ticketLog.create({
+                        data: { ticketId, status: newMainStatus, workerId: newWorkerId, note: tn, visibility: "PUBLIC", userId },
+                    });
+                }
+            }
+
             // 3b. Completion stamp — marks the OUTGOING work (prevWorkerId) done with
             //     its outcome. The Work Inbox "Finished" list reads these (joins the
             //     worker' Work, parses Success/Unsuccess from the note).

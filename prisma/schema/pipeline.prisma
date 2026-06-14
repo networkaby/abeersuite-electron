@@ -84,6 +84,17 @@ model TicketWorker {
   triggerMap        Json                @default("{}")
   actionLabel       String?
   autoRevertOnClear Boolean             @default(true)
+  // ── Entry-time popup (on worker change / hand-off INTO this worker) ──────────
+  // transitionNote: a fixed note auto-posted to the timeline (PUBLIC, customer-
+  //   visible) when a ticket ENTERS this worker — no popup. Blank = none.
+  // skipNoteOnEntry: false → the move shows the private/public note popup so the
+  //   operator can write something; true → friction-free (transition note still posts).
+  // entryQuestion: guidance shown at the top of that popup; the answer goes in the note.
+  // entryArgs: dormant (structured ask-on-entry, kept to match the existing column).
+  transitionNote    String?
+  skipNoteOnEntry   Boolean             @default(false)
+  entryQuestion     String?
+  entryArgs         Json                @default("[]")
   warrantyScope     String              @default("any")
   successWorkerId   String?
   successWorker     TicketWorker?       @relation("WorkerSuccess", fields: [successWorkerId], references: [id], onDelete: SetNull)

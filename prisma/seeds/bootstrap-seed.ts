@@ -528,6 +528,10 @@ type WorkerSeed = {
 
     triggerMap?: Record<string, string>;
     warrantyScope?: string; actionLabel?: string;
+    // Entry-time popup (on worker change): auto transition note + optional note popup.
+    transitionNote?: string;
+    skipNoteOnEntry?: boolean;
+    entryQuestion?: string;
     // Hybrid retry schedule: a "waiting" worker re-arms its work on a front-loaded
     // schedule (1st attempt immediate, then densest phase first). After the last
     // phase's last attempt it routes to failWorkerId (the unsuccess route = give-up).
@@ -884,7 +888,7 @@ async function main() {
         });
     }
     for (const ss of WORKERS_SEED) {
-        const retry = { retrySchedule: ss.retrySchedule ?? [], publicLabel: ss.publicLabel ?? null, spawnPipelineId: ss.spawnPipelineId ?? null, parentSignal: ss.parentSignal ?? null, actions: (ss.actions ?? []) as unknown as Prisma.InputJsonValue };
+        const retry = { retrySchedule: ss.retrySchedule ?? [], publicLabel: ss.publicLabel ?? null, spawnPipelineId: ss.spawnPipelineId ?? null, parentSignal: ss.parentSignal ?? null, actions: (ss.actions ?? []) as unknown as Prisma.InputJsonValue, transitionNote: ss.transitionNote ?? null, skipNoteOnEntry: ss.skipNoteOnEntry ?? false, entryQuestion: ss.entryQuestion ?? null };
         const color = seedColor(ss.color);
         await prisma.ticketWorker.upsert({
             where:  { id: ss.id },

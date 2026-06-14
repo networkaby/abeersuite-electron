@@ -76,6 +76,9 @@ interface Worker {
     successWorkerId?: string | null;
     failWorkerId?: string | null;
     autoRevertOnClear: boolean;
+    transitionNote?: string | null;
+    skipNoteOnEntry?: boolean;
+    entryQuestion?: string | null;
     retrySchedule?: { unit: string; every: number; times: number }[] | null;
     spawnPipelineId?: string | null;
     parentSignal?: string | null;
@@ -108,6 +111,9 @@ type FormValues = {
     successWorkerId: string;
     failWorkerId: string;
     autoRevertOnClear: boolean;
+    transitionNote: string;
+    skipNoteOnEntry: boolean;
+    entryQuestion: string;
     retryRows: RetryRows;
     spawnPipelineId: string;
     parentSignal: string;
@@ -127,6 +133,9 @@ const BLANK_FORM: FormValues = {
     successWorkerId: "",
     failWorkerId: "",
     autoRevertOnClear: true,
+    transitionNote: "",
+    skipNoteOnEntry: false,
+    entryQuestion: "",
     retryRows: BLANK_RETRY_ROWS(),
     spawnPipelineId: "",
     parentSignal: "",
@@ -331,6 +340,38 @@ function WorkerFormModal({
                         <p className="text-xs text-muted-foreground">
                             Shown on work dashboards as the task description.
                         </p>
+                    </div>
+
+                    {/* On worker change (hand-off INTO this worker): an auto transition note +
+                        an optional private/public note popup with a guidance question. */}
+                    <div className="space-y-3 rounded-md border border-border bg-muted/20 p-3">
+                        <div className="space-y-1.5">
+                            <Label className="text-xs">Transition note <span className="font-normal text-muted-foreground">— auto-posted to the timeline (customer-visible) when a ticket enters this worker; no popup. Blank = none.</span></Label>
+                            <Input
+                                value={form.transitionNote}
+                                onChange={(e) => setForm({ ...form, transitionNote: e.target.value })}
+                                placeholder="e.g. Your device is now being diagnosed."
+                            />
+                        </div>
+                        <label className="flex items-center gap-2 text-sm">
+                            <Checkbox
+                                checked={!form.skipNoteOnEntry}
+                                onCheckedChange={(checked) => setForm({ ...form, skipNoteOnEntry: checked !== true })}
+                            />
+                            Show note popup on entry <span className="text-xs text-muted-foreground">(let the operator add a note)</span>
+                        </label>
+                        <p className="-mt-1 text-xs text-muted-foreground">
+                            On → handing a ticket into this worker opens the private/public note popup so the operator can write something.
+                            Off → friction-free move (the transition note above still posts automatically).
+                        </p>
+                        <div className="space-y-1.5">
+                            <Label className="text-xs">Popup question <span className="font-normal text-muted-foreground">— guidance shown in that popup; the answer goes in the private/public note (no separate box)</span></Label>
+                            <Input
+                                value={form.entryQuestion}
+                                onChange={(e) => setForm({ ...form, entryQuestion: e.target.value })}
+                                placeholder="e.g. What alternative number did the customer give?"
+                            />
+                        </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
@@ -623,6 +664,9 @@ export default function WorkersPage() {
         successWorkerId: form.successWorkerId || null,
         failWorkerId: form.failWorkerId || null,
         autoRevertOnClear: form.autoRevertOnClear,
+        transitionNote: form.transitionNote.trim() || null,
+        skipNoteOnEntry: form.skipNoteOnEntry,
+        entryQuestion: form.entryQuestion.trim() || null,
         retrySchedule: rowsToSchedule(form.retryRows),
         spawnPipelineId: form.spawnPipelineId || null,
         parentSignal: form.parentSignal || null,
@@ -660,6 +704,9 @@ export default function WorkersPage() {
             successWorkerId: worker.successWorkerId ?? "",
             failWorkerId: worker.failWorkerId ?? "",
             autoRevertOnClear: worker.autoRevertOnClear ?? true,
+            transitionNote: worker.transitionNote ?? "",
+            skipNoteOnEntry: worker.skipNoteOnEntry ?? false,
+            entryQuestion: worker.entryQuestion ?? "",
             retryRows: scheduleToRows(worker.retrySchedule),
             spawnPipelineId: worker.spawnPipelineId ?? "",
             parentSignal: worker.parentSignal ?? "",
@@ -684,6 +731,9 @@ export default function WorkersPage() {
             successWorkerId: s.successWorkerId ?? "",
             failWorkerId: s.failWorkerId ?? "",
             autoRevertOnClear: s.autoRevertOnClear ?? true,
+            transitionNote: s.transitionNote ?? "",
+            skipNoteOnEntry: s.skipNoteOnEntry ?? false,
+            entryQuestion: s.entryQuestion ?? "",
             retryRows: scheduleToRows(s.retrySchedule),
             spawnPipelineId: s.spawnPipelineId ?? "",
             parentSignal: s.parentSignal ?? "",
