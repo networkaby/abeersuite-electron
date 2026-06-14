@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
 import { timeAgo, timeUntil } from "@/shared/lib/format/timeAgo";
 import WorkInboxBoard, { type WorkInboxItem } from "@/modules/repairing/components/assignments/WorkInboxBoard";
+import { parseArgs, isUserArg, resolveTicketSource, type TicketLike } from "@/modules/repairing/lib/ticketSources";
 
 // The Work Inbox: every active ticket sitting in a work-bearing worker, as one
 // mixed list (longest-waiting first). New tickets enter their status' entry
@@ -54,7 +55,7 @@ export default async function AssignmentsPage() {
                 ticket: { select: { id: true, device: { select: { brand: true, model: true, account: { select: customerPhones } } } } },
             },
         }),
-        prisma.work.findMany({ orderBy: { order: "asc" }, select: { id: true, label: true, color: true, successLabel: true, failLabel: true, groupId: true, group: { select: { id: true, label: true, color: true } } } }),
+        prisma.work.findMany({ orderBy: { order: "asc" }, select: { id: true, label: true, color: true, successLabel: true, failLabel: true, args: true, groupId: true, group: { select: { id: true, label: true, color: true } } } }),
         prisma.workGroup.findMany({ orderBy: { order: "asc" }, select: { id: true, label: true, color: true } }),
     ]);
 
@@ -81,6 +82,14 @@ export default async function AssignmentsPage() {
         // to a self-target when no explicit ✗→ route is set.
         const scheduled = Array.isArray(t.ticketWorker?.retrySchedule) && (t.ticketWorker.retrySchedule as unknown[]).length > 0;
         const selfTarget = t.ticketWorker ? { id: t.ticketWorker.id, label: t.ticketWorker.label } : null;
+        // Worker context = the work's SUPPLY args resolved against the ticket — incl.
+        // outcome variables earlier workers produced (context.<key>). Shown prominently.
+        const ticketLike: TicketLike = { id: t.id, context: t.context as Record<string, unknown> | null, device: t.device };
+        const context = work
+            ? parseArgs(work.args).filter((a) => !isUserArg(a))
+                .map((a) => ({ label: a.label, value: resolveTicketSource(a.source, ticketLike) }))
+                .filter((c): c is { label: string; value: string } => !!c.value)
+            : [];
         return {
             id: String(t.id),
             ticketId: t.id,
@@ -98,6 +107,7 @@ export default async function AssignmentsPage() {
             status: t.primaryOwner ? "progress" : "todo",
             coverLabel: t.ticketWorker?.label ?? "",
             ask: t.ticketWorker?.actionLabel ?? null,
+            context,
             problem: t.device.problem?.trim() || null,
             lastNote: noteLog?.note ?? null,
             lastNoteBy: noteLog?.changedBy?.name ?? null,
@@ -134,6 +144,7 @@ export default async function AssignmentsPage() {
             status: "answered",
             coverLabel: l.ticketWorker?.label ?? "",
             ask: null,
+            context: [],
             problem: null,
             lastNote: null,
             lastNoteBy: null,

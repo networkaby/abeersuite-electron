@@ -26,7 +26,9 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { COLOR_OPTIONS, WARRANTY_SCOPE_OPTIONS } from "@/utils/constants";
+import { WARRANTY_SCOPE_OPTIONS } from "@/utils/constants";
+import { ColorPicker, randomColor } from "@/shared/components/ColorPicker";
+import { badgeColor } from "@/shared/lib/format/entityColor";
 import {
     Table,
     TableBody,
@@ -60,10 +62,32 @@ interface TicketStatus {
     workId?: string | null;
     actionLabel: string | null;
     warrantyScope: string;
+    leavePrompt: string | null;
+    announceOnEntry: boolean;
+    etaText: string | null;
     pipelineId: string | null;
     fromTransitions: { toStatusId: string; to: { label: string } }[];
     _count: { tickets: number };
 }
+
+interface StatusForm {
+    label: string;
+    color: string;
+    order: number;
+    isTerminal: boolean;
+    isEntryPoint: boolean;
+    workId: string;
+    warrantyScope: string;
+    actionLabel: string;
+    leavePrompt: string;
+    announceOnEntry: boolean;
+    etaText: string;
+}
+
+const EMPTY_FORM: StatusForm = {
+    label: "", color: "bg-gray-100 text-gray-600", order: 0, isTerminal: false, isEntryPoint: false,
+    workId: "", warrantyScope: "any", actionLabel: "", leavePrompt: "", announceOnEntry: false, etaText: "",
+};
 
 export default function StatusesPage() {
     const [pipelines, setPipelines] = useState<Pipeline[]>([]);
@@ -72,22 +96,14 @@ export default function StatusesPage() {
     const [works, setWorks] = useState<Work[]>([]);
     const [loading, setLoading] = useState(true);
 
-    const [editingId, setEditingId] = useState<string | null>(null);
-    const [editValues, setEditValues] = useState<{ label: string; color: string; order: number; isTerminal: boolean; isEntryPoint: boolean }>({
-        label: "", color: "", order: 0, isTerminal: false, isEntryPoint: false,
-    });
+    // One full "Edit status" dialog covers basics, flags, work (optional), and prompts.
+    const [editModalId, setEditModalId] = useState<string | null>(null);
+    const [editForm, setEditForm] = useState<StatusForm>(EMPTY_FORM);
+    const [savingEdit, setSavingEdit] = useState(false);
 
     const [transitionModalId, setTransitionModalId] = useState<string | null>(null);
     const [selectedToIds, setSelectedToIds] = useState<string[]>([]);
     const [savingTransitions, setSavingTransitions] = useState(false);
-
-    const [workModalId, setWorkModalId] = useState<string | null>(null);
-    const [workForm, setWorkForm] = useState<{
-        workId: string;
-        actionLabel: string;
-        warrantyScope: string;
-    }>({ workId: "", actionLabel: "", warrantyScope: "any" });
-    const [savingWork, setSavingWork] = useState(false);
 
     const [addingNew, setAddingNew] = useState(false);
     const [newStatus, setNewStatus] = useState({ label: "", color: "bg-gray-100 text-gray-600", isTerminal: false });
@@ -116,31 +132,55 @@ export default function StatusesPage() {
 
     const switchPipeline = (id: string) => {
         setActivePipelineId(id);
-        setEditingId(null);
+        setEditModalId(null);
         setAddingNew(false);
     };
 
-    const startEdit = (status: TicketStatus) => {
-        setEditingId(status.id);
-        setEditValues({
+    const openEdit = (status: TicketStatus) => {
+        setEditModalId(status.id);
+        setEditForm({
             label: status.label,
             color: status.color,
             order: status.order,
             isTerminal: status.isTerminal,
             isEntryPoint: status.isEntryPoint,
+            workId: status.workId ?? "",
+            warrantyScope: status.warrantyScope ?? "any",
+            actionLabel: status.actionLabel ?? "",
+            leavePrompt: status.leavePrompt ?? "",
+            announceOnEntry: status.announceOnEntry ?? false,
+            etaText: status.etaText ?? "",
         });
     };
 
-    const cancelEdit = () => setEditingId(null);
-
-    const saveEdit = async (id: string) => {
+    const saveEdit = async () => {
+        if (!editModalId) return;
+        if (!editForm.label.trim()) {
+            toast.error("Label is required");
+            return;
+        }
+        setSavingEdit(true);
         try {
-            await axios.patch(`/api/ticket-statuses/${id}`, editValues);
+            await axios.patch(`/api/ticket-statuses/${editModalId}`, {
+                label: editForm.label.trim(),
+                color: editForm.color,
+                order: Number(editForm.order),
+                isTerminal: editForm.isTerminal,
+                isEntryPoint: editForm.isEntryPoint,
+                workId: editForm.workId || null,
+                warrantyScope: editForm.warrantyScope,
+                actionLabel: editForm.actionLabel.trim() || null,
+                leavePrompt: editForm.leavePrompt.trim() || null,
+                announceOnEntry: editForm.announceOnEntry,
+                etaText: editForm.etaText.trim() || null,
+            });
             toast.success("Status updated");
-            setEditingId(null);
+            setEditModalId(null);
             await fetchData(activePipelineId);
         } catch {
             toast.error("Failed to update status");
+        } finally {
+            setSavingEdit(false);
         }
     };
 
@@ -182,34 +222,6 @@ export default function StatusesPage() {
         }
     };
 
-    const openWork = (status: TicketStatus) => {
-        setWorkModalId(status.id);
-        setWorkForm({
-            workId: status.workId ?? "",
-            actionLabel: status.actionLabel ?? "",
-            warrantyScope: status.warrantyScope ?? "any",
-        });
-    };
-
-    const saveWork = async () => {
-        if (!workModalId) return;
-        setSavingWork(true);
-        try {
-            await axios.patch(`/api/ticket-statuses/${workModalId}`, {
-                workId: workForm.workId || null,
-                actionLabel: workForm.actionLabel || null,
-                warrantyScope: workForm.warrantyScope,
-            });
-            toast.success("Work settings saved");
-            setWorkModalId(null);
-            await fetchData(activePipelineId);
-        } catch {
-            toast.error("Failed to save work settings");
-        } finally {
-            setSavingWork(false);
-        }
-    };
-
     const addStatus = async () => {
         if (!newStatus.label.trim()) {
             toast.error("Label is required");
@@ -234,9 +246,9 @@ export default function StatusesPage() {
     };
 
     const transitionStatus = transitionModalId ? statuses.find((status) => status.id === transitionModalId) : null;
-    const workStatus = workModalId ? statuses.find((status) => status.id === workModalId) : null;
+    const editStatus = editModalId ? statuses.find((status) => status.id === editModalId) : null;
     const activePipeline = pipelines.find((pipeline) => pipeline.id === activePipelineId);
-    const selectedWork = workForm.workId ? worksById[workForm.workId] : undefined;
+    const selectedWork = editForm.workId ? worksById[editForm.workId] : undefined;
 
     return (
         <ScrollArea className="h-full" type="always">
@@ -248,7 +260,7 @@ export default function StatusesPage() {
                         Manage status labels, colors, transitions, and the work each stage represents.
                     </p>
                 </div>
-                <Button type="button" onClick={() => setAddingNew(true)}>
+                <Button type="button" onClick={() => { setNewStatus({ label: "", color: randomColor(), isTerminal: false }); setAddingNew(true); }}>
                     <Plus size={16} /> Add Status
                 </Button>
             </div>
@@ -311,145 +323,69 @@ export default function StatusesPage() {
                                 {statuses.map((status) => (
                                     <TableRow key={status.id}>
                                         <TableCell className="font-mono text-xs text-muted-foreground">{status.id}</TableCell>
-
-                                        {editingId === status.id ? (
-                                            <>
-                                                <TableCell>
-                                                    <Input
-                                                        autoFocus
-                                                        value={editValues.label}
-                                                        onChange={(e) => setEditValues((prev) => ({ ...prev, label: e.target.value }))}
-                                                    />
-                                                </TableCell>
-                                                <TableCell>
-                                                    <div className="flex items-center gap-2">
-                                                        <Select
-                                                            value={editValues.color}
-                                                            onValueChange={(value) => setEditValues((prev) => ({ ...prev, color: value }))}
-                                                        >
-                                                            <SelectTrigger className="w-48">
-                                                                <SelectValue />
-                                                            </SelectTrigger>
-                                                            <SelectContent>
-                                                                {COLOR_OPTIONS.map((color) => (
-                                                                    <SelectItem key={color.value} value={color.value}>
-                                                                        {color.label}
-                                                                    </SelectItem>
-                                                                ))}
-                                                            </SelectContent>
-                                                        </Select>
-                                                        <Badge className={editValues.color}>Preview</Badge>
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Input
-                                                        type="text"
-                                                        inputMode="numeric"
-                                                        value={editValues.order}
-                                                        onChange={(e) => setEditValues((prev) => ({ ...prev, order: Number(e.target.value) }))}
-                                                        className="w-20"
-                                                    />
-                                                </TableCell>
-                                                <TableCell>
-                                                    <div className="space-y-2">
-                                                        <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                                                            <Checkbox
-                                                                checked={editValues.isTerminal}
-                                                                onCheckedChange={(checked) => setEditValues((prev) => ({ ...prev, isTerminal: checked === true }))}
-                                                            />
-                                                            Terminal
-                                                        </label>
-                                                        <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                                                            <Checkbox
-                                                                checked={editValues.isEntryPoint}
-                                                                onCheckedChange={(checked) => setEditValues((prev) => ({ ...prev, isEntryPoint: checked === true }))}
-                                                            />
-                                                            Entry Point
-                                                        </label>
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell className="text-xs text-muted-foreground">—</TableCell>
-                                                <TableCell className="text-xs text-muted-foreground">—</TableCell>
-                                                <TableCell>{status._count.tickets}</TableCell>
-                                                <TableCell>
-                                                    <div className="flex gap-2">
-                                                        <Button type="button" size="sm" onClick={() => saveEdit(status.id)}>
-                                                            <Save size={12} /> Save
-                                                        </Button>
-                                                        <Button type="button" size="sm" variant="outline" onClick={cancelEdit}>
-                                                            Cancel
-                                                        </Button>
-                                                    </div>
-                                                </TableCell>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <TableCell>
-                                                    <Badge className={status.color}>{status.label}</Badge>
-                                                </TableCell>
-                                                <TableCell className="font-mono text-xs text-muted-foreground">{status.color}</TableCell>
-                                                <TableCell>{status.order}</TableCell>
-                                                <TableCell>
-                                                    <div className="flex flex-col gap-1">
-                                                        {status.isTerminal && <Badge className="bg-red-100 text-red-700">Terminal</Badge>}
-                                                        {status.isEntryPoint && <Badge className="bg-indigo-100 text-indigo-700">Entry Point</Badge>}
-                                                        {!status.isTerminal && !status.isEntryPoint && (
-                                                            <span className="text-xs text-muted-foreground">—</span>
-                                                        )}
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell>
-                                                    {(() => {
-                                                        const work = status.workId ? worksById[status.workId] : undefined;
-                                                        return work ? (
-                                                            <Badge className={work.color}>
-                                                                {work.permissionId && <Lock size={10} className="mr-1" />}
-                                                                {work.label}
-                                                            </Badge>
-                                                        ) : (
-                                                            <span className="text-xs text-muted-foreground">None</span>
-                                                        );
-                                                    })()}
-                                                </TableCell>
-                                                <TableCell>
-                                                    {status.fromTransitions.length === 0 ? (
-                                                        <span className="text-xs text-muted-foreground">None</span>
-                                                    ) : (
-                                                        <div className="flex flex-wrap gap-1">
-                                                            {status.fromTransitions.map((transition) => (
-                                                                <Badge key={transition.toStatusId} variant="secondary">
-                                                                    {transition.to.label}
-                                                                </Badge>
-                                                            ))}
-                                                        </div>
-                                                    )}
-                                                </TableCell>
-                                                <TableCell>{status._count.tickets}</TableCell>
-                                                <TableCell>
-                                                    <div className="flex flex-wrap gap-2">
-                                                        <Button type="button" size="sm" variant="outline" onClick={() => startEdit(status)}>
-                                                            Edit
-                                                        </Button>
-                                                        <Button type="button" size="sm" variant="outline" onClick={() => openWork(status)}>
-                                                            <Briefcase size={12} /> Work
-                                                        </Button>
-                                                        <Button type="button" size="sm" variant="outline" onClick={() => openTransitions(status)}>
-                                                            <GitMerge size={12} /> Transitions
-                                                        </Button>
-                                                        <Button
-                                                            type="button"
-                                                            size="icon-sm"
-                                                            variant="destructive"
-                                                            onClick={() => deleteStatus(status.id, status._count.tickets)}
-                                                            disabled={status._count.tickets > 0}
-                                                            title={status._count.tickets > 0 ? `${status._count.tickets} tickets use this status` : "Delete"}
-                                                        >
-                                                            <Trash2 size={14} />
-                                                        </Button>
-                                                    </div>
-                                                </TableCell>
-                                            </>
-                                        )}
+                                        <TableCell>
+                                            <Badge {...badgeColor(status.color)}>{status.label}</Badge>
+                                        </TableCell>
+                                        <TableCell className="font-mono text-xs text-muted-foreground">{status.color}</TableCell>
+                                        <TableCell>{status.order}</TableCell>
+                                        <TableCell>
+                                            <div className="flex flex-col gap-1">
+                                                {status.isTerminal && <Badge className="bg-red-100 text-red-700">Terminal</Badge>}
+                                                {status.isEntryPoint && <Badge className="bg-indigo-100 text-indigo-700">Entry Point</Badge>}
+                                                {status.leavePrompt && <Badge className="bg-amber-100 text-amber-700">Leave prompt</Badge>}
+                                                {status.announceOnEntry && <Badge className="bg-sky-100 text-sky-700">Announce</Badge>}
+                                                {!status.isTerminal && !status.isEntryPoint && !status.leavePrompt && !status.announceOnEntry && (
+                                                    <span className="text-xs text-muted-foreground">—</span>
+                                                )}
+                                            </div>
+                                        </TableCell>
+                                        <TableCell>
+                                            {(() => {
+                                                const work = status.workId ? worksById[status.workId] : undefined;
+                                                return work ? (
+                                                    <Badge className={work.color}>
+                                                        {work.permissionId && <Lock size={10} className="mr-1" />}
+                                                        {work.label}
+                                                    </Badge>
+                                                ) : (
+                                                    <span className="text-xs text-muted-foreground">None</span>
+                                                );
+                                            })()}
+                                        </TableCell>
+                                        <TableCell>
+                                            {status.fromTransitions.length === 0 ? (
+                                                <span className="text-xs text-muted-foreground">None</span>
+                                            ) : (
+                                                <div className="flex flex-wrap gap-1">
+                                                    {status.fromTransitions.map((transition) => (
+                                                        <Badge key={transition.toStatusId} variant="secondary">
+                                                            {transition.to.label}
+                                                        </Badge>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </TableCell>
+                                        <TableCell>{status._count.tickets}</TableCell>
+                                        <TableCell>
+                                            <div className="flex flex-wrap gap-2">
+                                                <Button type="button" size="sm" variant="outline" onClick={() => openEdit(status)}>
+                                                    <Briefcase size={12} /> Edit
+                                                </Button>
+                                                <Button type="button" size="sm" variant="outline" onClick={() => openTransitions(status)}>
+                                                    <GitMerge size={12} /> Transitions
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    size="icon-sm"
+                                                    variant="destructive"
+                                                    onClick={() => deleteStatus(status.id, status._count.tickets)}
+                                                    disabled={status._count.tickets > 0}
+                                                    title={status._count.tickets > 0 ? `${status._count.tickets} tickets use this status` : "Delete"}
+                                                >
+                                                    <Trash2 size={14} />
+                                                </Button>
+                                            </div>
+                                        </TableCell>
                                     </TableRow>
                                 ))}
 
@@ -465,24 +401,7 @@ export default function StatusesPage() {
                                             />
                                         </TableCell>
                                         <TableCell>
-                                            <div className="flex items-center gap-2">
-                                                <Select
-                                                    value={newStatus.color}
-                                                    onValueChange={(value) => setNewStatus((prev) => ({ ...prev, color: value }))}
-                                                >
-                                                    <SelectTrigger className="w-48">
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        {COLOR_OPTIONS.map((color) => (
-                                                            <SelectItem key={color.value} value={color.value}>
-                                                                {color.label}
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                                <Badge className={newStatus.color}>Preview</Badge>
-                                            </div>
+                                            <ColorPicker value={newStatus.color} onChange={(c) => setNewStatus((prev) => ({ ...prev, color: c }))} />
                                         </TableCell>
                                         <TableCell className="text-xs text-muted-foreground">auto</TableCell>
                                         <TableCell>
@@ -561,69 +480,173 @@ export default function StatusesPage() {
                 </DialogContent>
             </Dialog>
 
-            <Dialog open={!!workModalId && !!workStatus} onOpenChange={(isOpen) => { if (!isOpen) setWorkModalId(null); }}>
-                <DialogContent className="sm:max-w-xl">
+            <Dialog open={!!editModalId && !!editStatus} onOpenChange={(isOpen) => { if (!isOpen) setEditModalId(null); }}>
+                <DialogContent className="sm:max-w-xl max-h-[88vh] overflow-y-auto">
                     <DialogHeader>
-                        <DialogTitle>Work &amp; access</DialogTitle>
+                        <DialogTitle>Edit status</DialogTitle>
                         <DialogDescription>
-                            {workStatus ? `Set the work and action for ${workStatus.label}.` : ""}
+                            {editStatus ? `Configure “${editStatus.label}” (${editStatus.id}) — basics, flags, work, and crossing prompts.` : ""}
                         </DialogDescription>
                     </DialogHeader>
 
                     <div className="space-y-5">
+                        {/* ── Basics ─────────────────────────────────────── */}
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-2">
+                                <Label>Label</Label>
+                                <Input
+                                    autoFocus
+                                    value={editForm.label}
+                                    onChange={(e) => setEditForm((prev) => ({ ...prev, label: e.target.value }))}
+                                    placeholder="e.g. Diagnosing"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Order</Label>
+                                <Input
+                                    type="text"
+                                    inputMode="numeric"
+                                    value={editForm.order}
+                                    onChange={(e) => setEditForm((prev) => ({ ...prev, order: Number(e.target.value.replace(/[^0-9]/g, "")) || 0 }))}
+                                />
+                            </div>
+                        </div>
+
                         <div className="space-y-2">
-                            <Label>Work</Label>
-                            <Select value={workForm.workId || "__none__"} onValueChange={(value) => setWorkForm((prev) => ({ ...prev, workId: value === "__none__" ? "" : value }))}>
-                                <SelectTrigger className="w-full">
-                                    <SelectValue placeholder="Select work" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="__none__">— none —</SelectItem>
-                                    {works.map((w) => (
-                                        <SelectItem key={w.id} value={w.id}>{w.label}{w.permissionId ? " (gated)" : ""}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                            <Label>Color</Label>
+                            <ColorPicker value={editForm.color} onChange={(c) => setEditForm((prev) => ({ ...prev, color: c }))} />
+                        </div>
+
+                        {/* ── Flags ──────────────────────────────────────── */}
+                        <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Flags</p>
+                            <div className="flex flex-wrap gap-6 pt-1">
+                                <label className="flex cursor-pointer items-center gap-2 text-sm">
+                                    <Checkbox
+                                        checked={editForm.isEntryPoint}
+                                        onCheckedChange={(checked) => setEditForm((prev) => ({ ...prev, isEntryPoint: checked === true }))}
+                                    />
+                                    Entry point
+                                </label>
+                                <label className="flex cursor-pointer items-center gap-2 text-sm">
+                                    <Checkbox
+                                        checked={editForm.isTerminal}
+                                        onCheckedChange={(checked) => setEditForm((prev) => ({ ...prev, isTerminal: checked === true }))}
+                                    />
+                                    Terminal
+                                </label>
+                            </div>
                             <p className="text-xs text-muted-foreground">
-                                {selectedWork?.permissionId
-                                    ? `Only staff with the “${selectedWork.label}” work permission can move a ticket to this status. Admin always bypasses.`
-                                    : "Ungated — any staff can move a ticket to this status."}
+                                Entry point = where new tickets land. Terminal = a close-out stage with no further moves.
                             </p>
                         </div>
 
-                        <div className="space-y-2">
-                            <Label>Warranty scope</Label>
-                            <Select
-                                value={workForm.warrantyScope}
-                                onValueChange={(value) => setWorkForm((prev) => ({ ...prev, warrantyScope: value }))}
-                            >
-                                <SelectTrigger className="w-full">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {WARRANTY_SCOPE_OPTIONS.map((o) => (
-                                        <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                        {/* ── Work & access ──────────────────────────────── */}
+                        <div className="space-y-4 rounded-md border border-border bg-muted/30 p-3">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Work &amp; access</p>
+
+                            <div className="space-y-2">
+                                <Label>Work <span className="font-normal text-muted-foreground">(optional)</span></Label>
+                                <Select value={editForm.workId || "__none__"} onValueChange={(value) => setEditForm((prev) => ({ ...prev, workId: value === "__none__" ? "" : value }))}>
+                                    <SelectTrigger className="w-full">
+                                        <SelectValue placeholder="Select work" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="__none__">— none —</SelectItem>
+                                        {works.map((w) => (
+                                            <SelectItem key={w.id} value={w.id}>{w.label}{w.permissionId ? " (gated)" : ""}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <p className="text-xs text-muted-foreground">
+                                    {selectedWork?.permissionId
+                                        ? `Only staff with the “${selectedWork.label}” work permission can move a ticket to this status. Admin always bypasses.`
+                                        : "Ungated — any staff can move a ticket to this status."}
+                                </p>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label>Warranty scope</Label>
+                                <Select
+                                    value={editForm.warrantyScope}
+                                    onValueChange={(value) => setEditForm((prev) => ({ ...prev, warrantyScope: value }))}
+                                >
+                                    <SelectTrigger className="w-full">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {WARRANTY_SCOPE_OPTIONS.map((o) => (
+                                            <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label>Action label</Label>
+                                <Input
+                                    value={editForm.actionLabel}
+                                    onChange={(e) => setEditForm((prev) => ({ ...prev, actionLabel: e.target.value }))}
+                                    placeholder="e.g. New ticket received — assign a technician"
+                                />
+                            </div>
                         </div>
 
-                        <div className="space-y-2">
-                            <Label>Action label</Label>
-                            <Input
-                                value={workForm.actionLabel}
-                                onChange={(e) => setWorkForm((prev) => ({ ...prev, actionLabel: e.target.value }))}
-                                placeholder="e.g. New ticket received — assign a technician"
-                            />
+                        {/* ── Crossing prompts ───────────────────────────── */}
+                        <div className="space-y-4 rounded-md border border-border bg-muted/30 p-3">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                Crossing prompts
+                            </p>
+
+                            <div className="space-y-2">
+                                <Label>Leave prompt</Label>
+                                <Input
+                                    value={editForm.leavePrompt}
+                                    onChange={(e) => setEditForm((prev) => ({ ...prev, leavePrompt: e.target.value }))}
+                                    placeholder="e.g. Did you back up the device before moving on?"
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                    Shown as a confirmation in the move dialog when a ticket <em>leaves</em> this status. Blank = no prompt.
+                                </p>
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="flex cursor-pointer items-center gap-2">
+                                    <Checkbox
+                                        checked={editForm.announceOnEntry}
+                                        onCheckedChange={(checked) => setEditForm((prev) => ({ ...prev, announceOnEntry: checked === true }))}
+                                    />
+                                    <span className="text-sm">Announce to customer on entry</span>
+                                </label>
+                                <p className="text-xs text-muted-foreground">
+                                    Posts a public timeline message when a ticket <em>enters</em> this status:
+                                    {" "}<span className="font-medium text-foreground">
+                                        “{editForm.label || editStatus?.label || "Status"} is started{editForm.etaText.trim() ? ` and will take ${editForm.etaText.trim()}` : ""}”
+                                    </span>
+                                </p>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label>Estimated time (ETA)</Label>
+                                <Input
+                                    value={editForm.etaText}
+                                    onChange={(e) => setEditForm((prev) => ({ ...prev, etaText: e.target.value }))}
+                                    placeholder="e.g. 2 days"
+                                    disabled={!editForm.announceOnEntry}
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                    The “Y” in the announcement. Blank = announce without a duration.
+                                </p>
+                            </div>
                         </div>
                     </div>
 
                     <DialogFooter>
-                        <Button type="button" variant="outline" onClick={() => setWorkModalId(null)}>
+                        <Button type="button" variant="outline" onClick={() => setEditModalId(null)}>
                             Cancel
                         </Button>
-                        <Button type="button" onClick={saveWork} disabled={savingWork}>
-                            {savingWork ? "Saving…" : "Save"}
+                        <Button type="button" onClick={saveEdit} disabled={savingEdit}>
+                            {savingEdit ? "Saving…" : "Save"}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

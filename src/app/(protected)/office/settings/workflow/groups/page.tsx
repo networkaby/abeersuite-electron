@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,28 +11,13 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { badgeColor, randomHexColor } from "@/shared/lib/format/entityColor";
-
-const randomColor = () => randomHexColor(Math.random());
-const HEX_RE = /^#[0-9a-fA-F]{6}$/;
+import { badgeColor } from "@/shared/lib/format/entityColor";
+import { ColorPicker, randomColor } from "@/shared/components/ColorPicker";
 
 interface Work { id: string; label: string; color: string; }
 interface WorkGroup { id: string; label: string; color: string; order: number; works: Work[]; }
 type FormValues = { label: string; color: string };
 const BLANK: FormValues = { label: "", color: "bg-gray-100 text-gray-600" };
-
-function ColorPicker({ value, onChange }: { value: string; onChange: (c: string) => void }) {
-    return (
-        <div className="flex items-center gap-2">
-            <input type="color" aria-label="Pick a color" value={HEX_RE.test(value) ? value : "#7C9EF0"}
-                onChange={(e) => onChange(e.target.value.toUpperCase())}
-                className="h-9 w-10 shrink-0 cursor-pointer rounded-md border border-border bg-background p-0.5" />
-            <Input value={value} onChange={(e) => onChange(e.target.value)} placeholder="#D442D7" className="h-9 w-28 font-mono uppercase" />
-            <Button type="button" size="sm" variant="outline" onClick={() => onChange(randomColor())} title="Random color"><RefreshCw size={13} /> Random</Button>
-            <Badge {...badgeColor(value)}>Preview</Badge>
-        </div>
-    );
-}
 
 // Module-scope so it keeps a stable identity across the page's re-renders (a dialog
 // defined inside the page component remounts on every keystroke → input loses focus).

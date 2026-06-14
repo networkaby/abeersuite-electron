@@ -28,7 +28,8 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { WARRANTY_SCOPE_OPTIONS } from "@/utils/constants";
-import { badgeColor, randomHexColor } from "@/shared/lib/format/entityColor";
+import { badgeColor } from "@/shared/lib/format/entityColor";
+import { ColorPicker, randomColor } from "@/shared/components/ColorPicker";
 import { ACTION_TYPES } from "@/modules/repairing/lib/actionTypes";
 
 // Retry-schedule channels, densest → sparsest. Each is an optional row in the
@@ -46,11 +47,6 @@ type RetryRow = { every: string; times: string };
 type RetryRows = Record<RetryUnit, RetryRow>;
 const BLANK_RETRY_ROWS = (): RetryRows =>
     Object.fromEntries(RETRY_UNITS.map((u) => [u.key, { every: "", times: "" }])) as RetryRows;
-
-// New workers get a random (unlimited) hex color so the workflow reads at a
-// glance; the picker / hex box / preset swatches let you override it manually.
-const randomColor = () => randomHexColor(Math.random());
-const HEX_RE = /^#[0-9a-fA-F]{6}$/;
 
 interface Pipeline {
     id: string;
@@ -340,25 +336,7 @@ function WorkerFormModal({
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label>Color</Label>
-                            <div className="flex items-center gap-2">
-                                <input
-                                    type="color"
-                                    aria-label="Pick a custom color"
-                                    value={HEX_RE.test(form.color) ? form.color : "#7C9EF0"}
-                                    onChange={(e) => setForm({ ...form, color: e.target.value.toUpperCase() })}
-                                    className="h-9 w-10 shrink-0 cursor-pointer rounded-md border border-border bg-background p-0.5"
-                                />
-                                <Input
-                                    value={form.color}
-                                    onChange={(e) => setForm({ ...form, color: e.target.value })}
-                                    placeholder="#D442D7"
-                                    className="h-9 w-28 font-mono uppercase"
-                                />
-                                <Button type="button" size="sm" variant="outline" onClick={() => setForm({ ...form, color: randomColor() })} title="Random color">
-                                    <RefreshCw size={13} /> Random
-                                </Button>
-                                <Badge {...badgeColor(form.color)}>Preview</Badge>
-                            </div>
+                            <ColorPicker value={form.color} onChange={(c) => setForm({ ...form, color: c })} />
                         </div>
                         <div className="space-y-3 pt-6">
                             <label className="flex items-center gap-2 text-sm">

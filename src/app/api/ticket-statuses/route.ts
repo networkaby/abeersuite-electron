@@ -14,6 +14,9 @@ const ticketStatusSchema = labelColorSchema.extend({
     workId: z.string().trim().optional().nullable(),
     actionLabel: z.string().optional().nullable(),
     warrantyScope: z.enum(["any", "warranty_only", "non_warranty_only"]).optional(),
+    leavePrompt: z.string().optional().nullable(),
+    announceOnEntry: z.boolean().optional(),
+    etaText: z.string().optional().nullable(),
     pipelineId: z.string().optional().nullable(),
 });
 
@@ -62,6 +65,9 @@ export async function POST(req: Request) {
                 workId:       body.workId ?? null,
                 actionLabel:  body.actionLabel  ?? null,
                 warrantyScope: body.warrantyScope ?? "any",
+                leavePrompt:  body.leavePrompt ?? null,
+                announceOnEntry: body.announceOnEntry ?? false,
+                etaText:      body.etaText ?? null,
                 pipelineId:   body.pipelineId ?? null,
             },
         });

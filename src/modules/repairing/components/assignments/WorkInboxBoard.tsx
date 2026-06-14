@@ -29,6 +29,8 @@ export interface WorkInboxItem {
     status: "todo" | "progress" | "answered";
     coverLabel: string;
     ask: string | null;
+    /** Worker context — resolved supply args (incl. earlier workers' outcomes). */
+    context: { label: string; value: string }[];
     problem: string | null;
     lastNote: string | null;
     lastNoteBy: string | null;
@@ -167,7 +169,17 @@ export default function WorkInboxBoard({
                                         </span>
                                     </span>
                                 ) : (
-                                    <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                                    <span className="flex min-w-0 flex-1 flex-col gap-1">
+                                        {it.context.length > 0 && (
+                                            <span className="flex flex-wrap gap-1.5">
+                                                {it.context.map((c) => (
+                                                    <span key={c.label} className="inline-flex items-baseline gap-1.5 rounded-md border border-border bg-muted/40 px-2 py-1">
+                                                        <span className="text-[11px] uppercase tracking-wide text-muted-foreground">{c.label}</span>
+                                                        <span className="text-sm font-semibold text-foreground">{c.value}</span>
+                                                    </span>
+                                                ))}
+                                            </span>
+                                        )}
                                         {it.ask && <span className="truncate text-sm font-medium text-foreground">{it.ask}</span>}
                                         {it.lastNote && (
                                             <span className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -176,7 +188,7 @@ export default function WorkInboxBoard({
                                             </span>
                                         )}
                                         {it.problem && <span className="truncate text-xs text-muted-foreground/80">Issue: {it.problem}</span>}
-                                        {!it.ask && !it.lastNote && !it.problem && (
+                                        {!it.context.length && !it.ask && !it.lastNote && !it.problem && (
                                             <span className="text-xs italic text-muted-foreground/60">No context yet</span>
                                         )}
                                     </span>

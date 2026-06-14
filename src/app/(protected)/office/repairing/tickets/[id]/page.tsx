@@ -58,6 +58,7 @@ interface Ticket {
         label: string;
         color: string;
         isTerminal: boolean;
+        leavePrompt?: string | null;
         fromTransitions: { to: { id: string; label: string; color?: string; isTerminal?: boolean } }[];
     };
     device: {
@@ -546,6 +547,7 @@ export default function TicketDetailPage() {
                             isWarranty={ticket.isWarranty}
                             started={!!ticket.primaryOwner}
                             locked={workInProgress}
+                            leavePrompt={ticket.ticketStatus.leavePrompt}
                             nextStatuses={ticket.ticketStatus.fromTransitions.map((t) => t.to)}
                             backTarget={backTarget}
                             onChanged={fetchTicket}

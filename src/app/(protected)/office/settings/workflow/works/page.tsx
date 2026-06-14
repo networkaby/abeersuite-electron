@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Lock, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Lock, Pencil, Plus, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,15 +21,18 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { X } from "lucide-react";
-import { badgeColor, randomHexColor } from "@/shared/lib/format/entityColor";
-import { TICKET_SOURCES, USER_SOURCE, type WorkArg } from "@/modules/repairing/lib/ticketSources";
+import { badgeColor } from "@/shared/lib/format/entityColor";
+import { ColorPicker, randomColor } from "@/shared/components/ColorPicker";
+import { TICKET_SOURCES, USER_SOURCE, contextSource, outcomeVariables, type WorkArg } from "@/modules/repairing/lib/ticketSources";
 
 // Distinct source groups for the dropdown (Customer / Device / Ticket / Input).
 const SOURCE_GROUPS = [...new Set(TICKET_SOURCES.map((s) => s.group))];
 
-// Editor for a Work's arguments — each row: label + source (a ticket field, or
-// "Ask the user") + kind for user-given. Shared by the create & edit dialogs.
-function ArgsEditor({ args, onChange }: { args: WorkArg[]; onChange: (a: WorkArg[]) => void }) {
+// Editor for a Work's arguments — each row: label + source (a ticket field, an
+// earlier worker's OUTCOME via context.<key>, or "Ask the user") + kind/when for
+// user-given. `contextVars` = outcome variables other works produce (consumable).
+// Shared by the create & edit dialogs.
+function ArgsEditor({ args, onChange, contextVars }: { args: WorkArg[]; onChange: (a: WorkArg[]) => void; contextVars: { key: string; label: string }[] }) {
     const add = () => onChange([...args, { key: "", label: "", source: "customer.phone" }]);
     const upd = (i: number, patch: Partial<WorkArg>) => onChange(args.map((a, idx) => (idx === i ? { ...a, ...patch } : a)));
     const del = (i: number) => onChange(args.filter((_, idx) => idx !== i));
@@ -53,10 +56,23 @@ function ArgsEditor({ args, onChange }: { args: WorkArg[]; onChange: (a: WorkArg
                                     {TICKET_SOURCES.filter((s) => s.group === g).map((s) => (<SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>))}
                                 </SelectGroup>
                             ))}
+                            {contextVars.length > 0 && (
+                                <SelectGroup>
+                                    <SelectLabel>From an earlier step (outcome)</SelectLabel>
+                                    {contextVars.map((v) => (<SelectItem key={v.key} value={contextSource(v.key)}>{v.label}</SelectItem>))}
+                                </SelectGroup>
+                            )}
                         </SelectContent>
                     </Select>
                     {a.source === USER_SOURCE && (
                         <>
+                            <Input
+                                value={a.key ?? ""}
+                                onChange={(e) => upd(i, { key: e.target.value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_") })}
+                                placeholder="variable_name"
+                                title="Variable name other works can reuse (blank = auto from label)"
+                                className="h-8 w-32 shrink-0 font-mono text-xs"
+                            />
                             <Select value={a.kind ?? "text"} onValueChange={(v) => upd(i, { kind: v as "text" | "number" })}>
                                 <SelectTrigger className="h-8 w-[68px] shrink-0"><SelectValue /></SelectTrigger>
                                 <SelectContent>
@@ -81,29 +97,6 @@ function ArgsEditor({ args, onChange }: { args: WorkArg[]; onChange: (a: WorkArg
     );
 }
 
-// Random (unlimited) hex by default; the picker / hex box / Random button override.
-const randomColor = () => randomHexColor(Math.random());
-const HEX_RE = /^#[0-9a-fA-F]{6}$/;
-
-// Reusable hex color picker (input + hex box + Random + live preview).
-function ColorPicker({ value, onChange }: { value: string; onChange: (c: string) => void }) {
-    return (
-        <div className="flex items-center gap-2">
-            <input
-                type="color"
-                aria-label="Pick a custom color"
-                value={HEX_RE.test(value) ? value : "#7C9EF0"}
-                onChange={(e) => onChange(e.target.value.toUpperCase())}
-                className="h-9 w-10 shrink-0 cursor-pointer rounded-md border border-border bg-background p-0.5"
-            />
-            <Input value={value} onChange={(e) => onChange(e.target.value)} placeholder="#D442D7" className="h-9 w-28 font-mono uppercase" />
-            <Button type="button" size="sm" variant="outline" onClick={() => onChange(randomColor())} title="Random color">
-                <RefreshCw size={13} /> Random
-            </Button>
-            <Badge {...badgeColor(value)}>Preview</Badge>
-        </div>
-    );
-}
 
 interface UsingItem {
     id: string;
@@ -369,7 +362,7 @@ export default function WorksPage() {
                             </div>
                             <p className="col-span-2 text-xs text-muted-foreground">Custom labels for the two outcome buttons. Blank → generic Success / Unsuccess.</p>
                         </div>
-                        <ArgsEditor args={createForm.args} onChange={(a) => setCreateForm({ ...createForm, args: a })} />
+                        <ArgsEditor args={createForm.args} onChange={(a) => setCreateForm({ ...createForm, args: a })} contextVars={outcomeVariables(works)} />
                         <label className="flex items-center gap-2 text-sm">
                             <Checkbox checked={createForm.gated} onCheckedChange={(checked) => setCreateForm({ ...createForm, gated: checked === true })} />
                             Gated (requires a permission to set)
@@ -425,7 +418,7 @@ export default function WorksPage() {
                             </div>
                             <p className="col-span-2 text-xs text-muted-foreground">Custom labels for the two outcome buttons. Blank → generic Success / Unsuccess.</p>
                         </div>
-                        <ArgsEditor args={editForm.args} onChange={(a) => setEditForm({ ...editForm, args: a })} />
+                        <ArgsEditor args={editForm.args} onChange={(a) => setEditForm({ ...editForm, args: a })} contextVars={outcomeVariables(works)} />
                         <label className="flex items-center gap-2 text-sm">
                             <Checkbox checked={editForm.gated} onCheckedChange={(checked) => setEditForm({ ...editForm, gated: checked === true })} />
                             Gated (requires a permission to set)

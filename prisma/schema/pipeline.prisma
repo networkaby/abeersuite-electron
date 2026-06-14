@@ -39,6 +39,14 @@ model TicketStatus {
   isEntryPoint    Boolean            @default(false)
   actionLabel     String?
   warrantyScope   String             @default("any")
+  // ── Per-status crossing prompts (Pipeline→Status axis, no Worker involved) ──
+  // leavePrompt: a confirmation message shown in the move dialog when a ticket
+  // LEAVES this status (null = no prompt). announceOnEntry: when a ticket ENTERS
+  // this status, auto-post a PUBLIC timeline message "<label> is started and will
+  // take <etaText>" — the customer-facing ETA `Y`; etaText null = drop the tail.
+  leavePrompt     String?
+  announceOnEntry Boolean            @default(false)
+  etaText         String?
   workId          String?
   work            Work?              @relation(fields: [workId], references: [id], onDelete: SetNull)
   // The sub-status auto-applied when a ticket ENTERS this status — hand-picked per

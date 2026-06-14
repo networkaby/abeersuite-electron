@@ -4,6 +4,14 @@
 
 export const USER_SOURCE = "user";
 
+// A "context.<key>" source pulls a value a PREVIOUS worker produced (saved into
+// Ticket.context at completion). This is how an outcome variable flows downstream:
+// the producer's ask-arg `key` becomes the variable name, a later Work's supply arg
+// reads it back via `context.<key>`. See resolveTicketSource below.
+export const CONTEXT_PREFIX = "context.";
+export const contextSource = (key: string) => `${CONTEXT_PREFIX}${key}`;
+export const isContextSource = (source: string): boolean => source.startsWith(CONTEXT_PREFIX);
+
 export const TICKET_SOURCES: { value: string; label: string; group: string }[] = [
     { value: "customer.name", label: "Customer name", group: "Customer" },
     { value: "customer.phone", label: "Customer phone", group: "Customer" },
@@ -48,6 +56,8 @@ export type TicketLike = {
     id: number;
     status?: string;
     ticketStatus?: { label?: string | null } | null;
+    // Global variable bag — outcomes previous workers saved (flat key → value).
+    context?: Record<string, unknown> | null;
     device?: {
         type?: string | null; brand?: string | null; model?: string | null; problem?: string | null;
         account?: {
@@ -62,6 +72,11 @@ export type TicketLike = {
 // USER_SOURCE (those are collected, not read) or when the value is absent.
 export function resolveTicketSource(source: string, t: TicketLike): string | null {
     if (source === USER_SOURCE) return null;
+    // Outcome variable from an earlier worker (Ticket.context["<key>"]).
+    if (isContextSource(source)) {
+        const v = t.context?.[source.slice(CONTEXT_PREFIX.length)];
+        return v == null || v === "" ? null : String(v);
+    }
     const acct = t.device?.account;
     const party = acct?.person ?? acct?.company ?? null;
     switch (source) {
@@ -83,4 +98,19 @@ export function parseArgs(raw: unknown): WorkArg[] {
     return raw
         .filter((a): a is WorkArg => !!a && typeof a === "object" && typeof (a as WorkArg).source === "string")
         .map((a) => ({ key: a.key ?? "", label: a.label ?? "", source: a.source, kind: a.kind === "number" ? "number" : "text", on: a.on ?? "always" }));
+}
+
+// The catalog of outcome variables that can be CONSUMED downstream: every "ask"
+// (user) arg across all works produces a value in Ticket.context keyed by argKey().
+// Returns de-duped { key, label } pairs for the supply-source picker.
+export function outcomeVariables(works: { args?: unknown }[]): { key: string; label: string }[] {
+    const seen = new Map<string, string>();
+    for (const w of works) {
+        for (const a of parseArgs(w.args)) {
+            if (!isUserArg(a)) continue;
+            const k = argKey(a);
+            if (!seen.has(k)) seen.set(k, a.label || k);
+        }
+    }
+    return [...seen.entries()].map(([key, label]) => ({ key, label }));
 }

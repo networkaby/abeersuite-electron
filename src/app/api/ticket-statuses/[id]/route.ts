@@ -18,6 +18,9 @@ const ticketStatusPatchSchema = z.object({
     workId: z.string().trim().optional().nullable(),
     actionLabel: z.string().optional().nullable(),
     warrantyScope: z.enum(["any", "warranty_only", "non_warranty_only"]).optional(),
+    leavePrompt: z.string().optional().nullable(),
+    announceOnEntry: z.boolean().optional(),
+    etaText: z.string().optional().nullable(),
 });
 
 export async function PATCH(req: Request, { params }: Params) {
@@ -55,6 +58,9 @@ export async function PATCH(req: Request, { params }: Params) {
                 workId: "workId" in body ? (body.workId ?? null) : undefined,
                 actionLabel: "actionLabel" in body ? (body.actionLabel ?? null) : undefined,
                 warrantyScope: body.warrantyScope !== undefined ? body.warrantyScope : undefined,
+                leavePrompt: "leavePrompt" in body ? (body.leavePrompt ?? null) : undefined,
+                announceOnEntry: body.announceOnEntry !== undefined ? body.announceOnEntry : undefined,
+                etaText: "etaText" in body ? (body.etaText ?? null) : undefined,
             },
         });
         return NextResponse.json(status);

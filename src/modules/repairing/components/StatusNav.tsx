@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { ArrowRight, ArrowLeft, Lock, Eye, LockKeyhole, Share2, Flag } from "lucide-react";
+import { ArrowRight, ArrowLeft, Lock, Eye, LockKeyhole, Share2, Flag, HelpCircle } from "lucide-react";
 import { badgeColor } from "@/shared/lib/format/entityColor";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -25,13 +25,16 @@ interface Props {
     started: boolean;
     /** Lock all nav buttons — shown when work is in progress. */
     locked?: boolean;
+    /** Confirmation message configured on the CURRENT status — shown when leaving it
+     *  for another stage (null = no prompt). */
+    leavePrompt?: string | null;
     nextStatuses: StatusTarget[];
     backTarget: { statusId: string; workerId: string | null; label: string } | null;
     onChanged: () => void;
 }
 
 export default function StatusNav({
-    ticketId, statusId, workerId, isWarranty, started, locked = false, nextStatuses, backTarget, onChanged,
+    ticketId, statusId, workerId, isWarranty, started, locked = false, leavePrompt, nextStatuses, backTarget, onChanged,
 }: Props) {
     const [nextSubs, setNextSubs] = useState<SubTarget[]>([]);
     const [pending, setPending] = useState<Pending | null>(null);
@@ -93,6 +96,26 @@ export default function StatusNav({
         } finally { setBusy(false); }
     };
 
+    // Direct stage move with no dialog — used when the status being LEFT has no
+    // leave prompt configured (frictionless move). Same PUT as submit()'s status path.
+    const commitStatus = async (statusId: string, label: string) => {
+        setBusy(true);
+        try {
+            await axios.put(`/api/tickets/${ticketId}`, { status: statusId, visibility: "INTERNAL" });
+            toast.success(`Moved to ${label}`);
+            onChanged();
+        } catch (err: unknown) {
+            toast.error((err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Failed to move");
+        } finally { setBusy(false); }
+    };
+
+    // A stage change either opens the leave-prompt dialog (status has a prompt) or
+    // moves instantly (no prompt). The prompt lives on the status being LEFT.
+    const moveStage = (t: StatusTarget) => {
+        if (leavePrompt) setPending({ dir: "next", kind: "status", id: t.id, label: t.label });
+        else commitStatus(t.id, t.label);
+    };
+
     // Hand-off: stays in the stage, routes the work to another team (the Work badge).
     const subBtn = (t: SubTarget) => (
         <Button
@@ -113,7 +136,8 @@ export default function StatusNav({
     const statusBtn = (t: StatusTarget) => (
         <Button
             key={`st-${t.id}`}
-            onClick={() => setPending({ dir: "next", kind: "status", id: t.id, label: t.label })}
+            onClick={() => moveStage(t)}
+            disabled={busy}
             size="sm" variant="outline"
             className="w-full justify-start gap-2 border-primary/40 hover:bg-primary/5"
         >
@@ -126,7 +150,8 @@ export default function StatusNav({
     const terminalBtn = (t: StatusTarget) => (
         <Button
             key={`tm-${t.id}`}
-            onClick={() => setPending({ dir: "next", kind: "status", id: t.id, label: t.label })}
+            onClick={() => moveStage(t)}
+            disabled={busy}
             size="sm" variant="outline"
             className="w-full justify-start gap-2 text-muted-foreground"
         >
@@ -201,6 +226,17 @@ export default function StatusNav({
                             </DialogTitle>
                         </DialogHeader>
                         <div className="space-y-4">
+                            {leavePrompt && pending.dir === "next" && pending.kind === "status" && (
+                                <div className="flex gap-2.5 rounded-md border border-primary/30 bg-primary/5 px-3 py-2.5">
+                                    <HelpCircle size={16} className="mt-0.5 shrink-0 text-primary" />
+                                    <div className="space-y-0.5">
+                                        <p className="text-sm font-semibold text-foreground">{leavePrompt}</p>
+                                        <p className="text-[11px] leading-tight text-muted-foreground">
+                                            Answer in the notes below before moving.
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
                             {started && (
                                 <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
                                     This work is in progress — moving will leave it.

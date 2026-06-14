@@ -362,6 +362,7 @@ type PipelineSeed = {
         id: string; label: string; color: string; order: number;
         isEntryPoint: boolean; isTerminal: boolean; pipelineId: string;
         actionLabel?: string;
+        leavePrompt?: string; announceOnEntry?: boolean; etaText?: string;
     }>;
 };
 
@@ -371,8 +372,8 @@ const PIPELINES: PipelineSeed[] = [
         description: "Electronics repair and service workflow",
         color: "bg-blue-100 text-blue-600", order: 0, isDefault: true, entityType: "ticket",
         statuses: [
-            { id: "S1", label: "Received", color: "bg-gray-100 text-gray-600", order: 1, isEntryPoint: true, isTerminal: false, pipelineId: "P1" },
-            { id: "S2", label: "Diagnosing", color: "bg-yellow-100 text-yellow-700", order: 2, isEntryPoint: false, isTerminal: false, pipelineId: "P1" },
+            { id: "S1", label: "Received", color: "bg-gray-100 text-gray-600", order: 1, isEntryPoint: true, isTerminal: false, pipelineId: "P1", leavePrompt: "Confirm the device and accessories are logged before moving on." },
+            { id: "S2", label: "Diagnosing", color: "bg-yellow-100 text-yellow-700", order: 2, isEntryPoint: false, isTerminal: false, pipelineId: "P1", announceOnEntry: true, etaText: "2 days" },
             { id: "S3", label: "Repairing", color: "bg-blue-100 text-blue-700", order: 3, isEntryPoint: false, isTerminal: false, pipelineId: "P1" },
             { id: "S61", label: "Need Help", color: "bg-gray-100 text-gray-600", order: 4, isEntryPoint: false, isTerminal: false, pipelineId: "P1" },
             { id: "S62", label: "Escalated - Send to service", color: "bg-gray-100 text-gray-600", order: 5, isEntryPoint: false, isTerminal: false, pipelineId: "P1" },
@@ -858,8 +859,8 @@ async function main() {
         for (const s of pl.statuses) {
             await prisma.ticketStatus.upsert({
                 where:  { id: s.id },
-                update: { label: s.label, color: s.color, order: s.order, isTerminal: s.isTerminal, isEntryPoint: s.isEntryPoint, actionLabel: s.actionLabel ?? null, warrantyScope: "any", pipelineId: s.pipelineId },
-                create: { id: s.id, label: s.label, color: s.color, order: s.order, isTerminal: s.isTerminal, isEntryPoint: s.isEntryPoint, actionLabel: s.actionLabel ?? null, warrantyScope: "any", pipelineId: s.pipelineId },
+                update: { label: s.label, color: s.color, order: s.order, isTerminal: s.isTerminal, isEntryPoint: s.isEntryPoint, actionLabel: s.actionLabel ?? null, warrantyScope: "any", leavePrompt: s.leavePrompt ?? null, announceOnEntry: s.announceOnEntry ?? false, etaText: s.etaText ?? null, pipelineId: s.pipelineId },
+                create: { id: s.id, label: s.label, color: s.color, order: s.order, isTerminal: s.isTerminal, isEntryPoint: s.isEntryPoint, actionLabel: s.actionLabel ?? null, warrantyScope: "any", leavePrompt: s.leavePrompt ?? null, announceOnEntry: s.announceOnEntry ?? false, etaText: s.etaText ?? null, pipelineId: s.pipelineId },
             });
         }
     }

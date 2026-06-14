@@ -150,14 +150,17 @@ export async function PUT(
 
         // Work-permission gate on status changes: a target status carrying a gated
         // Work requires that permission. Statuses with no/ungated Work are open.
+        // Also pull the status' customer-announcement config (auto public message on entry).
+        let targetStatus: { label: string; announceOnEntry: boolean; etaText: string | null } | null = null;
         if (body.status) {
-            const targetStatus = await prisma.ticketStatus.findUnique({
+            const found = await prisma.ticketStatus.findUnique({
                 where: { id: body.status },
-                select: { work: { select: { permissionId: true } } },
+                select: { label: true, announceOnEntry: true, etaText: true, work: { select: { permissionId: true } } },
             });
-            if (!passesWorkGate(resolvedUser, targetStatus?.work ?? null)) {
+            if (!passesWorkGate(resolvedUser, found?.work ?? null)) {
                 return NextResponse.json({ error: "You don't have permission for this work" }, { status: 403 });
             }
+            if (found) targetStatus = { label: found.label, announceOnEntry: found.announceOnEntry, etaText: found.etaText };
         }
 
         const ticket = await prisma.ticket.update({
@@ -226,6 +229,21 @@ export async function PUT(
                     // No entry worker configured — clear current worker so stale work doesn't linger.
                     await prisma.ticket.update({ where: { id: ticket.id }, data: { workerId: null, primaryOwnerId: null, wakeAt: null, retryCount: 0, retryKeyId: null } });
                 }
+            }
+            // Customer-facing announcement: if the entered status opts in, auto-post a
+            // PUBLIC timeline note "<label> is started and will take <etaText>". Skipped
+            // on undo/back (a revert shouldn't re-announce the stage to the customer).
+            if (!("restoreWorkerId" in body) && targetStatus?.announceOnEntry) {
+                const eta = targetStatus.etaText?.trim();
+                await prisma.ticketLog.create({
+                    data: {
+                        ticketId:   ticket.id,
+                        status:     body.status,
+                        note:       `${targetStatus.label} is started${eta ? ` and will take ${eta}` : ""}`,
+                        visibility: "PUBLIC",
+                        userId,
+                    },
+                });
             }
             // If this change took a CHILD ticket onto a worker that signals its
             // parent, reconcile the parent (fire its Success / Unsuccess route).
