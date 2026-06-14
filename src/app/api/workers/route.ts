@@ -22,6 +22,7 @@ const workerSchema = labelColorSchema.extend({
     autoRevertOnClear: z.boolean().optional(),
     transitionNote: z.string().optional().nullable(),
     skipNoteOnEntry: z.boolean().optional(),
+    requireNoteOnEntry: z.boolean().optional(),
     entryQuestion: z.string().optional().nullable(),
     retrySchedule: z.array(z.object({
         unit: z.enum(["minute", "hour", "day", "week", "month", "year"]),
@@ -93,6 +94,7 @@ export async function POST(req: Request) {
                 autoRevertOnClear:  body.autoRevertOnClear ?? true,
                 transitionNote:     body.transitionNote ?? null,
                 skipNoteOnEntry:    body.skipNoteOnEntry ?? false,
+                requireNoteOnEntry: body.requireNoteOnEntry ?? false,
                 entryQuestion:      body.entryQuestion ?? null,
                 retrySchedule:      body.retrySchedule ?? [],
                 spawnPipelineId:    body.spawnPipelineId ?? null,

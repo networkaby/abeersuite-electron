@@ -22,6 +22,7 @@ const workerPatchSchema = z.object({
     autoRevertOnClear: z.boolean().optional(),
     transitionNote: z.string().optional().nullable(),
     skipNoteOnEntry: z.boolean().optional(),
+    requireNoteOnEntry: z.boolean().optional(),
     entryQuestion: z.string().optional().nullable(),
     retrySchedule: z.array(z.object({
         unit: z.enum(["minute", "hour", "day", "week", "month", "year"]),
@@ -92,6 +93,7 @@ export async function PATCH(
                 ...("autoRevertOnClear"  in body && { autoRevertOnClear: body.autoRevertOnClear }),
                 ...("transitionNote"     in body && { transitionNote:    body.transitionNote ?? null }),
                 ...("skipNoteOnEntry"    in body && { skipNoteOnEntry:   body.skipNoteOnEntry }),
+                ...("requireNoteOnEntry" in body && { requireNoteOnEntry: body.requireNoteOnEntry }),
                 ...("entryQuestion"      in body && { entryQuestion:     body.entryQuestion ?? null }),
                 ...("retrySchedule"        in body && { retrySchedule:        body.retrySchedule ?? [] }),
                 ...("spawnPipelineId"      in body && { spawnPipelineId:      body.spawnPipelineId ?? null }),

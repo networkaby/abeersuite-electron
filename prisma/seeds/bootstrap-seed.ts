@@ -510,7 +510,7 @@ const WORK_GROUPS = [
 // Opaque ids (W1…W7) so the id never encodes the label — renames stay safe.
 // groupId → WorkGroup (above).
 const WORKS = [
-    { id: "W1", label: "Tele Calling", order: 1, color: "bg-blue-100 text-blue-600", gated: true, groupId: "G1", successLabel: "Reachable", failLabel: "Unreachable", args: [{ key: "number", label: "Call number", source: "customer.phone" }, { key: "reason", label: "Reason", source: "user", kind: "text", on: "fail" }] },
+    { id: "W1", label: "Tele Calling", order: 1, color: "bg-blue-100 text-blue-600", gated: true, groupId: "G1", successLabel: "Reachable", failLabel: "Unreachable", prompt: "Add alternative number of customer if you know", startLabel: "Make a call", args: [{ key: "number", label: "Call number", source: "customer.phone" }, { key: "reason", label: "Reason", source: "user", kind: "text", on: "fail" }] },
     { id: "W2", label: "Repairing", order: 2, color: "bg-green-100 text-green-700", gated: false, groupId: "G2", successLabel: "Fixed", failLabel: "Can't fix", args: [] },
     { id: "W3", label: "Admin Approval", order: 3, color: "bg-orange-100 text-orange-600", gated: false, groupId: "G3", successLabel: "Approved", failLabel: "Rejected", args: [] },
     { id: "W4", label: "Order Parts", order: 4, color: "bg-purple-100 text-purple-600", gated: false, groupId: "G4", successLabel: "Ordered", failLabel: "Unavailable", args: [{ key: "part", label: "Part needed", source: "user", kind: "text" }] },
@@ -531,6 +531,7 @@ type WorkerSeed = {
     // Entry-time popup (on worker change): auto transition note + optional note popup.
     transitionNote?: string;
     skipNoteOnEntry?: boolean;
+    requireNoteOnEntry?: boolean;
     entryQuestion?: string;
     // Hybrid retry schedule: a "waiting" worker re-arms its work on a front-loaded
     // schedule (1st attempt immediate, then densest phase first). After the last
@@ -881,14 +882,17 @@ async function main() {
     for (const w of WORKS) {
         const permissionId = w.gated ? `work:${w.id}` : null;
         const color = seedColor(w.color);
+        // Work-shape fields are optional in the seed rows — default them here.
+        const shape = w as { prompt?: string | null; startLabel?: string | null; successPopup?: boolean; failPopup?: boolean };
+        const shapeFields = { prompt: shape.prompt ?? null, startLabel: shape.startLabel ?? null, successPopup: shape.successPopup ?? false, failPopup: shape.failPopup ?? false };
         await prisma.work.upsert({
             where:  { id: w.id },
-            update: { label: w.label, color, order: w.order, permissionId, groupId: w.groupId, successLabel: w.successLabel, failLabel: w.failLabel, args: w.args as unknown as Prisma.InputJsonValue },
-            create: { id: w.id, label: w.label, color, order: w.order, permissionId, groupId: w.groupId, successLabel: w.successLabel, failLabel: w.failLabel, args: w.args as unknown as Prisma.InputJsonValue },
+            update: { label: w.label, color, order: w.order, permissionId, groupId: w.groupId, successLabel: w.successLabel, failLabel: w.failLabel, args: w.args as unknown as Prisma.InputJsonValue, ...shapeFields },
+            create: { id: w.id, label: w.label, color, order: w.order, permissionId, groupId: w.groupId, successLabel: w.successLabel, failLabel: w.failLabel, args: w.args as unknown as Prisma.InputJsonValue, ...shapeFields },
         });
     }
     for (const ss of WORKERS_SEED) {
-        const retry = { retrySchedule: ss.retrySchedule ?? [], publicLabel: ss.publicLabel ?? null, spawnPipelineId: ss.spawnPipelineId ?? null, parentSignal: ss.parentSignal ?? null, actions: (ss.actions ?? []) as unknown as Prisma.InputJsonValue, transitionNote: ss.transitionNote ?? null, skipNoteOnEntry: ss.skipNoteOnEntry ?? false, entryQuestion: ss.entryQuestion ?? null };
+        const retry = { retrySchedule: ss.retrySchedule ?? [], publicLabel: ss.publicLabel ?? null, spawnPipelineId: ss.spawnPipelineId ?? null, parentSignal: ss.parentSignal ?? null, actions: (ss.actions ?? []) as unknown as Prisma.InputJsonValue, transitionNote: ss.transitionNote ?? null, skipNoteOnEntry: ss.skipNoteOnEntry ?? false, requireNoteOnEntry: ss.requireNoteOnEntry ?? false, entryQuestion: ss.entryQuestion ?? null };
         const color = seedColor(ss.color);
         await prisma.ticketWorker.upsert({
             where:  { id: ss.id },

@@ -12,11 +12,11 @@ import { Textarea } from "@/components/ui/textarea";
 /** A worker hand-off — stays in the current stage, routes the work elsewhere.
  *  skipNoteOnEntry hides the note popup (friction-free move); entryQuestion is the
  *  guidance shown in that popup (the answer goes in the private/public note). */
-interface SubTarget { id: string; label: string; work: { label: string; color: string } | null; skipNoteOnEntry?: boolean; entryQuestion?: string | null }
+interface SubTarget { id: string; label: string; work: { label: string; color: string } | null; skipNoteOnEntry?: boolean; requireNoteOnEntry?: boolean; entryQuestion?: string | null }
 /** A real stage change. `isTerminal` = a close-out (Closed / Cancelled). */
 interface StatusTarget { id: string; label: string; color?: string; isTerminal?: boolean }
 type Pending =
-    | { dir: "next"; kind: "sub" | "status"; id: string; label: string; entryQuestion?: string | null }
+    | { dir: "next"; kind: "sub" | "status"; id: string; label: string; entryQuestion?: string | null; requireNote?: boolean }
     | { dir: "back"; statusId: string; workerId: string | null; label: string };
 
 interface Props {
@@ -50,7 +50,7 @@ export default function StatusNav({
         if (workerId) fwd.set("fromWorkerId", workerId); else fwd.set("entryOnly", "true");
         try {
             const r = await axios.get(`/api/workers/next?${fwd}`);
-            setNextSubs((r.data as SubTarget[]).map((s) => ({ id: s.id, label: s.label, work: s.work ?? null, skipNoteOnEntry: !!s.skipNoteOnEntry, entryQuestion: s.entryQuestion ?? null })));
+            setNextSubs((r.data as SubTarget[]).map((s) => ({ id: s.id, label: s.label, work: s.work ?? null, skipNoteOnEntry: !!s.skipNoteOnEntry, requireNoteOnEntry: !!s.requireNoteOnEntry, entryQuestion: s.entryQuestion ?? null })));
         } catch { setNextSubs([]); }
     }, [statusId, workerId, isWarranty]);
 
@@ -133,7 +133,7 @@ export default function StatusNav({
         } finally { setBusy(false); }
     };
     const handOff = (t: SubTarget) => {
-        if (!t.skipNoteOnEntry) setPending({ dir: "next", kind: "sub", id: t.id, label: t.label, entryQuestion: t.entryQuestion ?? null });
+        if (!t.skipNoteOnEntry) setPending({ dir: "next", kind: "sub", id: t.id, label: t.label, entryQuestion: t.entryQuestion ?? null, requireNote: !!t.requireNoteOnEntry });
         else commitSub(t.id, t.label);
     };
 
@@ -314,9 +314,16 @@ export default function StatusNav({
                                 />
                             </div>
                         </div>
+                        {pending.dir === "next" && pending.kind === "sub" && pending.requireNote && !privateNote.trim() && (
+                            <p className="-mt-2 text-xs text-amber-700 dark:text-amber-400">A note is required for this worker before you can move.</p>
+                        )}
                         <DialogFooter className="mt-2 border-t border-border pt-4">
                             <Button onClick={close} variant="outline" className="flex-1">Cancel</Button>
-                            <Button onClick={submit} disabled={busy} className="flex-1">
+                            <Button
+                                onClick={submit}
+                                disabled={busy || (pending.dir === "next" && pending.kind === "sub" && !!pending.requireNote && !privateNote.trim())}
+                                className="flex-1"
+                            >
                                 {busy ? "Saving…" : pending.dir === "back" ? "← Revert" : "Move →"}
                             </Button>
                         </DialogFooter>

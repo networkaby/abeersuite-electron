@@ -32,11 +32,11 @@ export async function GET(req: Request) {
 
         let candidates: Array<{
             id: string; label: string; statusId: string | null;
-            warrantyScope: string | null; skipNoteOnEntry: boolean; entryQuestion: string | null;
+            warrantyScope: string | null; skipNoteOnEntry: boolean; requireNoteOnEntry: boolean; entryQuestion: string | null;
             work: { permissionId: string | null; label: string; color: string } | null;
         }>;
 
-        const subSelect = { id: true, label: true, statusId: true, warrantyScope: true, skipNoteOnEntry: true, entryQuestion: true, work: { select: { permissionId: true, label: true, color: true } } } as const;
+        const subSelect = { id: true, label: true, statusId: true, warrantyScope: true, skipNoteOnEntry: true, requireNoteOnEntry: true, entryQuestion: true, work: { select: { permissionId: true, label: true, color: true } } } as const;
 
         if (fromId === null) {
             const status = await prisma.ticketStatus.findUnique({
@@ -74,6 +74,7 @@ export async function GET(req: Request) {
             label: ss.label,
             work: ss.work ? { label: ss.work.label, color: ss.work.color } : null,
             skipNoteOnEntry: ss.skipNoteOnEntry,
+            requireNoteOnEntry: ss.requireNoteOnEntry,
             entryQuestion: ss.entryQuestion ?? null,
         })));
     } catch (e) {

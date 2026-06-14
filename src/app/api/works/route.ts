@@ -22,6 +22,10 @@ const createSchema = z.object({
     gated: z.boolean().optional(),
     successLabel: z.string().trim().optional().nullable(),
     failLabel: z.string().trim().optional().nullable(),
+    prompt: z.string().trim().optional().nullable(),
+    startLabel: z.string().trim().optional().nullable(),
+    successPopup: z.boolean().optional(),
+    failPopup: z.boolean().optional(),
     args: argSchema,
     groupId: z.string().trim().optional().nullable(),
 });
@@ -63,14 +67,14 @@ export async function POST(req: Request) {
     try {
         const { data, error } = await validateRequest(req, createSchema);
         if (error) return error;
-        const { label, color, order, gated, successLabel, failLabel, args, groupId } = data;
+        const { label, color, order, gated, successLabel, failLabel, prompt, startLabel, successPopup, failPopup, args, groupId } = data;
         // Opaque, hidden id (W1, W2, …) like statuses (S#) / workers (SS#),
         // so the id never encodes the label and renames stay comfortable.
         const { id, n } = await generateNextOpaqueId(prisma.work, "W");
         const maxOrder = order ?? n;
         const permissionId = gated ? await mintWorkPermission(id, label) : null;
         const work = await prisma.work.create({
-            data: { id, label, color: color ?? "bg-gray-100 text-gray-600", order: maxOrder, permissionId, successLabel: successLabel || null, failLabel: failLabel || null, args: (args ?? []) as unknown as Prisma.InputJsonValue, groupId: groupId || null },
+            data: { id, label, color: color ?? "bg-gray-100 text-gray-600", order: maxOrder, permissionId, successLabel: successLabel || null, failLabel: failLabel || null, prompt: prompt || null, startLabel: startLabel || null, successPopup: successPopup ?? false, failPopup: failPopup ?? false, args: (args ?? []) as unknown as Prisma.InputJsonValue, groupId: groupId || null },
         });
         return NextResponse.json(work, { status: 201 });
     } catch (e) {

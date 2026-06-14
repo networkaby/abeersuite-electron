@@ -4,7 +4,7 @@ import { useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import { Play, Check, X, CheckCircle, Lock, Eye } from "lucide-react";
+import { Play, Check, X, CheckCircle, Lock, Eye, HelpCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
@@ -22,6 +22,15 @@ interface Props {
      *  null → the buttons stay icon-only (generic). */
     successLabel?: string | null;
     failLabel?: string | null;
+    /** Optional third-button caption. When set the work is 2-step: this button shows
+     *  first (claims/locks the card), then the outcomes reveal. */
+    startLabel?: string | null;
+    /** Guidance shown at the top of the completion popup (what to enter / do). */
+    prompt?: string | null;
+    /** Per-outcome popup gate — true (or an outcome-scoped arg) opens the dialog;
+     *  otherwise that outcome completes silently. */
+    successPopup?: boolean;
+    failPopup?: boolean;
     /** The work's arguments — user-given ones are collected in the completion dialog. */
     args?: WorkArg[];
     /** Where this worker routes on a successful outcome (null = none configured). */
@@ -43,15 +52,15 @@ interface Props {
 
 /**
  * Start / outcome actions for a ticket's current work, reused on the Work Inbox
- * board and the ticket page. Start = claim (sets primaryOwner, no double-work).
- * When you own it, the two outcomes show directly as colour-coded buttons —
- * green Success / red Unsuccess — that move the ticket to the worker the
- * *current* worker routes that outcome to (configured on the source). A quick
- * note box captures the feedback (→ ticket activity) before the move. Works with
- * no routing fall back to a single neutral Complete (clear).
+ * board and the ticket page. The Work's *shape* drives the UI:
+ *  - `startLabel` → 2-step: a Start button claims/locks first, then outcomes reveal.
+ *  - `failLabel` blank → single neutral button (e.g. "Ok"); set → Success / ❌.
+ *  - `successPopup`/`failPopup` (or an outcome-scoped user arg) → that outcome opens a
+ *    popup to collect a note / args (with `prompt` at the top); else it completes silently.
  */
 export default function WorkActions({
-    ticketId, workLabel, successLabel, failLabel, args = [], successTarget, failTarget, retryScheduled = false,
+    ticketId, workLabel, successLabel, failLabel, startLabel, prompt, successPopup = false, failPopup = false,
+    args = [], successTarget, failTarget, retryScheduled = false,
     isOwned, isOwnerMe, onChanged, size = "sm", showComplete = true,
 }: Props) {
     const router = useRouter();
@@ -79,31 +88,31 @@ export default function WorkActions({
         } finally { setBusy(false); }
     };
 
-    const submit = async () => {
-        if (!pending) return;
+    // One completion code path — shared by the silent click and the dialog confirm.
+    // target=null → clear the worker (no-routing "done"). outcome tags it for the
+    // Work Inbox "Finished" list; collected args + notes ride along when present.
+    const post = async ({ target, kind, done, note, publicNote: pub, collected }: {
+        target: RouteTarget | null; kind: string; done: string;
+        note?: string; publicNote?: string; collected?: Record<string, string>;
+    }) => {
         setBusy(true);
         try {
-            // Tag the completion outcome so it lands in the Work Inbox "Finished" list.
-            const outcome = pending.kind === "Success" ? "success" : pending.kind === "Unsuccess" ? "unsuccess" : undefined;
-            // Collected user-given arguments (for this outcome) → saved into the ticket's context.
-            const collected = Object.fromEntries(
-                pendingArgs.map((a) => [argKey(a), (argValues[argKey(a)] ?? "").trim()]).filter(([, v]) => v),
-            );
-            if (pending.target) {
+            const outcome = kind === "Success" ? "success" : kind === "Unsuccess" ? "unsuccess" : undefined;
+            if (target) {
                 await axios.patch(`/api/tickets/${ticketId}/worker`, {
-                    workerId: pending.target.id,
-                    note: privateNote.trim() || undefined,
+                    workerId: target.id,
+                    note: note?.trim() || undefined,
                     visibility: "INTERNAL",
                     outcome,
-                    args: Object.keys(collected).length ? collected : undefined,
+                    args: collected && Object.keys(collected).length ? collected : undefined,
                 });
             } else {
                 await axios.delete(`/api/tickets/${ticketId}/worker`);
             }
-            if (publicEnabled && publicNote.trim()) {
-                await axios.post(`/api/tickets/${ticketId}/notes`, { note: publicNote.trim(), visibility: "PUBLIC" });
+            if (pub?.trim()) {
+                await axios.post(`/api/tickets/${ticketId}/notes`, { note: pub.trim(), visibility: "PUBLIC" });
             }
-            toast.success(pending.done);
+            toast.success(done);
             close();
             refresh();
         } catch (err: unknown) {
@@ -111,21 +120,44 @@ export default function WorkActions({
         } finally { setBusy(false); }
     };
 
+    // The dialog's confirm — gathers the collected args + notes from state.
+    const submit = () => {
+        if (!pending) return;
+        const collected = Object.fromEntries(
+            pendingArgs.map((a) => [argKey(a), (argValues[argKey(a)] ?? "").trim()]).filter(([, v]) => v),
+        );
+        return post({ target: pending.target, kind: pending.kind, done: pending.done, note: privateNote, publicNote: publicEnabled ? publicNote : undefined, collected });
+    };
+
+    // Does this outcome open the popup? Yes when the work checked "popup" for it, OR it
+    // has a question scoped to this outcome (never silently drop an input).
+    const popupFor = (kind: string) => {
+        const flag = kind === "Unsuccess" ? failPopup : successPopup;  // Success & Done use successPopup
+        return flag || userArgs.some((a) => argMatchesOutcome(a, kind));
+    };
+    const onOutcome = (target: RouteTarget | null, kind: string, done: string) => {
+        if (popupFor(kind)) setPending({ target, kind, done });
+        else post({ target, kind, done });
+    };
+
     const hasRouting = !!(successTarget || failTarget);
+    const twoStep = !!(startLabel && startLabel.trim());
+    const requireUnsuccess = !!(failLabel && failLabel.trim());
+    // Two-step works reveal outcomes only after claiming; one-step works show them directly.
+    const canComplete = showComplete && (twoStep ? isOwnerMe : true);
 
     return (
         <>
-            {!isOwned && (
+            {twoStep && !isOwned && (
                 <Button onClick={start} disabled={busy} size={size}>
-                    <Play size={13} /> Reply
-                    {/* Start */}
+                    <Play size={13} /> {startLabel}
                 </Button>
             )}
-            {showComplete && isOwnerMe && (hasRouting ? (
+            {canComplete && (hasRouting ? (
                 <>
                     {successTarget && (
                         <Button
-                            onClick={() => setPending({ target: successTarget, kind: "Success", done: `${successLabel || "Success"} → ${successTarget.label}` })}
+                            onClick={() => onOutcome(successTarget, "Success", `${successLabel || "Success"} → ${successTarget.label}`)}
                             disabled={busy} size={size} variant="outline" title={`${successLabel || "Success"} → ${successTarget.label}`}
                             className="border-green-300 bg-green-50 text-green-700 hover:bg-green-100 dark:border-green-800 dark:bg-green-950 dark:text-green-300"
                         >
@@ -133,9 +165,9 @@ export default function WorkActions({
                             {successLabel && <span>{successLabel}</span>}
                         </Button>
                     )}
-                    {failTarget && (
+                    {requireUnsuccess && failTarget && (
                         <Button
-                            onClick={() => setPending({ target: failTarget, kind: "Unsuccess", done: retryScheduled ? "Next attempt scheduled" : `${failLabel || "Unsuccess"} → ${failTarget.label}` })}
+                            onClick={() => onOutcome(failTarget, "Unsuccess", retryScheduled ? "Next attempt scheduled" : `${failLabel || "Unsuccess"} → ${failTarget.label}`)}
                             disabled={busy} size={size} variant="outline" title={retryScheduled ? "Couldn't — schedule next attempt" : `${failLabel || "Unsuccess"} → ${failTarget.label}`}
                             className="border-red-300 bg-red-50 text-red-700 hover:bg-red-100 dark:border-red-800 dark:bg-red-950 dark:text-red-300"
                         >
@@ -145,8 +177,8 @@ export default function WorkActions({
                     )}
                 </>
             ) : (
-                <Button onClick={() => setPending({ target: null, kind: "Done", done: "Marked done" })} disabled={busy} size={size} variant="outline">
-                    <CheckCircle size={13} /> Complete
+                <Button onClick={() => onOutcome(null, "Done", successLabel || "Marked done")} disabled={busy} size={size} variant="outline">
+                    <CheckCircle size={13} /> {successLabel || "Complete"}
                 </Button>
             ))}
 
@@ -158,6 +190,12 @@ export default function WorkActions({
                         </DialogHeader>
 
                         <div className="space-y-4">
+                            {prompt && (
+                                <div className="flex gap-2.5 rounded-md border border-primary/30 bg-primary/5 px-3 py-2.5">
+                                    <HelpCircle size={16} className="mt-0.5 shrink-0 text-primary" />
+                                    <p className="text-sm font-semibold text-foreground">{prompt}</p>
+                                </div>
+                            )}
                             {pending.target && (
                                 retryScheduled && pending.kind === "Unsuccess" ? (
                                     <p className="text-sm text-muted-foreground">

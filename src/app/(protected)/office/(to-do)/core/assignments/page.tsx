@@ -3,7 +3,7 @@ import { auth } from "@/auth";
 import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
 import { timeAgo, timeUntil } from "@/shared/lib/format/timeAgo";
 import WorkInboxBoard, { type WorkInboxItem } from "@/modules/repairing/components/assignments/WorkInboxBoard";
-import { parseArgs, isUserArg, resolveTicketSource, type TicketLike } from "@/modules/repairing/lib/ticketSources";
+import { parseArgs, isUserArg, resolveTicketSource, META_PREV_OUTCOME, META_LAST_NOTE, type TicketLike } from "@/modules/repairing/lib/ticketSources";
 
 // The Work Inbox: every active ticket sitting in a work-bearing worker, as one
 // mixed list (longest-waiting first). New tickets enter their status' entry
@@ -55,7 +55,7 @@ export default async function AssignmentsPage() {
                 ticket: { select: { id: true, device: { select: { brand: true, model: true, account: { select: customerPhones } } } } },
             },
         }),
-        prisma.work.findMany({ orderBy: { order: "asc" }, select: { id: true, label: true, color: true, successLabel: true, failLabel: true, args: true, groupId: true, group: { select: { id: true, label: true, color: true } } } }),
+        prisma.work.findMany({ orderBy: { order: "asc" }, select: { id: true, label: true, color: true, successLabel: true, failLabel: true, prompt: true, startLabel: true, successPopup: true, failPopup: true, args: true, groupId: true, group: { select: { id: true, label: true, color: true } } } }),
         prisma.workGroup.findMany({ orderBy: { order: "asc" }, select: { id: true, label: true, color: true } }),
     ]);
 
@@ -83,11 +83,20 @@ export default async function AssignmentsPage() {
         const scheduled = Array.isArray(t.ticketWorker?.retrySchedule) && (t.ticketWorker.retrySchedule as unknown[]).length > 0;
         const selfTarget = t.ticketWorker ? { id: t.ticketWorker.id, label: t.ticketWorker.label } : null;
         // Worker context = the work's SUPPLY args resolved against the ticket — incl.
-        // outcome variables earlier workers produced (context.<key>). Shown prominently.
+        // outcome variables earlier workers produced (context.<key>) and the two "Previous
+        // step" meta sources resolved from the logs (prev outcome + last note). Shown prominently.
         const ticketLike: TicketLike = { id: t.id, context: t.context as Record<string, unknown> | null, device: t.device };
+        const doneLog = t.logs.find((l) => l.note?.startsWith("Work done · "));
+        const prevOutcome = doneLog ? doneLog.note!.replace(/^Work done · /, "") : null;
+        const lastNoteVal = noteLog?.note ?? null;
         const context = work
             ? parseArgs(work.args).filter((a) => !isUserArg(a))
-                .map((a) => ({ label: a.label, value: resolveTicketSource(a.source, ticketLike) }))
+                .map((a) => ({
+                    label: a.label,
+                    value: a.source === META_PREV_OUTCOME ? prevOutcome
+                        : a.source === META_LAST_NOTE ? lastNoteVal
+                        : resolveTicketSource(a.source, ticketLike),
+                }))
                 .filter((c): c is { label: string; value: string } => !!c.value)
             : [];
         return {
@@ -104,6 +113,12 @@ export default async function AssignmentsPage() {
             groupColor: work?.group?.color ?? null,
             successLabel: work?.successLabel ?? null,
             failLabel: work?.failLabel ?? null,
+            startLabel: work?.startLabel ?? null,
+            prompt: work?.prompt ?? null,
+            successPopup: work?.successPopup ?? false,
+            failPopup: work?.failPopup ?? false,
+            // The work's args — WorkActions collects the user-given (outcome) ones in the popup.
+            args: work ? parseArgs(work.args) : [],
             status: t.primaryOwner ? "progress" : "todo",
             coverLabel: t.ticketWorker?.label ?? "",
             ask: t.ticketWorker?.actionLabel ?? null,

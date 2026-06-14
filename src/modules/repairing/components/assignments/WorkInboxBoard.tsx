@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Wrench, Clock, CheckCircle2, XCircle, MessageSquare } from "lucide-react";
 import WorkActions from "../WorkActions";
+import { type WorkArg } from "@/modules/repairing/lib/ticketSources";
 import { badgeColor, dotColor } from "@/shared/lib/format/entityColor";
 
 /**
@@ -26,6 +27,12 @@ export interface WorkInboxItem {
     groupColor: string | null;
     successLabel?: string | null;
     failLabel?: string | null;
+    startLabel?: string | null;
+    prompt?: string | null;
+    successPopup?: boolean;
+    failPopup?: boolean;
+    /** The work's arguments — user-given ones are collected in the completion popup. */
+    args?: WorkArg[];
     status: "todo" | "progress" | "answered";
     coverLabel: string;
     ask: string | null;
@@ -210,6 +217,11 @@ export default function WorkInboxBoard({
                                             workLabel={it.workLabel}
                                             successLabel={it.successLabel}
                                             failLabel={it.failLabel}
+                                            startLabel={it.startLabel}
+                                            prompt={it.prompt}
+                                            successPopup={it.successPopup}
+                                            failPopup={it.failPopup}
+                                            args={it.args}
                                             successTarget={it.successTarget}
                                             failTarget={it.failTarget}
                                             retryScheduled={it.retryScheduled}

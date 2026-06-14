@@ -121,6 +121,10 @@ model TicketLog {
   userId       Int
   workerId     String?
   visibility   LogVisibility @default(INTERNAL)
+  // Structured work-completion record (currently dormant — feature reverted; columns
+  // kept so existing data survives and a future rebuild has them ready).
+  outcome      String?
+  data         Json?
   createdAt    DateTime      @default(now())
   ticketStatus TicketStatus  @relation(fields: [status], references: [id])
   ticketWorker TicketWorker? @relation(fields: [workerId], references: [id])

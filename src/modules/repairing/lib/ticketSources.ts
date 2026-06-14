@@ -22,8 +22,19 @@ export const TICKET_SOURCES: { value: string; label: string; group: string }[] =
     { value: "device.problem", label: "Problem", group: "Device" },
     { value: "ticket.id", label: "Ticket #", group: "Ticket" },
     { value: "ticket.status", label: "Status", group: "Ticket" },
-    { value: USER_SOURCE, label: "Ask the user", group: "Input" },
+    // "Latest" meta sources — the most recent value of each kind on the ticket, wherever
+    // it came from (not necessarily the immediately-previous step). Resolved from the
+    // ticket's LOGS by the Work Inbox builder (not resolveTicketSource, which has no log
+    // access). prevOutcome = last completion stamp; lastNote = latest human note.
+    { value: "meta.prevOutcome", label: "Previous outcome", group: "Latest" },
+    { value: "meta.lastNote", label: "Last note (instruction)", group: "Latest" },
+    { value: USER_SOURCE, label: "Ask the helper", group: "Input" },
 ];
+
+// Meta sources show on the Work Inbox card but resolve from the ticket LOGS, not its
+// fields — the inbox builder fills them; resolveTicketSource returns null for them.
+export const META_PREV_OUTCOME = "meta.prevOutcome";
+export const META_LAST_NOTE = "meta.lastNote";
 
 export type WorkArg = {
     key: string;

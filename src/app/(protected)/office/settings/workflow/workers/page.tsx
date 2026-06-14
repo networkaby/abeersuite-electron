@@ -78,6 +78,7 @@ interface Worker {
     autoRevertOnClear: boolean;
     transitionNote?: string | null;
     skipNoteOnEntry?: boolean;
+    requireNoteOnEntry?: boolean;
     entryQuestion?: string | null;
     retrySchedule?: { unit: string; every: number; times: number }[] | null;
     spawnPipelineId?: string | null;
@@ -113,6 +114,7 @@ type FormValues = {
     autoRevertOnClear: boolean;
     transitionNote: string;
     skipNoteOnEntry: boolean;
+    requireNoteOnEntry: boolean;
     entryQuestion: string;
     retryRows: RetryRows;
     spawnPipelineId: string;
@@ -135,6 +137,7 @@ const BLANK_FORM: FormValues = {
     autoRevertOnClear: true,
     transitionNote: "",
     skipNoteOnEntry: false,
+    requireNoteOnEntry: false,
     entryQuestion: "",
     retryRows: BLANK_RETRY_ROWS(),
     spawnPipelineId: "",
@@ -364,6 +367,15 @@ function WorkerFormModal({
                             On → handing a ticket into this worker opens the private/public note popup so the operator can write something.
                             Off → friction-free move (the transition note above still posts automatically).
                         </p>
+                        {!form.skipNoteOnEntry && (
+                            <label className="ml-6 flex items-center gap-2 text-sm">
+                                <Checkbox
+                                    checked={form.requireNoteOnEntry}
+                                    onCheckedChange={(checked) => setForm({ ...form, requireNoteOnEntry: checked === true })}
+                                />
+                                Require the note <span className="text-xs text-muted-foreground">(the Move is blocked until it&apos;s filled — forces a fresh, relevant note)</span>
+                            </label>
+                        )}
                         <div className="space-y-1.5">
                             <Label className="text-xs">Popup question <span className="font-normal text-muted-foreground">— guidance shown in that popup; the answer goes in the private/public note (no separate box)</span></Label>
                             <Input
@@ -666,6 +678,7 @@ export default function WorkersPage() {
         autoRevertOnClear: form.autoRevertOnClear,
         transitionNote: form.transitionNote.trim() || null,
         skipNoteOnEntry: form.skipNoteOnEntry,
+        requireNoteOnEntry: form.requireNoteOnEntry,
         entryQuestion: form.entryQuestion.trim() || null,
         retrySchedule: rowsToSchedule(form.retryRows),
         spawnPipelineId: form.spawnPipelineId || null,
@@ -706,6 +719,7 @@ export default function WorkersPage() {
             autoRevertOnClear: worker.autoRevertOnClear ?? true,
             transitionNote: worker.transitionNote ?? "",
             skipNoteOnEntry: worker.skipNoteOnEntry ?? false,
+            requireNoteOnEntry: worker.requireNoteOnEntry ?? false,
             entryQuestion: worker.entryQuestion ?? "",
             retryRows: scheduleToRows(worker.retrySchedule),
             spawnPipelineId: worker.spawnPipelineId ?? "",
@@ -733,6 +747,7 @@ export default function WorkersPage() {
             autoRevertOnClear: s.autoRevertOnClear ?? true,
             transitionNote: s.transitionNote ?? "",
             skipNoteOnEntry: s.skipNoteOnEntry ?? false,
+            requireNoteOnEntry: s.requireNoteOnEntry ?? false,
             entryQuestion: s.entryQuestion ?? "",
             retryRows: scheduleToRows(s.retrySchedule),
             spawnPipelineId: s.spawnPipelineId ?? "",

@@ -93,6 +93,9 @@ model TicketWorker {
   // entryArgs: dormant (structured ask-on-entry, kept to match the existing column).
   transitionNote    String?
   skipNoteOnEntry   Boolean             @default(false)
+  // When the note popup shows (skipNoteOnEntry false), require a non-empty note —
+  // the Move is blocked until the operator writes one (forces fresh, relevant context).
+  requireNoteOnEntry Boolean            @default(false)
   entryQuestion     String?
   entryArgs         Json                @default("[]")
   warrantyScope     String              @default("any")
@@ -167,6 +170,17 @@ model Work {
   // null → fall back to generic "Success" / "Unsuccess" on the completion buttons.
   successLabel String?
   failLabel    String?
+  // ── Work shape (how the completion UI behaves) ──────────────────────────────
+  // prompt: guidance shown at the top of the work's COMPLETION popup (when one opens).
+  // startLabel: optional 2-step — a "start" button (claim/lock) shows first, then the
+  //   outcome buttons reveal. null/blank = outcomes show directly.
+  // successPopup / failPopup: that outcome opens the completion popup (to collect a
+  //   note / arg) instead of completing silently.
+  // Single-vs-two outcomes is derived from failLabel (blank → single button).
+  prompt       String?
+  startLabel   String?
+  successPopup Boolean        @default(false)
+  failPopup    Boolean        @default(false)
   // Arguments the work needs — [{ key, label, source, kind }]. `source` is either a
   // ticket-data path (e.g. "customer.phone", resolved LIVE & shown read-only) or
   // "user" (collected from the operator at completion → saved into Ticket.context).
