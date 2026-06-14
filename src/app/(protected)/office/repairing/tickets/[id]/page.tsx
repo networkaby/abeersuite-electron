@@ -448,7 +448,10 @@ export default function TicketDetailPage() {
 
                     {/* Right Column — Actions */}
                     <div className="space-y-4">
-                        {ticket.ticketWorker?.work && (
+                        {/* TEMP (dev): the "Current work" card duplicates the Work Inbox so we
+                            don't navigate between two pages. Hidden to avoid confusion — flip the
+                            `false &&` guard to re-enable. */}
+                        {false && ticket.ticketWorker?.work && (
                             <div className="space-y-3 rounded-lg border border-border bg-card p-4 shadow">
                                 <h2 className="text-sm font-semibold text-foreground">Current work</h2>
                                 <div className="flex flex-wrap items-center gap-2">
