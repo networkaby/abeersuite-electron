@@ -226,6 +226,17 @@ function WorkerFormModal({
     const scheduleSummary = summarizeRows(form.retryRows);
     const hasSchedule = !!scheduleSummary;
 
+    // ── DUMMY (UI preview only — not wired): Work vs Action execution model. A worker
+    //    runs EITHER a Work (a human does it) OR an Action (automated tool, no human);
+    //    both report Success/Unsuccess so the worker's routing is identical. ──
+    const [execKind, setExecKind] = useState<"work" | "action">("work");
+    const [dummyActionId, setDummyActionId] = useState("__none__");
+    const DUMMY_ACTIONS = [
+        { id: "a1", label: "Verify IMEI (web lookup)" },
+        { id: "a2", label: "Send SMS" },
+        { id: "a3", label: "Sync to CRM (webhook)" },
+    ];
+
     // ── Action chain (6th power) editors — each entry = a hook + when + arguments ─
     const addAction = () => setForm({ ...form, actions: [...form.actions, { type: ACTION_TYPES[0].type, on: "success", config: {} }] });
     const updateAction = (i: number, patch: Partial<WorkerActionForm>) =>
@@ -248,7 +259,7 @@ function WorkerFormModal({
                     <TabsList className="grid w-full grid-cols-3">
                         <TabsTrigger value="details">Details</TabsTrigger>
                         <TabsTrigger value="attempts">Attempts{hasSchedule ? " ·" : ""}</TabsTrigger>
-                        <TabsTrigger value="actions">Actions{form.actions.length ? ` · ${form.actions.length}` : ""}</TabsTrigger>
+                        <TabsTrigger value="actions">Execution{form.actions.length ? ` · ${form.actions.length}` : ""}</TabsTrigger>
                     </TabsList>
 
                     <TabsContent value="details" className="space-y-5">
@@ -540,8 +551,57 @@ function WorkerFormModal({
                     </TabsContent>
 
                     <TabsContent value="actions" className="space-y-3">
+                        {/* ── DUMMY (UI preview — not wired): Work vs Action toggle + selector ── */}
+                        <div className="space-y-3 rounded-md border border-border bg-muted/20 p-3">
+                            <Label className="text-xs">What runs on this worker</Label>
+                            <div className="inline-flex rounded-md border border-border bg-background p-0.5">
+                                <button
+                                    type="button"
+                                    onClick={() => setExecKind("work")}
+                                    className={`rounded px-3 py-1 text-sm transition-colors ${execKind === "work" ? "bg-primary text-primary-foreground font-medium shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                                >
+                                    Work <span className="text-xs opacity-70">· a person does it</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setExecKind("action")}
+                                    className={`rounded px-3 py-1 text-sm transition-colors ${execKind === "action" ? "bg-primary text-primary-foreground font-medium shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                                >
+                                    Action <span className="text-xs opacity-70">· runs automatically</span>
+                                </button>
+                            </div>
+
+                            {execKind === "work" ? (
+                                <div className="space-y-1.5">
+                                    <Label className="text-xs">Work</Label>
+                                    <Select value={form.workId || "__none__"} onValueChange={(value) => setForm({ ...form, workId: value === "__none__" ? "" : value })}>
+                                        <SelectTrigger className="h-9 w-full"><SelectValue placeholder="Select work" /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="__none__">— none —</SelectItem>
+                                            {works.map((w) => (<SelectItem key={w.id} value={w.id}>{w.label}{w.permissionId ? " (gated)" : ""}</SelectItem>))}
+                                        </SelectContent>
+                                    </Select>
+                                    <p className="text-xs text-muted-foreground">A <span className="font-medium">person</span> completes it on the Work Inbox and picks Success / Unsuccess.</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-1.5">
+                                    <Label className="text-xs">Action</Label>
+                                    <Select value={dummyActionId} onValueChange={setDummyActionId}>
+                                        <SelectTrigger className="h-9 w-full"><SelectValue placeholder="Select action" /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="__none__">— none —</SelectItem>
+                                            {DUMMY_ACTIONS.map((a) => (<SelectItem key={a.id} value={a.id}>{a.label}</SelectItem>))}
+                                        </SelectContent>
+                                    </Select>
+                                    <p className="text-xs text-muted-foreground">Runs <span className="font-medium">automatically</span> via a tool (fetch a site, open a tab, call a webhook…) — no human. Reports Success / Unsuccess just like a Work.</p>
+                                </div>
+                            )}
+                            <p className="text-[11px] italic text-muted-foreground/70">Dummy preview — both route on the Success / Unsuccess targets set in Details. Not saved yet.</p>
+                        </div>
+
+                        <div className="border-t border-border pt-3">
                         <p className="text-xs text-muted-foreground">
-                            Action <span className="font-medium">hooks</span> that run when this worker is <span className="font-medium">completed</span>, in order, each filtered by outcome.
+                            <span className="font-medium">Automation hooks (existing)</span> — run when this worker is <span className="font-medium">completed</span>, in order, each filtered by outcome.
                             Pick a hook and fill its arguments. See all hooks in <span className="font-medium">Workflow → Actions</span>.
                         </p>
                         {form.actions.length === 0 && (
@@ -601,6 +661,7 @@ function WorkerFormModal({
                         <Button type="button" variant="outline" size="sm" onClick={addAction} className="w-full">
                             <Plus size={14} className="mr-1" /> Add action
                         </Button>
+                        </div>
                     </TabsContent>
                 </Tabs>
 
