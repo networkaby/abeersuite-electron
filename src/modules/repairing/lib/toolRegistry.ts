@@ -3,9 +3,22 @@
 // An Action (a Work with kind="auto") names a toolType; autoAdvance runs it on the server
 // when a ticket lands on that worker, then routes on the Success/Unsuccess result.
 
+import { spawnChild } from "./spawnChild";
+
 export type ToolResult = { success: boolean; outputs: Record<string, string> };
 
-type ToolRunner = (inputs: Record<string, string>) => Promise<ToolResult>;
+// Runtime ticket context — supplied to "privileged" server tools that act ON the
+// ticket (create a child, etc.), not just on their string inputs. Pure tools
+// (open_tab, navigate) ignore it.
+export type ToolContext = {
+    ticketId: number;
+    status: string;
+    workerId: string;
+    deviceId: number;
+    userId: number;
+};
+
+type ToolRunner = (inputs: Record<string, string>, ctx?: ToolContext) => Promise<ToolResult>;
 
 // "open_tab": we can't pop a real browser tab on the server, so we DEEM the tab openable
 // by checking the URL is reachable — Success when it responds OK (2xx), Unsuccess on a
@@ -32,14 +45,34 @@ async function navigate(inputs: Record<string, string>): Promise<ToolResult> {
     return { success: ok, outputs: ok ? { navigatedTo: path } : {} };
 }
 
+// "create_child": spawn a child on another pipeline, linked back to this ticket.
+// Wraps the existing spawnChild (idempotent — one open child per parent+worker).
+// Needs the runtime ticket context; Success when a child is created this run.
+async function createChild(inputs: Record<string, string>, ctx?: ToolContext): Promise<ToolResult> {
+    if (!ctx) return { success: false, outputs: {} };
+    const pipelineId = (inputs.pipelineId ?? "").trim();
+    if (!pipelineId) return { success: false, outputs: {} };
+    const child = await spawnChild({
+        parentId: ctx.ticketId,
+        parentStatus: ctx.status,
+        parentWorkerId: ctx.workerId,
+        spawnPipelineId: pipelineId,
+        deviceId: ctx.deviceId,
+        userId: ctx.userId,
+    });
+    if (!child) return { success: false, outputs: {} };
+    return { success: true, outputs: { childId: String(child.id), childType: child.type } };
+}
+
 const TOOL_REGISTRY: Record<string, ToolRunner> = {
     open_tab: openTab,
     navigate,
+    create_child: createChild,
 };
 
 // Run a tool by type. Unknown tool → null (caller decides; never throws).
-export async function runServerTool(toolType: string, inputs: Record<string, string>): Promise<ToolResult | null> {
+export async function runServerTool(toolType: string, inputs: Record<string, string>, ctx?: ToolContext): Promise<ToolResult | null> {
     const runner = TOOL_REGISTRY[toolType];
     if (!runner) return null;
-    return runner(inputs);
+    return runner(inputs, ctx);
 }

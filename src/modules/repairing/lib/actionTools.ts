@@ -62,6 +62,19 @@ export const ACTION_TOOLS: ActionToolDef[] = [
             { key: "navigatedTo", label: "Navigated to", kind: "text" },
         ],
     },
+    {
+        type: "create_child",
+        label: "Create a child ticket",
+        description: "Spawns a child on another pipeline, linked back to this ticket (inherits the device). Success when a child is created (idempotent — won't duplicate an open child).",
+        runtime: "server",
+        inputs: [
+            { key: "pipelineId", label: "Target pipeline", kind: "text", hint: "the pipeline id the child rides, e.g. P2" },
+        ],
+        outputs: [
+            { key: "childId", label: "Child id", kind: "text" },
+            { key: "childType", label: "Child type", kind: "text" },
+        ],
+    },
 ];
 
 export const ACTION_TOOL_MAP: Record<string, ActionToolDef> = Object.fromEntries(ACTION_TOOLS.map((t) => [t.type, t]));

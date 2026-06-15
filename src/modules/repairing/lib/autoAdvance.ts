@@ -85,7 +85,10 @@ export async function autoAdvance(ticketId: number, userId: number): Promise<Aut
         }
 
         // Run the tool (headless). Unknown tool → stop (can't decide an outcome).
-        const result = await runServerTool(worker.work.toolType, inputs).catch(() => null);
+        // Privileged tools (create_child) also get the runtime ticket context.
+        const result = await runServerTool(worker.work.toolType, inputs, {
+            ticketId: ticket.id, status: ticket.status, workerId: worker.id, deviceId: ticket.deviceId, userId,
+        }).catch(() => null);
         if (!result) {
             await log(ticketId, ticket.status, worker.id, `⚠️ Auto-run: tool "${worker.work.toolType}" not runnable — stopped`, userId);
             return result_();
