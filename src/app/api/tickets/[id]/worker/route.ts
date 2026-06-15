@@ -357,8 +357,8 @@ export async function PATCH(
         // chain server-side. Best-effort — the human move above already succeeded.
         // openTabs = URLs of open_tab Actions that succeeded → the client pops them (the
         // server can't open browser tabs).
-        const openTabs = await autoAdvance(ticketId, userId).catch(() => [] as string[]);
-        return NextResponse.json({ ok: true, openTabs });
+        const auto = await autoAdvance(ticketId, userId).catch(() => ({ openTabs: [] as string[], navigateTo: null }));
+        return NextResponse.json({ ok: true, openTabs: auto.openTabs, navigateTo: auto.navigateTo });
     } catch (e) {
         return handleApiError(e, "Failed to update worker");
     }

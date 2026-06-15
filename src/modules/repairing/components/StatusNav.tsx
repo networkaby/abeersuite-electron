@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import axios from "axios";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { navigateInApp } from "@/modules/repairing/lib/clientNav";
 import { ArrowRight, ArrowLeft, Lock, Eye, LockKeyhole, Share2, Flag, HelpCircle } from "lucide-react";
 import { badgeColor } from "@/shared/lib/format/entityColor";
 import { Button } from "@/components/ui/button";
@@ -53,6 +55,7 @@ export default function StatusNav({
     // Worker-context fields the technician types on hand-off (keyed by argKey).
     const [entryValues, setEntryValues] = useState<Record<string, string>>({});
     const [busy, setBusy] = useState(false);
+    const router = useRouter();
 
     const load = useCallback(async () => {
         const fwd = new URLSearchParams({ statusId, isWarranty: String(isWarranty) });
@@ -71,6 +74,7 @@ export default function StatusNav({
         if (!pending) return;
         setBusy(true);
         let openTabs: string[] = [];
+        let navigateTo: string | null = null;
         try {
             if (pending.dir === "back") {
                 // True undo: restore exact previous (status, worker) pair.
@@ -93,6 +97,7 @@ export default function StatusNav({
                     args: Object.keys(collected).length ? collected : undefined,
                 });
                 openTabs = (res.data?.openTabs ?? []) as string[];
+                navigateTo = (res.data?.navigateTo ?? null) as string | null;
             } else {
                 await axios.put(`/api/tickets/${ticketId}`, {
                     status: pending.id,
@@ -111,6 +116,8 @@ export default function StatusNav({
             close();
             // Pop any tabs server-side Actions deemed openable (still in the user's click).
             openTabs.forEach((u) => window.open(u, "_blank", "noopener,noreferrer"));
+            // A navigate Action takes the user to an in-app page (or external URL).
+            if (navigateTo) { navigateInApp(router, navigateTo); return; }
             onChanged();
         } catch (err: unknown) {
             toast.error((err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Failed to move");
@@ -153,6 +160,9 @@ export default function StatusNav({
             close();
             // Pop any tabs server-side Actions deemed openable (still in the user's click).
             ((res.data?.openTabs ?? []) as string[]).forEach((u) => window.open(u, "_blank", "noopener,noreferrer"));
+            // A navigate Action takes the user to an in-app page (or external URL).
+            const navTo = (res.data?.navigateTo ?? null) as string | null;
+            if (navTo) { navigateInApp(router, navTo); return; }
             onChanged();
         } catch (err: unknown) {
             toast.error((err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Failed to move");

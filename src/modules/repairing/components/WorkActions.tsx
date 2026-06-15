@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { type WorkArg, isUserArg, argKey, argMatchesOutcome } from "@/modules/repairing/lib/ticketSources";
+import { navigateInApp } from "@/modules/repairing/lib/clientNav";
 
 interface RouteTarget { id: string; label: string }
 interface Pending { target: RouteTarget | null; kind: string; done: string }
@@ -98,6 +99,7 @@ export default function WorkActions({
         try {
             const outcome = kind === "Success" ? "success" : kind === "Unsuccess" ? "unsuccess" : undefined;
             let openTabs: string[] = [];
+            let navigateTo: string | null = null;
             if (target) {
                 const res = await axios.patch(`/api/tickets/${ticketId}/worker`, {
                     workerId: target.id,
@@ -106,6 +108,7 @@ export default function WorkActions({
                     args: collected && Object.keys(collected).length ? collected : undefined,
                 });
                 openTabs = (res.data?.openTabs ?? []) as string[];
+                navigateTo = (res.data?.navigateTo ?? null) as string | null;
             } else {
                 await axios.delete(`/api/tickets/${ticketId}/worker`);
             }
@@ -114,6 +117,8 @@ export default function WorkActions({
             // Auto-Works (Actions) run server-side; pop any tabs they deemed openable here
             // (still inside the user's click, so the browser allows it).
             openTabs.forEach((u) => window.open(u, "_blank", "noopener,noreferrer"));
+            // A navigate Action takes the user to an in-app page (router.push) or external URL.
+            if (navigateTo) { navigateInApp(router, navigateTo); return; }
             refresh();
         } catch (err: unknown) {
             toast.error((err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Failed to complete");

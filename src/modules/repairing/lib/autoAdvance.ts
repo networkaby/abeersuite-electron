@@ -38,15 +38,21 @@ const ticketSelect = {
     },
 } as const;
 
-// Returns the URL(s) of any client-openable tools (open_tab) it ran with Success, so the
-// caller's browser can pop the tab in the user's gesture (the server can't open tabs).
-export async function autoAdvance(ticketId: number, userId: number): Promise<string[]> {
+// Returns client-side effects the server can't perform itself, for the caller's browser
+// to run inside the user's gesture:
+//   • openTabs   — URLs of open_tab Actions that succeeded (window.open).
+//   • navigateTo — the last navigate Action's target path (router.push); null if none.
+export type AutoAdvanceResult = { openTabs: string[]; navigateTo: string | null };
+
+export async function autoAdvance(ticketId: number, userId: number): Promise<AutoAdvanceResult> {
     const visited = new Set<string>();
     const openedTabs: string[] = [];
+    let navigateTo: string | null = null;
+    const result_ = (): AutoAdvanceResult => ({ openTabs: openedTabs, navigateTo });
 
     for (let hop = 0; hop < MAX_AUTO_HOPS; hop++) {
         const ticket = await prisma.ticket.findUnique({ where: { id: ticketId }, select: ticketSelect });
-        if (!ticket?.workerId) return openedTabs;
+        if (!ticket?.workerId) return result_();
 
         const worker = await prisma.ticketWorker.findUnique({
             where: { id: ticket.workerId },
@@ -57,12 +63,12 @@ export async function autoAdvance(ticketId: number, userId: number): Promise<str
             },
         });
         // Not an Action (human Work, or auto without a tool) → chain pauses here.
-        if (!worker || worker.work?.kind !== "auto" || !worker.work.toolType) return openedTabs;
+        if (!worker || worker.work?.kind !== "auto" || !worker.work.toolType) return result_();
 
         // Loop guard: a cycle (A ✓→B, B ✓→A) must not run forever.
         if (visited.has(worker.id)) {
             await log(ticketId, ticket.status, worker.id, `⚠️ Auto-run loop detected at "${worker.label}" — stopped`, userId);
-            return openedTabs;
+            return result_();
         }
         visited.add(worker.id);
 
@@ -82,13 +88,15 @@ export async function autoAdvance(ticketId: number, userId: number): Promise<str
         const result = await runServerTool(worker.work.toolType, inputs).catch(() => null);
         if (!result) {
             await log(ticketId, ticket.status, worker.id, `⚠️ Auto-run: tool "${worker.work.toolType}" not runnable — stopped`, userId);
-            return openedTabs;
+            return result_();
         }
         const outcome: "success" | "unsuccess" = result.success ? "success" : "unsuccess";
         const target = result.success ? worker.successWorkerId : worker.failWorkerId;
 
         // open_tab succeeded (URL reachable) → ask the caller's browser to pop the tab.
         if (worker.work.toolType === "open_tab" && result.success && inputs.url) openedTabs.push(inputs.url);
+        // navigate succeeded → ask the caller's browser to route there (last one wins).
+        if (worker.work.toolType === "navigate" && result.success && inputs.path) navigateTo = inputs.path;
 
         // Map tool outputs → context keys (cfg.outputs: toolOutputKey → contextKey).
         const merged: Record<string, unknown> = { ...((ticket.context as Record<string, unknown> | null) ?? {}) };
@@ -103,7 +111,7 @@ export async function autoAdvance(ticketId: number, userId: number): Promise<str
                 await tx.ticket.update({ where: { id: ticketId }, data: { context: merged as Prisma.InputJsonValue, updatedAt: new Date() } });
                 await tx.ticketLog.create({ data: { ticketId, status: ticket.status, workerId: worker.id, note: `Work done · ${result.success ? "Success" : "Unsuccess"} — ${worker.label} (auto, no route)`, userId } });
             });
-            return openedTabs;
+            return result_();
         }
 
         // Landing: the target's triggerMap may auto-advance to a new status (→ its entry worker).
@@ -144,7 +152,7 @@ export async function autoAdvance(ticketId: number, userId: number): Promise<str
     // Bound exceeded — stop and log (prevents runaway chains).
     const t = await prisma.ticket.findUnique({ where: { id: ticketId }, select: { status: true, workerId: true } });
     await log(ticketId, t?.status ?? "", t?.workerId ?? null, `⚠️ Auto-run chain exceeded ${MAX_AUTO_HOPS} hops — stopped`, userId);
-    return openedTabs;
+    return result_();
 }
 
 async function log(ticketId: number, status: string, workerId: string | null, note: string, userId: number) {

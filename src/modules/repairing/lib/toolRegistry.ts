@@ -22,8 +22,19 @@ async function openTab(inputs: Record<string, string>): Promise<ToolResult> {
     }
 }
 
+// "navigate": an in-app client navigation (router.push in the browser). The server
+// can't drive the SPA router, so it only VALIDATES the target — Success when the path
+// is an in-app route ("/…") or an absolute URL. The browser performs the actual move
+// using the path echoed back in outputs.
+async function navigate(inputs: Record<string, string>): Promise<ToolResult> {
+    const path = (inputs.path ?? "").trim();
+    const ok = path.startsWith("/") || /^https?:\/\//i.test(path);
+    return { success: ok, outputs: ok ? { navigatedTo: path } : {} };
+}
+
 const TOOL_REGISTRY: Record<string, ToolRunner> = {
     open_tab: openTab,
+    navigate,
 };
 
 // Run a tool by type. Unknown tool → null (caller decides; never throws).

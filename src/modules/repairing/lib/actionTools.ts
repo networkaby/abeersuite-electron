@@ -50,6 +50,18 @@ export const ACTION_TOOLS: ActionToolDef[] = [
             { key: "openedUrl", label: "Opened URL", kind: "url" },
         ],
     },
+    {
+        type: "navigate",
+        label: "Navigate to a page",
+        description: "Navigates the current browser tab to a page inside the app (same window). Reports Success if the path is valid.",
+        runtime: "client",
+        inputs: [
+            { key: "path", label: "Path", kind: "text", hint: "e.g. /office/repairing/tickets or /office/work-inbox" },
+        ],
+        outputs: [
+            { key: "navigatedTo", label: "Navigated to", kind: "text" },
+        ],
+    },
 ];
 
 export const ACTION_TOOL_MAP: Record<string, ActionToolDef> = Object.fromEntries(ACTION_TOOLS.map((t) => [t.type, t]));
