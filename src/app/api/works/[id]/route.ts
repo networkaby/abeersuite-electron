@@ -6,6 +6,7 @@ import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { Prisma } from "@/generated/prisma/client";
+import { isKnownTool } from "@/modules/repairing/lib/actionTools";
 
 const patchSchema = z.object({
     label: z.string().trim().min(1).optional(),
@@ -27,6 +28,9 @@ const patchSchema = z.object({
         required: z.boolean().optional(),
     })).optional(),
     groupId: z.string().trim().optional().nullable(),
+    kind: z.enum(["human", "auto"]).optional(),
+    toolType: z.string().trim().optional().nullable(),
+    toolConfig: z.record(z.string(), z.any()).optional().nullable(),
 });
 
 async function mintWorkPermission(id: string, label: string): Promise<string> {
@@ -53,8 +57,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         if (!work) return NextResponse.json({ error: "Work not found" }, { status: 404 });
 
         const label = body.label ?? work.label;
+        const isAuto = (body.kind ?? work.kind) === "auto";
+        if (isAuto && body.toolType && !isKnownTool(body.toolType)) {
+            return NextResponse.json({ error: `Unknown tool: ${body.toolType}` }, { status: 400 });
+        }
         let permissionId = work.permissionId;
-        if (body.gated !== undefined) {
+        if (isAuto) {
+            // Auto Works (Actions) are system-run — never gated.
+            permissionId = null;
+        } else if (body.gated !== undefined) {
             // Gate transition: mint/link the permission, or detach it (row kept).
             permissionId = body.gated ? await mintWorkPermission(id, label) : null;
         } else if (body.label && work.permissionId) {
@@ -76,6 +87,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 ...("failPopup" in body && { failPopup: body.failPopup }),
                 ...("args" in body && { args: (body.args ?? []) as unknown as Prisma.InputJsonValue }),
                 ...("groupId" in body && { groupId: body.groupId || null }),
+                ...("kind" in body && { kind: body.kind ?? "human" }),
+                ...("toolType" in body && { toolType: isAuto ? (body.toolType || null) : null }),
+                ...("toolConfig" in body && { toolConfig: (body.toolConfig ?? {}) as Prisma.InputJsonValue }),
                 permissionId,
             },
         });

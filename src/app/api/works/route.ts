@@ -6,6 +6,7 @@ import { validateRequest, generateNextOpaqueId } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { Prisma } from "@/generated/prisma/client";
+import { isKnownTool } from "@/modules/repairing/lib/actionTools";
 
 const argSchema = z.array(z.object({
     key: z.string().trim().optional(),
@@ -29,6 +30,10 @@ const createSchema = z.object({
     failPopup: z.boolean().optional(),
     args: argSchema,
     groupId: z.string().trim().optional().nullable(),
+    // Execution: "human" (default) or "auto" (an Action that runs a tool).
+    kind: z.enum(["human", "auto"]).optional(),
+    toolType: z.string().trim().optional().nullable(),
+    toolConfig: z.record(z.string(), z.any()).optional().nullable(),
 });
 
 // A gated Work mints/links a `work:<id>` permission so it shows up in the roles
@@ -68,14 +73,19 @@ export async function POST(req: Request) {
     try {
         const { data, error } = await validateRequest(req, createSchema);
         if (error) return error;
-        const { label, color, order, gated, successLabel, failLabel, prompt, startLabel, successPopup, failPopup, args, groupId } = data;
+        const { label, color, order, gated, successLabel, failLabel, prompt, startLabel, successPopup, failPopup, args, groupId, kind, toolType, toolConfig } = data;
+        const isAuto = kind === "auto";
+        if (isAuto && toolType && !isKnownTool(toolType)) {
+            return NextResponse.json({ error: `Unknown tool: ${toolType}` }, { status: 400 });
+        }
         // Opaque, hidden id (W1, W2, …) like statuses (S#) / workers (SS#),
         // so the id never encodes the label and renames stay comfortable.
         const { id, n } = await generateNextOpaqueId(prisma.work, "W");
         const maxOrder = order ?? n;
-        const permissionId = gated ? await mintWorkPermission(id, label) : null;
+        // Auto Works (Actions) are system-run — never gated by a human permission.
+        const permissionId = gated && !isAuto ? await mintWorkPermission(id, label) : null;
         const work = await prisma.work.create({
-            data: { id, label, color: color ?? "bg-gray-100 text-gray-600", order: maxOrder, permissionId, successLabel: successLabel || null, failLabel: failLabel || null, prompt: prompt || null, startLabel: startLabel || null, successPopup: successPopup ?? false, failPopup: failPopup ?? false, args: (args ?? []) as unknown as Prisma.InputJsonValue, groupId: groupId || null },
+            data: { id, label, color: color ?? "bg-gray-100 text-gray-600", order: maxOrder, permissionId, successLabel: successLabel || null, failLabel: failLabel || null, prompt: prompt || null, startLabel: startLabel || null, successPopup: successPopup ?? false, failPopup: failPopup ?? false, args: (args ?? []) as unknown as Prisma.InputJsonValue, groupId: groupId || null, kind: kind ?? "human", toolType: isAuto ? (toolType || null) : null, toolConfig: (toolConfig ?? {}) as Prisma.InputJsonValue },
         });
         return NextResponse.json(work, { status: 201 });
     } catch (e) {

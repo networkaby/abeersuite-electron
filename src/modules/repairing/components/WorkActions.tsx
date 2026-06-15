@@ -97,18 +97,23 @@ export default function WorkActions({
         setBusy(true);
         try {
             const outcome = kind === "Success" ? "success" : kind === "Unsuccess" ? "unsuccess" : undefined;
+            let openTabs: string[] = [];
             if (target) {
-                await axios.patch(`/api/tickets/${ticketId}/worker`, {
+                const res = await axios.patch(`/api/tickets/${ticketId}/worker`, {
                     workerId: target.id,
                     visibility: "INTERNAL",
                     outcome,
                     args: collected && Object.keys(collected).length ? collected : undefined,
                 });
+                openTabs = (res.data?.openTabs ?? []) as string[];
             } else {
                 await axios.delete(`/api/tickets/${ticketId}/worker`);
             }
             toast.success(done);
             close();
+            // Auto-Works (Actions) run server-side; pop any tabs they deemed openable here
+            // (still inside the user's click, so the browser allows it).
+            openTabs.forEach((u) => window.open(u, "_blank", "noopener,noreferrer"));
             refresh();
         } catch (err: unknown) {
             toast.error((err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Failed to complete");

@@ -6,6 +6,7 @@ import { Priority } from "@/generated/prisma/enums";
 import { resolvedUserFromSession } from "@/shared/lib/auth/permissions";
 import { passesWorkGate } from "@/modules/repairing/lib/workGate";
 import { findEntryWorker } from "@/modules/repairing/lib/entryWorker";
+import { autoAdvance } from "@/modules/repairing/lib/autoAdvance";
 import { reconcileParentFromChild } from "@/modules/repairing/lib/spawnChild";
 import { listAllChildren } from "@/modules/repairing/lib/childEntities";
 import { validateRequest } from "@/shared/lib/api";
@@ -229,6 +230,8 @@ export async function PUT(
                     // No entry worker configured — clear current worker so stale work doesn't linger.
                     await prisma.ticket.update({ where: { id: ticket.id }, data: { workerId: null, primaryOwnerId: null, wakeAt: null, retryCount: 0, retryKeyId: null } });
                 }
+                // If the entry worker is an Action (auto Work), run it + chain (best-effort).
+                if (entrySub) await autoAdvance(ticket.id, userId).catch(() => { /* never blocks the status change */ });
             }
             // Customer-facing announcement: if the entered status opts in, auto-post a
             // PUBLIC timeline note "<label> is started and will take <etaText>". Skipped

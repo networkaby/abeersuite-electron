@@ -349,6 +349,8 @@ interface Work {
     failPopup: boolean;
     args: WorkArg[] | null;
     groupId: string | null;
+    kind?: string;                 // "human" (default) | "auto" (an Action — shown on the Actions page)
+    toolConfig?: { outputs?: Record<string, string> } | null;
     statuses: UsingItem[];
     workers: UsingItem[];
 }
@@ -496,11 +498,11 @@ export default function WorksPage() {
 
             {loading ? (
                 <p className="text-sm text-muted-foreground">Loading…</p>
-            ) : works.length === 0 ? (
+            ) : works.filter((w) => w.kind !== "auto").length === 0 ? (
                 <p className="text-sm text-muted-foreground">No works yet. Add the first one.</p>
             ) : (
                 <div className="space-y-4">
-                    {works.map((work) => {
+                    {works.filter((w) => w.kind !== "auto").map((work) => {
                         const usageCount = work.statuses.length + work.workers.length;
                         return (
                             <Card key={work.id}>

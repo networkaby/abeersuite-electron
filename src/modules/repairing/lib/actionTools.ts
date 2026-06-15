@@ -29,6 +29,10 @@ export type ActionToolDef = {
     type: string;
     label: string;
     description: string;
+    // WHERE the tool runs: "client" needs the browser (and a user gesture — e.g. open a
+    // tab); "server" runs headless. The outcome chain is orchestrated on the client for
+    // client tools (inside the human's click) and server-side for server tools (deferred).
+    runtime: "client" | "server";
     inputs: ToolField[];    // what the tool needs (bind each to a fixed value or a context source)
     outputs: ToolField[];   // what it returns into context (besides the Success/Unsuccess boolean)
 };
@@ -38,6 +42,7 @@ export const ACTION_TOOLS: ActionToolDef[] = [
         type: "open_tab",
         label: "Open a new tab",
         description: "Opens the resolved URL in a new browser tab. Reports Success if the tab opened, Unsuccess otherwise.",
+        runtime: "client",
         inputs: [
             { key: "url", label: "URL", kind: "url", hint: "e.g. https://imei.info/?q={device.serial}" },
         ],

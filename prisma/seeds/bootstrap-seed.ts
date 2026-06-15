@@ -518,6 +518,9 @@ const WORKS = [
     { id: "W6", label: "Escalated To EC", order: 6, color: "bg-red-100 text-red-600", gated: false, groupId: "G3", successLabel: null, failLabel: null, args: [] },
     { id: "W7", label: "Incoming Courier", order: 7, color: "bg-orange-100 text-orange-600", gated: false, groupId: "G4", successLabel: "Received", failLabel: "Lost", args: [{ key: "tracking", label: "Tracking #", source: "user", kind: "text", on: "success" }, { key: "lost_reason", label: "Lost reason", source: "user", kind: "text", on: "fail" }] },
     { id: "W8", label: "Order", order: 8, color: "bg-orange-100 text-orange-600", gated: false, groupId: "G5", successLabel: null, failLabel: null, args: [] },
+    // Demo ACTION (kind:"auto") — runs the open_tab tool instead of a human. Reports
+    // Success (tab opened) / Unsuccess (blocked); saves the opened URL to context.lookup_url.
+    { id: "W9", label: "IMEI Lookup", order: 9, color: "bg-violet-100 text-violet-600", gated: false, groupId: null, successLabel: "Opened", failLabel: "Blocked", args: [], kind: "auto", toolType: "open_tab", toolConfig: { bindings: { url: { mode: "fixed", value: "https://www.imei.info" } }, outputs: { openedUrl: "lookup_url" } } },
 ] as const;
 
 type WorkerSeed = {
@@ -883,8 +886,13 @@ async function main() {
         const permissionId = w.gated ? `work:${w.id}` : null;
         const color = seedColor(w.color);
         // Work-shape fields are optional in the seed rows — default them here.
-        const shape = w as { prompt?: string | null; startLabel?: string | null; successPopup?: boolean; failPopup?: boolean };
-        const shapeFields = { prompt: shape.prompt ?? null, startLabel: shape.startLabel ?? null, successPopup: shape.successPopup ?? false, failPopup: shape.failPopup ?? false };
+        const shape = w as { prompt?: string | null; startLabel?: string | null; successPopup?: boolean; failPopup?: boolean; kind?: string; toolType?: string | null; toolConfig?: unknown };
+        const shapeFields = {
+            prompt: shape.prompt ?? null, startLabel: shape.startLabel ?? null,
+            successPopup: shape.successPopup ?? false, failPopup: shape.failPopup ?? false,
+            kind: shape.kind ?? "human", toolType: shape.toolType ?? null,
+            toolConfig: (shape.toolConfig ?? {}) as Prisma.InputJsonValue,
+        };
         await prisma.work.upsert({
             where:  { id: w.id },
             update: { label: w.label, color, order: w.order, permissionId, groupId: w.groupId, successLabel: w.successLabel, failLabel: w.failLabel, args: w.args as unknown as Prisma.InputJsonValue, ...shapeFields },

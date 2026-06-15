@@ -5,6 +5,7 @@ import { passesWorkGate } from "@/modules/repairing/lib/workGate";
 import { findEntryWorker } from "@/modules/repairing/lib/entryWorker";
 import { spawnChild, reconcileParentFromChild } from "@/modules/repairing/lib/spawnChild";
 import { runWorkerActions } from "@/modules/repairing/lib/actions";
+import { autoAdvance } from "@/modules/repairing/lib/autoAdvance";
 import { Prisma } from "@/generated/prisma/client";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
@@ -352,7 +353,12 @@ export async function PATCH(
         // legacy User.role). Re-add Position-based handoff when RBAC is re-wired.
         // TODO(notify): worker notifications detached — re-add later, decoupled.
 
-        return NextResponse.json({ ok: true });
+        // If the ticket landed on an Action (auto Work), run it + continue the outcome
+        // chain server-side. Best-effort — the human move above already succeeded.
+        // openTabs = URLs of open_tab Actions that succeeded → the client pops them (the
+        // server can't open browser tabs).
+        const openTabs = await autoAdvance(ticketId, userId).catch(() => [] as string[]);
+        return NextResponse.json({ ok: true, openTabs });
     } catch (e) {
         return handleApiError(e, "Failed to update worker");
     }

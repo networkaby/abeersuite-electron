@@ -93,6 +93,7 @@ interface Work {
     color: string;
     order: number;
     permissionId: string | null;
+    kind?: string;   // "human" (default) | "auto" (an Action)
 }
 
 // One entry in a worker's action chain (6th power): a code HOOK + when it fires +
@@ -226,16 +227,18 @@ function WorkerFormModal({
     const scheduleSummary = summarizeRows(form.retryRows);
     const hasSchedule = !!scheduleSummary;
 
-    // ── DUMMY (UI preview only — not wired): Work vs Action execution model. A worker
-    //    runs EITHER a Work (a human does it) OR an Action (automated tool, no human);
-    //    both report Success/Unsuccess so the worker's routing is identical. ──
+    // Execution: a worker runs EITHER a human Work OR an Action (auto tool). Both are
+    // Work rows (kind="human"|"auto") referenced by the SAME workId — the toggle just
+    // filters which the selector offers. Switching kind clears the selection.
+    const humanWorks = works.filter((w) => (w.kind ?? "human") !== "auto");
+    const autoWorks = works.filter((w) => w.kind === "auto");
     const [execKind, setExecKind] = useState<"work" | "action">("work");
-    const [dummyActionId, setDummyActionId] = useState("__none__");
-    const DUMMY_ACTIONS = [
-        { id: "a1", label: "Verify IMEI (web lookup)" },
-        { id: "a2", label: "Send SMS" },
-        { id: "a3", label: "Sync to CRM (webhook)" },
-    ];
+    // Keep the toggle aligned with the currently-selected work's kind (e.g. on edit).
+    useEffect(() => {
+        const w = works.find((x) => x.id === form.workId);
+        if (w) setExecKind(w.kind === "auto" ? "action" : "work");
+    }, [form.workId, works]);
+    const pickExec = (k: "work" | "action") => { setExecKind(k); setForm({ ...form, workId: "" }); };
 
     // ── Action chain (6th power) editors — each entry = a hook + when + arguments ─
     const addAction = () => setForm({ ...form, actions: [...form.actions, { type: ACTION_TYPES[0].type, on: "success", config: {} }] });
@@ -285,23 +288,13 @@ function WorkerFormModal({
 
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                            <Label>Work</Label>
-                            <Select value={form.workId || "__none__"} onValueChange={(value) => setForm({ ...form, workId: value === "__none__" ? "" : value })}>
-                                <SelectTrigger className="w-full">
-                                    <SelectValue placeholder="Select work" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="__none__">— none —</SelectItem>
-                                    {works.map((w) => (
-                                        <SelectItem key={w.id} value={w.id}>{w.label}{w.permissionId ? " (gated)" : ""}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                            <p className="text-xs text-muted-foreground">
-                                {selectedWork?.permissionId
-                                    ? `Only staff with the “${selectedWork.label}” work permission can set this.`
-                                    : "Ungated work — any staff can set this worker."}
-                            </p>
+                            <Label>Execution</Label>
+                            <div className="flex h-9 items-center rounded-md border border-border bg-muted/30 px-3 text-sm">
+                                {selectedWork
+                                    ? <span>{selectedWork.label}{selectedWork.kind === "auto" ? " · Action" : selectedWork.permissionId ? " · gated" : ""}</span>
+                                    : <span className="text-muted-foreground">— none —</span>}
+                            </div>
+                            <p className="text-xs text-muted-foreground">Set the Work or Action in the <span className="font-medium">Execution</span> tab.</p>
                         </div>
                         <div className="space-y-2">
                             <Label>Warranty scope</Label>
@@ -551,20 +544,21 @@ function WorkerFormModal({
                     </TabsContent>
 
                     <TabsContent value="actions" className="space-y-3">
-                        {/* ── DUMMY (UI preview — not wired): Work vs Action toggle + selector ── */}
+                        {/* What this worker runs: a human Work or an Action (auto tool). Both
+                            are Work rows referenced by the same workId; the toggle filters the list. */}
                         <div className="space-y-3 rounded-md border border-border bg-muted/20 p-3">
                             <Label className="text-xs">What runs on this worker</Label>
                             <div className="inline-flex rounded-md border border-border bg-background p-0.5">
                                 <button
                                     type="button"
-                                    onClick={() => setExecKind("work")}
+                                    onClick={() => pickExec("work")}
                                     className={`rounded px-3 py-1 text-sm transition-colors ${execKind === "work" ? "bg-primary text-primary-foreground font-medium shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
                                 >
                                     Work <span className="text-xs opacity-70">· a person does it</span>
                                 </button>
                                 <button
                                     type="button"
-                                    onClick={() => setExecKind("action")}
+                                    onClick={() => pickExec("action")}
                                     className={`rounded px-3 py-1 text-sm transition-colors ${execKind === "action" ? "bg-primary text-primary-foreground font-medium shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
                                 >
                                     Action <span className="text-xs opacity-70">· runs automatically</span>
@@ -578,7 +572,7 @@ function WorkerFormModal({
                                         <SelectTrigger className="h-9 w-full"><SelectValue placeholder="Select work" /></SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="__none__">— none —</SelectItem>
-                                            {works.map((w) => (<SelectItem key={w.id} value={w.id}>{w.label}{w.permissionId ? " (gated)" : ""}</SelectItem>))}
+                                            {humanWorks.map((w) => (<SelectItem key={w.id} value={w.id}>{w.label}{w.permissionId ? " (gated)" : ""}</SelectItem>))}
                                         </SelectContent>
                                     </Select>
                                     <p className="text-xs text-muted-foreground">A <span className="font-medium">person</span> completes it on the Work Inbox and picks Success / Unsuccess.</p>
@@ -586,17 +580,17 @@ function WorkerFormModal({
                             ) : (
                                 <div className="space-y-1.5">
                                     <Label className="text-xs">Action</Label>
-                                    <Select value={dummyActionId} onValueChange={setDummyActionId}>
+                                    <Select value={form.workId || "__none__"} onValueChange={(value) => setForm({ ...form, workId: value === "__none__" ? "" : value })}>
                                         <SelectTrigger className="h-9 w-full"><SelectValue placeholder="Select action" /></SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="__none__">— none —</SelectItem>
-                                            {DUMMY_ACTIONS.map((a) => (<SelectItem key={a.id} value={a.id}>{a.label}</SelectItem>))}
+                                            {autoWorks.length === 0 && <SelectItem value="__empty__" disabled>No actions yet — create one in Workflow → Actions</SelectItem>}
+                                            {autoWorks.map((w) => (<SelectItem key={w.id} value={w.id}>{w.label}</SelectItem>))}
                                         </SelectContent>
                                     </Select>
-                                    <p className="text-xs text-muted-foreground">Runs <span className="font-medium">automatically</span> via a tool (fetch a site, open a tab, call a webhook…) — no human. Reports Success / Unsuccess just like a Work.</p>
+                                    <p className="text-xs text-muted-foreground">Runs <span className="font-medium">automatically</span> via a tool — no human. Reports Success / Unsuccess just like a Work; routes on the targets in <span className="font-medium">Details</span>.</p>
                                 </div>
                             )}
-                            <p className="text-[11px] italic text-muted-foreground/70">Dummy preview — both route on the Success / Unsuccess targets set in Details. Not saved yet.</p>
                         </div>
 
                         <div className="border-t border-border pt-3">

@@ -181,6 +181,16 @@ model Work {
   startLabel   String?
   successPopup Boolean        @default(false)
   failPopup    Boolean        @default(false)
+  // ── Execution kind ──────────────────────────────────────────────────────────
+  // kind: "human" → a person completes it on the Work Inbox (the default Work).
+  //       "auto"  → an ACTION: a hardcoded TOOL runs it (no human form). toolType
+  //       selects the tool (see actionTools.ts); toolConfig holds its input bindings
+  //       + output→context-key map: { bindings:{inKey→{mode:"fixed"|"context",value}},
+  //       outputs:{toolOutKey→contextKey} }. Both yield Success/Unsuccess so a worker
+  //       routes an Action exactly like a Work. Auto works are never gated.
+  kind         String         @default("human")
+  toolType     String?
+  toolConfig   Json           @default("{}")
   // Arguments the work needs — [{ key, label, source, kind }]. `source` is either a
   // ticket-data path (e.g. "customer.phone", resolved LIVE & shown read-only) or
   // "user" (collected from the operator at completion → saved into Ticket.context).

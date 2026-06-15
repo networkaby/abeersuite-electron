@@ -1,15 +1,15 @@
 "use client";
 
-// ── DUMMY UI (not wired) ──────────────────────────────────────────────────────
-// Exploring the "Action = a Work that has no human" model. An Action mirrors a Work,
-// EXCEPT its human "Completion" section is replaced by an "Automation" section: pick a
-// hardcoded TOOL (catalog in actionTools.ts). The tool DECLARES the inputs it needs and
-// the outputs it returns; selecting it reveals those. Each input is bound to a FIXED
-// value or a CONTEXT source. The tool reads its inputs, returns named outputs + a
-// Success/Unsuccess boolean — so a worker routes an Action exactly like a Work.
-// Nothing here is persisted yet.
+// Actions = automated Works (kind="auto"). An Action mirrors a Work, EXCEPT its human
+// "Completion" is replaced by an "Automation" section: pick a hardcoded TOOL (catalog in
+// actionTools.ts). The tool DECLARES the inputs it reads and the outputs it returns;
+// each input is bound to a FIXED value or a CONTEXT source. The tool returns named
+// outputs (saved to Ticket.context, reusable later) + a Success/Unsuccess boolean — so a
+// worker routes an Action exactly like a Work. Persisted via /api/works with kind="auto".
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import axios from "axios";
+import { toast } from "sonner";
 import { Zap, ArrowRight, Plus, Pencil, Trash2, ArrowDownToLine } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -33,19 +33,24 @@ import { TICKET_SOURCES, USER_SOURCE } from "@/modules/repairing/lib/ticketSourc
 // (an Action has no human to ask).
 const CONTEXT_GROUPS = [...new Set(TICKET_SOURCES.filter((s) => s.value !== USER_SOURCE).map((s) => s.group))];
 
-// Dummy seed list — stands in for real Action rows until wired.
-const DUMMY_ACTIONS = [
-    { id: "act_imei", label: "Verify IMEI", color: "bg-violet-100 text-violet-700", tool: "open_tab", successLabel: "Valid", failLabel: "Invalid" },
-    { id: "act_track", label: "Open courier tracking", color: "bg-amber-100 text-amber-700", tool: "open_tab", successLabel: "Opened", failLabel: "" },
-];
-
 // How a tool input is fed: a typed-in literal, or pulled from the ticket context.
 type InputBinding = { mode: "fixed" | "context"; value: string };
+
+// A persisted Action (a Work row with kind="auto").
+interface ActionRow {
+    id: string;
+    label: string;
+    color: string;
+    kind?: string;
+    toolType: string | null;
+    successLabel: string | null;
+    failLabel: string | null;
+    toolConfig: { bindings?: Record<string, InputBinding>; outputs?: Record<string, string> } | null;
+}
 
 type ActionForm = {
     label: string;
     color: string;
-    group: string;
     order: string;
     gated: boolean;
     tool: string;
@@ -56,9 +61,29 @@ type ActionForm = {
 };
 
 const BLANK: ActionForm = {
-    label: "", color: "bg-gray-100 text-gray-600", group: "", order: "", gated: false,
+    label: "", color: "bg-gray-100 text-gray-600", order: "", gated: false,
     tool: ACTION_TOOLS[0]?.type ?? "", bindings: {}, outputKeys: {}, successLabel: "", failLabel: "",
 };
+
+// Build the /api/works payload (kind="auto"). outputs = tool-output key → saved context key
+// (defaults to the tool's key); bindings = input key → {mode,value}.
+function toPayload(form: ActionForm) {
+    const outputs: Record<string, string> = {};
+    for (const o of ACTION_TOOL_MAP[form.tool]?.outputs ?? []) outputs[o.key] = (form.outputKeys[o.key] ?? o.key).trim() || o.key;
+    return {
+        label: form.label,
+        color: form.color,
+        order: form.order ? Number(form.order) : undefined,
+        kind: "auto",
+        gated: false,
+        successLabel: form.successLabel || null,
+        failLabel: form.failLabel || null,
+        toolType: form.tool,
+        toolConfig: { bindings: form.bindings, outputs },
+        args: [],
+        groupId: null,
+    };
+}
 
 // Grouped picker over ticket-context sources (mirrors the Work dialog's source dropdown).
 function ContextSourceSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
@@ -93,39 +118,20 @@ function ActionFormBody({ form, set }: { form: ActionForm; set: (p: Partial<Acti
 
     return (
         <div className="space-y-4">
-            {/* ── Basics (identical to a Work) ───────────────────────── */}
+            {/* ── Basics (like a Work) ───────────────────────────────── */}
             <div className="space-y-3 rounded-md border border-border bg-muted/20 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Basics</p>
-                <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="space-y-1.5">
-                        <Label className="text-xs">Label</Label>
-                        <Input value={form.label} onChange={(e) => set({ label: e.target.value })} placeholder="e.g. Verify IMEI" className="h-9" />
-                    </div>
-                    <div className="space-y-1.5">
-                        <Label className="text-xs">Group</Label>
-                        <Select value={form.group || "__none__"} onValueChange={(v) => set({ group: v === "__none__" ? "" : v })}>
-                            <SelectTrigger className="h-9 w-full"><SelectValue placeholder="— none —" /></SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="__none__">— none —</SelectItem>
-                                <SelectItem value="g_lookup">Lookups</SelectItem>
-                                <SelectItem value="g_notify">Notifications</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
+                <div className="space-y-1.5">
+                    <Label className="text-xs">Label</Label>
+                    <Input value={form.label} onChange={(e) => set({ label: e.target.value })} placeholder="e.g. Verify IMEI" className="h-9" />
                 </div>
                 <div className="space-y-1.5">
                     <Label className="text-xs">Color</Label>
                     <ColorPicker value={form.color} onChange={(c) => set({ color: c })} />
                 </div>
-                <div className="grid items-end gap-3 sm:grid-cols-2">
-                    <div className="space-y-1.5">
-                        <Label className="text-xs">Order <span className="font-normal text-muted-foreground">— blank = auto</span></Label>
-                        <Input inputMode="numeric" value={form.order} onChange={(e) => set({ order: e.target.value })} placeholder="Auto" className="h-9" />
-                    </div>
-                    <label className="flex h-9 items-center gap-2 text-sm">
-                        <Checkbox checked={form.gated} onCheckedChange={(c) => set({ gated: c === true })} />
-                        Gated <span className="text-xs text-muted-foreground">(needs a permission)</span>
-                    </label>
+                <div className="space-y-1.5">
+                    <Label className="text-xs">Order <span className="font-normal text-muted-foreground">— blank = auto</span></Label>
+                    <Input inputMode="numeric" value={form.order} onChange={(e) => set({ order: e.target.value })} placeholder="Auto" className="h-9 w-32" />
                 </div>
             </div>
 
@@ -223,12 +229,66 @@ function ActionFormBody({ form, set }: { form: ActionForm; set: (p: Partial<Acti
 }
 
 export default function ActionsPage() {
-    const [showCreate, setShowCreate] = useState(false);
+    const [actions, setActions] = useState<ActionRow[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [open, setOpen] = useState(false);
+    const [editId, setEditId] = useState<string | null>(null);
+    const [saving, setSaving] = useState(false);
+    const [deletingId, setDeletingId] = useState<string | null>(null);
     const [form, setForm] = useState<ActionForm>({ ...BLANK });
     const set = (p: Partial<ActionForm>) => setForm((f) => ({ ...f, ...p }));
-    // Dummy list state so create/edit/delete behave like the Works page lifecycle.
-    const [actions, setActions] = useState(DUMMY_ACTIONS);
-    const deleteAction = (id: string) => setActions((list) => list.filter((a) => a.id !== id));
+
+    const load = async () => {
+        setLoading(true);
+        try {
+            const res = await axios.get("/api/works");
+            setActions((res.data as ActionRow[]).filter((w) => w.kind === "auto"));
+        } catch {
+            toast.error("Failed to load actions");
+        } finally { setLoading(false); }
+    };
+    useEffect(() => { load(); }, []);
+
+    const openCreate = () => { setEditId(null); setForm({ ...BLANK, color: randomColor() }); setOpen(true); };
+    const openEdit = (a: ActionRow) => {
+        const cfg = a.toolConfig ?? {};
+        setEditId(a.id);
+        setForm({
+            ...BLANK,
+            label: a.label, color: a.color,
+            tool: a.toolType ?? (ACTION_TOOLS[0]?.type ?? ""),
+            bindings: cfg.bindings ?? {},
+            outputKeys: cfg.outputs ?? {},
+            successLabel: a.successLabel ?? "", failLabel: a.failLabel ?? "",
+        });
+        setOpen(true);
+    };
+
+    const save = async () => {
+        setSaving(true);
+        try {
+            const payload = toPayload(form);
+            if (editId) await axios.patch(`/api/works/${editId}`, payload);
+            else await axios.post("/api/works", payload);
+            toast.success(editId ? "Action updated" : "Action created");
+            setOpen(false); setEditId(null); setForm({ ...BLANK });
+            load();
+        } catch (err) {
+            const message = axios.isAxiosError(err) ? err.response?.data?.error : null;
+            toast.error(message ?? "Failed to save action");
+        } finally { setSaving(false); }
+    };
+
+    const remove = async (id: string) => {
+        setDeletingId(id);
+        try {
+            await axios.delete(`/api/works/${id}`);
+            toast.success("Action deleted");
+            load();
+        } catch {
+            toast.error("Failed to delete action");
+        } finally { setDeletingId(null); }
+    };
 
     return (
         <ScrollArea className="h-full" type="always">
@@ -242,29 +302,32 @@ export default function ActionsPage() {
                             that picks a <span className="font-medium">tool</span> (below). The tool reads its inputs and returns outputs + Success / Unsuccess.
                         </p>
                     </div>
-                    <Button type="button" onClick={() => { setForm({ ...BLANK, color: randomColor() }); setShowCreate(true); }}>
+                    <Button type="button" onClick={openCreate}>
                         <Plus size={16} /> Add Action
                     </Button>
                 </div>
 
-                {/* DUMMY action list */}
+                {/* Action list (Work rows with kind="auto") */}
                 <div className="space-y-2">
-                    {actions.length === 0 && <p className="text-sm text-muted-foreground">No actions yet. Add the first one.</p>}
-                    {actions.map((a) => (
+                    {loading ? (
+                        <p className="text-sm text-muted-foreground">Loading…</p>
+                    ) : actions.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No actions yet. Add the first one.</p>
+                    ) : actions.map((a) => (
                         <Card key={a.id}>
                             <CardHeader className="py-3">
                                 <div className="flex items-center gap-3">
                                     <Badge {...badgeColor(a.color)}>{a.label}</Badge>
                                     <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                                        <Zap size={11} /> {ACTION_TOOL_MAP[a.tool]?.label ?? a.tool}
+                                        <Zap size={11} /> {a.toolType ? (ACTION_TOOL_MAP[a.toolType]?.label ?? a.toolType) : "— no tool —"}
                                     </span>
                                     <span className="ml-auto flex items-center gap-2 text-xs">
-                                        <Badge variant="outline" className="text-green-700">{a.successLabel}</Badge>
+                                        {a.successLabel && <Badge variant="outline" className="text-green-700">{a.successLabel}</Badge>}
                                         {a.failLabel && <Badge variant="outline" className="text-red-700">{a.failLabel}</Badge>}
-                                        <Button type="button" size="sm" variant="outline" onClick={() => { setForm({ ...BLANK, label: a.label, color: a.color, tool: a.tool, successLabel: a.successLabel, failLabel: a.failLabel }); setShowCreate(true); }}>
+                                        <Button type="button" size="sm" variant="outline" onClick={() => openEdit(a)}>
                                             <Pencil size={12} /> Edit
                                         </Button>
-                                        <Button type="button" size="icon-sm" variant="destructive" onClick={() => deleteAction(a.id)} title="Deleting detaches it from any worker that uses it">
+                                        <Button type="button" size="icon-sm" variant="destructive" onClick={() => remove(a.id)} disabled={deletingId === a.id} title="Deleting detaches it from any worker that uses it">
                                             <Trash2 size={13} />
                                         </Button>
                                     </span>
@@ -291,6 +354,7 @@ export default function ActionsPage() {
                                     </span>
                                     <span className="text-sm font-medium">{t.label}</span>
                                     <code className="rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">{t.type}</code>
+                                    <Badge variant="outline" className="ml-auto text-[10px] font-normal">{t.runtime}</Badge>
                                 </div>
                             </CardHeader>
                             <CardContent className="space-y-2.5 pt-0 text-sm">
@@ -313,17 +377,19 @@ export default function ActionsPage() {
                 </div>
             </div>
 
-            {/* DUMMY Add/Edit Action dialog */}
-            <Dialog open={showCreate} onOpenChange={(o) => { if (!o) setShowCreate(false); }}>
+            {/* Add / Edit Action dialog */}
+            <Dialog open={open} onOpenChange={(o) => { if (!o) { setOpen(false); setEditId(null); } }}>
                 <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-2xl">
                     <DialogHeader>
-                        <DialogTitle>Add Action</DialogTitle>
-                        <DialogDescription>An automated Work — picks a tool instead of a human completion. (Dummy — not saved.)</DialogDescription>
+                        <DialogTitle>{editId ? "Edit Action" : "Add Action"}</DialogTitle>
+                        <DialogDescription>An automated Work — picks a tool instead of a human completion.</DialogDescription>
                     </DialogHeader>
                     <ActionFormBody form={form} set={set} />
                     <DialogFooter>
-                        <Button type="button" variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
-                        <Button type="button" onClick={() => setShowCreate(false)} disabled={!form.label.trim()}>Save (dummy)</Button>
+                        <Button type="button" variant="outline" onClick={() => { setOpen(false); setEditId(null); }}>Cancel</Button>
+                        <Button type="button" onClick={save} disabled={saving || !form.label.trim() || !form.tool}>
+                            {saving ? "Saving…" : "Save"}
+                        </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

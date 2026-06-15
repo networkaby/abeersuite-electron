@@ -70,6 +70,7 @@ export default function StatusNav({
     const submit = async () => {
         if (!pending) return;
         setBusy(true);
+        let openTabs: string[] = [];
         try {
             if (pending.dir === "back") {
                 // True undo: restore exact previous (status, worker) pair.
@@ -85,12 +86,13 @@ export default function StatusNav({
                 const collected = Object.fromEntries(
                     Object.entries(entryValues).map(([k, v]) => [k, v.trim()]).filter(([, v]) => v),
                 );
-                await axios.patch(`/api/tickets/${ticketId}/worker`, {
+                const res = await axios.patch(`/api/tickets/${ticketId}/worker`, {
                     workerId: pending.id,
                     note: privateNote.trim() || undefined,
                     visibility: "INTERNAL",
                     args: Object.keys(collected).length ? collected : undefined,
                 });
+                openTabs = (res.data?.openTabs ?? []) as string[];
             } else {
                 await axios.put(`/api/tickets/${ticketId}`, {
                     status: pending.id,
@@ -107,6 +109,8 @@ export default function StatusNav({
             }
             toast.success(pending.dir === "back" ? `Reverted to ${pending.label}` : `Moved to ${pending.label}`);
             close();
+            // Pop any tabs server-side Actions deemed openable (still in the user's click).
+            openTabs.forEach((u) => window.open(u, "_blank", "noopener,noreferrer"));
             onChanged();
         } catch (err: unknown) {
             toast.error((err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Failed to move");
@@ -140,13 +144,15 @@ export default function StatusNav({
     const commitSub = async (id: string, label: string, args?: Record<string, string>) => {
         setBusy(true);
         try {
-            await axios.patch(`/api/tickets/${ticketId}/worker`, {
+            const res = await axios.patch(`/api/tickets/${ticketId}/worker`, {
                 workerId: id,
                 visibility: "INTERNAL",
                 args: args && Object.keys(args).length ? args : undefined,
             });
             toast.success(`Moved to ${label}`);
             close();
+            // Pop any tabs server-side Actions deemed openable (still in the user's click).
+            ((res.data?.openTabs ?? []) as string[]).forEach((u) => window.open(u, "_blank", "noopener,noreferrer"));
             onChanged();
         } catch (err: unknown) {
             toast.error((err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Failed to move");

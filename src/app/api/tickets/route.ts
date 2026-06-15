@@ -7,6 +7,7 @@ import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
 import { findEntryWorker } from "@/modules/repairing/lib/entryWorker";
+import { autoAdvance } from "@/modules/repairing/lib/autoAdvance";
 
 const createTicketSchema = z.object({
     sourceShopOrderId: z.coerce.number().int().positive().optional(),
@@ -164,6 +165,8 @@ export async function POST(req: Request) {
             await prisma.ticketLog.create({
                 data: { ticketId: ticket.id, status: ticket.status, workerId: entrySub.id, note: `Entered: ${entrySub.label}`, userId: user.id },
             });
+            // If the entry worker is an Action (auto Work), run it + chain (best-effort).
+            await autoAdvance(ticket.id, user.id).catch(() => { /* never blocks create */ });
         }
 
         return NextResponse.json({ ...ticket, workerId: entrySub?.id ?? null });

@@ -125,13 +125,22 @@ export function parseArgs(raw: unknown): WorkArg[] {
 // The catalog of outcome variables that can be CONSUMED downstream: every "ask"
 // (user) arg across all works produces a value in Ticket.context keyed by argKey().
 // Returns de-duped { key, label } pairs for the supply-source picker.
-export function outcomeVariables(works: { args?: unknown }[]): { key: string; label: string }[] {
+export function outcomeVariables(
+    works: { args?: unknown; kind?: string; toolConfig?: { outputs?: Record<string, string> } | null }[],
+): { key: string; label: string }[] {
     const seen = new Map<string, string>();
     for (const w of works) {
+        // Human Works: user-given (outcome) args produce context variables.
         for (const a of parseArgs(w.args)) {
             if (!isUserArg(a)) continue;
             const k = argKey(a);
             if (!seen.has(k)) seen.set(k, a.label || k);
+        }
+        // Auto Works (Actions): their tool OUTPUTS save to context under named keys — reusable too.
+        if (w.kind === "auto" && w.toolConfig?.outputs) {
+            for (const ctxKey of Object.values(w.toolConfig.outputs)) {
+                if (ctxKey && !seen.has(ctxKey)) seen.set(ctxKey, ctxKey);
+            }
         }
     }
     return [...seen.entries()].map(([key, label]) => ({ key, label }));
