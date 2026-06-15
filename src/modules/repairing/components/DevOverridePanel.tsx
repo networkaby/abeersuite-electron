@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/select";
 
 interface Opt { id: string; label: string }
+interface WorkerOpt extends Opt { statusId: string | null }
 
 interface Props {
     ticketId: number;
@@ -31,7 +32,7 @@ const NONE = "__none__";
  */
 export default function DevOverridePanel({ ticketId, pipelineId, currentStatusId, currentWorkerId, onChanged }: Props) {
     const [statuses, setStatuses] = useState<Opt[]>([]);
-    const [workers, setWorkers] = useState<Opt[]>([]);
+    const [workers, setWorkers] = useState<WorkerOpt[]>([]);
     const [statusId, setStatusId] = useState(currentStatusId);
     const [workerId, setWorkerId] = useState(currentWorkerId ?? NONE);
     const [busy, setBusy] = useState(false);
@@ -44,7 +45,7 @@ export default function DevOverridePanel({ ticketId, pipelineId, currentStatusId
                 axios.get(`/api/workers${q}`),
             ]);
             setStatuses((st.data as Opt[]).map((s) => ({ id: s.id, label: s.label })));
-            setWorkers((wk.data as Opt[]).map((w) => ({ id: w.id, label: w.label })));
+            setWorkers((wk.data as WorkerOpt[]).map((w) => ({ id: w.id, label: w.label, statusId: w.statusId ?? null })));
         } catch {
             toast.error("Failed to load pipeline statuses / workers");
         }
@@ -54,6 +55,14 @@ export default function DevOverridePanel({ ticketId, pipelineId, currentStatusId
     // Re-sync the selects when the ticket reloads after an apply.
     useEffect(() => { setStatusId(currentStatusId); }, [currentStatusId]);
     useEffect(() => { setWorkerId(currentWorkerId ?? NONE); }, [currentWorkerId]);
+
+    // Only the workers that belong to the selected status — a worker lives in one
+    // status, so showing the whole pipeline is noise (and lets you pick an invalid pair).
+    const visibleWorkers = workers.filter((w) => w.statusId === statusId);
+    // If the selected worker isn't valid for the chosen status, drop back to "no worker".
+    useEffect(() => {
+        if (workerId !== NONE && !visibleWorkers.some((w) => w.id === workerId)) setWorkerId(NONE);
+    }, [statusId, workers]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const dirty = statusId !== currentStatusId || (workerId === NONE ? null : workerId) !== currentWorkerId;
 
@@ -99,7 +108,9 @@ export default function DevOverridePanel({ ticketId, pipelineId, currentStatusId
                     <SelectTrigger className="h-8 w-full bg-background text-xs"><SelectValue placeholder="Worker" /></SelectTrigger>
                     <SelectContent>
                         <SelectItem value={NONE} className="text-xs text-muted-foreground">— No worker —</SelectItem>
-                        {workers.map((w) => <SelectItem key={w.id} value={w.id} className="text-xs">{w.label}</SelectItem>)}
+                        {visibleWorkers.length === 0
+                            ? <div className="px-2 py-1.5 text-xs text-muted-foreground">No workers in this status</div>
+                            : visibleWorkers.map((w) => <SelectItem key={w.id} value={w.id} className="text-xs">{w.label}</SelectItem>)}
                     </SelectContent>
                 </Select>
             </div>
