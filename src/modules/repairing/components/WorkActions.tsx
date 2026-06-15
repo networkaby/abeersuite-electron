@@ -4,10 +4,9 @@ import { useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import { Play, Check, X, CheckCircle, Lock, Eye, HelpCircle } from "lucide-react";
+import { Play, Check, X, CheckCircle, HelpCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { type WorkArg, isUserArg, argKey, argMatchesOutcome } from "@/modules/repairing/lib/ticketSources";
 
@@ -66,16 +65,15 @@ export default function WorkActions({
     const router = useRouter();
     const [busy, setBusy] = useState(false);
     const [pending, setPending] = useState<Pending | null>(null);
-    const [privateNote, setPrivateNote] = useState("");
-    const [publicNote, setPublicNote] = useState("");
-    const [publicEnabled, setPublicEnabled] = useState(false);
     const [argValues, setArgValues] = useState<Record<string, string>>({});
 
-    const userArgs = args.filter(isUserArg);  // collected from the operator at completion
+    const userArgs = args.filter(isUserArg);  // collected from the helper at completion
     // Only collect the inputs that apply to the outcome being pressed (on: success/fail/always).
     const pendingArgs = pending ? userArgs.filter((a) => argMatchesOutcome(a, pending.kind)) : [];
+    // Required outcome fields gate the confirm button until filled.
+    const missingRequired = pendingArgs.some((a) => a.required && !(argValues[argKey(a)] ?? "").trim());
     const refresh = () => { if (onChanged) onChanged(); else router.refresh(); };
-    const close = () => { setPending(null); setPrivateNote(""); setPublicNote(""); setPublicEnabled(false); setArgValues({}); };
+    const close = () => { setPending(null); setArgValues({}); };
 
     const start = async () => {
         setBusy(true);
@@ -90,10 +88,11 @@ export default function WorkActions({
 
     // One completion code path — shared by the silent click and the dialog confirm.
     // target=null → clear the worker (no-routing "done"). outcome tags it for the
-    // Work Inbox "Finished" list; collected args + notes ride along when present.
-    const post = async ({ target, kind, done, note, publicNote: pub, collected }: {
+    // Work Inbox "Finished" list; collected outcome args ride along when present.
+    // Notes are NOT collected here — they belong to the technician's log popup (StatusNav).
+    const post = async ({ target, kind, done, collected }: {
         target: RouteTarget | null; kind: string; done: string;
-        note?: string; publicNote?: string; collected?: Record<string, string>;
+        collected?: Record<string, string>;
     }) => {
         setBusy(true);
         try {
@@ -101,16 +100,12 @@ export default function WorkActions({
             if (target) {
                 await axios.patch(`/api/tickets/${ticketId}/worker`, {
                     workerId: target.id,
-                    note: note?.trim() || undefined,
                     visibility: "INTERNAL",
                     outcome,
                     args: collected && Object.keys(collected).length ? collected : undefined,
                 });
             } else {
                 await axios.delete(`/api/tickets/${ticketId}/worker`);
-            }
-            if (pub?.trim()) {
-                await axios.post(`/api/tickets/${ticketId}/notes`, { note: pub.trim(), visibility: "PUBLIC" });
             }
             toast.success(done);
             close();
@@ -120,13 +115,13 @@ export default function WorkActions({
         } finally { setBusy(false); }
     };
 
-    // The dialog's confirm — gathers the collected args + notes from state.
+    // The dialog's confirm — gathers the collected outcome args from state.
     const submit = () => {
         if (!pending) return;
         const collected = Object.fromEntries(
             pendingArgs.map((a) => [argKey(a), (argValues[argKey(a)] ?? "").trim()]).filter(([, v]) => v),
         );
-        return post({ target: pending.target, kind: pending.kind, done: pending.done, note: privateNote, publicNote: publicEnabled ? publicNote : undefined, collected });
+        return post({ target: pending.target, kind: pending.kind, done: pending.done, collected });
     };
 
     // Does this outcome open the popup? Yes when the work checked "popup" for it, OR it
@@ -211,7 +206,7 @@ export default function WorkActions({
                                 <div className="space-y-2 rounded-md border border-border bg-muted/30 p-2.5">
                                     {pendingArgs.map((a) => (
                                         <div key={argKey(a)} className="space-y-1">
-                                            <label className="text-xs font-medium text-foreground">{a.label}</label>
+                                            <label className="text-xs font-medium text-foreground">{a.label}{a.required && <span className="text-red-500"> *</span>}</label>
                                             <Input
                                                 value={argValues[argKey(a)] ?? ""}
                                                 onChange={(e) => setArgValues((v) => ({ ...v, [argKey(a)]: e.target.value }))}
@@ -222,45 +217,17 @@ export default function WorkActions({
                                     ))}
                                 </div>
                             )}
-                            <div className="space-y-1.5">
-                                <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                                    <Lock size={12} /> Private note (internal only)
-                                </p>
-                                <Textarea
-                                    autoFocus rows={2} value={privateNote}
-                                    onChange={(e) => setPrivateNote(e.target.value)}
-                                    placeholder="Team-only note (optional)…"
-                                    className="resize-none"
-                                />
-                            </div>
-                            <div className="space-y-1.5">
-                                <label className="flex cursor-pointer items-center gap-2">
-                                    <input
-                                        type="checkbox"
-                                        checked={publicEnabled}
-                                        onChange={(e) => {
-                                            setPublicEnabled(e.target.checked);
-                                            if (!e.target.checked) setPublicNote("");
-                                        }}
-                                        className="h-4 w-4"
-                                    />
-                                    <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                                        <Eye size={12} /> Send public note to customer
-                                    </span>
-                                </label>
-                                <Textarea
-                                    rows={2} value={publicNote}
-                                    onChange={(e) => setPublicNote(e.target.value)}
-                                    placeholder="Message for the customer…"
-                                    disabled={!publicEnabled}
-                                    className={`resize-none transition-opacity ${!publicEnabled ? "opacity-40" : ""}`}
-                                />
-                            </div>
+                            {pendingArgs.length === 0 && (
+                                <p className="text-xs text-muted-foreground">Confirm to record the outcome. Notes are added when moving the ticket.</p>
+                            )}
                         </div>
 
+                        {missingRequired && (
+                            <p className="-mt-2 text-xs text-amber-700 dark:text-amber-400">Fill the required field(s) marked * before finishing.</p>
+                        )}
                         <DialogFooter className="mt-2 border-t border-border pt-4">
                             <Button onClick={close} variant="outline" className="flex-1">Cancel</Button>
-                            <Button onClick={submit} disabled={busy} className="flex-1">
+                            <Button onClick={submit} disabled={busy || missingRequired} className="flex-1">
                                 {busy ? "Saving…" : retryScheduled && pending.kind === "Unsuccess" ? "Schedule retry" : pending.target ? `Move → ${pending.target.label}` : "Mark done"}
                             </Button>
                         </DialogFooter>

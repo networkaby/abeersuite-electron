@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { passesWorkGate } from "@/modules/repairing/lib/workGate";
+import { parseArgs, isEntryArg } from "@/modules/repairing/lib/ticketSources";
 import { handleApiError } from "@/shared/lib/api";
 
 // GET /api/workers/next?statusId=S3&fromWorkerId=SS10
@@ -33,10 +34,10 @@ export async function GET(req: Request) {
         let candidates: Array<{
             id: string; label: string; statusId: string | null;
             warrantyScope: string | null; skipNoteOnEntry: boolean; requireNoteOnEntry: boolean; entryQuestion: string | null;
-            work: { permissionId: string | null; label: string; color: string } | null;
+            work: { permissionId: string | null; label: string; color: string; args: unknown } | null;
         }>;
 
-        const subSelect = { id: true, label: true, statusId: true, warrantyScope: true, skipNoteOnEntry: true, requireNoteOnEntry: true, entryQuestion: true, work: { select: { permissionId: true, label: true, color: true } } } as const;
+        const subSelect = { id: true, label: true, statusId: true, warrantyScope: true, skipNoteOnEntry: true, requireNoteOnEntry: true, entryQuestion: true, work: { select: { permissionId: true, label: true, color: true, args: true } } } as const;
 
         if (fromId === null) {
             const status = await prisma.ticketStatus.findUnique({
@@ -76,6 +77,8 @@ export async function GET(req: Request) {
             skipNoteOnEntry: ss.skipNoteOnEntry,
             requireNoteOnEntry: ss.requireNoteOnEntry,
             entryQuestion: ss.entryQuestion ?? null,
+            // Entry-context fields the technician fills in the log popup on hand-off.
+            entryArgs: ss.work ? parseArgs(ss.work.args).filter(isEntryArg) : [],
         })));
     } catch (e) {
         return handleApiError(e, "Failed to fetch next workers");

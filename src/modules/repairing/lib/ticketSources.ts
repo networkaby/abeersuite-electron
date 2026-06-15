@@ -41,10 +41,21 @@ export type WorkArg = {
     label: string;
     source: string;             // a TICKET_SOURCES value, or USER_SOURCE
     kind?: "text" | "number";   // for user-given args (the input type)
-    on?: "success" | "fail" | "always";  // user-given args: collect only on this outcome
+    // user-given args: WHO collects it and WHEN.
+    //   success | fail | always → the OUTCOME popup (helper, on finish)
+    //   entry                   → the worker-context fields in the LOG popup (technician, on hand-off)
+    on?: "success" | "fail" | "always" | "entry";
+    // user-given args: when true the popup blocks submit until this field is filled.
+    required?: boolean;
 };
 
+// A "user" arg is anything typed by a person (vs auto-pulled from the ticket).
 export const isUserArg = (a: WorkArg): boolean => a.source === USER_SOURCE;
+// Entry-context arg: typed by the TECHNICIAN on hand-off (log popup), shown to the
+// helper as worker context. Stored in Ticket.context like an outcome value.
+export const isEntryArg = (a: WorkArg): boolean => isUserArg(a) && a.on === "entry";
+// Outcome arg: typed by the HELPER when finishing the work (outcome popup).
+export const isOutcomeArg = (a: WorkArg): boolean => isUserArg(a) && a.on !== "entry";
 
 // Does a user-given arg apply to the outcome the operator pressed?
 // kind: "Success" | "Unsuccess" | "Done" (the pending dialog's kind).
@@ -108,7 +119,7 @@ export function parseArgs(raw: unknown): WorkArg[] {
     if (!Array.isArray(raw)) return [];
     return raw
         .filter((a): a is WorkArg => !!a && typeof a === "object" && typeof (a as WorkArg).source === "string")
-        .map((a) => ({ key: a.key ?? "", label: a.label ?? "", source: a.source, kind: a.kind === "number" ? "number" : "text", on: a.on ?? "always" }));
+        .map((a) => ({ key: a.key ?? "", label: a.label ?? "", source: a.source, kind: a.kind === "number" ? "number" : "text", on: a.on ?? "always", required: !!a.required }));
 }
 
 // The catalog of outcome variables that can be CONSUMED downstream: every "ask"

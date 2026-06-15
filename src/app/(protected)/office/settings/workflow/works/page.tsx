@@ -23,63 +23,116 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrig
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { badgeColor } from "@/shared/lib/format/entityColor";
 import { ColorPicker, randomColor } from "@/shared/components/ColorPicker";
-import { TICKET_SOURCES, USER_SOURCE, isUserArg, contextSource, outcomeVariables, type WorkArg } from "@/modules/repairing/lib/ticketSources";
+import { TICKET_SOURCES, USER_SOURCE, isUserArg, isEntryArg, isOutcomeArg, contextSource, outcomeVariables, type WorkArg } from "@/modules/repairing/lib/ticketSources";
 
 // Worker-context groups = the dropdown groups MINUS the "Ask the helper" input source.
 // "Ask the helper" is the reverse direction (collected, not shown) and lives in the
 // separate Outcome section — never offered among context sources.
 const CONTEXT_GROUPS = [...new Set(TICKET_SOURCES.filter((s) => s.value !== USER_SOURCE).map((s) => s.group))];
 
-// Editor for a Work's arguments, split by DIRECTION:
-//   • Worker context — info shown TO the helper (ticket fields, Latest, From an earlier
-//     step). source ≠ user.
-//   • Outcome — info collected FROM the helper at completion (the old "Ask the helper").
-//     source = user; carries variable name / kind / when.
+// Editor for a Work's arguments, split by DIRECTION + who fills them:
+//   • Worker context — info shown TO the helper. Two flavours:
+//       – supply rows: auto-pulled from the ticket (source = ticket field / Latest /
+//         earlier step), read-only.
+//       – entry rows: typed by the TECHNICIAN on hand-off (log popup), source = user,
+//         on = "entry". Saved to Ticket.context and shown as chips.
+//   • Outcome — typed by the HELPER when finishing (outcome popup). source = user,
+//     on = success/fail/always.
 // `contextVars` = outcome variables other works produce, reusable as a context source.
 function ArgsEditor({ args, onChange, contextVars }: { args: WorkArg[]; onChange: (a: WorkArg[]) => void; contextVars: { key: string; label: string }[] }) {
     const upd = (i: number, patch: Partial<WorkArg>) => onChange(args.map((a, idx) => (idx === i ? { ...a, ...patch } : a)));
     const del = (i: number) => onChange(args.filter((_, idx) => idx !== i));
-    const addContext = () => onChange([...args, { key: "", label: "", source: "customer.phone" }]);
+    const addSupply = () => onChange([...args, { key: "", label: "", source: "customer.phone" }]);
+    const addEntry = () => onChange([...args, { key: "", label: "", source: USER_SOURCE, kind: "text", on: "entry" }]);
     const addOutcome = () => onChange([...args, { key: "", label: "", source: USER_SOURCE, kind: "text", on: "always" }]);
 
     // Keep each row's ORIGINAL index so upd/del address the real array slot after filtering.
     const indexed = args.map((a, i) => ({ a, i }));
-    const contextRows = indexed.filter(({ a }) => !isUserArg(a));
-    const outcomeRows = indexed.filter(({ a }) => isUserArg(a));
+    const supplyRows = indexed.filter(({ a }) => !isUserArg(a));
+    const entryRows = indexed.filter(({ a }) => isEntryArg(a));
+    const outcomeRows = indexed.filter(({ a }) => isOutcomeArg(a));
+
+    // A user-collected key→value row (variable_name + kind) — shared by entry & outcome.
+    const collectRow = ({ a, i }: { a: WorkArg; i: number }, withWhen: boolean) => (
+        <div key={i} className="flex items-center gap-1.5">
+            <Input value={a.label} onChange={(e) => upd(i, { label: e.target.value })} placeholder="Question / label" className="h-8 flex-1" />
+            <Input
+                value={a.key ?? ""}
+                onChange={(e) => upd(i, { key: e.target.value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_") })}
+                placeholder="variable_name"
+                title="Variable name other works can reuse (blank = auto from label)"
+                className="h-8 w-32 shrink-0 font-mono text-xs"
+            />
+            <Select value={a.kind ?? "text"} onValueChange={(v) => upd(i, { kind: v as "text" | "number" })}>
+                <SelectTrigger className="h-8 w-[68px] shrink-0"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="text">Text</SelectItem>
+                    <SelectItem value="number">Number</SelectItem>
+                </SelectContent>
+            </Select>
+            {withWhen && (
+                <Select value={a.on ?? "always"} onValueChange={(v) => upd(i, { on: v as "success" | "fail" | "always" })}>
+                    <SelectTrigger className="h-8 w-[112px] shrink-0" title="When to collect this input"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="always">Always</SelectItem>
+                        <SelectItem value="success">On success</SelectItem>
+                        <SelectItem value="fail">On unsuccess</SelectItem>
+                    </SelectContent>
+                </Select>
+            )}
+            <label className="flex h-8 shrink-0 cursor-pointer items-center gap-1 text-[11px] text-muted-foreground" title="Required — block the move/finish until this is filled">
+                <Checkbox checked={!!a.required} onCheckedChange={(c) => upd(i, { required: c === true })} /> req
+            </label>
+            <Button type="button" variant="ghost" size="icon" className="h-8 w-7 shrink-0 text-muted-foreground" onClick={() => del(i)}><X size={14} /></Button>
+        </div>
+    );
 
     return (
         <div className="space-y-4">
             {/* ── Worker context — shown TO the helper ───────────────────────── */}
-            <div className="space-y-2 rounded-md border border-border bg-muted/20 p-3">
-                <div className="flex items-center justify-between">
-                    <Label className="text-xs">Worker context <span className="font-normal text-muted-foreground">— info shown to the helper (read-only chips)</span></Label>
-                    <Button type="button" variant="ghost" size="sm" onClick={addContext} className="h-6 px-1.5 text-xs text-primary"><Plus size={12} className="mr-0.5" /> Add</Button>
-                </div>
-                {contextRows.length === 0 && <p className="text-xs text-muted-foreground">None. Add a ticket field to show the helper (e.g. the number to call, the device model).</p>}
-                {contextRows.map(({ a, i }) => (
-                    <div key={i} className="flex items-center gap-1.5">
-                        <Input value={a.label} onChange={(e) => upd(i, { label: e.target.value })} placeholder="Label" className="h-8 w-32 shrink-0" />
-                        <span className="text-xs text-muted-foreground">←</span>
-                        <Select value={a.source} onValueChange={(v) => upd(i, { source: v })}>
-                            <SelectTrigger className="h-8 flex-1"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                                {CONTEXT_GROUPS.map((g) => (
-                                    <SelectGroup key={g}>
-                                        <SelectLabel>{g}</SelectLabel>
-                                        {TICKET_SOURCES.filter((s) => s.group === g && s.value !== USER_SOURCE).map((s) => (<SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>))}
-                                    </SelectGroup>
-                                ))}
-                                {contextVars.length > 0 && (
-                                    <SelectGroup>
-                                        <SelectLabel>From an earlier step (outcome)</SelectLabel>
-                                        {contextVars.map((v) => (<SelectItem key={v.key} value={contextSource(v.key)}><span className="font-mono text-xs">{v.key}</span></SelectItem>))}
-                                    </SelectGroup>
-                                )}
-                            </SelectContent>
-                        </Select>
-                        <Button type="button" variant="ghost" size="icon" className="h-8 w-7 shrink-0 text-muted-foreground" onClick={() => del(i)}><X size={14} /></Button>
+            <div className="space-y-3 rounded-md border border-border bg-muted/20 p-3">
+                {/* Supply rows — auto-pulled from the ticket (read-only). */}
+                <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                        <Label className="text-xs">Worker context <span className="font-normal text-muted-foreground">— shown to the helper as read-only chips</span></Label>
+                        <Button type="button" variant="ghost" size="sm" onClick={addSupply} className="h-6 px-1.5 text-xs text-primary"><Plus size={12} className="mr-0.5" /> Add</Button>
                     </div>
-                ))}
+                    {supplyRows.length === 0 && <p className="text-xs text-muted-foreground">None. Add a ticket field to show the helper (e.g. the number to call, the device model).</p>}
+                    {supplyRows.map(({ a, i }) => (
+                        <div key={i} className="flex items-center gap-1.5">
+                            <Input value={a.label} onChange={(e) => upd(i, { label: e.target.value })} placeholder="Label" className="h-8 w-32 shrink-0" />
+                            <span className="text-xs text-muted-foreground">←</span>
+                            <Select value={a.source} onValueChange={(v) => upd(i, { source: v })}>
+                                <SelectTrigger className="h-8 flex-1"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    {CONTEXT_GROUPS.map((g) => (
+                                        <SelectGroup key={g}>
+                                            <SelectLabel>{g}</SelectLabel>
+                                            {TICKET_SOURCES.filter((s) => s.group === g && s.value !== USER_SOURCE).map((s) => (<SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>))}
+                                        </SelectGroup>
+                                    ))}
+                                    {contextVars.length > 0 && (
+                                        <SelectGroup>
+                                            <SelectLabel>From an earlier step (outcome)</SelectLabel>
+                                            {contextVars.map((v) => (<SelectItem key={v.key} value={contextSource(v.key)}><span className="font-mono text-xs">{v.key}</span></SelectItem>))}
+                                        </SelectGroup>
+                                    )}
+                                </SelectContent>
+                            </Select>
+                            <Button type="button" variant="ghost" size="icon" className="h-8 w-7 shrink-0 text-muted-foreground" onClick={() => del(i)}><X size={14} /></Button>
+                        </div>
+                    ))}
+                </div>
+
+                {/* Entry rows — typed by the technician on hand-off (in the log popup). */}
+                <div className="space-y-2 border-t border-border/60 pt-2.5">
+                    <div className="flex items-center justify-between">
+                        <Label className="text-xs">Ask the technician <span className="font-normal text-muted-foreground">— filled on hand-off (log popup); shown to the helper</span></Label>
+                        <Button type="button" variant="ghost" size="sm" onClick={addEntry} className="h-6 px-1.5 text-xs text-primary"><Plus size={12} className="mr-0.5" /> Add</Button>
+                    </div>
+                    {entryRows.length === 0 && <p className="text-xs text-muted-foreground">None. Add a field the technician types when handing the ticket in (e.g. access password, preferred call time).</p>}
+                    {entryRows.map((row) => collectRow(row, false))}
+                </div>
             </div>
 
             {/* ── Outcome — collected FROM the helper ────────────────────────── */}
@@ -89,34 +142,7 @@ function ArgsEditor({ args, onChange, contextVars }: { args: WorkArg[]; onChange
                     <Button type="button" variant="ghost" size="sm" onClick={addOutcome} className="h-6 px-1.5 text-xs text-primary"><Plus size={12} className="mr-0.5" /> Add</Button>
                 </div>
                 {outcomeRows.length === 0 && <p className="text-xs text-muted-foreground">None. Add a question the helper answers (e.g. the number reached, why it failed). Their answer is saved and reusable later.</p>}
-                {outcomeRows.map(({ a, i }) => (
-                    <div key={i} className="flex items-center gap-1.5">
-                        <Input value={a.label} onChange={(e) => upd(i, { label: e.target.value })} placeholder="Question / label" className="h-8 flex-1" />
-                        <Input
-                            value={a.key ?? ""}
-                            onChange={(e) => upd(i, { key: e.target.value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_") })}
-                            placeholder="variable_name"
-                            title="Variable name other works can reuse (blank = auto from label)"
-                            className="h-8 w-32 shrink-0 font-mono text-xs"
-                        />
-                        <Select value={a.kind ?? "text"} onValueChange={(v) => upd(i, { kind: v as "text" | "number" })}>
-                            <SelectTrigger className="h-8 w-[68px] shrink-0"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="text">Text</SelectItem>
-                                <SelectItem value="number">Number</SelectItem>
-                            </SelectContent>
-                        </Select>
-                        <Select value={a.on ?? "always"} onValueChange={(v) => upd(i, { on: v as "success" | "fail" | "always" })}>
-                            <SelectTrigger className="h-8 w-[112px] shrink-0" title="When to collect this input"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="always">Always</SelectItem>
-                                <SelectItem value="success">On success</SelectItem>
-                                <SelectItem value="fail">On unsuccess</SelectItem>
-                            </SelectContent>
-                        </Select>
-                        <Button type="button" variant="ghost" size="icon" className="h-8 w-7 shrink-0 text-muted-foreground" onClick={() => del(i)}><X size={14} /></Button>
-                    </div>
-                ))}
+                {outcomeRows.map((row) => collectRow(row, true))}
             </div>
         </div>
     );

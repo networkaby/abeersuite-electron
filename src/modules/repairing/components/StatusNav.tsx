@@ -8,16 +8,22 @@ import { badgeColor } from "@/shared/lib/format/entityColor";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { argKey, type WorkArg } from "@/modules/repairing/lib/ticketSources";
 
 /** A worker hand-off — stays in the current stage, routes the work elsewhere.
  *  skipNoteOnEntry hides the note popup (friction-free move); entryQuestion is the
  *  guidance shown in that popup (the answer goes in the private/public note). */
-interface SubTarget { id: string; label: string; work: { label: string; color: string } | null; skipNoteOnEntry?: boolean; requireNoteOnEntry?: boolean; entryQuestion?: string | null }
+interface SubTarget { id: string; label: string; work: { label: string; color: string } | null; skipNoteOnEntry?: boolean; requireNoteOnEntry?: boolean; entryQuestion?: string | null; entryArgs?: WorkArg[] }
 /** A real stage change. `isTerminal` = a close-out (Closed / Cancelled). */
 interface StatusTarget { id: string; label: string; color?: string; isTerminal?: boolean }
 type Pending =
     | { dir: "next"; kind: "sub" | "status"; id: string; label: string; entryQuestion?: string | null; requireNote?: boolean }
     | { dir: "back"; statusId: string; workerId: string | null; label: string };
+// The SEPARATE worker-context popup (technician fills key→value fields on hand-off).
+// Independent of the log popup: shown whenever the work has entry fields, regardless
+// of skipNoteOnEntry. If the log popup is also on, this leads into it (sequential).
+type CtxPending = { id: string; label: string; entryArgs: WorkArg[]; skipNote: boolean; requireNote: boolean; entryQuestion: string | null };
 
 interface Props {
     ticketId: number;
@@ -40,9 +46,12 @@ export default function StatusNav({
 }: Props) {
     const [nextSubs, setNextSubs] = useState<SubTarget[]>([]);
     const [pending, setPending] = useState<Pending | null>(null);
+    const [ctxPending, setCtxPending] = useState<CtxPending | null>(null);
     const [privateNote, setPrivateNote] = useState("");
     const [publicNote, setPublicNote] = useState("");
     const [publicEnabled, setPublicEnabled] = useState(false);
+    // Worker-context fields the technician types on hand-off (keyed by argKey).
+    const [entryValues, setEntryValues] = useState<Record<string, string>>({});
     const [busy, setBusy] = useState(false);
 
     const load = useCallback(async () => {
@@ -50,13 +59,13 @@ export default function StatusNav({
         if (workerId) fwd.set("fromWorkerId", workerId); else fwd.set("entryOnly", "true");
         try {
             const r = await axios.get(`/api/workers/next?${fwd}`);
-            setNextSubs((r.data as SubTarget[]).map((s) => ({ id: s.id, label: s.label, work: s.work ?? null, skipNoteOnEntry: !!s.skipNoteOnEntry, requireNoteOnEntry: !!s.requireNoteOnEntry, entryQuestion: s.entryQuestion ?? null })));
+            setNextSubs((r.data as SubTarget[]).map((s) => ({ id: s.id, label: s.label, work: s.work ?? null, skipNoteOnEntry: !!s.skipNoteOnEntry, requireNoteOnEntry: !!s.requireNoteOnEntry, entryQuestion: s.entryQuestion ?? null, entryArgs: s.entryArgs ?? [] })));
         } catch { setNextSubs([]); }
     }, [statusId, workerId, isWarranty]);
 
     useEffect(() => { load(); }, [load]);
 
-    const close = () => { setPending(null); setPrivateNote(""); setPublicNote(""); setPublicEnabled(false); };
+    const close = () => { setPending(null); setCtxPending(null); setPrivateNote(""); setPublicNote(""); setPublicEnabled(false); setEntryValues({}); };
 
     const submit = async () => {
         if (!pending) return;
@@ -71,10 +80,16 @@ export default function StatusNav({
                     visibility: "INTERNAL",
                 });
             } else if (pending.kind === "sub") {
+                // Any worker-context values collected in the (preceding) context popup
+                // persist in entryValues → merged into Ticket.context by the worker route.
+                const collected = Object.fromEntries(
+                    Object.entries(entryValues).map(([k, v]) => [k, v.trim()]).filter(([, v]) => v),
+                );
                 await axios.patch(`/api/tickets/${ticketId}/worker`, {
                     workerId: pending.id,
                     note: privateNote.trim() || undefined,
                     visibility: "INTERNAL",
+                    args: Object.keys(collected).length ? collected : undefined,
                 });
             } else {
                 await axios.put(`/api/tickets/${ticketId}`, {
@@ -122,19 +137,48 @@ export default function StatusNav({
     // (skipNoteOnEntry); otherwise open the dialog so the operator can write a note,
     // with the target's entryQuestion shown as guidance. The worker's transition note
     // (if any) auto-posts on the server either way.
-    const commitSub = async (id: string, label: string) => {
+    const commitSub = async (id: string, label: string, args?: Record<string, string>) => {
         setBusy(true);
         try {
-            await axios.patch(`/api/tickets/${ticketId}/worker`, { workerId: id, visibility: "INTERNAL" });
+            await axios.patch(`/api/tickets/${ticketId}/worker`, {
+                workerId: id,
+                visibility: "INTERNAL",
+                args: args && Object.keys(args).length ? args : undefined,
+            });
             toast.success(`Moved to ${label}`);
+            close();
             onChanged();
         } catch (err: unknown) {
             toast.error((err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Failed to move");
         } finally { setBusy(false); }
     };
+    // Hand-off opens TWO independent popups, each only if its toggle is on:
+    //   • worker-context popup — when the work has entry fields (any skipNoteOnEntry).
+    //   • log popup — when skipNoteOnEntry is off.
+    // Both on → context first, then the log popup (sequential). Neither → instant move.
     const handOff = (t: SubTarget) => {
-        if (!t.skipNoteOnEntry) setPending({ dir: "next", kind: "sub", id: t.id, label: t.label, entryQuestion: t.entryQuestion ?? null, requireNote: !!t.requireNoteOnEntry });
-        else commitSub(t.id, t.label);
+        const hasEntry = (t.entryArgs?.length ?? 0) > 0;
+        if (hasEntry) {
+            setCtxPending({ id: t.id, label: t.label, entryArgs: t.entryArgs ?? [], skipNote: !!t.skipNoteOnEntry, requireNote: !!t.requireNoteOnEntry, entryQuestion: t.entryQuestion ?? null });
+        } else if (!t.skipNoteOnEntry) {
+            setPending({ dir: "next", kind: "sub", id: t.id, label: t.label, entryQuestion: t.entryQuestion ?? null, requireNote: !!t.requireNoteOnEntry });
+        } else {
+            commitSub(t.id, t.label);
+        }
+    };
+    // Worker-context popup confirm. If the log popup is also on → hand over to it
+    // (entryValues persist into submit()); otherwise move now with the collected values.
+    const ctxNext = async () => {
+        if (!ctxPending) return;
+        if (!ctxPending.skipNote) {
+            setPending({ dir: "next", kind: "sub", id: ctxPending.id, label: ctxPending.label, entryQuestion: ctxPending.entryQuestion, requireNote: ctxPending.requireNote });
+            setCtxPending(null);  // entryValues kept for submit()
+        } else {
+            const collected = Object.fromEntries(
+                Object.entries(entryValues).map(([k, v]) => [k, v.trim()]).filter(([, v]) => v),
+            );
+            await commitSub(ctxPending.id, ctxPending.label, collected);
+        }
     };
 
     // Hand-off: stays in the stage, routes the work to another team (the Work badge).
@@ -194,6 +238,8 @@ export default function StatusNav({
     const forwardStatuses = nextStatuses.filter((s) => !s.isTerminal);
     const terminalStatuses = nextStatuses.filter((s) => s.isTerminal);
     const hasNext = nextSubs.length > 0 || nextStatuses.length > 0;
+    // Required worker-context fields gate the context popup's confirm button.
+    const ctxMissing = !!ctxPending && ctxPending.entryArgs.some((a) => a.required && !(entryValues[argKey(a)] ?? "").trim());
 
     return (
         <div className="space-y-3 rounded-lg border border-border bg-card p-4 shadow">
@@ -325,6 +371,43 @@ export default function StatusNav({
                                 className="flex-1"
                             >
                                 {busy ? "Saving…" : pending.dir === "back" ? "← Revert" : "Move →"}
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+            )}
+
+            {/* SEPARATE worker-context popup — technician fills the work's context fields
+                on hand-off. Independent of the log popup; leads into it when that's on. */}
+            {ctxPending && (
+                <Dialog open onOpenChange={(o) => { if (!o) close(); }}>
+                    <DialogContent className="sm:max-w-md">
+                        <DialogHeader>
+                            <DialogTitle>Work context → {ctxPending.label}</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-3">
+                            <p className="text-xs text-muted-foreground">Fill what the helper needs to do this work — shown on the Work Inbox card.</p>
+                            <div className="space-y-2 rounded-md border border-border bg-muted/30 p-2.5">
+                                {ctxPending.entryArgs.map((a) => (
+                                    <div key={argKey(a)} className="space-y-1">
+                                        <label className="text-xs font-medium text-foreground">{a.label}{a.required && <span className="text-red-500"> *</span>}</label>
+                                        <Input
+                                            value={entryValues[argKey(a)] ?? ""}
+                                            onChange={(e) => setEntryValues((v) => ({ ...v, [argKey(a)]: e.target.value }))}
+                                            placeholder={a.label}
+                                            className="h-8"
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                            {ctxMissing && (
+                                <p className="text-xs text-amber-700 dark:text-amber-400">Fill the required field(s) marked * before continuing.</p>
+                            )}
+                        </div>
+                        <DialogFooter className="mt-2 border-t border-border pt-4">
+                            <Button onClick={close} variant="outline" className="flex-1">Cancel</Button>
+                            <Button onClick={ctxNext} disabled={busy || ctxMissing} className="flex-1">
+                                {busy ? "Saving…" : ctxPending.skipNote ? "Move →" : "Next →"}
                             </Button>
                         </DialogFooter>
                     </DialogContent>

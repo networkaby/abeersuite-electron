@@ -3,7 +3,7 @@ import { auth } from "@/auth";
 import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
 import { timeAgo, timeUntil } from "@/shared/lib/format/timeAgo";
 import WorkInboxBoard, { type WorkInboxItem } from "@/modules/repairing/components/assignments/WorkInboxBoard";
-import { parseArgs, isUserArg, resolveTicketSource, META_PREV_OUTCOME, META_LAST_NOTE, type TicketLike } from "@/modules/repairing/lib/ticketSources";
+import { parseArgs, isUserArg, isEntryArg, argKey, resolveTicketSource, META_PREV_OUTCOME, META_LAST_NOTE, type TicketLike } from "@/modules/repairing/lib/ticketSources";
 
 // The Work Inbox: every active ticket sitting in a work-bearing worker, as one
 // mixed list (longest-waiting first). New tickets enter their status' entry
@@ -85,18 +85,25 @@ export default async function AssignmentsPage() {
         // Worker context = the work's SUPPLY args resolved against the ticket — incl.
         // outcome variables earlier workers produced (context.<key>) and the two "Previous
         // step" meta sources resolved from the logs (prev outcome + last note). Shown prominently.
+        const ctxBag = (t.context as Record<string, unknown> | null) ?? {};
         const ticketLike: TicketLike = { id: t.id, context: t.context as Record<string, unknown> | null, device: t.device };
         const doneLog = t.logs.find((l) => l.note?.startsWith("Work done · "));
         const prevOutcome = doneLog ? doneLog.note!.replace(/^Work done · /, "") : null;
         const lastNoteVal = noteLog?.note ?? null;
+        // Worker-context chips = SUPPLY args (resolved live) + ENTRY args (typed by the
+        // technician on hand-off, read back from Ticket.context). Outcome args excluded.
         const context = work
-            ? parseArgs(work.args).filter((a) => !isUserArg(a))
-                .map((a) => ({
-                    label: a.label,
-                    value: a.source === META_PREV_OUTCOME ? prevOutcome
-                        : a.source === META_LAST_NOTE ? lastNoteVal
-                        : resolveTicketSource(a.source, ticketLike),
-                }))
+            ? parseArgs(work.args).filter((a) => !isUserArg(a) || isEntryArg(a))
+                .map((a) => {
+                    const ctxVal = ctxBag[argKey(a)];
+                    return {
+                        label: a.label,
+                        value: isEntryArg(a) ? (ctxVal == null || ctxVal === "" ? null : String(ctxVal))
+                            : a.source === META_PREV_OUTCOME ? prevOutcome
+                            : a.source === META_LAST_NOTE ? lastNoteVal
+                            : resolveTicketSource(a.source, ticketLike),
+                    };
+                })
                 .filter((c): c is { label: string; value: string } => !!c.value)
             : [];
         return {

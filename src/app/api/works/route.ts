@@ -12,7 +12,8 @@ const argSchema = z.array(z.object({
     label: z.string().trim().min(1),
     source: z.string().trim().min(1),
     kind: z.enum(["text", "number"]).optional(),
-    on: z.enum(["success", "fail", "always"]).optional(),
+    on: z.enum(["success", "fail", "always", "entry"]).optional(),
+    required: z.boolean().optional(),
 })).optional();
 
 const createSchema = z.object({
