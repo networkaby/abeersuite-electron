@@ -27,6 +27,7 @@ import TicketOwnershipPanel from "@/modules/repairing/components/TicketOwnership
 import PipelineTransferModal from "@/modules/repairing/components/PipelineTransferModal";
 import TicketInvoicesPanel from "@/modules/repairing/components/TicketInvoicesPanel";
 import WorkActions from "@/modules/repairing/components/WorkActions";
+import DevOverridePanel from "@/modules/repairing/components/DevOverridePanel";
 import { resolveTicketSource, type WorkArg } from "@/modules/repairing/lib/ticketSources";
 import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
@@ -480,6 +481,17 @@ export default function TicketDetailPage() {
                                     <p className="text-xs text-muted-foreground">Empty — no context stored yet.</p>
                                 )}
                             </div>
+                        )}
+                        {/* DEV (admin-gated): force the ticket onto any (status, worker) pair in
+                            its pipeline with no routing — the escape hatch for a stuck ticket. */}
+                        {canDebug && (
+                            <DevOverridePanel
+                                ticketId={ticket.id}
+                                pipelineId={ticket.pipelineId}
+                                currentStatusId={ticket.status}
+                                currentWorkerId={ticket.workerId ?? null}
+                                onChanged={fetchTicket}
+                            />
                         )}
                         {/* TEMP (dev): the "Current work" card duplicates the Work Inbox so we
                             don't navigate between two pages. Hidden to avoid confusion — flip the
