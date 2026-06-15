@@ -9,9 +9,10 @@ import {
     Clock, User, Building2, AlertTriangle,
     Printer, Lock, Eye, NotebookPen, ArrowRightLeft,
     Check, X, MessageSquare, RefreshCw, ArrowRight, CornerUpLeft, Flag,
-    GitBranch, ExternalLink,
+    GitBranch, ExternalLink, Bug,
     type LucideIcon,
 } from "lucide-react";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { timeAgo } from "@/shared/lib/format/timeAgo";
 import { badgeColor } from "@/shared/lib/format/entityColor";
 import Link from "next/link";
@@ -68,6 +69,9 @@ interface Ticket {
         problem: string;
         account: { name: string; phone?: string | null; email?: string | null } | null;
     };
+    // Soft, unstructured data bag — collected outcome values, spawnedFrom breadcrumb,
+    // etc. Shown raw in the dev-only debug panel (no end-user UI yet).
+    context?: Record<string, unknown> | null;
     parent?: { id: number } | null;
     // Spawned sub-pipeline children, gathered across ALL entity tables (MirrorChild).
     children?: {
@@ -149,8 +153,12 @@ export default function TicketDetailPage() {
     const [refValue, setRefValue] = useState("");
     const [savingRef, setSavingRef] = useState(false);
     const { data: session } = useSession();
-    const sessionUser = session?.user as { id?: string } | undefined;
+    const sessionUser = session?.user as { id?: string; permissions?: string[] } | undefined;
     const currentUserId = Number(sessionUser?.id ?? "0");
+    // Dev-only debug surfaces (the raw ticket-context panel). Gated on an admin
+    // permission — visible to admins / the super-admin bypass, hidden from staff.
+    const perms = sessionUser?.permissions ?? [];
+    const canDebug = perms.includes(PERMISSIONS.ADMIN_BYPASS) || perms.includes(PERMISSIONS.SETTINGS_MANAGE);
     // TODO(rbac): repairing actions temporarily open to all staff — re-gate on
     // position-based permissions when RBAC is re-wired.
     const canConvertWarranty = true;
@@ -448,6 +456,31 @@ export default function TicketDetailPage() {
 
                     {/* Right Column — Actions */}
                     <div className="space-y-4">
+                        {/* DEV (admin-gated): raw Ticket.context — the soft data bag where
+                            collected outcome values + spawnedFrom land. Lets a developer see
+                            the context/outcome flow that has no end-user UI yet. */}
+                        {canDebug && (
+                            <div className="space-y-2 rounded-lg border border-dashed border-amber-400/70 bg-amber-50/50 p-4 dark:border-amber-700/60 dark:bg-amber-950/20">
+                                <h2 className="flex items-center gap-2 text-sm font-semibold text-amber-700 dark:text-amber-300">
+                                    <Bug size={14} /> Ticket context
+                                    <span className="ml-auto rounded bg-amber-200/70 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-800 dark:bg-amber-900/60 dark:text-amber-200">dev</span>
+                                </h2>
+                                {ticket.context && Object.keys(ticket.context).length > 0 ? (
+                                    <div className="space-y-1">
+                                        {Object.entries(ticket.context).map(([k, v]) => (
+                                            <div key={k} className="flex gap-2 text-xs">
+                                                <span className="shrink-0 font-mono text-amber-800/80 dark:text-amber-200/80">{k}</span>
+                                                <span className="min-w-0 flex-1 break-words text-right font-mono text-foreground">
+                                                    {v === null || v === undefined ? "—" : typeof v === "object" ? JSON.stringify(v) : String(v)}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-xs text-muted-foreground">Empty — no context stored yet.</p>
+                                )}
+                            </div>
+                        )}
                         {/* TEMP (dev): the "Current work" card duplicates the Work Inbox so we
                             don't navigate between two pages. Hidden to avoid confusion — flip the
                             `false &&` guard to re-enable. */}
