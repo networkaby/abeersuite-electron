@@ -4,6 +4,8 @@ import { NextResponse } from "next/server";
 function isPublicPath(pathname: string): boolean {
     if (pathname === "/" || pathname === "/login") return true;
     if (pathname === "/staff/login") return true;
+    // Printer/display bridge installer — downloadable on the shop PC before sign-in.
+    if (pathname === "/combined-bridge.zip") return true;
     if (pathname.startsWith("/portal")) return true;
     if (pathname.startsWith("/shop")) return true;
     if (pathname === "/public/login") return true;

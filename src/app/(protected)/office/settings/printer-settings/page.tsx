@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Loader2, Wifi, Usb, Monitor, CheckCircle, XCircle, RefreshCw, Printer } from "lucide-react";
+import { Loader2, Wifi, Usb, Monitor, CheckCircle, XCircle, RefreshCw, Printer, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -145,9 +145,19 @@ export default function PrinterSettingsPage() {
     return (
         <ScrollArea className="h-full" type="always">
         <div className="max-w-xl mx-auto space-y-6 py-6">
-            <div className="flex items-center gap-2">
-                <Printer size={20} />
-                <h1 className="text-xl font-bold">Thermal Printer</h1>
+            <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                    <Printer size={20} />
+                    <h1 className="text-xl font-bold">Thermal Printer</h1>
+                </div>
+                <a
+                    href="/combined-bridge.zip"
+                    download
+                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                >
+                    <Download size={13} />
+                    Download bridge
+                </a>
             </div>
 
             {/* Relay status */}
@@ -170,10 +180,24 @@ export default function PrinterSettingsPage() {
             </div>
 
             {!relayUp && !loading && (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 space-y-1">
-                    <p className="font-medium">Start the relay on the shop PC first:</p>
-                    <code className="block bg-amber-100 rounded px-2 py-1 font-mono text-xs">node relay.js</code>
-                    <p className="text-xs text-amber-700">Then refresh this page.</p>
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 space-y-3">
+                    <div className="space-y-1">
+                        <p className="font-medium">Don&apos;t have the bridge installed yet?</p>
+                        <p className="text-xs text-amber-700">
+                            Download the printer &amp; display bridge, unzip it on the shop PC, then run it.
+                        </p>
+                        <Button asChild size="sm" variant="outline" className="mt-1 border-amber-300 bg-white">
+                            <a href="/combined-bridge.zip" download>
+                                <Download size={14} />
+                                Download bridge
+                            </a>
+                        </Button>
+                    </div>
+                    <div className="space-y-1 border-t border-amber-200 pt-3">
+                        <p className="font-medium">Already installed — start the relay on the shop PC:</p>
+                        <code className="block bg-amber-100 rounded px-2 py-1 font-mono text-xs">node relay.js</code>
+                        <p className="text-xs text-amber-700">Then refresh this page.</p>
+                    </div>
                 </div>
             )}
 
