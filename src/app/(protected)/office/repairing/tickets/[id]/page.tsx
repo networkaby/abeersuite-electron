@@ -197,6 +197,11 @@ export default function TicketDetailPage() {
     if (loading) return <p className="text-muted-foreground">Loading...</p>;
     if (!ticket) return <p className="text-muted-foreground">Ticket not found.</p>;
 
+    // Toggle for the hidden "Current work" card (duplicates the Work Inbox). Typed as
+    // `boolean` (not the literal `false`) so the JSX block below stays reachable and keeps
+    // the non-null `ticket` narrowing from the guard above — flip to re-enable.
+    const SHOW_CURRENT_WORK: boolean = false;
+
     const actionBtnBase = "w-full border border-border py-2 text-sm flex items-center justify-center gap-2 transition-colors hover:bg-muted rounded-md";
 
     // Work is "in progress" when the ticket has an owner AND an active work worker.
@@ -496,7 +501,7 @@ export default function TicketDetailPage() {
                         {/* TEMP (dev): the "Current work" card duplicates the Work Inbox so we
                             don't navigate between two pages. Hidden to avoid confusion — flip the
                             `false &&` guard to re-enable. */}
-                        {false && ticket.ticketWorker?.work && (
+                        {SHOW_CURRENT_WORK && ticket.ticketWorker?.work && (
                             <div className="space-y-3 rounded-lg border border-border bg-card p-4 shadow">
                                 <h2 className="text-sm font-semibold text-foreground">Current work</h2>
                                 <div className="flex flex-wrap items-center gap-2">
