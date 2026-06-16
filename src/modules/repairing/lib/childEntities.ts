@@ -27,6 +27,7 @@ export type SpawnArgs = {
     startWorkerId: string | null;   // entry worker (tickets only; others ride status)
     deviceId: number;                  // parent's device — a ticket child inherits it
     userId: number;
+    seedContext?: Record<string, unknown>;  // pipeline-specific worker context mapped INTO the child
 };
 
 export type MirrorChild = {
@@ -51,6 +52,9 @@ type Registry = {
 };
 
 const spawnContext = (a: SpawnArgs) => ({
+    // pipeline-specific worker context first; spawnedFrom is the system link and
+    // always wins (a stray seed key can't clobber the parent back-reference).
+    ...(a.seedContext ?? {}),
     spawnedFrom: { ticketId: a.parentTicketId, workerId: a.parentWorkerId },
 });
 const childTitle = (a: SpawnArgs) => `Spawned from ticket #${a.parentTicketId}`;

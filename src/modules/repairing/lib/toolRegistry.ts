@@ -64,10 +64,39 @@ async function createChild(inputs: Record<string, string>, ctx?: ToolContext): P
     return { success: true, outputs: { childId: String(child.id), childType: child.type } };
 }
 
+// "create_support_ticket": a PIPELINE-WISE create-child — the target pipeline is
+// baked in (Customer Support, P2), so there's no pipeline picker. Its inputs are
+// the support-specific worker context (subject / priority / details), which are
+// mapped INTO the child's context so the support agent opens with that context.
+// A different pipeline gets its OWN tool with its OWN context fields.
+const SUPPORT_PIPELINE_ID = "P2";
+async function createSupportTicket(inputs: Record<string, string>, ctx?: ToolContext): Promise<ToolResult> {
+    if (!ctx) return { success: false, outputs: {} };
+    const seedContext: Record<string, unknown> = {
+        support: {
+            subject: (inputs.subject ?? "").trim(),
+            priority: (inputs.priority ?? "").trim(),
+            details: (inputs.details ?? "").trim(),
+        },
+    };
+    const child = await spawnChild({
+        parentId: ctx.ticketId,
+        parentStatus: ctx.status,
+        parentWorkerId: ctx.workerId,
+        spawnPipelineId: SUPPORT_PIPELINE_ID,
+        deviceId: ctx.deviceId,
+        userId: ctx.userId,
+        seedContext,
+    });
+    if (!child) return { success: false, outputs: {} };
+    return { success: true, outputs: { childId: String(child.id), childType: child.type } };
+}
+
 const TOOL_REGISTRY: Record<string, ToolRunner> = {
     open_tab: openTab,
     navigate,
     create_child: createChild,
+    create_support_ticket: createSupportTicket,
 };
 
 // Run a tool by type. Unknown tool → null (caller decides; never throws).

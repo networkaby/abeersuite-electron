@@ -75,6 +75,24 @@ export const ACTION_TOOLS: ActionToolDef[] = [
             { key: "childType", label: "Child type", kind: "text" },
         ],
     },
+    {
+        // PIPELINE-WISE create-child: target pipeline (Customer Support) is baked in —
+        // no pipeline picker. Inputs are this pipeline's own worker context, carried
+        // INTO the child so the support agent opens with the parent's framing.
+        type: "create_support_ticket",
+        label: "Create a support ticket",
+        description: "Opens a Customer Support child for this ticket, carrying the subject / priority / details into it. Linked back to this ticket (inherits the device). Idempotent — won't duplicate an open child.",
+        runtime: "server",
+        inputs: [
+            { key: "subject", label: "Subject", kind: "text", hint: "what the support request is about, e.g. {device.problem}" },
+            { key: "priority", label: "Priority", kind: "text", hint: "normal | high | urgent" },
+            { key: "details", label: "Details", kind: "text", hint: "extra context for the support agent" },
+        ],
+        outputs: [
+            { key: "childId", label: "Child id", kind: "text" },
+            { key: "childType", label: "Child type", kind: "text" },
+        ],
+    },
 ];
 
 export const ACTION_TOOL_MAP: Record<string, ActionToolDef> = Object.fromEntries(ACTION_TOOLS.map((t) => [t.type, t]));

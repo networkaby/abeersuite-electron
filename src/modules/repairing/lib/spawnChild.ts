@@ -21,8 +21,9 @@ export async function spawnChild(args: {
     spawnPipelineId: string;       // pipeline to create the child on
     deviceId: number;              // a ticket child inherits the parent's device
     userId: number;
+    seedContext?: Record<string, unknown>;  // pipeline-specific context mapped into the child
 }): Promise<{ id: string; type: ChildEntityType } | null> {
-    const { parentId, parentStatus, parentWorkerId, spawnPipelineId, deviceId, userId } = args;
+    const { parentId, parentStatus, parentWorkerId, spawnPipelineId, deviceId, userId, seedContext } = args;
 
     const pipeline = await prisma.pipeline.findUnique({
         where: { id: spawnPipelineId },
@@ -48,7 +49,7 @@ export async function spawnChild(args: {
 
     const childId = await reg.create({
         parentTicketId: parentId, parentWorkerId, pipelineId: spawnPipelineId,
-        entryStatusId: entry.id, startWorkerId: entry.startWorkerId ?? null, deviceId, userId,
+        entryStatusId: entry.id, startWorkerId: entry.startWorkerId ?? null, deviceId, userId, seedContext,
     });
 
     // Log on the PARENT ticket (always). The child-side log only exists for ticket
