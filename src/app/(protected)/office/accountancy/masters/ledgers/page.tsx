@@ -20,7 +20,6 @@ import { fmt } from "@/utils/constants";
 import { GroupCombobox } from "@/modules/accountancy/components/GroupCombobox";
 
 type GroupType  = "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE";
-type GlType     = "ASSET" | "LIABILITY" | "EQUITY" | "REVENUE" | "EXPENSE";
 
 interface LedgerRow {
     id: number;
@@ -106,6 +105,11 @@ function drCr(balance: number): string {
 
 const NONE = "none";
 
+// A ledger's normal balance is inherited from its group's accounting nature.
+function inheritedNormalBalance(type: GroupType): "Debit" | "Credit" {
+    return type === "ASSET" || type === "EXPENSE" ? "Debit" : "Credit";
+}
+
 export default function LedgersPage() {
     const router = useRouter();
 
@@ -116,8 +120,7 @@ export default function LedgersPage() {
     const [saving, setSaving]     = useState(false);
 
     const [newForm, setNewForm] = useState({
-        name: "", groupId: NONE, code: "", description: "",
-        type: NONE, normalBalance: NONE,
+        name: "", groupId: NONE, description: "",
     });
 
     // Inline ledger edit (name + parent group)
@@ -182,17 +185,15 @@ export default function LedgersPage() {
         if (!newForm.name.trim()) { toast.error("Name is required"); return; }
         setSaving(true);
         try {
+            // normalBalance is left unset → inherited from the group's nature.
             await axios.post("/api/accountancy/ledgers", {
                 name:          newForm.name.trim(),
                 groupId:       newForm.groupId !== NONE ? Number(newForm.groupId) : null,
-                code:          newForm.code.trim() || null,
                 description:   newForm.description.trim() || null,
-                type:          newForm.type !== NONE ? newForm.type : null,
-                normalBalance: newForm.normalBalance !== NONE ? newForm.normalBalance : null,
             });
             toast.success("Ledger created");
             setShowAdd(false);
-            setNewForm({ name: "", groupId: NONE, code: "", description: "", type: NONE, normalBalance: NONE });
+            setNewForm({ name: "", groupId: NONE, description: "" });
             load();
         } catch (err: unknown) {
             const msg = axios.isAxiosError(err) ? err.response?.data?.error : "Failed";
@@ -251,35 +252,17 @@ export default function LedgersPage() {
                             </Select>
                         </div>
                         <div className="space-y-1.5">
-                            <Label>Code</Label>
-                            <Input
-                                value={newForm.code}
-                                onChange={(e) => setNewForm((f) => ({ ...f, code: e.target.value }))}
-                                placeholder="e.g. 1100"
-                            />
-                        </div>
-                        <div className="space-y-1.5">
-                            <Label>Type</Label>
-                            <Select value={newForm.type} onValueChange={(v) => setNewForm((f) => ({ ...f, type: v }))}>
-                                <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value={NONE}>— none —</SelectItem>
-                                    {(["ASSET", "LIABILITY", "EQUITY", "REVENUE", "EXPENSE"] as GlType[]).map((t) => (
-                                        <SelectItem key={t} value={t}>{t}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="space-y-1.5">
                             <Label>Normal Balance</Label>
-                            <Select value={newForm.normalBalance} onValueChange={(v) => setNewForm((f) => ({ ...f, normalBalance: v }))}>
-                                <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value={NONE}>— none —</SelectItem>
-                                    <SelectItem value="DEBIT">Debit</SelectItem>
-                                    <SelectItem value="CREDIT">Credit</SelectItem>
-                                </SelectContent>
-                            </Select>
+                            {(() => {
+                                const selectedGroup = allFlat.find((g) => String(g.id) === newForm.groupId);
+                                return (
+                                    <div className="flex h-9 items-center rounded-md border border-input bg-muted/40 px-3 text-sm text-muted-foreground">
+                                        {selectedGroup
+                                            ? `${inheritedNormalBalance(selectedGroup.type)} — inherited from ${selectedGroup.name}`
+                                            : "Inherited from group"}
+                                    </div>
+                                );
+                            })()}
                         </div>
                         <div className="space-y-1.5">
                             <Label>Description</Label>

@@ -60,3 +60,4 @@ next-env.d.ts
 # Thermal relay local config (contains printer IP)
 tools/thermal-relay/config.json
 tools/thermal-relay/node_modules/
+block.env.local
