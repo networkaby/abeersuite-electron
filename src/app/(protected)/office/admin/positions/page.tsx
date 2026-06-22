@@ -24,7 +24,7 @@ import {
 
 interface Branch     { id: string; name: string; }
 interface Department { id: string; name: string; branchId: string | null; }
-interface UserStub   { id: number; name: string; avatarUrl: string | null; role: string; title: string | null; userRole: { label: string; color: string }; }
+interface UserStub   { id: number; name: string; avatarUrl: string | null; role: string; title: string | null; userRole: { label: string; color: string } | null; }
 interface RoleOption { id: string; label: string; color: string; }
 
 interface Position {
@@ -227,7 +227,9 @@ function AssignPanel({
                                     className="h-auto w-full justify-start gap-2 rounded-none px-3 py-2 text-left text-xs"
                                 >
                                     <span className="font-medium">{u.name}</span>
-                                    <Badge className={`${u.userRole.color} text-[9px] px-1 py-0`}>{u.userRole.label}</Badge>
+                                    {u.userRole && (
+                                        <Badge className={`${u.userRole.color} text-[9px] px-1 py-0`}>{u.userRole.label}</Badge>
+                                    )}
                                     {u.title && <span className="text-muted-foreground">{u.title}</span>}
                                 </Button>
                             ))
