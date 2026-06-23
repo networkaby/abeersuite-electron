@@ -11,10 +11,11 @@
 // data; only this file describes the production-required state.
 //
 // What this seeds (kept on hard-clean):
-//   • RBAC: 7 Roles, 80+ Permissions, RolePermission grants
+//   • RBAC: 1 Role (R1 Admin — only isSystem role; R2+ via helper-roles.ts),
+//     80+ Permissions, R1's RolePermission grants
 //   • Workflow: 9 Pipelines, 63 TicketStatuses, 8 Works (1 gated → work:*
 //     permissions), 43 Workers, status + worker transitions
-//   • Org structure: 2 Branches (HQ + Online), 7 Departments, Role ranks
+//   • Org structure: 1 Branch (HQ), 7 Departments, Role ranks
 //   • Chart of accounts: 28 AccountGroups (Tally tree) + ~50 GL ledgers
 //     **Stock-in-Hand group is intentionally empty** — closing-stock value is
 //     derived live by `getClosingStockValue` and injected as a synthetic
@@ -74,14 +75,14 @@ const prisma = new PrismaClient({ adapter });
 // Roles are the *templates* that Positions inherit permissions from. Users do NOT
 // receive a role directly — `User.role` is null until a Position appointment
 // promotes them. See `Position.roleTemplateId` and `authorizeStaff.ts`.
+//
+// Bootstrap seeds ONLY R1 (Admin) — the one role universal to every trade. All
+// other roles (Service Engineer, Cashier, Accountant, …) are trade-specific and
+// vary per business, so they are NOT seeded here. A starter set lives in the
+// `helper-roles.ts` seed (`pnpm seed:helper-roles`), and admins create or edit
+// the rest from the Role Matrix UI as the business needs.
 const ROLES = [
-    { id: "R1", label: "Role-Admin",            color: "bg-red-100 text-red-600",       isSystem: true, rank: 100 },
-    { id: "R5", label: "Role-Branch Manager",   color: "bg-amber-100 text-amber-700",   isSystem: true, rank: 80  },
-    { id: "R2", label: "Role-Service Engineer", color: "bg-blue-100 text-blue-600",     isSystem: true, rank: 70  },
-    { id: "R6", label: "Role-Accountant",       color: "bg-indigo-100 text-indigo-700", isSystem: true, rank: 60  },
-    { id: "R7", label: "Role-Sales Executive",  color: "bg-teal-100 text-teal-700",     isSystem: true, rank: 50  },
-    { id: "R3", label: "Role-Counter / Cashier",color: "bg-green-100 text-green-600",   isSystem: true, rank: 30  },
-    { id: "R4", label: "Role-Stores & Despatch",color: "bg-purple-100 text-purple-600", isSystem: true, rank: 30  },
+    { id: "R1", label: "Role-Admin", color: "bg-red-100 text-red-600", isSystem: true, rank: 100 },
 ] as const;
 
 const PERMISSIONS = [
@@ -255,97 +256,11 @@ const PERMISSIONS = [
 
 const ROLE_PERMISSIONS: Record<string, string[]> = {
     // R1 — Owner / Admin: every permission except system-only sentinels.
+    // This is the ONLY bootstrap role. Trade-specific starter roles live in
+    // `helper-roles.ts` (`pnpm seed:helper-roles`); admins build the rest.
     R1: (PERMISSIONS as readonly { id: string; systemOnly?: boolean }[])
         .filter((p) => !p.systemOnly)
         .map((p) => p.id),
-
-    // R5 — Branch Manager: full branch authority; no global settings/roles.
-    R5: [
-        "customers:view", "customers:view:org",
-        "customers:create", "customers:edit:branch", "customers:edit:org", "customers:delete:branch",
-        "companies:manage", "companies:create", "companies:edit:org",
-        "tickets:create", "tickets:status:set", "tickets:substatus:set",
-        "tickets:assign", "tickets:manage-participants", "warranty:convert",
-        "tickets:view:org", "tickets:edit:org", "tickets:delete:branch",
-        "work:W1", "work:W2", "work:W3", "work:W4",
-        "assignments:view-org", "assignments:view:org",
-        "service-centers:view", "service-centers:view:org",
-        "finance:voucher:create", "finance:voucher:post", "finance:voucher:cancel", "finance:voucher:delete",
-        "finance:invoice:cancel", "finance:invoice:delete",
-        "finance:payment:cancel", "finance:payment:delete",
-        "finance:allocation:manage",
-        "inventory:manage",
-        "inventory:view:org", "inventory:edit:branch",
-        "inventory:voucher:cancel", "inventory:voucher:delete",
-        "pos:shift:open", "pos:shift:close", "pos:shift:drop",
-        "pos:shift:view:org", "pos:shift:manage",
-        "accountancy:create:own", "accountancy:view:br", "accountancy:view:org", "accountancy:edit:br",
-        "deals:view", "deals:manage",
-        "administration:tasks:view", "administration:tasks:manage",
-    ],
-
-    // R2 — Service Engineer: repair & diagnostics workflow.
-    R2: [
-        "customers:view",
-        "tickets:create", "tickets:status:set", "tickets:substatus:set",
-        "tickets:assign", "tickets:manage-participants", "warranty:convert",
-        "tickets:view:own", "tickets:view:branch",
-        "work:W1", "work:W2", "work:W3", "work:W4",
-        "assignments:view-team", "assignments:view:own",
-        "service-centers:view", "service-centers:view:branch",
-    ],
-
-    // R6 — Accountant: books, GST, vouchers, reconciliation. No admin/POS/tickets.
-    R6: [
-        "customers:view", "customers:view:org",
-        "companies:manage", "companies:create", "companies:edit:org",
-        "finance:journal:cancel", "finance:journal:delete",
-        "finance:invoice:cancel", "finance:invoice:delete",
-        "finance:payment:cancel", "finance:payment:delete",
-        "finance:voucher:create", "finance:voucher:post", "finance:voucher:cancel", "finance:voucher:delete",
-        "finance:allocation:manage",
-        "finance:opening-balance:manage",
-        "inventory:view:org",
-        "pos:shift:view:org",
-        "accountancy:create:own",
-        "accountancy:view:own", "accountancy:view:br", "accountancy:view:org",
-        "accountancy:edit:own", "accountancy:edit:br", "accountancy:edit:org",
-        "accountancy:delete:own", "accountancy:delete:br",
-    ],
-
-    // R7 — Sales Executive: CRM, customer acquisition, ecommerce, counter sales.
-    R7: [
-        "customers:view", "customers:view:org",
-        "customers:create", "customers:edit:own", "customers:edit:branch", "customers:delete:own",
-        "companies:manage", "companies:create", "companies:edit:org",
-        "tickets:create", "tickets:status:set", "tickets:substatus:set", "tickets:assign",
-        "tickets:view:own", "tickets:view:branch",
-        "assignments:view-team", "assignments:view:own",
-        "deals:view", "deals:manage",
-        "ecommerce:manage",
-        "inventory:view:branch",
-        "pos:shift:open", "pos:shift:close", "pos:shift:drop", "pos:shift:view:branch",
-    ],
-
-    // R3 — Counter / Cashier: POS, customer intake, ticket triage, branch inventory.
-    R3: [
-        "customers:view", "customers:manage", "companies:manage",
-        "tickets:create", "tickets:status:set", "tickets:substatus:set", "tickets:assign",
-        "work:W1", "work:W2",
-        "assignments:view-team",
-        "deals:view", "deals:manage",
-        "inventory:view:branch", "inventory:edit:branch",
-        "pos:shift:open", "pos:shift:close", "pos:shift:drop", "pos:shift:view:branch",
-    ],
-
-    // R4 — Stores & Despatch: stock vouchers, goods in/out, repair item handoff.
-    R4: [
-        "customers:view",
-        "tickets:substatus:set", "tickets:assign",
-        "assignments:view-team",
-        "inventory:view:branch", "inventory:edit:branch",
-        "pos:shift:open", "pos:shift:close", "pos:shift:drop",
-    ],
 };
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -679,7 +594,7 @@ const STATUS_STARTS: Record<string, string> = {
 // Only the two branches needed for the typical setup. Add more via UI later.
 // HQ inherits the organisation address from COMPANY_DETAILS — for a single-
 // state business this lets you start with a printable invoice address on
-// day one. The Online / Virtual branch carries no postal address by design.
+// day one. Admins add further branches (regional / online) via the UI.
 const HQ_GSTIN = COMPANY_DETAILS.tax.gstin ?? "";
 const BRANCHES = [
     {
@@ -696,22 +611,6 @@ const BRANCHES = [
         pinCode:      COMPANY_DETAILS.address.pin,
         country:      COMPANY_DETAILS.address.country,
         email:        COMPANY_DETAILS.contact.email || null,
-        gstin:        HQ_GSTIN,
-        gstStateCode: HQ_GSTIN.length >= 2 ? HQ_GSTIN.slice(0, 2) : "",
-    },
-    {
-        id:    "BR-ONL",
-        name:  "Online / Virtual",
-        address:      null as string | null,
-        phone:        null as string | null,
-        addressLine1: "",
-        addressLine2: "",
-        city:         "",
-        state:        "",
-        pinCode:      "",
-        country:      COMPANY_DETAILS.address.country,
-        email:        null as string | null,
-        // Online branch typically shares the HQ GSTIN — no separate registration.
         gstin:        HQ_GSTIN,
         gstStateCode: HQ_GSTIN.length >= 2 ? HQ_GSTIN.slice(0, 2) : "",
     },

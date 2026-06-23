@@ -4,8 +4,9 @@ All seed scripts and their fixture data live under `prisma/seeds/`.
 
 ```
 prisma/seeds/
-├─ bootstrap-seed.ts            PRODUCTION — single source of truth for setup
+├─ bootstrap-seed.ts            PRODUCTION — single source of truth for setup (RBAC seeds only R1)
 ├─ helper-inventory-masters.ts  HELPER — trade-specific masters (brands, categories, HSN/GST groups)
+├─ helper-roles.ts              HELPER — trade-specific starter roles (R2–R7, non-system / admin-editable)
 ├─ hard-clean.ts                CLEANER — wipes everything bootstrap doesn't seed
 ├─ purge-vouchers.ts            OPS — wipes only vouchers/JEs/invoices/payments
 ├─ recompute-balances.ts        OPS — recompute Account.balance drift from JournalLine
@@ -35,18 +36,18 @@ pnpm prisma db seed       # 2. runs bootstrap-seed.ts
 
 `bootstrap-seed.ts` is **idempotent** — safe to re-run. It seeds:
 
-- **RBAC** — 7 roles (prefixed `Role-`), 80+ permissions, RolePermission grants
+- **RBAC** — **1 role** (`R1` Admin, the only `isSystem` role), 80+ permissions, R1's RolePermission grants. The other starter roles (`R2`–`R7`) are trade-specific and live in `helper-roles.ts` (see below); admins build the rest from the Role Matrix.
 - **Workflow** — 6 pipelines, 49 ticket statuses, 7 worker groups, 38 workers, transitions
-- **Org structure** — 2 branches (HQ + Online), 7 cross-branch departments, role ranks
+- **Org structure** — 1 branch (HQ; admins add regional / online branches via the UI), 7 cross-branch departments, role ranks
 - **Chart of accounts** — 28 AccountGroups (Tally tree, 15 primary + 13 sub) + ~50 GL ledgers; per-branch Vault accounts + POS counter till accounts
 - **Inventory Unit master** — 13 units (PCS, NOS, BOX, SET, UNIT, MTR, ROLL, PKT, PAIR, KG, BAG, REAM, DAY)
 - **Inventory Warranty Term master** — ~10 terms (No Warranty, 7/15-day, 1/3/6-month, 1/2/3/5-year)
 - **Org Defaults** — default GST rate (18%), default unit (UNIT), taxability (TAXABLE), currency (₹), credit periods (0 days)
 - **DB constraints** — `Phone_owner_xor`, `Email_owner_xor` CHECK constraints (Prisma can't express XOR; applied via raw SQL inside the seed)
 
-> **Universal vs trade-specific.** Bootstrap seeds only masters common to **every** trade (units, GST slabs, warranty terms, chart of accounts, RBAC, workflow). Masters that are **specific to the computer/CCTV/printer trade** — brands, categories, and the HSN/GST product-group spine — are NOT in bootstrap; they live in the helper seed below. A different trade would ship its own helper.
+> **Universal vs trade-specific.** Bootstrap seeds only masters common to **every** trade (units, GST slabs, warranty terms, chart of accounts, the `R1` Admin role, workflow). Masters that are **specific to the computer/CCTV/printer trade** — brands, categories, the HSN/GST product-group spine, and the `R2`–`R7` starter roles — are NOT in bootstrap; they live in the helper seeds below. A different trade would ship its own helpers (or just build roles in the Role Matrix).
 
-> Production deployments run `pnpm prisma db seed` (mandatory) then, for this trade, `pnpm seed:helper-inventory`. Do not run any `dummy-*` script in production.
+> Production deployments run `pnpm prisma db seed` (mandatory) then, for this trade, `pnpm seed:helper-inventory` and `pnpm seed:helper-roles`. Do not run any `dummy-*` script in production.
 
 ## Helper seed (trade-specific reference data)
 
@@ -62,6 +63,16 @@ pnpm seed:helper-inventory   # after `pnpm prisma db seed`
 
 Wiped by `hard-clean` (all three are in its `INVENTORY_MASTERS` list) — re-run this helper to restore.
 
+## Helper seed (trade-specific starter roles)
+
+```bash
+pnpm seed:helper-roles   # after `pnpm prisma db seed`
+```
+
+`helper-roles.ts` creates `R2`–`R7` (Service Engineer, Counter/Cashier, Stores & Despatch, Branch Manager, Accountant, Sales Executive) plus their permission grants. They are **non-system** (`isSystem: false`), so admins can rename, re-grant, or delete them from the Role Matrix — unlike the locked `R1`. Idempotent (upsert-by-id; grants fully rewritten each run). Permission rows come from bootstrap, so run this **after** `pnpm prisma db seed`.
+
+Wiped by `hard-clean` (it deletes every non-system role back to the R1-only bootstrap state) — re-run this helper to restore.
+
 ## Dummy seeds (dev only)
 
 Manual, idempotent, **never** auto-run by Prisma. Use for demos, screenshots, local testing.
@@ -73,7 +84,7 @@ Manual, idempotent, **never** auto-run by Prisma. Use for demos, screenshots, lo
 | `pnpm seed:dummy-customers` | Demo persons + companies with phones/emails + party-linked Account ledgers |
 | `pnpm seed:dummy-shop` | Demo product catalog (laptops, desktops, etc.) — reads from `data/demoCatalogSeed.ts` |
 | `pnpm seed:dummy-vouchers` | Demo invoices, payments, journal entries |
-| `pnpm seed:dummy-all` | Runs in dependency order: customers → users → **helper-inventory** → shop → vouchers (helper runs before shop so demo products resolve their brand / category / group) |
+| `pnpm seed:dummy-all` | Runs in dependency order: customers → **helper-roles** → users → **helper-inventory** → shop → vouchers (helper-roles runs before users so demo positions resolve their `R2`/`R3`/`R4` templates; helper-inventory runs before shop so demo products resolve their brand / category / group) |
 
 ## Cleaner — return to bootstrap state
 
@@ -92,9 +103,10 @@ pnpm seed:hard-clean
 - All party-linked Account rows
 - ServiceCenter, ShopCoupon, PortalCredentials
 - Payment gateways (`payment_gateways`, Settings → Payment Methods — operator config, bootstrap seeds none). Cleared with an explicit `DELETE` (not a `TRUNCATE … CASCADE`) so the `ON DELETE SET NULL` on `PosCounterPaymentAccount.gatewayId` fires: counter payment rails are **preserved**, just unlinked from the deleted gateways.
+- **Non-system roles** (every `Role` with `isSystem: false` — the `helper-roles.ts` starter set and any admin-created role). Positions pointing at them are unlinked first (restrict FK), then the roles + their grants are deleted. Re-run `pnpm seed:helper-roles` to restore the starter set. `R1` (the only `isSystem` role) survives.
 
 **Preserves** everything bootstrap-seed wrote, plus user-set config:
-- Roles, Permissions, RolePermissions, Pipelines, Statuses, Branches, Departments
+- `R1` role + Permissions + R1's RolePermissions, Pipelines, Statuses, Branches, Departments
 - Chart of accounts (AccountGroup tree + GL ledgers)
 - **InvUnit** (13 units) — universal bootstrap data
 - **InvWarrantyTerm** (~10 terms) — universal bootstrap data

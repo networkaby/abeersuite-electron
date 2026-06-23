@@ -46,16 +46,28 @@ The constant name mirrors the string: `INVENTORY_VOUCHER_HARD_DELETE = "inventor
 
 `User.rank` (0–100 int) gates role assignment — a user can only assign roles ranked at or below their own rank. R1 = 100, R2 ≈ 70, R3 ≈ 40, R4 ≈ 20.
 
-## Role catalogue (seeded by `bootstrap-seed.ts`)
+## Role catalogue
+
+`bootstrap-seed.ts` seeds **only `R1`** — the one role universal to every trade. It is the lone `isSystem: true` role (locked: cannot be deleted, see [admin.md](./admin.md)). Every other role is trade-specific and varies per business, so it is **not** in bootstrap.
+
+| ID | Name | Rank | `isSystem` | Source | Typical permissions |
+|---|---|---|---|---|---|
+| `R1` | Admin / Owner | 100 | ✅ | `bootstrap-seed.ts` | Every non-`systemOnly` permission. `admin:bypass` is **not** in this set — see Env super admin below. |
+
+**Starter roles** (`R2`–`R7`) are a trade-specific helper set — created as **non-system** (`isSystem: false`, admin-editable) by `prisma/seeds/helper-roles.ts` (run `pnpm seed:helper-roles` after `pnpm prisma db seed`):
 
 | ID | Name | Rank | Typical permissions |
 |---|---|---|---|
-| `R1` | Admin / Owner | 100 | Every non-`systemOnly` permission (~111 keys). `admin:bypass` is **not** in this set — see Env super admin below. |
-| `R2` | Technician | 70 | `tickets:*:own/branch`, `inventory:view:branch`, repair-side ops |
-| `R3` | Front Desk | 40 | `tickets:create`, `customers:*`, `pos:shift:*`, `inventory:view:branch`, `inventory:edit:branch` |
-| `R4` | Despatch | 20 | `tickets:edit:branch` (despatch workers), `pos:shift:open` |
+| `R5` | Branch Manager | 80 | full branch authority across tickets / finance / inventory / POS; no global settings or roles |
+| `R2` | Service Engineer | 70 | `tickets:*:own/branch`, `work:W1`–`W4`, repair-side ops |
+| `R6` | Accountant | 60 | `finance:*`, `accountancy:*`, vouchers + reconciliation; no admin/POS/tickets |
+| `R7` | Sales Executive | 50 | `customers:*`, `deals:*`, `ecommerce:manage`, counter sales |
+| `R3` | Counter / Cashier | 30 | `tickets:create`, `customers:*`, `pos:shift:*`, `inventory:view/edit:branch` |
+| `R4` | Stores & Despatch | 30 | `tickets:substatus:set`, `inventory:*:branch`, `pos:shift:*` |
 
-> Read the actual `Role` + `RolePermission` rows in `bootstrap-seed.ts` (sections 2–3) for the canonical assignment matrix.
+Admins create or edit roles freely from the Role Matrix UI as the business needs — the starter set is just a head start, not a fixed catalogue. A different trade would ship its own `helper-roles.ts`.
+
+> Read the actual `Role` + `RolePermission` rows in `bootstrap-seed.ts` (R1) and `helper-roles.ts` (R2–R7) for the canonical assignment matrix.
 
 ## Env super admin (emergency bypass)
 
@@ -89,7 +101,7 @@ These string IDs are stable across the codebase. Renaming any of them is a break
 
 | Domain | Pattern | Examples |
 |---|---|---|
-| Roles | `R1`–`R4` | `R1` Admin, `R2` Technician, `R3` Front Desk, `R4` Despatch |
+| Roles | `R1` (bootstrap) + `R2`–`R7` (helper / admin-created) | `R1` Admin, `R2` Service Engineer, `R3` Counter/Cashier, `R4` Stores & Despatch, `R5` Branch Manager, `R6` Accountant, `R7` Sales Executive |
 | Priorities | `P1`–`P4` | `P1` Low, `P2` Normal, `P3` High, `P4` Urgent |
 | Pipelines | `P-<AREA>` | `P-REPAIR`, `P-SALES`, plus seeded P2/P4/P6 for helpdesk/admin/CRM intake |
 | Ticket statuses | `S1`–`S10` | `S1` Received, `S2` Diagnosing, … `S10` Returned |
@@ -112,4 +124,4 @@ These string IDs are stable across the codebase. Renaming any of them is a break
 
 Customers don't carry permission keys. Portal sessions are discriminated by `session.kind === "customer"` and routed through `requirePortalAuth()`. See [customer-portal.md](./customer-portal.md).
 
-_Last updated: 2026-05-25 — Added `customers:hard-delete` for the Trash view on `/office/settings/customer-tools` (not granted to any role by default; env super admin holds it implicitly). Previously (2026-05-20): `admin:bypass` reclassified as `systemOnly` (never auto-granted to R1, removed from Role Matrix UI); env super admin (`SUPER_ADMIN_EMAIL` / `SUPER_ADMIN_PASSWORD`) added as the only entity that can hold the bypass at runtime._
+_Last updated: 2026-06-23 — Bootstrap now seeds **only `R1`** (the lone `isSystem` role). The former built-in roles `R2`–`R7` moved to a trade-specific starter seed `prisma/seeds/helper-roles.ts` (`pnpm seed:helper-roles`), created as non-system / admin-editable; admins build the rest from the Role Matrix. Previously (2026-05-25): added `customers:hard-delete` for the Trash view on `/office/settings/customer-tools`. Previously (2026-05-20): `admin:bypass` reclassified as `systemOnly`; env super admin added as the only entity that can hold the bypass at runtime._

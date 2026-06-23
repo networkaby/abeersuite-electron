@@ -6,11 +6,11 @@
 
 ```
 Cash-in-Hand
-  ├── Cash – Counter 1 – Main Branch   ← POS counter till (per billing station)
-  ├── Cash – Counter 1 – Online Branch ← POS counter till
-  ├── Cash – Vault – Main Branch       ← branch vault (end-of-day surplus)
-  └── Cash – Vault – Online Branch
+  ├── Cash – Counter 1 – Head Office   ← POS counter till (per billing station)
+  └── Cash – Vault – Head Office       ← branch vault (end-of-day surplus)
 ```
+
+Bootstrap seeds one branch (Head Office) with one counter + vault. Each branch an admin adds gets its own `Cash – Counter N – <Branch>` till and `Cash – Vault – <Branch>` vault on the same pattern.
 
 Personal-user till accounts no longer exist. Tills belong to counters, not people. Shortage accountability is via the shift report, not the GL ledger.
 

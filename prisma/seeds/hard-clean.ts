@@ -14,7 +14,9 @@
 //
 // Preserves (everything bootstrap-seed.ts wrote, plus user-set config):
 //   • Admin user (admin@networkservice.in)
-//   • Roles, Permissions, RolePermissions
+//   • R1 (Admin) role, all Permissions, R1's RolePermissions
+//     (NON-system roles — the helper-roles.ts starter set + any admin-created
+//     roles — are wiped here; re-run `pnpm seed:helper-roles` to restore them)
 //   • Branches, Departments, UserPositions
 //   • Pipelines, TicketStatus, TicketWorker, transitions
 //   • AccountGroup tree + pure-GL Account chart
@@ -139,6 +141,22 @@ async function main(): Promise<void> {
     console.log("[4/7] Removing non-admin users");
     const u = await pool.query(`DELETE FROM "User" WHERE email != $1`, [ADMIN_EMAIL]);
     console.log(`      ✓ Deleted ${u.rowCount} user(s); ${ADMIN_EMAIL} preserved\n`);
+
+    // ── Phase 4b — Reset roles to bootstrap (R1 only) ──────────────────
+    // Bootstrap seeds only R1 (isSystem=true). Every other role — the
+    // helper-roles.ts starter set and any admin-created role — is non-system
+    // and trade-specific, so it's wiped here. Unlink positions first because
+    // Position.roleTemplateId → Role is a restrict FK (no cascade).
+    console.log("[4b] Resetting roles to bootstrap (R1 only)");
+    await pool.query(
+        `UPDATE "Position" SET "roleTemplateId" = NULL
+         WHERE "roleTemplateId" IN (SELECT id FROM "Role" WHERE "isSystem" = false)`,
+    );
+    await pool.query(
+        `DELETE FROM "RolePermission" WHERE "roleId" IN (SELECT id FROM "Role" WHERE "isSystem" = false)`,
+    );
+    const delRoles = await pool.query(`DELETE FROM "Role" WHERE "isSystem" = false`);
+    console.log(`      ✓ Deleted ${delRoles.rowCount} non-system role(s); R1 preserved\n`);
 
     // ── Phase 5 — TRUNCATE inventory masters ───────────────────────────
     console.log("[5/7] Wiping inventory masters (trade-specific — InvUnit + InvWarrantyTerm preserved)");
