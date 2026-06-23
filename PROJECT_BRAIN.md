@@ -264,6 +264,7 @@ Typed fields are **mandatory where a downstream worker can't function without an
 - **Shop prices in paise.** Use `moneyInr.ts` to format. Never divide by 100 inline.
 - **Schema added via `db push`, no migration**: GST/HSN columns, naming-convention columns. Migrate before any prod deploy.
 - **Legacy `src/modules/tally/`** co-exists with `src/modules/accountancy/`. Rename was 2026-05-07; folder removal is pending separate work.
+- **Departments are intentionally cosmetic for now (decided 2026-06-23).** They structure the org chart and derive `user.departmentIds`, but nothing user-facing keys off them. The home dashboard ([office/page.tsx](src/app/(protected)/office/page.tsx)) was switched from department-routed briefings to a **common, permission-gated** dashboard — every user sees the same page and each briefing card shows by permission (admin:bypass sees all), reusing the same `DeptBriefings.tsx` components. **Department-scoped data visibility is also deferred**: the `*:department` permission keys (`tickets/customers/assignments:*:department`) and the `department` tier in [ticketScope.ts](src/modules/repairing/lib/ticketScope.ts) are real code but **granted to no role**, so the filter never fires. All of this is by design, not a bug — do **not** wire dept-scoped silos or dept-routed UI until the department feature is built. Branch is the enforced scope (GL / POS / vault).
 
 ---
 

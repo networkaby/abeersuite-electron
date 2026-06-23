@@ -1,14 +1,16 @@
-# Home — Role-Aware Dashboard
+# Home — Permission-Aware Dashboard
 
 > The `/office` landing page that every staff member sees after login.
-> Shows a **Universal Customer Panel** (all staff, all channels) and a **Department Briefing** tailored to the user's assigned department(s).
+> Shows a **Universal Customer Panel** (all staff, all channels) and a set of **briefing cards gated by permission** — a single common dashboard, the same for everyone, where each card appears only if the user holds a representative permission for that area.
 
-## Four-layer design
+> **Departments are deferred (2026-06-23).** The home page used to route briefings by `session.departmentIds`; it now selects them by permission instead. Departments are cosmetic for now — the department-routed layout returns when the department feature ships. See [PROJECT_BRAIN.md](../../PROJECT_BRAIN.md) "Known gotchas".
+
+## Layered design
 
 ```
 LAYER 1 — Universal Customer Panel   (everyone, always — owner's rule: every staff member is a customer touchpoint)
 LAYER 2 — Branch filter              (session.branchIds + activeBranch already scoped by existing helpers)
-LAYER 3 — Department-based layout    (session.departmentIds → which briefing card to render)
+LAYER 3 — Briefing cards             (gated by PERMISSION via hasPermissionWithScope — admin:bypass sees all)
 LAYER 4 — Position-wise buttons      (hasPermission() inside each briefing component)
 ```
 
@@ -23,7 +25,7 @@ LAYER 4 — Position-wise buttons      (hasPermission() inside each briefing com
 
 ## Permissions (gate keys)
 
-None for the home page itself. `admin:bypass` (`PERMISSIONS.ADMIN_BYPASS`) routes admin users to `AdminBriefing` regardless of department.
+No single gate guards the page itself — it always renders. Which briefing **cards** appear is decided per-card by `hasPermissionWithScope(user.permissions, …)`; `admin:bypass` short-circuits true, so admins see every card.
 
 Individual buttons inside briefings use existing module permissions (e.g. `pos:shift:open`).
 
@@ -37,25 +39,25 @@ Individual buttons inside briefings use existing module permissions (e.g. `pos:s
 - `InvVoucher` (`inventory.prisma`) — counted/summed for today's counter sales in ShowroomBriefing. POS bills = `{ type: "POS", status: "POSTED", date >= startOfToday }` (Layer 3d, 2026-05-24 — switched off the legacy `Invoice` filter when that table was retired).
 - `Ticket` (`repair.prisma`) — counted in RepairBriefing + DespatchBriefing.
 
-## Department → Briefing mapping
+## Permission → Briefing mapping
 
-| Department.id | Department name | Briefing component |
-|---|---|---|
-| `DEP-REPAIR` | Repairs | `RepairBriefing` |
-| `DEP-SALES` | Sales | `ShowroomBriefing` |
-| `DEP-DESK` | Front Desk | `ShowroomBriefing` |
-| `DEP-FIN` | Finance | `FinanceBriefing` |
-| `DEP-IT` | IT / Admin | `AdminBriefing` |
-| `DEP-HR` | HR | `HrBriefing` |
-| `DEP-DESP` | Despatch | `DespatchBriefing` |
-| `admin:bypass` | (virtual — any admin) | `AdminBriefing` |
+Each card renders when the user holds (at any scope ≥ the one named, or via `admin:bypass`) one of these permissions:
 
-Users with multiple departments see all their briefings stacked. Users with zero departments see `NoDeptCard`.
+| Briefing component | Shows when the user can… |
+|---|---|
+| `AdminBriefing` | `admin:bypass` **or** `users:manage` / `settings:manage` / `roles:manage` |
+| `RepairBriefing` | `tickets:view:own` (any ticket-view scope) |
+| `ShowroomBriefing` | `pos:shift:open` / `pos:shift:view:branch` / `tickets:create` |
+| `FinanceBriefing` | `accountancy:view:own` / `finance:voucher:create` |
+| `DespatchBriefing` | `inventory:view:branch` |
+| `HrBriefing` | `users:manage` |
+
+All qualifying cards stack (admins see every card). A user who qualifies for none sees `AllClearCard`. The mapping lives inline in [office/page.tsx](../../src/app/(protected)/office/page.tsx) (`showAdmin`, `showRepair`, …).
 
 ## Key components
 
 - `UniversalCustomerPanel` (`src/modules/home/UniversalCustomerPanel.tsx`) — client component. Two search inputs (product lookup via `/api/inventory/products/lookup`; repair status via `/api/tickets/lookup?q=` — accepts customer name, phone, or ticket #) + three log buttons (Sales Query → P6, Customer Problem → P2, Internal Request → P4 via `POST /api/quick-log`). Sales Query dialog includes a `CustomerPicker` backed by `usePartySearch` to link the lead to an existing `Person` record (`personId`).
-- `RepairBriefing`, `ShowroomBriefing`, `FinanceBriefing`, `AdminBriefing`, `DespatchBriefing`, `HrBriefing`, `NoDeptCard` (`src/modules/home/DeptBriefings.tsx`) — async server components. Show live counts + quick-action links.
+- `RepairBriefing`, `ShowroomBriefing`, `FinanceBriefing`, `AdminBriefing`, `DespatchBriefing`, `HrBriefing`, `AllClearCard` (`src/modules/home/DeptBriefings.tsx`) — async server components. Show live counts + quick-action links. (`NoDeptCard` also still lives here, unused until department routing returns.)
 
 ## Common workflows
 
@@ -68,13 +70,13 @@ Users with multiple departments see all their briefings stacked. Users with zero
 ## Recent decisions / gotchas
 
 - **CrmLead as generic pipeline item**: the same `CrmLead` model works for P2, P4, and P6. It has a `pipelineId` FK to `Pipeline`. The `POST /api/quick-log` uses `requireAuth()` (not `requirePermission(CRM_MANAGE)`) because this intake is staff-universal. Validation in the route was unified onto the shared zod-error pattern in commit `496f01d` (no public API change).
-- **Department.id as stable key**: departments use stable IDs (`DEP-REPAIR`, `DEP-SALES`, etc.) — no `slug` field was added. The home resolver does a `switch(id)` on these string values. Do not change department IDs after data is in production.
+- **Departments no longer drive the home page (2026-06-23)**: the briefing selector was switched from `switch(departmentId)` to per-card permission gates (`hasPermissionWithScope`). Department IDs are still stable keys (`DEP-REPAIR`, etc.) used elsewhere (org chart, `user.departmentIds`), but the home page ignores them. Department-routed layout is deferred until the department feature ships — don't re-introduce dept branching here before then.
 - **ShowroomBriefing POS filter**: walk-in (POS) bills = `InvVoucher` with `type=POS`, `status=POSTED`, `date >= startOfToday`. Cash sales sum derives from the bill's non-AR tender rows via the same shape used by `sumShiftCashSalesPaise` (see [pos.md](./pos.md)).
 - **Repair full dashboard**: the full repair module dashboard (TechnicianDashboard, FrontDeskDashboard, etc.) remains at `/office/repairing/`. The home page shows a lightweight briefing (counts + links) to avoid duplicating heavy data-fetch logic.
 
 ## Out of scope / deferred
 
-- Multi-department tab strip (planned): when a user has multiple departments, currently all briefings are stacked vertically. A tab strip allowing switching between them is deferred.
+- **Department-routed dashboard (deferred)**: one briefing card per department (and the multi-department stack / tab strip) returns when the department feature is built. Until then the dashboard is common + permission-gated.
 - Position-level button permissions within briefings: currently `hasPermission()` guards are on individual module pages. Future iterations can add them inside briefing components too.
 
-_Last updated: 2026-05-24 — **Layer 3d: ShowroomBriefing migrated off Invoice onto InvVoucher.** Today's POS bill count + cash sales sum now read `InvVoucher type=POS, status=POSTED` filtered by date; the legacy `Invoice` filter (`shopOrderId: null, ticketId: null, status != "VOID"`) is gone. Previously (2026-05-20): covers initial four-layer home page implementation + quick-log validation refactor._
+_Last updated: 2026-06-23 — **Home dashboard switched from department-routed to common + permission-gated.** Each briefing card now shows by `hasPermissionWithScope` (admin:bypass sees all) instead of `switch(departmentId)`; `NoDeptCard` fallback replaced by `AllClearCard`. Departments are cosmetic for now (deferred). Previously (2026-05-24): Layer 3d — ShowroomBriefing migrated off `Invoice` onto `InvVoucher` (`type=POS, status=POSTED`)._

@@ -1,7 +1,7 @@
 /**
- * /office — Role-Aware Home Page
+ * /office — Permission-Aware Home Page
  *
- * Four-layer design (per docs/modules/home.md):
+ * Layout (departments deferred — see PROJECT_BRAIN "Known gotchas"):
  *
  *   LAYER 1 — Universal Customer Panel (everyone, always)
  *     Quick product lookup + repair status + 3 log buttons (Sales/Helpdesk/Internal)
@@ -9,28 +9,21 @@
  *   LAYER 2 — Branch filter
  *     Data inside widgets is already scoped by session.branchIds + activeBranch.
  *
- *   LAYER 3 — Department-based layout
- *     Each department sees a briefing card tailored to their work:
- *       DEP-REPAIR  → RepairBriefing
- *       DEP-SALES   → ShowroomBriefing
- *       DEP-DESK    → ShowroomBriefing
- *       DEP-FIN     → FinanceBriefing (links only)
- *       DEP-IT      → AdminBriefing
- *       DEP-HR      → HrBriefing
- *       DEP-DESP    → DespatchBriefing
+ *   LAYER 3 — Briefing cards, gated by PERMISSION (not department)
+ *     Every user sees the SAME dashboard; each briefing card appears only when
+ *     the user holds a representative permission for that area, and admin:bypass
+ *     sees all. Action buttons inside each card stay permission-gated.
  *
- *   LAYER 4 — Position-wise buttons
- *     Gated inside each briefing component with hasPermission(). Admin bypass
- *     users see the AdminBriefing regardless of department.
- *
- * If a user has MULTIPLE departments, all their briefings are stacked.
- * If a user has ZERO departments, a "no department assigned" fallback shows.
+ *   Department-based layout (one card per department) is deferred until the
+ *   department feature ships; until then departments are cosmetic and the
+ *   dashboard is common + permission-driven.
  */
 
 import { auth } from "@/auth";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { resolvedUserFromSession } from "@/shared/lib/auth/permissions";
+import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import UniversalCustomerPanel from "@/modules/home/UniversalCustomerPanel";
 import {
     RepairBriefing,
@@ -39,20 +32,8 @@ import {
     AdminBriefing,
     DespatchBriefing,
     HrBriefing,
-    NoDeptCard,
+    AllClearCard,
 } from "@/modules/home/DeptBriefings";
-
-// Map stable Department.id → which briefing component to render.
-// "admin" is a virtual key used for admin:bypass users regardless of dept.
-type DeptKey =
-    | "DEP-REPAIR"
-    | "DEP-SALES"
-    | "DEP-DESK"
-    | "DEP-FIN"
-    | "DEP-IT"
-    | "DEP-HR"
-    | "DEP-DESP"
-    | "admin";
 
 export default async function OfficePage() {
     const session = await auth();
@@ -61,31 +42,22 @@ export default async function OfficePage() {
     const user = resolvedUserFromSession(session ?? {});
     const name = (session?.user as { name?: string })?.name ?? "there";
 
-    // Determine which department briefings to show
-    const deptIds = user.departmentIds as string[];
     const isAdmin = user.permissions.includes(PERMISSIONS.ADMIN_BYPASS);
 
-    // Deduplicate and collect the set of briefings to render
-    const deptSet = new Set<DeptKey>();
+    // Which briefing cards to render — gated by PERMISSION, not department.
+    // `hasPermissionWithScope` short-circuits true on admin:bypass and accepts
+    // any scope at or above the one named, so a holder of e.g. tickets:view:org
+    // still matches the tickets:view:own gate below.
+    const can = (permissionId: string) => hasPermissionWithScope(user.permissions, permissionId);
 
-    if (isAdmin) {
-        deptSet.add("admin");
-    }
+    const showAdmin    = isAdmin || can("users:manage") || can("settings:manage") || can("roles:manage");
+    const showRepair   = can("tickets:view:own");
+    const showShowroom = can("pos:shift:open") || can("pos:shift:view:branch") || can("tickets:create");
+    const showFinance  = can("accountancy:view:own") || can("finance:voucher:create");
+    const showDespatch = can("inventory:view:branch");
+    const showHr       = can("users:manage");
 
-    for (const id of deptIds) {
-        switch (id as DeptKey) {
-            case "DEP-REPAIR": deptSet.add("DEP-REPAIR"); break;
-            case "DEP-SALES":  deptSet.add("DEP-SALES");  break;
-            case "DEP-DESK":   deptSet.add("DEP-DESK");   break;
-            case "DEP-FIN":    deptSet.add("DEP-FIN");    break;
-            case "DEP-IT":     deptSet.add("DEP-IT");     break;
-            case "DEP-HR":     deptSet.add("DEP-HR");     break;
-            case "DEP-DESP":   deptSet.add("DEP-DESP");   break;
-        }
-    }
-
-    // DEP-SALES and DEP-DESK both use ShowroomBriefing — collapse to one
-    const showShowroom = deptSet.has("DEP-SALES") || deptSet.has("DEP-DESK");
+    const anyCard = showAdmin || showRepair || showShowroom || showFinance || showDespatch || showHr;
 
     // Greeting line (morning / afternoon / evening)
     const hour = new Date().getHours();
@@ -110,21 +82,18 @@ export default async function OfficePage() {
             {/* Layer 1: Universal Customer Panel — shown to everyone */}
             <UniversalCustomerPanel />
 
-            {/* Layers 3 & 4: Department briefings */}
-            {deptSet.size === 0 ? (
-                <NoDeptCard name={name} />
-            ) : (
+            {/* Layer 3: Permission-gated briefings (common dashboard, department-agnostic) */}
+            {anyCard ? (
                 <div className="space-y-4">
-                    {deptSet.has("admin") && <AdminBriefing />}
-                    {deptSet.has("DEP-REPAIR") && <RepairBriefing userId={user.id} isAdmin={isAdmin} />}
+                    {showAdmin && <AdminBriefing />}
+                    {showRepair && <RepairBriefing userId={user.id} isAdmin={isAdmin} />}
                     {showShowroom && <ShowroomBriefing />}
-                    {deptSet.has("DEP-FIN") && <FinanceBriefing />}
-                    {deptSet.has("DEP-DESP") && <DespatchBriefing />}
-                    {deptSet.has("DEP-HR") && <HrBriefing />}
-                    {/* DEP-IT users: show AdminBriefing (already handled by "admin" key above,
-                        but if they're not admin:bypass, show it separately) */}
-                    {deptSet.has("DEP-IT") && !isAdmin && <AdminBriefing />}
+                    {showFinance && <FinanceBriefing />}
+                    {showDespatch && <DespatchBriefing />}
+                    {showHr && <HrBriefing />}
                 </div>
+            ) : (
+                <AllClearCard name={name} />
             )}
         </div>
         </ScrollArea>
