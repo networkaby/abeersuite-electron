@@ -33,13 +33,13 @@ interface Permission {
     id: string; label: string; module: string; description: string | null;
 }
 interface StaffCard {
-    id: number; name: string; title: string | null; role: string;
+    id: number; name: string; title: string | null; role: string | null;
     avatarUrl: string | null;
-    userRole: { label: string; color: string };
+    userRole: { label: string; color: string } | null;
 }
 interface UserProfile {
     id: number; name: string; email: string; title: string | null;
-    role: string; scope: string; createdAt: string; managerId: number | null;
+    role: string | null; scope: string; createdAt: string; managerId: number | null;
     avatarUrl: string | null;
     coverUrl: string | null;
     phone: string | null;
@@ -49,7 +49,7 @@ interface UserProfile {
     twitter: string | null;
     instagram: string | null;
     facebook: string | null;
-    userRole: { id: string; label: string; color: string; rank: number; permissions: { permission: Permission }[] };
+    userRole: { id: string; label: string; color: string; rank: number; permissions: { permission: Permission }[] } | null;
     manager: StaffCard | null;
     reports: StaffCard[];
     departments: { id: string; name: string }[];
@@ -58,8 +58,8 @@ interface UserProfile {
 interface WallPost {
     id: number; body: string; createdAt: string;
     author: {
-        id: number; name: string; avatarUrl: string | null; role: string;
-        userRole: { label: string; color: string };
+        id: number; name: string; avatarUrl: string | null; role: string | null;
+        userRole: { label: string; color: string } | null;
     };
 }
 interface UserActivity {
@@ -87,8 +87,8 @@ const COVER_GRADIENT: Record<string, string> = {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function coverBg(role: string) {
-    return COVER_GRADIENT[role] ?? "linear-gradient(135deg,#334155 0%,#64748b 100%)";
+function coverBg(role: string | null) {
+    return COVER_GRADIENT[role ?? ""] ?? "linear-gradient(135deg,#334155 0%,#64748b 100%)";
 }
 function formatBirthday(iso: string) {
     return new Date(iso).toLocaleDateString("en-US", { day: "numeric", month: "long", year: "numeric" });
@@ -248,9 +248,15 @@ function ProfileHeader({
                                         {profile.name}
                                     </h1>
 
-                                    <Badge className={`${profile.userRole.color} text-xs`}>
-                                        {profile.userRole.label}
-                                    </Badge>
+                                    {profile.userRole ? (
+                                        <Badge className={`${profile.userRole.color} text-xs`}>
+                                            {profile.userRole.label}
+                                        </Badge>
+                                    ) : (
+                                        <Badge variant="outline" className="text-xs text-white/70 border-white/30">
+                                            No role assigned
+                                        </Badge>
+                                    )}
 
                                     {isSelf && (
                                         <span className="text-[10px] bg-primary/20 text-primary border border-primary/30 px-1.5 py-0.5 font-medium rounded">
@@ -333,9 +339,12 @@ function ProfileHeader({
                         {wallPostCount !== 1 ? "s" : ""}
                     </span>
 
-                    <span className="hidden sm:inline text-white/40">·</span>
-
-                    <span>Rank {profile.userRole.rank}</span>
+                    {profile.userRole && (
+                        <>
+                            <span className="hidden sm:inline text-white/40">·</span>
+                            <span>Rank {profile.userRole.rank}</span>
+                        </>
+                    )}
                 </div>
 
             </div>
@@ -424,7 +433,9 @@ function WallTab({
                                             className="text-sm font-semibold text-foreground hover:text-primary transition-colors">
                                             {post.author.name}
                                         </Link>
-                                        <Badge className={`${post.author.userRole.color} text-[10px]`}>{post.author.userRole.label}</Badge>
+                                        {post.author.userRole && (
+                                            <Badge className={`${post.author.userRole.color} text-[10px]`}>{post.author.userRole.label}</Badge>
+                                        )}
                                         <span className="text-[11px] text-muted-foreground ml-auto">{timeAgo(post.createdAt)}</span>
                                         {canDelete(post) && (
                                             <Button
