@@ -20,9 +20,9 @@ export const SUPER_ADMIN = {
 
 /**
  * Where we send staff after login. The login page's built-in default is
- * `/office/core/assignments` (the assignments dashboard — it exists under the
- * `(to-do)` route group). We override it to `/office`, a lighter landing, so the
- * post-login render is fast and deterministic in tests.
+ * `/office/work-flow-inbox` (the Work Inbox / assignments dashboard). We
+ * override it to `/office`, a lighter landing, so the post-login render is
+ * fast and deterministic in tests.
  */
 export const STAFF_HOME = "/office";
 

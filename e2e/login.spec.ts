@@ -35,7 +35,7 @@ test.describe("staff login", () => {
         // Super-admin authenticates without a DB lookup, so this passes even on
         // a freshly reset database. staffLogin passes an explicit callbackUrl to
         // STAFF_HOME (/office) — a lighter landing than the built-in default
-        // (/office/core/assignments) for fast, deterministic post-login render.
+        // (/office/work-flow-inbox) for fast, deterministic post-login render.
         await staffLogin(page, SUPER_ADMIN);
         await expect(page).toHaveURL(new RegExp(STAFF_HOME.replace(/\//g, "\\/")));
     });

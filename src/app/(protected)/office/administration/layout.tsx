@@ -14,7 +14,7 @@ export default async function AdministrationLayout({ children }: { children: Rea
         !permissions.includes(PERMISSIONS.ADMIN_BYPASS) &&
         !permissions.includes(PERMISSIONS.ADMINISTRATION_TASKS_VIEW)
     ) {
-        redirect("/office/core/assignments");
+        redirect("/office/work-flow-inbox");
     }
 
     return (

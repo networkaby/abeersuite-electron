@@ -11,7 +11,7 @@ export default async function WorkflowLayout({ children }: { children: React.Rea
     const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
     const allowed = [PERMISSIONS.SETTINGS_STATUSES, PERMISSIONS.SETTINGS_PIPELINES];
     if (!permissions.includes(PERMISSIONS.ADMIN_BYPASS) && !allowed.some((p) => permissions.includes(p))) {
-        redirect("/office/core/assignments");
+        redirect("/office/work-flow-inbox");
     }
     return (
         <div className="flex h-full flex-col">

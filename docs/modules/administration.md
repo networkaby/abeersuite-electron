@@ -5,7 +5,7 @@
 ## URLs
 
 ### Layout / page
-- `office/administration/layout.tsx` — async server layout: inline permission gate (redirects callers without `administration:tasks:view` to `/office/core/assignments`) + `PathBreadcrumb` rooted at "Administration" with `escapeBack` (Esc → `router.back()`, guarded against open dialogs via `useEscapeBack`).
+- `office/administration/layout.tsx` — async server layout: inline permission gate (redirects callers without `administration:tasks:view` to `/office/work-flow-inbox`) + `PathBreadcrumb` rooted at "Administration" with `escapeBack` (Esc → `router.back()`, guarded against open dialogs via `useEscapeBack`).
 - `office/administration/page.tsx` — SSR shell. Loads the P4 pipeline stages (`TicketStatus where pipelineId="P4" order by order`), the **Position list** (assignee options), and the current user's **held position ids** (`UserPosition`, drives "My tasks"), then renders the client `TaskBoard` island.
 
 ### UI page

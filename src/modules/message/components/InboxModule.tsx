@@ -11,6 +11,7 @@ import { supabase } from "@/shared/lib/supabase/supabaseClient";
 import { formatInboxTime } from "@/shared/lib/format/formatDate";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { PathBreadcrumb } from "@/shared/components/PathBreadcrumb";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -453,7 +454,10 @@ export default function InboxModule({
     // ── Render ───────────────────────────────────────────────────────────────────
 
     return (
-        <div className="-m-8 flex h-screen bg-background">
+        <div className="flex h-full flex-col overflow-hidden bg-background">
+            <PathBreadcrumb root={{ href: "/office/message/inbox", label: "Inbox" }} escapeBack />
+
+            <div className="flex flex-1 overflow-hidden">
 
             {/* ══ Left sidebar ═══════════════════════════════════════════════════ */}
             <aside className="flex w-64 shrink-0 flex-col border-r border-border bg-sidebar overflow-hidden">
@@ -711,6 +715,7 @@ export default function InboxModule({
                     </>
                 )}
             </section>
+            </div>
         </div>
     );
 }

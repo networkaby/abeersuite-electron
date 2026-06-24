@@ -191,7 +191,7 @@ The whole ticket/CRM/order workflow engine reduces to one small, repeatable shap
 
 - **State** — where the entity sits (the Worker is the sub-status, renamed `TicketSubStatus → TicketWorker` on 2026-06-13).
 - **Executor — exactly one, a person *or* a machine** ("one worker, one thing"):
-  - **Human Work** — permission-gated (`work:<id>`); surfaces the entity in the **Work Inbox** (`/office/core/assignments`) for whoever holds the permission. For activities that *can't* be automated — packaging, physical QC, handing the device over, an in-person call. The person does it and records **Success / Unsuccess**.
+  - **Human Work** — permission-gated (`work:<id>`); surfaces the entity in the **Work Inbox** (`/office/work-flow-inbox`) for whoever holds the permission. For activities that *can't* be automated — packaging, physical QC, handing the device over, an in-person call. The person does it and records **Success / Unsuccess**.
   - **Action (automated)** — the system performs it: send email, create a deal/order/sale, spawn a child entity. For activities that *can* be automated. Dispatched through an `ACTION_REGISTRY` (same shape as `childEntities.ts`).
   - The human-vs-action choice lives on the **Work** (W1–W8): each Work is *either* a human activity *or* an automated action ("different action for different work"). A Worker just *places* one Work at one point in a pipeline.
 - **Routing** — every Worker exits the same way: `Success → <worker>` / `Unsuccess → <worker>`. **The engine never branches on executor type** — a human clicking the outcome and an action reporting its result feed the identical routes.

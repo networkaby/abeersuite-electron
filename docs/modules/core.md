@@ -5,7 +5,7 @@
 ## URLs
 
 ### UI pages
-- `/office/core/assignments` — staff post-login landing; ticket assignments per the user's scope. File: `src/app/(protected)/office/core/assignments/page.tsx`
+- `/office/work-flow-inbox` — staff post-login landing; the Work Inbox / ticket assignments per the user's scope. Lives outside this module's `core/` URL prefix as a top-level office route. File: `src/app/(protected)/office/work-flow-inbox/page.tsx`
 - `/office/core/call-log` — inbound/outbound call records with follow-up tracking. File: `src/app/(protected)/office/core/call-log/page.tsx` + `CallLogFilters.tsx`
 - `/office/core/accounts` — ledger accounts directory; filters by `personId` / `companyId`. File: `src/app/(protected)/office/core/accounts/page.tsx`
 - `/office/core/accounts/[id]` — single account detail (transactions + balance). File: `src/app/(protected)/office/core/accounts/[id]/page.tsx`
@@ -34,11 +34,12 @@
 - None at present — `src/modules/core/` has no `lib/`. No cross-page domain logic worth extracting yet.
 
 ## Common workflows (wiring)
-1. **Front-desk view assignments**: `/office/core/assignments` filters by `caller.scope` against ticket `branch`/`department`/`assigneeId` columns.
+1. **Front-desk view assignments**: `/office/work-flow-inbox` filters by `caller.scope` against ticket `branch`/`department`/`assigneeId` columns.
 2. **Search a device**: `/office/core/search-slno` → typed serial → `GET /api/search-slno?q=…` → device + ticket history; click through to `/office/repairing/tickets/[id]`.
 3. **Look up a customer's ledger**: `/office/core/accounts` filtered by `personId` → click → `/office/core/accounts/[id]` for the transaction list.
 
 ## Recent decisions / gotchas
+- 2026-06-24: the assignments / Work Inbox page moved out of `(to-do)/core/assignments` to a top-level route, `/office/work-flow-inbox` (`src/app/(protected)/office/work-flow-inbox/page.tsx`). It's the default post-login landing and the fallback redirect target for every permission gate — updated in `src/proxy.ts`, `staff/login/page.tsx`, `makePermissionLayout.tsx`, and every module layout's permission-fail redirect. Old URL is not redirected (internal app, no compat shim).
 - 2026-05-11: route group `(core)` promoted to real URL segment `core` (commit `30800af`). Previous URLs `/office/{accounts,assignments,call-log,search-slno}` now redirect to nothing — old bookmarks 404. Internal app, no compat redirect.
 - Call log table (`CallLog`) is separate from the ticket-log-with-kind approach — historic split. Not yet unified.
 

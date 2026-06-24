@@ -12,7 +12,7 @@ export default async function InventoryMastersLayout({ children }: { children: R
         !permissions.includes(PERMISSIONS.ADMIN_BYPASS) &&
         !permissions.includes(PERMISSIONS.INVENTORY_MANAGE)
     ) {
-        redirect("/office/core/assignments");
+        redirect("/office/work-flow-inbox");
     }
 
     return (

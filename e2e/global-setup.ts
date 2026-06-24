@@ -6,7 +6,7 @@ import type { FullConfig } from "@playwright/test";
  * `reuseExistingServer` means Playwright will attach to whatever is already
  * listening on :3000 — including a DIFFERENT project's dev server. That silently
  * runs the whole suite against the wrong app (this exact thing once made
- * /office/core/assignments look like a 404 when it was really a foreign server
+ * /office/work-flow-inbox look like a 404 when it was really a foreign server
  * responding). This check fails the run loudly instead.
  *
  * Signal: /api/auth/providers is unauthenticated and lists this app's NextAuth

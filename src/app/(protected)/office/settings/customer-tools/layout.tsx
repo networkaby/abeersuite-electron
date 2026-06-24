@@ -13,7 +13,7 @@ export default async function CustomerToolsLayout({ children }: { children: Reac
         const hasBoth =
             permissions.includes(PERMISSIONS.CUSTOMERS_MANAGE) &&
             permissions.includes(PERMISSIONS.COMPANIES_MANAGE);
-        if (!hasBoth) redirect("/office/core/assignments");
+        if (!hasBoth) redirect("/office/work-flow-inbox");
     }
     return <>{children}</>;
 }

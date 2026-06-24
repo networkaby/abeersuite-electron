@@ -9,7 +9,7 @@ export default async function ContactsPage() {
     const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
     const isAdmin = permissions.includes(PERMISSIONS.ADMIN_BYPASS);
     const canView = isAdmin || permissions.some((p) => p.startsWith("customers:view"));
-    if (!canView) redirect("/office/core/assignments");
+    if (!canView) redirect("/office/work-flow-inbox");
     const canEdit =
         isAdmin ||
         permissions.includes(PERMISSIONS.CUSTOMERS_MANAGE) ||

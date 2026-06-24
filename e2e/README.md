@@ -73,10 +73,9 @@ automatically; `--project=authed` pulls in both).
 ## Known app quirks the tests work around
 
 - **Post-login landing is overridden for speed.** The login page's built-in
-  default `callbackUrl` is `/office/core/assignments` (the assignments dashboard,
-  which lives under the `(to-do)` route group and serves fine — route-group
-  parens are stripped from the URL). The tests pass an explicit
-  `callbackUrl=/office` so the post-login render is lighter and deterministic.
+  default `callbackUrl` is `/office/work-flow-inbox` (the Work Inbox /
+  assignments dashboard). The tests pass an explicit `callbackUrl=/office` so
+  the post-login render is lighter and deterministic.
 - **GL payment route is `/vouchers/payments/new`** (plural, under the `(gl)`
   group), not `/vouchers/payment` as some docs say.
 - **No `data-testid`s** anywhere — selectors are role/text/attribute based. The

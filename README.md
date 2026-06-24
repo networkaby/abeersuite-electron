@@ -130,7 +130,7 @@ pnpm dev
 
 - NextAuth config is in `src/auth.ts`.
 - JWT/session include user context such as roles, permissions, rank, scope, branch, and department.
-- Route-level auth redirect logic is in `src/proxy.ts` (guests hitting **`/office/*`** go to **`/staff/login`**; other protected paths go to **`/login`**; staff home after sign-in: **`/office/core/assignments`**).
+- Route-level auth redirect logic is in `src/proxy.ts` (guests hitting **`/office/*`** go to **`/staff/login`**; other protected paths go to **`/login`**; staff home after sign-in: **`/office/work-flow-inbox`**).
 - API and server-side permission checks are implemented with `requireAuth` / `requirePermission` helpers.
 
 ## Known Operational Gotchas

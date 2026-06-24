@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 function StaffLoginForm() {
     const router = useRouter();
     const searchParams = useSearchParams();
-    const callbackUrl = searchParams.get("callbackUrl") || "/office/core/assignments";
+    const callbackUrl = searchParams.get("callbackUrl") || "/office/work-flow-inbox";
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [error, setError] = useState("");
@@ -33,7 +33,7 @@ function StaffLoginForm() {
             setError("Invalid email or password");
             setLoading(false);
         } else {
-            const dest = callbackUrl.startsWith("/") ? callbackUrl : "/office/core/assignments";
+            const dest = callbackUrl.startsWith("/") ? callbackUrl : "/office/work-flow-inbox";
             router.push(dest);
         }
     };

@@ -51,7 +51,7 @@ Every directory under `src/app/(protected)/office/` is a real URL segment — UR
 - `home/` — role-aware four-layer landing.
 - `roadmap/[moduleKey]/` — placeholder hub for future modules.
 
-Staff sign-in: `/staff/login`; post-login redirect to `/office/core/assignments` (see `src/proxy.ts`).
+Staff sign-in: `/staff/login`; post-login redirect to `/office/work-flow-inbox` (see `src/proxy.ts`).
 
 `/office/tally/*` 307-redirects to `/office/accountancy/*` (legacy URL preservation).
 
@@ -101,7 +101,7 @@ Validation is Zod-driven on write endpoints. Auth uses guard helpers from `src/s
 ### Staff
 
 - NextAuth config in `src/auth.ts` (`Credentials` provider, JWT strategy).
-- Staff provider: `credentials-staff`. Login page: `/staff/login`. After login → `/office/core/assignments` (or `callbackUrl`) via `src/proxy.ts`.
+- Staff provider: `credentials-staff`. Login page: `/staff/login`. After login → `/office/work-flow-inbox` (or `callbackUrl`) via `src/proxy.ts`.
 - Session carries role, permissions, rank, scope, branch, department.
 - API uses `requirePermission` for fine-grained authorization. Direction is permission-driven, not role-name checks.
 

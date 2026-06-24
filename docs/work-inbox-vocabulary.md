@@ -16,7 +16,7 @@
 
 ## Helper
 
-**Definition:** The person who picks up a work item from the Work Inbox and performs the actual task, such as calling a customer, finding information, or sourcing parts. Works from the Work Inbox (`/office/core/assignments`).
+**Definition:** The person who picks up a work item from the Work Inbox and performs the actual task, such as calling a customer, finding information, or sourcing parts. Works from the Work Inbox (`/office/work-flow-inbox`).
 
 ---
 

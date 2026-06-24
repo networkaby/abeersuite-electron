@@ -10,7 +10,7 @@ export default async function DealsPage() {
     const sessionUser = session?.user as { id?: string; permissions?: string[] } | undefined;
     const permissions = sessionUser?.permissions ?? [];
     if (!permissions.includes(PERMISSIONS.ADMIN_BYPASS) && !permissions.includes(PERMISSIONS.DEALS_VIEW)) {
-        redirect("/office/core/assignments");
+        redirect("/office/work-flow-inbox");
     }
     const canManage =
         permissions.includes(PERMISSIONS.ADMIN_BYPASS) || permissions.includes(PERMISSIONS.DEALS_MANAGE);
