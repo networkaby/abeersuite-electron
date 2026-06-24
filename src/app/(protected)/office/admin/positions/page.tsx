@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
     Select,
@@ -33,17 +34,16 @@ interface Position {
     branchId: string | null;
     departmentId: string | null;
     parentPositionId: string | null;
-    roleTemplateId: string | null;
     branch:     { id: string; name: string } | null;
     department: { id: string; name: string } | null;
     parent:     { id: string; title: string } | null;
-    roleTemplate: { id: string; label: string; color: string } | null;
+    roleTemplates: { id: string; label: string; color: string }[];
     holders:    { user: UserStub }[];
     _count:     { children: number };
 }
 
-type FormState = { id: string; title: string; branchId: string; parentPositionId: string; roleTemplateId: string };
-const EMPTY: FormState = { id: "", title: "", branchId: "", parentPositionId: "", roleTemplateId: "" };
+type FormState = { id: string; title: string; branchId: string; parentPositionId: string; roleTemplateIds: string[] };
+const EMPTY: FormState = { id: "", title: "", branchId: "", parentPositionId: "", roleTemplateIds: [] };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -81,6 +81,77 @@ function UserChip({ user, onRemove }: { user: UserStub; onRemove?: () => void })
     );
 }
 
+function roleDepartmentHint(roleIds: string[], roleOptions: RoleOption[]): string | null {
+    const depts = [...new Set(
+        roleIds
+            .map((id) => roleOptions.find((r) => r.id === id)?.department?.name)
+            .filter((name): name is string => Boolean(name)),
+    )];
+    if (depts.length === 0) return null;
+    if (depts.length === 1) return depts[0]!;
+    return depts.join(", ");
+}
+
+function RoleTemplatePicker({
+    roleOptions,
+    selectedIds,
+    onChange,
+}: {
+    roleOptions: RoleOption[];
+    selectedIds: string[];
+    onChange: (ids: string[]) => void;
+}) {
+    const toggle = (roleId: string, checked: boolean) => {
+        onChange(
+            checked
+                ? [...selectedIds, roleId]
+                : selectedIds.filter((id) => id !== roleId),
+        );
+    };
+
+    const deptHint = roleDepartmentHint(selectedIds, roleOptions);
+
+    return (
+        <div>
+            <label className="text-xs font-medium text-muted-foreground">Role templates</label>
+            <div className="mt-1 max-h-40 space-y-1 overflow-y-auto rounded-md border border-border bg-background p-2">
+                {roleOptions.length === 0 ? (
+                    <p className="px-1 py-2 text-xs text-muted-foreground italic">No roles available</p>
+                ) : (
+                    roleOptions.map((role) => {
+                        const checked = selectedIds.includes(role.id);
+                        return (
+                            <label
+                                key={role.id}
+                                className="flex cursor-pointer items-start gap-2 rounded px-1 py-1 hover:bg-muted/50"
+                            >
+                                <Checkbox
+                                    checked={checked}
+                                    onCheckedChange={(value) => toggle(role.id, value === true)}
+                                    className="mt-0.5"
+                                />
+                                <span className="text-sm leading-snug">
+                                    <span className="font-medium">{role.label}</span>
+                                    <span className="text-muted-foreground"> ({role.id})</span>
+                                    {role.department && (
+                                        <span className="text-muted-foreground"> · {role.department.name}</span>
+                                    )}
+                                </span>
+                            </label>
+                        );
+                    })
+                )}
+            </div>
+            {deptHint && (
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                    Home department{deptHint.includes(",") ? "s" : ""}:{" "}
+                    <span className="font-medium text-foreground">{deptHint}</span> (from roles)
+                </p>
+            )}
+        </div>
+    );
+}
+
 // ── Form fields (extracted to avoid remount on parent re-render) ──────────────
 
 function PositionFormFields({
@@ -93,8 +164,6 @@ function PositionFormFields({
     roleOptions: RoleOption[];
     onChange: (f: FormState) => void;
 }) {
-    const selectedRole = roleOptions.find(r => r.id === form.roleTemplateId);
-
     return (
         <div className="grid grid-cols-2 gap-3">
             {addingNew && (
@@ -129,29 +198,12 @@ function PositionFormFields({
                     </SelectContent>
                 </Select>
             </div>
-            <div>
-                <label className="text-xs font-medium text-muted-foreground">Role template</label>
-                <Select
-                    value={form.roleTemplateId || "none"}
-                    onValueChange={(value) => onChange({ ...form, roleTemplateId: value === "none" ? "" : value })}
-                >
-                    <SelectTrigger className="mt-1">
-                        <SelectValue placeholder="None" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="none">None</SelectItem>
-                        {roleOptions.map((role) => (
-                            <SelectItem key={role.id} value={role.id}>
-                                {role.label} ({role.id}){role.department ? ` · ${role.department.name}` : ""}
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-                {selectedRole?.department && (
-                    <p className="mt-1 text-[11px] text-muted-foreground">
-                        Home department: <span className="font-medium text-foreground">{selectedRole.department.name}</span> (from role)
-                    </p>
-                )}
+            <div className="col-span-2">
+                <RoleTemplatePicker
+                    roleOptions={roleOptions}
+                    selectedIds={form.roleTemplateIds}
+                    onChange={(roleTemplateIds) => onChange({ ...form, roleTemplateIds })}
+                />
             </div>
             <div className="col-span-2">
                 <label className="text-xs font-medium text-muted-foreground">Reports to (parent position) <span className="font-normal">(optional)</span></label>
@@ -256,7 +308,8 @@ function PositionRow({
     const [expanded, setExpanded] = useState(false);
     const [form, setForm]         = useState<FormState>({
         id: position.id, title: position.title,
-        branchId: position.branchId ?? "", parentPositionId: position.parentPositionId ?? "", roleTemplateId: position.roleTemplateId ?? "",
+        branchId: position.branchId ?? "", parentPositionId: position.parentPositionId ?? "",
+        roleTemplateIds: position.roleTemplates.map((r) => r.id),
     });
     const [saving, setSaving] = useState(false);
 
@@ -268,7 +321,8 @@ function PositionRow({
     const openEdit = () => {
         setForm({
             id: position.id, title: position.title,
-            branchId: position.branchId ?? "", parentPositionId: position.parentPositionId ?? "", roleTemplateId: position.roleTemplateId ?? "",
+            branchId: position.branchId ?? "", parentPositionId: position.parentPositionId ?? "",
+            roleTemplateIds: position.roleTemplates.map((r) => r.id),
         });
         setEditing(true);
     };
@@ -281,7 +335,7 @@ function PositionRow({
                 title:            form.title,
                 branchId:         form.branchId         || null,
                 parentPositionId: form.parentPositionId || null,
-                roleTemplateId:   form.roleTemplateId   || null,
+                roleTemplateIds:  form.roleTemplateIds,
             });
             setEditing(false);
         } finally {
@@ -321,11 +375,11 @@ function PositionRow({
                                 {position.parent && (
                                     <span className="text-[11px] text-muted-foreground">↑ {position.parent.title}</span>
                                 )}
-                                {position.roleTemplate && (
-                                    <Badge className={`${position.roleTemplate.color} text-[10px]`}>
-                                        Template: {position.roleTemplate.label}
+                                {position.roleTemplates.map((role) => (
+                                    <Badge key={role.id} className={`${role.color} text-[10px]`}>
+                                        {role.label}
                                     </Badge>
-                                )}
+                                ))}
                             </div>
                             <div className="flex items-center gap-2 mt-0.5">
                                 {position.branchId ? (
@@ -416,7 +470,7 @@ export default function PositionsPage() {
                 title:            form.title,
                 branchId:         form.branchId         || null,
                 parentPositionId: form.parentPositionId || null,
-                roleTemplateId:   form.roleTemplateId   || null,
+                roleTemplateIds:  form.roleTemplateIds,
             });
             toast.success("Position created");
             setForm(EMPTY); setAddingNew(false);

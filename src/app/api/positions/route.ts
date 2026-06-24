@@ -6,28 +6,16 @@ import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { resolvePositionDepartmentId } from "@/shared/lib/org/positionDepartment";
+import { flattenPositionRoles, POSITION_INCLUDE } from "@/shared/lib/org/positionIncludes";
+import { syncPositionRoles } from "@/shared/lib/org/positionRoles";
 
 const createSchema = z.object({
     id:               z.string().trim().min(1, "ID is required").toUpperCase(),
     title:            z.string().trim().min(1, "Title is required"),
     branchId:         z.string().trim().optional().nullable(),
     parentPositionId: z.string().trim().optional().nullable(),
-    roleTemplateId:   z.string().trim().optional().nullable(),
+    roleTemplateIds:  z.array(z.string().trim().min(1)).optional().default([]),
 });
-
-const POSITION_INCLUDE = {
-    branch:     { select: { id: true, name: true } },
-    department: { select: { id: true, name: true } },
-    parent:     { select: { id: true, title: true } },
-    roleTemplate: { select: { id: true, label: true, color: true } },
-    holders:    {
-        select: {
-            createdAt: true,
-            user: { select: { id: true, name: true, avatarUrl: true, role: true, title: true, userRole: { select: { label: true, color: true } } } },
-        },
-    },
-    _count: { select: { children: true } },
-} as const;
 
 export async function GET() {
     const { response } = await requireAuth();
@@ -37,7 +25,7 @@ export async function GET() {
             orderBy: [{ branchId: "asc" }, { departmentId: "asc" }, { title: "asc" }],
             include: POSITION_INCLUDE,
         });
-        return NextResponse.json(positions);
+        return NextResponse.json(positions.map(flattenPositionRoles));
     } catch (e) {
         return handleApiError(e, "Failed to fetch positions");
     }
@@ -49,22 +37,34 @@ export async function POST(req: Request) {
     try {
         const { data, error } = await validateRequest(req, createSchema);
         if (error) return error;
-        const { id, title, branchId, parentPositionId, roleTemplateId } = data;
+        const { id, title, branchId, parentPositionId, roleTemplateIds } = data;
         const existing = await prisma.position.findUnique({ where: { id } });
         if (existing) return NextResponse.json({ error: "Position ID already exists" }, { status: 409 });
-        const resolvedDepartmentId = await resolvePositionDepartmentId(roleTemplateId);
-        const position = await prisma.position.create({
-            data: {
-                id,
-                title,
-                branchId: branchId ?? null,
-                departmentId: resolvedDepartmentId,
-                parentPositionId: parentPositionId ?? null,
-                roleTemplateId: roleTemplateId ?? null,
-            },
-            include: POSITION_INCLUDE,
+
+        const resolvedDepartmentId = await resolvePositionDepartmentId(roleTemplateIds);
+        const position = await prisma.$transaction(async (tx) => {
+            const created = await tx.position.create({
+                data: {
+                    id,
+                    title,
+                    branchId: branchId ?? null,
+                    departmentId: resolvedDepartmentId,
+                    parentPositionId: parentPositionId ?? null,
+                },
+            });
+            if (roleTemplateIds.length > 0) {
+                await tx.positionRole.createMany({
+                    data: roleTemplateIds.map((roleId) => ({ positionId: id, roleId })),
+                    skipDuplicates: true,
+                });
+            }
+            return tx.position.findUniqueOrThrow({
+                where:   { id: created.id },
+                include: POSITION_INCLUDE,
+            });
         });
-        return NextResponse.json(position, { status: 201 });
+
+        return NextResponse.json(flattenPositionRoles(position), { status: 201 });
     } catch (e) {
         return handleApiError(e, "Failed to create position");
     }

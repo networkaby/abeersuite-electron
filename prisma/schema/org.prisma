@@ -77,14 +77,13 @@ model Position {
   branchId         String?
   departmentId     String?
   parentPositionId String?
-  roleTemplateId   String?
   createdAt        DateTime @default(now())
 
   branch         Branch?        @relation(fields: [branchId], references: [id])
   department     Department?    @relation(fields: [departmentId], references: [id])
   parent         Position?      @relation("PositionHierarchy", fields: [parentPositionId], references: [id])
   children       Position[]     @relation("PositionHierarchy")
-  roleTemplate   Role?          @relation(fields: [roleTemplateId], references: [id])
+  roleTemplates  PositionRole[]
   holders        UserPosition[]
   // Work-board tasks owned by this seat (Administration board, etc.)
   tasks          Task[]         @relation("TaskAssignedPosition")
@@ -104,6 +103,20 @@ model UserPosition {
   position Position @relation(fields: [positionId], references: [id], onDelete: Cascade)
 
   @@id([userId, positionId])
+}
+
+// ── Position ↔ Role (M2M) ─────────────────────────────────────────────────────
+// A position may carry one or more role templates. Holders inherit the union of
+// their positions' role grants. `Position.departmentId` is derived from the
+// attached roles (see resolvePositionDepartmentId).
+model PositionRole {
+  positionId String
+  roleId     String
+  position   Position @relation(fields: [positionId], references: [id], onDelete: Cascade)
+  role       Role     @relation(fields: [roleId], references: [id], onDelete: Restrict)
+
+  @@id([positionId, roleId])
+  @@index([roleId])
 }
 
 // ── Org-wide defaults — singleton row (id=1) ──────────────────────────────────

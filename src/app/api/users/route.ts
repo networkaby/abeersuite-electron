@@ -39,7 +39,12 @@ const USER_SELECT = {
                     title:        true,
                     branch:       { select: { id: true, name: true } },
                     department:   { select: { id: true, name: true } },
-                    roleTemplate: { select: { id: true, label: true, color: true } },
+                    roleTemplates: {
+                        orderBy: { roleId: "asc" as const },
+                        include: {
+                            role: { select: { id: true, label: true, color: true } },
+                        },
+                    },
                 },
             },
         },
@@ -60,7 +65,13 @@ export async function GET() {
         // that used to read these arrays off User keep working.
         const shaped = users.map((u) => {
             const { userPositions, ...rest } = u;
-            const positions = userPositions.map((up) => up.position);
+            const positions = userPositions.map((up) => {
+                const { roleTemplates, ...pos } = up.position;
+                return {
+                    ...pos,
+                    roleTemplates: roleTemplates.map((row) => row.role),
+                };
+            });
             const branchMap = new Map<string, { id: string; name: string }>();
             const deptMap   = new Map<string, { id: string; name: string }>();
             for (const p of positions) {

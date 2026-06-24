@@ -66,11 +66,13 @@ export async function PATCH(
             if (!pool.isAllAccess) {
                 const allowed = pool.permissionIds ?? [];
                 // Empty pool → strip everything (Prisma `notIn: []` is unreliable, so branch).
-                await prisma.rolePermission.deleteMany(
-                    allowed.length
-                        ? { where: { roleId: id, permissionId: { notIn: allowed } } }
-                        : { where: { roleId: id } },
-                );
+                if (allowed.length > 0) {
+                    await prisma.rolePermission.deleteMany({
+                        where: { roleId: id, permissionId: { notIn: allowed } },
+                    });
+                } else {
+                    await prisma.rolePermission.deleteMany({ where: { roleId: id } });
+                }
             }
         }
 

@@ -146,11 +146,11 @@ async function main(): Promise<void> {
     // Bootstrap seeds only R1 (isSystem=true). Every other role — the
     // helper-roles.ts starter set and any admin-created role — is non-system
     // and trade-specific, so it's wiped here. Unlink positions first because
-    // Position.roleTemplateId → Role is a restrict FK (no cascade).
+    // PositionRole → Role is a restrict FK (no cascade).
     console.log("[4b] Resetting roles to bootstrap (R1 only)");
     await pool.query(
-        `UPDATE "Position" SET "roleTemplateId" = NULL
-         WHERE "roleTemplateId" IN (SELECT id FROM "Role" WHERE "isSystem" = false)`,
+        `DELETE FROM "PositionRole"
+         WHERE "roleId" IN (SELECT id FROM "Role" WHERE "isSystem" = false)`,
     );
     await pool.query(
         `DELETE FROM "RolePermission" WHERE "roleId" IN (SELECT id FROM "Role" WHERE "isSystem" = false)`,

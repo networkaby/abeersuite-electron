@@ -6,9 +6,9 @@ model User {
   email                            String                     @unique
   password                         String
   // Authority is granted via Position appointments — `role` is only populated
-  // when a user holds a Position whose roleTemplate matches. New users start
+  // when a user holds a Position whose role templates match. New users start
   // with `role = null` (no operational permissions). The canonical source for
-  // effective permissions is `userPositions[].position.roleTemplate.permissions`.
+  // effective permissions is `userPositions[].position.roleTemplates[].role.permissions`.
   role                             String?
   title                            String?
   scope                            UserScope                  @default(OWN)

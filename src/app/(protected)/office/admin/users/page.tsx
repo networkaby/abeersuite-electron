@@ -33,7 +33,7 @@ interface Position {
     title:        string;
     branch:       { id: string; name: string } | null;
     department:   { id: string; name: string } | null;
-    roleTemplate: { id: string; label: string; color: string } | null;
+    roleTemplates: { id: string; label: string; color: string }[];
 }
 
 interface User {
@@ -60,19 +60,18 @@ interface User {
  * - Department appears when set; suppressed when null (dept-agnostic).
  */
 function PositionChip({ position }: { position: Position }) {
-    const role = position.roleTemplate;
-    // Role.color is a multi-class Tailwind string like "bg-red-100 text-red-600".
-    // For the chip's leading dot we want just the bg colour.
-    const dotColor = role?.color
-        ? role.color.split(" ").find((c) => c.startsWith("bg-")) ?? "bg-muted-foreground/40"
+    const primaryRole = position.roleTemplates[0];
+    const dotColor = primaryRole?.color
+        ? primaryRole.color.split(" ").find((c) => c.startsWith("bg-")) ?? "bg-muted-foreground/40"
         : "bg-muted-foreground/40";
+    const roleTitle = position.roleTemplates.map((r) => r.label).join(", ");
 
     const isOrgWide = position.branch === null;
 
     return (
         <div
             className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2 py-0.5 text-xs"
-            title={role?.label ? `Role: ${role.label}` : undefined}
+            title={roleTitle ? `Roles: ${roleTitle}` : undefined}
         >
             <span className={`h-2 w-2 rounded-full shrink-0 ${dotColor}`} />
             <span className="font-medium text-foreground">{position.title}</span>

@@ -5,28 +5,15 @@ import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
-import { resolvePositionDepartmentId } from "@/shared/lib/org/positionDepartment";
+import { flattenPositionRoles, POSITION_INCLUDE } from "@/shared/lib/org/positionIncludes";
+import { syncPositionRoles } from "@/shared/lib/org/positionRoles";
 
 const updateSchema = z.object({
     title:            z.string().trim().min(1, "Title is required").optional(),
     branchId:         z.string().trim().optional().nullable(),
     parentPositionId: z.string().trim().optional().nullable(),
-    roleTemplateId:   z.string().trim().optional().nullable(),
+    roleTemplateIds:  z.array(z.string().trim().min(1)).optional(),
 });
-
-const POSITION_INCLUDE = {
-    branch:     { select: { id: true, name: true } },
-    department: { select: { id: true, name: true } },
-    parent:     { select: { id: true, title: true } },
-    roleTemplate: { select: { id: true, label: true, color: true } },
-    holders:    {
-        select: {
-            createdAt: true,
-            user: { select: { id: true, name: true, avatarUrl: true, role: true, title: true, userRole: { select: { label: true, color: true } } } },
-        },
-    },
-    _count: { select: { children: true } },
-} as const;
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { response } = await requireAuth();
@@ -35,7 +22,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         const { id } = await params;
         const position = await prisma.position.findUnique({ where: { id }, include: POSITION_INCLUDE });
         if (!position) return NextResponse.json({ error: "Position not found" }, { status: 404 });
-        return NextResponse.json(position);
+        return NextResponse.json(flattenPositionRoles(position));
     } catch (e) {
         return handleApiError(e, "Failed to fetch position");
     }
@@ -49,14 +36,23 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         const { data, error } = await validateRequest(req, updateSchema);
         if (error) return error;
 
-        // Department follows the role — re-derive whenever the role template changes.
-        const updateData: typeof data & { departmentId?: string | null } = { ...data };
-        if (data.roleTemplateId !== undefined) {
-            updateData.departmentId = await resolvePositionDepartmentId(data.roleTemplateId);
-        }
+        const { roleTemplateIds, ...scalarFields } = data;
+        const position = await prisma.$transaction(async (tx) => {
+            const existing = await tx.position.findUnique({ where: { id }, select: { id: true } });
+            if (!existing) return null;
 
-        const position = await prisma.position.update({ where: { id }, data: updateData, include: POSITION_INCLUDE });
-        return NextResponse.json(position);
+            if (Object.keys(scalarFields).length > 0) {
+                await tx.position.update({ where: { id }, data: scalarFields });
+            }
+            if (roleTemplateIds !== undefined) {
+                await syncPositionRoles(tx, id, roleTemplateIds);
+            }
+
+            return tx.position.findUniqueOrThrow({ where: { id }, include: POSITION_INCLUDE });
+        });
+
+        if (!position) return NextResponse.json({ error: "Position not found" }, { status: 404 });
+        return NextResponse.json(flattenPositionRoles(position));
     } catch (e) {
         return handleApiError(e, "Failed to update position");
     }

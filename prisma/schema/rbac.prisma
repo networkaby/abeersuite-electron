@@ -14,7 +14,7 @@ model Role {
   departmentId       String
   department         Department       @relation(fields: [departmentId], references: [id])
   users              User[]
-  templatedPositions Position[]
+  positionRoles      PositionRole[]
   permissions        RolePermission[]
   chatRooms          ChatRoom[]
 }

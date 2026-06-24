@@ -17,6 +17,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import bcrypt from "bcryptjs";
 import * as dotenv from "dotenv";
+import { upsertPositionWithRoles } from "./lib/positionSeedSync";
 
 dotenv.config({ path: ".env.local" });
 dotenv.config({ path: ".env" });
@@ -206,10 +207,12 @@ async function main() {
     // ── Step 4: Positions + UserPosition appointments ────────────────────────
     console.log("\n[4/4] Upserting positions + appointments…");
     for (const p of POSITIONS) {
-        await prisma.position.upsert({
-            where:  { id: p.id },
-            update: { title: p.title, branchId: p.branchId, departmentId: p.departmentId, roleTemplateId: p.roleTemplateId },
-            create: { id: p.id, title: p.title, branchId: p.branchId, departmentId: p.departmentId, roleTemplateId: p.roleTemplateId },
+        await upsertPositionWithRoles(prisma, {
+            id: p.id,
+            title: p.title,
+            branchId: p.branchId,
+            departmentId: p.departmentId,
+            roleTemplateIds: [p.roleTemplateId],
         });
         for (const email of p.holders) {
             const userId = userIdByEmail.get(email);

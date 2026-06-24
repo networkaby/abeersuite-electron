@@ -1,20 +1,30 @@
+import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 
+type DbClient = Prisma.TransactionClient | typeof prisma;
+
 /**
- * A Position's department is derived from its role template — a role already
- * carries its home department (`Role.departmentId`), so the position inherits it.
- * The position never picks a department independently (that would let position
- * and role disagree). A role-less seat has no department.
- *
- * @returns the departmentId to persist on the position, or `null`.
+ * A Position's department is derived from its role templates — each role carries
+ * a home department (`Role.departmentId`). When all roles agree, that department
+ * wins; when they differ, the highest-rank role's home department is used.
+ * A role-less seat has no department.
  */
 export async function resolvePositionDepartmentId(
-    roleTemplateId: string | null | undefined,
+    roleIds: string[],
+    client: DbClient = prisma,
 ): Promise<string | null> {
-    if (!roleTemplateId) return null;
-    const role = await prisma.role.findUnique({
-        where:  { id: roleTemplateId },
-        select: { departmentId: true },
+    const uniqueRoleIds = [...new Set(roleIds.filter(Boolean))];
+    if (uniqueRoleIds.length === 0) return null;
+
+    const roles = await client.role.findMany({
+        where:  { id: { in: uniqueRoleIds } },
+        select: { departmentId: true, rank: true },
     });
-    return role?.departmentId ?? null;
+    if (roles.length === 0) return null;
+
+    const deptIds = [...new Set(roles.map((r) => r.departmentId))];
+    if (deptIds.length === 1) return deptIds[0]!;
+
+    const top = roles.reduce((best, r) => (r.rank > best.rank ? r : best), roles[0]!);
+    return top.departmentId;
 }

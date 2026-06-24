@@ -52,6 +52,7 @@ import {
     buildVoucherTemplateDefaults,
 } from "../../src/shared/lib/print/voucherTemplateDefaults";
 import { COMPANY_DETAILS } from "../../src/utils/constants-company-details";
+import { upsertPositionWithRoles } from "./lib/positionSeedSync";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import bcrypt from "bcryptjs";
@@ -74,7 +75,7 @@ const prisma = new PrismaClient({ adapter });
 
 // Roles are the *templates* that Positions inherit permissions from. Users do NOT
 // receive a role directly — `User.role` is null until a Position appointment
-// promotes them. See `Position.roleTemplateId` and `authorizeStaff.ts`.
+// promotes them. See `PositionRole` and `authorizeStaff.ts`.
 //
 // Bootstrap seeds ONLY R1 (Admin) — the one role universal to every trade. All
 // other roles (Service Engineer, Cashier, Accountant, …) are trade-specific and
@@ -1099,10 +1100,11 @@ async function main() {
     // that when User.role is eventually dropped in favour of Position-only
     // authority, the admin account still inherits full permissions via the
     // Position → Role → Permission chain rather than losing access.
-    await prisma.position.upsert({
-        where:  { id: "POS-SYSADMIN" },
-        update: { title: "System Administrator", branchId: null, departmentId: null, roleTemplateId: "R1" },
-        create: { id: "POS-SYSADMIN", title: "System Administrator", branchId: null, departmentId: null, roleTemplateId: "R1" },
+    await upsertPositionWithRoles(prisma, {
+        id: "POS-SYSADMIN",
+        title: "System Administrator",
+        branchId: null,
+        roleTemplateIds: ["R1"],
     });
     await prisma.userPosition.upsert({
         where:  { userId_positionId: { userId: adminUser.id, positionId: "POS-SYSADMIN" } },

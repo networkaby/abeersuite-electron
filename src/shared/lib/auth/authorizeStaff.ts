@@ -82,9 +82,13 @@ export async function authorizeStaffCredentials(
                 include: {
                     position: {
                         include: {
-                            roleTemplate: {
+                            roleTemplates: {
                                 include: {
-                                    permissions: { include: { permission: true } },
+                                    role: {
+                                        include: {
+                                            permissions: { include: { permission: true } },
+                                        },
+                                    },
                                 },
                             },
                         },
@@ -101,9 +105,9 @@ export async function authorizeStaffCredentials(
 
     // Roles flow from Position appointments. `User.role` is a manual override /
     // cache (e.g. promoted admins); it's included in the union when present.
-    const positionRoleIds = user.userPositions
-        .map((up) => up.position.roleTemplateId)
-        .filter((id): id is string => Boolean(id));
+    const positionRoleIds = user.userPositions.flatMap((up) =>
+        up.position.roleTemplates.map((row) => row.role.id),
+    );
     const allRoles = new Set<string>(positionRoleIds);
     if (user.role) allRoles.add(user.role);
     const roles = [...allRoles];
@@ -118,10 +122,11 @@ export async function authorizeStaffCredentials(
         }
     }
     for (const userPosition of user.userPositions) {
-        const templatePerms = userPosition.position.roleTemplate?.permissions ?? [];
-        for (const rp of templatePerms) {
-            const permId = rp.permission?.id;
-            if (permId) effective.add(permId);
+        for (const row of userPosition.position.roleTemplates) {
+            for (const rp of row.role.permissions) {
+                const permId = rp.permission?.id;
+                if (permId) effective.add(permId);
+            }
         }
     }
 
@@ -141,8 +146,9 @@ export async function authorizeStaffCredentials(
     // Rank = max rank across user's role + every held Position's roleTemplate.
     let rank = user.userRole?.rank ?? 0;
     for (const up of user.userPositions) {
-        const r = up.position.roleTemplate?.rank ?? 0;
-        if (r > rank) rank = r;
+        for (const row of up.position.roleTemplates) {
+            if (row.role.rank > rank) rank = row.role.rank;
+        }
     }
 
     // Surface metadata for the highest-rank source for UI badges.
@@ -152,9 +158,11 @@ export async function authorizeStaffCredentials(
         // No direct user role — pick the highest-rank Position role template.
         let best: { rank: number; label?: string; color?: string } | null = null;
         for (const up of user.userPositions) {
-            const rt = up.position.roleTemplate;
-            if (rt && (!best || rt.rank > best.rank)) {
-                best = { rank: rt.rank, label: rt.label, color: rt.color };
+            for (const row of up.position.roleTemplates) {
+                const rt = row.role;
+                if (!best || rt.rank > best.rank) {
+                    best = { rank: rt.rank, label: rt.label, color: rt.color };
+                }
             }
         }
         roleLabel = best?.label;
