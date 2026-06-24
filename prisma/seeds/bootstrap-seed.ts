@@ -82,7 +82,9 @@ const prisma = new PrismaClient({ adapter });
 // `helper-roles.ts` seed (`pnpm seed:helper-roles`), and admins create or edit
 // the rest from the Role Matrix UI as the business needs.
 const ROLES = [
-    { id: "R1", label: "Role-Admin", color: "bg-red-100 text-red-600", isSystem: true, rank: 100 },
+    // R1 is the cross-cutting admin role — homed in the all-access department
+    // (DEP-ADMIN) so the Role Matrix offers it the full permission list.
+    { id: "R1", label: "Role-Admin", color: "bg-red-100 text-red-600", isSystem: true, rank: 100, departmentId: "DEP-ADMIN" },
 ] as const;
 
 const PERMISSIONS = [
@@ -616,7 +618,12 @@ const BRANCHES = [
     },
 ];
 
-const DEPARTMENTS = [
+const DEPARTMENTS: { id: string; name: string; description: string; isAllAccess?: boolean }[] = [
+    // All-access department — home for cross-cutting roles (R1 Admin). Its
+    // permission pool is "every permission" (computed live; no DepartmentPermission
+    // rows), so new permissions are auto-grantable to admin roles. Exactly one
+    // department carries isAllAccess.
+    { id: "DEP-ADMIN",  name: "Administration", description: "Org-wide administration — all-access role authoring", isAllAccess: true },
     { id: "DEP-REPAIR", name: "Repairs",     description: "Device diagnosis and repair" },
     { id: "DEP-SALES",  name: "Sales",       description: "Sales and customer acquisition" },
     { id: "DEP-DESK",   name: "Front Desk",  description: "Customer intake, calls, and receipts" },
@@ -733,11 +740,21 @@ async function main() {
 
     // ── Section 1: RBAC ────────────────────────────────────────────────
     console.log("[1/7] RBAC — Roles, Permissions, Role grants");
+    // Departments first — Role.departmentId is a required FK, so the all-access
+    // department (DEP-ADMIN, R1's home) must exist before roles are upserted.
+    for (const d of DEPARTMENTS) {
+        await pool.query(
+            `INSERT INTO "Department" (id, name, description, "branchId", "isAllAccess")
+             VALUES ($1, $2, $3, NULL, $4)
+             ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description, "isAllAccess" = EXCLUDED."isAllAccess"`,
+            [d.id, d.name, d.description, d.isAllAccess ?? false],
+        );
+    }
     for (const r of ROLES) {
         await prisma.role.upsert({
             where:  { id: r.id },
-            update: { label: r.label, color: r.color, isSystem: r.isSystem, rank: r.rank },
-            create: { id: r.id, label: r.label, color: r.color, isSystem: r.isSystem, rank: r.rank },
+            update: { label: r.label, color: r.color, isSystem: r.isSystem, rank: r.rank, departmentId: r.departmentId },
+            create: { id: r.id, label: r.label, color: r.color, isSystem: r.isSystem, rank: r.rank, departmentId: r.departmentId },
         });
     }
     for (const p of PERMISSIONS) {
@@ -865,15 +882,9 @@ async function main() {
             ],
         );
     }
-    for (const d of DEPARTMENTS) {
-        await pool.query(
-            `INSERT INTO "Department" (id, name, description, "branchId")
-             VALUES ($1, $2, $3, NULL)
-             ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description`,
-            [d.id, d.name, d.description],
-        );
-    }
-    console.log(`      ✓ ${BRANCHES.length} branches · ${DEPARTMENTS.length} departments\n`);
+    // Departments are seeded in Section 1 (RBAC) because Role.departmentId is a
+    // required FK that depends on DEP-ADMIN existing before roles are created.
+    console.log(`      ✓ ${BRANCHES.length} branches · ${DEPARTMENTS.length} departments (seeded in §1)\n`);
 
     // ── Section 4: Chart of accounts ───────────────────────────────────
     console.log("[4/7] Chart of accounts — Groups + GL ledgers (Stock-in-Hand intentionally empty)");

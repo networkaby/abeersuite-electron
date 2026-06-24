@@ -5,6 +5,7 @@ import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { resolvePositionDepartmentId } from "@/shared/lib/org/positionDepartment";
 
 const updateSchema = z.object({
     title:            z.string().trim().min(1, "Title is required").optional(),
@@ -48,7 +49,23 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         const { id } = await params;
         const { data, error } = await validateRequest(req, updateSchema);
         if (error) return error;
-        const position = await prisma.position.update({ where: { id }, data: data, include: POSITION_INCLUDE });
+
+        // Department follows the role. Re-derive it whenever the role or the
+        // (role-less) manual department is touched, using existing values for
+        // whichever side the partial update omits.
+        const updateData: typeof data & { departmentId?: string | null } = { ...data };
+        if (data.roleTemplateId !== undefined || data.departmentId !== undefined) {
+            const existing = await prisma.position.findUnique({
+                where:  { id },
+                select: { roleTemplateId: true, departmentId: true },
+            });
+            if (!existing) return NextResponse.json({ error: "Position not found" }, { status: 404 });
+            const effectiveRole = data.roleTemplateId !== undefined ? data.roleTemplateId : existing.roleTemplateId;
+            const fallbackDept  = data.departmentId  !== undefined ? data.departmentId  : existing.departmentId;
+            updateData.departmentId = await resolvePositionDepartmentId(effectiveRole, fallbackDept);
+        }
+
+        const position = await prisma.position.update({ where: { id }, data: updateData, include: POSITION_INCLUDE });
         return NextResponse.json(position);
     } catch (e) {
         return handleApiError(e, "Failed to update position");

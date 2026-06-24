@@ -10,6 +10,7 @@ const updateSchema = z.object({
     name:        z.string().trim().min(1).optional(),
     description: z.string().trim().optional().nullable(),
     branchId:    z.string().trim().optional().nullable(),
+    isAllAccess: z.boolean().optional(),
 });
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {

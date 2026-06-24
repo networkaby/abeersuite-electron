@@ -11,6 +11,9 @@ const createSchema = z.object({
     name:        z.string().trim().min(1, "Name is required"),
     description: z.string().trim().optional().nullable(),
     branchId:    z.string().trim().optional().nullable(),
+    // All-access flag — its pool is "every permission", managed automatically.
+    // Admin-only; normally only the seed sets this true.
+    isAllAccess: z.boolean().optional(),
 });
 
 export async function GET() {
@@ -28,6 +31,7 @@ export async function GET() {
                         holders:  { select: { userId: true } },
                     },
                 },
+                _count: { select: { permissionPool: true, roles: true } },
             },
         });
 
@@ -39,13 +43,15 @@ export async function GET() {
                 if (p.branchId) branchIds.add(p.branchId);
             }
 
-            const { positions, ...rest } = d;
+            const { positions, _count, ...rest } = d;
             return {
                 ...rest,
                 _count: {
-                    users:     userIds.size,
-                    positions: positions.length,
-                    branches:  branchIds.size,
+                    users:          userIds.size,
+                    positions:      positions.length,
+                    branches:       branchIds.size,
+                    permissionPool: _count.permissionPool,
+                    roles:          _count.roles,
                 },
             };
         });
@@ -62,11 +68,11 @@ export async function POST(req: Request) {
     try {
         const { data, error } = await validateRequest(req, createSchema);
         if (error) return error;
-        const { id, name, description, branchId } = data;
+        const { id, name, description, branchId, isAllAccess } = data;
         const existing = await prisma.department.findUnique({ where: { id } });
         if (existing) return NextResponse.json({ error: "Department ID already exists" }, { status: 409 });
         const department = await prisma.department.create({
-            data: { id, name, description: description ?? null, branchId: branchId ?? null },
+            data: { id, name, description: description ?? null, branchId: branchId ?? null, isAllAccess: isAllAccess ?? false },
             include: { branch: { select: { id: true, name: true } } },
         });
         return NextResponse.json(department, { status: 201 });

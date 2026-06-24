@@ -36,9 +36,9 @@ pnpm prisma db seed       # 2. runs bootstrap-seed.ts
 
 `bootstrap-seed.ts` is **idempotent** — safe to re-run. It seeds:
 
-- **RBAC** — **1 role** (`R1` Admin, the only `isSystem` role), 80+ permissions, R1's RolePermission grants. The other starter roles (`R2`–`R7`) are trade-specific and live in `helper-roles.ts` (see below); admins build the rest from the Role Matrix.
+- **RBAC** — **1 role** (`R1` Admin, the only `isSystem` role; homed in the all-access `DEP-ADMIN` department so its Role Matrix shows the full permission list), 80+ permissions, R1's RolePermission grants. The other starter roles (`R2`–`R7`) are trade-specific and live in `helper-roles.ts` (see below); admins build the rest from the Role Matrix.
 - **Workflow** — 6 pipelines, 49 ticket statuses, 7 worker groups, 38 workers, transitions
-- **Org structure** — 1 branch (HQ; admins add regional / online branches via the UI), 7 cross-branch departments, role ranks
+- **Org structure** — 1 branch (HQ; admins add regional / online branches via the UI), 8 cross-branch departments (incl. `DEP-ADMIN`, the all-access dept — `Department.isAllAccess`, whose permission pool is "everything"), role ranks. Department rows are seeded in the RBAC section because `Role.departmentId` is a required FK that needs `DEP-ADMIN` to exist before roles.
 - **Chart of accounts** — 28 AccountGroups (Tally tree, 15 primary + 13 sub) + ~50 GL ledgers; per-branch Vault accounts + POS counter till accounts
 - **Inventory Unit master** — 13 units (PCS, NOS, BOX, SET, UNIT, MTR, ROLL, PKT, PAIR, KG, BAG, REAM, DAY)
 - **Inventory Warranty Term master** — ~10 terms (No Warranty, 7/15-day, 1/3/6-month, 1/2/3/5-year)
@@ -71,7 +71,9 @@ pnpm seed:helper-roles   # after `pnpm prisma db seed`
 
 `helper-roles.ts` creates `R2`–`R7` (Service Engineer, Counter/Cashier, Stores & Despatch, Branch Manager, Accountant, Sales Executive) plus their permission grants. They are **non-system** (`isSystem: false`), so admins can rename, re-grant, or delete them from the Role Matrix — unlike the locked `R1`. Idempotent (upsert-by-id; grants fully rewritten each run). Permission rows come from bootstrap, so run this **after** `pnpm prisma db seed`.
 
-Wiped by `hard-clean` (it deletes every non-system role back to the R1-only bootstrap state) — re-run this helper to restore.
+Each role is homed in a department (`R2`→`DEP-REPAIR`, `R6`→`DEP-FIN`, `R7`→`DEP-SALES`, `R3`→`DEP-DESK`, `R4`→`DEP-DESP`; `R5` Branch Manager → `DEP-ADMIN`). This helper also seeds the **department permission pools** (`DepartmentPermission`) for those functional departments — each pool = the union of its roles' permissions, so a role can never grant outside its department's pool (the all-access `DEP-ADMIN` carries no rows; its pool is everything). Pools are trade-specific (they depend on the helper roles), which is why they live here, not in bootstrap.
+
+Wiped by `hard-clean` (it deletes every non-system role back to the R1-only bootstrap state, and clears all `DepartmentPermission` pool rows) — re-run this helper to restore.
 
 ## Dummy seeds (dev only)
 
@@ -104,6 +106,7 @@ pnpm seed:hard-clean
 - ServiceCenter, ShopCoupon, PortalCredentials
 - Payment gateways (`payment_gateways`, Settings → Payment Methods — operator config, bootstrap seeds none). Cleared with an explicit `DELETE` (not a `TRUNCATE … CASCADE`) so the `ON DELETE SET NULL` on `PosCounterPaymentAccount.gatewayId` fires: counter payment rails are **preserved**, just unlinked from the deleted gateways.
 - **Non-system roles** (every `Role` with `isSystem: false` — the `helper-roles.ts` starter set and any admin-created role). Positions pointing at them are unlinked first (restrict FK), then the roles + their grants are deleted. Re-run `pnpm seed:helper-roles` to restore the starter set. `R1` (the only `isSystem` role) survives.
+- **Department permission pools** (`DepartmentPermission`) — all rows are helper-seeded (bootstrap seeds none; `DEP-ADMIN` is all-access with no rows), so they are cleared back to the bootstrap state. Department rows themselves are bootstrap-seeded and survive. Re-run `pnpm seed:helper-roles` to restore the pools.
 
 **Preserves** everything bootstrap-seed wrote, plus user-set config:
 - `R1` role + Permissions + R1's RolePermissions, Pipelines, Statuses, Branches, Departments

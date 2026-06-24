@@ -47,7 +47,8 @@
 ## Prisma models
 
 - `User`, `Role`, `Permission`, `RolePermission`, `UserPermission` (in `prisma/schema/users.prisma`).
-- `Branch`, `Department`, `Position`, `UserPosition` (org-shape, in `prisma/schema/org.prisma`).
+- `Branch`, `Department` (+ `isAllAccess`), `Position`, `UserPosition` (org-shape, in `prisma/schema/org.prisma`).
+- `Role` (+ required `departmentId`), `Permission`, `RolePermission`, `DepartmentPermission` (department permission pool — the Role Matrix authoring lens), in `prisma/schema/rbac.prisma`.
 
 > `OrgDefaults`, `Pipeline`, `TicketStatus`, `TicketSubStatus`, `SubStatusGroup`, `StatusTransition`, `SubStatusTransition` are documented in [settings.md](./settings.md).
 
@@ -88,6 +89,7 @@
 
 ## Recent decisions / gotchas
 
+- **2026-06-24 — Department-wise roles + permission pools.** The Role Matrix (`/office/admin/role`) is now scoped by department. Every `Role` has a required home department (`Role.departmentId`); a new `DepartmentPermission` join holds each department's curated **pool**, edited on `/office/admin/departments` ("Permissions" button → `PUT /api/departments/[id]/permissions`). The role editor filters its matrix + chips to the role's pool; an all-access department (`Department.isAllAccess`, seeded `DEP-ADMIN`) shows the full list. **Positions no longer pick a department independently** — `/office/admin/positions` derives it from the chosen role template (read-only; a role-less seat may still pick one), and the positions API stamps `role.department` on save. Pool removal cascades to roles in the department (API returns the count). Authoring concern only — `authorizeStaff.ts` resolution is unchanged. See [permissions.md](./permissions.md) "Department-wise roles & permission pools".
 - **2026-05-07 (Step 0)**: 4 demo users seeded with predictable passwords — see the demo-logins table in [seeds.md](../seeds.md) and the role catalogue in [permissions.md](./permissions.md).
 - **2026-05-07 (Step 0)**: 10 new `accountancy:*` permission rows added. Admin (R1) gets them via `PERMISSIONS.map(p => p.id)`. Non-admin roles need explicit grant via the matrix.
 - **2026-05-07 (Step 2)**: Pipelines / statuses / workers moved from Repair settings to Admin (`/office/admin/pipelines` etc.).

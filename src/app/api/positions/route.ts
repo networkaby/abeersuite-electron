@@ -5,6 +5,7 @@ import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { resolvePositionDepartmentId } from "@/shared/lib/org/positionDepartment";
 
 const createSchema = z.object({
     id:               z.string().trim().min(1, "ID is required").toUpperCase(),
@@ -52,12 +53,15 @@ export async function POST(req: Request) {
         const { id, title, branchId, departmentId, parentPositionId, roleTemplateId } = data;
         const existing = await prisma.position.findUnique({ where: { id } });
         if (existing) return NextResponse.json({ error: "Position ID already exists" }, { status: 409 });
+        // Department follows the role (a role carries its home department). A
+        // manual departmentId is honoured only for a role-less seat.
+        const resolvedDepartmentId = await resolvePositionDepartmentId(roleTemplateId, departmentId);
         const position = await prisma.position.create({
             data: {
                 id,
                 title,
                 branchId: branchId ?? null,
-                departmentId: departmentId ?? null,
+                departmentId: resolvedDepartmentId,
                 parentPositionId: parentPositionId ?? null,
                 roleTemplateId: roleTemplateId ?? null,
             },

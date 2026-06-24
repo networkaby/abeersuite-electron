@@ -33,14 +33,24 @@ const prisma = new PrismaClient({ adapter });
 // ════════════════════════════════════════════════════════════════════════════
 // Role templates — all NON-system (admin-editable).
 // ════════════════════════════════════════════════════════════════════════════
+// Each role is homed in one department — its authoring lens (the Role Matrix
+// shows only that department's permission pool). R5 Branch Manager is
+// cross-functional (spans Sales/Repair/Finance/POS), which one department's pool
+// can't hold, so it lives in the all-access department (DEP-ADMIN). NOTE: the
+// intended end-state for branch managers is a multi-position holder (one role
+// per department, scope = BRANCH) rather than this single mega-role — R5 is kept
+// here only so the existing demo/appointment seeds stay runnable.
 const ROLES = [
-    { id: "R5", label: "Role-Branch Manager",   color: "bg-amber-100 text-amber-700",   isSystem: false, rank: 80 },
-    { id: "R2", label: "Role-Service Engineer", color: "bg-blue-100 text-blue-600",     isSystem: false, rank: 70 },
-    { id: "R6", label: "Role-Accountant",       color: "bg-indigo-100 text-indigo-700", isSystem: false, rank: 60 },
-    { id: "R7", label: "Role-Sales Executive",  color: "bg-teal-100 text-teal-700",     isSystem: false, rank: 50 },
-    { id: "R3", label: "Role-Counter / Cashier",color: "bg-green-100 text-green-600",   isSystem: false, rank: 30 },
-    { id: "R4", label: "Role-Stores & Despatch",color: "bg-purple-100 text-purple-600", isSystem: false, rank: 30 },
+    { id: "R5", label: "Role-Branch Manager",   color: "bg-amber-100 text-amber-700",   isSystem: false, rank: 80, departmentId: "DEP-ADMIN" },
+    { id: "R2", label: "Role-Service Engineer", color: "bg-blue-100 text-blue-600",     isSystem: false, rank: 70, departmentId: "DEP-REPAIR" },
+    { id: "R6", label: "Role-Accountant",       color: "bg-indigo-100 text-indigo-700", isSystem: false, rank: 60, departmentId: "DEP-FIN" },
+    { id: "R7", label: "Role-Sales Executive",  color: "bg-teal-100 text-teal-700",     isSystem: false, rank: 50, departmentId: "DEP-SALES" },
+    { id: "R3", label: "Role-Counter / Cashier",color: "bg-green-100 text-green-600",   isSystem: false, rank: 30, departmentId: "DEP-DESK" },
+    { id: "R4", label: "Role-Stores & Despatch",color: "bg-purple-100 text-purple-600", isSystem: false, rank: 30, departmentId: "DEP-DESP" },
 ] as const;
+
+// Departments whose pool is "everything" (no DepartmentPermission rows).
+const ALL_ACCESS_DEPTS = new Set<string>(["DEP-ADMIN"]);
 
 const ROLE_PERMISSIONS: Record<string, string[]> = {
     // R5 — Branch Manager: full branch authority; no global settings/roles.
@@ -138,8 +148,8 @@ async function main(): Promise<void> {
     for (const r of ROLES) {
         await prisma.role.upsert({
             where:  { id: r.id },
-            update: { label: r.label, color: r.color, isSystem: r.isSystem, rank: r.rank },
-            create: { id: r.id, label: r.label, color: r.color, isSystem: r.isSystem, rank: r.rank },
+            update: { label: r.label, color: r.color, isSystem: r.isSystem, rank: r.rank, departmentId: r.departmentId },
+            create: { id: r.id, label: r.label, color: r.color, isSystem: r.isSystem, rank: r.rank, departmentId: r.departmentId },
         });
     }
 
@@ -150,8 +160,27 @@ async function main(): Promise<void> {
     );
     await prisma.rolePermission.createMany({ data: grants, skipDuplicates: true });
 
-    console.log(`  ✓ ${ROLES.length} roles · ${grants.length} grants`);
-    for (const r of ROLES) console.log(`    + ${r.id}: ${r.label}`);
+    // Department permission pools — the Role Matrix authoring lens. Each functional
+    // department's pool = the union of permissions used by the roles homed in it,
+    // so a role can never grant a permission outside its department's pool (keeps
+    // the editor filter and the pool-removal cascade consistent). All-access
+    // departments carry no rows (their pool is "everything").
+    const poolByDept = new Map<string, Set<string>>();
+    for (const r of ROLES) {
+        if (ALL_ACCESS_DEPTS.has(r.departmentId)) continue;
+        const set = poolByDept.get(r.departmentId) ?? new Set<string>();
+        for (const pid of ROLE_PERMISSIONS[r.id] ?? []) set.add(pid);
+        poolByDept.set(r.departmentId, set);
+    }
+    const poolDeptIds = [...poolByDept.keys()];
+    await prisma.departmentPermission.deleteMany({ where: { departmentId: { in: poolDeptIds } } });
+    const poolRows = [...poolByDept.entries()].flatMap(([departmentId, perms]) =>
+        [...perms].map((permissionId) => ({ departmentId, permissionId })),
+    );
+    await prisma.departmentPermission.createMany({ data: poolRows, skipDuplicates: true });
+
+    console.log(`  ✓ ${ROLES.length} roles · ${grants.length} grants · ${poolRows.length} pool entries across ${poolDeptIds.length} departments`);
+    for (const r of ROLES) console.log(`    + ${r.id}: ${r.label}  →  ${r.departmentId}`);
     console.log("\nDone. Admins can rename / re-grant / delete these from the Role Matrix.\n");
 
     await prisma.$disconnect();

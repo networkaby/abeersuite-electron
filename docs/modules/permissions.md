@@ -9,6 +9,7 @@
 | Permission key constants | [`src/shared/lib/constants/permissions.ts`](../../src/shared/lib/constants/permissions.ts) |
 | Permission row inserts + role grants | [`prisma/seeds/bootstrap-seed.ts`](../../prisma/seeds/bootstrap-seed.ts) |
 | Scope-aware guards | [`src/shared/lib/auth/permissionScope.ts`](../../src/shared/lib/auth/permissionScope.ts), [`src/shared/lib/auth/permissions.ts`](../../src/shared/lib/auth/permissions.ts) |
+| Department permission pools (authoring lens) | [`src/shared/lib/auth/departmentPool.ts`](../../src/shared/lib/auth/departmentPool.ts), API `GET`/`PUT /api/departments/[id]/permissions` |
 | Route enforcement | `requirePermission(id)`, `requireAuth()`, `requirePortalAuth()` from `src/shared/lib/auth/` |
 
 When in doubt, **`permissions.ts` is the registry**. The bootstrap seed mirrors it row-by-row.
@@ -56,18 +57,29 @@ The constant name mirrors the string: `INVENTORY_VOUCHER_HARD_DELETE = "inventor
 
 **Starter roles** (`R2`–`R7`) are a trade-specific helper set — created as **non-system** (`isSystem: false`, admin-editable) by `prisma/seeds/helper-roles.ts` (run `pnpm seed:helper-roles` after `pnpm prisma db seed`):
 
-| ID | Name | Rank | Typical permissions |
-|---|---|---|---|
-| `R5` | Branch Manager | 80 | full branch authority across tickets / finance / inventory / POS; no global settings or roles |
-| `R2` | Service Engineer | 70 | `tickets:*:own/branch`, `work:W1`–`W4`, repair-side ops |
-| `R6` | Accountant | 60 | `finance:*`, `accountancy:*`, vouchers + reconciliation; no admin/POS/tickets |
-| `R7` | Sales Executive | 50 | `customers:*`, `deals:*`, `ecommerce:manage`, counter sales |
-| `R3` | Counter / Cashier | 30 | `tickets:create`, `customers:*`, `pos:shift:*`, `inventory:view/edit:branch` |
-| `R4` | Stores & Despatch | 30 | `tickets:substatus:set`, `inventory:*:branch`, `pos:shift:*` |
+| ID | Name | Rank | Home dept | Typical permissions |
+|---|---|---|---|---|
+| `R5` | Branch Manager | 80 | `DEP-ADMIN` (all-access) | full branch authority across tickets / finance / inventory / POS; no global settings or roles. Cross-functional, so homed in the all-access dept — see note below |
+| `R2` | Service Engineer | 70 | `DEP-REPAIR` | `tickets:*:own/branch`, `work:W1`–`W4`, repair-side ops |
+| `R6` | Accountant | 60 | `DEP-FIN` | `finance:*`, `accountancy:*`, vouchers + reconciliation; no admin/POS/tickets |
+| `R7` | Sales Executive | 50 | `DEP-SALES` | `customers:*`, `deals:*`, `ecommerce:manage`, counter sales |
+| `R3` | Counter / Cashier | 30 | `DEP-DESK` | `tickets:create`, `customers:*`, `pos:shift:*`, `inventory:view/edit:branch` |
+| `R4` | Stores & Despatch | 30 | `DEP-DESP` | `tickets:substatus:set`, `inventory:*:branch`, `pos:shift:*` |
 
 Admins create or edit roles freely from the Role Matrix UI as the business needs — the starter set is just a head start, not a fixed catalogue. A different trade would ship its own `helper-roles.ts`.
 
 > Read the actual `Role` + `RolePermission` rows in `bootstrap-seed.ts` (R1) and `helper-roles.ts` (R2–R7) for the canonical assignment matrix.
+
+## Department-wise roles & permission pools
+
+Every `Role` carries a required **home department** (`Role.departmentId`). This is an **authoring lens, not a data scope** — it controls *which permissions the Role Matrix offers* when editing the role, nothing about runtime visibility (scope is still `User.scope` + the `:own/:branch/:org` suffix, resolved in `authorizeStaff.ts`). The department pool **never participates in runtime permission checks.**
+
+- **Department pool** (`DepartmentPermission` join, edited on the Departments page, `PUT /api/departments/[id]/permissions`). The curated set of permissions a department surfaces. A permission can sit in several pools (e.g. `finance:invoice:*` in both Sales and Accounts). A role homed in the department may only be granted permissions from its pool — the role editor filters the matrix + additional-permission chips to the pool.
+- **All-access department** (`Department.isAllAccess`, seeded `DEP-ADMIN`). Carries **no** `DepartmentPermission` rows — its pool is *every permission*, computed live, so new permissions are auto-grantable to admin roles. `R1` is homed here, which is why its editor shows the full list.
+- **Cross-cutting access** is modelled two ways, never via a null department: (a) a role homed in the all-access dept (admin/super-user), or (b) a **multi-position holder** — e.g. a branch manager holding one position per department, effective permissions = union, `scope = BRANCH`. (`R5` is a legacy single mega-role kept in `DEP-ADMIN`; the intended end-state is the multi-position pattern.)
+- **Pool removal cascades.** Removing a permission from a pool strips it from every role homed in that department (the API returns how many grants changed — never silent). Moving a role to another department strips grants outside the new pool.
+- **Positions derive their department from their role** (`Role.departmentId`); the position editor shows it read-only. Only a role-less seat may pick a department manually. See [admin.md](./admin.md).
+- `null` `User.role` / no position = a user created but not yet appointed → no permissions.
 
 ## Env super admin (emergency bypass)
 
@@ -106,7 +118,7 @@ These string IDs are stable across the codebase. Renaming any of them is a break
 | Pipelines | `P-<AREA>` | `P-REPAIR`, `P-SALES`, plus seeded P2/P4/P6 for helpdesk/admin/CRM intake |
 | Ticket statuses | `S1`–`S10` | `S1` Received, `S2` Diagnosing, … `S10` Returned |
 | Workers | `SS1`–`SS37` | Per-pipeline handoff states |
-| Departments | `DEP-<NAME>` | `DEP-REPAIR`, `DEP-SALES`, `DEP-DESK`, `DEP-FIN`, `DEP-IT`, `DEP-HR`, `DEP-DESP` |
+| Departments | `DEP-<NAME>` | `DEP-ADMIN` (all-access), `DEP-REPAIR`, `DEP-SALES`, `DEP-DESK`, `DEP-FIN`, `DEP-IT`, `DEP-HR`, `DEP-DESP` |
 | Branches | `BR-<NAME>` | `BR-HQ`, plus seeded regionals |
 
 `bootstrap-seed.ts` is idempotent — re-running it never reassigns IDs. The seed is the spec for "which IDs exist on a fresh database."
@@ -119,9 +131,10 @@ These string IDs are stable across the codebase. Renaming any of them is a break
 4. Use `requirePermission(PERMISSIONS.YOUR_KEY)` (or `hasPermission` for client gates) in the route(s).
 5. Re-seed the dev DB: `pnpm seed:hard-clean && pnpm prisma db seed`.
 6. Add the gate row to the relevant module doc's "Permissions" section.
+7. To make the new key grantable to a **functional-department** role, add it to that department's pool (Departments page, or the pool seed in `helper-roles.ts`). Admin (all-access) roles get it automatically.
 
 ## Customer portal — no permission keys
 
 Customers don't carry permission keys. Portal sessions are discriminated by `session.kind === "customer"` and routed through `requirePortalAuth()`. See [customer-portal.md](./customer-portal.md).
 
-_Last updated: 2026-06-23 — Bootstrap now seeds **only `R1`** (the lone `isSystem` role). The former built-in roles `R2`–`R7` moved to a trade-specific starter seed `prisma/seeds/helper-roles.ts` (`pnpm seed:helper-roles`), created as non-system / admin-editable; admins build the rest from the Role Matrix. Previously (2026-05-25): added `customers:hard-delete` for the Trash view on `/office/settings/customer-tools`. Previously (2026-05-20): `admin:bypass` reclassified as `systemOnly`; env super admin added as the only entity that can hold the bypass at runtime._
+_Last updated: 2026-06-24 — **Department-wise roles & permission pools.** Every `Role` now has a required home department (`Role.departmentId`); a new `DepartmentPermission` join holds each department's curated pool (the Role Matrix authoring lens); `Department.isAllAccess` (seeded `DEP-ADMIN`) means "pool = every permission". The role editor filters to the pool; positions derive their department from their role; pool removal cascades to roles. Authoring-only — runtime resolution unchanged. Previously (2026-06-23): bootstrap seeds only `R1`; `R2`–`R7` moved to `helper-roles.ts`. Previously (2026-05-25): added `customers:hard-delete`. Previously (2026-05-20): `admin:bypass` reclassified `systemOnly`; env super admin added._

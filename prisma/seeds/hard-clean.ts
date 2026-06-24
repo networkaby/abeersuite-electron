@@ -156,7 +156,11 @@ async function main(): Promise<void> {
         `DELETE FROM "RolePermission" WHERE "roleId" IN (SELECT id FROM "Role" WHERE "isSystem" = false)`,
     );
     const delRoles = await pool.query(`DELETE FROM "Role" WHERE "isSystem" = false`);
-    console.log(`      ✓ Deleted ${delRoles.rowCount} non-system role(s); R1 preserved\n`);
+    // Department permission pools are seeded by helper-roles.ts (bootstrap seeds
+    // none — DEP-ADMIN is all-access with no rows), so wipe them back to the
+    // bootstrap state. Department rows themselves are bootstrap-seeded → preserved.
+    const delPool = await pool.query(`DELETE FROM "DepartmentPermission"`);
+    console.log(`      ✓ Deleted ${delRoles.rowCount} non-system role(s); R1 preserved · ${delPool.rowCount} department-pool entries cleared\n`);
 
     // ── Phase 5 — TRUNCATE inventory masters ───────────────────────────
     console.log("[5/7] Wiping inventory masters (trade-specific — InvUnit + InvWarrantyTerm preserved)");

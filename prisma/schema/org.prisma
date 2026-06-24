@@ -53,9 +53,17 @@ model Department {
   name        String
   description String?
   branchId    String?
+  // All-access flag — when true, this department's permission pool is "every
+  // permission" (computed live, no DepartmentPermission rows). Home for
+  // cross-cutting roles (R1 Admin). Exactly one department should set this.
+  isAllAccess Boolean    @default(false)
   createdAt   DateTime   @default(now())
   branch      Branch?    @relation(fields: [branchId], references: [id])
   positions   Position[]
+  // Roles homed in this department (their authoring lens = this dept's pool).
+  roles       Role[]
+  // The curated permission pool surfaced when authoring those roles.
+  permissionPool DepartmentPermission[]
 }
 
 // ── Position (org-chart hierarchy) ────────────────────────────────────────────

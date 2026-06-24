@@ -6,6 +6,7 @@ import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { pickDefined } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { getDepartmentPool } from "@/shared/lib/auth/departmentPool";
 
 export async function GET(
     _: Request,
@@ -19,6 +20,12 @@ export async function GET(
             where: { id },
             include: {
                 permissions: { include: { permission: true } },
+                department: {
+                    select: {
+                        id: true, name: true, isAllAccess: true,
+                        permissionPool: { select: { permissionId: true } },
+                    },
+                },
                 _count: { select: { users: true } },
             },
         });
@@ -30,9 +37,13 @@ export async function GET(
 }
 
 const rolePatchSchema = z.object({
-    label: z.string().trim().min(1).optional(),
-    color: z.string().trim().min(1).optional(),
-    rank:  z.coerce.number().int().min(0).max(100).optional(),
+    label:        z.string().trim().min(1).optional(),
+    color:        z.string().trim().min(1).optional(),
+    rank:         z.coerce.number().int().min(0).max(100).optional(),
+    // Moving a role to another department re-homes its authoring lens. Grants
+    // that fall outside the new department's pool are stripped to keep the
+    // invariant (a role never grants outside its department pool).
+    departmentId: z.string().trim().min(1).optional(),
 });
 
 export async function PATCH(
@@ -46,13 +57,32 @@ export async function PATCH(
         const { data, error } = await validateRequest(req, rolePatchSchema);
         if (error) return error;
         const body = data;
+
+        // When re-homing the role to a new department, strip grants outside the
+        // new pool (all-access pools contain everything → nothing stripped).
+        if (body.departmentId) {
+            const pool = await getDepartmentPool(body.departmentId);
+            if (!pool) return NextResponse.json({ error: "Department not found" }, { status: 400 });
+            if (!pool.isAllAccess) {
+                const allowed = pool.permissionIds ?? [];
+                // Empty pool → strip everything (Prisma `notIn: []` is unreliable, so branch).
+                await prisma.rolePermission.deleteMany(
+                    allowed.length
+                        ? { where: { roleId: id, permissionId: { notIn: allowed } } }
+                        : { where: { roleId: id } },
+                );
+            }
+        }
+
         const role = await prisma.role.update({
             where: { id },
             data: pickDefined({
-                label: body.label,
-                color: body.color,
-                rank: body.rank,
+                label:        body.label,
+                color:        body.color,
+                rank:         body.rank,
+                departmentId: body.departmentId,
             }),
+            include: { department: { select: { id: true, name: true, isAllAccess: true } } },
         });
         return NextResponse.json(role);
     } catch (e) {

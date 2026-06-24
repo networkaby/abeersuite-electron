@@ -25,7 +25,7 @@ import {
 interface Branch     { id: string; name: string; }
 interface Department { id: string; name: string; branchId: string | null; }
 interface UserStub   { id: number; name: string; avatarUrl: string | null; role: string; title: string | null; userRole: { label: string; color: string } | null; }
-interface RoleOption { id: string; label: string; color: string; }
+interface RoleOption { id: string; label: string; color: string; department: { id: string; name: string } | null; }
 
 interface Position {
     id: string;
@@ -98,6 +98,12 @@ function PositionFormFields({
         ? departments.filter(d => !d.branchId || d.branchId === form.branchId)
         : departments;
 
+    // Department follows the role: a role carries its home department, so once a
+    // role template is chosen the department is derived (read-only). Only a
+    // role-less seat may pick a department manually, for org-chart placement.
+    const selectedRole = roleOptions.find(r => r.id === form.roleTemplateId);
+    const derivedDept = selectedRole?.department ?? null;
+
     return (
         <div className="grid grid-cols-2 gap-3">
             {addingNew && (
@@ -133,20 +139,35 @@ function PositionFormFields({
                 </Select>
             </div>
             <div>
-                <label className="text-xs font-medium text-muted-foreground">Department scope <span className="font-normal">(optional)</span></label>
-                <Select value={form.departmentId || "none"} onValueChange={(value) => onChange({ ...form, departmentId: value === "none" ? "" : value })}>
-                    <SelectTrigger className="mt-1">
-                        <SelectValue placeholder="None" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="none">None</SelectItem>
-                        {filteredDepts.map((d) => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
-                    </SelectContent>
-                </Select>
+                <label className="text-xs font-medium text-muted-foreground">Department</label>
+                {form.roleTemplateId ? (
+                    <div className="mt-1 flex h-9 items-center rounded-md border border-dashed border-border bg-muted/40 px-3 text-sm text-muted-foreground">
+                        {derivedDept ? derivedDept.name : "—"}
+                        <span className="ml-2 text-[11px]">(from role)</span>
+                    </div>
+                ) : (
+                    <Select value={form.departmentId || "none"} onValueChange={(value) => onChange({ ...form, departmentId: value === "none" ? "" : value })}>
+                        <SelectTrigger className="mt-1">
+                            <SelectValue placeholder="None" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="none">None</SelectItem>
+                            {filteredDepts.map((d) => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                )}
             </div>
             <div className="col-span-2">
-                <label className="text-xs font-medium text-muted-foreground">Role template <span className="font-normal">(optional)</span></label>
-                <Select value={form.roleTemplateId || "none"} onValueChange={(value) => onChange({ ...form, roleTemplateId: value === "none" ? "" : value })}>
+                <label className="text-xs font-medium text-muted-foreground">Role template <span className="font-normal">(sets department)</span></label>
+                <Select
+                    value={form.roleTemplateId || "none"}
+                    onValueChange={(value) => {
+                        const roleId = value === "none" ? "" : value;
+                        // Department follows the role — sync it on selection (cleared for a role-less seat).
+                        const role = roleOptions.find(r => r.id === roleId);
+                        onChange({ ...form, roleTemplateId: roleId, departmentId: roleId ? (role?.department?.id ?? "") : form.departmentId });
+                    }}
+                >
                     <SelectTrigger className="mt-1">
                         <SelectValue placeholder="None" />
                     </SelectTrigger>

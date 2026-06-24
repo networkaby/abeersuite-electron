@@ -56,12 +56,25 @@ interface Permission {
     description?: string | null;
 }
 
+interface RoleDepartment {
+    id: string;
+    name: string;
+    isAllAccess: boolean;
+}
+
+interface Department {
+    id: string;
+    name: string;
+    isAllAccess: boolean;
+}
+
 interface Role {
     id: string;
     label: string;
     color: string;
     rank: number;
     isSystem: boolean;
+    department?: RoleDepartment | null;
     _count: { users: number };
     permissions: { permissionId: string; permission: Permission }[];
 }
@@ -70,12 +83,14 @@ type RoleForm = {
     label: string;
     color: string;
     rank: number;
+    departmentId: string;
 };
 
 const EMPTY_ROLE: RoleForm = {
     label: "",
     color: "bg-blue-100 text-blue-600",
     rank: 20,
+    departmentId: "",
 };
 
 const COLOR_OPTIONS = [
@@ -466,6 +481,7 @@ function roleToForm(role: Role): RoleForm {
         label: role.label,
         color: role.color,
         rank: role.rank,
+        departmentId: role.department?.id ?? "",
     };
 }
 
@@ -476,6 +492,10 @@ function getErrorMessage(error: unknown, fallback: string) {
 export default function RolePage() {
     const [roles, setRoles] = useState<Role[]>([]);
     const [allPerms, setAllPerms] = useState<Permission[]>([]);
+    const [departments, setDepartments] = useState<Department[]>([]);
+    // Active role's department pool — `null` means all-access (no filtering: every
+    // permission is offered). A Set means only those permission ids are in the lens.
+    const [poolIds, setPoolIds] = useState<Set<string> | null>(null);
     const [activeRoleId, setActiveRoleId] = useState("");
     const [selected, setSelected] = useState<Set<string>>(new Set());
     const [original, setOriginal] = useState<Set<string>>(new Set());
@@ -492,9 +512,10 @@ export default function RolePage() {
 
     const loadData = useCallback(async (preferredRoleId?: string) => {
         try {
-            const [rolesRes, permsRes] = await Promise.all([
+            const [rolesRes, permsRes, deptsRes] = await Promise.all([
                 axios.get<Role[]>("/api/roles"),
                 axios.get<Permission[]>("/api/permissions"),
+                axios.get<Department[]>("/api/departments"),
             ]);
             const fetchedRoles = rolesRes.data;
             const nextActive =
@@ -504,6 +525,7 @@ export default function RolePage() {
 
             setRoles(fetchedRoles);
             setAllPerms(permsRes.data);
+            setDepartments(deptsRes.data);
             setActiveRoleId(nextActive);
         } catch {
             toast.error("Failed to load roles");
@@ -525,6 +547,22 @@ export default function RolePage() {
         setSearch("");
     }, [activeRole]);
 
+    // Load the active role's department pool — the authoring lens. All-access
+    // departments (or a role with no department) leave poolIds null = no filter.
+    const activeDeptId = activeRole?.department?.id ?? null;
+    useEffect(() => {
+        if (!activeDeptId) { setPoolIds(null); return; }
+        let cancelled = false;
+        axios
+            .get<{ isAllAccess: boolean; permissionIds: string[] | null }>(`/api/departments/${activeDeptId}/permissions`)
+            .then((res) => {
+                if (cancelled) return;
+                setPoolIds(res.data.isAllAccess || !res.data.permissionIds ? null : new Set(res.data.permissionIds));
+            })
+            .catch(() => { if (!cancelled) setPoolIds(null); });
+        return () => { cancelled = true; };
+    }, [activeDeptId]);
+
     const hasPermissionChanges = useMemo(() => {
         if (selected.size !== original.size) return true;
         for (const permissionId of selected) {
@@ -536,17 +574,27 @@ export default function RolePage() {
     const hasRoleChanges = activeRole
         ? roleForm.label.trim() !== activeRole.label ||
             roleForm.color !== activeRole.color ||
-            roleForm.rank !== activeRole.rank
+            roleForm.rank !== activeRole.rank ||
+            roleForm.departmentId !== (activeRole.department?.id ?? "")
         : false;
 
     const permissionById = useMemo(() => new Map(allPerms.map((permission) => [permission.id, permission])), [allPerms]);
 
-    const filtered = search.trim()
+    // Department lens — a permission is offered if it's in the active role's
+    // department pool. A currently-granted permission is always shown (so nothing
+    // granted is ever hidden), even in the defensive case it sits outside the pool.
+    const inLens = useCallback(
+        (id: string) => poolIds === null || poolIds.has(id) || selected.has(id),
+        [poolIds, selected],
+    );
+
+    const filtered = (search.trim()
         ? allPerms.filter((permission) =>
             [permission.label, permission.id, permission.module, permission.description ?? ""]
                 .some((value) => value.toLowerCase().includes(search.toLowerCase()))
         )
-        : allPerms;
+        : allPerms
+    ).filter((permission) => inLens(permission.id));
 
     const matrixPermissions = filtered.filter((permission) => MATRIX_PERMISSION_IDS.has(permission.id));
     const additionalPermissions = filtered.filter(
@@ -555,6 +603,11 @@ export default function RolePage() {
 
     const selectedCount = selected.size;
     const totalCount = allPerms.length;
+    // Size of the active role's lens (the pool). All-access → every permission.
+    const lensSize = poolIds === null ? totalCount : allPerms.filter((p) => poolIds.has(p.id)).length;
+    const lensIsAllAccess = poolIds === null;
+    // Permission ids the active role may hold (its pool) — drives "Select all".
+    const lensPermIds = allPerms.filter((p) => poolIds === null ? p.id !== "admin:bypass" : poolIds.has(p.id)).map((p) => p.id);
     const hasBypass = selected.has("admin:bypass");
 
     const handleTabChange = (roleId: string) => {
@@ -565,6 +618,10 @@ export default function RolePage() {
     const handleCreate = async () => {
         if (!newRole.label.trim()) {
             toast.error("Role name is required");
+            return;
+        }
+        if (!newRole.departmentId) {
+            toast.error("Select a department for the role");
             return;
         }
 
@@ -601,6 +658,7 @@ export default function RolePage() {
                 label: roleForm.label,
                 color: roleForm.color,
                 rank: roleForm.rank,
+                departmentId: roleForm.departmentId,
             });
             toast.success("Role updated");
             await loadData(activeRole.id);
@@ -676,7 +734,15 @@ export default function RolePage() {
                         Create roles, edit role details, and manage permissions from one page.
                     </p>
                 </div>
-                <Button size="sm" onClick={() => setNewRoleOpen(true)}>
+                <Button
+                    size="sm"
+                    onClick={() => {
+                        // Default to the first functional (non-all-access) department so new
+                        // roles get a narrow lens by default, not the full permission list.
+                        setNewRole({ ...EMPTY_ROLE, departmentId: departments.find((d) => !d.isAllAccess)?.id ?? departments[0]?.id ?? "" });
+                        setNewRoleOpen(true);
+                    }}
+                >
                     <Plus /> New Role
                 </Button>
             </div>
@@ -693,6 +759,7 @@ export default function RolePage() {
                     <RoleDetailsCard
                         role={activeRole}
                         form={roleForm}
+                        departments={departments}
                         selectedCount={selectedCount}
                         totalCount={totalCount}
                         saving={savingRole}
@@ -746,6 +813,23 @@ export default function RolePage() {
                                     </div>
                                 </div>
 
+                                <div className="flex flex-wrap items-center gap-2 rounded-md border border-blue-200 bg-blue-50/60 px-3 py-2 text-[11px] dark:border-blue-900 dark:bg-blue-950/30">
+                                    <Boxes size={13} className="shrink-0 text-blue-600 dark:text-blue-400" />
+                                    {lensIsAllAccess ? (
+                                        <span className="text-foreground">
+                                            <span className="font-semibold">{activeRole.department?.name ?? "Administration"}</span>
+                                            {` is all-access — all ${totalCount} permissions are available.`}
+                                        </span>
+                                    ) : (
+                                        <span className="text-foreground">
+                                            {"Lens: "}
+                                            <span className="font-semibold">{activeRole.department?.name ?? "—"}</span>
+                                            {` department · showing ${lensSize} of ${totalCount} permissions in its pool. `}
+                                            <span className="text-muted-foreground">Edit the pool on the Departments page.</span>
+                                        </span>
+                                    )}
+                                </div>
+
                                 <div className="flex flex-wrap gap-1.5 rounded-md border border-border bg-muted/30 px-3 py-2">
                                     <div className="relative min-w-64 flex-1">
                                         <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -759,7 +843,7 @@ export default function RolePage() {
                                     <Button
                                         variant="outline"
                                         size="sm"
-                                        onClick={() => setSelected(new Set(allPerms.map((permission) => permission.id)))}
+                                        onClick={() => setSelected(new Set(lensPermIds))}
                                     >
                                         Select all
                                     </Button>
@@ -816,6 +900,7 @@ export default function RolePage() {
                 open={newRoleOpen}
                 onOpenChange={setNewRoleOpen}
                 roles={roles}
+                departments={departments}
                 form={newRole}
                 copyFromRoleId={copyFromRoleId}
                 saving={savingRole}
@@ -836,11 +921,40 @@ export default function RolePage() {
 function RoleFields({
     form,
     onChange,
+    departments,
 }: {
     form: RoleForm;
     onChange: React.Dispatch<React.SetStateAction<RoleForm>>;
+    departments: Department[];
 }) {
+    const selectedDept = departments.find((d) => d.id === form.departmentId);
     return (
+        <div className="space-y-2">
+        <div>
+            <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
+                Department <span className="font-normal">(authoring lens — which permissions this role can hold)</span>
+            </label>
+            <Select
+                value={form.departmentId || undefined}
+                onValueChange={(value) => onChange((prev) => ({ ...prev, departmentId: value }))}
+            >
+                <SelectTrigger className="h-7 w-full text-xs">
+                    <SelectValue placeholder="Select a department…" />
+                </SelectTrigger>
+                <SelectContent>
+                    {departments.map((dept) => (
+                        <SelectItem key={dept.id} value={dept.id}>
+                            {dept.name}{dept.isAllAccess ? " · all-access" : ""}
+                        </SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
+            {selectedDept && !selectedDept.isAllAccess && (
+                <p className="mt-1 text-[10px] text-muted-foreground">
+                    Only permissions in {selectedDept.name}&apos;s pool are offered. Moving a role to another department strips grants outside the new pool.
+                </p>
+            )}
+        </div>
         <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_78px_minmax(160px,1fr)]">
             <div>
                 <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
@@ -891,12 +1005,14 @@ function RoleFields({
                 </div>
             </div>
         </div>
+        </div>
     );
 }
 
 function RoleDetailsCard({
     role,
     form,
+    departments,
     selectedCount,
     totalCount,
     saving,
@@ -908,6 +1024,7 @@ function RoleDetailsCard({
 }: {
     role: Role;
     form: RoleForm;
+    departments: Department[];
     selectedCount: number;
     totalCount: number;
     saving: boolean;
@@ -934,10 +1051,16 @@ function RoleDetailsCard({
                         <p className="mt-0.5 text-[11px] text-muted-foreground">
                             {role._count.users} {role._count.users === 1 ? "user" : "users"} · {selectedCount}/{totalCount} permissions
                         </p>
+                        {role.department && (
+                            <p className="mt-0.5 text-[11px] text-muted-foreground">
+                                <span className="font-medium text-foreground">{role.department.name}</span> department
+                                {role.department.isAllAccess ? " · all-access" : ""}
+                            </p>
+                        )}
                     </div>
                 </div>
 
-                <RoleFields form={form} onChange={onFormChange} />
+                <RoleFields form={form} onChange={onFormChange} departments={departments} />
 
                 <div className="flex flex-wrap gap-1.5 lg:justify-end">
                     <Button
@@ -977,6 +1100,7 @@ function NewRoleDialog({
     open,
     onOpenChange,
     roles,
+    departments,
     form,
     copyFromRoleId,
     saving,
@@ -988,6 +1112,7 @@ function NewRoleDialog({
     open: boolean;
     onOpenChange: (open: boolean) => void;
     roles: Role[];
+    departments: Department[];
     form: RoleForm;
     copyFromRoleId: string;
     saving: boolean;
@@ -1007,7 +1132,7 @@ function NewRoleDialog({
                 </DialogHeader>
 
                 <div className="space-y-5">
-                    <RoleFields form={form} onChange={onFormChange} />
+                    <RoleFields form={form} onChange={onFormChange} departments={departments} />
 
                     <div>
                         <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
@@ -1088,38 +1213,43 @@ function RoleList({
                                         : "border-border hover:border-primary/50 hover:bg-muted/40",
                                 ].join(" ")}
                             >
-                                <div className="flex items-start justify-between gap-2">
-                                    <div className="min-w-0 space-y-1">
-                                        <div className="flex flex-wrap items-center gap-1.5">
+                                <div className="flex w-full min-w-0 flex-col gap-1 whitespace-normal">
+                                    <div className="flex items-start justify-between gap-2">
+                                        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                                             <Badge className={`${role.color} font-mono text-[10px]`}>
                                                 {role.id}
                                             </Badge>
                                             {role.isSystem && (
-                                                <span className="inline-flex items-center gap-1 border border-border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                                <span className="inline-flex items-center gap-1 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
                                                     <Lock size={9} /> System
                                                 </span>
                                             )}
                                         </div>
-                                        <p className="truncate text-xs font-semibold text-foreground">
-                                            {role.label}
-                                        </p>
+                                        {isActive && (
+                                            <span className="shrink-0 text-[10px] font-medium text-primary">Active</span>
+                                        )}
                                     </div>
-                                    <span className="text-[10px] text-muted-foreground">
-                                        {isActive ? "Active" : ""}
-                                    </span>
-                                </div>
-                                <div className="mt-1.5 flex flex-wrap items-center gap-1 text-[10px] text-muted-foreground">
-                                    <span className="inline-flex items-center gap-1 border border-border bg-muted px-1.5 py-0.5">
-                                        <Users size={10} />
-                                        {role._count.users}
-                                    </span>
-                                    <span className="inline-flex items-center gap-1 border border-border bg-muted px-1.5 py-0.5">
-                                        <Shield size={10} />
-                                        {permissionCount}/{totalCount}
-                                    </span>
-                                    <span className="inline-flex items-center border border-border bg-muted px-1.5 py-0.5">
-                                        Rank {role.rank}
-                                    </span>
+                                    <p className="truncate text-xs font-semibold text-foreground">
+                                        {role.label}
+                                    </p>
+                                    {role.department && (
+                                        <p className="truncate text-[10px] text-muted-foreground" title="Authoring department">
+                                            {role.department.name}{role.department.isAllAccess ? " · all-access" : ""}
+                                        </p>
+                                    )}
+                                    <div className="flex flex-wrap items-center gap-1 text-[10px] text-muted-foreground">
+                                        <span className="inline-flex items-center gap-1 rounded border border-border bg-muted px-1.5 py-0.5">
+                                            <Users size={10} />
+                                            {role._count.users}
+                                        </span>
+                                        <span className="inline-flex items-center gap-1 rounded border border-border bg-muted px-1.5 py-0.5">
+                                            <Shield size={10} />
+                                            {permissionCount}/{totalCount}
+                                        </span>
+                                        <span className="inline-flex items-center rounded border border-border bg-muted px-1.5 py-0.5">
+                                            Rank {role.rank}
+                                        </span>
+                                    </div>
                                 </div>
                             </Button>
                         );
@@ -1153,8 +1283,16 @@ function PermissionMatrix({
         if (!cell) return [] as string[];
         return Array.isArray(cell) ? cell : [cell];
     };
+    // A row is relevant only if at least one of its cell permissions is in the
+    // active lens (the passed `permissions`). Drops whole business areas that
+    // fall outside a narrow department pool so the matrix stays tight.
+    const rowHasVisiblePermission = (row: (typeof MATRIX_ROWS)[number]) =>
+        Object.values(row.cells).some((cell) =>
+            cellPermissionIds(cell).some((permissionId) => visiblePermissionIds.has(permissionId))
+        );
     const normalizedSearch = search.trim().toLowerCase();
     const rows = MATRIX_ROWS.filter((row) => {
+        if (!rowHasVisiblePermission(row)) return false;
         if (!normalizedSearch) return true;
         if (row.label.toLowerCase().includes(normalizedSearch) || row.module.toLowerCase().includes(normalizedSearch)) {
             return true;
