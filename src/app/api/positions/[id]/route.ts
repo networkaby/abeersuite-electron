@@ -10,7 +10,6 @@ import { resolvePositionDepartmentId } from "@/shared/lib/org/positionDepartment
 const updateSchema = z.object({
     title:            z.string().trim().min(1, "Title is required").optional(),
     branchId:         z.string().trim().optional().nullable(),
-    departmentId:     z.string().trim().optional().nullable(),
     parentPositionId: z.string().trim().optional().nullable(),
     roleTemplateId:   z.string().trim().optional().nullable(),
 });
@@ -50,19 +49,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         const { data, error } = await validateRequest(req, updateSchema);
         if (error) return error;
 
-        // Department follows the role. Re-derive it whenever the role or the
-        // (role-less) manual department is touched, using existing values for
-        // whichever side the partial update omits.
+        // Department follows the role — re-derive whenever the role template changes.
         const updateData: typeof data & { departmentId?: string | null } = { ...data };
-        if (data.roleTemplateId !== undefined || data.departmentId !== undefined) {
-            const existing = await prisma.position.findUnique({
-                where:  { id },
-                select: { roleTemplateId: true, departmentId: true },
-            });
-            if (!existing) return NextResponse.json({ error: "Position not found" }, { status: 404 });
-            const effectiveRole = data.roleTemplateId !== undefined ? data.roleTemplateId : existing.roleTemplateId;
-            const fallbackDept  = data.departmentId  !== undefined ? data.departmentId  : existing.departmentId;
-            updateData.departmentId = await resolvePositionDepartmentId(effectiveRole, fallbackDept);
+        if (data.roleTemplateId !== undefined) {
+            updateData.departmentId = await resolvePositionDepartmentId(data.roleTemplateId);
         }
 
         const position = await prisma.position.update({ where: { id }, data: updateData, include: POSITION_INCLUDE });

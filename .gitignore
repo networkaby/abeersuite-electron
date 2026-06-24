@@ -61,3 +61,5 @@ next-env.d.ts
 tools/thermal-relay/config.json
 tools/thermal-relay/node_modules/
 block.env.local
+.block.env.local
+.block.env

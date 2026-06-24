@@ -42,8 +42,8 @@ interface Position {
     _count:     { children: number };
 }
 
-type FormState = { id: string; title: string; branchId: string; departmentId: string; parentPositionId: string; roleTemplateId: string };
-const EMPTY: FormState = { id: "", title: "", branchId: "", departmentId: "", parentPositionId: "", roleTemplateId: "" };
+type FormState = { id: string; title: string; branchId: string; parentPositionId: string; roleTemplateId: string };
+const EMPTY: FormState = { id: "", title: "", branchId: "", parentPositionId: "", roleTemplateId: "" };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -84,25 +84,16 @@ function UserChip({ user, onRemove }: { user: UserStub; onRemove?: () => void })
 // ── Form fields (extracted to avoid remount on parent re-render) ──────────────
 
 function PositionFormFields({
-    addingNew, form, branches, departments, allPositions, roleOptions, onChange,
+    addingNew, form, branches, allPositions, roleOptions, onChange,
 }: {
     addingNew: boolean;
     form: FormState;
     branches: Branch[];
-    departments: Department[];
     allPositions: Position[];
     roleOptions: RoleOption[];
     onChange: (f: FormState) => void;
 }) {
-    const filteredDepts = form.branchId
-        ? departments.filter(d => !d.branchId || d.branchId === form.branchId)
-        : departments;
-
-    // Department follows the role: a role carries its home department, so once a
-    // role template is chosen the department is derived (read-only). Only a
-    // role-less seat may pick a department manually, for org-chart placement.
     const selectedRole = roleOptions.find(r => r.id === form.roleTemplateId);
-    const derivedDept = selectedRole?.department ?? null;
 
     return (
         <div className="grid grid-cols-2 gap-3">
@@ -128,7 +119,7 @@ function PositionFormFields({
             </div>
             <div>
                 <label className="text-xs font-medium text-muted-foreground">Branch scope <span className="font-normal">(blank = org-wide)</span></label>
-                <Select value={form.branchId || "org-wide"} onValueChange={(value) => onChange({ ...form, branchId: value === "org-wide" ? "" : value, departmentId: "" })}>
+                <Select value={form.branchId || "org-wide"} onValueChange={(value) => onChange({ ...form, branchId: value === "org-wide" ? "" : value })}>
                     <SelectTrigger className="mt-1">
                         <SelectValue placeholder="Org-wide (Executive Council)" />
                     </SelectTrigger>
@@ -139,34 +130,10 @@ function PositionFormFields({
                 </Select>
             </div>
             <div>
-                <label className="text-xs font-medium text-muted-foreground">Department</label>
-                {form.roleTemplateId ? (
-                    <div className="mt-1 flex h-9 items-center rounded-md border border-dashed border-border bg-muted/40 px-3 text-sm text-muted-foreground">
-                        {derivedDept ? derivedDept.name : "—"}
-                        <span className="ml-2 text-[11px]">(from role)</span>
-                    </div>
-                ) : (
-                    <Select value={form.departmentId || "none"} onValueChange={(value) => onChange({ ...form, departmentId: value === "none" ? "" : value })}>
-                        <SelectTrigger className="mt-1">
-                            <SelectValue placeholder="None" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="none">None</SelectItem>
-                            {filteredDepts.map((d) => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
-                        </SelectContent>
-                    </Select>
-                )}
-            </div>
-            <div className="col-span-2">
-                <label className="text-xs font-medium text-muted-foreground">Role template <span className="font-normal">(sets department)</span></label>
+                <label className="text-xs font-medium text-muted-foreground">Role template</label>
                 <Select
                     value={form.roleTemplateId || "none"}
-                    onValueChange={(value) => {
-                        const roleId = value === "none" ? "" : value;
-                        // Department follows the role — sync it on selection (cleared for a role-less seat).
-                        const role = roleOptions.find(r => r.id === roleId);
-                        onChange({ ...form, roleTemplateId: roleId, departmentId: roleId ? (role?.department?.id ?? "") : form.departmentId });
-                    }}
+                    onValueChange={(value) => onChange({ ...form, roleTemplateId: value === "none" ? "" : value })}
                 >
                     <SelectTrigger className="mt-1">
                         <SelectValue placeholder="None" />
@@ -174,10 +141,17 @@ function PositionFormFields({
                     <SelectContent>
                         <SelectItem value="none">None</SelectItem>
                         {roleOptions.map((role) => (
-                            <SelectItem key={role.id} value={role.id}>{role.label} ({role.id})</SelectItem>
+                            <SelectItem key={role.id} value={role.id}>
+                                {role.label} ({role.id}){role.department ? ` · ${role.department.name}` : ""}
+                            </SelectItem>
                         ))}
                     </SelectContent>
                 </Select>
+                {selectedRole?.department && (
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                        Home department: <span className="font-medium text-foreground">{selectedRole.department.name}</span> (from role)
+                    </p>
+                )}
             </div>
             <div className="col-span-2">
                 <label className="text-xs font-medium text-muted-foreground">Reports to (parent position) <span className="font-normal">(optional)</span></label>
@@ -265,14 +239,13 @@ function AssignPanel({
 // ── Position row ──────────────────────────────────────────────────────────────
 
 function PositionRow({
-    position, allPositions, allUsers, branches, departments, roleOptions,
+    position, allPositions, allUsers, branches, roleOptions,
     onSave, onDelete, onAssign, onUnassign,
 }: {
     position: Position;
     allPositions: Position[];
     allUsers: UserStub[];
     branches: Branch[];
-    departments: Department[];
     roleOptions: RoleOption[];
     onSave: (id: string, data: object) => Promise<void>;
     onDelete: (id: string) => Promise<void>;
@@ -283,7 +256,7 @@ function PositionRow({
     const [expanded, setExpanded] = useState(false);
     const [form, setForm]         = useState<FormState>({
         id: position.id, title: position.title,
-        branchId: position.branchId ?? "", departmentId: position.departmentId ?? "", parentPositionId: position.parentPositionId ?? "", roleTemplateId: position.roleTemplateId ?? "",
+        branchId: position.branchId ?? "", parentPositionId: position.parentPositionId ?? "", roleTemplateId: position.roleTemplateId ?? "",
     });
     const [saving, setSaving] = useState(false);
 
@@ -295,7 +268,7 @@ function PositionRow({
     const openEdit = () => {
         setForm({
             id: position.id, title: position.title,
-            branchId: position.branchId ?? "", departmentId: position.departmentId ?? "", parentPositionId: position.parentPositionId ?? "", roleTemplateId: position.roleTemplateId ?? "",
+            branchId: position.branchId ?? "", parentPositionId: position.parentPositionId ?? "", roleTemplateId: position.roleTemplateId ?? "",
         });
         setEditing(true);
     };
@@ -307,7 +280,6 @@ function PositionRow({
             await onSave(position.id, {
                 title:            form.title,
                 branchId:         form.branchId         || null,
-                departmentId:     form.departmentId     || null,
                 parentPositionId: form.parentPositionId || null,
                 roleTemplateId:   form.roleTemplateId   || null,
             });
@@ -323,7 +295,7 @@ function PositionRow({
                 <div className="p-4 space-y-3">
                     <PositionFormFields
                         addingNew={false} form={form} branches={branches}
-                        departments={departments} allPositions={allPositions} roleOptions={roleOptions} onChange={setForm}
+                        allPositions={allPositions} roleOptions={roleOptions} onChange={setForm}
                     />
                     <div className="flex gap-2">
                         <Button size="sm" onClick={handleSave} disabled={saving}><Check size={14} /> Save</Button>
@@ -443,7 +415,6 @@ export default function PositionsPage() {
                 id:               form.id.toUpperCase(),
                 title:            form.title,
                 branchId:         form.branchId         || null,
-                departmentId:     form.departmentId     || null,
                 parentPositionId: form.parentPositionId || null,
                 roleTemplateId:   form.roleTemplateId   || null,
             });
@@ -565,7 +536,7 @@ export default function PositionsPage() {
                     <p className="text-sm font-semibold">New Position</p>
                     <PositionFormFields
                         addingNew={true} form={form} branches={branches}
-                        departments={departments} allPositions={positions} roleOptions={roleOptions} onChange={setForm}
+                        allPositions={positions} roleOptions={roleOptions} onChange={setForm}
                     />
                     <div className="flex gap-2 pt-1">
                         <Button onClick={handleCreate} disabled={saving} size="sm"><Check size={14} /> Create</Button>
@@ -593,7 +564,7 @@ export default function PositionsPage() {
                             <div className="space-y-1.5">
                                 {orgPositions.map(p => (
                                     <PositionRow key={p.id} position={p} allPositions={positions} allUsers={allUsers}
-                                        branches={branches} departments={departments} roleOptions={roleOptions}
+                                        branches={branches} roleOptions={roleOptions}
                                         onSave={handleSave} onDelete={handleDelete}
                                         onAssign={handleAssign} onUnassign={handleUnassign} />
                                 ))}
@@ -622,7 +593,7 @@ export default function PositionsPage() {
                                     <div className="space-y-1.5 mb-3">
                                         {noDeptPositions.map(p => (
                                             <PositionRow key={p.id} position={p} allPositions={positions} allUsers={allUsers}
-                                                branches={branches} departments={departments} roleOptions={roleOptions}
+                                                branches={branches} roleOptions={roleOptions}
                                                 onSave={handleSave} onDelete={handleDelete}
                                                 onAssign={handleAssign} onUnassign={handleUnassign} />
                                         ))}
@@ -639,7 +610,7 @@ export default function PositionsPage() {
                                         <div className="space-y-1.5">
                                             {dPositions.map(p => (
                                                 <PositionRow key={p.id} position={p} allPositions={positions} allUsers={allUsers}
-                                                    branches={branches} departments={departments} roleOptions={roleOptions}
+                                                    branches={branches} roleOptions={roleOptions}
                                                     onSave={handleSave} onDelete={handleDelete}
                                                     onAssign={handleAssign} onUnassign={handleUnassign} />
                                             ))}
