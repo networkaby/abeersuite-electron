@@ -149,13 +149,18 @@ model TicketWorker {
 // /sub-statuses carrying it. Generalizes the former WorkerGroup.
 // A WorkGroup categorises Works (e.g. "Calling" groups several calling works). The
 // Work Inbox organises GROUP-wise; a Work belongs to one group (or none).
+// A *gated* group (permissionId set) mints a permission ("workgroup:<id>") that
+// controls who can SEE the group's tickets in the Work Inbox — distinct from a
+// Work's own permissionId, which gates who can ACT on a ticket carrying that Work.
 model WorkGroup {
-  id        String   @id
-  label     String
-  color     String   @default("bg-gray-100 text-gray-600")
-  order     Int      @default(0)
-  createdAt DateTime @default(now())
-  works     Work[]
+  id           String      @id
+  label        String
+  color        String      @default("bg-gray-100 text-gray-600")
+  order        Int         @default(0)
+  permissionId String?
+  permission   Permission? @relation(fields: [permissionId], references: [id])
+  createdAt    DateTime    @default(now())
+  works        Work[]
 }
 
 model Work {

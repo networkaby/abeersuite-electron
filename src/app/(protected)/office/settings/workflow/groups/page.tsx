@@ -3,10 +3,11 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Lock, Pencil, Plus, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,9 +16,9 @@ import { badgeColor } from "@/shared/lib/format/entityColor";
 import { ColorPicker, randomColor } from "@/shared/components/ColorPicker";
 
 interface Work { id: string; label: string; color: string; }
-interface WorkGroup { id: string; label: string; color: string; order: number; works: Work[]; }
-type FormValues = { label: string; color: string };
-const BLANK: FormValues = { label: "", color: "bg-gray-100 text-gray-600" };
+interface WorkGroup { id: string; label: string; color: string; order: number; permissionId: string | null; works: Work[]; }
+type FormValues = { label: string; color: string; gated: boolean };
+const BLANK: FormValues = { label: "", color: "bg-gray-100 text-gray-600", gated: false };
 
 // Module-scope so it keeps a stable identity across the page's re-renders (a dialog
 // defined inside the page component remounts on every keystroke → input loses focus).
@@ -41,6 +42,10 @@ function GroupDialog({ open, onOpenChange, form, setForm, id, onSave, saving }: 
                         <Label>Color</Label>
                         <ColorPicker value={form.color} onChange={(c) => setForm({ ...form, color: c })} />
                     </div>
+                    <label className="flex items-center gap-2 text-sm">
+                        <Checkbox checked={form.gated} onCheckedChange={(c) => setForm({ ...form, gated: c === true })} />
+                        Gated <span className="text-xs text-muted-foreground">(only roles you grant the permission to can see this group's tickets in the Work Inbox)</span>
+                    </label>
                 </div>
                 <DialogFooter>
                     <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
@@ -107,8 +112,15 @@ export default function WorkGroupsPage() {
                                     <CardHeader className="border-b py-3">
                                         <div className="flex items-center gap-3">
                                             <Badge {...badgeColor(g.color)}>{g.label}</Badge>
+                                            {g.permissionId ? (
+                                                <Badge variant="outline" className="gap-1 text-amber-700">
+                                                    <Lock size={11} /> Gated
+                                                </Badge>
+                                            ) : (
+                                                <Badge variant="outline" className="text-muted-foreground">Ungated</Badge>
+                                            )}
                                             <CardTitle className="ml-auto text-sm font-normal text-muted-foreground">{g.works.length} work{g.works.length !== 1 ? "s" : ""}</CardTitle>
-                                            <Button type="button" size="sm" variant="outline" onClick={() => { setEditId(g.id); setEditForm({ label: g.label, color: g.color }); }}><Pencil size={13} /> Edit</Button>
+                                            <Button type="button" size="sm" variant="outline" onClick={() => { setEditId(g.id); setEditForm({ label: g.label, color: g.color, gated: !!g.permissionId }); }}><Pencil size={13} /> Edit</Button>
                                             <Button type="button" size="icon-sm" variant="destructive" onClick={() => remove(g.id)} disabled={deletingId === g.id} title="Delete (works keep, ungrouped)"><Trash2 size={13} /></Button>
                                         </div>
                                     </CardHeader>

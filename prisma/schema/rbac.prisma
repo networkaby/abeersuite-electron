@@ -29,6 +29,7 @@ model Permission {
   userOverrides  UserPermission[]
   departmentPool DepartmentPermission[]
   works          Work[]
+  workGroups     WorkGroup[]
 }
 
 model UserPermission {

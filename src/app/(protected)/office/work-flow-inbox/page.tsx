@@ -4,6 +4,7 @@ import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
 import { timeAgo, timeUntil } from "@/shared/lib/format/timeAgo";
 import WorkInboxBoard, { type WorkInboxItem } from "@/modules/repairing/components/assignments/WorkInboxBoard";
 import { parseArgs, isUserArg, isEntryArg, argKey, resolveTicketSource, META_PREV_OUTCOME, META_LAST_NOTE, type TicketLike } from "@/modules/repairing/lib/ticketSources";
+import { resolvedUserFromSession, hasPermission } from "@/shared/lib/auth/permissions";
 
 // The Work Inbox: every active ticket sitting in a work-bearing worker, as one
 // mixed list (longest-waiting first). New tickets enter their status' entry
@@ -12,6 +13,7 @@ import { parseArgs, isUserArg, isEntryArg, argKey, resolveTicketSource, META_PRE
 export default async function AssignmentsPage() {
     const session = await auth();
     const userId = Number((session?.user as { id?: string } | undefined)?.id ?? "0");
+    const resolvedUser = resolvedUserFromSession(session ?? {});
 
     const customerPhones = {
         person: { select: { name: true, phones: selectPrimaryPhone } },
@@ -51,15 +53,25 @@ export default async function AssignmentsPage() {
             select: {
                 id: true, note: true, createdAt: true,
                 changedBy: { select: { name: true } },
-                ticketWorker: { select: { label: true, work: { select: { id: true, label: true, color: true } } } },
+                ticketWorker: { select: { label: true, work: { select: { id: true, label: true, color: true, groupId: true } } } },
                 ticket: { select: { id: true, device: { select: { brand: true, model: true, account: { select: customerPhones } } } } },
             },
         }),
         prisma.work.findMany({ orderBy: { order: "asc" }, select: { id: true, label: true, color: true, successLabel: true, failLabel: true, prompt: true, startLabel: true, successPopup: true, failPopup: true, args: true, groupId: true, group: { select: { id: true, label: true, color: true } } } }),
-        prisma.workGroup.findMany({ orderBy: { order: "asc" }, select: { id: true, label: true, color: true } }),
+        prisma.workGroup.findMany({ orderBy: { order: "asc" }, select: { id: true, label: true, color: true, permissionId: true } }),
     ]);
 
     const worksById = Object.fromEntries(works.map((w) => [w.id, w]));
+
+    // A *gated* group (permissionId set) is visible only to roles holding that
+    // permission (admin:bypass passes via hasPermission). Ungated groups are
+    // visible to everyone. Tickets in a hidden group are dropped entirely below —
+    // not just hidden from the filter chips — so a gated group's queue is fully
+    // private to whoever holds its permission.
+    const visibleGroupIds = new Set(
+        groups.filter((g) => !g.permissionId || hasPermission(resolvedUser, g.permissionId)).map((g) => g.id)
+    );
+    const visibleGroups = groups.filter((g) => visibleGroupIds.has(g.id));
 
     // System-generated log notes (entry/auto-advance/claim/transfer/completion stamps)
     // are noise as "why" context — only surface free-text notes a human actually wrote.
@@ -160,7 +172,7 @@ export default async function AssignmentsPage() {
             workId: work?.id ?? "",
             workLabel: work?.label ?? l.ticketWorker?.label ?? "Work",
             workColor: work?.color ?? "bg-muted text-muted-foreground",
-            groupId: null,
+            groupId: work?.groupId ?? null,
             groupLabel: null,
             groupColor: null,
             status: "answered",
@@ -183,5 +195,11 @@ export default async function AssignmentsPage() {
         };
     });
 
-    return <WorkInboxBoard items={[...openItems, ...finishedItems]} groups={groups} currentUserId={userId} />;
+    // Drop items from gated groups the caller doesn't hold the permission for —
+    // private to whoever holds it, not just absent from that group's filter chip.
+    const visibleItems = [...openItems, ...finishedItems].filter(
+        (it) => !it.groupId || visibleGroupIds.has(it.groupId)
+    );
+
+    return <WorkInboxBoard items={visibleItems} groups={visibleGroups} currentUserId={userId} />;
 }

@@ -9,7 +9,18 @@ const patchSchema = z.object({
     label: z.string().trim().min(1).optional(),
     color: z.string().trim().optional(),
     order: z.coerce.number().int().nonnegative().optional(),
+    gated: z.boolean().optional(),
 });
+
+async function mintGroupPermission(id: string, label: string): Promise<string> {
+    const permissionId = `workgroup:${id}`;
+    await prisma.permission.upsert({
+        where:  { id: permissionId },
+        update: { label: `Work Group: ${label}`, module: "tickets" },
+        create: { id: permissionId, label: `Work Group: ${label}`, module: "tickets", description: `See ${label} tickets in the Work Inbox.` },
+    });
+    return permissionId;
+}
 
 // PATCH /api/work-groups/[id]
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -19,12 +30,27 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         const { id } = await params;
         const { data, error } = await validateRequest(req, patchSchema);
         if (error) return error;
+
+        const group = await prisma.workGroup.findUnique({ where: { id } });
+        if (!group) return NextResponse.json({ error: "Work group not found" }, { status: 404 });
+
+        const label = data.label ?? group.label;
+        let permissionId = group.permissionId;
+        if (data.gated !== undefined) {
+            // Gate transition: mint/link the permission, or detach it (row kept).
+            permissionId = data.gated ? await mintGroupPermission(id, label) : null;
+        } else if (data.label && group.permissionId) {
+            // Keep the existing permission label in sync with the group label.
+            await mintGroupPermission(id, label);
+        }
+
         const updated = await prisma.workGroup.update({
             where: { id },
             data: {
                 ...(data.label !== undefined && { label: data.label }),
                 ...(data.color !== undefined && { color: data.color }),
                 ...(data.order !== undefined && { order: data.order }),
+                permissionId,
             },
         });
         return NextResponse.json(updated);
