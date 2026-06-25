@@ -1,19 +1,18 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAuth, userCanVoucher } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
 import { ensureDeletable, deleteFields, isPosted, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const schema = z.object({ reason: z.string().trim().min(1, "Delete reason required") });
 
 // POST /api/accountancy/vouchers/[id]/delete
 // Soft-delete: hides from views and reverses GL impact (no counter-entry). Recoverable.
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { user, response } = await requirePermission(PERMISSIONS.FINANCE_VOUCHER_DELETE);
+    const { user, response } = await requireAuth();
     if (response) return response;
 
     const { id } = await params;
@@ -25,6 +24,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         include: { lines: { include: { account: { select: { normalBalance: true } } } } },
     });
     if (!voucher) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    // Per-kind delete gate (falls back to generic finance:voucher:delete).
+    if (!userCanVoucher(user, voucher.type, "delete")) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
     try {
         ensureDeletable(voucher);

@@ -1,15 +1,14 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAuth, userCanVoucher } from "@/shared/lib/auth/permissions";
 import { balanceDelta, toNumber, nextRefFromSeries } from "@/modules/accountancy/lib/balance";
 import { handleApiError } from "@/shared/lib/api";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 // POST /api/accountancy/vouchers/[id]/post
 // DRAFT → POSTED: applies GL impact, creates a mirror JournalEntry for the audit
 // trail, and updates Account.balance per line.
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { user, response } = await requirePermission(PERMISSIONS.FINANCE_VOUCHER_POST);
+    const { user, response } = await requireAuth();
     if (response) return response;
 
     const { id } = await params;
@@ -20,6 +19,10 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
         },
     });
     if (!voucher) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    // Per-kind post gate (falls back to generic finance:voucher:post).
+    if (!userCanVoucher(user, voucher.type, "post")) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     if (voucher.deletedAt) return NextResponse.json({ error: "Voucher is deleted — restore first" }, { status: 409 });
     if (voucher.status !== "DRAFT") return NextResponse.json({ error: "Only DRAFT vouchers can be posted" }, { status: 409 });
 

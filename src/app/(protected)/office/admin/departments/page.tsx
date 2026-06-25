@@ -15,6 +15,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { GL_VOUCHER_MATRIX, voucherKindPermissionIds } from "@/shared/lib/auth/voucherMatrix";
 
 interface Branch { id: string; name: string; }
 interface Permission {
@@ -152,6 +153,15 @@ export default function DepartmentsPage() {
         setPoolSelected(prev => {
             const next = new Set(prev);
             if (next.has(id)) next.delete(id); else next.add(id);
+            return next;
+        });
+    };
+
+    // Bulk on/off for a set of ids (a voucher-kind toggle flips all 5 of its actions).
+    const setPoolPerms = (ids: string[], on: boolean) => {
+        setPoolSelected(prev => {
+            const next = new Set(prev);
+            for (const id of ids) { if (on) next.add(id); else next.delete(id); }
             return next;
         });
     };
@@ -315,6 +325,7 @@ export default function DepartmentsPage() {
                                         saving={poolSaving}
                                         dirty={poolDirty}
                                         onToggle={togglePoolPerm}
+                                        onToggleMany={setPoolPerms}
                                         onSave={savePool}
                                         onCancel={() => setPoolEditId(null)}
                                     />
@@ -337,6 +348,7 @@ function PoolEditor({
     saving,
     dirty,
     onToggle,
+    onToggleMany,
     onSave,
     onCancel,
 }: {
@@ -346,17 +358,23 @@ function PoolEditor({
     saving: boolean;
     dirty: boolean;
     onToggle: (id: string) => void;
+    onToggleMany: (ids: string[], on: boolean) => void;
     onSave: () => void;
     onCancel: () => void;
 }) {
     const [search, setSearch] = useState("");
-    const filtered = search.trim()
-        ? permissions.filter(p =>
-            [p.label, p.id, p.module, p.description ?? ""].some(v => v.toLowerCase().includes(search.toLowerCase())))
-        : permissions;
-    // admin:bypass is a system-only sentinel — never offered in a department pool.
-    const poolable = filtered.filter(p => p.id !== "admin:bypass");
+    const matches = (p: Permission) =>
+        !search.trim() || [p.label, p.id, p.module, p.description ?? ""].some(v => v.toLowerCase().includes(search.toLowerCase()));
+    const filtered = permissions.filter(matches);
+    // admin:bypass is a system-only sentinel; GL voucher perms get their own
+    // "what to do" toggle section below (the dept declares which voucher kinds it
+    // works with — create/cancel/delete eligibility is decided per-role).
+    const poolable = filtered.filter(p => p.id !== "admin:bypass" && !p.id.startsWith("finance:voucher:"));
     const modules = [...new Set(poolable.map(p => p.module))].sort();
+    // Voucher kinds shown when not searching, or when the search hits a voucher kind label.
+    const voucherKinds = GL_VOUCHER_MATRIX.filter(
+        k => !search.trim() || k.label.toLowerCase().includes(search.toLowerCase()) || "voucher".includes(search.toLowerCase()),
+    );
 
     return (
         <div className="space-y-3 border-t border-border bg-muted/20 px-4 py-3">
@@ -381,6 +399,35 @@ function PoolEditor({
                 className="h-7 max-w-xs text-xs"
             />
             <div className="max-h-[50vh] space-y-3 overflow-auto pr-1">
+                {voucherKinds.length > 0 && (
+                    <div>
+                        <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                            accountancy · vouchers <span className="font-normal normal-case">(what this dept works with — eligibility set per-role)</span>
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                            {voucherKinds.map(kind => {
+                                const ids = voucherKindPermissionIds(kind.type);
+                                const on = ids.every(id => selected.has(id));
+                                return (
+                                    <button
+                                        key={kind.type}
+                                        type="button"
+                                        onClick={() => onToggleMany(ids, !on)}
+                                        title={`Toggle ${kind.label} for this department`}
+                                        className={[
+                                            "inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] transition-colors",
+                                            on
+                                                ? "border-primary bg-primary/10 text-foreground"
+                                                : "border-border bg-background text-muted-foreground hover:border-primary/50",
+                                        ].join(" ")}
+                                    >
+                                        {on && <Check size={11} />}{kind.label}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
                 {modules.map(module => (
                     <div key={module}>
                         <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{module}</p>

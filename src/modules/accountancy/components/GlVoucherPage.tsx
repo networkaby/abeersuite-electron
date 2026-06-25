@@ -23,6 +23,7 @@ import { parseAmount, isAmountChars } from "@/utils/numberInput";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { extractApiError } from "@/shared/lib/api";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
+import { requiredVoucherPermission } from "@/shared/lib/auth/voucherMatrix";
 import { consumeDuplicate } from "@/modules/accountancy/lib/duplicate";
 import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/components/GlAccountCombobox";
 import { BalanceHint } from "@/modules/accountancy/components/BalanceHint";
@@ -218,9 +219,15 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
     const router = useRouter();
     const { data: session } = useSession();
     const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
-    const canCancel     = hasPermissionWithScope(permissions, "finance:voucher:cancel");
-    const canDelete     = hasPermissionWithScope(permissions, "finance:voucher:delete");
-    const canHardDelete = hasPermissionWithScope(permissions, "finance:voucher:hard-delete");
+    // Per-kind eligibility (generic key OR the kind-specific key). Removal is one
+    // action now (soft-delete retired) — both LifecycleActions delete props map to it.
+    const vCancel = requiredVoucherPermission(kind, "cancel");
+    const vDelete = requiredVoucherPermission(kind, "delete");
+    const holds = (g: string, p: string | null) =>
+        hasPermissionWithScope(permissions, g) || (p != null && hasPermissionWithScope(permissions, p));
+    const canCancel     = holds(vCancel.generic, vCancel.perKind);
+    const canDelete     = holds(vDelete.generic, vDelete.perKind);
+    const canHardDelete = canDelete;
 
     const copy = PER_KIND[kind];
     const isEditing = voucherId != null && Number.isFinite(voucherId);

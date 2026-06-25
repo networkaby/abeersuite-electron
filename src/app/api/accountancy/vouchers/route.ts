@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requirePermission, requireVoucherPermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { isBalanced, nextRefFromSeries } from "@/modules/accountancy/lib/balance";
 import { validateRequest } from "@/shared/lib/api";
@@ -84,13 +84,13 @@ export async function GET(req: Request) {
 
 // POST /api/accountancy/vouchers
 export async function POST(req: Request) {
-    const { user, response } = await requirePermission(PERMISSIONS.FINANCE_VOUCHER_CREATE);
-    if (response) return response;
-
     const { data, error } = await validateRequest(req, createSchema);
-
     if (error) return error;
     const body = data;
+
+    // Per-kind create gate (falls back to the generic finance:voucher:create).
+    const { user, response } = await requireVoucherPermission(body.type, "create");
+    if (response) return response;
 
     if (!isBalanced(body.lines)) {
         return NextResponse.json({ error: "Voucher is not balanced — debits must equal credits" }, { status: 422 });

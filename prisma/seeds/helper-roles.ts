@@ -52,6 +52,12 @@ const ROLES = [
 // Departments whose pool is "everything" (no DepartmentPermission rows).
 const ALL_ACCESS_DEPTS = new Set<string>(["DEP-ADMIN"]);
 
+// Per-kind GL voucher permission helper — mirrors src/shared/lib/auth/voucherMatrix.ts
+// (kept inline so this seed has no src `@/` alias dependency).
+const GL_VOUCHER_KINDS = ["payment", "receipt", "contra", "credit-note", "debit-note", "journal"] as const;
+const voucherPerms = (actions: string[]): string[] =>
+    GL_VOUCHER_KINDS.flatMap(k => actions.map(a => `finance:voucher:${a}:${k}`));
+
 const ROLE_PERMISSIONS: Record<string, string[]> = {
     // R5 — Branch Manager: full branch authority; no global settings/roles.
     R5: [
@@ -64,7 +70,7 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
         "work:W1", "work:W2", "work:W3", "work:W4",
         "assignments:view-org", "assignments:view:org",
         "service-centers:view", "service-centers:view:org",
-        "finance:voucher:create", "finance:voucher:post", "finance:voucher:cancel", "finance:voucher:delete",
+        ...voucherPerms(["create", "post", "cancel", "delete"]),
         "finance:invoice:cancel", "finance:invoice:delete",
         "finance:payment:cancel", "finance:payment:delete",
         "finance:allocation:manage",
@@ -96,7 +102,7 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
         "finance:journal:cancel", "finance:journal:delete",
         "finance:invoice:cancel", "finance:invoice:delete",
         "finance:payment:cancel", "finance:payment:delete",
-        "finance:voucher:create", "finance:voucher:post", "finance:voucher:cancel", "finance:voucher:delete",
+        ...voucherPerms(["create", "post", "cancel", "delete"]),
         "finance:allocation:manage",
         "finance:opening-balance:manage",
         "inventory:view:org",
@@ -171,6 +177,15 @@ async function main(): Promise<void> {
         const set = poolByDept.get(r.departmentId) ?? new Set<string>();
         for (const pid of ROLE_PERMISSIONS[r.id] ?? []) set.add(pid);
         poolByDept.set(r.departmentId, set);
+    }
+    // DEP-FIN offers the FULL GL voucher matrix (every kind × every action,
+    // incl. hard-delete) so the role editor shows all columns; individual roles
+    // (e.g. R6) then grant a subset. Department decides "what", role decides
+    // "eligibility" — so the pool is kind-complete even where no seeded role
+    // holds hard-delete yet.
+    if (poolByDept.has("DEP-FIN")) {
+        const fin = poolByDept.get("DEP-FIN")!;
+        for (const pid of voucherPerms(["create", "post", "cancel", "delete"])) fin.add(pid);
     }
     const poolDeptIds = [...poolByDept.keys()];
     await prisma.departmentPermission.deleteMany({ where: { departmentId: { in: poolDeptIds } } });

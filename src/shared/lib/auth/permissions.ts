@@ -2,6 +2,8 @@ import { auth } from "@/auth";
 import { NextResponse } from "next/server";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { requiredVoucherPermission, type VoucherAction } from "@/shared/lib/auth/voucherMatrix";
+import type { VoucherType } from "@/generated/prisma/client";
 
 /**
  * Canonical staff-side resolved-user shape.
@@ -51,6 +53,16 @@ export function isAdmin(user: ResolvedUser): boolean {
     return hasPermission(user, PERMISSIONS.ADMIN_BYPASS);
 }
 
+/**
+ * Sync check for a GL voucher action — per-kind key OR the generic fallback.
+ * Use in `[id]` routes that must load the voucher (for its `type`) before they
+ * can know which permission applies. `action: "cancel"` also covers editing.
+ */
+export function userCanVoucher(user: ResolvedUser, type: VoucherType, action: VoucherAction): boolean {
+    const { perKind, generic } = requiredVoucherPermission(type, action);
+    return (perKind != null && hasPermission(user, perKind)) || hasPermission(user, generic);
+}
+
 type GuardResult =
     | { user: ResolvedUser; response: null }
     | { user: null; response: NextResponse };
@@ -87,6 +99,28 @@ export async function requirePermission(permissionId: string): Promise<GuardResu
     const result = await requireAuth();
     if (result.response) return result;
     if (!hasPermission(result.user, permissionId)) {
+        return { user: null, response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
+    }
+    return result;
+}
+
+/**
+ * Gate a GL voucher action by the per-kind permission, falling back to the
+ * generic key (additive — legacy roles holding `finance:voucher:*` keep working).
+ * The voucher kind usually comes from the request body (create) or the loaded
+ * voucher row (post/cancel/delete), so call this after you know the `type`.
+ *
+ * `action: "cancel"` also gates editing a voucher ("who can cancel can edit").
+ */
+export async function requireVoucherPermission(
+    type: VoucherType,
+    action: VoucherAction,
+): Promise<GuardResult> {
+    const result = await requireAuth();
+    if (result.response) return result;
+    const { perKind, generic } = requiredVoucherPermission(type, action);
+    const ok = (perKind != null && hasPermission(result.user, perKind)) || hasPermission(result.user, generic);
+    if (!ok) {
         return { user: null, response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
     }
     return result;

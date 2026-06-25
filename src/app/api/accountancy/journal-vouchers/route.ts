@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse, type NextRequest } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireVoucherPermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { isBalanced, balanceDelta, nextRefFromSeries } from "@/modules/accountancy/lib/balance";
 import { invNextRef } from "@/modules/inventory/lib/stock";
@@ -10,7 +10,6 @@ import * as Sentry from "@sentry/nextjs";
 import { isStockEligibleAccount } from "@/modules/accountancy/lib/stockEligibleAccount";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { resolveActiveBranchId, BranchAccessError } from "@/shared/lib/auth/activeBranch";
 import { auth } from "@/auth";
 
@@ -53,14 +52,20 @@ const createSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
-    const { user, response } = await requirePermission(PERMISSIONS.FINANCE_VOUCHER_CREATE);
-    if (response) return response;
-
     const session = await auth();
     const { data, error } = await validateRequest(req, createSchema);
 
     if (error) return error;
     const body = data;
+
+    // Per-kind create gate (+ per-kind post when the voucher is posted immediately).
+    // Falls back to the generic finance:voucher:create / :post.
+    const { user, response } = await requireVoucherPermission(body.type, "create");
+    if (response) return response;
+    if (body.postImmediately) {
+        const postGate = await requireVoucherPermission(body.type, "post");
+        if (postGate.response) return postGate.response;
+    }
 
     let activeBranchId: string;
     try { activeBranchId = resolveActiveBranchId(req, session); }

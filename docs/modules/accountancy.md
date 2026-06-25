@@ -1,6 +1,8 @@
 # Accountancy
 
 > Full Tally-style accounting suite — chart of accounts, vouchers, invoices, payments, GL reports, GST hub. Renamed from "Tally" on 2026-05-07. Gated behind `accountancy:view:org` so only Owner / CA see it; everyone else's sidebar hides the section entirely.
+>
+> **Terminology:** for the agreed names in this layer (Transaction Engine, Financial transaction = `Voucher`, Inventory transaction = `InvVoucher`), see [vocabulary.md](../vocabulary.md). The rename + Transaction Engine are planned, not yet in code.
 
 ## URLs
 

@@ -48,6 +48,20 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { PermissionMatrix as SharedPermissionMatrix, type MatrixColumnGroup, type MatrixRow, type ColumnTint } from "@/shared/components/PermissionMatrix";
+import { GL_VOUCHER_MATRIX, VOUCHER_ACTIONS, type VoucherAction } from "@/shared/lib/auth/voucherMatrix";
+
+// Column tint per voucher action for the GL voucher matrix.
+const VOUCHER_ACTION_TINT: Record<VoucherAction, ColumnTint> = {
+    create: "green", post: "blue", cancel: "amber", delete: "rose",
+};
+const VOUCHER_COLUMN_GROUPS: MatrixColumnGroup[] = VOUCHER_ACTIONS.map((a) => ({
+    key: a.key, label: a.label, tint: VOUCHER_ACTION_TINT[a.key], columns: [{ key: a.key, label: a.label }],
+}));
+const VOUCHER_MATRIX_ROWS: MatrixRow[] = GL_VOUCHER_MATRIX.map((r) => ({
+    key: r.type, label: r.label,
+    cells: Object.fromEntries(VOUCHER_ACTIONS.map((a) => [a.key, r.perms[a.key]])),
+}));
 
 interface Permission {
     id: string;
@@ -598,8 +612,22 @@ export default function RolePage() {
 
     const matrixPermissions = filtered.filter((permission) => MATRIX_PERMISSION_IDS.has(permission.id));
     const additionalPermissions = filtered.filter(
-        (permission) => !MATRIX_PERMISSION_IDS.has(permission.id) && permission.id !== "admin:bypass"
+        (permission) => !MATRIX_PERMISSION_IDS.has(permission.id)
+            && permission.id !== "admin:bypass"
+            // GL voucher perms (per-kind + generic fallbacks) render in their own
+            // matrix below, not as loose chips.
+            && !permission.id.startsWith("finance:voucher:")
     );
+
+    // GL voucher matrix — show ONLY the voucher kinds the role's department offers
+    // (a kind is pooled as a whole, so its row is either fully offered or hidden).
+    // All-access depts (poolIds null) show every kind.
+    const voucherCellLocked = (permId: string) =>
+        poolIds !== null && !poolIds.has(permId) && !selected.has(permId);
+    const visibleVoucherRows = VOUCHER_MATRIX_ROWS.filter((row) =>
+        Object.values(row.cells).some((permId) => permId != null && !voucherCellLocked(permId)),
+    );
+    const showVoucherMatrix = visibleVoucherRows.length > 0;
 
     const selectedCount = selected.size;
     const totalCount = allPerms.length;
@@ -881,6 +909,17 @@ export default function RolePage() {
                                             original={original}
                                             onTogglePerm={togglePerm}
                                         />
+                                        {showVoucherMatrix && (
+                                            <SharedPermissionMatrix
+                                                title="GL voucher eligibility"
+                                                description="Per voucher kind: who can create / post / cancel (= edit) / delete / hard-delete. Locked cells aren't offered by this department's pool."
+                                                rows={visibleVoucherRows}
+                                                columnGroups={VOUCHER_COLUMN_GROUPS}
+                                                selected={selected}
+                                                onTogglePerm={togglePerm}
+                                                locked={voucherCellLocked}
+                                            />
+                                        )}
                                         <AdditionalPermissions
                                             permissions={additionalPermissions}
                                             selected={selected}

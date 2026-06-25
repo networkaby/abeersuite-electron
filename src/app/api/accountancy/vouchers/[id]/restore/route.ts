@@ -1,15 +1,14 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAuth, userCanVoucher } from "@/shared/lib/auth/permissions";
 import { balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
 import { ensureRestorable, restoreFields, isPosted, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
 import { handleApiError } from "@/shared/lib/api";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 // POST /api/accountancy/vouchers/[id]/restore
 // Inverse of delete — re-applies GL impact if the voucher was posted.
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission(PERMISSIONS.FINANCE_VOUCHER_DELETE);
+    const { user, response } = await requireAuth();
     if (response) return response;
 
     const { id } = await params;
@@ -18,6 +17,10 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
         include: { lines: { include: { account: { select: { normalBalance: true } } } } },
     });
     if (!voucher) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    // Per-kind delete gate (restore is the inverse of delete; falls back to generic).
+    if (!userCanVoucher(user, voucher.type, "delete")) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
     try {
         ensureRestorable(voucher);

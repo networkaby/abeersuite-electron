@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requirePermission, requireAuth, userCanVoucher } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { isBalanced, balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
 import { validateRequest } from "@/shared/lib/api";
@@ -64,7 +64,7 @@ const patchSchema = z.object({
 });
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission(PERMISSIONS.FINANCE_VOUCHER_CREATE);
+    const { user, response } = await requireAuth();
     if (response) return response;
 
     const { id } = await params;
@@ -75,6 +75,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         include: { lines: { include: { account: { select: { normalBalance: true } } } } },
     });
     if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    // "Who can cancel can edit also" — editing is gated by the per-kind cancel permission.
+    if (!userCanVoucher(user, existing.type, "cancel")) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     if (existing.deletedAt) {
         return NextResponse.json({ error: "Voucher is deleted — restore it first" }, { status: 409 });
     }

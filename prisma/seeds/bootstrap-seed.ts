@@ -208,6 +208,41 @@ const PERMISSIONS = [
     { id: "finance:voucher:delete",      label: "Delete vouchers",      module: "finance", description: "Soft-delete a voucher; reverses GL impact. Recoverable." },
     { id: "finance:voucher:hard-delete", label: "Hard-delete vouchers", module: "finance", description: "Physically remove a voucher with audit snapshot." },
 
+    // finance — per-kind GL voucher gates (finance:voucher:<action>:<kind>). The
+    // routes accept the per-kind key OR the generic key above. CANCEL covers
+    // cancel + edit + convert-to-draft; DELETE is the single removal (soft-delete
+    // retired 2026-06-09, "hard-delete" renamed to "delete"). Source of truth for
+    // the kind↔permission mapping: src/shared/lib/auth/voucherMatrix.ts.
+    { id: "finance:voucher:create:payment",      label: "Create payment voucher",      module: "finance", description: "Create a Payment voucher." },
+    { id: "finance:voucher:post:payment",        label: "Post payment voucher",        module: "finance", description: "Post a Payment voucher (applies GL)." },
+    { id: "finance:voucher:cancel:payment",      label: "Cancel / edit payment voucher", module: "finance", description: "Cancel, edit, or convert-to-draft a Payment voucher." },
+    { id: "finance:voucher:delete:payment",      label: "Delete payment voucher",      module: "finance", description: "Remove a Payment voucher (recoverable from the Recycle Bin)." },
+
+    { id: "finance:voucher:create:receipt",      label: "Create receipt voucher",      module: "finance", description: "Create a Receipt voucher." },
+    { id: "finance:voucher:post:receipt",        label: "Post receipt voucher",        module: "finance", description: "Post a Receipt voucher (applies GL)." },
+    { id: "finance:voucher:cancel:receipt",      label: "Cancel / edit receipt voucher", module: "finance", description: "Cancel, edit, or convert-to-draft a Receipt voucher." },
+    { id: "finance:voucher:delete:receipt",      label: "Delete receipt voucher",      module: "finance", description: "Remove a Receipt voucher (recoverable from the Recycle Bin)." },
+
+    { id: "finance:voucher:create:contra",      label: "Create contra voucher",      module: "finance", description: "Create a Contra voucher." },
+    { id: "finance:voucher:post:contra",        label: "Post contra voucher",        module: "finance", description: "Post a Contra voucher (applies GL)." },
+    { id: "finance:voucher:cancel:contra",      label: "Cancel / edit contra voucher", module: "finance", description: "Cancel, edit, or convert-to-draft a Contra voucher." },
+    { id: "finance:voucher:delete:contra",      label: "Delete contra voucher",      module: "finance", description: "Remove a Contra voucher (recoverable from the Recycle Bin)." },
+
+    { id: "finance:voucher:create:credit-note",      label: "Create credit note",      module: "finance", description: "Create a Credit Note." },
+    { id: "finance:voucher:post:credit-note",        label: "Post credit note",        module: "finance", description: "Post a Credit Note (applies GL)." },
+    { id: "finance:voucher:cancel:credit-note",      label: "Cancel / edit credit note", module: "finance", description: "Cancel, edit, or convert-to-draft a Credit Note." },
+    { id: "finance:voucher:delete:credit-note",      label: "Delete credit note",      module: "finance", description: "Remove a Credit Note (recoverable from the Recycle Bin)." },
+
+    { id: "finance:voucher:create:debit-note",      label: "Create debit note",      module: "finance", description: "Create a Debit Note." },
+    { id: "finance:voucher:post:debit-note",        label: "Post debit note",        module: "finance", description: "Post a Debit Note (applies GL)." },
+    { id: "finance:voucher:cancel:debit-note",      label: "Cancel / edit debit note", module: "finance", description: "Cancel, edit, or convert-to-draft a Debit Note." },
+    { id: "finance:voucher:delete:debit-note",      label: "Delete debit note",      module: "finance", description: "Remove a Debit Note (recoverable from the Recycle Bin)." },
+
+    { id: "finance:voucher:create:journal",      label: "Create journal voucher",      module: "finance", description: "Create a Journal voucher (general GL adjustment)." },
+    { id: "finance:voucher:post:journal",        label: "Post journal voucher",        module: "finance", description: "Post a Journal voucher (applies GL)." },
+    { id: "finance:voucher:cancel:journal",      label: "Cancel / edit journal voucher", module: "finance", description: "Cancel, edit, or convert-to-draft a Journal voucher." },
+    { id: "finance:voucher:delete:journal",      label: "Delete journal voucher",      module: "finance", description: "Remove a Journal voucher (recoverable from the Recycle Bin)." },
+
     // finance — bill-wise allocation
     { id: "finance:allocation:manage", label: "Manage bill-wise allocations", module: "finance", description: "Link / unlink any voucher to any other voucher (full or partial), drives outstandings + aging." },
 

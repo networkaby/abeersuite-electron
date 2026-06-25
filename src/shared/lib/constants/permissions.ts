@@ -75,6 +75,46 @@ export const PERMISSIONS = {
     FINANCE_VOUCHER_CANCEL:             "finance:voucher:cancel",
     FINANCE_VOUCHER_DELETE:             "finance:voucher:delete",
     FINANCE_VOUCHER_HARD_DELETE:        "finance:voucher:hard-delete",
+
+    // Finance — per-kind GL voucher gates: finance:voucher:<action>:<kind>.
+    // The trailing segment is the VoucherType (kebab-case), NOT a scope — a
+    // deliberate exception to area:operation:scope (like work:<id>), because a
+    // department's accounting tools are split by voucher kind, not by visibility
+    // radius. Routes check the per-kind key OR the generic key above (additive
+    // fallback, so legacy grants keep working).
+    //   • CANCEL covers cancel + edit + convert-to-draft (one eligibility).
+    //   • DELETE is the single removal (soft-delete was retired 2026-06-09;
+    //     the former "hard-delete" is now just "delete").
+    // Single source of truth for the kind↔permission mapping: voucherMatrix.ts.
+    FINANCE_VOUCHER_CREATE_PAYMENT:      "finance:voucher:create:payment",
+    FINANCE_VOUCHER_POST_PAYMENT:        "finance:voucher:post:payment",
+    FINANCE_VOUCHER_CANCEL_PAYMENT:      "finance:voucher:cancel:payment",
+    FINANCE_VOUCHER_DELETE_PAYMENT:      "finance:voucher:delete:payment",
+
+    FINANCE_VOUCHER_CREATE_RECEIPT:      "finance:voucher:create:receipt",
+    FINANCE_VOUCHER_POST_RECEIPT:        "finance:voucher:post:receipt",
+    FINANCE_VOUCHER_CANCEL_RECEIPT:      "finance:voucher:cancel:receipt",
+    FINANCE_VOUCHER_DELETE_RECEIPT:      "finance:voucher:delete:receipt",
+
+    FINANCE_VOUCHER_CREATE_CONTRA:       "finance:voucher:create:contra",
+    FINANCE_VOUCHER_POST_CONTRA:         "finance:voucher:post:contra",
+    FINANCE_VOUCHER_CANCEL_CONTRA:       "finance:voucher:cancel:contra",
+    FINANCE_VOUCHER_DELETE_CONTRA:       "finance:voucher:delete:contra",
+
+    FINANCE_VOUCHER_CREATE_CREDIT_NOTE:      "finance:voucher:create:credit-note",
+    FINANCE_VOUCHER_POST_CREDIT_NOTE:        "finance:voucher:post:credit-note",
+    FINANCE_VOUCHER_CANCEL_CREDIT_NOTE:      "finance:voucher:cancel:credit-note",
+    FINANCE_VOUCHER_DELETE_CREDIT_NOTE:      "finance:voucher:delete:credit-note",
+
+    FINANCE_VOUCHER_CREATE_DEBIT_NOTE:      "finance:voucher:create:debit-note",
+    FINANCE_VOUCHER_POST_DEBIT_NOTE:        "finance:voucher:post:debit-note",
+    FINANCE_VOUCHER_CANCEL_DEBIT_NOTE:      "finance:voucher:cancel:debit-note",
+    FINANCE_VOUCHER_DELETE_DEBIT_NOTE:      "finance:voucher:delete:debit-note",
+
+    FINANCE_VOUCHER_CREATE_JOURNAL:      "finance:voucher:create:journal",
+    FINANCE_VOUCHER_POST_JOURNAL:        "finance:voucher:post:journal",
+    FINANCE_VOUCHER_CANCEL_JOURNAL:      "finance:voucher:cancel:journal",
+    FINANCE_VOUCHER_DELETE_JOURNAL:      "finance:voucher:delete:journal",
     FINANCE_PAYMENT_CANCEL:             "finance:payment:cancel",
     FINANCE_PAYMENT_DELETE:             "finance:payment:delete",
     FINANCE_PAYMENT_HARD_DELETE:        "finance:payment:hard-delete",
