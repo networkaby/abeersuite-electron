@@ -215,3 +215,45 @@ export async function reverseStockMovement(
         });
     }
 }
+
+// ── Recompute on-hand from truth (the ② safety net + edit oracle) ────────────
+//
+// Rebuilds the cached InvProduct.stock / InvProductBranch.stock for the given
+// products straight from the source of truth, so callers (e.g. the in-place
+// voucher edit) never hand-maintain the cache with fragile delta math — they
+// mutate the ledger, then call this. Formula (validated catalogue-wide, zero
+// drift — see scripts/recompute-stock.ts):
+//   InvProduct.stock       = openingStock (Tally master column) + Σ(inQty − outQty)
+//   InvProductBranch.stock = Σ(inQty − outQty) per branch
+// `openingStock` is folded in exactly as GL folds Account.openingBalance into
+// aggregateClosingAsOf — it is NOT a ledger row.
+export async function recomputeProductStock(
+    tx: Prisma.TransactionClient,
+    productIds: number[],
+): Promise<void> {
+    const ids = [...new Set(productIds)];
+    if (ids.length === 0) return;
+
+    const [byProduct, byBranch, products] = await Promise.all([
+        tx.invStockLedger.groupBy({ by: ["productId"], where: { productId: { in: ids } }, _sum: { inQty: true, outQty: true } }),
+        tx.invStockLedger.groupBy({ by: ["productId", "branchId"], where: { productId: { in: ids } }, _sum: { inQty: true, outQty: true } }),
+        tx.invProduct.findMany({ where: { id: { in: ids } }, select: { id: true, openingStock: true } }),
+    ]);
+
+    const ledgerByProduct = new Map<number, number>();
+    for (const r of byProduct) ledgerByProduct.set(r.productId, toNumber(r._sum.inQty ?? 0) - toNumber(r._sum.outQty ?? 0));
+
+    for (const p of products) {
+        const stock = toNumber(p.openingStock ?? 0) + (ledgerByProduct.get(p.id) ?? 0);
+        await tx.invProduct.update({ where: { id: p.id }, data: { stock } });
+    }
+
+    for (const r of byBranch) {
+        const stock = toNumber(r._sum.inQty ?? 0) - toNumber(r._sum.outQty ?? 0);
+        await tx.invProductBranch.upsert({
+            where:  { productId_branchId: { productId: r.productId, branchId: r.branchId } },
+            create: { productId: r.productId, branchId: r.branchId, stock },
+            update: { stock },
+        });
+    }
+}

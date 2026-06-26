@@ -26,6 +26,7 @@ import { Pool } from "pg";
 import type { PostVoucherInput } from "@/modules/accountancy/lib/postInvVoucher";
 import { saleToSpec, buildTradingStockMoves } from "@/modules/accountancy/lib/voucherMappers";
 import { enginePost, engineCreateVoucher, mirrorJeToSpine, syncSpineLifecycle } from "@/modules/accountancy/lib/transactionEngine";
+import { recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
 
 // Self-built client (the app singleton reads env at import-time; tsx doesn't load
 // .env.local for us). Mirror prismaClient.ts's local-vs-remote SSL detection.
@@ -320,13 +321,60 @@ async function runLifecycle(): Promise<boolean> {
     return ok;
 }
 
+/** ②-foundation: recomputeProductStock (rebuild cache from openingStock + ledger)
+ *  must agree with the incremental stock arm. Post a sale, recompute, assert the
+ *  cache is unchanged (zero drift). Rolled back. */
+async function runStockRecompute(): Promise<boolean> {
+    const [branch, product, cash, user] = await Promise.all([
+        prisma.branch.findFirst({ select: { id: true } }),
+        prisma.invProduct.findFirst({ select: { id: true, stock: true } }),
+        prisma.account.findFirst({ where: { name: { equals: "Cash", mode: "insensitive" }, personId: null, companyId: null }, select: { id: true } }),
+        prisma.user.findFirst({ select: { id: true } }),
+    ]);
+    if (!branch || !product || !cash || !user) { console.log("\nstock-recompute skipped — missing seed data"); return true; }
+
+    let ok = false;
+    try {
+        await prisma.$transaction(async (tx) => {
+            const v = await tx.invVoucher.create({
+                data: {
+                    type: "SALE", reference: `PARITY-RECOMP-${Date.now()}`, branchId: branch.id,
+                    date: new Date(), description: "recompute check sale", status: "DRAFT",
+                    subtotal: 118, taxAmount: 18, totalAmount: 118,
+                    deliveryMode: "COUNTER", placeOfSupply: "19", createdById: user.id,
+                    lines:   { create: [{ productId: product.id, quantity: 1, rate: 100, taxRate: 18, taxAmount: 18, amount: 118 }] },
+                    tenders: { create: [{ accountId: cash.id, amount: 118 }] },
+                },
+                include: { lines: { include: { product: { select: { id: true, stock: true, mrpPaise: true } } } }, tenders: true },
+            });
+            const spec = await saleToSpec(
+                tx,
+                { ...v, sellerStateCode: "19", buyerStateCode: "19" } as unknown as PostVoucherInput["voucher"],
+                { voucherId: v.id, branchId: v.branchId, lines: v.lines },
+            );
+            await enginePost(tx, spec, user.id);   // incremental stock arm decrements InvProduct.stock
+            const afterPost = await tx.invProduct.findUnique({ where: { id: product.id }, select: { stock: true } });
+            await recomputeProductStock(tx, [product.id]);   // rebuild from openingStock + ledger
+            const afterRecompute = await tx.invProduct.findUnique({ where: { id: product.id }, select: { stock: true } });
+            ok = Number(afterPost?.stock) === Number(afterRecompute?.stock);
+            throw new Error(ROLLBACK);
+        }, { timeout: 30_000, maxWait: 10_000 });
+    } catch (e) {
+        if ((e as Error)?.message !== ROLLBACK) throw e;
+    }
+    console.log("\n=== stock recompute (post sale → recomputeProductStock == incremental, rolled back) ===");
+    console.log("recompute == incremental:", ok ? "✓" : "✗");
+    return ok;
+}
+
 async function main() {
     const stockOk    = stockCheck();
     const e2eOk      = await runE2E();
+    const recompOk   = await runStockRecompute();
     const goldenOk   = await runGolden();
     const mirrorOk   = await runMirror();
     const lifecycleOk = await runLifecycle();
-    const green      = stockOk && e2eOk && goldenOk && mirrorOk && lifecycleOk;
+    const green      = stockOk && e2eOk && recompOk && goldenOk && mirrorOk && lifecycleOk;
     console.log(green ? "\nHARNESS GREEN ✓" : "\nHARNESS FAILED ✗");
     if (!green) process.exitCode = 1;
 }
