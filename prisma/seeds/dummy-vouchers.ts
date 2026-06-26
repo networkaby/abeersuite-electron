@@ -75,6 +75,12 @@ async function seedCostPoolDemo(): Promise<void> {
             },
             include: { lines: true },
         });
+        // Keep Account.balance in step with this directly-created JE (engineGlArm
+        // maintains it for engine-posted vouchers; this seed bypasses the engine,
+        // so without this the cache drifts). Courier (expense, Dr) +5000; Cash
+        // (asset, Cr) −5000.
+        await prisma.account.update({ where: { id: courier.id }, data: { balance: { increment: 5000 } } });
+        await prisma.account.update({ where: { id: cash.id },    data: { balance: { decrement: 5000 } } });
     }
     const courierLine = je.lines.find((l) => l.accountId === courier.id && l.type === "DEBIT");
     if (!courierLine) { console.log("    courier debit line missing — skipping."); return; }
