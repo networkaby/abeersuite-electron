@@ -27,6 +27,7 @@ import type { PostVoucherInput } from "@/modules/accountancy/lib/postInvVoucher"
 import { saleToSpec, buildTradingStockMoves } from "@/modules/accountancy/lib/voucherMappers";
 import { enginePost, engineCreateVoucher, mirrorJeToSpine, syncSpineLifecycle } from "@/modules/accountancy/lib/transactionEngine";
 import { recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
+import { recomputeAccountBalances } from "@/modules/accountancy/lib/aggregateLedger";
 
 // Self-built client (the app singleton reads env at import-time; tsx doesn't load
 // .env.local for us). Mirror prismaClient.ts's local-vs-remote SSL detection.
@@ -352,18 +353,33 @@ async function runStockRecompute(): Promise<boolean> {
                 { ...v, sellerStateCode: "19", buyerStateCode: "19" } as unknown as PostVoucherInput["voucher"],
                 { voucherId: v.id, branchId: v.branchId, lines: v.lines },
             );
-            await enginePost(tx, spec, user.id);   // incremental stock arm decrements InvProduct.stock
-            const afterPost = await tx.invProduct.findUnique({ where: { id: product.id }, select: { stock: true } });
-            await recomputeProductStock(tx, [product.id]);   // rebuild from openingStock + ledger
-            const afterRecompute = await tx.invProduct.findUnique({ where: { id: product.id }, select: { stock: true } });
-            ok = Number(afterPost?.stock) === Number(afterRecompute?.stock);
+            await enginePost(tx, spec, user.id);   // incremental: stock arm + Account.balance deltas
+            const stockAfterPost = await tx.invProduct.findUnique({ where: { id: product.id }, select: { stock: true } });
+            const cashAfterPost  = await tx.account.findUnique({ where: { id: cash.id }, select: { balance: true } });
+            await recomputeProductStock(tx, [product.id]);       // rebuild stock from openingStock + ledger
+            await recomputeAccountBalances(tx, [cash.id]);       // rebuild Account.balance from posted lines
+            const stockAfterRecompute = await tx.invProduct.findUnique({ where: { id: product.id }, select: { stock: true } });
+            const cashAfterRecompute  = await tx.account.findUnique({ where: { id: cash.id }, select: { balance: true } });
+            // Stock cache was clean (validated), so recompute must match incremental.
+            const stockOk = Number(stockAfterPost?.stock) === Number(stockAfterRecompute?.stock);
+            // Account.balance can carry pre-existing drift, so verify the helper
+            // against an INDEPENDENT line-sum (Cash is DEBIT-normal) instead.
+            const cashLines = await tx.voucherGlLine.groupBy({
+                by: ["type"], where: { accountId: cash.id, universalVoucher: { status: "POSTED", deletedAt: null } }, _sum: { amount: true },
+            });
+            let expectedCash = 0;
+            for (const l of cashLines) expectedCash += (String(l.type) === "DEBIT" ? 1 : -1) * Number(l._sum.amount ?? 0);
+            const acctOk = Math.abs(Number(cashAfterRecompute?.balance) - expectedCash) < 0.01;
+            const drift  = Number(cashAfterPost?.balance) - Number(cashAfterRecompute?.balance);
+            console.log(`\n=== recompute (post sale → recompute helpers, rolled back) ===`);
+            console.log(`stock recompute == incremental: ${stockOk ? "✓" : "✗"}`);
+            console.log(`account recompute == independent line-sum: ${acctOk ? "✓" : "✗"}  (pre-existing Account.balance drift on Cash = ${drift.toFixed(2)})`);
+            ok = stockOk && acctOk;
             throw new Error(ROLLBACK);
         }, { timeout: 30_000, maxWait: 10_000 });
     } catch (e) {
         if ((e as Error)?.message !== ROLLBACK) throw e;
     }
-    console.log("\n=== stock recompute (post sale → recomputeProductStock == incremental, rolled back) ===");
-    console.log("recompute == incremental:", ok ? "✓" : "✗");
     return ok;
 }
 
