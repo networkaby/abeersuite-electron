@@ -4,6 +4,7 @@ import { requirePermission, requireAuth, userCanVoucher } from "@/shared/lib/aut
 import { z } from "zod";
 import { isBalanced, balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
 import { resyncSpineFromJe } from "@/modules/accountancy/lib/transactionEngine";
+import { auditSnapshot } from "@/modules/accountancy/lib/voucherLifecycle";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -106,6 +107,22 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         await prisma.$transaction(async (tx) => {
             // ── POSTED: reverse the old GL impact first ─────────────────
             if (existing.status === "POSTED") {
+                // Phase 4 ②: snapshot the pre-edit state to AuditLog (matches the
+                // inventory edit) — the voucher + JE are rewritten in place below.
+                const origJe = existing.journalEntryId
+                    ? await tx.journalEntry.findUnique({ where: { id: existing.journalEntryId }, include: { lines: true } })
+                    : null;
+                await tx.auditLog.create({
+                    data: auditSnapshot({
+                        entityType:  "GL_VOUCHER",
+                        subtype:     existing.type,
+                        originalId:  existing.id,
+                        originalRef: existing.reference,
+                        reason:      `Edit (in-place) of ${existing.reference}`,
+                        snapshot:    { ...existing, journalEntry: origJe },
+                        actorId:     user!.id,
+                    }),
+                });
                 for (const line of existing.lines) {
                     const delta = balanceDelta(
                         line.account.normalBalance!,
