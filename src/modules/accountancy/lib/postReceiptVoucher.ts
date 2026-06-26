@@ -18,7 +18,7 @@
 // dependency surface small.
 
 import type { Prisma } from "@/generated/prisma/client";
-import { createGlVoucher } from "./transactionEngine";
+import { engineCreateVoucher } from "./transactionEngine";
 
 export type ReceiptTender = {
     accountId:    number;           // till / bank / UPI / card ledger to debit
@@ -73,7 +73,7 @@ export async function postReceiptVoucher(
     // the mirror JournalEntry and the per-line Account.balance deltas (with the
     // null-normalBalance group-nature fallback the AR/AP party ledgers need).
     // `postedAt = args.date` preserves the auto-settled receipt's posting stamp.
-    const voucher = await createGlVoucher(tx, {
+    const voucher = await engineCreateVoucher(tx, {
         type:           "RECEIPT",
         date:           args.date,
         userId:         args.userId,

@@ -19,7 +19,7 @@ import { z } from "zod";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
-import { createGlVoucher } from "@/modules/accountancy/lib/transactionEngine";
+import { engineCreateVoucher } from "@/modules/accountancy/lib/transactionEngine";
 
 const expenditureSchema = z.object({
     amountPaise:      z.number().int().positive(),
@@ -80,7 +80,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         const created = await prisma.$transaction(async (tx) => {
             // PAYMENT voucher (Dr expense / Cr counter till) via the Transaction Engine
             // — created + posted (mirror JE + balance deltas), branch-stamped to the shift.
-            const voucher = await createGlVoucher(tx, {
+            const voucher = await engineCreateVoucher(tx, {
                 type:      "PAYMENT",
                 date:      new Date(),
                 userId:    user!.id,

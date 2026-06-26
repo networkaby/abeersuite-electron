@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission, requireVoucherPermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { isBalanced } from "@/modules/accountancy/lib/balance";
-import { createGlVoucher } from "@/modules/accountancy/lib/transactionEngine";
+import { engineCreateVoucher } from "@/modules/accountancy/lib/transactionEngine";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -101,7 +101,7 @@ export async function POST(req: Request) {
         // Create a DRAFT financial transaction via the Transaction Engine
         // (engine computes totalAmount + reference; posting is a separate step).
         const voucher = await prisma.$transaction((tx) =>
-            createGlVoucher(tx, {
+            engineCreateVoucher(tx, {
                 type:           body.type,
                 date:           new Date(body.date),
                 userId:         user!.id,

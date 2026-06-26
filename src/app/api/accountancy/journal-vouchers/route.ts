@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { requireVoucherPermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { isBalanced } from "@/modules/accountancy/lib/balance";
-import { createGlVoucher } from "@/modules/accountancy/lib/transactionEngine";
+import { engineCreateVoucher } from "@/modules/accountancy/lib/transactionEngine";
 import { invNextRef } from "@/modules/inventory/lib/stock";
 import { recordStockMovement } from "@/modules/inventory/lib/stockMovement";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
@@ -111,7 +111,7 @@ export async function POST(req: NextRequest) {
             // mirror JE + balance deltas (incl. the null-normalBalance fallback)
             // now live in the engine. GL JE lines stay branch-less (org-level),
             // exactly as before — branch context rides only the stock carrier below.
-            const voucher = await createGlVoucher(tx, {
+            const voucher = await engineCreateVoucher(tx, {
                 type:            body.type,
                 date:            new Date(body.date),
                 userId:          user!.id,

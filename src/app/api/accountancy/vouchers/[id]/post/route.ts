@@ -1,7 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth, userCanVoucher } from "@/shared/lib/auth/permissions";
-import { postFinancialTransaction } from "@/modules/accountancy/lib/transactionEngine";
+import { enginePostVoucher } from "@/modules/accountancy/lib/transactionEngine";
 import { handleApiError } from "@/shared/lib/api";
 
 // POST /api/accountancy/vouchers/[id]/post
@@ -31,7 +31,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
         // Per-line account.update + mirror-JE over the Supabase pooler can exceed
         // the default 5s interactive-tx ceiling (P2028) — match the 30s headroom.
         const posted = await prisma.$transaction(async (tx) => {
-            await postFinancialTransaction(tx, voucher, user!.id);
+            await enginePostVoucher(tx, voucher, user!.id);
             return tx.voucher.findUnique({ where: { id: voucher.id } });
         }, { timeout: 30_000, maxWait: 10_000 });
 

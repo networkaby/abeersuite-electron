@@ -23,7 +23,7 @@
 
 import { Prisma } from "@/generated/prisma/client";
 import { isBalanced, toNumber } from "@/modules/accountancy/lib/balance";
-import { createGlVoucher } from "@/modules/accountancy/lib/transactionEngine";
+import { engineCreateVoucher } from "@/modules/accountancy/lib/transactionEngine";
 
 export type ContraLine = {
     accountId:   number;
@@ -71,7 +71,7 @@ export async function postContra(
 
     // Create + post the CONTRA via the Transaction Engine (CV-… reference,
     // mirror JE on the GL_POSTING series, per-line balance deltas).
-    const voucher = await createGlVoucher(tx, {
+    const voucher = await engineCreateVoucher(tx, {
         type:           "CONTRA",
         date,
         userId:         input.userId,

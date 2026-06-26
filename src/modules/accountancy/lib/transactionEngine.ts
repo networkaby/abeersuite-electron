@@ -1,32 +1,59 @@
 // ── Transaction Engine ────────────────────────────────────────────────────────
 //
-// The single internal creator/poster for GL ("financial") transactions — the
-// `Voucher` table. Consolidates the previously-scattered `tx.voucher.create`
-// + post logic behind one entry so there is ONE place the create/post rules
-// (and, later, the branch rule) live.
+// The single internal writer for ledger postings. Every posting voucher funnels
+// through `enginePost`, which drives two internal arms in the caller's tx:
+//   • engineGlArm    — mirror JournalEntry + JournalLines + Account.balance deltas
+//   • engineStockArm — InvStockLedger + InvProduct/InvProductBranch stock caches
 //
-// SCOPE (v1): the financial side only. `postFinancialTransaction` is a VERBATIM
-// extraction of the `/api/accountancy/vouchers/[id]/post` route's posting body
-// (mirror JournalEntry + per-line Account.balance deltas); `createGlVoucher`
-// is the verbatim create from `/api/accountancy/vouchers` POST, with an opt-in
-// `post` step that delegates to `postFinancialTransaction`. No behaviour change.
+// INVARIANT: one voucher → one `enginePost` call carrying both arms; both run in
+// the SAME `tx` (atomic); the engine never opens or commits its own transaction
+// (callers own that + the P2028 timeout tuning).
 //
-// NOT here yet (deferred, see docs/plan): branch stamping on the mirror JE,
-// the null-normalBalance group-nature fallback, inventory's stock arm, and
-// lifecycle (cancel/edit/delete). Each lands as its own isolated change so GL
-// parity stays verifiable.
+// Naming: every engine function carries the `engine` prefix.
+//   enginePost          — the funnel (spec in, GL + stock out)
+//   engineGlArm         — the GL writer (shared by enginePost + enginePostVoucher)
+//   engineStockArm      — the stock writer (wraps recordStockMovementsBatch)
+//   enginePostVoucher   — legacy: post a `Voucher` row (engineGlArm + status flip)
+//   engineCreateVoucher — legacy: create a `Voucher` row, optionally posting it
 //
-// Both functions take an existing `tx` — they are pure transaction steps and
-// never open or commit their own transaction (callers own that + the P2028
-// timeout tuning).
+// `enginePostVoucher` / `engineCreateVoucher` still target the GL `Voucher` table
+// and are being subsumed by `enginePost` as callers migrate (see plan Phase 3).
 
 import type { Prisma, VoucherType } from "@/generated/prisma/client";
 import { balanceDelta, nextRefFromSeries, toNumber } from "./balance";
 import { defaultNormalBalanceForGroupType, type GroupTypeStr } from "./groupNature";
+import { recordStockMovementsBatch, type RecordStockMovementArgs } from "@/modules/inventory/lib/stockMovement";
 
 type Drcr = "DEBIT" | "CREDIT";
 
-/** A voucher loaded with the fields the post routine needs.
+/** A single GL (Dr/Cr) line for the engine. `account` is optional: when the
+ * caller already loaded the ledger's nature (normalBalance/group) the engine
+ * uses it; otherwise the engine batch-loads it before applying balance deltas. */
+export interface EngineGlLine {
+    accountId:    number;
+    type:         Drcr;
+    amount:       Prisma.Decimal | number | string;
+    description?: string | null;
+    account?:     { normalBalance: Drcr | null; group: { type: GroupTypeStr } | null } | null;
+}
+
+/** A stock movement for the engine's stock arm (re-export of the stock helper's shape). */
+export type EngineStockMove = RecordStockMovementArgs;
+
+/** The canonical thing the engine writes. Either arm may be empty:
+ *  empty `glLines` → skip the GL arm; empty `stockMoves` → skip the stock arm. */
+export interface TransactionSpec {
+    type:        string;
+    date:        Date;
+    /** JE description. When omitted it's built from `type`/`reference`/`narration`. */
+    description?: string;
+    reference?:  string;
+    narration?:  string | null;
+    glLines:     EngineGlLine[];
+    stockMoves:  EngineStockMove[];
+}
+
+/** A voucher loaded with the fields the GL post routine needs.
  * `account.group.type` feeds the null-normalBalance fallback (subsidiary party
  * ledgers carry a null `normalBalance`; their natural side derives from the
  * group). */
@@ -45,38 +72,42 @@ export interface PostableVoucher {
     }[];
 }
 
+// ── GL arm ──────────────────────────────────────────────────────────────────
+
 /**
- * Post a DRAFT financial transaction: create the mirror JournalEntry (for the
- * audit trail / Day Book), apply per-line `Account.balance` deltas, and flip the
- * voucher to POSTED with its `journalEntryId`. Caller must have already loaded
- * + guarded the voucher (DRAFT, not deleted) and must wrap this in a tx.
+ * The single GL writer. Creates the mirror `JournalEntry` (GL_POSTING series) +
+ * `JournalLine`s (branch-stamped), and applies per-line `Account.balance` deltas
+ * with the null-normalBalance group-nature fallback. Returns the JE id.
  *
- * Returns the created JournalEntry id.
- *
- * VERBATIM from the former `/post` route — keep behaviour identical.
+ * Ledger nature comes from each line's pre-loaded `account` when present; the
+ * engine batch-loads any missing ledgers. Does NOT touch a `Voucher` row — that
+ * is the caller's concern (`enginePostVoucher` flips the voucher; `enginePost`
+ * leaves it to the route).
  */
-export async function postFinancialTransaction(
+export async function engineGlArm(
     tx: Prisma.TransactionClient,
-    voucher: PostableVoucher,
-    userId: number,
-    /** Stamped on the mirror-JE lines for branch-scoped GL reports. Office GL
-     * vouchers pass null (org-level); POS callers pass the shift/active branch. */
-    branchId: string | null = null,
-    /** Posting timestamp. Defaults to now; auto-settled receipts pass the voucher
-     * date to preserve their prior `postedAt` semantics. */
-    postedAt: Date = new Date(),
+    args: {
+        date:        Date;
+        description: string;
+        lines:       EngineGlLine[];
+        userId:      number;
+        branchId:    string | null;
+        postedAt:    Date;
+    },
 ): Promise<number> {
+    const { date, description, lines, userId, branchId, postedAt } = args;
+
     const jeRef = await nextRefFromSeries(tx, "GL_POSTING", userId);
     const je = await tx.journalEntry.create({
         data: {
-            date:        voucher.date,
+            date,
             reference:   jeRef,
-            description: `${voucher.type} ${voucher.reference}: ${voucher.narration ?? ""}`.trim(),
+            description,
             status:      "POSTED",
             postedAt,
             createdById: userId,
             lines: {
-                create: voucher.lines.map((l) => ({
+                create: lines.map((l) => ({
                     accountId:   l.accountId,
                     type:        l.type,
                     amount:      l.amount,
@@ -88,26 +119,126 @@ export async function postFinancialTransaction(
         select: { id: true },
     });
 
-    // Per-line Account.balance deltas. `normalBalance` is null on subsidiary
-    // party (AR/AP) ledgers → fall back to the group's natural side (mirrors
-    // postReceiptVoucher). A line with neither is skipped rather than mis-posted.
-    for (const line of voucher.lines) {
-        const side = line.account.normalBalance
-            ?? (line.account.group?.type ? defaultNormalBalanceForGroupType(line.account.group.type) : null);
+    // Resolve each ledger's normal side for the balance delta. Use the caller's
+    // pre-loaded `account` when present; batch-load the rest. Null-normalBalance
+    // subsidiary (AR/AP) ledgers fall back to their group's natural side; a line
+    // with neither is skipped rather than mis-posted.
+    const natureById = new Map<number, Drcr | null>();
+    for (const l of lines) {
+        if (l.account) {
+            natureById.set(
+                l.accountId,
+                l.account.normalBalance
+                    ?? (l.account.group?.type ? defaultNormalBalanceForGroupType(l.account.group.type) : null),
+            );
+        }
+    }
+    const missing = [...new Set(lines.filter((l) => !natureById.has(l.accountId)).map((l) => l.accountId))];
+    if (missing.length > 0) {
+        const rows = await tx.account.findMany({
+            where:  { id: { in: missing } },
+            select: { id: true, normalBalance: true, group: { select: { type: true } } },
+        });
+        for (const r of rows) {
+            natureById.set(
+                r.id,
+                (r.normalBalance as Drcr | null)
+                    ?? (r.group?.type ? defaultNormalBalanceForGroupType(r.group.type as GroupTypeStr) : null),
+            );
+        }
+    }
+    for (const l of lines) {
+        const side = natureById.get(l.accountId) ?? null;
         if (!side) continue;
-        const delta = balanceDelta(side, line.type, toNumber(line.amount));
+        const delta = balanceDelta(side, l.type, toNumber(l.amount));
         await tx.account.update({
-            where: { id: line.accountId },
+            where: { id: l.accountId },
             data:  { balance: { increment: delta } },
         });
     }
 
+    return je.id;
+}
+
+// ── Stock arm ───────────────────────────────────────────────────────────────
+
+/** The stock writer — InvStockLedger rows + InvProduct/InvProductBranch caches. */
+export async function engineStockArm(
+    tx: Prisma.TransactionClient,
+    moves: EngineStockMove[],
+): Promise<void> {
+    if (moves.length === 0) return;
+    await recordStockMovementsBatch(tx, moves);
+}
+
+// ── Funnel ──────────────────────────────────────────────────────────────────
+
+/**
+ * The engine funnel — every posting voucher's single entry. Writes the GL arm
+ * (when `glLines` present) and the stock arm (when `stockMoves` present) in the
+ * caller's `tx`, atomically. Returns the mirror JE id (null when GL-less).
+ *
+ * Does not touch a voucher row — the caller flips voucher status / links the JE.
+ */
+export async function enginePost(
+    tx: Prisma.TransactionClient,
+    spec: TransactionSpec,
+    userId: number,
+    opts: { branchId?: string | null; postedAt?: Date } = {},
+): Promise<{ journalEntryId: number | null }> {
+    const branchId = opts.branchId ?? null;
+    const postedAt = opts.postedAt ?? new Date();
+
+    let journalEntryId: number | null = null;
+    if (spec.glLines.length > 0) {
+        const description = spec.description
+            ?? `${spec.type} ${spec.reference ?? ""}: ${spec.narration ?? ""}`.trim();
+        journalEntryId = await engineGlArm(tx, {
+            date:        spec.date,
+            description,
+            lines:       spec.glLines,
+            userId,
+            branchId,
+            postedAt,
+        });
+    }
+    if (spec.stockMoves.length > 0) {
+        await engineStockArm(tx, spec.stockMoves);
+    }
+    return { journalEntryId };
+}
+
+// ── Legacy GL-voucher helpers (being subsumed by enginePost) ──────────────────
+
+/**
+ * Post a DRAFT financial voucher: write its GL via `engineGlArm`, then flip the
+ * `Voucher` to POSTED with its `journalEntryId`. Caller loads + guards the
+ * voucher (DRAFT, not deleted) and owns the tx. Returns the JE id.
+ */
+export async function enginePostVoucher(
+    tx: Prisma.TransactionClient,
+    voucher: PostableVoucher,
+    /** Stamped on the mirror-JE lines for branch-scoped GL reports. Office GL
+     * vouchers pass null (org-level); POS callers pass the shift/active branch. */
+    userId: number,
+    branchId: string | null = null,
+    /** Posting timestamp. Defaults to now; auto-settled receipts pass the voucher
+     * date to preserve their prior `postedAt` semantics. */
+    postedAt: Date = new Date(),
+): Promise<number> {
+    const jeId = await engineGlArm(tx, {
+        date:        voucher.date,
+        description: `${voucher.type} ${voucher.reference}: ${voucher.narration ?? ""}`.trim(),
+        lines:       voucher.lines,
+        userId,
+        branchId,
+        postedAt,
+    });
     await tx.voucher.update({
         where: { id: voucher.id },
-        data:  { status: "POSTED", postedAt, journalEntryId: je.id },
+        data:  { status: "POSTED", postedAt, journalEntryId: jeId },
     });
-
-    return je.id;
+    return jeId;
 }
 
 export interface CreateGlVoucherSpec {
@@ -130,13 +261,10 @@ export interface CreateGlVoucherSpec {
 
 /**
  * Create a financial transaction (the `Voucher` row + lines), optionally posting
- * it. `totalAmount` is the sum of debit lines (matches the prior route). Returns
- * the created voucher with its lines (DRAFT snapshot; re-fetch if you need the
- * posted state).
- *
- * VERBATIM from the former `/api/accountancy/vouchers` POST create block.
+ * it. `totalAmount` is the sum of debit lines. Returns the created voucher with
+ * its lines (DRAFT snapshot; re-fetch if you need the posted state).
  */
-export async function createGlVoucher(
+export async function engineCreateVoucher(
     tx: Prisma.TransactionClient,
     spec: CreateGlVoucherSpec,
 ) {
@@ -173,7 +301,7 @@ export async function createGlVoucher(
             include: { lines: { include: { account: { select: { normalBalance: true, group: { select: { type: true } } } } } } },
         });
         if (loaded) {
-            const jeId = await postFinancialTransaction(tx, loaded as unknown as PostableVoucher, spec.userId, spec.branchId ?? null, spec.postedAt ?? new Date());
+            const jeId = await enginePostVoucher(tx, loaded as unknown as PostableVoucher, spec.userId, spec.branchId ?? null, spec.postedAt ?? new Date());
             // Reflect the posted state on the returned snapshot so callers that
             // need the mirror-JE id (postContra et al.) can read it without a re-fetch.
             voucher.journalEntryId = jeId;
