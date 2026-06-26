@@ -5,7 +5,8 @@ import { z } from "zod";
 import { invNextRef, calcVoucherTotals } from "@/modules/inventory/lib/stock";
 import { recordStockMovementsBatch } from "@/modules/inventory/lib/stockMovement";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
-import { postInvVoucherToGl } from "@/modules/accountancy/lib/postInvVoucher";
+import { saleToSpec } from "@/modules/accountancy/lib/voucherMappers";
+import { enginePost } from "@/modules/accountancy/lib/transactionEngine";
 import { postReceiptVoucher } from "@/modules/accountancy/lib/postReceiptVoucher";
 import { channelToPaymentMethod } from "@/modules/pos/lib/counterTenders";
 import { Prisma, type PaymentMethod } from "@/generated/prisma/client";
@@ -606,41 +607,41 @@ export async function POST(req: Request) {
             // ── 2. GL post (Dr Till/Bank + (optional) Dr Customer AR / Cr Sales / Cr GST) ─
             // postInvVoucherToGl reads the tender rows directly — one Dr
             // leg per tender. No back-compat single-paymentAccount path.
-            const gl = await postInvVoucherToGl(tx, {
-                voucherId: voucher.id,
-                voucher: {
-                    id:          voucher.id,
-                    type:        voucher.type,
-                    reference:   voucher.reference,
-                    date:        voucher.date,
-                    description: voucher.description,
-                    partyJson:   voucher.partyJson,
-                    subtotal:    voucher.subtotal,
-                    taxAmount:   voucher.taxAmount,
-                    shippingAmt: voucher.shippingAmt,
-                    discountAmt: voucher.discountAmt,
-                    roundOff:    voucher.roundOff,
-                    totalAmount: voucher.totalAmount,
-                    tenders:     voucher.tenders.map((t) => ({
-                        accountId: t.accountId,
-                        amount:    Number(t.amount),
-                        account:   t.account,
-                    })),
-                    charges:     voucher.charges.map((c) => ({
-                        accountId:   c.accountId,
-                        amount:      Number(c.amount),
-                        description: c.description,
-                        account:     c.account,
-                    })),
-                    sellerStateCode,
-                    buyerStateCode: sellerStateCode, // counter pickup → intra-state
-                },
-                userId: user!.id,
+            // GL via the Transaction Engine (GL only — POS moves stock itself
+            // via recordStockMovementsBatch). saleToSpec reads the tender rows
+            // directly — one Dr leg per tender. POS is counter-pickup → intra-state.
+            const spec = await saleToSpec(tx, {
+                id:          voucher.id,
+                type:        voucher.type,
+                reference:   voucher.reference,
+                date:        voucher.date,
+                description: voucher.description,
+                partyJson:   voucher.partyJson,
+                subtotal:    voucher.subtotal,
+                taxAmount:   voucher.taxAmount,
+                shippingAmt: voucher.shippingAmt,
+                discountAmt: voucher.discountAmt,
+                roundOff:    voucher.roundOff,
+                totalAmount: voucher.totalAmount,
+                tenders:     voucher.tenders.map((t) => ({
+                    accountId: t.accountId,
+                    amount:    Number(t.amount),
+                    account:   t.account,
+                })),
+                charges:     voucher.charges.map((c) => ({
+                    accountId:   c.accountId,
+                    amount:      Number(c.amount),
+                    description: c.description,
+                    account:     c.account,
+                })),
+                sellerStateCode,
+                buyerStateCode: sellerStateCode, // counter pickup → intra-state
             });
+            const gl = await enginePost(tx, spec, user!.id);
             if (gl.journalEntryId === null) {
                 throw new GlPostFailedError(
-                    `Cannot post POS sale ${voucherRef}: GL bridge could not build a journal entry.`,
-                    gl.notes,
+                    `Cannot post POS sale ${voucherRef}: engine produced no journal entry.`,
+                    [],
                 );
             }
             await tx.invVoucher.update({

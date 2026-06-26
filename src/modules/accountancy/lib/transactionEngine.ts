@@ -93,6 +93,12 @@ export async function engineGlArm(
         userId:      number;
         branchId:    string | null;
         postedAt:    Date;
+        // Phase 4 dual-write metadata (Stage C). Optional so the engine compiles
+        // for any caller; threaded onto the universal-voucher spine mirror.
+        type?:           string;
+        friendlyRef?:    string | null;
+        narration?:      string | null;
+        partyAccountId?: number | null;
     },
 ): Promise<number> {
     const { date, description, lines, userId, branchId, postedAt } = args;
@@ -157,7 +163,95 @@ export async function engineGlArm(
         });
     }
 
+    // ── Phase 4 dual-write (Stage C) ─────────────────────────────────────────
+    // Mirror this post into the universal-voucher spine + VoucherGlLine children,
+    // alongside the legacy JE above. No reader uses these yet — this keeps the
+    // spine populated so Stage D can reconcile and Stage E can cut readers over.
+    // Byte-identical lines to the JE; `sourceJournalEntryId` ties the two.
+    await tx.universalVoucher.create({
+        data: {
+            type:                 args.type ?? "JOURNAL",
+            reference:            jeRef,
+            friendlyRef:          args.friendlyRef ?? null,
+            date,
+            description,
+            narration:            args.narration ?? null,
+            status:               "POSTED",
+            postedAt,
+            partyAccountId:       args.partyAccountId ?? null,
+            createdById:          userId,
+            sourceJournalEntryId: je.id,
+            lines: {
+                create: lines.map((l) => ({
+                    accountId:   l.accountId,
+                    type:        l.type,
+                    amount:      l.amount,
+                    description: l.description ?? null,
+                    branchId,
+                })),
+            },
+        },
+    });
+
     return je.id;
+}
+
+// ── Spine mirror for bypass GL writers (Phase 4 Stage D.5) ────────────────────
+
+/**
+ * Mirror an ALREADY-written `JournalEntry` into the universal-voucher spine.
+ * For the GL writers that bypass `engineGlArm` and post a `JournalEntry`
+ * directly (reversal / cancel / cash-variance / gift-card JEs): call this right
+ * after the `journalEntry.create`, in the SAME tx, so the spine never falls
+ * behind the legacy GL once readers cut over (Stage E). Idempotent — skips if a
+ * spine row already exists for the JE. (`auditRestore` is the one deliberate
+ * non-mirror exception: it rebuilds from a snapshot with the original ids.)
+ */
+export async function mirrorJeToSpine(
+    tx: Prisma.TransactionClient,
+    journalEntryId: number,
+    meta: { type?: string; friendlyRef?: string | null; partyAccountId?: number | null } = {},
+): Promise<void> {
+    const exists = await tx.universalVoucher.findUnique({
+        where:  { sourceJournalEntryId: journalEntryId },
+        select: { id: true },
+    });
+    if (exists) return;
+    const je = await tx.journalEntry.findUnique({
+        where:   { id: journalEntryId },
+        include: { lines: { select: { accountId: true, type: true, amount: true, description: true, branchId: true } } },
+    });
+    if (!je) return;
+    await tx.universalVoucher.create({
+        data: {
+            type:                 meta.type ?? "JOURNAL",
+            reference:            je.reference,
+            friendlyRef:          meta.friendlyRef ?? null,
+            date:                 je.date,
+            description:          je.description,
+            narration:            null,
+            status:               je.status,
+            partyAccountId:       meta.partyAccountId ?? null,
+            postedAt:             je.postedAt,
+            cancelledAt:          je.cancelledAt,
+            cancelledById:        je.cancelledById,
+            cancelReason:         je.cancelReason,
+            deletedAt:            je.deletedAt,
+            deletedById:          je.deletedById,
+            deleteReason:         je.deleteReason,
+            createdById:          je.createdById,
+            sourceJournalEntryId: je.id,
+            lines: {
+                create: je.lines.map((l) => ({
+                    accountId:   l.accountId,
+                    type:        l.type,
+                    amount:      l.amount,
+                    description: l.description,
+                    branchId:    l.branchId,
+                })),
+            },
+        },
+    });
 }
 
 // ── Stock arm ───────────────────────────────────────────────────────────────
@@ -200,6 +294,9 @@ export async function enginePost(
             userId,
             branchId,
             postedAt,
+            type:        spec.type,
+            friendlyRef: spec.reference ?? null,
+            narration:   spec.narration ?? null,
         });
     }
     if (spec.stockMoves.length > 0) {
@@ -233,6 +330,9 @@ export async function enginePostVoucher(
         userId,
         branchId,
         postedAt,
+        type:        voucher.type,
+        friendlyRef: voucher.reference,
+        narration:   voucher.narration,
     });
     await tx.voucher.update({
         where: { id: voucher.id },

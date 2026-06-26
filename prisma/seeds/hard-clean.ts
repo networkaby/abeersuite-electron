@@ -51,6 +51,10 @@ const ADMIN_EMAIL = "admin@networkservice.in";
 const TRANSACTION_TABLES = [
     "pos_handovers", "pos_cash_drops", "pos_expenditures", "pos_receipts", "pos_shifts",
     "JournalLine", "JournalEntry",
+    // Phase 4 universal-voucher spine + GL-arm lines (transitional dual-write
+    // target; transactional, never bootstrap). Child before parent; cascade also
+    // covers the child when the spine is truncated.
+    "VoucherGlLine", "UniversalVoucher",
     "VoucherAllocation", "VoucherLine", "Voucher",
     // AuditLog — unified recycle-bin for hard-deleted vouchers/JEs (2026-06-09,
     // replaced the 3 *Audit tables). Transactional snapshot data, wiped here.

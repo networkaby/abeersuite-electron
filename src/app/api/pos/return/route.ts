@@ -33,7 +33,8 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { invNextRef } from "@/modules/inventory/lib/stock";
 import { recordStockMovement } from "@/modules/inventory/lib/stockMovement";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
-import { postInvVoucherToGl } from "@/modules/accountancy/lib/postInvVoucher";
+import { saleToSpec } from "@/modules/accountancy/lib/voucherMappers";
+import { enginePost } from "@/modules/accountancy/lib/transactionEngine";
 import { reverseLoyaltyForReturn, ratesFromConfig } from "@/modules/loyalty/lib";
 import { reverseCouponRedemption } from "@/modules/coupons/lib";
 import * as Sentry from "@sentry/nextjs";
@@ -216,34 +217,31 @@ export async function POST(req: Request) {
             // 2. GL post — SALE_RETURN is purchase-shape (counter Cr).
             // Tender row's accountId gets credited; body legs (Dr Sales
             // Returns / Dr GST reversal) come from goods + tax.
-            const gl = await postInvVoucherToGl(tx, {
-                voucherId: voucher.id,
-                voucher: {
-                    id:          voucher.id,
-                    type:        voucher.type,
-                    reference:   voucher.reference,
-                    date:        voucher.date,
-                    description: voucher.description,
-                    partyJson:   voucher.partyJson,
-                    subtotal:    voucher.subtotal,
-                    taxAmount:   voucher.taxAmount,
-                    shippingAmt: voucher.shippingAmt,
-                    roundOff:    voucher.roundOff,
-                    totalAmount: voucher.totalAmount,
-                    tenders:     voucher.tenders.map((t) => ({
-                        accountId: t.accountId,
-                        amount:    Number(t.amount),
-                        account:   t.account,
-                    })),
-                    sellerStateCode,
-                    buyerStateCode: sellerStateCode,
-                },
-                userId: user!.id,
-            });
+            const spec = await saleToSpec(tx, {
+                id:          voucher.id,
+                type:        voucher.type,
+                reference:   voucher.reference,
+                date:        voucher.date,
+                description: voucher.description,
+                partyJson:   voucher.partyJson,
+                subtotal:    voucher.subtotal,
+                taxAmount:   voucher.taxAmount,
+                shippingAmt: voucher.shippingAmt,
+                roundOff:    voucher.roundOff,
+                totalAmount: voucher.totalAmount,
+                tenders:     voucher.tenders.map((t) => ({
+                    accountId: t.accountId,
+                    amount:    Number(t.amount),
+                    account:   t.account,
+                })),
+                sellerStateCode,
+                buyerStateCode: sellerStateCode,
+            });   // GL only — stock IN handled below
+            const gl = await enginePost(tx, spec, user!.id);
             if (gl.journalEntryId === null) {
                 throw new GlPostFailedError(
-                    `Cannot post sale return ${vRef}: GL bridge could not build a journal entry.`,
-                    gl.notes,
+                    `Cannot post sale return ${vRef}: engine produced no journal entry.`,
+                    [],
                 );
             }
             await tx.invVoucher.update({

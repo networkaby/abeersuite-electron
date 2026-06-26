@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { parseRange } from "@/modules/accountancy/lib/period";
-import { aggregateRange, loadNormalBalanceMap } from "@/modules/accountancy/lib/aggregateLedger";
+import { aggregateRange, loadNormalBalanceMap, ledgerStatusFilterUv } from "@/modules/accountancy/lib/aggregateLedger";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
@@ -44,10 +44,10 @@ export async function GET(req: Request) {
 
         // Pull every JE in the period that has at least one cash line, with all
         // its lines so we can identify counterparties.
-        const entries = await prisma.journalEntry.findMany({
+        const entries = await prisma.universalVoucher.findMany({
             where: {
                 date:      { gte: from, lte: to },
-                deletedAt: null,
+                ...ledgerStatusFilterUv(),   // POSTED only, spine
                 lines:     { some: { accountId: { in: Array.from(cashIdSet) } } },
             },
             select: {

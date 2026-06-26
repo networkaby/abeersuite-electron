@@ -1,11 +1,12 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
-import { toNumber, nextRefFromSeries } from "@/modules/accountancy/lib/balance";
+import { toNumber } from "@/modules/accountancy/lib/balance";
 import { recordStockMovement } from "@/modules/inventory/lib/stockMovement";
 import { valueStockBatch } from "@/modules/inventory/lib/valuation";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
-import { postInvVoucherToGl } from "@/modules/accountancy/lib/postInvVoucher";
+import { saleToSpec } from "@/modules/accountancy/lib/voucherMappers";
+import { enginePost } from "@/modules/accountancy/lib/transactionEngine";
 import * as Sentry from "@sentry/nextjs";
 import { handleApiError } from "@/shared/lib/api";
 import { getOrganisation } from "@/shared/lib/org/getOrganisation";
@@ -87,6 +88,10 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     const isPhysicalStock = voucher.type === "PHYSICAL_STOCK";
     const isManufacturingJournal = voucher.type === "MANUFACTURING_JOURNAL";
     const isBranchTransfer = voucher.type === "BRANCH_TRANSFER";
+    // Fixed-direction trading types (stock IN/OUT decided by type) route through
+    // the Transaction Engine — stock + GL in one `enginePost`. PHYSICAL_STOCK /
+    // MANUFACTURING_JOURNAL / BRANCH_TRANSFER keep their bespoke logic below.
+    const isFixedDirection = isSale || isPurchase;
 
     if (isBranchTransfer && !voucher.destinationBranchId) {
         return NextResponse.json({ error: "Branch Transfer is missing a destination branch — edit the draft and pick one." }, { status: 422 });
@@ -180,7 +185,9 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                         updateOrgWideStock: false,
                     });
                 }
-            } else if (!isCommitment) {
+            } else if (!isCommitment && !isFixedDirection) {
+                // PHYSICAL_STOCK + MANUFACTURING_JOURNAL only — fixed-direction
+                // trading types now move stock via the engine (below).
                 for (const line of voucher.lines) {
                     const qty = toNumber(line.quantity);
                     const freeQty = line.freeQty != null ? toNumber(line.freeQty) : 0;
@@ -297,26 +304,30 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
             // Purchase Order) intentionally don't touch GL on POST.
             let journalEntryId: number | null = null;
             const postNotes: string[] = [];
-            if (isTradingVoucher) {
-                // sellerStateCode / buyerStateCode resolved before the tx opened
-                // (see hoisted block above) — the CGST/SGST vs IGST split inputs.
-                const out = await postInvVoucherToGl(tx, {
-                    voucherId: voucher.id,
-                    voucher: { ...voucher, sellerStateCode, buyerStateCode },
-                    userId,
-                });
+            if (isFixedDirection) {
+                // Stock + GL through the Transaction Engine in ONE call (one tx).
+                // `saleToSpec` builds the GL lines (shared with the legacy bridge
+                // → byte-identical, parity-harness-verified) plus the stock moves;
+                // `enginePost` writes both arms. sellerStateCode/buyerStateCode
+                // were resolved before the tx (the CGST/SGST vs IGST split inputs).
+                // GL JE lines stay branch-less (org-level), exactly as the legacy
+                // bridge produced them (no branchId passed to the engine).
+                const spec = await saleToSpec(
+                    tx,
+                    { ...voucher, sellerStateCode, buyerStateCode },
+                    { voucherId: voucher.id, branchId: voucher.branchId, lines: voucher.lines },
+                );
+                const out = await enginePost(tx, spec, userId);
                 journalEntryId = out.journalEntryId;
-                postNotes.push(...out.notes);
-                // A trading voucher MUST produce a balanced JournalEntry — the
-                // top-bar Cash/Bank/Receivables/Payables widgets, Balance Sheet,
-                // Day Book and P&L all read GL only, so a POSTED-without-JE
-                // voucher is invisible to every consumer. Fail loud rather
-                // than create another silent orphan. Rollback is automatic via
-                // the surrounding $transaction.
-                if (journalEntryId === null) {
+                // A GL-posting trading voucher (SALE / PURCHASE / returns) MUST
+                // produce a balanced JE — Balance Sheet / Day Book / P&L read GL
+                // only, so a POSTED-without-JE voucher is invisible. Stock-only
+                // fixed-direction types (GRN / Challan / Rejection) legitimately
+                // have a null JE, so fail loud only for the GL-posting kinds.
+                if (isTradingVoucher && journalEntryId === null) {
                     throw new GlPostFailedError(
-                        `Cannot post ${voucher.type} ${voucher.reference}: GL bridge could not build a journal entry.`,
-                        out.notes,
+                        `Cannot post ${voucher.type} ${voucher.reference}: engine produced no journal entry.`,
+                        [],
                     );
                 }
             } else if (isManufacturingJournal && voucher.charges.length > 0) {
@@ -341,50 +352,33 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                             throw new Error(`Charge line account "${e.account?.name ?? e.accountId}" must be an EXPENSE-type ledger.`);
                         }
                     }
-                    const jeRef = await nextRefFromSeries(tx, "GL_POSTING", userId);
-                    const je = await tx.journalEntry.create({
-                        data: {
-                            date:        voucher.date,
-                            reference:   jeRef,
-                            description: `Manufacturing Charges for ${voucher.reference}`,
-                            status:      "POSTED",
-                            postedAt:    new Date(),
-                            createdById: userId,
-                            lines: {
-                                create: [
-                                    ...voucher.charges.map((e) => ({
-                                        accountId: e.accountId,
-                                        type:      "DEBIT" as const,
-                                        amount:    toNumber(e.amount),
-                                        description: e.description ?? `Manufacturing charge: ${e.account?.name ?? ""}`.trim(),
-                                    })),
-                                    {
-                                        accountId: paymentTender.accountId,
-                                        type:      "CREDIT" as const,
-                                        amount:    totalCharges,
-                                        description: `Charges paid for ${voucher.reference}`,
-                                    },
-                                ],
+                    // N expense debits + 1 payment-account credit → the engine
+                    // (engineGlArm writes the JE + balance deltas). Bespoke
+                    // description, not the type prefix.
+                    const out = await enginePost(tx, {
+                        type:        "MANUFACTURING_JOURNAL",
+                        date:        voucher.date,
+                        description: `Manufacturing Charges for ${voucher.reference}`,
+                        glLines: [
+                            ...voucher.charges.map((e) => ({
+                                accountId:   e.accountId,
+                                type:        "DEBIT" as const,
+                                amount:      toNumber(e.amount),
+                                description: e.description ?? `Manufacturing charge: ${e.account?.name ?? ""}`.trim(),
+                                account:     e.account,
+                            })),
+                            {
+                                accountId:   paymentTender.accountId,
+                                type:        "CREDIT" as const,
+                                amount:      totalCharges,
+                                description: `Charges paid for ${voucher.reference}`,
+                                account:     paymentTender.account,
                             },
-                        },
-                    });
-                    journalEntryId = je.id;
-
-                    // Apply balance deltas. Each ledger's balance direction
-                    // follows normalBalance: a DEBIT line increments DEBIT-
-                    // normal accounts and decrements CREDIT-normal ones.
-                    for (const e of voucher.charges) {
-                        const acct = e.account!;
-                        const debitDelta = toNumber(e.amount);
-                        const delta = acct.normalBalance === "DEBIT" ? debitDelta : -debitDelta;
-                        await tx.account.update({ where: { id: acct.id }, data: { balance: { increment: delta } } });
-                    }
-                    if (paymentTender.account) {
-                        const credit = totalCharges;
-                        const delta = paymentTender.account.normalBalance === "CREDIT" ? credit : -credit;
-                        await tx.account.update({ where: { id: paymentTender.account.id }, data: { balance: { increment: delta } } });
-                    }
-                    postNotes.push(`Posted JE ${jeRef}: ${voucher.charges.length} expense debit(s) totalling ${totalCharges.toFixed(2)} → ${paymentTender.account?.name ?? "payment account"}.`);
+                        ],
+                        stockMoves: [],
+                    }, userId);
+                    journalEntryId = out.journalEntryId;
+                    postNotes.push(`Posted ${voucher.charges.length} expense debit(s) totalling ${totalCharges.toFixed(2)} → ${paymentTender.account?.name ?? "payment account"}.`);
                 }
             }
 

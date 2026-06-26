@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
 import { resolveSourceBatch } from "@/modules/accountancy/lib/journalEntrySource";
+import { ledgerStatusFilter } from "@/modules/accountancy/lib/aggregateLedger";
 import { defaultNormalBalanceForGroupType } from "@/modules/accountancy/lib/groupNature";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -36,7 +37,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ accountI
         const openingLines = await prisma.journalLine.findMany({
             where: {
                 accountId: Number(accountId),
-                journalEntry: { status: "POSTED", deletedAt: null, date: { lt: from } },
+                journalEntry: { ...ledgerStatusFilter(), date: { lt: from } },
             },
             select: { type: true, amount: true },
         });
@@ -52,7 +53,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ accountI
         const lines = await prisma.journalLine.findMany({
             where: {
                 accountId: Number(accountId),
-                journalEntry: { status: "POSTED", deletedAt: null, date: { gte: from, lte: to } },
+                journalEntry: { ...ledgerStatusFilter(), date: { gte: from, lte: to } },
             },
             orderBy: [{ journalEntry: { date: "asc" } }, { id: "asc" }],
             include: {

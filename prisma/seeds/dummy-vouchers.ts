@@ -90,6 +90,25 @@ async function seedCostPoolDemo(): Promise<void> {
         });
     }
 
+    // 4b. Phase 4 dual-write parity: mirror the dummy JE into the universal-voucher
+    //     spine (this seed creates the JE directly, bypassing the engine, so the
+    //     spine must be written explicitly to stay consistent — §5).
+    if (!(await prisma.universalVoucher.findUnique({ where: { reference: PAYMENT_REF } }))) {
+        await prisma.universalVoucher.create({
+            data: {
+                type: "PAYMENT", reference: PAYMENT_REF, friendlyRef: VOUCHER_REF, date: today,
+                description: "Courier payment to DTDC (dummy)", narration: "Courier payment to DTDC (dummy)",
+                status: "POSTED", postedAt: today, createdById: admin.id, sourceJournalEntryId: je.id,
+                lines: {
+                    create: [
+                        { accountId: courier.id, type: "DEBIT", amount: 5000, description: "Courier charges" },
+                        { accountId: cash.id, type: "CREDIT", amount: 5000, description: "Paid in cash" },
+                    ],
+                },
+            },
+        });
+    }
+
     // 5. Draws against the ₹5,000 entry: ₹2,000 onto a product, ₹3,000 dismissed.
     if ((await prisma.additionalCostAllocation.count({ where: { sourceJournalLineId: courierLine.id } })) === 0) {
         await prisma.additionalCostAllocation.createMany({

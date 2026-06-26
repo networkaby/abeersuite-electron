@@ -27,7 +27,8 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { invNextRef } from "@/modules/inventory/lib/stock";
 import { recordStockMovement } from "@/modules/inventory/lib/stockMovement";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
-import { postInvVoucherToGl } from "@/modules/accountancy/lib/postInvVoucher";
+import { saleToSpec } from "@/modules/accountancy/lib/voucherMappers";
+import { enginePost } from "@/modules/accountancy/lib/transactionEngine";
 import * as Sentry from "@sentry/nextjs";
 
 const lostLineSchema = z.object({
@@ -177,34 +178,31 @@ export async function POST(req: Request) {
                 include: { lines: true, tenders: { include: { account: { select: { id: true, name: true, normalBalance: true, group: { select: { type: true } } } } } } },
             });
 
-            const gl = await postInvVoucherToGl(tx, {
-                voucherId: voucher.id,
-                voucher: {
-                    id:          voucher.id,
-                    type:        voucher.type,
-                    reference:   voucher.reference,
-                    date:        voucher.date,
-                    description: voucher.description,
-                    partyJson:   voucher.partyJson,
-                    subtotal:    voucher.subtotal,
-                    taxAmount:   voucher.taxAmount,
-                    shippingAmt: voucher.shippingAmt,
-                    roundOff:    voucher.roundOff,
-                    totalAmount: voucher.totalAmount,
-                    tenders:     voucher.tenders.map((t) => ({
-                        accountId: t.accountId,
-                        amount:    Number(t.amount),
-                        account:   t.account,
-                    })),
-                    sellerStateCode,
-                    buyerStateCode: sellerStateCode,
-                },
-                userId: user!.id,
-            });
+            const spec = await saleToSpec(tx, {
+                id:          voucher.id,
+                type:        voucher.type,
+                reference:   voucher.reference,
+                date:        voucher.date,
+                description: voucher.description,
+                partyJson:   voucher.partyJson,
+                subtotal:    voucher.subtotal,
+                taxAmount:   voucher.taxAmount,
+                shippingAmt: voucher.shippingAmt,
+                roundOff:    voucher.roundOff,
+                totalAmount: voucher.totalAmount,
+                tenders:     voucher.tenders.map((t) => ({
+                    accountId: t.accountId,
+                    amount:    Number(t.amount),
+                    account:   t.account,
+                })),
+                sellerStateCode,
+                buyerStateCode: sellerStateCode,
+            });   // GL only — stock IN handled below
+            const gl = await enginePost(tx, spec, user!.id);
             if (gl.journalEntryId === null) {
                 throw new GlPostFailedError(
-                    `Cannot post lost-invoice return ${vRef}: GL bridge could not build a journal entry.`,
-                    gl.notes,
+                    `Cannot post lost-invoice return ${vRef}: engine produced no journal entry.`,
+                    [],
                 );
             }
             await tx.invVoucher.update({

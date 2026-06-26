@@ -5,6 +5,7 @@ import { validateRequest, handleApiError, parseIdParam } from "@/shared/lib/api"
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { giftCardIssueSchema } from "@/shared/lib/schemas/giftCardSchemas";
 import { nextRefFromSeries, balanceDelta } from "@/modules/accountancy/lib/balance";
+import { mirrorJeToSpine } from "@/modules/accountancy/lib/transactionEngine";
 
 // POST /api/gift-cards/[id]/issue — SELL a DRAFT card. Posts a balanced JE
 // Dr <payment ledger> / Cr "Gift Card Liability" for the card's value, writes an
@@ -43,7 +44,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         const issued = await prisma.$transaction(async (tx) => {
             // Balanced JE: Dr payment ledger / Cr Gift Card Liability.
             const jeRef = await nextRefFromSeries(tx, "GL_POSTING", user!.id);
-            await tx.journalEntry.create({
+            const issueJe = await tx.journalEntry.create({
                 data: {
                     date: new Date(),
                     reference: jeRef,
@@ -59,6 +60,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                     },
                 },
             });
+            // Phase 4: mirror the gift-card issue JE into the spine.
+            await mirrorJeToSpine(tx, issueJe.id, { type: "JOURNAL", friendlyRef: jeRef });
             await tx.account.update({ where: { id: payAccount.id }, data: { balance: { increment: balanceDelta(payAccount.normalBalance ?? "DEBIT", "DEBIT", value) } } });
             await tx.account.update({ where: { id: liability.id }, data: { balance: { increment: balanceDelta(liability.normalBalance ?? "CREDIT", "CREDIT", value) } } });
 

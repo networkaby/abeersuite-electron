@@ -4,6 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { nextRefFromSeries, balanceDelta } from "@/modules/accountancy/lib/balance";
+import { mirrorJeToSpine } from "@/modules/accountancy/lib/transactionEngine";
 
 // POST /api/gift-cards/expire-breakage — recognise breakage on every ACTIVE card
 // that is past its expiry with a leftover balance. For each: Dr "Gift Card
@@ -37,7 +38,7 @@ export async function POST() {
             for (const gc of due) {
                 const amt = Number(gc.balance);
                 const jeRef = await nextRefFromSeries(tx, "GL_POSTING", user!.id);
-                await tx.journalEntry.create({
+                const breakageJe = await tx.journalEntry.create({
                     data: {
                         date: now,
                         reference: jeRef,
@@ -53,6 +54,8 @@ export async function POST() {
                         },
                     },
                 });
+                // Phase 4: mirror the gift-card breakage JE into the spine.
+                await mirrorJeToSpine(tx, breakageJe.id, { type: "JOURNAL", friendlyRef: jeRef });
                 await tx.account.update({ where: { id: liability.id }, data: { balance: { increment: balanceDelta(liability.normalBalance ?? "CREDIT", "DEBIT", amt) } } });
                 await tx.account.update({ where: { id: breakage.id }, data: { balance: { increment: balanceDelta(breakage.normalBalance ?? "CREDIT", "CREDIT", amt) } } });
                 await tx.giftCardTxn.create({

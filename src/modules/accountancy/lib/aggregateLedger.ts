@@ -1,9 +1,40 @@
 // Single-pass aggregation of POSTED JournalLines per account.
 // Returns opening / debits / credits / closing — given a date range (or just an asOf for closing-only).
 
+import type { Prisma, VoucherStatus } from "@/generated/prisma/client";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { balanceDelta } from "./balance";
 import { computeTradingStockAdjustment } from "./tradingStockAdjustment";
+
+export type LedgerMode = "posted" | "provisional";
+
+/**
+ * The single JournalEntry inclusion gate for ledger reads. `posted` (default) =
+ * POSTED only (the books); `provisional` also includes DRAFT (Tally-Scenario
+ * what-if). CANCELLED / soft-deleted are never counted. Every GL reader — Balance
+ * Sheet, P&L, Trial Balance, Day Book, ledger, cash-flow — spreads this into its
+ * `journalEntry` (or top-level JE) filter so they agree by construction.
+ *
+ * NOTE: pre-Phase-4 a DRAFT has no JournalEntry, so `provisional` behaves
+ * POSTED-only in practice today; the helper exists now so all readers route
+ * through ONE gate (and `cash-flow`, which filtered no status, gets fixed).
+ */
+function ledgerStatusWhere(mode: LedgerMode) {
+    return mode === "provisional"
+        ? { status: { in: ["POSTED", "DRAFT"] as VoucherStatus[] }, deletedAt: null }
+        : { status: "POSTED" as VoucherStatus, deletedAt: null };
+}
+
+export function ledgerStatusFilter(mode: LedgerMode = "posted"): Prisma.JournalEntryWhereInput {
+    return ledgerStatusWhere(mode);
+}
+
+/** Spine-typed sibling of `ledgerStatusFilter` (Phase 4 Stage E): the SAME
+ *  status/deletedAt gate, typed for the `UniversalVoucher` relation. Both
+ *  wrappers funnel through `ledgerStatusWhere` — still ONE source of truth. */
+export function ledgerStatusFilterUv(mode: LedgerMode = "posted"): Prisma.UniversalVoucherWhereInput {
+    return ledgerStatusWhere(mode);
+}
 
 export type AccountAggregate = {
     accountId: number;
@@ -65,10 +96,10 @@ export async function aggregateClosingAsOf(
     nbMap: Map<number, "DEBIT" | "CREDIT">,
 ): Promise<Map<number, number>> {
     const [sums, masterOpening] = await Promise.all([
-        prisma.journalLine.groupBy({
+        prisma.voucherGlLine.groupBy({
             by: ["accountId", "type"],
             _sum: { amount: true },
-            where: { journalEntry: { status: "POSTED", deletedAt: null, date: { lte: asOf } } },
+            where: { universalVoucher: { ...ledgerStatusFilterUv(), date: { lte: asOf } } },
         }),
         loadMasterOpeningBalances(asOf, nbMap),
     ]);
@@ -175,15 +206,15 @@ export async function aggregateRange(
     nbMap: Map<number, "DEBIT" | "CREDIT">,
 ): Promise<Map<number, AccountAggregate>> {
     const [openingSums, periodSums, masterOpening] = await Promise.all([
-        prisma.journalLine.groupBy({
+        prisma.voucherGlLine.groupBy({
             by: ["accountId", "type"],
             _sum: { amount: true },
-            where: { journalEntry: { status: "POSTED", deletedAt: null, date: { lt: from } } },
+            where: { universalVoucher: { ...ledgerStatusFilterUv(), date: { lt: from } } },
         }),
-        prisma.journalLine.groupBy({
+        prisma.voucherGlLine.groupBy({
             by: ["accountId", "type"],
             _sum: { amount: true },
-            where: { journalEntry: { status: "POSTED", deletedAt: null, date: { gte: from, lte: to } } },
+            where: { universalVoucher: { ...ledgerStatusFilterUv(), date: { gte: from, lte: to } } },
         }),
         loadMasterOpeningBalances(to, nbMap),
     ]);
@@ -264,12 +295,12 @@ export async function netProfitLoss(from: Date, to: Date): Promise<number> {
 
     const sumNetCredit = async (ids: number[]): Promise<number> => {
         if (ids.length === 0) return 0;
-        const sums = await prisma.journalLine.groupBy({
+        const sums = await prisma.voucherGlLine.groupBy({
             by: ["type"],
             _sum: { amount: true },
             where: {
                 accountId: { in: ids },
-                journalEntry: { status: "POSTED", deletedAt: null, date: { gte: from, lte: to } },
+                universalVoucher: { ...ledgerStatusFilterUv(), date: { gte: from, lte: to } },
             },
         });
         let dr = 0, cr = 0;
@@ -289,12 +320,12 @@ export async function netProfitLoss(from: Date, to: Date): Promise<number> {
     };
     const sumNetDebit = async (ids: number[]): Promise<number> => {
         if (ids.length === 0) return 0;
-        const sums = await prisma.journalLine.groupBy({
+        const sums = await prisma.voucherGlLine.groupBy({
             by: ["type"],
             _sum: { amount: true },
             where: {
                 accountId: { in: ids },
-                journalEntry: { status: "POSTED", deletedAt: null, date: { gte: from, lte: to } },
+                universalVoucher: { ...ledgerStatusFilterUv(), date: { gte: from, lte: to } },
             },
         });
         let dr = 0, cr = 0;

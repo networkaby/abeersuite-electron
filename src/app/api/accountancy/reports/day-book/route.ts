@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { parseRange } from "@/modules/accountancy/lib/period";
+import { ledgerStatusFilter } from "@/modules/accountancy/lib/aggregateLedger";
 import { resolveSourceBatch } from "@/modules/accountancy/lib/journalEntrySource";
 import { parsePagination } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
@@ -39,8 +40,11 @@ export async function GET(req: Request) {
     // the source tables. "Journal" is the negation — any JE not linked to a
     // voucher / invoice. We pre-compute the id sets in parallel so the main
     // findMany still uses a single round trip.
+    // Single ledger-inclusion gate — POSTED only + not soft-deleted, shared with
+    // every other report via `ledgerStatusFilter` (previously inlined `status`
+    // here and silently omitted the `deletedAt: null` guard).
     const baseWhere = {
-        status: "POSTED" as const,
+        ...ledgerStatusFilter(),
         date: { gte: from, lte: to },
     };
     let kindIdsFilter: { id: { in: number[] } } | { id: { notIn: number[] } } | undefined;

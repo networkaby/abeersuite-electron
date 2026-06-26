@@ -25,8 +25,7 @@
 
 import type { Prisma, PrismaClient } from "@/generated/prisma/client";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
-import { balanceDelta, nextRefFromSeries, toNumber } from "./balance";
-import { defaultNormalBalanceForGroupType } from "./groupNature";
+import { toNumber } from "./balance";
 import { computeGstSplit } from "@/shared/lib/gst/computeGstSplit";
 import { readPartyName } from "@/shared/lib/accountancy/partySnapshot";
 
@@ -93,13 +92,6 @@ async function findLedgerByNames(tx: Tx, names: readonly string[]): Promise<Ledg
     return null;
 }
 
-function effectiveNormalBalance(led: LedgerLite): "DEBIT" | "CREDIT" {
-    if (led.normalBalance) return led.normalBalance;
-    if (led.groupType)     return defaultNormalBalanceForGroupType(led.groupType);
-    // Last-resort default (shouldn't happen for properly grouped accounts)
-    return "DEBIT";
-}
-
 export type PostVoucherInput = {
     voucherId: number;
     voucher: {
@@ -162,14 +154,23 @@ export type PostVoucherInput = {
     userId: number;
 };
 
-export type PostVoucherResult = {
-    journalEntryId: number | null;
-    /** Diagnostic notes — non-blocking warnings (e.g. "tax ledger not found"). */
-    notes: string[];
-};
+type BuiltGl =
+    | { skip: true;  notes: string[] }
+    | { skip: false; lines: JeLine[]; notes: string[]; ledgers: LedgerLite[] };
 
-export async function postInvVoucherToGl(tx: Tx, input: PostVoucherInput): Promise<PostVoucherResult> {
-    const { voucher, userId } = input;
+/**
+ * Build the balanced GL lines for an inventory trading voucher (SALE / PURCHASE
+ * / SALE_RETURN / PURCHASE_RETURN). No JE / balance writes — returns `lines`,
+ * diagnostic `notes`, and the resolved `ledgers` (so the caller can apply the
+ * balance deltas). `skip:true` means no GL post (wrong type / zero total / no
+ * body ledger / no tenders / unbalanced). Shared by `postInvVoucherToGl` (which
+ * writes the JE itself) and the engine mapper `saleToSpec` (feeds `enginePost`)
+ * so both produce byte-identical lines.
+ */
+export async function buildInvVoucherGlLines(
+    tx: Tx,
+    voucher: PostVoucherInput["voucher"],
+): Promise<BuiltGl> {
     const notes: string[] = [];
     // Party name for JE descriptions comes from the frozen snapshot (partyJson).
     const partyName = readPartyName(voucher.partyJson);
@@ -189,7 +190,7 @@ export async function postInvVoucherToGl(tx: Tx, input: PostVoucherInput): Promi
     const isSaleReturn       = voucher.type === "SALE_RETURN";
     const isPurchaseReturn   = voucher.type === "PURCHASE_RETURN";
     if (!isPositiveSale && !isPositivePurchase && !isSaleReturn && !isPurchaseReturn) {
-        return { journalEntryId: null, notes: ["voucher type does not post to GL"] };
+        return { skip: true, notes: ["voucher type does not post to GL"] };
     }
     // `isSale` (legacy name) reused below as a shorthand for the "sale shape"
     // direction — counter Dr, body Cr. SALE and PURCHASE_RETURN both share it.
@@ -214,7 +215,7 @@ export async function postInvVoucherToGl(tx: Tx, input: PostVoucherInput): Promi
     const goodsAmount  = subtotal - taxAmount;
 
     if (totalAmount <= 0) {
-        return { journalEntryId: null, notes: ["voucher total is zero — skipping GL post"] };
+        return { skip: true, notes: ["voucher total is zero — skipping GL post"] };
     }
 
     // ── Resolve ledgers ────────────────────────────────────────────────
@@ -235,7 +236,7 @@ export async function postInvVoucherToGl(tx: Tx, input: PostVoucherInput): Promi
         if (bodyLedger) notes.push(`no dedicated ${bodyKindLabel} ledger — folded into ${bodyLedger.name}`);
     }
     if (!bodyLedger) {
-        return { journalEntryId: null, notes: [
+        return { skip: true, notes: [
             `no ledger found for ${bodyKindLabel} — skipping GL post`,
         ] };
     }
@@ -248,7 +249,7 @@ export async function postInvVoucherToGl(tx: Tx, input: PostVoucherInput): Promi
     // partyType+partyId resolution fallback.
     const tenderRows = (voucher.tenders ?? []).filter((t) => toNumber(t.amount) > 0.005);
     if (tenderRows.length === 0) {
-        return { journalEntryId: null, notes: [
+        return { skip: true, notes: [
             ...notes,
             `no tender rows on voucher ${voucher.reference} — caller must supply at least one`,
         ] };
@@ -467,76 +468,19 @@ export async function postInvVoucherToGl(tx: Tx, input: PostVoucherInput): Promi
     const debSum = lines.filter((l) => l.type === "DEBIT").reduce((s, l) => s + l.amount, 0);
     const credSum = lines.filter((l) => l.type === "CREDIT").reduce((s, l) => s + l.amount, 0);
     if (Math.abs(debSum - credSum) > 0.01) {
-        return { journalEntryId: null, notes: [
+        return { skip: true, notes: [
             ...notes,
             `JE not balanced (Dr ${debSum.toFixed(2)} vs Cr ${credSum.toFixed(2)}) — skipped`,
         ] };
     }
 
-    // ── Create JournalEntry + JournalLines ───────────────────────────────
-    // Engine output — uses the GL_POSTING series (prefix `GL-`) so it never
-    // collides visually with the user's Journal Voucher (prefix `JV-`).
-    const ref = await nextRefFromSeries(tx as Prisma.TransactionClient, "GL_POSTING", userId);
-    const je = await tx.journalEntry.create({
-        data: {
-            date:        voucher.date,
-            reference:   ref,
-            description: `${voucher.type} ${voucher.reference}: ${partyName ?? voucher.description}`,
-            status:      "POSTED",
-            postedAt:    new Date(),
-            createdById: userId,
-            lines: { create: lines.map((l) => ({
-                accountId:   l.accountId,
-                type:        l.type,
-                amount:      l.amount,
-                description: l.description ?? null,
-            })) },
-        },
-        select: { id: true },
-    });
-
-    // Update Account.balance for each line.
-    //
-    // Pre-resolved ledgers (with normalBalance + groupType): counterLedger,
-    // bodyLedger, the optional shipping/discount/roundoff legs, and any
-    // ledger the caller passed inline on a tender/charge row (collected
-    // into `extraLedgers` while building the JE).
-    //
-    // For tender/charge rows where the caller didn't pre-resolve, we
-    // batch-fetch the missing accounts so balance deltas hit the right
-    // side. effectiveNormalBalance falls back to group type when the
-    // ledger's own normalBalance column is null (identity ledgers).
-    const ledgerById = new Map<number, LedgerLite>();
-    for (const led of [bodyLedger, roundOffLedger, shippingLedger, discountLedger, ...extraLedgers]) {
-        if (led) ledgerById.set(led.id, led);
-    }
-    for (const leg of taxLegs) {
-        ledgerById.set(leg.ledger.id, leg.ledger);
-    }
-    const unresolvedIds = [...new Set(lines.map((l) => l.accountId).filter((id) => !ledgerById.has(id)))];
-    if (unresolvedIds.length > 0) {
-        const rows = await tx.account.findMany({
-            where:  { id: { in: unresolvedIds } },
-            select: { id: true, name: true, normalBalance: true, group: { select: { type: true } } },
-        });
-        for (const r of rows) {
-            ledgerById.set(r.id, {
-                id:            r.id,
-                name:          r.name,
-                normalBalance: r.normalBalance,
-                groupType:     r.group?.type ?? null,
-            });
-        }
-    }
-    for (const l of lines) {
-        const led = ledgerById.get(l.accountId);
-        const nb  = led ? effectiveNormalBalance(led) : "DEBIT";
-        const delta = balanceDelta(nb, l.type, l.amount);
-        await tx.account.update({
-            where: { id: l.accountId },
-            data:  { balance: { increment: delta } },
-        });
-    }
-
-    return { journalEntryId: je.id, notes };
+    return { skip: false, lines, notes, ledgers: [
+        bodyLedger, roundOffLedger, shippingLedger, discountLedger,
+        ...extraLedgers, ...taxLegs.map((leg) => leg.ledger),
+    ].filter((x): x is LedgerLite => x != null) };
 }
+
+// `postInvVoucherToGl` (the legacy GL bridge) was deleted 2026-06-26 — all
+// callers now build the spec via `saleToSpec` (which reuses `buildInvVoucherGlLines`
+// above) and write through the engine's `enginePost`. The line-building lives on
+// here; the JE-write + balance-delta half moved to `engineGlArm`.

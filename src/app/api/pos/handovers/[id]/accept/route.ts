@@ -26,6 +26,7 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { postContra } from "@/modules/accountancy/lib/postContra";
 import { computeExpectedCash, computeVariance, sumPaise, sumShiftCashSalesPaise } from "@/modules/pos/lib/shiftMath";
 import { nextRefFromSeries, balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
+import { mirrorJeToSpine } from "@/modules/accountancy/lib/transactionEngine";
 
 const acceptSchema = z.object({
     countedByBPaise: z.number().int().min(0),
@@ -162,6 +163,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                     await tx.account.update({ where: { id: line.accountId }, data: { balance: { increment: delta } } });
                 }
                 varianceJeId = varianceJe.id;
+                // Phase 4: mirror the variance JE into the spine.
+                await mirrorJeToSpine(tx, varianceJe.id, { type: "JOURNAL", friendlyRef: jeRef });
             }
 
             // 2. Closing Contra — sweep surplus to vault.

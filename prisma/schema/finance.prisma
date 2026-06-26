@@ -145,6 +145,69 @@ model VoucherLine {
   @@index([accountId])
 }
 
+// ── Phase 4: Universal Voucher (the posting spine) ───────────────────────────
+// Added Stage C as a TRANSITIONAL dual-write target: `engineGlArm` writes these
+// ALONGSIDE the legacy JournalEntry/JournalLine on every post. No reader uses
+// them yet (Stage E cuts readers over; Stage G retires the legacy tables and
+// slims InvVoucher to a 1:1 detail sidecar).
+//
+// Scalar/id-only (no Prisma relations on createdById/accountId/partyAccountId/
+// branchId) ON PURPOSE — same pattern as AuditLog/VoucherPrintTemplate — so this
+// stage touches only finance.prisma + the engine. Relations + FK constraints get
+// promoted in Stage G when these become canonical. `sourceJournalEntryId` is the
+// provenance back-link used by Stage D backfill reconciliation.
+model UniversalVoucher {
+  id                   Int             @id @default(autoincrement())
+  // Spans EVERY kind — VoucherType (CONTRA/PAYMENT/…), InvVoucherType (SALE/…),
+  // and JOURNAL. String (not enum) so the spine isn't coupled to either enum.
+  type                 String
+  // Canonical id (currently reuses the freshly-minted GL_POSTING ref → unique).
+  reference            String          @unique
+  // Human/legal ref carried from the source voucher (CV-2026-0001, SV-…). The
+  // future GST-invoice "friendlyRef"; not unique (drafts/series may collide).
+  friendlyRef          String?
+  date                 DateTime        @db.Date
+  description          String
+  narration            String?
+  status               VoucherStatus   @default(DRAFT)
+  partyAccountId       Int?
+  postedAt             DateTime?
+  cancelledAt          DateTime?
+  cancelledById        Int?
+  cancelReason         String?
+  deletedAt            DateTime?
+  deletedById          Int?
+  deleteReason         String?
+  createdById          Int
+  // Back-link to the legacy JE written in the same enginePost (dual-write).
+  sourceJournalEntryId Int?            @unique
+  lines                VoucherGlLine[]
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+
+  @@index([status, date])
+  @@index([date])
+  @@index([type, status])
+  @@index([deletedAt])
+  @@index([partyAccountId])
+}
+
+model VoucherGlLine {
+  id                 Int              @id @default(autoincrement())
+  universalVoucherId Int
+  universalVoucher   UniversalVoucher @relation(fields: [universalVoucherId], references: [id], onDelete: Cascade)
+  accountId          Int
+  type               EntryType
+  amount             Decimal          @db.Decimal(14, 2)
+  description        String?
+  branchId           String?
+
+  @@index([accountId])
+  @@index([universalVoucherId])
+  @@index([accountId, universalVoucherId])
+  @@index([branchId, accountId])
+}
+
 // ── Bill-wise allocation (free-form linking) ─────────────────────────────
 // Polymorphic: any voucher (target) can be settled by any other voucher (source),
 // fully or partially, now or later. AllocationMethod mirrors Tally's four modes:

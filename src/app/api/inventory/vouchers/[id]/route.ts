@@ -5,7 +5,8 @@ import { calcLineTotals, calcVoucherTotals } from "@/modules/inventory/lib/stock
 import { toNumber, nextRefFromSeries } from "@/modules/accountancy/lib/balance";
 import { recordStockMovement } from "@/modules/inventory/lib/stockMovement";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
-import { postInvVoucherToGl } from "@/modules/accountancy/lib/postInvVoucher";
+import { saleToSpec } from "@/modules/accountancy/lib/voucherMappers";
+import { enginePost, mirrorJeToSpine } from "@/modules/accountancy/lib/transactionEngine";
 import * as Sentry from "@sentry/nextjs";
 import { handleApiError } from "@/shared/lib/api";
 import { Prisma } from "@/generated/prisma/client";
@@ -297,6 +298,8 @@ export async function PATCH(req: Request, { params }: Params) {
                                 lines:       { create: reversalLines },
                             },
                         });
+                        // Phase 4: mirror the edit-reversal JE into the spine.
+                        await mirrorJeToSpine(tx, revJe.id, { type: "JOURNAL", friendlyRef: jeRef });
 
                         for (const rl of reversalLines) {
                             const origLine = origJe.lines.find((l) => l.accountId === rl.accountId)!;
@@ -467,11 +470,9 @@ export async function PATCH(req: Request, { params }: Params) {
 
                 let journalEntryId: number | null = null;
                 if (["SALE", "POS", "PURCHASE", "SALE_RETURN", "PURCHASE_RETURN"].includes(fresh.type)) {
-                    const out = await postInvVoucherToGl(tx, {
-                        voucherId: fresh.id,
-                        voucher:   fresh,
-                        userId,
-                    });
+                    // GL via the Transaction Engine (GL only — stock re-posted above).
+                    const spec = await saleToSpec(tx, fresh);
+                    const out = await enginePost(tx, spec, userId);
                     journalEntryId = out.journalEntryId;
                 }
 

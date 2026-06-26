@@ -4,6 +4,12 @@
 
 Read this file in full before making any change to this repo.
 
+## 0. Refactor posture — use the vocabulary
+
+Read [docs/vocabulary.md](docs/vocabulary.md)
+
+Be ready for major refactors toward one GL path through the engine; don't be conservative when a change aligns with that model (migration status: `PROJECT_BRAIN.md`).
+
 ## 1. Core principles
 
 - **This is NOT the Next.js you know.** APIs, conventions, and file structure differ from training data. Before writing code, read the relevant guide in `node_modules/next/dist/docs/` and respect deprecation notices.
@@ -28,15 +34,6 @@ Single-module code lives in `src/modules/<m>/{lib,hooks,components}/`. Promote l
 For module-specific URLs, permissions, models, and wiring, read `docs/modules/<module>.md` first.
 
 Each module doc follows the same template: URLs (UI + API), Permissions, Prisma models, Key components, Common workflows, Gotchas. Module docs are **reference only** — they don't carry "shipped" / "pending" status.
-
-## 4. Completed & protected surfaces (no-regression rule)
-
-Before editing critical completed flows, read `docs/completed-and-protected.md`.
-
-- Treat listed items (POS, Balance Sheet, Profit & Loss, Day Book, etc.) as **preserve-first**.
-- Refactors and styling are fine, but behaviour or output changes require explicit user approval.
-- Don't alter accounting math paths (`effectiveLedgerBalance`, `aggregateClosingAsOf`, `aggregateRange`, `netProfitLoss`) unless the task explicitly asks for accounting logic changes.
-- If a protected surface is intentionally changed, update `docs/completed-and-protected.md` in the same commit.
 
 ## 5. Seeds — keep production & dummy in sync with the schema
 
@@ -65,10 +62,10 @@ When `hard-clean.ts` needs to remove rows from a new dummy-only table, extend it
 
 Docs drift in two ways. Tools handle one; you handle the other.
 
-| Layer | Detected by | Fixed by |
-|---|---|---|
-| **Mechanical** — broken file paths in docs; permission keys in `bootstrap-seed.ts` that aren't in `permissions.ts` | `pnpm seed:check-docs` | `pnpm seed:fix-docs` (auto-applies safe fixes) |
-| **Narrative** — module docs older than the code they document; missing new routes / APIs / gotchas in prose | `pnpm seed:check-docs` (reports "N days behind") | Claude, via the `sync-docs-with-code` skill in `.claude/skills/` |
+| Layer                                                                                                              | Detected by                                      | Fixed by                                                         |
+| ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------ | ---------------------------------------------------------------- |
+| **Mechanical** — broken file paths in docs; permission keys in `bootstrap-seed.ts` that aren't in `permissions.ts` | `pnpm seed:check-docs`                           | `pnpm seed:fix-docs` (auto-applies safe fixes)                   |
+| **Narrative** — module docs older than the code they document; missing new routes / APIs / gotchas in prose        | `pnpm seed:check-docs` (reports "N days behind") | Claude, via the `sync-docs-with-code` skill in `.claude/skills/` |
 
 ### Commands
 

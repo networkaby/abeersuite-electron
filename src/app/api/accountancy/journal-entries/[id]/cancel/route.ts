@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { balanceDelta, toNumber, nextRefFromSeries } from "@/modules/accountancy/lib/balance";
+import { mirrorJeToSpine } from "@/modules/accountancy/lib/transactionEngine";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
@@ -51,7 +52,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             }
 
             const reversalRef = await nextRefFromSeries(tx, "GL_POSTING", user!.id);
-            await tx.journalEntry.create({
+            const reversalJe = await tx.journalEntry.create({
                 data: {
                     date: new Date(),
                     reference: reversalRef,
@@ -69,6 +70,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                     },
                 },
             });
+            // Phase 4: keep the spine in step with this reversal JE.
+            await mirrorJeToSpine(tx, reversalJe.id, { type: "JOURNAL", friendlyRef: reversalRef });
 
             for (const line of entry.lines) {
                 const reversedType = line.type === "DEBIT" ? "CREDIT" : "DEBIT";
