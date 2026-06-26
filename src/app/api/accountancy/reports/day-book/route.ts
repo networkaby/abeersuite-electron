@@ -40,9 +40,8 @@ export async function GET(req: Request) {
     // the source tables. "Journal" is the negation — any JE not linked to a
     // voucher / invoice. We pre-compute the id sets in parallel so the main
     // findMany still uses a single round trip.
-    // Single ledger-inclusion gate — POSTED only + not soft-deleted, shared with
-    // every other report via `ledgerStatusFilter` (previously inlined `status`
-    // here and silently omitted the `deletedAt: null` guard).
+    // Single ledger-inclusion gate (POSTED, not soft-deleted), shared with every
+    // report via `ledgerStatusFilterUv`, on the universal-voucher spine.
     const baseWhere = {
         ...ledgerStatusFilterUv(),
         date: { gte: from, lte: to },
