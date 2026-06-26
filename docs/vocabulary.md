@@ -59,18 +59,18 @@ This file unifies what used to be two separate glossaries — the Transaction En
 
 ## Voucher lines
 
-**Definition:** A voucher carries several kinds of **lines**, named `Voucher<What>Line` so the model reads as a set of siblings and is self-describing. Two are the "faces" of a voucher — the **money side** and the **goods side** — and the rest are supporting line kinds. A voucher line is **input** (what the user entered), distinct from the **derived ledgers** the engine writes from it.
+**Definition:** A voucher has exactly **two** kinds of line — the **money face** and the **goods face**:
 
 | Term | Meaning | Current code |
 | --- | --- | --- |
-| **VoucherGlLine** | the **accounting** lines — Dr/Cr against ledger accounts (the money face) | `VoucherGlLine` (`finance.prisma`) — already follows the convention |
-| **VoucherInventoryLine** | the **goods** lines — product, qty, rate, tax (the goods face) | `InvVoucherLine` (`inventory.prisma`) |
-| **VoucherTenderLine** | the **payment** lines — cash / card / UPI received | `InvVoucherTender` |
-| **VoucherChargeLine** | the **extra-charge** lines — freight, packing, etc. | `InvVoucherCharge` |
+| **VoucherGlLine** | the **accounting** lines — every Dr/Cr posting against a ledger account: the body (sales/purchase), tax, the tender/cash legs, charges, round-off, discount, shipping | `VoucherGlLine` (`finance.prisma`) |
+| **VoucherInventoryLine** | the **goods** lines — product, qty, rate, tax %, free qty, MRP (what was bought/sold) | `InvVoucherLine` (`inventory.prisma`) |
 
-**Input vs derived (keep distinct):** `VoucherInventoryLine` is the item _on the voucher_ ("5 × Widget @ ₹100"). `InvStockLedger` is the stock _movement_ it produces ("−5 Widget, branch HQ") — a **derived ledger** (the stock-arm output), **not** a voucher line. Do not name the movement `VoucherStockLine`; that would blur input vs. derived. Likewise `VoucherGlLine` is the accounting input; `JournalLine` / `Account.balance` are its derived GL footprint.
+**Tenders and charges are NOT separate line types — they are `VoucherGlLine` rows.** A tender (cash/card/UPI received) is just a `Dr` against a cash/bank/AR account; a charge (freight/packing) is just a `Dr`/`Cr` against a charge ledger. Both fold into `VoucherGlLine`, distinguished by a **`role`** tag (`BODY` / `TAX` / `TENDER` / `CHARGE` / `ROUND_OFF` / `DISCOUNT` / `SHIPPING`). Tender-only attributes — `method` (CASH/CARD/UPI label) and `reference` (UPI ref / cheque #) — ride as nullable columns on the GL line. _Why they're separate tables today:_ `InvVoucher` doesn't store GL lines — the GL is computed at post time, so `InvVoucherTender`/`InvVoucherCharge` are input rows that `buildInvVoucherGlLines` derives the JournalLines from. Once the voucher **stores** its GL lines, those input rows simply **are** the GL lines (role-tagged); the separate tables go away.
 
-**Status:** naming **adopted (2026-06-27)**. `VoucherGlLine` already uses it. The `InvVoucherLine` / `InvVoucherTender` / `InvVoucherCharge` renames are applied **as part of the universal-voucher table build** (when `InvVoucher` collapses into the universal voucher), not as a standalone rename — one migration, not two.
+**Input vs derived (keep distinct):** `VoucherInventoryLine` stays its own table because it is **not** a GL posting — it's the goods detail the body/tax `VoucherGlLine`s are *derived from* ("5 × Widget @ ₹100"). The derived **ledgers** are not voucher lines: `InvStockLedger` is the stock-arm movement ("−5 Widget, branch HQ") — do **not** name it `VoucherStockLine`; and `JournalLine` / `Account.balance` are the GL footprint of the `VoucherGlLine`s.
+
+**Status:** naming **adopted (2026-06-27)**. `VoucherGlLine` already uses it. The `InvVoucherLine` rename and the `InvVoucherTender` / `InvVoucherCharge` → role-tagged `VoucherGlLine` fold are applied **as part of the universal-voucher table build** (when `InvVoucher` collapses into the universal voucher), not as a standalone rename.
 
 ---
 
@@ -398,4 +398,4 @@ This file unifies what used to be two separate glossaries — the Transaction En
 
 ---
 
-_Last updated: 2026-06-27 — Added the "Voucher lines" term: the `Voucher<What>Line` naming convention (VoucherGlLine / VoucherInventoryLine / VoucherTenderLine / VoucherChargeLine), the input-vs-derived-ledger distinction, and the note that the renames land with the universal-voucher table build. Prior: 2026-06-25 — merged the former transaction- and work-inbox vocabularies into this single doc._
+_Last updated: 2026-06-27 — Added the "Voucher lines" term: a voucher has TWO line faces — `VoucherGlLine` (every Dr/Cr posting, incl. tenders + charges as role-tagged rows) and `VoucherInventoryLine` (goods). Tenders/charges are NOT separate line types (they're GL postings); InvStockLedger stays a derived ledger, not a voucher line. Renames land with the universal-voucher table build. Prior: 2026-06-25 — merged the former transaction- and work-inbox vocabularies into this single doc._
