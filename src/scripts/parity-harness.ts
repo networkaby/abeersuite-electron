@@ -25,9 +25,10 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import type { PostVoucherInput } from "@/modules/accountancy/lib/postInvVoucher";
 import { saleToSpec, buildTradingStockMoves } from "@/modules/accountancy/lib/voucherMappers";
-import { enginePost, engineCreateVoucher, mirrorJeToSpine, syncSpineLifecycle, resyncSpineFromJe } from "@/modules/accountancy/lib/transactionEngine";
-import { recomputeProductStock, recordStockMovement } from "@/modules/inventory/lib/stockMovement";
+import { enginePost, engineCreateVoucher, mirrorJeToSpine, syncSpineLifecycle } from "@/modules/accountancy/lib/transactionEngine";
+import { recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
 import { recomputeAccountBalances } from "@/modules/accountancy/lib/aggregateLedger";
+import { reapplyTradingVoucherInPlace } from "@/modules/accountancy/lib/reapplyTradingVoucher";
 
 // Self-built client (the app singleton reads env at import-time; tsx doesn't load
 // .env.local for us). Mirror prismaClient.ts's local-vs-remote SSL detection.
@@ -427,21 +428,14 @@ async function runEditCycle(): Promise<boolean> {
             await tx.invVoucherTender.updateMany({ where: { voucherId: v.id }, data: { amount: 236 } });
             await tx.invVoucher.update({ where: { id: v.id }, data: { subtotal: 236, taxAmount: 36, totalAmount: 236 } });
             const edited = await reload(tx, v.id);
-            const spec2 = await saleToSpec(tx, { ...edited!, sellerStateCode: "19", buyerStateCode: "19" } as unknown as PostVoucherInput["voucher"], { voucherId: v.id, branchId: v.branchId, lines: edited!.lines });
-
-            const oldAccts = (await tx.journalLine.findMany({ where: { journalEntryId: saleJe }, select: { accountId: true } })).map((l) => l.accountId);
-            const affected = [...new Set([...oldAccts, ...spec2.glLines.map((l) => l.accountId)])];
-
-            // GL: rewrite the lines on the SAME JE id (in place → allocations safe).
-            await tx.journalLine.deleteMany({ where: { journalEntryId: saleJe } });
-            await tx.journalLine.createMany({ data: spec2.glLines.map((l) => ({ journalEntryId: saleJe, accountId: l.accountId, type: l.type, amount: l.amount, description: l.description ?? null })) });
-            await resyncSpineFromJe(tx, saleJe, { type: "SALE", friendlyRef: v.reference });   // spine = new JE lines
-            await recomputeAccountBalances(tx, affected);                                       // cache from new spine
-
-            // Stock: delete old rows + re-post new + recompute.
-            await tx.invStockLedger.deleteMany({ where: { voucherId: v.id } });
-            for (const m of spec2.stockMoves) await recordStockMovement(tx, m);
-            await recomputeProductStock(tx, [product.id]);
+            // Reapply through the SHARED helper the PATCH route uses — so a green
+            // harness verifies the route's actual edit logic, not a parallel copy.
+            await reapplyTradingVoucherInPlace(tx, {
+                voucher:        { ...edited!, sellerStateCode: "19", buyerStateCode: "19" } as unknown as PostVoucherInput["voucher"],
+                branchId:       v.branchId,
+                lines:          edited!.lines,
+                journalEntryId: saleJe,
+            });
 
             // 3. Assertions.
             const vAfter = await tx.invVoucher.findUnique({ where: { id: v.id }, select: { journalEntryId: true } });
