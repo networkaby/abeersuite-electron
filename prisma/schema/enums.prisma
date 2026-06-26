@@ -117,6 +117,7 @@ enum AllocationTargetType {
   INVOICE
   VOUCHER
   JOURNAL_ENTRY
+  UNIVERSAL_VOUCHER // Phase 4 G1: allocations re-home onto the universal-voucher spine
 }
 
 enum AllocationSourceType {

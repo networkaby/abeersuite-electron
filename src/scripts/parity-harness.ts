@@ -29,6 +29,7 @@ import { enginePost, engineCreateVoucher, mirrorJeToSpine, syncSpineLifecycle } 
 import { recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
 import { recomputeAccountBalances } from "@/modules/accountancy/lib/aggregateLedger";
 import { reapplyTradingVoucherInPlace } from "@/modules/accountancy/lib/reapplyTradingVoucher";
+import { postReceiptVoucher } from "@/modules/accountancy/lib/postReceiptVoucher";
 
 // Self-built client (the app singleton reads env at import-time; tsx doesn't load
 // .env.local for us). Mirror prismaClient.ts's local-vs-remote SSL detection.
@@ -465,15 +466,68 @@ async function runEditCycle(): Promise<boolean> {
     return ok;
 }
 
+/** Stage G1: a receipt allocated against a sale's JE must ALSO get a spine-targeted
+ *  (UNIVERSAL_VOUCHER) allocation — the dual-target step. Rolled back. */
+async function runAllocationDualTarget(): Promise<boolean> {
+    const [branch, product, cash, debtor, user] = await Promise.all([
+        prisma.branch.findFirst({ select: { id: true } }),
+        prisma.invProduct.findFirst({ select: { id: true, stock: true } }),
+        prisma.account.findFirst({ where: { name: { equals: "Cash", mode: "insensitive" }, personId: null, companyId: null }, select: { id: true } }),
+        prisma.account.findFirst({ where: { group: { name: { equals: "Sundry Debtors", mode: "insensitive" } } }, select: { id: true } }),
+        prisma.user.findFirst({ select: { id: true } }),
+    ]);
+    if (!branch || !product || !cash || !debtor || !user) { console.log("\nG1 alloc skipped — missing seed data"); return true; }
+
+    let ok = false;
+    try {
+        await prisma.$transaction(async (tx) => {
+            const v = await tx.invVoucher.create({
+                data: {
+                    type: "SALE", reference: `PARITY-G1-${Date.now()}`, branchId: branch.id,
+                    date: new Date(), description: "G1 alloc sale", status: "POSTED",
+                    subtotal: 118, taxAmount: 18, totalAmount: 118,
+                    deliveryMode: "COUNTER", placeOfSupply: "19", createdById: user.id,
+                    lines:   { create: [{ productId: product.id, quantity: 1, rate: 100, taxRate: 18, taxAmount: 18, amount: 118 }] },
+                    tenders: { create: [{ accountId: cash.id, amount: 118 }] },
+                },
+                include: { lines: { include: { product: { select: { id: true, stock: true, mrpPaise: true } } } }, tenders: true },
+            });
+            const spec = await saleToSpec(tx, { ...v, sellerStateCode: "19", buyerStateCode: "19" } as unknown as PostVoucherInput["voucher"], { voucherId: v.id, branchId: v.branchId, lines: v.lines });
+            const { journalEntryId: saleJe } = await enginePost(tx, spec, user.id);
+
+            const r = await postReceiptVoucher(tx, {
+                customerAccountId: debtor.id,
+                tenders:           [{ accountId: cash.id, amount: 118 }],
+                date:              new Date(),
+                userId:            user.id,
+                allocateToJournalEntryId: saleJe!,
+            });
+
+            const allocs = await tx.voucherAllocation.findMany({ where: { sourceType: "VOUCHER", sourceId: r.voucherId }, select: { targetType: true, targetId: true } });
+            const spine  = await tx.universalVoucher.findUnique({ where: { sourceJournalEntryId: saleJe! }, select: { id: true } });
+            const jeAlloc = allocs.find((a) => a.targetType === "JOURNAL_ENTRY" && a.targetId === saleJe);
+            const uvAlloc = allocs.find((a) => a.targetType === "UNIVERSAL_VOUCHER" && a.targetId === spine?.id);
+            ok = !!jeAlloc && !!uvAlloc && allocs.length === 2;
+            throw new Error(ROLLBACK);
+        }, { timeout: 30_000, maxWait: 10_000 });
+    } catch (e) {
+        if ((e as Error)?.message !== ROLLBACK) throw e;
+    }
+    console.log("\n=== G1 dual-target alloc (receipt → JE + spine allocations, rolled back) ===");
+    console.log("dual allocation (JOURNAL_ENTRY + UNIVERSAL_VOUCHER):", ok ? "✓" : "✗");
+    return ok;
+}
+
 async function main() {
     const stockOk    = stockCheck();
     const e2eOk      = await runE2E();
     const recompOk   = await runStockRecompute();
     const editOk     = await runEditCycle();
+    const allocOk    = await runAllocationDualTarget();
     const goldenOk   = await runGolden();
     const mirrorOk   = await runMirror();
     const lifecycleOk = await runLifecycle();
-    const green      = stockOk && e2eOk && recompOk && editOk && goldenOk && mirrorOk && lifecycleOk;
+    const green      = stockOk && e2eOk && recompOk && editOk && allocOk && goldenOk && mirrorOk && lifecycleOk;
     console.log(green ? "\nHARNESS GREEN ✓" : "\nHARNESS FAILED ✗");
     if (!green) process.exitCode = 1;
 }
