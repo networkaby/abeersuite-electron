@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
 import { defaultNormalBalanceForGroupType } from "@/modules/accountancy/lib/groupNature";
+import { ledgerStatusFilterUv } from "@/modules/accountancy/lib/aggregateLedger";
 import { handleApiError } from "@/shared/lib/api";
 
 // POST /api/accountancy/maintenance/recompute-balances
@@ -32,10 +33,10 @@ export async function POST(req: Request) {
             if (g) nbMap.set(a.id, defaultNormalBalanceForGroupType(g));
         }
 
-        const sums = await prisma.journalLine.groupBy({
+        const sums = await prisma.voucherGlLine.groupBy({
             by: ["accountId", "type"],
             _sum: { amount: true },
-            where: { journalEntry: { status: "POSTED", deletedAt: null } },
+            where: { universalVoucher: { ...ledgerStatusFilterUv() } },
         });
 
         const computed = new Map<number, number>();

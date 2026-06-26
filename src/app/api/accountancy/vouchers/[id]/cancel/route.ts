@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth, userCanVoucher } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
+import { syncSpineLifecycle } from "@/modules/accountancy/lib/transactionEngine";
 import { ensureCancelable, cancelFields, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
@@ -53,6 +54,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                         cancelReason:  `Voucher ${voucher.reference} cancelled: ${data.reason}`,
                     },
                 });
+                await syncSpineLifecycle(tx, voucher.journalEntryId);
             }
 
             await tx.voucher.update({

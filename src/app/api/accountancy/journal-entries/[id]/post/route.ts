@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { isBalanced, balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
+import { mirrorJeToSpine } from "@/modules/accountancy/lib/transactionEngine";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
@@ -48,6 +49,9 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                 where: { id: Number(id) },
                 data: { status: "POSTED", postedAt: new Date() },
             });
+            // Phase 4: a manual JE created DRAFT has no spine row; create it now
+            // that it's POSTED so reports (which read the spine) include it.
+            await mirrorJeToSpine(tx, Number(id), { type: "JOURNAL" });
         // Per-line account.update over the Supabase pooler can exceed the
         // default 5s interactive-tx ceiling (P2028) on multi-line entries.
         }, { timeout: 30_000, maxWait: 10_000 });

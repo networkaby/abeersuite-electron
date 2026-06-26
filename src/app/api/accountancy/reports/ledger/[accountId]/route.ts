@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
 import { resolveSourceBatch } from "@/modules/accountancy/lib/journalEntrySource";
-import { ledgerStatusFilter } from "@/modules/accountancy/lib/aggregateLedger";
+import { ledgerStatusFilterUv } from "@/modules/accountancy/lib/aggregateLedger";
 import { defaultNormalBalanceForGroupType } from "@/modules/accountancy/lib/groupNature";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -34,10 +34,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ accountI
     try {
         // Opening balance: all posted lines before the 'from' date, plus the
         // master-page openingBalance if its as-of date is on/before `from`.
-        const openingLines = await prisma.journalLine.findMany({
+        const openingLines = await prisma.voucherGlLine.findMany({
             where: {
                 accountId: Number(accountId),
-                journalEntry: { ...ledgerStatusFilter(), date: { lt: from } },
+                universalVoucher: { ...ledgerStatusFilterUv(), date: { lt: from } },
             },
             select: { type: true, amount: true },
         });
@@ -49,20 +49,26 @@ export async function GET(req: Request, { params }: { params: Promise<{ accountI
             openingBalance += balanceDelta(nb, account.openingBalanceType, toNumber(account.openingBalance));
         }
 
-        // Lines within the date range
-        const lines = await prisma.journalLine.findMany({
+        // Lines within the date range (read from the universal-voucher spine).
+        const lines = await prisma.voucherGlLine.findMany({
             where: {
                 accountId: Number(accountId),
-                journalEntry: { ...ledgerStatusFilter(), date: { gte: from, lte: to } },
+                universalVoucher: { ...ledgerStatusFilterUv(), date: { gte: from, lte: to } },
             },
-            orderBy: [{ journalEntry: { date: "asc" } }, { id: "asc" }],
+            orderBy: [{ universalVoucher: { date: "asc" } }, { id: "asc" }],
             include: {
-                journalEntry: {
-                    select: { id: true, date: true, reference: true, description: true },
+                universalVoucher: {
+                    select: { id: true, date: true, reference: true, description: true, sourceJournalEntryId: true },
                 },
-                branch: { select: { id: true, name: true } },
             },
         });
+
+        // Branch names by id — VoucherGlLine carries a scalar branchId (no relation).
+        const branchIds = [...new Set(lines.map((l) => l.branchId).filter((x): x is string => x != null))];
+        const branchRows = branchIds.length
+            ? await prisma.branch.findMany({ where: { id: { in: branchIds } }, select: { id: true, name: true } })
+            : [];
+        const branchNameById = new Map(branchRows.map((b) => [b.id, b.name]));
 
         // Hide edit-reversal noise: when a voucher is edited, the original JE
         // stays POSTED and a counter-entry JE is posted ("EDIT (reverse): X").
@@ -70,27 +76,30 @@ export async function GET(req: Request, { params }: { params: Promise<{ accountI
         // away and only surface the new posting. Match by identical
         // description, earliest unmatched original wins (handles repeated
         // edits where each pair nets independently).
-        const excludeJeIds = new Set<number>();
+        const excludeIds = new Set<number>();
         const REV_PREFIX = "EDIT (reverse): ";
         for (const l of lines) {
-            const desc = l.journalEntry.description ?? "";
+            const desc = l.universalVoucher.description ?? "";
             if (!desc.startsWith(REV_PREFIX)) continue;
-            if (excludeJeIds.has(l.journalEntry.id)) continue;
+            if (excludeIds.has(l.universalVoucher.id)) continue;
             const origDesc = desc.slice(REV_PREFIX.length);
             const orig = lines.find((o) =>
-                o.journalEntry.id !== l.journalEntry.id
-                && !excludeJeIds.has(o.journalEntry.id)
-                && (o.journalEntry.description ?? "") === origDesc,
+                o.universalVoucher.id !== l.universalVoucher.id
+                && !excludeIds.has(o.universalVoucher.id)
+                && (o.universalVoucher.description ?? "") === origDesc,
             );
             if (orig) {
-                excludeJeIds.add(orig.journalEntry.id);
-                excludeJeIds.add(l.journalEntry.id);
+                excludeIds.add(orig.universalVoucher.id);
+                excludeIds.add(l.universalVoucher.id);
             }
         }
-        const visibleLines = lines.filter((l) => !excludeJeIds.has(l.journalEntry.id));
+        const visibleLines = lines.filter((l) => !excludeIds.has(l.universalVoucher.id));
 
-        // Resolve source documents in bulk
-        const jeIds = [...new Set(visibleLines.map((l) => l.journalEntry.id))];
+        // Resolve source documents in bulk — keyed by the legacy JE id the spine
+        // mirrors (resolveSourceBatch looks up InvVoucher.journalEntryId).
+        const jeIds = [...new Set(
+            visibleLines.map((l) => l.universalVoucher.sourceJournalEntryId).filter((x): x is number => x != null),
+        )];
         const sourceMap = await resolveSourceBatch(jeIds);
 
         // Compute running balance and attach source URL
@@ -98,16 +107,17 @@ export async function GET(req: Request, { params }: { params: Promise<{ accountI
         const rows = visibleLines.map((l) => {
             const delta = balanceDelta(nb, l.type, toNumber(l.amount));
             runningBalance += delta;
-            const source = sourceMap.get(l.journalEntry.id) ?? null;
+            const srcJeId = l.universalVoucher.sourceJournalEntryId;
+            const source = srcJeId != null ? (sourceMap.get(srcJeId) ?? null) : null;
             return {
                 id: l.id,
-                journalEntryId: l.journalEntry.id,
-                date: l.journalEntry.date,
-                reference: l.journalEntry.reference,
-                description: l.journalEntry.description,
+                journalEntryId: srcJeId,
+                date: l.universalVoucher.date,
+                reference: l.universalVoucher.reference,
+                description: l.universalVoucher.description,
                 lineDescription: l.description,
-                branchId: l.branch?.id ?? null,
-                branchName: l.branch?.name ?? null,
+                branchId: l.branchId ?? null,
+                branchName: l.branchId ? (branchNameById.get(l.branchId) ?? null) : null,
                 debit: l.type === "DEBIT" ? toNumber(l.amount) : null,
                 credit: l.type === "CREDIT" ? toNumber(l.amount) : null,
                 balance: runningBalance,

@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { toNumber, balanceDelta } from "@/modules/accountancy/lib/balance";
+import { syncSpineLifecycle } from "@/modules/accountancy/lib/transactionEngine";
 import { recordStockMovement, reverseStockMovement } from "@/modules/inventory/lib/stockMovement";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import { ensureCancelable, cancelFields, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
@@ -137,6 +138,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                             cancelReason: `Voucher ${voucher.reference} cancelled: ${reason.trim()}`,
                         },
                     });
+                    await syncSpineLifecycle(tx, origJe.id);
                 }
             }
 

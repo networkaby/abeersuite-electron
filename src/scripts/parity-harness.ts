@@ -25,7 +25,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import type { PostVoucherInput } from "@/modules/accountancy/lib/postInvVoucher";
 import { saleToSpec, buildTradingStockMoves } from "@/modules/accountancy/lib/voucherMappers";
-import { enginePost, engineCreateVoucher, mirrorJeToSpine } from "@/modules/accountancy/lib/transactionEngine";
+import { enginePost, engineCreateVoucher, mirrorJeToSpine, syncSpineLifecycle } from "@/modules/accountancy/lib/transactionEngine";
 
 // Self-built client (the app singleton reads env at import-time; tsx doesn't load
 // .env.local for us). Mirror prismaClient.ts's local-vs-remote SSL detection.
@@ -283,12 +283,50 @@ async function runMirror(): Promise<boolean> {
     return ok;
 }
 
+/** Stage F: a JE's delete/restore must propagate to its spine mirror so reports
+ *  (which read the spine) hide/show it in step with legacy. Rolled back. */
+async function runLifecycle(): Promise<boolean> {
+    const acc = await loadAccounts();
+    if (!acc || acc.cash == null || acc.expense == null) { console.log("\nlifecycle skipped — no accounts"); return true; }
+    let ok = false;
+    try {
+        await prisma.$transaction(async (tx) => {
+            const je = await tx.journalEntry.create({
+                data: {
+                    date: new Date(), reference: `PARITY-LIFE-${Date.now()}`, description: "parity lifecycle",
+                    status: "POSTED", postedAt: new Date(), createdById: acc.userId,
+                    lines: { create: [
+                        { accountId: acc.expense!, type: "DEBIT",  amount: 700 },
+                        { accountId: acc.cash!,    type: "CREDIT", amount: 700 },
+                    ] },
+                },
+                select: { id: true },
+            });
+            await mirrorJeToSpine(tx, je.id, { type: "JOURNAL" });
+            await tx.journalEntry.update({ where: { id: je.id }, data: { deletedAt: new Date(), deleteReason: "t" } });
+            await syncSpineLifecycle(tx, je.id);
+            const afterDelete = await tx.universalVoucher.findUnique({ where: { sourceJournalEntryId: je.id }, select: { deletedAt: true } });
+            await tx.journalEntry.update({ where: { id: je.id }, data: { deletedAt: null, deleteReason: null } });
+            await syncSpineLifecycle(tx, je.id);
+            const afterRestore = await tx.universalVoucher.findUnique({ where: { sourceJournalEntryId: je.id }, select: { deletedAt: true } });
+            ok = afterDelete?.deletedAt != null && afterRestore?.deletedAt == null;
+            throw new Error(ROLLBACK);
+        }, { timeout: 30_000, maxWait: 10_000 });
+    } catch (e) {
+        if ((e as Error)?.message !== ROLLBACK) throw e;
+    }
+    console.log("\n=== lifecycle (delete → spine.deletedAt set; restore → cleared, rolled back) ===");
+    console.log("lifecycle propagation:", ok ? "✓" : "✗");
+    return ok;
+}
+
 async function main() {
-    const stockOk  = stockCheck();
-    const e2eOk    = await runE2E();
-    const goldenOk = await runGolden();
-    const mirrorOk = await runMirror();
-    const green    = stockOk && e2eOk && goldenOk && mirrorOk;
+    const stockOk    = stockCheck();
+    const e2eOk      = await runE2E();
+    const goldenOk   = await runGolden();
+    const mirrorOk   = await runMirror();
+    const lifecycleOk = await runLifecycle();
+    const green      = stockOk && e2eOk && goldenOk && mirrorOk && lifecycleOk;
     console.log(green ? "\nHARNESS GREEN ✓" : "\nHARNESS FAILED ✗");
     if (!green) process.exitCode = 1;
 }

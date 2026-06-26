@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { parseRange } from "@/modules/accountancy/lib/period";
-import { ledgerStatusFilter } from "@/modules/accountancy/lib/aggregateLedger";
+import { ledgerStatusFilterUv } from "@/modules/accountancy/lib/aggregateLedger";
 import { resolveSourceBatch } from "@/modules/accountancy/lib/journalEntrySource";
 import { parsePagination } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
@@ -44,10 +44,15 @@ export async function GET(req: Request) {
     // every other report via `ledgerStatusFilter` (previously inlined `status`
     // here and silently omitted the `deletedAt: null` guard).
     const baseWhere = {
-        ...ledgerStatusFilter(),
+        ...ledgerStatusFilterUv(),
         date: { gte: from, lte: to },
     };
-    let kindIdsFilter: { id: { in: number[] } } | { id: { notIn: number[] } } | undefined;
+    // Kind filters reverse-join the source tables by their legacy `journalEntryId`;
+    // the spine matches via `sourceJournalEntryId` (the JE id it mirrors).
+    let kindIdsFilter:
+        | { sourceJournalEntryId: { in: number[] } }
+        | { sourceJournalEntryId: { notIn: number[] } }
+        | undefined;
     if (kind !== "All") {
         if (kind === "Sale" || kind === "POS" || kind === "Purchase" || kind === "Estimate" || kind === "Sale Return" || kind === "Purchase Return") {
             // Each Day Book kind maps to exactly one InvVoucher.type value.
@@ -65,7 +70,7 @@ export async function GET(req: Request) {
                 where: { type: { in: [...types] }, journalEntryId: { not: null } },
                 select: { journalEntryId: true },
             });
-            kindIdsFilter = { id: { in: rows.map((r) => r.journalEntryId!).filter(Boolean) } };
+            kindIdsFilter = { sourceJournalEntryId: { in: rows.map((r) => r.journalEntryId!).filter(Boolean) } };
         } else if (kind === "Journal") {
             // "Journal" covers two things:
             //   1. JEs linked to a Voucher of type=JOURNAL (the dialog's path).
@@ -92,7 +97,7 @@ export async function GET(req: Request) {
             // We want JEs that are EITHER unlinked OR linked to a JOURNAL voucher.
             // Equivalent: exclude JEs linked to any non-JOURNAL source.
             const linkedNonJournal = [...linkedSet].filter((id) => !journalIds.has(id));
-            kindIdsFilter = { id: { notIn: linkedNonJournal } };
+            kindIdsFilter = { sourceJournalEntryId: { notIn: linkedNonJournal } };
         } else {
             // GL voucher types: CONTRA / PAYMENT / RECEIPT / CREDIT_NOTE / DEBIT_NOTE.
             // (JOURNAL is handled by the dedicated branch above.)
@@ -106,7 +111,7 @@ export async function GET(req: Request) {
                 where: { type: dbType, journalEntryId: { not: null } },
                 select: { journalEntryId: true },
             });
-            kindIdsFilter = { id: { in: rows.map((r) => r.journalEntryId!).filter(Boolean) } };
+            kindIdsFilter = { sourceJournalEntryId: { in: rows.map((r) => r.journalEntryId!).filter(Boolean) } };
         }
     }
 
@@ -123,28 +128,35 @@ export async function GET(req: Request) {
 
     try {
         const [entries, total] = await Promise.all([
-            prisma.journalEntry.findMany({
+            prisma.universalVoucher.findMany({
                 where,
                 orderBy: [{ date: "desc" }, { id: "desc" }],
                 skip: (page - 1) * limit,
                 take: limit,
                 select: {
-                    id: true, reference: true, description: true, date: true,
+                    id: true, reference: true, description: true, date: true, sourceJournalEntryId: true,
                     // Stable line order — first line is the principal "By" account
-                    // shown in the row's single Amount column.
+                    // shown in the row's single Amount column. VoucherGlLine is
+                    // id-only (no account relation); account fields are resolved
+                    // via the lookup map below.
                     lines: {
                         orderBy: { id: "asc" },
-                        select: {
-                            type: true, amount: true, description: true,
-                            account: { select: { id: true, name: true, code: true, normalBalance: true } },
-                        },
+                        select: { type: true, amount: true, description: true, accountId: true },
                     },
                 },
             }),
-            prisma.journalEntry.count({ where }),
+            prisma.universalVoucher.count({ where }),
         ]);
 
-        const jeIds = entries.map((e) => e.id);
+        // Account name/code by id — VoucherGlLine carries a scalar accountId.
+        const accountIds = [...new Set(entries.flatMap((e) => e.lines.map((l) => l.accountId)))];
+        const accountRows = accountIds.length
+            ? await prisma.account.findMany({ where: { id: { in: accountIds } }, select: { id: true, name: true, code: true } })
+            : [];
+        const accById = new Map(accountRows.map((a) => [a.id, a]));
+
+        // Source/label lookups key off the legacy JE id the spine mirrors.
+        const jeIds = entries.map((e) => e.sourceJournalEntryId).filter((x): x is number => x != null);
         const [sourceMap, glVouchers] = await Promise.all([
             resolveSourceBatch(jeIds),
             // Also look up GL Voucher rows so we can label rows as
@@ -187,8 +199,9 @@ export async function GET(req: Request) {
                 if (l.type === "DEBIT") dr += amt;
                 else                    cr += amt;
             }
-            const source = sourceMap.get(e.id) ?? null;
-            const gl     = glMap.get(e.id);
+            const srcJeId = e.sourceJournalEntryId;
+            const source  = srcJeId != null ? (sourceMap.get(srcJeId) ?? null) : null;
+            const gl      = srcJeId != null ? glMap.get(srcJeId) : undefined;
             const kind: Kind =
                 source?.kind === "sale"            ? "Sale"
               : source?.kind === "pos"             ? "POS"
@@ -201,14 +214,15 @@ export async function GET(req: Request) {
             // Principal account = first line in stable order. Tally-style display:
             // single Amount column with Dr/Cr suffix matching this side.
             const first = e.lines[0];
+            const firstAcc = first ? accById.get(first.accountId) : undefined;
             const principal = first ? {
-                accountId:   first.account.id,
-                accountName: first.account.name,
+                accountId:   first.accountId,
+                accountName: firstAcc?.name ?? "",
                 side:        first.type,
                 amount:      Number(first.amount),
             } : null;
             return {
-                id: e.id,
+                id: e.sourceJournalEntryId ?? e.id,
                 date: e.date,
                 reference: e.reference,
                 description: e.description,
@@ -217,14 +231,17 @@ export async function GET(req: Request) {
                 credit: cr,
                 principal,
                 // Compact line list for the right-click expand view.
-                lines: e.lines.map((l) => ({
-                    accountId:   l.account.id,
-                    accountName: l.account.name,
-                    accountCode: l.account.code,
-                    side:        l.type,
-                    amount:      Number(l.amount),
-                    description: l.description,
-                })),
+                lines: e.lines.map((l) => {
+                    const a = accById.get(l.accountId);
+                    return {
+                        accountId:   l.accountId,
+                        accountName: a?.name ?? "",
+                        accountCode: a?.code ?? "",
+                        side:        l.type,
+                        amount:      Number(l.amount),
+                        description: l.description,
+                    };
+                }),
                 // Prefer the InvVoucher/Invoice source link; fall back to the
                 // per-type GL voucher detail page (contras / payments / etc.).
                 source: source ?? (gl ? {

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { isBalanced, balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
+import { resyncSpineFromJe } from "@/modules/accountancy/lib/transactionEngine";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -120,7 +121,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 }
             }
 
-            return tx.journalEntry.update({
+            const updatedJe = await tx.journalEntry.update({
                 where: { id: entryId },
                 data: {
                     ...(body.date ? { date: new Date(body.date) } : {}),
@@ -132,6 +133,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                     },
                 },
             });
+            // Phase 4: a POSTED JE has a spine row — rebuild it from the edited JE.
+            if (existing.status === "POSTED") {
+                await resyncSpineFromJe(tx, entryId, { type: "JOURNAL" });
+            }
+            return updatedJe;
         // Posted edit = reverse + per-new-line findUnique + re-apply; over the
         // Supabase pooler this can exceed the default 5s interactive-tx
         // ceiling (P2028).

@@ -2,7 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { balanceDelta, toNumber, nextRefFromSeries } from "@/modules/accountancy/lib/balance";
-import { mirrorJeToSpine } from "@/modules/accountancy/lib/transactionEngine";
+import { mirrorJeToSpine, syncSpineLifecycle } from "@/modules/accountancy/lib/transactionEngine";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
@@ -95,6 +95,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                     cancelledById: user!.id,
                 },
             });
+            await syncSpineLifecycle(tx, Number(id));
         // Per-line reversal + counter-JE over the Supabase pooler can exceed
         // the default 5s interactive-tx ceiling (P2028).
         }, { timeout: 30_000, maxWait: 10_000 });

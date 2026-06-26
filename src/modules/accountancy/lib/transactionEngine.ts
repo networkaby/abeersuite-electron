@@ -254,6 +254,57 @@ export async function mirrorJeToSpine(
     });
 }
 
+/**
+ * Propagate a legacy JE's CURRENT lifecycle (status / posted / cancelled /
+ * deleted fields) onto its universal-voucher spine mirror (Phase 4 Stage F).
+ * Call in the SAME tx right after any `journalEntry.update` that changes
+ * deletedAt / status / cancelledAt / restored state — otherwise the spine
+ * (which reports now read) keeps showing a deleted/cancelled voucher. Safe when
+ * no spine row exists yet (updateMany over zero rows is a no-op).
+ */
+export async function syncSpineLifecycle(
+    tx: Prisma.TransactionClient,
+    journalEntryId: number,
+): Promise<void> {
+    const je = await tx.journalEntry.findUnique({
+        where:  { id: journalEntryId },
+        select: {
+            status: true, postedAt: true,
+            cancelledAt: true, cancelledById: true, cancelReason: true,
+            deletedAt: true, deletedById: true, deleteReason: true,
+        },
+    });
+    if (!je) return;
+    await tx.universalVoucher.updateMany({
+        where: { sourceJournalEntryId: journalEntryId },
+        data:  {
+            status:        je.status,
+            postedAt:      je.postedAt,
+            cancelledAt:   je.cancelledAt,
+            cancelledById: je.cancelledById,
+            cancelReason:  je.cancelReason,
+            deletedAt:     je.deletedAt,
+            deletedById:   je.deletedById,
+            deleteReason:  je.deleteReason,
+        },
+    });
+}
+
+/**
+ * Re-sync the spine's GL-arm lines + header after an IN-PLACE JE edit (the
+ * financial-voucher / journal-entry PATCH paths that delete & recreate
+ * `JournalLine`s on the same JE rather than reversing). Drops the stale spine
+ * row and rebuilds it from the now-current JE. Same tx.
+ */
+export async function resyncSpineFromJe(
+    tx: Prisma.TransactionClient,
+    journalEntryId: number,
+    meta: { type?: string; friendlyRef?: string | null; partyAccountId?: number | null } = {},
+): Promise<void> {
+    await tx.universalVoucher.deleteMany({ where: { sourceJournalEntryId: journalEntryId } });
+    await mirrorJeToSpine(tx, journalEntryId, meta);
+}
+
 // ── Stock arm ───────────────────────────────────────────────────────────────
 
 /** The stock writer — InvStockLedger rows + InvProduct/InvProductBranch caches. */

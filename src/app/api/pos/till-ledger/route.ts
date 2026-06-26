@@ -13,6 +13,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { toNumber } from "@/modules/accountancy/lib/balance";
+import { ledgerStatusFilterUv } from "@/modules/accountancy/lib/aggregateLedger";
 
 export async function GET(req: NextRequest) {
     const { response } = await requirePermission(PERMISSIONS.POS_SHIFT_OPEN);
@@ -40,22 +41,22 @@ export async function GET(req: NextRequest) {
         const delta = (type: "DEBIT" | "CREDIT", amt: number) => (type === "DEBIT" ? amt : -amt);
 
         // Opening balance — every posted till line strictly before `from`.
-        const openingLines = await prisma.journalLine.findMany({
-            where:  { accountId: tid, journalEntry: { status: "POSTED", deletedAt: null, date: { lt: from } } },
+        const openingLines = await prisma.voucherGlLine.findMany({
+            where:  { accountId: tid, universalVoucher: { ...ledgerStatusFilterUv(), date: { lt: from } } },
             select: { type: true, amount: true },
         });
         const openingBalance = openingLines.reduce((b, l) => b + delta(l.type, toNumber(l.amount)), 0);
 
         // Lines within the range, oldest first so the running balance accumulates.
-        const lines = await prisma.journalLine.findMany({
-            where:   { accountId: tid, journalEntry: { status: "POSTED", deletedAt: null, date: { gte: from, lte: to } } },
-            orderBy: [{ journalEntry: { date: "asc" } }, { id: "asc" }],
-            include: { journalEntry: { select: { id: true, date: true, reference: true, description: true } } },
+        const lines = await prisma.voucherGlLine.findMany({
+            where:   { accountId: tid, universalVoucher: { ...ledgerStatusFilterUv(), date: { gte: from, lte: to } } },
+            orderBy: [{ universalVoucher: { date: "asc" } }, { id: "asc" }],
+            include: { universalVoucher: { select: { id: true, date: true, reference: true, description: true, sourceJournalEntryId: true } } },
         });
 
         // Resolve reprint targets: InvVoucher (POS sale) → /receipt/invoice; GL
         // RECEIPT/PAYMENT voucher → /receipt/payment. Contras have no receipt.
-        const jeIds = [...new Set(lines.map((l) => l.journalEntry.id))];
+        const jeIds = [...new Set(lines.map((l) => l.universalVoucher.sourceJournalEntryId).filter((x): x is number => x != null))];
         const [invs, vouchers] = await Promise.all([
             prisma.invVoucher.findMany({ where: { journalEntryId: { in: jeIds } }, select: { id: true, journalEntryId: true, reference: true } }),
             prisma.voucher.findMany({ where: { journalEntryId: { in: jeIds } }, select: { id: true, journalEntryId: true, type: true, reference: true } }),
@@ -69,9 +70,9 @@ export async function GET(req: NextRequest) {
             const debit  = l.type === "DEBIT"  ? amt : null;
             const credit = l.type === "CREDIT" ? amt : null;
             balance += delta(l.type, amt);
-            const je  = l.journalEntry;
-            const inv = invByJe.get(je.id);
-            const v   = vByJe.get(je.id);
+            const je  = l.universalVoucher;
+            const inv = je.sourceJournalEntryId != null ? invByJe.get(je.sourceJournalEntryId) : undefined;
+            const v   = je.sourceJournalEntryId != null ? vByJe.get(je.sourceJournalEntryId) : undefined;
             const printUrl =
                 inv                                                 ? `/receipt/invoice/${inv.id}?kind=POS`
               : v && (v.type === "RECEIPT" || v.type === "PAYMENT") ? `/receipt/payment/${v.id}`

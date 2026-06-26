@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission, requireAuth, userCanVoucher } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { isBalanced, balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
+import { resyncSpineFromJe } from "@/modules/accountancy/lib/transactionEngine";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -174,6 +175,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                         date: new Date(body.date),
                         ...(body.narration ? { description: body.narration } : {}),
                     },
+                });
+                // Phase 4: rebuild the spine row from the edited JE (lines + header).
+                await resyncSpineFromJe(tx, existing.journalEntryId, {
+                    type: existing.type, friendlyRef: existing.reference, partyAccountId: body.partyAccountId ?? null,
                 });
             }
 
