@@ -1,8 +1,8 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
-import { balanceDelta, toNumber, nextRefFromSeries } from "@/modules/accountancy/lib/balance";
-import { mirrorJeToSpine, syncSpineLifecycle } from "@/modules/accountancy/lib/transactionEngine";
+import { balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
+import { syncSpineLifecycle } from "@/modules/accountancy/lib/transactionEngine";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
@@ -51,41 +51,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 });
             }
 
-            const reversalRef = await nextRefFromSeries(tx, "GL_POSTING", user!.id);
-            const reversalJe = await tx.journalEntry.create({
-                data: {
-                    date: new Date(),
-                    reference: reversalRef,
-                    description: `REVERSAL of ${entry.reference}: ${data.reason}`,
-                    status: "POSTED",
-                    postedAt: new Date(),
-                    createdById: user!.id,
-                    lines: {
-                        create: entry.lines.map((l) => ({
-                            accountId: l.accountId,
-                            type: l.type === "DEBIT" ? "CREDIT" : "DEBIT",
-                            amount: l.amount,
-                            description: `Reversal of ${entry.reference}`,
-                        })),
-                    },
-                },
-            });
-            // Phase 4: keep the spine in step with this reversal JE.
-            await mirrorJeToSpine(tx, reversalJe.id, { type: "JOURNAL", friendlyRef: reversalRef });
-
-            for (const line of entry.lines) {
-                const reversedType = line.type === "DEBIT" ? "CREDIT" : "DEBIT";
-                const delta = balanceDelta(
-                    line.account.normalBalance!,
-                    reversedType,
-                    toNumber(line.amount),
-                );
-                await tx.account.update({
-                    where: { id: line.accountId },
-                    data: { balance: { increment: delta } },
-                });
-            }
-
+            // Phase 4 (flag-only cancel): the POSTED-only gate already excludes a
+            // CANCELLED entry from every count, so we do NOT post a reversal JE.
+            // (The old reversal + CANCELLED flag double-removed — the account
+            // landed at −original.) The decrement above removes the original; the
+            // status flip hides it from reports; syncSpineLifecycle mirrors the flag.
             await tx.journalEntry.update({
                 where: { id: Number(id) },
                 data: {
@@ -96,8 +66,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 },
             });
             await syncSpineLifecycle(tx, Number(id));
-        // Per-line reversal + counter-JE over the Supabase pooler can exceed
-        // the default 5s interactive-tx ceiling (P2028).
+        // Per-line balance decrement over the Supabase pooler can exceed the
+        // default 5s interactive-tx ceiling (P2028).
         }, { timeout: 30_000, maxWait: 10_000 });
 
         const cancelled = await prisma.journalEntry.findUnique({ where: { id: Number(id) } });
