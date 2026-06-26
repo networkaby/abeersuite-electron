@@ -29,8 +29,7 @@ import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { postContra } from "@/modules/accountancy/lib/postContra";
 import { computeExpectedCash, computeVariance, sumPaise, sumShiftCashSalesPaise, buildShiftTenderBreakdown } from "@/modules/pos/lib/shiftMath";
-import { nextRefFromSeries, balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
-import { mirrorJeToSpine } from "@/modules/accountancy/lib/transactionEngine";
+import { enginePost } from "@/modules/accountancy/lib/transactionEngine";
 
 const closeSchema = z.object({
     declaredCashPaise:  z.number().int().min(0),
@@ -131,7 +130,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             let varianceJeId: number | null = null;
             if (variance !== 0) {
                 const absRupees = Math.abs(variance) / 100;
-                const jeRef = await nextRefFromSeries(tx, "GL_POSTING", user!.id);
                 const lines = variance > 0
                     ? [
                         { accountId: tillAccountId,  type: "DEBIT"  as const, amount: absRupees, description: "Cash drawer over" },
@@ -141,33 +139,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                         { accountId: shortAccountId!, type: "DEBIT"  as const, amount: absRupees, description: "Cash Short (POS variance)" },
                         { accountId: tillAccountId,   type: "CREDIT" as const, amount: absRupees, description: "Cash drawer short" },
                     ];
-                const varianceJe = await tx.journalEntry.create({
-                    data: {
-                        date:        new Date(),
-                        reference:   jeRef,
-                        description: `Shift #${shift.id} variance — ${variance > 0 ? "over" : "short"} ₹${Math.abs(variance) / 100}`,
-                        status:      "POSTED",
-                        postedAt:    new Date(),
-                        createdById: user!.id,
-                        lines: { create: lines.map((l) => ({ accountId: l.accountId, type: l.type, amount: l.amount, description: l.description })) },
-                    },
-                    select: { id: true },
-                });
-                // Balance deltas for the variance JE.
-                const accountIds = lines.map((l) => l.accountId);
-                const accounts = await tx.account.findMany({
-                    where:  { id: { in: accountIds } },
-                    select: { id: true, normalBalance: true },
-                });
-                const normalById = new Map(accounts.map((a) => [a.id, a.normalBalance]));
-                for (const line of lines) {
-                    const normal = normalById.get(line.accountId)!;
-                    const delta = balanceDelta(normal, line.type, toNumber(line.amount));
-                    await tx.account.update({ where: { id: line.accountId }, data: { balance: { increment: delta } } });
-                }
-                varianceJeId = varianceJe.id;
-                // Phase 4: mirror the variance JE into the spine.
-                await mirrorJeToSpine(tx, varianceJe.id, { type: "JOURNAL", friendlyRef: jeRef });
+                // Variance through the engine (JE + balance deltas + spine in one
+                // place), posted as a JOURNAL voucher. `lines` already matches the
+                // engine's GL-line shape.
+                const { journalEntryId } = await enginePost(tx, {
+                    type:        "JOURNAL",
+                    date:        new Date(),
+                    description: `Shift #${shift.id} variance — ${variance > 0 ? "over" : "short"} ₹${absRupees}`,
+                    glLines:     lines,
+                    stockMoves:  [],
+                }, user!.id);
+                varianceJeId = journalEntryId;
             }
 
             // 4. Closing Contra — sweep surplus to vault (only the non-carry-over portion).

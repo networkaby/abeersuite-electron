@@ -25,8 +25,7 @@ import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { postContra } from "@/modules/accountancy/lib/postContra";
 import { computeExpectedCash, computeVariance, sumPaise, sumShiftCashSalesPaise } from "@/modules/pos/lib/shiftMath";
-import { nextRefFromSeries, balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
-import { mirrorJeToSpine } from "@/modules/accountancy/lib/transactionEngine";
+import { enginePost } from "@/modules/accountancy/lib/transactionEngine";
 
 const acceptSchema = z.object({
     countedByBPaise: z.number().int().min(0),
@@ -126,7 +125,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             let varianceJeId: number | null = null;
             if (tillDiscrepancy !== 0) {
                 const absRupees = Math.abs(tillDiscrepancy) / 100;
-                const jeRef = await nextRefFromSeries(tx, "GL_POSTING", user!.id);
                 const lines = tillDiscrepancy > 0
                     // Books say more than B counted → counter short (shortage is A's accountability).
                     ? [
@@ -138,33 +136,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                         { accountId: tillAccountId,  type: "DEBIT"  as const, amount: absRupees, description: `Counter till adjusted to B's count (over)` },
                         { accountId: overAccountId!, type: "CREDIT" as const, amount: absRupees, description: `Cash Over — Shift #${fromShift.id} handover` },
                     ];
-                const varianceJe = await tx.journalEntry.create({
-                    data: {
-                        date:        new Date(),
-                        reference:   jeRef,
-                        description: `Shift #${fromShift.id} handover variance — ${tillDiscrepancy > 0 ? "short" : "over"} ₹${absRupees}`,
-                        status:      "POSTED",
-                        postedAt:    new Date(),
-                        createdById: user!.id,
-                        lines: { create: lines.map((l) => ({ accountId: l.accountId, type: l.type, amount: l.amount, description: l.description })) },
-                    },
-                    select: { id: true },
-                });
-                // Balance deltas.
-                const accountIds = lines.map((l) => l.accountId);
-                const accounts = await tx.account.findMany({
-                    where:  { id: { in: accountIds } },
-                    select: { id: true, normalBalance: true },
-                });
-                const normalById = new Map(accounts.map((a) => [a.id, a.normalBalance]));
-                for (const line of lines) {
-                    const normal = normalById.get(line.accountId)!;
-                    const delta  = balanceDelta(normal, line.type, toNumber(line.amount));
-                    await tx.account.update({ where: { id: line.accountId }, data: { balance: { increment: delta } } });
-                }
-                varianceJeId = varianceJe.id;
-                // Phase 4: mirror the variance JE into the spine.
-                await mirrorJeToSpine(tx, varianceJe.id, { type: "JOURNAL", friendlyRef: jeRef });
+                // Variance through the engine (JE + balance deltas + spine in one
+                // place), posted as a JOURNAL voucher.
+                const { journalEntryId } = await enginePost(tx, {
+                    type:        "JOURNAL",
+                    date:        new Date(),
+                    description: `Shift #${fromShift.id} handover variance — ${tillDiscrepancy > 0 ? "short" : "over"} ₹${absRupees}`,
+                    glLines:     lines,
+                    stockMoves:  [],
+                }, user!.id);
+                varianceJeId = journalEntryId;
             }
 
             // 2. Closing Contra — sweep surplus to vault.
