@@ -134,9 +134,48 @@ async function assertZeroDrift(): Promise<boolean> {
     return false;
 }
 
+// Phase 4 G1: for every legacy JOURNAL_ENTRY allocation, ensure a parallel
+// UNIVERSAL_VOUCHER allocation exists (targetId = the spine that mirrors the JE).
+// Idempotent — skips when the parallel row is already present. Additive: never
+// touches the JOURNAL_ENTRY rows (readers cut over to UNIVERSAL_VOUCHER later).
+async function backfillAllocations(): Promise<number> {
+    const jeAllocs = await prisma.voucherAllocation.findMany({
+        where:  { targetType: "JOURNAL_ENTRY" },
+        select: { targetId: true, sourceType: true, sourceId: true, amount: true, method: true, reference: true, createdById: true },
+    });
+    if (jeAllocs.length === 0) return 0;
+
+    const jeIds = [...new Set(jeAllocs.map((a) => a.targetId))];
+    const spineByJe = new Map(
+        (await prisma.universalVoucher.findMany({ where: { sourceJournalEntryId: { in: jeIds } }, select: { id: true, sourceJournalEntryId: true } }))
+            .map((s) => [s.sourceJournalEntryId!, s.id]),
+    );
+    const existingUv = new Set(
+        (await prisma.voucherAllocation.findMany({ where: { targetType: "UNIVERSAL_VOUCHER" }, select: { sourceType: true, sourceId: true, targetId: true } }))
+            .map((a) => `${a.sourceType}:${a.sourceId}:${a.targetId}`),
+    );
+
+    let created = 0;
+    for (const a of jeAllocs) {
+        const spineId = spineByJe.get(a.targetId);
+        if (spineId == null) continue;
+        if (existingUv.has(`${a.sourceType}:${a.sourceId}:${spineId}`)) continue;
+        await prisma.voucherAllocation.create({
+            data: { targetType: "UNIVERSAL_VOUCHER", targetId: spineId, sourceType: a.sourceType, sourceId: a.sourceId, amount: a.amount, method: a.method, reference: a.reference, createdById: a.createdById },
+        });
+        created++;
+    }
+    return created;
+}
+
 async function main() {
-    if (!CHECK_ONLY) await backfill();
-    else console.log("--check: skipping writes, asserting drift only.");
+    if (!CHECK_ONLY) {
+        await backfill();
+        const allocs = await backfillAllocations();
+        console.log(`allocation backfill: created ${allocs} parallel UNIVERSAL_VOUCHER allocation(s).`);
+    } else {
+        console.log("--check: skipping writes, asserting drift only.");
+    }
     const ok = await assertZeroDrift();
     if (!ok) process.exitCode = 1;
 }
