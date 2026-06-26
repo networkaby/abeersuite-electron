@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { parseRange } from "@/modules/accountancy/lib/period";
+import { sumReceiptAllocationsByJe } from "@/modules/accountancy/lib/outstandings";
 
 // GET /api/person/[id]/transactions?from=YYYY-MM-DD&to=YYYY-MM-DD
 //
@@ -64,16 +65,8 @@ export async function GET(
         const jeIds = rawVouchers
             .map((v) => v.journalEntryId)
             .filter((x): x is number => x !== null);
-        const jeAllocs = jeIds.length > 0
-            ? await prisma.voucherAllocation.findMany({
-                where:  { targetType: "JOURNAL_ENTRY", targetId: { in: jeIds } },
-                select: { targetId: true, amount: true },
-            })
-            : [];
-        const paidByJe = jeAllocs.reduce<Record<number, number>>((acc, a) => {
-            acc[a.targetId] = (acc[a.targetId] ?? 0) + Number(a.amount);
-            return acc;
-        }, {});
+        // RECEIPT settlements via the universal-voucher spine (keyed by JE id).
+        const paidByJe = await sumReceiptAllocationsByJe(prisma, jeIds);
 
         const invVouchers = rawVouchers.map((v) => {
             const arAccountId = v.accountId ?? account?.id ?? null;

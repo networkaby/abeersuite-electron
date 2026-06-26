@@ -1,6 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
+import { sumReceiptAllocationsByJe } from "@/modules/accountancy/lib/outstandings";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 // GET /api/accountancy/allocations/open?accountId=N
@@ -43,14 +44,8 @@ export async function GET(req: Request) {
     const jeIds = invVouchers
         .map((v) => v.journalEntryId)
         .filter((x): x is number => x !== null);
-    const jeAllocs = jeIds.length > 0 ? await prisma.voucherAllocation.findMany({
-        where: { targetType: "JOURNAL_ENTRY", targetId: { in: jeIds } },
-        select: { targetId: true, amount: true },
-    }) : [];
-    const jeAllocSum = jeAllocs.reduce<Record<number, number>>((acc, a) => {
-        acc[a.targetId] = (acc[a.targetId] ?? 0) + Number(a.amount);
-        return acc;
-    }, {});
+    // RECEIPT settlements via the universal-voucher spine (keyed by JE id).
+    const jeAllocSum = await sumReceiptAllocationsByJe(prisma, jeIds);
 
     const openInvoices = invVouchers
         .map((v) => {

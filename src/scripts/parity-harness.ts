@@ -30,6 +30,7 @@ import { recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
 import { recomputeAccountBalances } from "@/modules/accountancy/lib/aggregateLedger";
 import { reapplyTradingVoucherInPlace } from "@/modules/accountancy/lib/reapplyTradingVoucher";
 import { postReceiptVoucher } from "@/modules/accountancy/lib/postReceiptVoucher";
+import { sumReceiptAllocationsByJe } from "@/modules/accountancy/lib/outstandings";
 
 // Self-built client (the app singleton reads env at import-time; tsx doesn't load
 // .env.local for us). Mirror prismaClient.ts's local-vs-remote SSL detection.
@@ -507,7 +508,10 @@ async function runAllocationDualTarget(): Promise<boolean> {
             const spine  = await tx.universalVoucher.findUnique({ where: { sourceJournalEntryId: saleJe! }, select: { id: true } });
             const jeAlloc = allocs.find((a) => a.targetType === "JOURNAL_ENTRY" && a.targetId === saleJe);
             const uvAlloc = allocs.find((a) => a.targetType === "UNIVERSAL_VOUCHER" && a.targetId === spine?.id);
-            ok = !!jeAlloc && !!uvAlloc && allocs.length === 2;
+            // G1c: the spine-based reader helper returns the settled amount keyed by JE id.
+            const paidViaSpine = await sumReceiptAllocationsByJe(tx, [saleJe!]);
+            const helperOk = Math.abs((paidViaSpine[saleJe!] ?? 0) - 118) < 0.01;
+            ok = !!jeAlloc && !!uvAlloc && allocs.length === 2 && helperOk;
             throw new Error(ROLLBACK);
         }, { timeout: 30_000, maxWait: 10_000 });
     } catch (e) {
