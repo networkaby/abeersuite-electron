@@ -19,7 +19,7 @@ import { z } from "zod";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
-import { nextRefFromSeries, balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
+import { createGlVoucher } from "@/modules/accountancy/lib/transactionEngine";
 
 const expenditureSchema = z.object({
     amountPaise:      z.number().int().positive(),
@@ -78,53 +78,20 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         const rupees = data.amountPaise / 100;
 
         const created = await prisma.$transaction(async (tx) => {
-            // PAYMENT voucher — Dr expense / Cr counter till.
-            const ref = await nextRefFromSeries(tx, "PAYMENT", user!.id);
-            const lines = [
-                { accountId: data.expenseAccountId, type: "DEBIT"  as const, amount: rupees, description: data.description },
-                { accountId: tillAccountId,         type: "CREDIT" as const, amount: rupees, description: `Paid from ${shift.counter.name} drawer` },
-            ];
-            const voucher = await tx.voucher.create({
-                data: {
-                    type:        "PAYMENT",
-                    reference:   ref,
-                    date:        new Date(),
-                    narration:   `POS expenditure — ${data.description}`,
-                    totalAmount: rupees,
-                    status:      "POSTED",
-                    postedAt:    new Date(),
-                    createdById: user!.id,
-                    lines: { create: lines.map((l) => ({ accountId: l.accountId, type: l.type, amount: l.amount, description: l.description })) },
-                },
-                select: { id: true, reference: true },
+            // PAYMENT voucher (Dr expense / Cr counter till) via the Transaction Engine
+            // — created + posted (mirror JE + balance deltas), branch-stamped to the shift.
+            const voucher = await createGlVoucher(tx, {
+                type:      "PAYMENT",
+                date:      new Date(),
+                userId:    user!.id,
+                narration: `POS expenditure — ${data.description}`,
+                lines: [
+                    { accountId: data.expenseAccountId, type: "DEBIT",  amount: rupees, description: data.description },
+                    { accountId: tillAccountId,         type: "CREDIT", amount: rupees, description: `Paid from ${shift.counter.name} drawer` },
+                ],
+                post:      true,
+                branchId:  shift.branchId,
             });
-            // Mirror JE so Day Book / reports see the double entry.
-            const jeRef = await nextRefFromSeries(tx, "GL_POSTING", user!.id);
-            const je = await tx.journalEntry.create({
-                data: {
-                    date:        new Date(),
-                    reference:   jeRef,
-                    description: `PAYMENT ${ref}: POS expenditure — ${data.description}`,
-                    status:      "POSTED",
-                    postedAt:    new Date(),
-                    createdById: user!.id,
-                    lines: { create: lines.map((l) => ({ accountId: l.accountId, type: l.type, amount: l.amount, description: l.description, branchId: shift.branchId })) },
-                },
-                select: { id: true },
-            });
-            await tx.voucher.update({ where: { id: voucher.id }, data: { journalEntryId: je.id } });
-
-            // Account.balance deltas (need each account's normalBalance).
-            const accs = await tx.account.findMany({
-                where:  { id: { in: [data.expenseAccountId, tillAccountId] } },
-                select: { id: true, normalBalance: true },
-            });
-            const normalById = new Map(accs.map((a) => [a.id, a.normalBalance]));
-            for (const l of lines) {
-                const normal = normalById.get(l.accountId);
-                if (!normal) throw new Error(`Account ${l.accountId} has no normalBalance — cannot post expenditure`);
-                await tx.account.update({ where: { id: l.accountId }, data: { balance: { increment: balanceDelta(normal, l.type, toNumber(l.amount)) } } });
-            }
 
             const exp = await tx.posExpenditure.create({
                 data: {

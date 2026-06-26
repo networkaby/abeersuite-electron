@@ -2,7 +2,8 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse, type NextRequest } from "next/server";
 import { requireVoucherPermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
-import { isBalanced, balanceDelta, nextRefFromSeries } from "@/modules/accountancy/lib/balance";
+import { isBalanced } from "@/modules/accountancy/lib/balance";
+import { createGlVoucher } from "@/modules/accountancy/lib/transactionEngine";
 import { invNextRef } from "@/modules/inventory/lib/stock";
 import { recordStockMovement } from "@/modules/inventory/lib/stockMovement";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
@@ -78,10 +79,6 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Voucher is not balanced — debits must equal credits" }, { status: 422 });
     }
 
-    const totalAmount = body.lines
-        .filter((l) => l.type === "DEBIT")
-        .reduce((s, l) => s + l.amount, 0);
-
     const hasStock = body.lines.some((l) => (l.stockItems?.length ?? 0) > 0);
 
     // Defense in depth — even if a future client bypasses the dialog, only
@@ -108,79 +105,27 @@ export async function POST(req: NextRequest) {
 
     try {
         const result = await prisma.$transaction(async (tx) => {
-            // ── 1. Voucher header + lines ──────────────────────────────────
-            // Reference assembly is delegated to the JOURNAL VoucherSeries
-            // configured in Settings → Year Ending. This is the same series
-            // the dialog previews via /api/accountancy/vouchers/next-ref?type=JOURNAL.
-            const reference = await nextRefFromSeries(tx, "JOURNAL", user!.id);
-
-            const voucher = await tx.voucher.create({
-                data: {
-                    type:        body.type,
-                    reference,
-                    date:        new Date(body.date),
-                    narration:   body.narration ?? null,
-                    totalAmount,
-                    createdById: user!.id,
-                    status:      "DRAFT",
-                    lines: {
-                        create: body.lines.map((l) => ({
-                            accountId:   l.accountId,
-                            type:        l.type,
-                            amount:      l.amount,
-                            description: l.description ?? null,
-                        })),
-                    },
-                },
+            // ── 1. Voucher + (when requested) GL posting via the Transaction Engine ──
+            // referenceSeries "JOURNAL" preserves the JV-… numbering the dialog
+            // previews via /api/accountancy/vouchers/next-ref?type=JOURNAL. The
+            // mirror JE + balance deltas (incl. the null-normalBalance fallback)
+            // now live in the engine. GL JE lines stay branch-less (org-level),
+            // exactly as before — branch context rides only the stock carrier below.
+            const voucher = await createGlVoucher(tx, {
+                type:            body.type,
+                date:            new Date(body.date),
+                userId:          user!.id,
+                lines:           body.lines,
+                narration:       body.narration ?? null,
+                referenceSeries: "JOURNAL",
+                post:            body.postImmediately,
             });
 
             if (!body.postImmediately) {
-                return { voucherId: voucher.id, reference, posted: false };
+                return { voucherId: voucher.id, reference: voucher.reference, posted: false };
             }
 
-            // ── 2. Mirror JournalEntry (GL) ────────────────────────────────
-            const accountsLite = await tx.account.findMany({
-                where:  { id: { in: body.lines.map((l) => l.accountId) } },
-                select: { id: true, normalBalance: true },
-            });
-            const normalBalanceById = new Map(accountsLite.map((a) => [a.id, a.normalBalance]));
-
-            const jeRef = await nextRefFromSeries(tx, "GL_POSTING", user!.id);
-            const je = await tx.journalEntry.create({
-                data: {
-                    date:        new Date(body.date),
-                    reference:   jeRef,
-                    description: `${body.type} ${reference}: ${body.narration ?? ""}`.trim(),
-                    status:      "POSTED",
-                    postedAt:    new Date(),
-                    createdById: user!.id,
-                    lines: {
-                        create: body.lines.map((l) => ({
-                            accountId:   l.accountId,
-                            type:        l.type,
-                            amount:      l.amount,
-                            description: l.description ?? null,
-                        })),
-                    },
-                },
-            });
-
-            for (const l of body.lines) {
-                const nb = normalBalanceById.get(l.accountId);
-                if (!nb) continue;
-                const delta = balanceDelta(nb, l.type, l.amount);
-                await tx.account.update({
-                    where: { id: l.accountId },
-                    data:  { balance: { increment: delta } },
-                });
-            }
-
-            await tx.voucher.update({
-                where: { id: voucher.id },
-                data:  { status: "POSTED", postedAt: new Date(), journalEntryId: je.id },
-            });
-
-            // ── 3. Stock movement (only if any line carries inventory) ─────
+            // ── 2. Stock movement (only if any line carries inventory) ─────
             if (hasStock) {
                 const flatItems = body.lines.flatMap((l) =>
                     (l.stockItems ?? []).map((s) => ({
@@ -200,7 +145,7 @@ export async function POST(req: NextRequest) {
                         reference:   sjRef,
                         branchId:    activeBranchId,
                         date:        new Date(body.date),
-                        description: `Auto-created from journal voucher ${reference}`,
+                        description: `Auto-created from journal voucher ${voucher.reference}`,
                         status:      "POSTED",
                         postedAt:    new Date(),
                         subtotal:    flatItems.reduce((s, i) => s + i.amount, 0),
@@ -254,7 +199,7 @@ export async function POST(req: NextRequest) {
                 }
             }
 
-            return { voucherId: voucher.id, reference, posted: true };
+            return { voucherId: voucher.id, reference: voucher.reference, posted: true };
         });
 
         const touchedProductIds = body.lines.flatMap((l) =>

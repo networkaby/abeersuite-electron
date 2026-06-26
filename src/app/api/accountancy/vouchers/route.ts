@@ -2,7 +2,8 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission, requireVoucherPermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
-import { isBalanced, nextRefFromSeries } from "@/modules/accountancy/lib/balance";
+import { isBalanced } from "@/modules/accountancy/lib/balance";
+import { createGlVoucher } from "@/modules/accountancy/lib/transactionEngine";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -96,35 +97,20 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "Voucher is not balanced — debits must equal credits" }, { status: 422 });
     }
 
-    const totalAmount = body.lines
-        .filter((l) => l.type === "DEBIT")
-        .reduce((s, l) => s + l.amount, 0);
-
     try {
-        const voucher = await prisma.$transaction(async (tx) => {
-            const reference = await nextRefFromSeries(tx, body.type, user!.id);
-
-            return tx.voucher.create({
-                data: {
-                    type:           body.type,
-                    reference,
-                    date:           new Date(body.date),
-                    narration:      body.narration ?? null,
-                    partyAccountId: body.partyAccountId ?? null,
-                    totalAmount,
-                    createdById:    user!.id,
-                    lines: {
-                        create: body.lines.map((l) => ({
-                            accountId:   l.accountId,
-                            type:        l.type,
-                            amount:      l.amount,
-                            description: l.description ?? null,
-                        })),
-                    },
-                },
-                include: { lines: true },
-            });
-        });
+        // Create a DRAFT financial transaction via the Transaction Engine
+        // (engine computes totalAmount + reference; posting is a separate step).
+        const voucher = await prisma.$transaction((tx) =>
+            createGlVoucher(tx, {
+                type:           body.type,
+                date:           new Date(body.date),
+                userId:         user!.id,
+                lines:          body.lines,
+                narration:      body.narration ?? null,
+                partyAccountId: body.partyAccountId ?? null,
+                post:           false,
+            }),
+        );
         return NextResponse.json(voucher, { status: 201 });
     } catch (e) {
         return handleApiError(e, "Failed to create voucher");

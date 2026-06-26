@@ -22,9 +22,8 @@
 // so callers can persist the back-link (e.g. `PosShift.openingContraVoucherId`).
 
 import { Prisma } from "@/generated/prisma/client";
-import {
-    balanceDelta, isBalanced, nextRefFromSeries, toNumber,
-} from "@/modules/accountancy/lib/balance";
+import { isBalanced, toNumber } from "@/modules/accountancy/lib/balance";
+import { createGlVoucher } from "@/modules/accountancy/lib/transactionEngine";
 
 export type ContraLine = {
     accountId:   number;
@@ -69,85 +68,23 @@ export async function postContra(
     }
 
     const date = typeof input.date === "string" ? new Date(input.date) : input.date;
-    const totalAmount = input.lines
-        .filter((l) => l.type === "DEBIT")
-        .reduce((s, l) => s + toNumber(l.amount), 0);
 
-    // 1. Sequential reference
-    const reference = await nextRefFromSeries(tx, "CONTRA", input.userId);
-
-    // 2. Voucher (POSTED — Contra is never drafted via the helper)
-    const voucher = await tx.voucher.create({
-        data: {
-            type:           "CONTRA",
-            reference,
-            date,
-            narration:      input.narration ?? null,
-            partyAccountId: input.partyAccountId ?? null,
-            totalAmount,
-            status:         "POSTED",
-            postedAt:       new Date(),
-            createdById:    input.userId,
-            lines: {
-                create: input.lines.map((l) => ({
-                    accountId:   l.accountId,
-                    type:        l.type,
-                    amount:      l.amount,
-                    description: l.description ?? null,
-                })),
-            },
-        },
-        select: { id: true },
+    // Create + post the CONTRA via the Transaction Engine (CV-… reference,
+    // mirror JE on the GL_POSTING series, per-line balance deltas).
+    const voucher = await createGlVoucher(tx, {
+        type:           "CONTRA",
+        date,
+        userId:         input.userId,
+        narration:      input.narration ?? null,
+        partyAccountId: input.partyAccountId ?? null,
+        lines: input.lines.map((l) => ({
+            accountId:   l.accountId,
+            type:        l.type,
+            amount:      toNumber(l.amount),
+            description: l.description ?? null,
+        })),
+        post: true,
     });
 
-    // 3. Mirror JE — engine output for double-entry posting. Carries the
-    //    internal GL_POSTING reference (`GL-…`); the user-visible reference
-    //    is the parent Voucher's `CV-…` above.
-    const jeRef = await nextRefFromSeries(tx, "GL_POSTING", input.userId);
-    const je = await tx.journalEntry.create({
-        data: {
-            date,
-            reference:   jeRef,
-            description: `CONTRA ${reference}: ${input.narration ?? ""}`.trim(),
-            status:      "POSTED",
-            postedAt:    new Date(),
-            createdById: input.userId,
-            lines: {
-                create: input.lines.map((l) => ({
-                    accountId:   l.accountId,
-                    type:        l.type,
-                    amount:      l.amount,
-                    description: l.description ?? null,
-                })),
-            },
-        },
-        select: { id: true },
-    });
-
-    // Wire back the JE reference on the Voucher (consumed by some reports).
-    await tx.voucher.update({
-        where: { id: voucher.id },
-        data:  { journalEntryId: je.id },
-    });
-
-    // 4. Account.balance deltas — need each account's normalBalance to know
-    //    whether DEBIT increases or decreases the running balance.
-    const accountIds = input.lines.map((l) => l.accountId);
-    const accounts = await tx.account.findMany({
-        where:  { id: { in: accountIds } },
-        select: { id: true, normalBalance: true },
-    });
-    const normalById = new Map(accounts.map((a) => [a.id, a.normalBalance]));
-
-    for (const line of input.lines) {
-        const normal = normalById.get(line.accountId);
-        if (!normal) throw new Error(`Account ${line.accountId} has no normalBalance set — cannot post Contra`);
-        const delta = balanceDelta(normal, line.type, toNumber(line.amount));
-        await tx.account.update({
-            where: { id: line.accountId },
-            data:  { balance: { increment: delta } },
-        });
-    }
-
-    return { voucherId: voucher.id, journalEntryId: je.id, reference };
+    return { voucherId: voucher.id, journalEntryId: voucher.journalEntryId!, reference: voucher.reference };
 }

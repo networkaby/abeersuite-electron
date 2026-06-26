@@ -1,7 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth, userCanVoucher } from "@/shared/lib/auth/permissions";
-import { balanceDelta, toNumber, nextRefFromSeries } from "@/modules/accountancy/lib/balance";
+import { postFinancialTransaction } from "@/modules/accountancy/lib/transactionEngine";
 import { handleApiError } from "@/shared/lib/api";
 
 // POST /api/accountancy/vouchers/[id]/post
@@ -15,7 +15,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     const voucher = await prisma.voucher.findUnique({
         where: { id: Number(id) },
         include: {
-            lines: { include: { account: { select: { id: true, normalBalance: true } } } },
+            lines: { include: { account: { select: { id: true, normalBalance: true, group: { select: { type: true } } } } } },
         },
     });
     if (!voucher) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -27,50 +27,12 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     if (voucher.status !== "DRAFT") return NextResponse.json({ error: "Only DRAFT vouchers can be posted" }, { status: 409 });
 
     try {
+        // DRAFT → POSTED via the Transaction Engine (mirror JE + balance deltas).
+        // Per-line account.update + mirror-JE over the Supabase pooler can exceed
+        // the default 5s interactive-tx ceiling (P2028) — match the 30s headroom.
         const posted = await prisma.$transaction(async (tx) => {
-            // Mirror JE for the audit trail (so reports/Day Book see it the same as Journal entries).
-            const jeRef = await nextRefFromSeries(tx, "GL_POSTING", user!.id);
-            const je = await tx.journalEntry.create({
-                data: {
-                    date:        voucher.date,
-                    reference:   jeRef,
-                    description: `${voucher.type} ${voucher.reference}: ${voucher.narration ?? ""}`.trim(),
-                    status:      "POSTED",
-                    postedAt:    new Date(),
-                    createdById: user!.id,
-                    lines: {
-                        create: voucher.lines.map((l) => ({
-                            accountId:   l.accountId,
-                            type:        l.type,
-                            amount:      l.amount,
-                            description: l.description ?? null,
-                        })),
-                    },
-                },
-            });
-
-            // Apply Account.balance deltas.
-            for (const line of voucher.lines) {
-                const delta = balanceDelta(line.account.normalBalance!, line.type, toNumber(line.amount));
-                await tx.account.update({
-                    where: { id: line.accountId },
-                    data:  { balance: { increment: delta } },
-                });
-            }
-
-            await tx.voucher.update({
-                where: { id: voucher.id },
-                data:  {
-                    status:         "POSTED",
-                    postedAt:       new Date(),
-                    journalEntryId: je.id,
-                },
-            });
-
+            await postFinancialTransaction(tx, voucher, user!.id);
             return tx.voucher.findUnique({ where: { id: voucher.id } });
-        // Per-line account.update + mirror-JE over the Supabase pooler can
-        // exceed the default 5s interactive-tx ceiling (P2028) on multi-line
-        // vouchers — match the 30s headroom used elsewhere.
         }, { timeout: 30_000, maxWait: 10_000 });
 
         return NextResponse.json(posted);
