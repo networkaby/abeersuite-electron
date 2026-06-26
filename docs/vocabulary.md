@@ -57,6 +57,23 @@ This file unifies what used to be two separate glossaries — the Transaction En
 
 ---
 
+## Voucher lines
+
+**Definition:** A voucher carries several kinds of **lines**, named `Voucher<What>Line` so the model reads as a set of siblings and is self-describing. Two are the "faces" of a voucher — the **money side** and the **goods side** — and the rest are supporting line kinds. A voucher line is **input** (what the user entered), distinct from the **derived ledgers** the engine writes from it.
+
+| Term | Meaning | Current code |
+| --- | --- | --- |
+| **VoucherGlLine** | the **accounting** lines — Dr/Cr against ledger accounts (the money face) | `VoucherGlLine` (`finance.prisma`) — already follows the convention |
+| **VoucherInventoryLine** | the **goods** lines — product, qty, rate, tax (the goods face) | `InvVoucherLine` (`inventory.prisma`) |
+| **VoucherTenderLine** | the **payment** lines — cash / card / UPI received | `InvVoucherTender` |
+| **VoucherChargeLine** | the **extra-charge** lines — freight, packing, etc. | `InvVoucherCharge` |
+
+**Input vs derived (keep distinct):** `VoucherInventoryLine` is the item _on the voucher_ ("5 × Widget @ ₹100"). `InvStockLedger` is the stock _movement_ it produces ("−5 Widget, branch HQ") — a **derived ledger** (the stock-arm output), **not** a voucher line. Do not name the movement `VoucherStockLine`; that would blur input vs. derived. Likewise `VoucherGlLine` is the accounting input; `JournalLine` / `Account.balance` are its derived GL footprint.
+
+**Status:** naming **adopted (2026-06-27)**. `VoucherGlLine` already uses it. The `InvVoucherLine` / `InvVoucherTender` / `InvVoucherCharge` renames are applied **as part of the universal-voucher table build** (when `InvVoucher` collapses into the universal voucher), not as a standalone rename — one migration, not two.
+
+---
+
 > Words for the Work / Work Inbox / ticket-workflow layer.
 
 ## Technician
@@ -381,4 +398,4 @@ This file unifies what used to be two separate glossaries — the Transaction En
 
 ---
 
-_Last updated: 2026-06-25 — Merged the former `transaction-vocabulary.md` (2026-06-25 draft) and `work-inbox-vocabulary.md` (2026-06-15) into this single global vocabulary doc, flattened into one list (dropped the Part 1/Part 2 dividers and the code-mapping table — this doc is for shared vocabulary, not a code map). No term definitions changed._
+_Last updated: 2026-06-27 — Added the "Voucher lines" term: the `Voucher<What>Line` naming convention (VoucherGlLine / VoucherInventoryLine / VoucherTenderLine / VoucherChargeLine), the input-vs-derived-ledger distinction, and the note that the renames land with the universal-voucher table build. Prior: 2026-06-25 — merged the former transaction- and work-inbox vocabularies into this single doc._
