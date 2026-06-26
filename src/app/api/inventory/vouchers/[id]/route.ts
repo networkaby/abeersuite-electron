@@ -2,11 +2,10 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { calcLineTotals, calcVoucherTotals } from "@/modules/inventory/lib/stock";
-import { toNumber, nextRefFromSeries } from "@/modules/accountancy/lib/balance";
-import { recordStockMovement } from "@/modules/inventory/lib/stockMovement";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
-import { saleToSpec } from "@/modules/accountancy/lib/voucherMappers";
-import { enginePost, mirrorJeToSpine } from "@/modules/accountancy/lib/transactionEngine";
+import { reapplyTradingVoucherInPlace } from "@/modules/accountancy/lib/reapplyTradingVoucher";
+import { auditSnapshot } from "@/modules/accountancy/lib/voucherLifecycle";
+import type { PostVoucherInput } from "@/modules/accountancy/lib/postInvVoucher";
 import * as Sentry from "@sentry/nextjs";
 import { handleApiError } from "@/shared/lib/api";
 import { Prisma } from "@/generated/prisma/client";
@@ -241,88 +240,29 @@ export async function PATCH(req: Request, { params }: Params) {
             // PHASE 1 — Reverse the existing posting (POSTED only)
             // ────────────────────────────────────────────────────────────
             if (wasPosted) {
-                const isPurchase = existing.type === "PURCHASE" || existing.type === "GRN" || existing.type === "REJECTION_IN" || existing.type === "SALE_RETURN";
-                // POS = counter sale: same stock-out + GL shape as SALE (postInvVoucherToGl
-                // treats POS like SALE), so a posted-POS edit reverses + re-posts like a sale.
-                const isSale     = existing.type === "SALE"     || existing.type === "POS" || existing.type === "CHALLAN" || existing.type === "REJECTION_OUT" || existing.type === "PURCHASE_RETURN";
-
-                // Reverse stock — write counter entries against the same
-                // voucher id and adjust the cached InvProduct.stock so the
-                // running balance matches pre-original state.
-                for (const line of existing.lines) {
-                    const qty = toNumber(line.quantity);
-                    const freeQty = line.freeQty != null ? toNumber(line.freeQty) : 0;
-                    const totalQty = qty + freeQty;
-                    if (totalQty <= 0) continue;
-
-                    // For non-purchase/non-sale types (e.g., POS POSTED edits)
-                    // we still write a zero-qty ledger row as audit trail; the
-                    // helper's internal `delta === 0` guard then skips the
-                    // product/branch updates.
-                    await recordStockMovement(tx, {
-                        voucherId: existing.id,
-                        productId: line.productId,
-                        branchId:  existing.branchId,
-                        date:      new Date(),
-                        inQty:     isSale     ? totalQty : 0,
-                        outQty:    isPurchase ? totalQty : 0,
-                        rate:      line.rate,
-                        amount:    -toNumber(line.amount),
-                    });
-                }
-
-                // Reverse GL — post a reversal JE and cancel the original.
-                if (existing.journalEntryId) {
-                    const origJe = await tx.journalEntry.findUnique({
-                        where: { id: existing.journalEntryId },
-                        include: { lines: { include: { account: { select: { normalBalance: true } } } } },
-                    });
-                    if (origJe && origJe.status === "POSTED") {
-                        const jeRef = await nextRefFromSeries(tx, "GL_POSTING", userId);
-
-                        const reversalLines = origJe.lines.map((l) => ({
-                            accountId:   l.accountId,
-                            type:        (l.type === "DEBIT" ? "CREDIT" : "DEBIT") as "DEBIT" | "CREDIT",
-                            amount:      toNumber(l.amount),
-                            description: `EDIT: ${l.description ?? ""}`,
-                        }));
-
-                        const revJe = await tx.journalEntry.create({
-                            data: {
-                                date:        new Date(),
-                                reference:   jeRef,
-                                description: `EDIT (reverse): ${origJe.description}`,
-                                status:      "POSTED",
-                                postedAt:    new Date(),
-                                createdById: userId,
-                                lines:       { create: reversalLines },
-                            },
-                        });
-                        // Phase 4: mirror the edit-reversal JE into the spine.
-                        await mirrorJeToSpine(tx, revJe.id, { type: "JOURNAL", friendlyRef: jeRef });
-
-                        for (const rl of reversalLines) {
-                            const origLine = origJe.lines.find((l) => l.accountId === rl.accountId)!;
-                            const delta = origLine.account.normalBalance === "DEBIT"
-                                ? (rl.type === "DEBIT" ? rl.amount : -rl.amount)
-                                : (rl.type === "CREDIT" ? rl.amount : -rl.amount);
-                            await tx.account.update({
-                                where: { id: rl.accountId },
-                                data:  { balance: { increment: delta } },
-                            });
-                        }
-
-                        // Tally-style: original JE stays POSTED. The reversal
-                        // JE above nets it out at the line level (so ledger
-                        // running balance is correct) and is the audit signal
-                        // for "this was edited". Marking the original as
-                        // CANCELLED would hide it from the POSTED-only ledger
-                        // view while the reversal stayed visible — leaving the
-                        // counter-entry with no original to cancel out, and
-                        // breaking the closing balance.
-                        void revJe;
-                    }
-                }
+                // Phase 4 ②: snapshot the pre-edit state to AuditLog, then reapply
+                // IN PLACE in Phase 3 (rewrite the SAME JE + replace stock rows +
+                // recompute caches). No reversal JE, no counter stock entries — the
+                // voucher and its journalEntryId are preserved, so receipts
+                // allocated against the JE stay linked.
+                const origJe = existing.journalEntryId
+                    ? await tx.journalEntry.findUnique({ where: { id: existing.journalEntryId }, include: { lines: true } })
+                    : null;
+                const oldSnap = await tx.invVoucher.findUnique({
+                    where:   { id },
+                    include: { lines: true, charges: true, tenders: true },
+                });
+                await tx.auditLog.create({
+                    data: auditSnapshot({
+                        entityType:  "INV_VOUCHER",
+                        subtype:     existing.type,
+                        originalId:  existing.id,
+                        originalRef: existing.reference,
+                        reason:      `Edit (in-place) of ${existing.reference}`,
+                        snapshot:    { ...oldSnap, journalEntry: origJe },
+                        actorId:     userId,
+                    }),
+                });
             }
 
             // ────────────────────────────────────────────────────────────
@@ -378,8 +318,8 @@ export async function PATCH(req: Request, { params }: Params) {
                     ...(discountPct      !== undefined ? { discountPct }     : {}),
                     ...(discountAmt      !== undefined ? { discountAmt }     : {}),
                     ...(totals ? totals : {}),
-                    // Clear the link to the now-cancelled JE; re-post fills it.
-                    ...(wasPosted ? { journalEntryId: null } : {}),
+                    // Phase 4 ②: keep the existing journalEntryId — the JE is
+                    // rewritten in place in Phase 3, not re-minted.
                     ...(computedLines ? {
                         lines: {
                             create: computedLines.map((l) => ({
@@ -421,69 +361,30 @@ export async function PATCH(req: Request, { params }: Params) {
             });
 
             // ────────────────────────────────────────────────────────────
-            // PHASE 3 — Re-post stock + GL (POSTED only)
+            // PHASE 3 — Reapply IN PLACE (POSTED only)
             // ────────────────────────────────────────────────────────────
             if (wasPosted) {
                 const fresh = await tx.invVoucher.findUnique({
                     where: { id },
                     include: {
-                        lines: { include: { product: { select: { id: true, mrpPaise: true, stock: true } } } },
-                        // Multi-tender + additional-charge rows flow through
-                        // to postInvVoucherToGl so the re-posted JE has one
-                        // leg per row.
-                        tenders: {
-                            orderBy: { id: "asc" },
-                            include: { account: { select: { id: true, name: true, normalBalance: true, group: { select: { type: true } } } } },
-                        },
-                        charges: {
-                            include: { account: { select: { id: true, name: true, normalBalance: true, group: { select: { type: true } } } } },
-                        },
+                        lines:   { include: { product: { select: { id: true, mrpPaise: true, stock: true } } } },
+                        // Tenders + charges flow into saleToSpec (one GL leg per row).
+                        tenders: { orderBy: { id: "asc" }, include: { account: { select: { id: true, name: true, normalBalance: true, group: { select: { type: true } } } } } },
+                        charges: { include: { account: { select: { id: true, name: true, normalBalance: true, group: { select: { type: true } } } } } },
                     },
                 });
                 if (!fresh) throw new Error("Voucher disappeared mid-transaction");
 
-                const isPurchase = ["PURCHASE", "GRN", "REJECTION_IN", "SALE_RETURN"].includes(fresh.type);
-                const isSale     = ["SALE", "POS", "CHALLAN", "REJECTION_OUT", "PURCHASE_RETURN"].includes(fresh.type);
-
-                for (const line of fresh.lines) {
-                    const qty = toNumber(line.quantity);
-                    const freeQty = line.freeQty != null ? toNumber(line.freeQty) : 0;
-                    const totalQty = qty + freeQty;
-                    if (totalQty <= 0) continue;
-                    let inQty = 0, outQty = 0;
-                    if (isPurchase) inQty = totalQty; else if (isSale) outQty = totalQty;
-                    if (inQty === 0 && outQty === 0) continue;
-
-                    await recordStockMovement(tx, {
-                        voucherId: fresh.id,
-                        productId: line.productId,
-                        branchId:  fresh.branchId,
-                        date:      fresh.date,
-                        inQty,
-                        outQty,
-                        rate:      line.rate,
-                        amount:    line.amount,
-                        productCurrentStock: line.product.stock,
-                        newMrpPaise: isPurchase && line.mrpPaise != null ? line.mrpPaise : undefined,
-                    });
-                }
-
-                let journalEntryId: number | null = null;
-                if (["SALE", "POS", "PURCHASE", "SALE_RETURN", "PURCHASE_RETURN"].includes(fresh.type)) {
-                    // GL via the Transaction Engine (GL only — stock re-posted above).
-                    const spec = await saleToSpec(tx, fresh);
-                    const out = await enginePost(tx, spec, userId);
-                    journalEntryId = out.journalEntryId;
-                }
-
-                await tx.invVoucher.update({
-                    where: { id },
-                    data:  {
-                        // Already POSTED — just refresh the JE link.
-                        journalEntryId,
-                        postedAt: new Date(),
-                    },
+                // Rewrite the SAME JE in place + replace stock rows + recompute the
+                // caches from truth (no reversal, no re-minted JE — journalEntryId
+                // is preserved so receipts allocated against it stay linked).
+                await reapplyTradingVoucherInPlace(tx, {
+                    voucher:        fresh as unknown as PostVoucherInput["voucher"],
+                    branchId:       fresh.branchId,
+                    lines:          fresh.lines,
+                    journalEntryId: existing.journalEntryId,
                 });
+                await tx.invVoucher.update({ where: { id }, data: { postedAt: new Date() } });
             }
 
             return tx.invVoucher.findUnique({
