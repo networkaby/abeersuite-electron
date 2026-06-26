@@ -25,8 +25,8 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import type { PostVoucherInput } from "@/modules/accountancy/lib/postInvVoucher";
 import { saleToSpec, buildTradingStockMoves } from "@/modules/accountancy/lib/voucherMappers";
-import { enginePost, engineCreateVoucher, mirrorJeToSpine, syncSpineLifecycle } from "@/modules/accountancy/lib/transactionEngine";
-import { recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
+import { enginePost, engineCreateVoucher, mirrorJeToSpine, syncSpineLifecycle, resyncSpineFromJe } from "@/modules/accountancy/lib/transactionEngine";
+import { recomputeProductStock, recordStockMovement } from "@/modules/inventory/lib/stockMovement";
 import { recomputeAccountBalances } from "@/modules/accountancy/lib/aggregateLedger";
 
 // Self-built client (the app singleton reads env at import-time; tsx doesn't load
@@ -383,14 +383,103 @@ async function runStockRecompute(): Promise<boolean> {
     return ok;
 }
 
+/** ②-gate: post a SALE qty 1, then EDIT it to qty 2 IN PLACE (same JE id) using
+ *  the decided ② operations — rewrite JE lines on the same JE, rewrite stock,
+ *  recompute caches, resync spine. Asserts: JE id preserved (allocation-safe),
+ *  JE rebalanced to the new total, stock reflects the new qty, spine == JE.
+ *  Rolled back. This proves the ② edit operations before wiring them into the route. */
+async function runEditCycle(): Promise<boolean> {
+    const [branch, product, cash, user] = await Promise.all([
+        prisma.branch.findFirst({ select: { id: true } }),
+        prisma.invProduct.findFirst({ select: { id: true } }),
+        prisma.account.findFirst({ where: { name: { equals: "Cash", mode: "insensitive" }, personId: null, companyId: null }, select: { id: true } }),
+        prisma.user.findFirst({ select: { id: true } }),
+    ]);
+    if (!branch || !product || !cash || !user) { console.log("\nedit-cycle skipped — missing seed data"); return true; }
+
+    let ok = false;
+    const log: string[] = [];
+    const reload = (tx: Prisma.TransactionClient, id: number) => tx.invVoucher.findUnique({
+        where: { id },
+        include: { lines: { include: { product: { select: { id: true, stock: true, mrpPaise: true } } } }, tenders: true },
+    });
+    try {
+        await prisma.$transaction(async (tx) => {
+            // 1. Post a SALE qty 1.
+            const v = await tx.invVoucher.create({
+                data: {
+                    type: "SALE", reference: `PARITY-EDIT-${Date.now()}`, branchId: branch.id,
+                    date: new Date(), description: "edit-cycle sale", status: "POSTED",
+                    subtotal: 118, taxAmount: 18, totalAmount: 118,
+                    deliveryMode: "COUNTER", placeOfSupply: "19", createdById: user.id,
+                    lines:   { create: [{ productId: product.id, quantity: 1, rate: 100, taxRate: 18, taxAmount: 18, amount: 118 }] },
+                    tenders: { create: [{ accountId: cash.id, amount: 118 }] },
+                },
+                include: { lines: { include: { product: { select: { id: true, stock: true, mrpPaise: true } } } }, tenders: true },
+            });
+            const spec1 = await saleToSpec(tx, { ...v, sellerStateCode: "19", buyerStateCode: "19" } as unknown as PostVoucherInput["voucher"], { voucherId: v.id, branchId: v.branchId, lines: v.lines });
+            const { journalEntryId: saleJe } = await enginePost(tx, spec1, user.id);
+            if (saleJe == null) throw new Error("no saleJe");
+            await tx.invVoucher.update({ where: { id: v.id }, data: { journalEntryId: saleJe } });
+
+            // 2. EDIT in place: qty 1 → 2 (line 236 = taxable 200 + 18% tax 36).
+            await tx.invVoucherLine.updateMany({ where: { voucherId: v.id }, data: { quantity: 2, amount: 236, taxAmount: 36 } });
+            await tx.invVoucherTender.updateMany({ where: { voucherId: v.id }, data: { amount: 236 } });
+            await tx.invVoucher.update({ where: { id: v.id }, data: { subtotal: 236, taxAmount: 36, totalAmount: 236 } });
+            const edited = await reload(tx, v.id);
+            const spec2 = await saleToSpec(tx, { ...edited!, sellerStateCode: "19", buyerStateCode: "19" } as unknown as PostVoucherInput["voucher"], { voucherId: v.id, branchId: v.branchId, lines: edited!.lines });
+
+            const oldAccts = (await tx.journalLine.findMany({ where: { journalEntryId: saleJe }, select: { accountId: true } })).map((l) => l.accountId);
+            const affected = [...new Set([...oldAccts, ...spec2.glLines.map((l) => l.accountId)])];
+
+            // GL: rewrite the lines on the SAME JE id (in place → allocations safe).
+            await tx.journalLine.deleteMany({ where: { journalEntryId: saleJe } });
+            await tx.journalLine.createMany({ data: spec2.glLines.map((l) => ({ journalEntryId: saleJe, accountId: l.accountId, type: l.type, amount: l.amount, description: l.description ?? null })) });
+            await resyncSpineFromJe(tx, saleJe, { type: "SALE", friendlyRef: v.reference });   // spine = new JE lines
+            await recomputeAccountBalances(tx, affected);                                       // cache from new spine
+
+            // Stock: delete old rows + re-post new + recompute.
+            await tx.invStockLedger.deleteMany({ where: { voucherId: v.id } });
+            for (const m of spec2.stockMoves) await recordStockMovement(tx, m);
+            await recomputeProductStock(tx, [product.id]);
+
+            // 3. Assertions.
+            const vAfter = await tx.invVoucher.findUnique({ where: { id: v.id }, select: { journalEntryId: true } });
+            const jeCap  = await captureJe(tx, saleJe);
+            const spine  = await captureSpine(tx, saleJe);
+            const dr = jeCap.filter((l) => l.type === "DEBIT").reduce((s, l) => s + l.amount, 0);
+            const cr = jeCap.filter((l) => l.type === "CREDIT").reduce((s, l) => s + l.amount, 0);
+            const outQty = (await tx.invStockLedger.findMany({ where: { voucherId: v.id }, select: { outQty: true } })).reduce((s, r) => s + Number(r.outQty), 0);
+
+            const jeSameId = vAfter?.journalEntryId === saleJe;
+            const balanced = Math.abs(dr - cr) < 0.01 && Math.abs(dr - 236) < 0.01;
+            const stockOk2 = Math.abs(outQty - 2) < 0.001;
+            const spineOk  = sameLines(jeCap, spine);
+            ok = jeSameId && balanced && stockOk2 && spineOk;
+            log.push(`JE id preserved (allocation-safe): ${jeSameId ? "✓" : "✗"}`);
+            log.push(`JE rebalanced to 236: ${balanced ? "✓" : "✗"} (Dr ${dr} / Cr ${cr})`);
+            log.push(`stock OUT 2: ${stockOk2 ? "✓" : "✗"} (${outQty})`);
+            log.push(`spine == JE: ${spineOk ? "✓" : "✗"}`);
+            throw new Error(ROLLBACK);
+        }, { timeout: 30_000, maxWait: 10_000 });
+    } catch (e) {
+        if ((e as Error)?.message !== ROLLBACK) throw e;
+    }
+    console.log("\n=== edit-cycle (post sale qty1 → edit qty2 IN PLACE → recompute, rolled back) ===");
+    for (const l of log) console.log("  " + l);
+    console.log("edit cycle:", ok ? "✓" : "✗");
+    return ok;
+}
+
 async function main() {
     const stockOk    = stockCheck();
     const e2eOk      = await runE2E();
     const recompOk   = await runStockRecompute();
+    const editOk     = await runEditCycle();
     const goldenOk   = await runGolden();
     const mirrorOk   = await runMirror();
     const lifecycleOk = await runLifecycle();
-    const green      = stockOk && e2eOk && recompOk && goldenOk && mirrorOk && lifecycleOk;
+    const green      = stockOk && e2eOk && recompOk && editOk && goldenOk && mirrorOk && lifecycleOk;
     console.log(green ? "\nHARNESS GREEN ✓" : "\nHARNESS FAILED ✗");
     if (!green) process.exitCode = 1;
 }
