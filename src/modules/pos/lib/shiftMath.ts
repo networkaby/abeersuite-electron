@@ -73,16 +73,19 @@ export async function sumShiftCashSalesPaise(
 ): Promise<bigint> {
     const end = args.closedAt ?? new Date();
 
-    // POS sale tenders → directly on the InvVoucher (no separate Receipt).
-    const posTenders = await tx.invVoucherTender.findMany({
+    // POS sale tenders → the spine's role=TENDER GL lines (G4b-3). The shift
+    // window is keyed off `InvVoucher.createdAt` (the sale time) — NOT the spine
+    // row's createdAt, which is the backfill time for historical rows — so we
+    // resolve the in-window POS vouchers' JEs first, then read their till tenders.
+    const posJeIds = (await tx.invVoucher.findMany({
+        where:  { type: "POS", status: "POSTED", deletedAt: null, createdAt: { gte: args.openedAt, lte: end } },
+        select: { journalEntryId: true },
+    })).map((v) => v.journalEntryId).filter((x): x is number => x != null);
+    const posTenders = posJeIds.length === 0 ? [] : await tx.voucherGlLine.findMany({
         where: {
-            accountId: args.tillAccountId,
-            voucher: {
-                type:      "POS",
-                status:    "POSTED",
-                deletedAt: null,
-                createdAt: { gte: args.openedAt, lte: end },
-            },
+            accountId:        args.tillAccountId,
+            role:             "TENDER",
+            universalVoucher: { sourceJournalEntryId: { in: posJeIds } },
         },
         select: { amount: true },
     });
@@ -133,12 +136,19 @@ export async function sumShiftTendersByAccount(
     const add = (accountId: number, paise: bigint) =>
         totals.set(accountId, (totals.get(accountId) ?? BigInt(0)) + paise);
 
-    // POS sale tenders (Dr Till / Bank / Wallet …) carried on the voucher.
-    const posTenders = await tx.invVoucherTender.groupBy({
+    // POS sale tenders (Dr Till / Bank / Wallet …) → spine role=TENDER GL lines
+    // (G4b-3). Windowed off InvVoucher.createdAt (sale time), then grouped per
+    // settlement account from the spine. See sumShiftCashSalesPaise for why.
+    const posJeIds = (await tx.invVoucher.findMany({
+        where:  { type: "POS", status: "POSTED", deletedAt: null, createdAt: { gte: args.openedAt, lte: end } },
+        select: { journalEntryId: true },
+    })).map((v) => v.journalEntryId).filter((x): x is number => x != null);
+    const posTenders = posJeIds.length === 0 ? [] : await tx.voucherGlLine.groupBy({
         by:    ["accountId"],
         where: {
-            accountId: { in: args.accountIds },
-            voucher:   { type: "POS", status: "POSTED", deletedAt: null, createdAt: { gte: args.openedAt, lte: end } },
+            accountId:        { in: args.accountIds },
+            role:             "TENDER",
+            universalVoucher: { sourceJournalEntryId: { in: posJeIds } },
         },
         _sum:  { amount: true },
     });

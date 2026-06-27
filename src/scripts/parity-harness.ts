@@ -31,6 +31,7 @@ import { recomputeAccountBalances } from "@/modules/accountancy/lib/aggregateLed
 import { reapplyTradingVoucherInPlace } from "@/modules/accountancy/lib/reapplyTradingVoucher";
 import { postReceiptVoucher } from "@/modules/accountancy/lib/postReceiptVoucher";
 import { sumReceiptAllocationsByJe, loadTenderLinesByJe } from "@/modules/accountancy/lib/outstandings";
+import { sumShiftCashSalesPaise, sumShiftTendersByAccount } from "@/modules/pos/lib/shiftMath";
 
 // Self-built client (the app singleton reads env at import-time; tsx doesn't load
 // .env.local for us). Mirror prismaClient.ts's local-vs-remote SSL detection.
@@ -589,6 +590,51 @@ async function runGlLineTwin(): Promise<boolean> {
     return ok;
 }
 
+/** G4b-3: POS shift cash reconciliation reads tenders from the spine (role=TENDER)
+ *  instead of InvVoucherTender. Post a POS sale with a ₹118 cash tender, assert
+ *  sumShiftCashSalesPaise + sumShiftTendersByAccount both report 11800 paise on
+ *  the till for the window. Rolled back. */
+async function runShiftCashMath(): Promise<boolean> {
+    const [branch, product, cash, user] = await Promise.all([
+        prisma.branch.findFirst({ select: { id: true } }),
+        prisma.invProduct.findFirst({ select: { id: true, stock: true } }),
+        prisma.account.findFirst({ where: { name: { equals: "Cash", mode: "insensitive" }, personId: null, companyId: null }, select: { id: true } }),
+        prisma.user.findFirst({ select: { id: true } }),
+    ]);
+    if (!branch || !product || !cash || !user) { console.log("\nshift-cash skipped — missing seed data"); return true; }
+    let ok = false;
+    try {
+        await prisma.$transaction(async (tx) => {
+            const openedAt = new Date(Date.now() - 60_000);
+            const v = await tx.invVoucher.create({
+                data: {
+                    type: "POS", reference: `PARITY-SHIFT-${Date.now()}`, branchId: branch.id,
+                    date: new Date(), description: "parity POS shift", status: "DRAFT",
+                    subtotal: 118, taxAmount: 18, totalAmount: 118,
+                    deliveryMode: "COUNTER", placeOfSupply: "19", createdById: user.id,
+                    lines:   { create: [{ productId: product.id, quantity: 1, rate: 100, taxRate: 18, taxAmount: 18, amount: 118 }] },
+                    tenders: { create: [{ accountId: cash.id, amount: 118, method: "CASH" }] },
+                },
+                include: { lines: { include: { product: { select: { id: true, stock: true, mrpPaise: true } } } }, tenders: true },
+            });
+            const spec = await saleToSpec(tx, { ...v, sellerStateCode: "19", buyerStateCode: "19" } as unknown as PostVoucherInput["voucher"], { voucherId: v.id, branchId: v.branchId, lines: v.lines });
+            const { journalEntryId } = await enginePost(tx, spec, user.id);
+            // POS route links the JE to the voucher — replicate so the window→JE resolution finds it.
+            await tx.invVoucher.update({ where: { id: v.id }, data: { status: "POSTED", journalEntryId } });
+            const end = new Date(Date.now() + 60_000);
+            const cashPaise = await sumShiftCashSalesPaise(tx, { tillAccountId: cash.id, openedAt, closedAt: end });
+            const byAcct = await sumShiftTendersByAccount(tx, { accountIds: [cash.id], openedAt, closedAt: end });
+            ok = cashPaise === BigInt(11800) && (byAcct.get(cash.id) ?? BigInt(0)) === BigInt(11800);
+            throw new Error(ROLLBACK);
+        }, { timeout: 30_000, maxWait: 10_000 });
+    } catch (e) {
+        if ((e as Error)?.message !== ROLLBACK) throw e;
+    }
+    console.log("\n=== G4b-3 shift cash math (POS sale → spine tenders, rolled back) ===");
+    console.log("till cash sales + per-account == 11800 paise:", ok ? "✓" : "✗");
+    return ok;
+}
+
 async function main() {
     const stockOk    = stockCheck();
     const e2eOk      = await runE2E();
@@ -596,10 +642,11 @@ async function main() {
     const editOk     = await runEditCycle();
     const allocOk    = await runAllocationDualTarget();
     const twinOk     = await runGlLineTwin();
+    const shiftOk    = await runShiftCashMath();
     const goldenOk   = await runGolden();
     const mirrorOk   = await runMirror();
     const lifecycleOk = await runLifecycle();
-    const green      = stockOk && e2eOk && recompOk && editOk && allocOk && twinOk && goldenOk && mirrorOk && lifecycleOk;
+    const green      = stockOk && e2eOk && recompOk && editOk && allocOk && twinOk && shiftOk && goldenOk && mirrorOk && lifecycleOk;
     console.log(green ? "\nHARNESS GREEN ✓" : "\nHARNESS FAILED ✗");
     if (!green) process.exitCode = 1;
 }
