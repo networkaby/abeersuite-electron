@@ -5,6 +5,7 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { invNextRef } from "@/modules/inventory/lib/stock";
 import { engineCreateSpine } from "@/modules/accountancy/lib/transactionEngine";
+import { linkVoucherChildrenToSpine } from "@/modules/inventory/lib/voucherSpineLink";
 
 // POST /api/inventory/vouchers/[id]/duplicate
 //
@@ -91,6 +92,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                 userId:         user!.id,
             });
             await tx.invVoucher.update({ where: { id: voucher.id }, data: { universalVoucherId: spineId } });
+            await linkVoucherChildrenToSpine(tx, voucher.id, spineId);   // 5C
             return voucher;
         });
 

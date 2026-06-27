@@ -7,6 +7,7 @@ import { buildPartyJson, readPartyName, readPartyPhone, readPartyAddress } from 
 import { buildSettlementJson } from "@/shared/lib/accountancy/settlement";
 import { engineCreateSpine } from "@/modules/accountancy/lib/transactionEngine";
 import { syncVoucherLinks } from "@/modules/accountancy/lib/voucherLinks";
+import { linkVoucherChildrenToSpine } from "@/modules/inventory/lib/voucherSpineLink";
 import { resolveActiveBranchId, requireBranchAccess, BranchAccessError } from "@/shared/lib/auth/activeBranch";
 import { auth } from "@/auth";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -514,6 +515,7 @@ export async function POST(req: NextRequest) {
             // Phase 5 5A: dual-write the order-pipeline link onto the spine's
             // VoucherLink (SALES_ORDER rides the Orders board). Columns kept until 5A-3.
             await syncVoucherLinks(tx, spineId, { orderPipelineId, orderStatusId });
+            await linkVoucherChildrenToSpine(tx, created.id, spineId);   // 5C: link goods lines
             return created;
         });
 

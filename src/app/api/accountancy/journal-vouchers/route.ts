@@ -5,6 +5,7 @@ import { z } from "zod";
 import { isBalanced } from "@/modules/accountancy/lib/balance";
 import { engineCreateVoucher } from "@/modules/accountancy/lib/transactionEngine";
 import { invNextRef } from "@/modules/inventory/lib/stock";
+import { linkVoucherChildrenToSpine } from "@/modules/inventory/lib/voucherSpineLink";
 import { recordStockMovement } from "@/modules/inventory/lib/stockMovement";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import * as Sentry from "@sentry/nextjs";
@@ -197,6 +198,9 @@ export async function POST(req: NextRequest) {
                     // Suppress unused-var lint for carrierLine — kept for readability.
                     void carrierLine;
                 }
+                // Phase 5 5C: the carrier's stock rows + lines belong to the journal
+                // voucher — link them onto its spine (the carrier has no spine of its own).
+                await linkVoucherChildrenToSpine(tx, carrier.id, voucher.universalVoucherId);
             }
 
             return { voucherId: voucher.id, reference: voucher.reference, posted: true };

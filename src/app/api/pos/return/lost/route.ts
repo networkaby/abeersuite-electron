@@ -26,6 +26,7 @@ import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { invNextRef } from "@/modules/inventory/lib/stock";
 import { recordStockMovement } from "@/modules/inventory/lib/stockMovement";
+import { linkVoucherChildrenToSpine } from "@/modules/inventory/lib/voucherSpineLink";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import { saleToSpec } from "@/modules/accountancy/lib/voucherMappers";
 import { buildSettlementJson } from "@/shared/lib/accountancy/settlement";
@@ -203,6 +204,7 @@ export async function POST(req: Request) {
                 where: { id: voucher.id },
                 data:  { journalEntryId: gl.journalEntryId, universalVoucherId: gl.universalVoucherId },
             });
+            await linkVoucherChildrenToSpine(tx, voucher.id, gl.universalVoucherId);   // 5C
 
             // Stock IN.
             for (const l of data.lines) {

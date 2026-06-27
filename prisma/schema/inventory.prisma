@@ -541,6 +541,10 @@ model VoucherInventoryLine {
   id                  Int        @id @default(autoincrement())
   voucherId           Int
   voucher             InvVoucher @relation(fields: [voucherId], references: [id], onDelete: Cascade)
+  // Phase 5 5C: re-point goods lines onto the spine. Nullable + dual-written in
+  // 5C-1; becomes the sole parent FK when voucherId is dropped (5C-3).
+  universalVoucherId  Int?
+  universalVoucher    UniversalVoucher? @relation("SpineInventoryLines", fields: [universalVoucherId], references: [id], onDelete: Cascade)
   productId           Int
   product             InvProduct @relation(fields: [productId], references: [id])
   description         String?
@@ -574,6 +578,7 @@ model VoucherInventoryLine {
   amount              Decimal    @db.Decimal(14, 2)
 
   @@index([voucherId])
+  @@index([universalVoucherId])
   @@index([productId])
   @@map("InvVoucherLine")
 }
@@ -586,6 +591,9 @@ model InvStockLedger {
   product   InvProduct @relation(fields: [productId], references: [id])
   voucherId Int
   voucher   InvVoucher @relation(fields: [voucherId], references: [id])
+  // Phase 5 5C: re-point stock rows onto the spine (dual-written in 5C-1).
+  universalVoucherId Int?
+  universalVoucher   UniversalVoucher? @relation("SpineStockLedger", fields: [universalVoucherId], references: [id], onDelete: Cascade)
   /// Branch where this stock movement happened — stamped at post time from
   /// the parent voucher's branchId. Required for per-branch ledger queries.
   branchId  String
@@ -598,6 +606,7 @@ model InvStockLedger {
 
   @@index([productId, date])
   @@index([voucherId])
+  @@index([universalVoucherId])
   @@index([productId, branchId, date])
 }
 

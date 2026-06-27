@@ -4,6 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { invNextRef, calcVoucherTotals } from "@/modules/inventory/lib/stock";
 import { recordStockMovementsBatch } from "@/modules/inventory/lib/stockMovement";
+import { linkVoucherChildrenToSpine } from "@/modules/inventory/lib/voucherSpineLink";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import { saleToSpec } from "@/modules/accountancy/lib/voucherMappers";
 import { buildSettlementJson } from "@/shared/lib/accountancy/settlement";
@@ -623,6 +624,7 @@ export async function POST(req: Request) {
                 where: { id: voucher.id },
                 data:  { journalEntryId: gl.journalEntryId, universalVoucherId: gl.universalVoucherId },
             });
+            await linkVoucherChildrenToSpine(tx, voucher.id, gl.universalVoucherId);   // 5C
 
             // ── 3a. Coupon: log the redemption (enforces usage limits + powers
             // return reversal). Non-GL — the discount already posted as a charge.

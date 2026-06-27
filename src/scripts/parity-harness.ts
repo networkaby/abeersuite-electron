@@ -34,6 +34,7 @@ import { sumReceiptAllocations, loadTenderLines, sumVoucherAllocations } from "@
 import { sumShiftCashSalesPaise, sumShiftTendersByAccount } from "@/modules/pos/lib/shiftMath";
 import { buildSettlementJson } from "@/shared/lib/accountancy/settlement";
 import { syncVoucherLink, syncVoucherLinks } from "@/modules/accountancy/lib/voucherLinks";
+import { linkVoucherChildrenToSpine } from "@/modules/inventory/lib/voucherSpineLink";
 
 // Self-built client (the app singleton reads env at import-time; tsx doesn't load
 // .env.local for us). Mirror prismaClient.ts's local-vs-remote SSL detection.
@@ -358,14 +359,20 @@ async function runDraftSale(): Promise<boolean> {
             // 2. POST (the route's post path): mapper + enginePost ATTACH to the draft spine.
             const spec = await saleToSpec(tx, { ...v, tenders: [{ accountId: cash.id, amount: 118, method: "CASH" }], charges: [], sellerStateCode: "19", buyerStateCode: "19" } as unknown as PostVoucherInput["voucher"], { voucherId: v.id, branchId: v.branchId, lines: v.lines });
             const out = await enginePost(tx, spec, user.id, { existingSpineId: spineId });
+            // 5C: the route links the goods lines + stock rows to the spine after post.
+            await linkVoucherChildrenToSpine(tx, v.id, spineId);
             const linesNow = await captureJe(tx, spineId);
             const postedStatus = (await tx.universalVoucher.findUnique({ where: { id: spineId }, select: { status: true } }))?.status;
-            const stock = await tx.invStockLedger.findMany({ where: { voucherId: v.id }, select: { outQty: true } });
+            const stock = await tx.invStockLedger.findMany({ where: { voucherId: v.id }, select: { outQty: true, universalVoucherId: true } });
+            // 5C: goods line + stock row now carry the spine id.
+            const goods = await tx.voucherInventoryLine.findMany({ where: { voucherId: v.id }, select: { universalVoucherId: true } });
             ok = draftStatus === "DRAFT"
                 && out.universalVoucherId === spineId    // ATTACHED, not a new spine
                 && postedStatus === "POSTED"
                 && linesNow.length === 4
-                && stock.length === 1 && Number(stock[0].outQty) === 1;
+                && stock.length === 1 && Number(stock[0].outQty) === 1
+                && stock[0].universalVoucherId === spineId         // 5C stock linked
+                && goods.length === 1 && goods[0].universalVoucherId === spineId;   // 5C goods linked
             throw new Error(ROLLBACK);
         }, { timeout: 30_000, maxWait: 10_000 });
     } catch (e) {

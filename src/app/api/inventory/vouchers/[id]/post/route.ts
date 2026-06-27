@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { toNumber } from "@/modules/accountancy/lib/balance";
 import { recordStockMovement } from "@/modules/inventory/lib/stockMovement";
+import { linkVoucherChildrenToSpine } from "@/modules/inventory/lib/voucherSpineLink";
 import { valueStockBatch } from "@/modules/inventory/lib/valuation";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import { saleToSpec } from "@/modules/accountancy/lib/voucherMappers";
@@ -381,6 +382,8 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                     data:  { status: "POSTED", postedAt: new Date(), sourceCreatedAt: new Date() },
                 });
             }
+            // Phase 5 5C: link the just-written stock rows (+ goods lines) to the spine.
+            await linkVoucherChildrenToSpine(tx, voucher.id, universalVoucherId);
 
             // ── 3. Mark voucher as POSTED ─────────────────────────────────
             const updated = await tx.invVoucher.update({

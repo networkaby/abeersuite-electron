@@ -152,6 +152,10 @@ model UniversalVoucher {
   voucher              Voucher?        @relation("VoucherSpine")
   // Phase 5 5A: cross-module workflow links (loose, FK-free — see VoucherLink).
   links                VoucherLink[]   @relation("VoucherLinks")
+  // Phase 5 5C: inventory children re-homed onto the spine (dual-written; sole
+  // parent once InvVoucher.voucherId is dropped in 5C-3).
+  inventoryLines       VoucherInventoryLine[] @relation("SpineInventoryLines")
+  stockLedger          InvStockLedger[]       @relation("SpineStockLedger")
   createdAt            DateTime        @default(now())
   updatedAt            DateTime        @updatedAt
 

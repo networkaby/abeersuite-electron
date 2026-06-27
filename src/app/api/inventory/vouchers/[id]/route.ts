@@ -4,6 +4,7 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { calcLineTotals, calcVoucherTotals } from "@/modules/inventory/lib/stock";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import { reapplyTradingVoucherInPlace } from "@/modules/accountancy/lib/reapplyTradingVoucher";
+import { linkVoucherChildrenToSpine } from "@/modules/inventory/lib/voucherSpineLink";
 import { auditSnapshot } from "@/modules/accountancy/lib/voucherLifecycle";
 import type { PostVoucherInput } from "@/modules/accountancy/lib/postInvVoucher";
 import * as Sentry from "@sentry/nextjs";
@@ -376,6 +377,8 @@ export async function PATCH(req: Request, { params }: Params) {
                     ? await tx.universalVoucher.findUnique({ where: { sourceJournalEntryId: existing.journalEntryId }, select: { id: true } })
                     : null;
                 await tx.invVoucher.update({ where: { id }, data: { postedAt: new Date(), universalVoucherId: newSpine?.id ?? null } });
+                // Phase 5 5C: link the rewritten stock rows (+ any new goods lines) to the spine.
+                await linkVoucherChildrenToSpine(tx, id, newSpine?.id ?? existing.journalEntryId);
             }
 
             return tx.invVoucher.findUnique({
