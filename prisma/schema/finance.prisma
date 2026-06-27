@@ -104,6 +104,14 @@ model UniversalVoucher {
   // parent once InvVoucher.voucherId is dropped in 5C-3).
   inventoryLines       VoucherInventoryLine[] @relation("SpineInventoryLines")
   stockLedger          InvStockLedger[]       @relation("SpineStockLedger")
+  // Phase 5 5B: loyalty / coupon / gift-card / cost-pool satellites anchored on the
+  // spine (the document), re-pointed off InvVoucher.
+  loyaltyLots               LoyaltyLot[]               @relation("SpineLoyaltyLots")
+  loyaltyLedger             LoyaltyLedger[]            @relation("SpineLoyaltyLedger")
+  loyaltyMilestoneAwards    LoyaltyMilestoneAward[]    @relation("SpineLoyaltyMilestoneAwards")
+  couponRedemptions         CouponRedemption[]         @relation("SpineCouponRedemptions")
+  giftCardTxns              GiftCardTxn[]              @relation("SpineGiftCardTxns")
+  additionalCostAllocations AdditionalCostAllocation[] @relation("SpineAdditionalCostAllocations")
   createdAt            DateTime        @default(now())
   updatedAt            DateTime        @updatedAt
 

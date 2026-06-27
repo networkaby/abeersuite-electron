@@ -642,7 +642,7 @@ export async function POST(req: Request) {
                 await recordCouponRedemption(tx, {
                     couponId,
                     accountId: isIdentified ? customerAccount.id : null,
-                    voucherId: voucher.id,
+                    universalVoucherId: spineId,
                     amount:    couponRupees,
                     channel:   "POS",
                 });
@@ -650,7 +650,7 @@ export async function POST(req: Request) {
 
             // Gift card: draw down the balance (the GL leg was the tender above).
             if (giftCardId != null && giftCardRedeem > 0) {
-                await redeemGiftCard(tx, { giftCardId, amount: giftCardRedeem, voucherId: voucher.id, createdById: user!.id });
+                await redeemGiftCard(tx, { giftCardId, amount: giftCardRedeem, universalVoucherId: spineId, createdById: user!.id });
             }
 
             // ── 3b. Loyalty: redeem (consume oldest lots) + earn (new lot) ─
@@ -662,7 +662,7 @@ export async function POST(req: Request) {
             if (loyaltyEnabled) {
                 loyaltyResult = await applyLoyaltyForSale(tx, {
                     accountId:        customerAccount.id,
-                    voucherId:        voucher.id,
+                    universalVoucherId: spineId,
                     earnLines,
                     combinedDiscount: effectiveTierDiscount + redemptionRupees + couponRupees,
                     redeemPoints,
@@ -685,7 +685,7 @@ export async function POST(req: Request) {
                     const ms = await applyMilestones(tx, {
                         accountId:     customerAccount.id,
                         lifetimeSpend,
-                        voucherId:     voucher.id,
+                        universalVoucherId: spineId,
                         milestones:    milestoneTiers,
                         rates:         loyaltyRates,
                         createdById:   user!.id,

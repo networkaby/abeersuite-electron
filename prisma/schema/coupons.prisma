@@ -149,8 +149,9 @@ model CouponRedemption {
   coupon     Coupon        @relation(fields: [couponId], references: [id])
   accountId  Int?
   account    Account?      @relation("AccountCouponRedemptions", fields: [accountId], references: [id])
-  voucherId  Int?
-  voucher    InvVoucher?   @relation("InvVoucherCouponRedemptions", fields: [voucherId], references: [id])
+  /// Phase 5 5B: points at the UniversalVoucher spine (the document), not InvVoucher.
+  universalVoucherId Int?
+  universalVoucher   UniversalVoucher? @relation("SpineCouponRedemptions", fields: [universalVoucherId], references: [id])
   /// ₹ discount actually applied at this redemption.
   amount     Decimal       @db.Decimal(14, 2)
   channel    CouponChannel
@@ -160,7 +161,7 @@ model CouponRedemption {
 
   @@index([couponId])
   @@index([accountId])
-  @@index([voucherId])
+  @@index([universalVoucherId])
 }
 
 /// Prepaid gift card / store credit. Lifecycle: DRAFT (generated in the UI, no
@@ -201,15 +202,16 @@ model GiftCardTxn {
   /// Signed against balance: +ISSUE/+REFUND, −REDEEM.
   amount       Decimal         @db.Decimal(14, 2)
   /// The POS sale that redeemed (or the return that refunded), for audit.
-  voucherId    Int?
-  voucher      InvVoucher?     @relation("InvVoucherGiftCardTxns", fields: [voucherId], references: [id])
+  /// Phase 5 5B: points at the UniversalVoucher spine (the document), not InvVoucher.
+  universalVoucherId Int?
+  universalVoucher   UniversalVoucher? @relation("SpineGiftCardTxns", fields: [universalVoucherId], references: [id])
   balanceAfter Decimal         @db.Decimal(14, 2)
   createdById  Int
   createdBy    User            @relation("GiftCardTxnCreatedBy", fields: [createdById], references: [id])
   createdAt    DateTime        @default(now())
 
   @@index([giftCardId])
-  @@index([voucherId])
+  @@index([universalVoucherId])
 }
 
 /// Singleton (id=1) — global stacking guard + dedicated GL ledger wiring.

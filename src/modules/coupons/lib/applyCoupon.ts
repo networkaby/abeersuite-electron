@@ -132,10 +132,10 @@ export async function selectCouponForCart(
 /// Record a redemption inside the sale tx.
 export async function recordCouponRedemption(
     tx: Tx,
-    args: { couponId: number; accountId: number | null; voucherId: number; amount: number; channel: CouponChannel },
+    args: { couponId: number; accountId: number | null; universalVoucherId: number; amount: number; channel: CouponChannel },
 ): Promise<void> {
     await tx.couponRedemption.create({
-        data: { couponId: args.couponId, accountId: args.accountId, voucherId: args.voucherId, amount: args.amount, channel: args.channel },
+        data: { couponId: args.couponId, accountId: args.accountId, universalVoucherId: args.universalVoucherId, amount: args.amount, channel: args.channel },
     });
 }
 
@@ -169,11 +169,11 @@ export async function issueMilestoneCoupon(
 /// keep the coupon "used". No GL effect — the credit note already reverses goods.
 export async function reverseCouponRedemption(
     tx: Tx,
-    args: { originalVoucherId: number; returnFraction: number },
+    args: { originalUniversalVoucherId: number | null; returnFraction: number },
 ): Promise<{ reversed: number }> {
-    if (args.returnFraction < 0.999) return { reversed: 0 };
+    if (args.returnFraction < 0.999 || args.originalUniversalVoucherId == null) return { reversed: 0 };
     const res = await tx.couponRedemption.updateMany({
-        where: { voucherId: args.originalVoucherId, reversedAt: null },
+        where: { universalVoucherId: args.originalUniversalVoucherId, reversedAt: null },
         data: { reversedAt: new Date() },
     });
     return { reversed: res.count };

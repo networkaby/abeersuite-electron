@@ -60,8 +60,9 @@ export type CostPoolDrawUpdateInput = z.infer<typeof costPoolDrawUpdateSchema>;
 // caps the SUM of amountPaise against the entry's remaining.
 export const costPoolAllocateBatchSchema = z.object({
     sourceGlLineId: z.number().int().positive(),
-    /// The PURCHASE/GRN voucher the freight is being spread from.
-    sourceInvVoucherId: z.number().int().positive().optional(),
+    /// The PURCHASE/GRN voucher (its UniversalVoucher spine id) the freight is
+    /// being spread from. Phase 5 5B: spine id, not InvVoucher id.
+    sourceUniversalVoucherId: z.number().int().positive().optional(),
     date: dateField,
     note: noteField.optional(),
     lines: z

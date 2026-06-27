@@ -253,19 +253,21 @@ export async function POST(req: Request) {
             // proportional to the value returned. No-ops (returns null) when the
             // original sale had no loyalty activity (walk-in / pre-loyalty / SALE).
             const loyalty = await reverseLoyaltyForReturn(tx, {
-                accountId:         original.accountId!,
-                originalVoucherId: original.id,
-                returnVoucherId:   voucher.id,
+                accountId:                  original.accountId!,
+                originalUniversalVoucherId: original.universalVoucherId,
+                originalVoucherId:          original.id,
+                returnUniversalVoucherId:   spineId,
+                returnVoucherId:            voucher.id,
                 returnFraction,
-                rates:             loyaltyRates,
-                createdById:       user!.id,
+                rates:                      loyaltyRates,
+                createdById:                user!.id,
             });
 
             // 2c. Coupon reversal — free the usage slot on a FULL return so the
             // coupon can be used again. Non-GL (the credit note already reverses
             // goods + tax). Partial returns keep the coupon "used".
             const couponReversal = await reverseCouponRedemption(tx, {
-                originalVoucherId: original.id,
+                originalUniversalVoucherId: original.universalVoucherId,
                 returnFraction,
             });
 

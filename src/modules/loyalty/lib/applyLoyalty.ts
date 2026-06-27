@@ -40,12 +40,12 @@ export async function liveBalance(tx: Tx, accountId: number, rates: LoyaltyRates
 
 async function addLot(
     tx: Tx,
-    args: { accountId: number; voucherId: number | null; points: number; earnedAt: Date },
+    args: { accountId: number; universalVoucherId: number | null; points: number; earnedAt: Date },
 ): Promise<void> {
     await tx.loyaltyLot.create({
         data: {
             accountId: args.accountId,
-            voucherId: args.voucherId,
+            universalVoucherId: args.universalVoucherId,
             pointsEarned: args.points,
             pointsRemaining: args.points,
             earnedAt: args.earnedAt,
@@ -79,7 +79,7 @@ async function postMovement(
     tx: Tx,
     args: {
         accountId: number;
-        voucherId: number | null;
+        universalVoucherId: number | null;
         delta: number;
         reason: "EARN_SALE" | "REDEEM_SALE" | "REVERSAL_RETURN" | "ADMIN_ADJUST" | "MILESTONE_BONUS";
         note?: string | null;
@@ -95,7 +95,7 @@ async function postMovement(
     await tx.loyaltyLedger.create({
         data: {
             accountId: args.accountId,
-            voucherId: args.voucherId,
+            universalVoucherId: args.universalVoucherId,
             delta: args.delta,
             reason: args.reason,
             balanceAfter,
@@ -108,7 +108,8 @@ async function postMovement(
 
 export type ApplySaleArgs = {
     accountId: number;
-    voucherId: number;
+    /// Phase 5 5B: the sale's UniversalVoucher spine id (the document anchor).
+    universalVoucherId: number;
     earnLines: EarnLine[];
     /// Combined voucher-level reduction (tier discount + redemption ₹).
     combinedDiscount: number;
@@ -137,7 +138,7 @@ export async function applyLoyaltyForSale(
         pointsRedeemed = await consumeLotsFIFO(tx, args.accountId, args.redeemPoints, cutoff);
         newBalance = await postMovement(tx, {
             accountId: args.accountId,
-            voucherId: args.voucherId,
+            universalVoucherId: args.universalVoucherId,
             delta: -pointsRedeemed,
             reason: "REDEEM_SALE",
             createdById: args.createdById,
@@ -151,10 +152,10 @@ export async function applyLoyaltyForSale(
     const base = meetsEarnFloor ? earnableBaseForCart(args.earnLines, args.combinedDiscount, args.rulesIndex, args.taxonomyMaps) : 0;
     const pointsEarned = pointsForBase(base, args.rates);
     if (pointsEarned > 0) {
-        await addLot(tx, { accountId: args.accountId, voucherId: args.voucherId, points: pointsEarned, earnedAt: new Date() });
+        await addLot(tx, { accountId: args.accountId, universalVoucherId: args.universalVoucherId, points: pointsEarned, earnedAt: new Date() });
         newBalance = await postMovement(tx, {
             accountId: args.accountId,
-            voucherId: args.voucherId,
+            universalVoucherId: args.universalVoucherId,
             delta: pointsEarned,
             reason: "EARN_SALE",
             createdById: args.createdById,
@@ -169,7 +170,14 @@ export async function applyLoyaltyForSale(
 
 export type ReverseReturnArgs = {
     accountId: number;
+    /// Phase 5 5B: loyalty rows are keyed by the spine; the prior-returns lookup
+    /// still walks InvVoucher.refVoucherId (InvVoucher id space). So we take BOTH
+    /// id faces of the original sale + the return — spine for loyalty, InvVoucher
+    /// for the refVoucher graph. `originalUniversalVoucherId` may be null (a sale
+    /// with no spine never carried loyalty → the function returns null).
+    originalUniversalVoucherId: number | null;
     originalVoucherId: number;
+    returnUniversalVoucherId: number;
     returnVoucherId: number;
     /// returnedGoods / originalGoods, clamped 0..1 by the caller.
     returnFraction: number;
@@ -184,8 +192,9 @@ export async function reverseLoyaltyForReturn(
     tx: Tx,
     args: ReverseReturnArgs,
 ): Promise<{ pointsClawedBack: number; pointsRestored: number; newBalance: number } | null> {
+    if (args.originalUniversalVoucherId == null) return null;
     const rows = await tx.loyaltyLedger.findMany({
-        where: { voucherId: args.originalVoucherId, reason: { in: ["EARN_SALE", "REDEEM_SALE"] } },
+        where: { universalVoucherId: args.originalUniversalVoucherId, reason: { in: ["EARN_SALE", "REDEEM_SALE"] } },
         select: { reason: true, delta: true },
     });
     if (rows.length === 0) return null;
@@ -205,7 +214,7 @@ export async function reverseLoyaltyForReturn(
         const target = Math.round(originalEarn * fraction);
         if (target > 0) {
             const lot = await tx.loyaltyLot.findFirst({
-                where: { accountId: args.accountId, voucherId: args.originalVoucherId },
+                where: { accountId: args.accountId, universalVoucherId: args.originalUniversalVoucherId },
                 orderBy: { id: "asc" },
                 select: { id: true, pointsRemaining: true },
             });
@@ -215,7 +224,7 @@ export async function reverseLoyaltyForReturn(
                 pointsClawedBack = claw;
                 newBalance = await postMovement(tx, {
                     accountId: args.accountId,
-                    voucherId: args.returnVoucherId,
+                    universalVoucherId: args.returnUniversalVoucherId,
                     delta: -claw,
                     reason: "REVERSAL_RETURN",
                     note: `Claw-back of points earned on sale #${args.originalVoucherId}`,
@@ -229,25 +238,29 @@ export async function reverseLoyaltyForReturn(
 
     // ── Restore redeemed — fresh lot, capped at original redeem net of prior restores.
     if (originalRedeem > 0) {
+        // Prior returns of the SAME sale walk the InvVoucher refVoucher graph
+        // (InvVoucher id space), but their loyalty rows are keyed by the spine — so
+        // select each prior return's universalVoucherId for the ledger aggregate.
         const priorReturns = await tx.invVoucher.findMany({
             where: { refVoucherId: args.originalVoucherId, type: "SALE_RETURN", id: { not: args.returnVoucherId } },
-            select: { id: true },
+            select: { universalVoucherId: true },
         });
         let alreadyRestored = 0;
-        if (priorReturns.length > 0) {
+        const priorReturnSpineIds = priorReturns.map((v) => v.universalVoucherId).filter((x): x is number => x != null);
+        if (priorReturnSpineIds.length > 0) {
             const agg = await tx.loyaltyLedger.aggregate({
-                where: { voucherId: { in: priorReturns.map((v) => v.id) }, reason: "REVERSAL_RETURN", delta: { gt: 0 } },
+                where: { universalVoucherId: { in: priorReturnSpineIds }, reason: "REVERSAL_RETURN", delta: { gt: 0 } },
                 _sum: { delta: true },
             });
             alreadyRestored = agg._sum.delta ?? 0;
         }
         const target = Math.min(Math.round(originalRedeem * fraction), originalRedeem - alreadyRestored);
         if (target > 0) {
-            await addLot(tx, { accountId: args.accountId, voucherId: args.returnVoucherId, points: target, earnedAt: new Date() });
+            await addLot(tx, { accountId: args.accountId, universalVoucherId: args.returnUniversalVoucherId, points: target, earnedAt: new Date() });
             pointsRestored = target;
             newBalance = await postMovement(tx, {
                 accountId: args.accountId,
-                voucherId: args.returnVoucherId,
+                universalVoucherId: args.returnUniversalVoucherId,
                 delta: target,
                 reason: "REVERSAL_RETURN",
                 note: `Restore of points redeemed on sale #${args.originalVoucherId}`,
@@ -269,7 +282,8 @@ export type AwardMilestonesArgs = {
     accountId: number;
     /// Lifetime spend (₹) AFTER the current sale — computed by the caller inside the tx.
     lifetimeSpend: number;
-    voucherId: number | null;
+    /// Phase 5 5B: the crossing sale's UniversalVoucher spine id (null if admin).
+    universalVoucherId: number | null;
     /// Enabled milestone tiers (any order); already filtered to enabled.
     milestones: MilestoneTier[];
     rates: LoyaltyRates;
@@ -304,13 +318,13 @@ export async function applyMilestones(
     for (const m of pending) {
         // Unique [accountId, milestoneId] is the real guard against double-award.
         await tx.loyaltyMilestoneAward.create({
-            data: { accountId: args.accountId, milestoneId: m.id, voucherId: args.voucherId, pointsGranted: m.bonusPoints },
+            data: { accountId: args.accountId, milestoneId: m.id, universalVoucherId: args.universalVoucherId, pointsGranted: m.bonusPoints },
         });
         if (m.bonusPoints > 0) {
-            await addLot(tx, { accountId: args.accountId, voucherId: args.voucherId, points: m.bonusPoints, earnedAt: new Date() });
+            await addLot(tx, { accountId: args.accountId, universalVoucherId: args.universalVoucherId, points: m.bonusPoints, earnedAt: new Date() });
             newBalance = await postMovement(tx, {
                 accountId: args.accountId,
-                voucherId: args.voucherId,
+                universalVoucherId: args.universalVoucherId,
                 delta: m.bonusPoints,
                 reason: "MILESTONE_BONUS",
                 note: m.label ? `Milestone reward: ${m.label}` : `Milestone reward (₹${m.threshold.toFixed(0)} lifetime)`,
@@ -339,7 +353,7 @@ export async function adjustPoints(
 ): Promise<{ newBalance: number }> {
     await ensureAccount(tx, args.accountId);
     if (args.delta > 0) {
-        await addLot(tx, { accountId: args.accountId, voucherId: null, points: args.delta, earnedAt: new Date() });
+        await addLot(tx, { accountId: args.accountId, universalVoucherId: null, points: args.delta, earnedAt: new Date() });
     } else if (args.delta < 0) {
         const cutoff = expiryCutoff(new Date(), args.rates);
         const consumed = await consumeLotsFIFO(tx, args.accountId, -args.delta, cutoff);
@@ -351,7 +365,7 @@ export async function adjustPoints(
     }
     const newBalance = await postMovement(tx, {
         accountId: args.accountId,
-        voucherId: null,
+        universalVoucherId: null,
         delta: args.delta,
         reason: "ADMIN_ADJUST",
         note: args.note,

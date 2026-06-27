@@ -28,7 +28,7 @@ export async function lookupActiveGiftCard(tx: Tx, code: string, now: Date): Pro
 
 /// Draw down a gift card inside the sale tx (validated by the caller).
 export async function redeemGiftCard(
-    tx: Tx, args: { giftCardId: number; amount: number; voucherId: number; createdById: number },
+    tx: Tx, args: { giftCardId: number; amount: number; universalVoucherId: number; createdById: number },
 ): Promise<number> {
     const gc = await tx.giftCard.findUniqueOrThrow({ where: { id: args.giftCardId }, select: { balance: true, status: true } });
     const newBal = Math.round((Number(gc.balance) - args.amount) * 100) / 100;
@@ -37,14 +37,14 @@ export async function redeemGiftCard(
         data: { balance: newBal, status: newBal <= 0.005 ? "REDEEMED" : gc.status },
     });
     await tx.giftCardTxn.create({
-        data: { giftCardId: args.giftCardId, type: "REDEEM", amount: -args.amount, voucherId: args.voucherId, balanceAfter: newBal, createdById: args.createdById },
+        data: { giftCardId: args.giftCardId, type: "REDEEM", amount: -args.amount, universalVoucherId: args.universalVoucherId, balanceAfter: newBal, createdById: args.createdById },
     });
     return newBal;
 }
 
 /// Restore balance on a return (proportional amount computed by the caller).
 export async function refundGiftCard(
-    tx: Tx, args: { giftCardId: number; amount: number; voucherId: number; createdById: number },
+    tx: Tx, args: { giftCardId: number; amount: number; universalVoucherId: number; createdById: number },
 ): Promise<number> {
     const gc = await tx.giftCard.findUniqueOrThrow({ where: { id: args.giftCardId }, select: { balance: true, status: true } });
     const newBal = Math.round((Number(gc.balance) + args.amount) * 100) / 100;
@@ -53,7 +53,7 @@ export async function refundGiftCard(
         data: { balance: newBal, status: gc.status === "REDEEMED" ? "ACTIVE" : gc.status },
     });
     await tx.giftCardTxn.create({
-        data: { giftCardId: args.giftCardId, type: "REFUND", amount: args.amount, voucherId: args.voucherId, balanceAfter: newBal, createdById: args.createdById },
+        data: { giftCardId: args.giftCardId, type: "REFUND", amount: args.amount, universalVoucherId: args.universalVoucherId, balanceAfter: newBal, createdById: args.createdById },
     });
     return newBal;
 }

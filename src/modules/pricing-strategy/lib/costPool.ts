@@ -214,9 +214,9 @@ export async function getEntryRemainingPaise(glLineId: number): Promise<number |
  * *newer* purchase replaces an older one (latest inward wins) — older freight
  * doesn't keep stacking.
  *
- * "Latest inward" is keyed by `sourceInvVoucherId` (falling back to the row's
- * `date` for ad-hoc rows with no source voucher); the batch with the most-recent
- * `date` is summed.
+ * "Latest inward" is keyed by `sourceUniversalVoucherId` (the spine; falling back
+ * to the row's `date` for ad-hoc rows with no source voucher); the batch with the
+ * most-recent `date` is summed.
  * Products with no allocation are absent from the map (treat as 0 at the call site).
  */
 export async function getCurrentAdditionalCostByProduct(
@@ -226,13 +226,13 @@ export async function getCurrentAdditionalCostByProduct(
     if (productIds.length === 0) return out;
     const rows = await prisma.additionalCostAllocation.findMany({
         where: { kind: "ALLOCATION", productId: { in: productIds }, perUnitPaise: { not: null } },
-        select: { productId: true, perUnitPaise: true, sourceInvVoucherId: true, date: true },
+        select: { productId: true, perUnitPaise: true, sourceUniversalVoucherId: true, date: true },
         orderBy: [{ productId: "asc" }, { date: "desc" }, { createdAt: "desc" }, { id: "desc" }],
     });
 
     // Identity of the inward "batch" a row belongs to (legs of one shipment share it).
-    const batchKey = (r: { sourceInvVoucherId: number | null; date: Date }): string =>
-        r.sourceInvVoucherId != null ? `v${r.sourceInvVoucherId}` : `d${r.date.toISOString().slice(0, 10)}`;
+    const batchKey = (r: { sourceUniversalVoucherId: number | null; date: Date }): string =>
+        r.sourceUniversalVoucherId != null ? `v${r.sourceUniversalVoucherId}` : `d${r.date.toISOString().slice(0, 10)}`;
 
     const byProduct = new Map<number, typeof rows>();
     for (const r of rows) {

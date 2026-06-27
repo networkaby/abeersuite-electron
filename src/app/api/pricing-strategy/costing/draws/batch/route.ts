@@ -37,7 +37,7 @@ export async function POST(req: Request) {
             data: data.lines.map((l) => ({
                 kind: "ALLOCATION" as const,
                 sourceVoucherGlLineId: data.sourceGlLineId,
-                sourceInvVoucherId: data.sourceInvVoucherId ?? null,
+                sourceUniversalVoucherId: data.sourceUniversalVoucherId ?? null,
                 amountPaise: l.amountPaise,
                 productId: l.productId,
                 perUnitPaise: l.perUnitPaise,

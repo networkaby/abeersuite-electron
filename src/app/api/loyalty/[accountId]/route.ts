@@ -32,7 +32,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ account
                 take: 50,
                 select: {
                     id: true, delta: true, reason: true, balanceAfter: true, note: true, createdAt: true,
-                    voucher: { select: { id: true, reference: true } },
+                    // Phase 5 5B: the linked document is the spine; aliased to `voucher`
+                    // below so the wire shape the loyalty UI consumes is unchanged.
+                    universalVoucher: { select: { id: true, reference: true } },
                 },
             }),
         ]);
@@ -50,7 +52,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ account
             totalEarned:   wallet?.totalEarned ?? 0,
             totalRedeemed: wallet?.totalRedeemed ?? 0,
             lots: lotsOut,
-            ledger,
+            ledger: ledger.map(({ universalVoucher, ...row }) => ({ ...row, voucher: universalVoucher })),
         });
     } catch (e) {
         return handleApiError(e, "Failed to fetch loyalty wallet");

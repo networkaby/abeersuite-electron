@@ -5,12 +5,11 @@ import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { costPoolDrawCreateSchema } from "@/shared/lib/schemas/costPoolSchemas";
 import { getEntryRemainingPaise } from "@/modules/pricing-strategy/lib/costPool";
-import { readPartyName } from "@/shared/lib/accountancy/partySnapshot";
 
 // GET /api/pricing-strategy/costing/draws — draw history.
 //   ?productId=N       → allocations for one product
 //   ?sourceGlLineId=N  → draws against one pool entry (a spine VoucherGlLine)
-//   ?invVoucherId=N    → all allocations spread from one purchase/GRN (its legs)
+//   ?invVoucherId=N    → all allocations spread from one purchase/GRN (its spine id)
 // Otherwise: the whole history (most recent first).
 export async function GET(req: Request) {
     const { response } = await requirePermission(PERMISSIONS.INVENTORY_MANAGE);
@@ -19,13 +18,14 @@ export async function GET(req: Request) {
         const { searchParams } = new URL(req.url);
         const productId = Number(searchParams.get("productId")) || undefined;
         const sourceGlLineId = Number(searchParams.get("sourceGlLineId")) || undefined;
-        const sourceInvVoucherId = Number(searchParams.get("invVoucherId")) || undefined;
+        // `invVoucherId` query param kept for UI compat; it now carries the spine id.
+        const sourceUniversalVoucherId = Number(searchParams.get("invVoucherId")) || undefined;
 
         const rows = await prisma.additionalCostAllocation.findMany({
             where: {
                 ...(productId ? { productId } : {}),
                 ...(sourceGlLineId ? { sourceVoucherGlLineId: sourceGlLineId } : {}),
-                ...(sourceInvVoucherId ? { sourceInvVoucherId } : {}),
+                ...(sourceUniversalVoucherId ? { sourceUniversalVoucherId } : {}),
             },
             orderBy: [{ createdAt: "desc" }, { id: "desc" }],
             take: 500,
@@ -50,15 +50,20 @@ export async function GET(req: Request) {
                         universalVoucher: { select: { friendlyRef: true, type: true, status: true, deletedAt: true } },
                     },
                 },
-                sourceInvVoucherId: true,
-                sourceInvVoucher: { select: { reference: true, type: true, partyJson: true } },
+                // Phase 5 5B: the source document is the spine (not InvVoucher).
+                sourceUniversalVoucherId: true,
+                sourceUniversalVoucher: { select: { reference: true, friendlyRef: true, type: true, partyAccountId: true } },
                 createdBy: { select: { name: true } },
             },
         });
 
         // Ledger names for the source debits (VoucherGlLine has no `account`
-        // relation until G4) — one batched lookup keyed by accountId.
-        const acctIds = [...new Set(rows.map((r) => r.sourceVoucherGlLine?.accountId).filter((x): x is number => x != null))];
+        // relation until G4) + the source spine's party ledger name — one batched
+        // lookup keyed by accountId (the spine carries partyAccountId, no partyJson).
+        const acctIds = [...new Set([
+            ...rows.map((r) => r.sourceVoucherGlLine?.accountId),
+            ...rows.map((r) => r.sourceUniversalVoucher?.partyAccountId),
+        ].filter((x): x is number => x != null))];
         const acctNameById = new Map(
             (acctIds.length === 0 ? [] : await prisma.account.findMany({ where: { id: { in: acctIds } }, select: { id: true, name: true } }))
                 .map((a) => [a.id, a.name]),
@@ -80,10 +85,10 @@ export async function GET(req: Request) {
             ledgerName: r.sourceVoucherGlLine?.accountId != null ? (acctNameById.get(r.sourceVoucherGlLine.accountId) ?? null) : null,
             reference: r.sourceVoucherGlLine?.universalVoucher?.friendlyRef ?? null,
             referenceType: r.sourceVoucherGlLine?.universalVoucher?.type ?? null,
-            invVoucherId: r.sourceInvVoucherId,
-            invVoucherRef: r.sourceInvVoucher?.reference ?? null,
-            invVoucherType: r.sourceInvVoucher?.type ?? null,
-            invVoucherParty: readPartyName(r.sourceInvVoucher?.partyJson),
+            invVoucherId: r.sourceUniversalVoucherId,
+            invVoucherRef: r.sourceUniversalVoucher?.friendlyRef ?? r.sourceUniversalVoucher?.reference ?? null,
+            invVoucherType: r.sourceUniversalVoucher?.type ?? null,
+            invVoucherParty: r.sourceUniversalVoucher?.partyAccountId != null ? (acctNameById.get(r.sourceUniversalVoucher.partyAccountId) ?? null) : null,
             createdByName: r.createdBy?.name ?? null,
             // The source entry was cancelled/deleted after this draw was made.
             orphaned:

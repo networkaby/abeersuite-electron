@@ -25,6 +25,8 @@ export interface AllocEntry {
 
 interface VoucherListItem {
     id: number;
+    /// Phase 5 5B: cost-pool keys by the spine; the picked voucher's spine id.
+    universalVoucherId: number | null;
     reference: string;
     date: string;
     type: string;
@@ -56,6 +58,9 @@ export function AllocateVoucherDialog({
     const [vouchers, setVouchers] = useState<VoucherListItem[]>([]);
     const [vouchersLoaded, setVouchersLoaded] = useState(false);
     const [voucherId, setVoucherId] = useState<number | null>(null);
+    // Phase 5 5B: the picked voucher's UniversalVoucher spine id — cost-pool draws
+    // key by the spine now, while the line/detail fetch still uses the InvVoucher id.
+    const [voucherUvId, setVoucherUvId] = useState<number | null>(null);
     // The selected voucher's date — the inward date the new price takes effect from.
     const [voucherDate, setVoucherDate] = useState<string | null>(null);
     const [lines, setLines] = useState<VoucherLine[]>([]);
@@ -84,6 +89,7 @@ export function AllocateVoucherDialog({
     useEffect(() => {
         if (open && entry) {
             setVoucherId(null);
+            setVoucherUvId(null);
             setVoucherDate(null);
             setLines([]);
             resetInputs();
@@ -92,7 +98,8 @@ export function AllocateVoucherDialog({
         }
     }, [open, entry]);
 
-    const loadVoucherLines = useCallback(async (id: number) => {
+    // `id` = InvVoucher id (line/detail fetch); `uvId` = its spine id (draws filter).
+    const loadVoucherLines = useCallback(async (id: number, uvId: number | null) => {
         setLinesLoading(true);
         try {
             const r = await axios.get(`/api/inventory/vouchers/${id}`);
@@ -108,9 +115,10 @@ export function AllocateVoucherDialog({
             })).filter((l: VoucherLine) => l.productId && l.quantity > 0);
             setLines(vl);
             resetInputs();
-            // Earlier freight legs already allocated to this same inward (sum per product).
+            // Earlier freight legs already allocated to this same inward (sum per
+            // product). Keyed by the spine id now (the `invVoucherId` param carries it).
             try {
-                const ex = await axios.get(`/api/pricing-strategy/costing/draws?invVoucherId=${id}`);
+                const ex = await axios.get(`/api/pricing-strategy/costing/draws?invVoucherId=${uvId ?? id}`);
                 const m: Record<number, { perUnitPaise: number; legs: number }> = {};
                 for (const d of ex.data as { kind: string; productId: number | null; perUnitPaise: number | null }[]) {
                     if (d.kind !== "ALLOCATION" || d.productId == null || d.perUnitPaise == null) continue;
@@ -129,12 +137,15 @@ export function AllocateVoucherDialog({
     }, []);
 
     function pickVoucher(id: number | null) {
+        const picked = id != null ? vouchers.find((v) => v.id === id) : undefined;
+        const uvId = picked?.universalVoucherId ?? null;
         setVoucherId(id);
-        setVoucherDate(id != null ? (vouchers.find((v) => v.id === id)?.date ?? null) : null);
+        setVoucherUvId(uvId);
+        setVoucherDate(picked?.date ?? null);
         setLines([]);
         resetInputs();
         setExisting({});
-        if (id != null) void loadVoucherLines(id);
+        if (id != null) void loadVoucherLines(id, uvId);
     }
 
     const voucherOptions = useMemo(
@@ -215,7 +226,7 @@ export function AllocateVoucherDialog({
         try {
             await axios.post("/api/pricing-strategy/costing/draws/batch", {
                 sourceGlLineId: entry.glLineId,
-                sourceInvVoucherId: voucherId ?? undefined,
+                sourceUniversalVoucherId: voucherUvId ?? undefined,
                 // Effective date = the inward voucher's date, so the updated cost
                 // takes effect from when the goods (and their freight) came in.
                 date: voucherDate ?? undefined,

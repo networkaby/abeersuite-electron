@@ -117,8 +117,9 @@ model LoyaltyMilestoneAward {
   milestoneId   Int
   milestone     LoyaltyMilestone @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
   /// The sale at which the milestone was crossed (audit; null if admin-triggered).
-  voucherId     Int?
-  voucher       InvVoucher?      @relation("InvVoucherLoyaltyMilestoneAwards", fields: [voucherId], references: [id])
+  /// Phase 5 5B: points at the UniversalVoucher spine (the document), not InvVoucher.
+  universalVoucherId Int?
+  universalVoucher   UniversalVoucher? @relation("SpineLoyaltyMilestoneAwards", fields: [universalVoucherId], references: [id])
   pointsGranted Int
   awardedAt     DateTime         @default(now())
 
@@ -148,8 +149,9 @@ model LoyaltyLot {
   accountId       Int
   loyaltyAccount  LoyaltyAccount @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
   /// The earning sale (null for admin grants / restored-on-return lots).
-  voucherId       Int?
-  voucher         InvVoucher?    @relation("InvVoucherLoyaltyLots", fields: [voucherId], references: [id])
+  /// Phase 5 5B: points at the UniversalVoucher spine (the document), not InvVoucher.
+  universalVoucherId Int?
+  universalVoucher   UniversalVoucher? @relation("SpineLoyaltyLots", fields: [universalVoucherId], references: [id])
   pointsEarned    Int
   pointsRemaining Int
   /// Validity is derived: the lot is live while earnedAt > now − expiryMonths.
@@ -157,15 +159,16 @@ model LoyaltyLot {
   createdAt       DateTime       @default(now())
 
   @@index([accountId, earnedAt]) // FIFO consumption among in-window lots
-  @@index([voucherId])
+  @@index([universalVoucherId])
 }
 
 model LoyaltyLedger {
   id             Int            @id @default(autoincrement())
   accountId      Int
   loyaltyAccount LoyaltyAccount @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
-  voucherId      Int?
-  voucher        InvVoucher?    @relation("InvVoucherLoyaltyLedger", fields: [voucherId], references: [id])
+  /// Phase 5 5B: points at the UniversalVoucher spine (the document), not InvVoucher.
+  universalVoucherId Int?
+  universalVoucher   UniversalVoucher? @relation("SpineLoyaltyLedger", fields: [universalVoucherId], references: [id])
   /// Signed: +earn/restore, −redeem/clawback/expire.
   delta          Int
   reason         LoyaltyReason
@@ -177,5 +180,5 @@ model LoyaltyLedger {
   createdAt      DateTime       @default(now())
 
   @@index([accountId, createdAt])
-  @@index([voucherId])
+  @@index([universalVoucherId])
 }

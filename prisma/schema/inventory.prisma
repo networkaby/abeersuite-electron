@@ -514,13 +514,8 @@ model InvVoucher {
   //          charges: [{accountId, amount, description?}] }. Replaced the
   // InvVoucherTender / InvVoucherCharge tables (folded into the spine on POST).
   settlementJson            Json?
-  loyaltyLots               LoyaltyLot[]               @relation("InvVoucherLoyaltyLots")
-  loyaltyLedger             LoyaltyLedger[]            @relation("InvVoucherLoyaltyLedger")
-  loyaltyMilestoneAwards    LoyaltyMilestoneAward[]    @relation("InvVoucherLoyaltyMilestoneAwards")
-  couponRedemptions         CouponRedemption[]         @relation("InvVoucherCouponRedemptions")
-  giftCardTxns              GiftCardTxn[]              @relation("InvVoucherGiftCardTxns")
-  // Pricing-strategy additional-cost allocations sourced from this purchase/GRN.
-  additionalCostAllocations AdditionalCostAllocation[] @relation("AdditionalCostAllocationInvVoucher")
+  // Phase 5 5B: loyalty / coupon / gift-card / cost-pool back-relations moved to
+  // the UniversalVoucher spine (the document) — InvVoucher no longer anchors them.
   createdAt                 DateTime                   @default(now())
   updatedAt                 DateTime                   @updatedAt
 
@@ -701,10 +696,11 @@ model AdditionalCostAllocation {
   perUnitPaise        Int?
   quantity            Decimal?                     @db.Decimal(14, 3)
   // The PURCHASE/GRN voucher this allocation was spread from (the "source
-  // inventory voucher"). Lets the history list group rows into a voucher-like
-  // document. Null for dismissals / ad-hoc rows.
-  sourceInvVoucherId  Int?
-  sourceInvVoucher    InvVoucher?                  @relation("AdditionalCostAllocationInvVoucher", fields: [sourceInvVoucherId], references: [id], onDelete: SetNull)
+  // document"). Lets the history list group rows into a voucher-like document.
+  // Null for dismissals / ad-hoc rows. Phase 5 5B: points at the UniversalVoucher
+  // spine (the document), not InvVoucher.
+  sourceUniversalVoucherId Int?
+  sourceUniversalVoucher   UniversalVoucher?       @relation("SpineAdditionalCostAllocations", fields: [sourceUniversalVoucherId], references: [id], onDelete: SetNull)
   note                String?
   date                DateTime                     @db.Date
   createdById         Int
@@ -713,7 +709,7 @@ model AdditionalCostAllocation {
 
   @@index([sourceVoucherGlLineId])
   @@index([productId, createdAt])
-  @@index([sourceInvVoucherId])
+  @@index([sourceUniversalVoucherId])
   @@index([kind])
   @@map("additional_cost_allocations")
 }
