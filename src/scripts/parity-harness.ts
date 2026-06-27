@@ -323,6 +323,58 @@ async function runDraftPost(): Promise<boolean> {
     return ok;
 }
 
+/** Phase 5 5.0: the INVENTORY route pattern — a DRAFT InvVoucher gets a draft
+ *  spine at create (engineCreateSpine + universalVoucherId); POST runs the mapper
+ *  + enginePost({existingSpineId}) which ATTACHES to that same spine (no orphan
+ *  second spine) + flips it. Asserts the attach (out.uv === spineId), POSTED, 4
+ *  GL lines, stock OUT 1. Rolled back. */
+async function runDraftSale(): Promise<boolean> {
+    const [branch, product, cash, user] = await Promise.all([
+        prisma.branch.findFirst({ select: { id: true } }),
+        prisma.invProduct.findFirst({ select: { id: true, stock: true } }),
+        prisma.account.findFirst({ where: { name: { equals: "Cash", mode: "insensitive" }, personId: null, companyId: null }, select: { id: true } }),
+        prisma.user.findFirst({ select: { id: true } }),
+    ]);
+    if (!branch || !product || !cash || !user) { console.log("\ndraft-sale skipped — missing seed data"); return true; }
+    let ok = false;
+    try {
+        await prisma.$transaction(async (tx) => {
+            // 1. DRAFT InvVoucher + draft spine at create (the route's create path).
+            const v = await tx.invVoucher.create({
+                data: {
+                    type: "SALE", reference: `PARITY-DRAFTSALE-${Date.now()}`, branchId: branch.id,
+                    date: new Date(), description: "parity draft-sale", status: "DRAFT",
+                    subtotal: 118, taxAmount: 18, totalAmount: 118,
+                    deliveryMode: "COUNTER", placeOfSupply: "19", createdById: user.id,
+                    lines: { create: [{ productId: product.id, quantity: 1, rate: 100, taxRate: 18, taxAmount: 18, amount: 118 }] },
+                    settlementJson: buildSettlementJson([{ accountId: cash.id, amount: 118, method: "CASH" }], []),
+                },
+                include: { lines: { include: { product: { select: { id: true, stock: true, mrpPaise: true } } } } },
+            });
+            const spineId = await engineCreateSpine(tx, { type: "SALE", date: new Date(), description: "parity draft-sale", friendlyRef: v.reference, userId: user.id });
+            await tx.invVoucher.update({ where: { id: v.id }, data: { universalVoucherId: spineId } });
+            const draftStatus = (await tx.universalVoucher.findUnique({ where: { id: spineId }, select: { status: true } }))?.status;
+            // 2. POST (the route's post path): mapper + enginePost ATTACH to the draft spine.
+            const spec = await saleToSpec(tx, { ...v, tenders: [{ accountId: cash.id, amount: 118, method: "CASH" }], charges: [], sellerStateCode: "19", buyerStateCode: "19" } as unknown as PostVoucherInput["voucher"], { voucherId: v.id, branchId: v.branchId, lines: v.lines });
+            const out = await enginePost(tx, spec, user.id, { existingSpineId: spineId });
+            const linesNow = await captureJe(tx, spineId);
+            const postedStatus = (await tx.universalVoucher.findUnique({ where: { id: spineId }, select: { status: true } }))?.status;
+            const stock = await tx.invStockLedger.findMany({ where: { voucherId: v.id }, select: { outQty: true } });
+            ok = draftStatus === "DRAFT"
+                && out.universalVoucherId === spineId    // ATTACHED, not a new spine
+                && postedStatus === "POSTED"
+                && linesNow.length === 4
+                && stock.length === 1 && Number(stock[0].outQty) === 1;
+            throw new Error(ROLLBACK);
+        }, { timeout: 30_000, maxWait: 10_000 });
+    } catch (e) {
+        if ((e as Error)?.message !== ROLLBACK) throw e;
+    }
+    console.log("\n=== 5.0 draft-sale (InvVoucher DRAFT + draft spine → POST attaches to SAME spine, rolled back) ===");
+    console.log("draft→posted on same spine, 4 GL lines + stock OUT 1:", ok ? "✓" : "✗");
+    return ok;
+}
+
 /** ②-foundation: recomputeProductStock (rebuild cache from openingStock + ledger)
  *  must agree with the incremental stock arm. Post a sale, recompute, assert the
  *  cache is unchanged (zero drift). Rolled back. */
@@ -613,7 +665,8 @@ async function main() {
     const shiftOk    = await runShiftCashMath();
     const goldenOk   = await runGolden();
     const draftOk    = await runDraftPost();
-    const green      = stockOk && e2eOk && recompOk && editOk && allocOk && vchAllocOk && shiftOk && goldenOk && draftOk;
+    const draftSaleOk = await runDraftSale();
+    const green      = stockOk && e2eOk && recompOk && editOk && allocOk && vchAllocOk && shiftOk && goldenOk && draftOk && draftSaleOk;
     console.log(green ? "\nHARNESS GREEN ✓" : "\nHARNESS FAILED ✗");
     if (!green) process.exitCode = 1;
 }

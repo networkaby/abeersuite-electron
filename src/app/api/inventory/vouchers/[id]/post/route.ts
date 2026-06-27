@@ -290,7 +290,9 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
             // Other types (GRN, Challan, Rejections, Physical Stock, Sales/
             // Purchase Order) intentionally don't touch GL on POST.
             let journalEntryId: number | null = null;
-            let universalVoucherId: number | null = null;   // G4d direct spine link
+            // Phase 5 5.0: the draft spine created at voucher-save (POST attaches
+            // its GL lines + flips it). Null for pre-5.0 drafts → engine create-posted.
+            let universalVoucherId: number | null = voucher.universalVoucherId ?? null;
             const postNotes: string[] = [];
             // G4b: tender/charge input from settlementJson (replaced the tables).
             const settlement = readSettlement(voucher.settlementJson);
@@ -307,7 +309,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                     { ...voucher, tenders: settlement.tenders, charges: settlement.charges, sellerStateCode, buyerStateCode },
                     { voucherId: voucher.id, branchId: voucher.branchId, lines: voucher.lines },
                 );
-                const out = await enginePost(tx, spec, userId);
+                const out = await enginePost(tx, spec, userId, { existingSpineId: voucher.universalVoucherId });
                 journalEntryId = out.journalEntryId; universalVoucherId = out.universalVoucherId;
                 // A GL-posting trading voucher (SALE / PURCHASE / returns) MUST
                 // produce a balanced JE — Balance Sheet / Day Book / P&L read GL
@@ -362,10 +364,22 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                             },
                         ],
                         stockMoves: [],
-                    }, userId);
+                    }, userId, { existingSpineId: voucher.universalVoucherId });
                     journalEntryId = out.journalEntryId; universalVoucherId = out.universalVoucherId;
                     postNotes.push(`Posted ${settlement.charges.length} expense debit(s) totalling ${totalCharges.toFixed(2)}.`);
                 }
+            }
+
+            // Phase 5 5.0: flip the draft spine to POSTED. Idempotent — the GL
+            // paths (enginePost existingSpineId) already flipped it (the DRAFT
+            // guard makes this a no-op then); non-GL types (GRN / Challan /
+            // Rejection / Physical Stock / orders) get flipped here so the spine
+            // status tracks the voucher even without GL lines.
+            if (universalVoucherId != null) {
+                await tx.universalVoucher.updateMany({
+                    where: { id: universalVoucherId, status: "DRAFT" },
+                    data:  { status: "POSTED", postedAt: new Date(), sourceCreatedAt: new Date() },
+                });
             }
 
             // ── 3. Mark voucher as POSTED ─────────────────────────────────

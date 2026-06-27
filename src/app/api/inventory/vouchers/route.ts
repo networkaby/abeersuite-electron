@@ -5,6 +5,7 @@ import { invNextRef, calcLineTotals, calcVoucherTotals } from "@/modules/invento
 import { InvVoucherType, Prisma, type InvVoucherDeliveryMode } from "@/generated/prisma/client";
 import { buildPartyJson, readPartyName, readPartyPhone, readPartyAddress } from "@/shared/lib/accountancy/partySnapshot";
 import { buildSettlementJson } from "@/shared/lib/accountancy/settlement";
+import { engineCreateSpine } from "@/modules/accountancy/lib/transactionEngine";
 import { resolveActiveBranchId, requireBranchAccess, BranchAccessError } from "@/shared/lib/auth/activeBranch";
 import { auth } from "@/auth";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -442,7 +443,7 @@ export async function POST(req: NextRequest) {
     try {
         const voucher = await prisma.$transaction(async (tx) => {
             const reference = await invNextRef(tx, type);
-            return tx.invVoucher.create({
+            const created = await tx.invVoucher.create({
                 data: {
                     type,
                     reference,
@@ -496,6 +497,20 @@ export async function POST(req: NextRequest) {
                     createdBy: { select: { name: true } },
                 },
             });
+            // Phase 5 5.0: every voucher carries a DRAFT spine from create (the
+            // document anchor). POST attaches its GL lines + flips it; non-GL
+            // types just flip the spine status. Gated out of balances while DRAFT.
+            const spineId = await engineCreateSpine(tx, {
+                type,
+                date:           new Date(date),
+                description:    description.trim(),
+                friendlyRef:    reference,
+                partyAccountId: resolvedAccountId,
+                userId,
+            });
+            await tx.invVoucher.update({ where: { id: created.id }, data: { universalVoucherId: spineId } });
+            (created as { universalVoucherId: number | null }).universalVoucherId = spineId;
+            return created;
         });
 
         return NextResponse.json(voucher, { status: 201 });
