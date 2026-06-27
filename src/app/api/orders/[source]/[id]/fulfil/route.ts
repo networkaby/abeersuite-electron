@@ -8,6 +8,7 @@ import { ORDER_STAGE } from "@/modules/order/lib/orderPipeline";
 import { checkCreditLimit, CreditLimitError } from "@/shared/lib/accountancy/checkCreditLimit";
 import { executeRedemptions } from "@/modules/order/lib/redemptionHold";
 import { readPartyName } from "@/shared/lib/accountancy/partySnapshot";
+import { syncVoucherLink } from "@/modules/accountancy/lib/voucherLinks";
 
 // POST /api/orders/[source]/[id]/fulfil
 //
@@ -152,7 +153,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ sou
             // a no-op today since no capture UI produces holds yet.)
             await executeRedemptions({ source: "inv", id }, tx);
             await tx.invVoucher.update({ where: { id: sale.id }, data: { refVoucherId: id } }); // sale → order
-            await tx.invVoucher.update({ where: { id }, data: { orderStatusId: ORDER_STAGE.DELIVERED } });
+            const delivered = await tx.invVoucher.update({
+                where:  { id },
+                data:   { orderStatusId: ORDER_STAGE.DELIVERED },
+                select: { universalVoucherId: true },
+            });
+            // Phase 5 5A: keep the spine's ORDER_STATUS VoucherLink in step.
+            await syncVoucherLink(tx, delivered.universalVoucherId, "ORDER_STATUS", ORDER_STAGE.DELIVERED);
         }, { timeout: 30_000, maxWait: 10_000 });
 
         return NextResponse.json({ saleId: sale.id, saleRef: sale.reference, paid: paidTotal, onCredit });

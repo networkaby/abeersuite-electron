@@ -33,6 +33,7 @@ import { postReceiptVoucher } from "@/modules/accountancy/lib/postReceiptVoucher
 import { sumReceiptAllocations, loadTenderLines, sumVoucherAllocations } from "@/modules/accountancy/lib/outstandings";
 import { sumShiftCashSalesPaise, sumShiftTendersByAccount } from "@/modules/pos/lib/shiftMath";
 import { buildSettlementJson } from "@/shared/lib/accountancy/settlement";
+import { syncVoucherLink, syncVoucherLinks } from "@/modules/accountancy/lib/voucherLinks";
 
 // Self-built client (the app singleton reads env at import-time; tsx doesn't load
 // .env.local for us). Mirror prismaClient.ts's local-vs-remote SSL detection.
@@ -375,6 +376,36 @@ async function runDraftSale(): Promise<boolean> {
     return ok;
 }
 
+/** Phase 5 5A: VoucherLink dual-write — workflow links upsert onto the spine,
+ *  move in place, and clear (loose targetId, no FK). Rolled back. */
+async function runVoucherLink(): Promise<boolean> {
+    const acc = await loadAccounts();
+    if (!acc) { console.log("\nvoucher-link skipped — no accounts"); return true; }
+    let ok = false;
+    try {
+        await prisma.$transaction(async (tx) => {
+            const spineId = await engineCreateSpine(tx, { type: "POS_ORDER", date: new Date(), description: "parity voucher-link", userId: acc.userId });
+            await syncVoucherLinks(tx, spineId, { dealId: 4242, orderStatusId: "P7-S1" });
+            const after = await tx.voucherLink.findMany({ where: { universalVoucherId: spineId }, select: { kind: true, targetId: true } });
+            await syncVoucherLink(tx, spineId, "ORDER_STATUS", "P7-S2");   // move in place
+            await syncVoucherLink(tx, spineId, "DEAL", null);             // clear
+            const after2 = await tx.voucherLink.findMany({ where: { universalVoucherId: spineId }, select: { kind: true, targetId: true } });
+            ok = after.length === 2
+                && after.some((l) => l.kind === "DEAL" && l.targetId === "4242")
+                && after.some((l) => l.kind === "ORDER_STATUS" && l.targetId === "P7-S1")
+                && after2.length === 1
+                && after2.some((l) => l.kind === "ORDER_STATUS" && l.targetId === "P7-S2")
+                && !after2.some((l) => l.kind === "DEAL");
+            throw new Error(ROLLBACK);
+        }, { timeout: 30_000, maxWait: 10_000 });
+    } catch (e) {
+        if ((e as Error)?.message !== ROLLBACK) throw e;
+    }
+    console.log("\n=== 5A voucher-link (dual-write upsert/move/clear on the spine, rolled back) ===");
+    console.log("links written (2), moved in place, cleared:", ok ? "✓" : "✗");
+    return ok;
+}
+
 /** ②-foundation: recomputeProductStock (rebuild cache from openingStock + ledger)
  *  must agree with the incremental stock arm. Post a sale, recompute, assert the
  *  cache is unchanged (zero drift). Rolled back. */
@@ -666,7 +697,8 @@ async function main() {
     const goldenOk   = await runGolden();
     const draftOk    = await runDraftPost();
     const draftSaleOk = await runDraftSale();
-    const green      = stockOk && e2eOk && recompOk && editOk && allocOk && vchAllocOk && shiftOk && goldenOk && draftOk && draftSaleOk;
+    const linkOk     = await runVoucherLink();
+    const green      = stockOk && e2eOk && recompOk && editOk && allocOk && vchAllocOk && shiftOk && goldenOk && draftOk && draftSaleOk && linkOk;
     console.log(green ? "\nHARNESS GREEN ✓" : "\nHARNESS FAILED ✗");
     if (!green) process.exitCode = 1;
 }

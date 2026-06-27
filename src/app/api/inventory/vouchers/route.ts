@@ -6,6 +6,7 @@ import { InvVoucherType, Prisma, type InvVoucherDeliveryMode } from "@/generated
 import { buildPartyJson, readPartyName, readPartyPhone, readPartyAddress } from "@/shared/lib/accountancy/partySnapshot";
 import { buildSettlementJson } from "@/shared/lib/accountancy/settlement";
 import { engineCreateSpine } from "@/modules/accountancy/lib/transactionEngine";
+import { syncVoucherLinks } from "@/modules/accountancy/lib/voucherLinks";
 import { resolveActiveBranchId, requireBranchAccess, BranchAccessError } from "@/shared/lib/auth/activeBranch";
 import { auth } from "@/auth";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -510,6 +511,9 @@ export async function POST(req: NextRequest) {
             });
             await tx.invVoucher.update({ where: { id: created.id }, data: { universalVoucherId: spineId } });
             (created as { universalVoucherId: number | null }).universalVoucherId = spineId;
+            // Phase 5 5A: dual-write the order-pipeline link onto the spine's
+            // VoucherLink (SALES_ORDER rides the Orders board). Columns kept until 5A-3.
+            await syncVoucherLinks(tx, spineId, { orderPipelineId, orderStatusId });
             return created;
         });
 

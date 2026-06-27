@@ -1,6 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { toNumber } from "@/modules/accountancy/lib/balance";
 import { readPartyName } from "@/shared/lib/accountancy/partySnapshot";
+import { syncVoucherLink } from "@/modules/accountancy/lib/voucherLinks";
 
 // The unified Order is polymorphic (lightweight model — no new table): an "order"
 // is either an order-type InvVoucher (POS_ORDER / SALES_ORDER) or a ShopOrder,
@@ -115,7 +116,16 @@ export async function resolveOrderStatus(ref: OrderRef): Promise<{ statusId: str
 /** Write a new P7 stage onto the backing object (the only differing line per source). */
 export async function writeOrderStatus(ref: OrderRef, statusId: string): Promise<void> {
     if (ref.source === "inv") {
-        await prisma.invVoucher.update({ where: { id: ref.id }, data: { orderStatusId: statusId } });
+        // Phase 5 5A: keep the spine's ORDER_STATUS VoucherLink in step with the
+        // column (dual-write) — atomically so the board reader can't see a half-move.
+        await prisma.$transaction(async (tx) => {
+            const v = await tx.invVoucher.update({
+                where:  { id: ref.id },
+                data:   { orderStatusId: statusId },
+                select: { universalVoucherId: true },
+            });
+            await syncVoucherLink(tx, v.universalVoucherId, "ORDER_STATUS", statusId);
+        });
     } else {
         await prisma.shopOrder.update({ where: { id: ref.id }, data: { statusId } });
     }

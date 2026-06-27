@@ -16,6 +16,7 @@ import { buildPartyJson } from "@/shared/lib/accountancy/partySnapshot";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { invNextRef, calcLineTotals, calcVoucherTotals } from "@/modules/inventory/lib/stock";
 import { engineCreateSpine } from "@/modules/accountancy/lib/transactionEngine";
+import { syncVoucherLinks, syncVoucherLink } from "@/modules/accountancy/lib/voucherLinks";
 import { getDealsPipeline, findOpenDealForParty } from "@/modules/deals/lib/dealsPipeline";
 import { getOrderPipeline, orderEntryStatus } from "@/modules/order/lib/orderPipeline";
 import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
@@ -182,6 +183,9 @@ export async function createPosQuoteVoucher(opts: {
             data:  { status: "POSTED", postedAt: new Date(), sourceCreatedAt: new Date() },
         });
         await tx.invVoucher.update({ where: { id: voucher.id }, data: { universalVoucherId: spineId } });
+        // Phase 5 5A: dual-write the order-pipeline link (POS_ORDER rides the
+        // Orders board). The deal link is dual-written below once resolved.
+        await syncVoucherLinks(tx, spineId, { orderPipelineId: orderPipeline?.id ?? null, orderStatusId });
 
         let dealId: number | null = null;
         if (hasParty && entry && actor) {
@@ -215,6 +219,7 @@ export async function createPosQuoteVoucher(opts: {
                 },
             });
             await tx.invVoucher.update({ where: { id: voucher.id }, data: { dealId } });
+            await syncVoucherLink(tx, spineId, "DEAL", dealId);   // Phase 5 5A dual-write
         }
 
         return { voucherId: voucher.id, reference: voucher.reference, dealId };
