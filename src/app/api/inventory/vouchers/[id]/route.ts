@@ -370,7 +370,12 @@ export async function PATCH(req: Request, { params }: Params) {
                     lines:          fresh.lines,
                     journalEntryId: existing.journalEntryId,
                 });
-                await tx.invVoucher.update({ where: { id }, data: { postedAt: new Date() } });
+                // G4d: reapply resyncs the spine (delete + re-mirror → new spine id);
+                // refresh the direct link so InvVoucher.universalVoucherId stays valid.
+                const newSpine = existing.journalEntryId != null
+                    ? await tx.universalVoucher.findUnique({ where: { sourceJournalEntryId: existing.journalEntryId }, select: { id: true } })
+                    : null;
+                await tx.invVoucher.update({ where: { id }, data: { postedAt: new Date(), universalVoucherId: newSpine?.id ?? null } });
             }
 
             return tx.invVoucher.findUnique({

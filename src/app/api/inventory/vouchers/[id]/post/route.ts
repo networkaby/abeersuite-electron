@@ -290,6 +290,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
             // Other types (GRN, Challan, Rejections, Physical Stock, Sales/
             // Purchase Order) intentionally don't touch GL on POST.
             let journalEntryId: number | null = null;
+            let universalVoucherId: number | null = null;   // G4d direct spine link
             const postNotes: string[] = [];
             // G4b: tender/charge input from settlementJson (replaced the tables).
             const settlement = readSettlement(voucher.settlementJson);
@@ -307,7 +308,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                     { voucherId: voucher.id, branchId: voucher.branchId, lines: voucher.lines },
                 );
                 const out = await enginePost(tx, spec, userId);
-                journalEntryId = out.journalEntryId;
+                journalEntryId = out.journalEntryId; universalVoucherId = out.universalVoucherId;
                 // A GL-posting trading voucher (SALE / PURCHASE / returns) MUST
                 // produce a balanced JE — Balance Sheet / Day Book / P&L read GL
                 // only, so a POSTED-without-JE voucher is invisible. Stock-only
@@ -362,7 +363,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                         ],
                         stockMoves: [],
                     }, userId);
-                    journalEntryId = out.journalEntryId;
+                    journalEntryId = out.journalEntryId; universalVoucherId = out.universalVoucherId;
                     postNotes.push(`Posted ${settlement.charges.length} expense debit(s) totalling ${totalCharges.toFixed(2)}.`);
                 }
             }
@@ -374,6 +375,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                     status:        "POSTED",
                     postedAt:      new Date(),
                     journalEntryId,
+                    universalVoucherId,
                 },
                 include: {
                     lines: { include: { product: { select: { id: true, sku: true, name: true } } } },

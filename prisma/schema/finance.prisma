@@ -104,6 +104,9 @@ model Voucher {
   postedAt       DateTime?
   // Counter-entry created on POST — lets reports tie back to GL.
   journalEntryId Int?
+  // Phase 4 G4d: direct link to the universal-voucher spine (set on POST).
+  universalVoucherId Int?         @unique
+  universalVoucher   UniversalVoucher? @relation("VoucherSpine", fields: [universalVoucherId], references: [id])
   createdById    Int
 
   // ── Lifecycle metadata ──────────────────────────────────────────────────
@@ -182,6 +185,11 @@ model UniversalVoucher {
   // Back-link to the legacy JE written in the same enginePost (dual-write).
   sourceJournalEntryId Int?            @unique
   lines                VoucherGlLine[]
+  // Phase 4 G4d: direct sidecar back-links (replace the indirect
+  // sourceJournalEntryId↔journalEntryId hop, so the spine↔voucher relationship
+  // survives the JournalEntry/Voucher drop in G5).
+  invVoucher           InvVoucher?     @relation("InvVoucherSpine")
+  voucher              Voucher?        @relation("VoucherSpine")
   createdAt            DateTime        @default(now())
   updatedAt            DateTime        @updatedAt
 

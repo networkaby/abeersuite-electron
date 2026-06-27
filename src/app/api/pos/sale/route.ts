@@ -621,7 +621,7 @@ export async function POST(req: Request) {
             }
             await tx.invVoucher.update({
                 where: { id: voucher.id },
-                data:  { journalEntryId: gl.journalEntryId },
+                data:  { journalEntryId: gl.journalEntryId, universalVoucherId: gl.universalVoucherId },
             });
 
             // ── 3a. Coupon: log the redemption (enforces usage limits + powers

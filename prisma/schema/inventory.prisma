@@ -451,6 +451,9 @@ model InvVoucher {
   totalAmount         Decimal                @db.Decimal(14, 2)
   /// Linked GL journal entry — auto-created on post
   journalEntryId      Int?
+  /// Phase 4 G4d: direct link to the universal-voucher spine (set on post).
+  universalVoucherId  Int?                   @unique
+  universalVoucher    UniversalVoucher?      @relation("InvVoucherSpine", fields: [universalVoucherId], references: [id])
   postedAt            DateTime?
   // Toggle on Challan vouchers — when false, printed challan hides rate/amount columns.
   showPrices          Boolean                @default(true)

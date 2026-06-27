@@ -240,7 +240,7 @@ export async function POST(req: Request) {
             }
             await tx.invVoucher.update({
                 where: { id: voucher.id },
-                data:  { journalEntryId: gl.journalEntryId },
+                data:  { journalEntryId: gl.journalEntryId, universalVoucherId: gl.universalVoucherId },
             });
 
             // 2b. Loyalty reversal — claw back earned / restore redeemed points

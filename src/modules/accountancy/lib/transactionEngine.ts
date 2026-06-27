@@ -108,7 +108,7 @@ export async function engineGlArm(
         narration?:      string | null;
         partyAccountId?: number | null;
     },
-): Promise<number> {
+): Promise<{ journalEntryId: number; universalVoucherId: number }> {
     const { date, description, lines, userId, branchId, postedAt } = args;
 
     const jeRef = await nextRefFromSeries(tx, "GL_POSTING", userId);
@@ -180,7 +180,8 @@ export async function engineGlArm(
     // alongside the legacy JE above. No reader uses these yet — this keeps the
     // spine populated so Stage D can reconcile and Stage E can cut readers over.
     // Byte-identical lines to the JE; `sourceJournalEntryId` ties the two.
-    await tx.universalVoucher.create({
+    const uv = await tx.universalVoucher.create({
+        select: { id: true },
         data: {
             type:                 args.type ?? "JOURNAL",
             reference:            jeRef,
@@ -210,7 +211,7 @@ export async function engineGlArm(
         },
     });
 
-    return je.id;
+    return { journalEntryId: je.id, universalVoucherId: uv.id };
 }
 
 // ── Spine mirror for bypass GL writers (Phase 4 Stage D.5) ────────────────────
@@ -349,15 +350,16 @@ export async function enginePost(
     spec: TransactionSpec,
     userId: number,
     opts: { branchId?: string | null; postedAt?: Date } = {},
-): Promise<{ journalEntryId: number | null }> {
+): Promise<{ journalEntryId: number | null; universalVoucherId: number | null }> {
     const branchId = opts.branchId ?? null;
     const postedAt = opts.postedAt ?? new Date();
 
     let journalEntryId: number | null = null;
+    let universalVoucherId: number | null = null;
     if (spec.glLines.length > 0) {
         const description = spec.description
             ?? `${spec.type} ${spec.reference ?? ""}: ${spec.narration ?? ""}`.trim();
-        journalEntryId = await engineGlArm(tx, {
+        const gl = await engineGlArm(tx, {
             date:        spec.date,
             description,
             lines:       spec.glLines,
@@ -368,11 +370,13 @@ export async function enginePost(
             friendlyRef: spec.reference ?? null,
             narration:   spec.narration ?? null,
         });
+        journalEntryId = gl.journalEntryId;
+        universalVoucherId = gl.universalVoucherId;   // G4d direct spine link
     }
     if (spec.stockMoves.length > 0) {
         await engineStockArm(tx, spec.stockMoves);
     }
-    return { journalEntryId };
+    return { journalEntryId, universalVoucherId };
 }
 
 // ── Legacy GL-voucher helpers (being subsumed by enginePost) ──────────────────
@@ -393,7 +397,7 @@ export async function enginePostVoucher(
      * date to preserve their prior `postedAt` semantics. */
     postedAt: Date = new Date(),
 ): Promise<number> {
-    const jeId = await engineGlArm(tx, {
+    const { journalEntryId: jeId, universalVoucherId } = await engineGlArm(tx, {
         date:        voucher.date,
         description: `${voucher.type} ${voucher.reference}: ${voucher.narration ?? ""}`.trim(),
         lines:       voucher.lines,
@@ -406,7 +410,7 @@ export async function enginePostVoucher(
     });
     await tx.voucher.update({
         where: { id: voucher.id },
-        data:  { status: "POSTED", postedAt, journalEntryId: jeId },
+        data:  { status: "POSTED", postedAt, journalEntryId: jeId, universalVoucherId },  // G4d direct spine link
     });
     return jeId;
 }

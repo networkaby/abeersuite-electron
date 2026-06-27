@@ -249,6 +249,33 @@ async function backfillCostPoolGlLines(): Promise<number> {
     return updated;
 }
 
+// Phase 4 G4d: populate the direct InvVoucher/Voucher → spine link
+// (`universalVoucherId`) from the indirect sourceJournalEntryId↔journalEntryId
+// hop, so the relationship survives the JournalEntry drop in G5. Idempotent.
+async function backfillVoucherSpineLinks(): Promise<number> {
+    const spines = await prisma.universalVoucher.findMany({
+        where:  { sourceJournalEntryId: { not: null } },
+        select: { id: true, sourceJournalEntryId: true },
+    });
+    const spineByJe = new Map(spines.map((s) => [s.sourceJournalEntryId!, s.id]));
+    let updated = 0;
+    const invs = await prisma.invVoucher.findMany({ where: { journalEntryId: { not: null }, universalVoucherId: null }, select: { id: true, journalEntryId: true } });
+    for (const v of invs) {
+        const sid = spineByJe.get(v.journalEntryId!);
+        if (sid == null) continue;
+        await prisma.invVoucher.update({ where: { id: v.id }, data: { universalVoucherId: sid } });
+        updated++;
+    }
+    const vchs = await prisma.voucher.findMany({ where: { journalEntryId: { not: null }, universalVoucherId: null }, select: { id: true, journalEntryId: true } });
+    for (const v of vchs) {
+        const sid = spineByJe.get(v.journalEntryId!);
+        if (sid == null) continue;
+        await prisma.voucher.update({ where: { id: v.id }, data: { universalVoucherId: sid } });
+        updated++;
+    }
+    return updated;
+}
+
 async function main() {
     if (!CHECK_ONLY) {
         await backfill();
@@ -260,6 +287,8 @@ async function main() {
         console.log(`G2 spine-line back-refs: stamped ${glLineLinks} VoucherGlLine.sourceJournalLineId.`);
         const costPoolLinks = await backfillCostPoolGlLines();
         console.log(`G2 cost-pool re-home: linked ${costPoolLinks} AdditionalCostAllocation to spine lines.`);
+        const spineLinks = await backfillVoucherSpineLinks();
+        console.log(`G4d spine links: set ${spineLinks} InvVoucher/Voucher.universalVoucherId.`);
     } else {
         console.log("--check: skipping writes, asserting drift only.");
     }
