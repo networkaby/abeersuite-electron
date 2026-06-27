@@ -111,7 +111,7 @@ async function runE2E(): Promise<boolean> {
         return false;
     }
 
-    const box: { cap: { jeLines: GlLine[]; spineOk: boolean; stock: { productId: number; inQty: number; outQty: number }[] } | null } = { cap: null };
+    const box: { cap: { jeLines: GlLine[]; spineOk: boolean; stock: { productId: number; inQty: number; outQty: number }[]; rolesOk: boolean } | null } = { cap: null };
     try {
         await prisma.$transaction(async (tx) => {
             const v = await tx.invVoucher.create({
@@ -134,7 +134,16 @@ async function runE2E(): Promise<boolean> {
             const jeLines = journalEntryId ? await captureJe(tx, journalEntryId) : [];
             const spine   = journalEntryId ? await captureSpine(tx, journalEntryId) : [];
             const stock = await tx.invStockLedger.findMany({ where: { voucherId: v.id }, select: { productId: true, inQty: true, outQty: true } });
-            box.cap = { jeLines, spineOk: sameLines(jeLines, spine), stock: stock.map((s) => ({ productId: s.productId, inQty: Number(s.inQty), outQty: Number(s.outQty) })) };
+            // G4: every spine GL line of a trading sale must carry a role tag
+            // (TENDER + BODY + TAX here) and a contiguous seq 0..n-1.
+            const uv = journalEntryId ? await tx.universalVoucher.findUnique({ where: { sourceJournalEntryId: journalEntryId }, select: { id: true } }) : null;
+            const roleLines = uv ? await tx.voucherGlLine.findMany({ where: { universalVoucherId: uv.id }, select: { role: true, seq: true }, orderBy: { seq: "asc" } }) : [];
+            const roles = new Set(roleLines.map((l) => l.role));
+            const rolesOk = roleLines.length === 4
+                && roleLines.every((l) => l.role != null)
+                && roles.has("TENDER") && roles.has("BODY") && roles.has("TAX")
+                && roleLines.every((l, i) => l.seq === i);
+            box.cap = { jeLines, spineOk: sameLines(jeLines, spine), stock: stock.map((s) => ({ productId: s.productId, inQty: Number(s.inQty), outQty: Number(s.outQty) })), rolesOk };
             throw new Error(ROLLBACK);
         }, { timeout: 30_000, maxWait: 10_000 });
     } catch (e) {
@@ -146,8 +155,8 @@ async function runE2E(): Promise<boolean> {
     if (!box.cap) return false;
     const glOk    = box.cap.jeLines.length === 4;                                  // Dr Cash + Cr Sales + CGST + SGST
     const stockOk = box.cap.stock.length === 1 && box.cap.stock[0].outQty === 1 && box.cap.stock[0].inQty === 0;
-    console.log("GL 4 lines:", glOk ? "✓" : "✗", "· stock OUT 1:", stockOk ? "✓" : "✗", "· spine parity:", box.cap.spineOk ? "✓" : "✗");
-    return glOk && stockOk && box.cap.spineOk;
+    console.log("GL 4 lines:", glOk ? "✓" : "✗", "· stock OUT 1:", stockOk ? "✓" : "✗", "· spine parity:", box.cap.spineOk ? "✓" : "✗", "· G4 role/seq tags:", box.cap.rolesOk ? "✓" : "✗");
+    return glOk && stockOk && box.cap.spineOk && box.cap.rolesOk;
 }
 
 // ── Phase 4 golden baseline — financial voucher kinds ────────────────────────

@@ -23,7 +23,7 @@
 //   • Missing buyer state (legacy callers) falls back to seller state →
 //     intra-state, matching pre-refactor behaviour.
 
-import type { Prisma, PrismaClient } from "@/generated/prisma/client";
+import type { Prisma, PrismaClient, VoucherGlRole } from "@/generated/prisma/client";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { toNumber } from "./balance";
 import { computeGstSplit } from "@/shared/lib/gst/computeGstSplit";
@@ -43,6 +43,10 @@ type JeLine = {
     type:        "DEBIT" | "CREDIT";
     amount:      number;
     description?: string;
+    /// Phase 4 G4 — form-section tag (BODY/TAX/TENDER/…). `seq` is stamped by
+    /// emission order just before return so the spine reconstructs the form.
+    role?:       VoucherGlRole;
+    seq?:        number;
 };
 
 const NAMES = {
@@ -378,6 +382,7 @@ export async function buildInvVoucherGlLines(
             type:        counterType,
             amount:      amt,
             description: partyName ?? voucher.description,
+            role:        "TENDER",
         });
         if (t.account) {
             extraLedgers.push({
@@ -394,6 +399,7 @@ export async function buildInvVoucherGlLines(
             type:        bodyType,
             amount:      bodyAmount,
             description: voucher.description,
+            role:        "BODY",
         });
     }
     for (const leg of taxLegs) {
@@ -402,6 +408,7 @@ export async function buildInvVoucherGlLines(
             type:        bodyType, // for SALE: credit GST; for PURCHASE: debit GST
             amount:      leg.amount,
             description: leg.label,
+            role:        "TAX",
         });
     }
     if (shippingLedger && shippingAmt > 0) {
@@ -412,6 +419,7 @@ export async function buildInvVoucherGlLines(
             type:        bodyType,
             amount:      shippingAmt,
             description: shippingLedger.name,
+            role:        "SHIPPING",
         });
     }
     if (discountLedger && discountAmt > 0) {
@@ -423,6 +431,7 @@ export async function buildInvVoucherGlLines(
             type:        counterType,
             amount:      discountAmt,
             description: discountLedger.name,
+            role:        "DISCOUNT",
         });
     }
     if (roundOffLedger && rndLineAmt !== 0) {
@@ -434,6 +443,7 @@ export async function buildInvVoucherGlLines(
             type:        rndLineAmt > 0 ? positiveSide : negativeSide,
             amount:      Math.abs(rndLineAmt),
             description: "Round Off",
+            role:        "ROUNDOFF",
         });
     }
 
@@ -453,6 +463,7 @@ export async function buildInvVoucherGlLines(
             type:        dir,
             amount:      Math.abs(raw),
             description: ch.description ?? undefined,
+            role:        "CHARGE",
         });
         if (ch.account) {
             extraLedgers.push({
@@ -463,6 +474,10 @@ export async function buildInvVoucherGlLines(
             });
         }
     }
+
+    // G4: stamp each leg's ordinal position so the spine reconstructs the form
+    // (role = section, seq = order within the document).
+    lines.forEach((l, i) => { l.seq = i; });
 
     // Sanity: check balance
     const debSum = lines.filter((l) => l.type === "DEBIT").reduce((s, l) => s + l.amount, 0);

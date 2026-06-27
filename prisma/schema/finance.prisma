@@ -202,6 +202,15 @@ model VoucherGlLine {
   description        String?
   branchId           String?
 
+  // Phase 4 G4: self-describing line — `role` = which section of the voucher
+  // form this leg belongs to (BODY/TAX/TENDER/CHARGE/…), `seq` = its ordinal
+  // position. Lets the edit/display UI rebuild the form straight from the stored
+  // GL lines (filter by role, sort by seq) and is the foundation for folding
+  // InvVoucherTender/InvVoucherCharge into role-tagged GL lines. Nullable: only
+  // the trading GL builder tags roles; generic financial legs leave role null.
+  role               VoucherGlRole?
+  seq                Int?
+
   // Phase 4 G2: line-level twin link to the legacy JournalLine this spine line
   // mirrors — the per-line analog of UniversalVoucher.sourceJournalEntryId. Lets
   // consumers that referenced a specific posted line (the cost-pool) re-home onto

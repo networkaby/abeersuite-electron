@@ -19,7 +19,7 @@
 // `enginePostVoucher` / `engineCreateVoucher` still target the GL `Voucher` table
 // and are being subsumed by `enginePost` as callers migrate (see plan Phase 3).
 
-import type { Prisma, VoucherType } from "@/generated/prisma/client";
+import type { Prisma, VoucherType, VoucherGlRole } from "@/generated/prisma/client";
 import { balanceDelta, nextRefFromSeries, toNumber } from "./balance";
 import { defaultNormalBalanceForGroupType, type GroupTypeStr } from "./groupNature";
 import { recordStockMovementsBatch, type RecordStockMovementArgs } from "@/modules/inventory/lib/stockMovement";
@@ -35,6 +35,11 @@ export interface EngineGlLine {
     amount:       Prisma.Decimal | number | string;
     description?: string | null;
     account?:     { normalBalance: Drcr | null; group: { type: GroupTypeStr } | null } | null;
+    /** Phase 4 G4 — self-describing spine line. `role` = form section (set by the
+     *  trading GL builder; null on generic legs); `seq` = ordinal (defaults to the
+     *  line's position when omitted). Mirrored onto `VoucherGlLine`, not JournalLine. */
+    role?:        VoucherGlRole | null;
+    seq?:         number | null;
 }
 
 /** A stock movement for the engine's stock arm (re-export of the stock helper's shape). */
@@ -192,6 +197,8 @@ export async function engineGlArm(
                     amount:              l.amount,
                     description:         l.description ?? null,
                     branchId,
+                    role:                l.role ?? null,        // G4 form-section tag
+                    seq:                 l.seq ?? idx,          // G4 ordinal (form order)
                     sourceJournalLineId: jeLineIds[idx],   // G2 line-level twin
                 })),
             },
@@ -247,12 +254,13 @@ export async function mirrorJeToSpine(
             createdById:          je.createdById,
             sourceJournalEntryId: je.id,
             lines: {
-                create: je.lines.map((l) => ({
+                create: je.lines.map((l, idx) => ({
                     accountId:           l.accountId,
                     type:                l.type,
                     amount:              l.amount,
                     description:         l.description,
                     branchId:            l.branchId,
+                    seq:                 idx,    // G4 ordinal (form order); role null on raw/reversal JEs
                     sourceJournalLineId: l.id,   // G2 line-level twin
                 })),
             },

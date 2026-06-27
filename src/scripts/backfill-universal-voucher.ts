@@ -86,12 +86,13 @@ async function backfill(): Promise<number> {
                 createdById:          je.createdById,
                 sourceJournalEntryId: je.id,
                 lines: {
-                    create: je.lines.map((l) => ({
+                    create: je.lines.map((l, idx) => ({
                         accountId:   l.accountId,
                         type:        l.type,
                         amount:      l.amount,
                         description: l.description,
                         branchId:    l.branchId,
+                        seq:         idx,   // G4 ordinal; role null on backfilled legs
                     })),
                 },
             },

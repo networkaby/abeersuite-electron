@@ -62,6 +62,22 @@ enum EntryType {
   CREDIT
 }
 
+// Phase 4 G4: the "section" each spine VoucherGlLine belongs to, so the edit /
+// display UI can reconstruct the voucher form from the stored GL lines (role =
+// which section, seq = order within). Set by the trading GL builder; null on
+// generic financial-voucher legs that have no section taxonomy. TENDER lines are
+// the "Received In" rows (their method/reference move onto the line in G4b); the
+// rest mirror buildInvVoucherGlLines' leg kinds.
+enum VoucherGlRole {
+  BODY
+  TAX
+  TENDER
+  SHIPPING
+  DISCOUNT
+  ROUNDOFF
+  CHARGE
+}
+
 // PaymentMethod survives the Invoice → InvVoucher consolidation because the
 // POS sale route still tags each tender (CASH / CARD / UPI / …) so the GL
 // description carries the channel through to the Day Book. The legacy

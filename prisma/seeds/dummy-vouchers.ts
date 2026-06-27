@@ -108,8 +108,8 @@ async function seedCostPoolDemo(): Promise<void> {
                 status: "POSTED", postedAt: today, createdById: admin.id, sourceJournalEntryId: je.id,
                 lines: {
                     create: [
-                        { accountId: courier.id, type: "DEBIT", amount: 5000, description: "Courier charges", sourceJournalLineId: courierLine.id },
-                        { accountId: cash.id, type: "CREDIT", amount: 5000, description: "Paid in cash", sourceJournalLineId: cashLine?.id ?? null },
+                        { accountId: courier.id, type: "DEBIT", amount: 5000, description: "Courier charges", seq: 0, sourceJournalLineId: courierLine.id },
+                        { accountId: cash.id, type: "CREDIT", amount: 5000, description: "Paid in cash", seq: 1, sourceJournalLineId: cashLine?.id ?? null },
                     ],
                 },
             },
