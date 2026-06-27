@@ -428,13 +428,27 @@ export async function engineCreateVoucher(
         include: { lines: true },
     });
 
+    // Phase 5 5.0: every financial voucher carries a DRAFT spine from create — the
+    // document anchor. POST attaches its GL lines + flips it (existingSpineId).
+    const spineId = await engineCreateSpine(tx, {
+        type:           spec.type,
+        date:           spec.date,
+        description:    `${spec.type} ${reference}: ${spec.narration ?? ""}`.trim(),
+        narration:      spec.narration ?? null,
+        friendlyRef:    reference,
+        partyAccountId: spec.partyAccountId ?? null,
+        userId:         spec.userId,
+    });
+    await tx.voucher.update({ where: { id: voucher.id }, data: { universalVoucherId: spineId } });
+    voucher.universalVoucherId = spineId;
+
     if (spec.post) {
         const loaded = await tx.voucher.findUnique({
             where:   { id: voucher.id },
             include: { lines: { include: { account: { select: { normalBalance: true, group: { select: { type: true } } } } } } },
         });
         if (loaded) {
-            const jeId = await enginePostVoucher(tx, loaded as unknown as PostableVoucher, spec.userId, spec.branchId ?? null, spec.postedAt ?? new Date());
+            const jeId = await enginePostVoucher(tx, loaded as unknown as PostableVoucher, spec.userId, spec.branchId ?? null, spec.postedAt ?? new Date(), spineId);
             // Reflect the posted state on the returned snapshot so callers that
             // need the mirror-JE id (postContra et al.) can read it without a re-fetch.
             voucher.journalEntryId = jeId;
