@@ -3,7 +3,7 @@ import { fyStartYearFor } from "./voucherRef";
 
 const KINDS = [
     { kind: "CONTRA",      label: "Contra Voucher",  typeValue: "CV",  voucherType: "CONTRA" as const },
-    { kind: "PAYMENT",     label: "Payment Voucher", typeValue: "PV",  voucherType: "PAYMENT" as const },
+    { kind: "PAYMENT",     label: "Payment Voucher", typeValue: "PMT", voucherType: "PAYMENT" as const },
     { kind: "RECEIPT",     label: "Receipt Voucher", typeValue: "RV",  voucherType: "RECEIPT" as const },
     { kind: "CREDIT_NOTE", label: "Credit Note",     typeValue: "CRN", voucherType: "CREDIT_NOTE" as const },
     { kind: "DEBIT_NOTE",  label: "Debit Note",      typeValue: "DRN", voucherType: "DEBIT_NOTE" as const },
@@ -122,5 +122,15 @@ export async function seedVoucherSeries(prisma: PrismaClient) {
     await prisma.voucherSeries.updateMany({
         where: { kind: "JOURNAL", typeValue: "JE" },
         data:  { typeValue: "JV" },
+    });
+
+    // One-time prefix migration: PAYMENT used to emit `PV-`, which collided with
+    // PURCHASE invoices (also `PV-`). Harmless while they lived in separate tables,
+    // but the merged universal-voucher spine needs ONE globally-unique voucher
+    // number, so PAYMENT flips to `PMT-` (dummy data already used it). Only touches
+    // rows still on the old default — admin overrides are preserved.
+    await prisma.voucherSeries.updateMany({
+        where: { kind: "PAYMENT", typeValue: "PV" },
+        data:  { typeValue: "PMT" },
     });
 }
