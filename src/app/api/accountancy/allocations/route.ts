@@ -56,8 +56,20 @@ export async function POST(req: Request) {
     if (error) return error;
 
     try {
+        // G5: re-home a VOUCHER target onto the universal-voucher spine
+        // (UNIVERSAL_VOUCHER + the bill's universalVoucherId) so settlements read
+        // off the spine and the Voucher table can retire. Falls back to VOUCHER
+        // when the bill has no spine yet (defensive — posted bills always do).
+        let { targetType, targetId } = data;
+        if (targetType === "VOUCHER") {
+            const bill = await prisma.voucher.findUnique({ where: { id: targetId }, select: { universalVoucherId: true } });
+            if (bill?.universalVoucherId != null) {
+                targetType = "UNIVERSAL_VOUCHER";
+                targetId   = bill.universalVoucherId;
+            }
+        }
         const allocation = await prisma.voucherAllocation.create({
-            data: { ...data, createdById: user!.id },
+            data: { ...data, targetType, targetId, createdById: user!.id },
         });
         return NextResponse.json(allocation, { status: 201 });
     } catch (e) {

@@ -30,7 +30,7 @@ import { recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
 import { recomputeAccountBalances } from "@/modules/accountancy/lib/aggregateLedger";
 import { reapplyTradingVoucherInPlace } from "@/modules/accountancy/lib/reapplyTradingVoucher";
 import { postReceiptVoucher } from "@/modules/accountancy/lib/postReceiptVoucher";
-import { sumReceiptAllocationsByJe, loadTenderLinesByJe } from "@/modules/accountancy/lib/outstandings";
+import { sumReceiptAllocationsByJe, loadTenderLinesByJe, sumVoucherAllocations } from "@/modules/accountancy/lib/outstandings";
 import { sumShiftCashSalesPaise, sumShiftTendersByAccount } from "@/modules/pos/lib/shiftMath";
 import { buildSettlementJson } from "@/shared/lib/accountancy/settlement";
 
@@ -643,18 +643,50 @@ async function runShiftCashMath(): Promise<boolean> {
     return ok;
 }
 
+/** G5: a CREDIT_NOTE bill settled by a UNIVERSAL_VOUCHER allocation (re-homed off
+ *  targetType=VOUCHER) is read back via sumVoucherAllocations keyed by Voucher id.
+ *  Rolled back. */
+async function runVoucherAllocation(): Promise<boolean> {
+    const acc = await loadAccounts();
+    if (!acc || acc.income == null || acc.debtor == null) { console.log("\nvoucher-alloc skipped — no accounts"); return true; }
+    let ok = false;
+    try {
+        await prisma.$transaction(async (tx) => {
+            // A posted CREDIT_NOTE bill (Dr Income / Cr Debtor) → has a spine + universalVoucherId.
+            const v = await engineCreateVoucher(tx, {
+                type: "CREDIT_NOTE", date: new Date(), userId: acc.userId,
+                lines: [{ accountId: acc.income!, type: "DEBIT", amount: 300 }, { accountId: acc.debtor!, type: "CREDIT", amount: 300 }],
+                partyAccountId: acc.debtor, post: true,
+            });
+            const bill = await tx.voucher.findUnique({ where: { id: v.id }, select: { universalVoucherId: true } });
+            if (bill?.universalVoucherId == null) throw new Error("CREDIT_NOTE has no spine link");
+            // Settle 120 against the bill on the spine.
+            await tx.voucherAllocation.create({ data: { targetType: "UNIVERSAL_VOUCHER", targetId: bill.universalVoucherId, sourceType: "VOUCHER", sourceId: v.id, amount: 120, method: "AGAINST_REF", createdById: acc.userId } });
+            const paid = await sumVoucherAllocations(tx, [v.id]);
+            ok = Math.abs((paid[v.id] ?? 0) - 120) < 0.005;
+            throw new Error(ROLLBACK);
+        }, { timeout: 30_000, maxWait: 10_000 });
+    } catch (e) {
+        if ((e as Error)?.message !== ROLLBACK) throw e;
+    }
+    console.log("\n=== G5 voucher-alloc (CREDIT_NOTE settled on spine, rolled back) ===");
+    console.log("sumVoucherAllocations returns settled 120 by Voucher id:", ok ? "✓" : "✗");
+    return ok;
+}
+
 async function main() {
     const stockOk    = stockCheck();
     const e2eOk      = await runE2E();
     const recompOk   = await runStockRecompute();
     const editOk     = await runEditCycle();
     const allocOk    = await runAllocationDualTarget();
+    const vchAllocOk = await runVoucherAllocation();
     const twinOk     = await runGlLineTwin();
     const shiftOk    = await runShiftCashMath();
     const goldenOk   = await runGolden();
     const mirrorOk   = await runMirror();
     const lifecycleOk = await runLifecycle();
-    const green      = stockOk && e2eOk && recompOk && editOk && allocOk && twinOk && shiftOk && goldenOk && mirrorOk && lifecycleOk;
+    const green      = stockOk && e2eOk && recompOk && editOk && allocOk && vchAllocOk && twinOk && shiftOk && goldenOk && mirrorOk && lifecycleOk;
     console.log(green ? "\nHARNESS GREEN ✓" : "\nHARNESS FAILED ✗");
     if (!green) process.exitCode = 1;
 }

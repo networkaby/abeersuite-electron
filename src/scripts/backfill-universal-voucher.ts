@@ -195,6 +195,40 @@ async function dropLegacyAllocations(): Promise<number> {
     return toDelete.length;
 }
 
+// Phase 4 G5: re-home targetType=VOUCHER allocations (CREDIT_NOTE/DEBIT_NOTE bill
+// settlements) onto UNIVERSAL_VOUCHER via the bill's universalVoucherId, then drop
+// the legacy VOUCHER rows once the parallel exists. Mirrors the G1 JE re-home.
+async function backfillVoucherAllocations(): Promise<{ created: number; dropped: number }> {
+    const vchAllocs = await prisma.voucherAllocation.findMany({
+        where:  { targetType: "VOUCHER" },
+        select: { id: true, targetId: true, sourceType: true, sourceId: true, amount: true, method: true, reference: true, createdById: true },
+    });
+    if (vchAllocs.length === 0) return { created: 0, dropped: 0 };
+    const spineByVoucher = new Map(
+        (await prisma.voucher.findMany({ where: { id: { in: [...new Set(vchAllocs.map((a) => a.targetId))] }, universalVoucherId: { not: null } }, select: { id: true, universalVoucherId: true } }))
+            .map((v) => [v.id, v.universalVoucherId!]),
+    );
+    const uvKey = (sourceType: string, sourceId: number, targetId: number) => `${sourceType}:${sourceId}:${targetId}`;
+    const existingUv = new Set(
+        (await prisma.voucherAllocation.findMany({ where: { targetType: "UNIVERSAL_VOUCHER" }, select: { sourceType: true, sourceId: true, targetId: true } }))
+            .map((a) => uvKey(a.sourceType, a.sourceId, a.targetId)),
+    );
+    let created = 0;
+    for (const a of vchAllocs) {
+        const sid = spineByVoucher.get(a.targetId);
+        if (sid == null) continue;
+        if (existingUv.has(uvKey(a.sourceType, a.sourceId, sid))) continue;
+        await prisma.voucherAllocation.create({ data: { targetType: "UNIVERSAL_VOUCHER", targetId: sid, sourceType: a.sourceType, sourceId: a.sourceId, amount: a.amount, method: a.method, reference: a.reference, createdById: a.createdById } });
+        existingUv.add(uvKey(a.sourceType, a.sourceId, sid));
+        created++;
+    }
+    const toDelete = vchAllocs
+        .filter((a) => { const sp = spineByVoucher.get(a.targetId); return sp != null && existingUv.has(uvKey(a.sourceType, a.sourceId, sp)); })
+        .map((a) => a.id);
+    if (toDelete.length > 0) await prisma.voucherAllocation.deleteMany({ where: { id: { in: toDelete } } });
+    return { created, dropped: toDelete.length };
+}
+
 // Phase 4 G2: stamp each pre-existing spine line with its legacy JournalLine
 // twin's id (`VoucherGlLine.sourceJournalLineId`). New rows are stamped at
 // write-time by the engine; this fills in spines created before G2. Pairs lines
@@ -320,6 +354,8 @@ async function main() {
         console.log(`G4d spine links: set ${spineLinks} InvVoucher/Voucher.universalVoucherId.`);
         const spineTs = await backfillSpineCreatedAt();
         console.log(`G5 spine timestamps: set ${spineTs} UniversalVoucher.sourceCreatedAt.`);
+        const vchAl = await backfillVoucherAllocations();
+        console.log(`G5 voucher allocations: re-homed ${vchAl.created}, dropped ${vchAl.dropped} legacy VOUCHER allocation(s).`);
     } else {
         console.log("--check: skipping writes, asserting drift only.");
     }

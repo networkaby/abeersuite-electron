@@ -1,7 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
-import { sumReceiptAllocationsByJe, loadTenderLinesByJe } from "@/modules/accountancy/lib/outstandings";
+import { sumReceiptAllocationsByJe, loadTenderLinesByJe, sumVoucherAllocations } from "@/modules/accountancy/lib/outstandings";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 // GET /api/accountancy/allocations/open?accountId=N
@@ -88,14 +88,8 @@ export async function GET(req: Request) {
         orderBy: [{ date: "asc" }],
     });
     const vchIds = vouchers.map((v) => v.id);
-    const vchAllocs = vchIds.length > 0 ? await prisma.voucherAllocation.findMany({
-        where: { targetType: "VOUCHER", targetId: { in: vchIds } },
-        select: { targetId: true, amount: true },
-    }) : [];
-    const vchAllocSum = vchAllocs.reduce<Record<number, number>>((acc, a) => {
-        acc[a.targetId] = (acc[a.targetId] ?? 0) + Number(a.amount);
-        return acc;
-    }, {});
+    // G5: CREDIT_NOTE/DEBIT_NOTE settlements via the spine (keyed by Voucher id).
+    const vchAllocSum = await sumVoucherAllocations(prisma, vchIds);
 
     const openVouchers = vouchers
         .map((v) => ({

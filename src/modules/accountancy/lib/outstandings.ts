@@ -80,13 +80,6 @@ function bucketFor(days: number): AgeingBucket {
     return "b90_plus";
 }
 
-function sumByTarget(allocs: { targetId: number; amount: unknown }[]): Record<number, number> {
-    return allocs.reduce<Record<number, number>>((acc, a) => {
-        acc[a.targetId] = (acc[a.targetId] ?? 0) + Number(a.amount);
-        return acc;
-    }, {});
-}
-
 /**
  * Phase 4 G1: total RECEIPT allocations against each given journal entry, read
  * from the universal-voucher spine (UNIVERSAL_VOUCHER allocations), returned
@@ -145,6 +138,38 @@ export async function loadTenderLinesByJe(
         const arr = out.get(je) ?? [];
         arr.push({ accountId: l.accountId, amount: Number(l.amount) });
         out.set(je, arr);
+    }
+    return out;
+}
+
+/**
+ * Phase 4 G5: total allocations settling each finance Voucher (CREDIT_NOTE /
+ * DEBIT_NOTE bill), read from the universal-voucher spine (UNIVERSAL_VOUCHER
+ * allocations keyed by the bill's `universalVoucherId`), returned keyed by the
+ * LEGACY Voucher id — a drop-in for the old `targetType=VOUCHER` sum so callers
+ * that key by `voucher.id` are unchanged. Re-homes off `targetType=VOUCHER`.
+ */
+export async function sumVoucherAllocations(
+    db: Prisma.TransactionClient,
+    voucherIds: number[],
+): Promise<Record<number, number>> {
+    const ids = [...new Set(voucherIds)];
+    if (ids.length === 0) return {};
+    const vchs = await db.voucher.findMany({
+        where:  { id: { in: ids }, universalVoucherId: { not: null } },
+        select: { id: true, universalVoucherId: true },
+    });
+    if (vchs.length === 0) return {};
+    const spineToVoucher = new Map(vchs.map((v) => [v.universalVoucherId!, v.id]));
+    const allocs = await db.voucherAllocation.findMany({
+        where:  { targetType: "UNIVERSAL_VOUCHER", targetId: { in: vchs.map((v) => v.universalVoucherId!) } },
+        select: { targetId: true, amount: true },
+    });
+    const out: Record<number, number> = {};
+    for (const a of allocs) {
+        const vid = spineToVoucher.get(a.targetId);
+        if (vid == null) continue;
+        out[vid] = (out[vid] ?? 0) + Number(a.amount);
     }
     return out;
 }
@@ -286,20 +311,14 @@ async function loadOpenBills(
     // for each voucher: AR tender amount = the bill portion that landed
     // on the customer's ledger (= what's still outstanding before later
     // receipts apply); non-AR tender sum = paid up-front at sale time.
-    const [vchAllocs, tendersByJe, paidByJe] = await Promise.all([
-        vchIds.length > 0
-            ? prisma.voucherAllocation.findMany({
-                where: { targetType: "VOUCHER", targetId: { in: vchIds } },
-                select: { targetId: true, amount: true },
-            })
-            : Promise.resolve([] as { targetId: number; amount: unknown }[]),
+    const [paidByVch, tendersByJe, paidByJe] = await Promise.all([
+        // CREDIT_NOTE/DEBIT_NOTE bill settlements via the spine (G5 — keyed by Voucher id).
+        sumVoucherAllocations(prisma, vchIds),
         // Up-front tenders via the universal-voucher spine (role=TENDER), keyed by JE.
         loadTenderLinesByJe(prisma, jeIds),
         // RECEIPT settlements via the universal-voucher spine (keyed by JE id).
         sumReceiptAllocationsByJe(prisma, jeIds),
     ]);
-
-    const paidByVch = sumByTarget(vchAllocs);
 
     const bills: RawBill[] = [];
 
