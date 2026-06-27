@@ -617,9 +617,9 @@ async function runShiftCashMath(): Promise<boolean> {
                 include: { lines: { include: { product: { select: { id: true, stock: true, mrpPaise: true } } } } },
             });
             const spec = await saleToSpec(tx, { ...v, tenders: [{ accountId: cash.id, amount: 118, method: "CASH" }], charges: [], sellerStateCode: "19", buyerStateCode: "19" } as unknown as PostVoucherInput["voucher"], { voucherId: v.id, branchId: v.branchId, lines: v.lines });
-            const { journalEntryId } = await enginePost(tx, spec, user.id);
-            // POS route links the JE to the voucher — replicate so the window→JE resolution finds it.
-            await tx.invVoucher.update({ where: { id: v.id }, data: { status: "POSTED", journalEntryId } });
+            const { journalEntryId, universalVoucherId } = await enginePost(tx, spec, user.id);
+            // POS route links the spine to the voucher — replicate so the window→spine resolution finds it.
+            await tx.invVoucher.update({ where: { id: v.id }, data: { status: "POSTED", journalEntryId, universalVoucherId } });
             // G5: an office RECEIPT at the till (Dr Till 50 / Cr Debtor) must ALSO
             // count toward shift cash — now read off the spine (sourceCreatedAt window).
             const expectReceipt = debtor != null;

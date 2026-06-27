@@ -64,12 +64,12 @@ export async function GET(req: Request) {
         // views like the Day Book can show it. Most office/legacy GL vouchers have
         // none → null. The spine line is scalar/id-only (no `branch` relation until
         // G4), so resolve the branch name from the masters.
-        const jeIds = vouchers.map((v) => v.journalEntryId).filter((x): x is number => x != null);
-        const branchLines = jeIds.length
+        const uvIds = vouchers.map((v) => v.universalVoucherId).filter((x): x is number => x != null);
+        const branchLines = uvIds.length
             ? await prisma.voucherGlLine.findMany({
-                where:    { universalVoucher: { sourceJournalEntryId: { in: jeIds } }, branchId: { not: null } },
+                where:    { universalVoucherId: { in: uvIds }, branchId: { not: null } },
                 distinct: ["universalVoucherId"],
-                select:   { branchId: true, universalVoucher: { select: { sourceJournalEntryId: true } } },
+                select:   { branchId: true, universalVoucherId: true },
             })
             : [];
         const branchIds = [...new Set(branchLines.map((l) => l.branchId).filter((x): x is string => x != null))];
@@ -77,16 +77,16 @@ export async function GET(req: Request) {
             (branchIds.length === 0 ? [] : await prisma.branch.findMany({ where: { id: { in: branchIds } }, select: { id: true, name: true } }))
                 .map((b) => [b.id, b.name]),
         );
-        const branchByJe = new Map(
+        const branchByUv = new Map(
             branchLines
-                .filter((l) => l.universalVoucher?.sourceJournalEntryId != null && l.branchId != null)
-                .map((l) => [l.universalVoucher!.sourceJournalEntryId!, { id: l.branchId!, name: branchNameById.get(l.branchId!) ?? null }]),
+                .filter((l) => l.branchId != null)
+                .map((l) => [l.universalVoucherId, { id: l.branchId!, name: branchNameById.get(l.branchId!) ?? null }]),
         );
 
         return NextResponse.json(
             vouchers.map((v) => ({
                 ...v,
-                branch: v.journalEntryId != null ? (branchByJe.get(v.journalEntryId) ?? null) : null,
+                branch: v.universalVoucherId != null ? (branchByUv.get(v.universalVoucherId) ?? null) : null,
             })),
         );
     } catch (e) {

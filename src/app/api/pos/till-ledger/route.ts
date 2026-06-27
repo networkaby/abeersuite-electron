@@ -51,18 +51,18 @@ export async function GET(req: NextRequest) {
         const lines = await prisma.voucherGlLine.findMany({
             where:   { accountId: tid, universalVoucher: { ...ledgerStatusFilterUv(), date: { gte: from, lte: to } } },
             orderBy: [{ universalVoucher: { date: "asc" } }, { id: "asc" }],
-            include: { universalVoucher: { select: { id: true, date: true, reference: true, description: true, sourceJournalEntryId: true } } },
+            include: { universalVoucher: { select: { id: true, date: true, reference: true, description: true } } },
         });
 
-        // Resolve reprint targets: InvVoucher (POS sale) → /receipt/invoice; GL
-        // RECEIPT/PAYMENT voucher → /receipt/payment. Contras have no receipt.
-        const jeIds = [...new Set(lines.map((l) => l.universalVoucher.sourceJournalEntryId).filter((x): x is number => x != null))];
+        // Resolve reprint targets via the direct spine link (G5): InvVoucher (POS
+        // sale) → /receipt/invoice; GL RECEIPT/PAYMENT voucher → /receipt/payment.
+        const uvIds = [...new Set(lines.map((l) => l.universalVoucher.id))];
         const [invs, vouchers] = await Promise.all([
-            prisma.invVoucher.findMany({ where: { journalEntryId: { in: jeIds } }, select: { id: true, journalEntryId: true, reference: true } }),
-            prisma.voucher.findMany({ where: { journalEntryId: { in: jeIds } }, select: { id: true, journalEntryId: true, type: true, reference: true } }),
+            prisma.invVoucher.findMany({ where: { universalVoucherId: { in: uvIds } }, select: { id: true, universalVoucherId: true, reference: true } }),
+            prisma.voucher.findMany({ where: { universalVoucherId: { in: uvIds } }, select: { id: true, universalVoucherId: true, type: true, reference: true } }),
         ]);
-        const invByJe = new Map(invs.filter((i) => i.journalEntryId != null).map((i) => [i.journalEntryId!, i]));
-        const vByJe   = new Map(vouchers.filter((v) => v.journalEntryId != null).map((v) => [v.journalEntryId!, v]));
+        const invByUv = new Map(invs.filter((i) => i.universalVoucherId != null).map((i) => [i.universalVoucherId!, i]));
+        const vByUv   = new Map(vouchers.filter((v) => v.universalVoucherId != null).map((v) => [v.universalVoucherId!, v]));
 
         let balance = openingBalance;
         const rows = lines.map((l) => {
@@ -71,8 +71,8 @@ export async function GET(req: NextRequest) {
             const credit = l.type === "CREDIT" ? amt : null;
             balance += delta(l.type, amt);
             const je  = l.universalVoucher;
-            const inv = je.sourceJournalEntryId != null ? invByJe.get(je.sourceJournalEntryId) : undefined;
-            const v   = je.sourceJournalEntryId != null ? vByJe.get(je.sourceJournalEntryId) : undefined;
+            const inv = invByUv.get(je.id);
+            const v   = vByUv.get(je.id);
             const printUrl =
                 inv                                                 ? `/receipt/invoice/${inv.id}?kind=POS`
               : v && (v.type === "RECEIPT" || v.type === "PAYMENT") ? `/receipt/payment/${v.id}`
