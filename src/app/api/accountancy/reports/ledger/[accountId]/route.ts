@@ -58,7 +58,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ accountI
             orderBy: [{ universalVoucher: { date: "asc" } }, { id: "asc" }],
             include: {
                 universalVoucher: {
-                    select: { id: true, date: true, reference: true, description: true, sourceJournalEntryId: true },
+                    select: { id: true, date: true, reference: true, description: true },
                 },
             },
         });
@@ -95,23 +95,20 @@ export async function GET(req: Request, { params }: { params: Promise<{ accountI
         }
         const visibleLines = lines.filter((l) => !excludeIds.has(l.universalVoucher.id));
 
-        // Resolve source documents in bulk — keyed by the legacy JE id the spine
-        // mirrors (resolveSourceBatch looks up InvVoucher.journalEntryId).
-        const jeIds = [...new Set(
-            visibleLines.map((l) => l.universalVoucher.sourceJournalEntryId).filter((x): x is number => x != null),
-        )];
-        const sourceMap = await resolveSourceBatch(jeIds);
+        // Resolve source documents in bulk — keyed by the spine voucher id (G5).
+        const uvIds = [...new Set(visibleLines.map((l) => l.universalVoucher.id))];
+        const sourceMap = await resolveSourceBatch(uvIds);
 
         // Compute running balance and attach source URL
         let runningBalance = openingBalance;
         const rows = visibleLines.map((l) => {
             const delta = balanceDelta(nb, l.type, toNumber(l.amount));
             runningBalance += delta;
-            const srcJeId = l.universalVoucher.sourceJournalEntryId;
-            const source = srcJeId != null ? (sourceMap.get(srcJeId) ?? null) : null;
+            const srcUvId = l.universalVoucher.id;
+            const source = sourceMap.get(srcUvId) ?? null;
             return {
                 id: l.id,
-                journalEntryId: srcJeId,
+                journalEntryId: srcUvId,
                 date: l.universalVoucher.date,
                 reference: l.universalVoucher.reference,
                 description: l.universalVoucher.description,

@@ -46,18 +46,15 @@ export async function GET(req: Request) {
         ...ledgerStatusFilterUv(),
         date: { gte: from, lte: to },
     };
-    // Kind filters reverse-join the source tables by their legacy `journalEntryId`;
-    // the spine matches via `sourceJournalEntryId` (the JE id it mirrors).
+    // Kind filters reverse-join the source tables by their `universalVoucherId`
+    // (G5 — the direct spine link); the spine matches via its own `id`.
     let kindIdsFilter:
-        | { sourceJournalEntryId: { in: number[] } }
-        | { sourceJournalEntryId: { notIn: number[] } }
+        | { id: { in: number[] } }
+        | { id: { notIn: number[] } }
         | undefined;
     if (kind !== "All") {
         if (kind === "Sale" || kind === "POS" || kind === "Purchase" || kind === "Estimate" || kind === "Sale Return" || kind === "Purchase Return") {
             // Each Day Book kind maps to exactly one InvVoucher.type value.
-            // Sale and POS are split so the counter flow is distinguishable
-            // from the office sale flow even though both post the same
-            // AR/Revenue JE shape.
             const types =
                 kind === "Sale"            ? (["SALE"] as const) :
                 kind === "POS"             ? (["POS"] as const) :
@@ -66,40 +63,28 @@ export async function GET(req: Request) {
                 kind === "Sale Return"     ? (["SALE_RETURN"] as const) :
                                              (["PURCHASE_RETURN"] as const);
             const rows = await prisma.invVoucher.findMany({
-                where: { type: { in: [...types] }, journalEntryId: { not: null } },
-                select: { journalEntryId: true },
+                where: { type: { in: [...types] }, universalVoucherId: { not: null } },
+                select: { universalVoucherId: true },
             });
-            kindIdsFilter = { sourceJournalEntryId: { in: rows.map((r) => r.journalEntryId!).filter(Boolean) } };
+            kindIdsFilter = { id: { in: rows.map((r) => r.universalVoucherId!).filter(Boolean) } };
         } else if (kind === "Journal") {
-            // "Journal" covers two things:
-            //   1. JEs linked to a Voucher of type=JOURNAL (the dialog's path).
-            //   2. Stand-alone JEs not linked to any source (legacy / direct posts).
+            // "Journal" covers: (1) spines linked to a Voucher of type=JOURNAL, and
+            // (2) stand-alone spines not linked to any source. Equivalent: exclude
+            // spines linked to any non-JOURNAL source voucher.
             const [journalVchs, invs, vchs] = await Promise.all([
-                prisma.voucher.findMany({
-                    where: { type: "JOURNAL", journalEntryId: { not: null } },
-                    select: { journalEntryId: true },
-                }),
-                prisma.invVoucher.findMany({
-                    where: { journalEntryId: { not: null } },
-                    select: { journalEntryId: true },
-                }),
-                prisma.voucher.findMany({
-                    where: { journalEntryId: { not: null } },
-                    select: { journalEntryId: true },
-                }),
+                prisma.voucher.findMany({ where: { type: "JOURNAL", universalVoucherId: { not: null } }, select: { universalVoucherId: true } }),
+                prisma.invVoucher.findMany({ where: { universalVoucherId: { not: null } }, select: { universalVoucherId: true } }),
+                prisma.voucher.findMany({ where: { universalVoucherId: { not: null } }, select: { universalVoucherId: true } }),
             ]);
             const linkedSet = new Set<number>();
-            for (const r of invs) if (r.journalEntryId != null) linkedSet.add(r.journalEntryId);
-            for (const r of vchs) if (r.journalEntryId != null) linkedSet.add(r.journalEntryId);
+            for (const r of invs) if (r.universalVoucherId != null) linkedSet.add(r.universalVoucherId);
+            for (const r of vchs) if (r.universalVoucherId != null) linkedSet.add(r.universalVoucherId);
             const journalIds = new Set<number>();
-            for (const r of journalVchs) if (r.journalEntryId != null) journalIds.add(r.journalEntryId);
-            // We want JEs that are EITHER unlinked OR linked to a JOURNAL voucher.
-            // Equivalent: exclude JEs linked to any non-JOURNAL source.
+            for (const r of journalVchs) if (r.universalVoucherId != null) journalIds.add(r.universalVoucherId);
             const linkedNonJournal = [...linkedSet].filter((id) => !journalIds.has(id));
-            kindIdsFilter = { sourceJournalEntryId: { notIn: linkedNonJournal } };
+            kindIdsFilter = { id: { notIn: linkedNonJournal } };
         } else {
             // GL voucher types: CONTRA / PAYMENT / RECEIPT / CREDIT_NOTE / DEBIT_NOTE.
-            // (JOURNAL is handled by the dedicated branch above.)
             const dbType =
                 kind === "Contra"      ? "CONTRA"      :
                 kind === "Payment"     ? "PAYMENT"     :
@@ -107,10 +92,10 @@ export async function GET(req: Request) {
                 kind === "Credit Note" ? "CREDIT_NOTE" :
                 /* Debit Note */         "DEBIT_NOTE";
             const rows = await prisma.voucher.findMany({
-                where: { type: dbType, journalEntryId: { not: null } },
-                select: { journalEntryId: true },
+                where: { type: dbType, universalVoucherId: { not: null } },
+                select: { universalVoucherId: true },
             });
-            kindIdsFilter = { sourceJournalEntryId: { in: rows.map((r) => r.journalEntryId!).filter(Boolean) } };
+            kindIdsFilter = { id: { in: rows.map((r) => r.universalVoucherId!).filter(Boolean) } };
         }
     }
 
@@ -133,7 +118,7 @@ export async function GET(req: Request) {
                 skip: (page - 1) * limit,
                 take: limit,
                 select: {
-                    id: true, reference: true, description: true, date: true, sourceJournalEntryId: true,
+                    id: true, reference: true, description: true, date: true,
                     // Stable line order — first line is the principal "By" account
                     // shown in the row's single Amount column. VoucherGlLine is
                     // id-only (no account relation); account fields are resolved
@@ -154,22 +139,22 @@ export async function GET(req: Request) {
             : [];
         const accById = new Map(accountRows.map((a) => [a.id, a]));
 
-        // Source/label lookups key off the legacy JE id the spine mirrors.
-        const jeIds = entries.map((e) => e.sourceJournalEntryId).filter((x): x is number => x != null);
+        // Source/label lookups key off the spine voucher id (G5).
+        const uvIds = entries.map((e) => e.id);
         const [sourceMap, glVouchers] = await Promise.all([
-            resolveSourceBatch(jeIds),
+            resolveSourceBatch(uvIds),
             // Also look up GL Voucher rows so we can label rows as
             // Contra / Payment / Receipt / Credit Note / Debit Note instead
             // of the generic "Journal".
             prisma.voucher.findMany({
-                where: { journalEntryId: { in: jeIds } },
-                select: { journalEntryId: true, type: true, id: true, reference: true },
+                where: { universalVoucherId: { in: uvIds } },
+                select: { universalVoucherId: true, type: true, id: true, reference: true },
             }),
         ]);
         const glMap = new Map<number, { type: string; id: number; reference: string }>();
         for (const v of glVouchers) {
-            if (v.journalEntryId == null) continue;
-            glMap.set(v.journalEntryId, { type: v.type, id: v.id, reference: v.reference });
+            if (v.universalVoucherId == null) continue;
+            glMap.set(v.universalVoucherId, { type: v.type, id: v.id, reference: v.reference });
         }
         const VOUCHER_KIND_LABEL: Record<string, "Contra" | "Payment" | "Receipt" | "Credit Note" | "Debit Note" | "Journal"> = {
             CONTRA:      "Contra",
@@ -198,9 +183,8 @@ export async function GET(req: Request) {
                 if (l.type === "DEBIT") dr += amt;
                 else                    cr += amt;
             }
-            const srcJeId = e.sourceJournalEntryId;
-            const source  = srcJeId != null ? (sourceMap.get(srcJeId) ?? null) : null;
-            const gl      = srcJeId != null ? glMap.get(srcJeId) : undefined;
+            const source  = sourceMap.get(e.id) ?? null;
+            const gl      = glMap.get(e.id);
             const kind: Kind =
                 source?.kind === "sale"            ? "Sale"
               : source?.kind === "pos"             ? "POS"
@@ -221,7 +205,7 @@ export async function GET(req: Request) {
                 amount:      Number(first.amount),
             } : null;
             return {
-                id: e.sourceJournalEntryId ?? e.id,
+                id: e.id,
                 date: e.date,
                 reference: e.reference,
                 description: e.description,

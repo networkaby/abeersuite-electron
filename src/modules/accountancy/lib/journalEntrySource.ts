@@ -33,10 +33,10 @@ function kindForVoucherType(type: InvVoucherType): SourceDoc["kind"] | null {
     }
 }
 
-/** Single-record resolver — returns SourceDoc for one journal entry id, or null. */
-export async function resolveSource(journalEntryId: number): Promise<SourceDoc | null> {
+/** Single-record resolver — returns SourceDoc for one spine voucher id, or null. */
+export async function resolveSource(universalVoucherId: number): Promise<SourceDoc | null> {
     const v = await prisma.invVoucher.findFirst({
-        where: { journalEntryId },
+        where: { universalVoucherId },
         select: { id: true, type: true, reference: true },
     });
     if (!v) return null;
@@ -47,22 +47,23 @@ export async function resolveSource(journalEntryId: number): Promise<SourceDoc |
     return { kind, id: v.id, reference: v.reference, url };
 }
 
-/** Bulk resolver — efficient for tables/reports listing many JEs. */
-export async function resolveSourceBatch(journalEntryIds: number[]): Promise<Map<number, SourceDoc>> {
+/** Bulk resolver — efficient for tables/reports listing many spine vouchers.
+ *  Keyed by `universalVoucherId` (G5 — the JE id is gone). */
+export async function resolveSourceBatch(universalVoucherIds: number[]): Promise<Map<number, SourceDoc>> {
     const out = new Map<number, SourceDoc>();
-    if (journalEntryIds.length === 0) return out;
+    if (universalVoucherIds.length === 0) return out;
 
     const vouchers = await prisma.invVoucher.findMany({
-        where: { journalEntryId: { in: journalEntryIds } },
-        select: { id: true, type: true, reference: true, journalEntryId: true },
+        where: { universalVoucherId: { in: universalVoucherIds } },
+        select: { id: true, type: true, reference: true, universalVoucherId: true },
     });
     for (const v of vouchers) {
-        if (v.journalEntryId === null) continue;
+        if (v.universalVoucherId === null) continue;
         const kind = kindForVoucherType(v.type);
         if (!kind) continue;
         const url = referenceHref("inv", v.id, v.type);
         if (!url) continue;
-        out.set(v.journalEntryId, { kind, id: v.id, reference: v.reference, url });
+        out.set(v.universalVoucherId, { kind, id: v.id, reference: v.reference, url });
     }
     return out;
 }
