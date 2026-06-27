@@ -15,6 +15,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { buildPartyJson } from "@/shared/lib/accountancy/partySnapshot";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { invNextRef, calcLineTotals, calcVoucherTotals } from "@/modules/inventory/lib/stock";
+import { engineCreateSpine } from "@/modules/accountancy/lib/transactionEngine";
 import { getDealsPipeline, findOpenDealForParty } from "@/modules/deals/lib/dealsPipeline";
 import { getOrderPipeline, orderEntryStatus } from "@/modules/order/lib/orderPipeline";
 import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
@@ -163,6 +164,24 @@ export async function createPosQuoteVoucher(opts: {
             },
             select: { id: true, reference: true },
         });
+
+        // Phase 5 5.0c: anchor the quote on the spine (the document table) so its
+        // deal / order-pipeline links can become VoucherLinks in 5A. These are
+        // "issued" the moment they're saved (no GL, no stock), so the spine is
+        // POSTED with no GL lines — gate-neutral (no lines → no balance effect).
+        const spineId = await engineCreateSpine(tx, {
+            type,
+            date:           body.date ? new Date(body.date) : new Date(),
+            description,
+            friendlyRef:    reference,
+            partyAccountId: body.accountId ?? null,
+            userId,
+        });
+        await tx.universalVoucher.updateMany({
+            where: { id: spineId },
+            data:  { status: "POSTED", postedAt: new Date(), sourceCreatedAt: new Date() },
+        });
+        await tx.invVoucher.update({ where: { id: voucher.id }, data: { universalVoucherId: spineId } });
 
         let dealId: number | null = null;
         if (hasParty && entry && actor) {

@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { invNextRef } from "@/modules/inventory/lib/stock";
+import { engineCreateSpine } from "@/modules/accountancy/lib/transactionEngine";
 
 // POST /api/inventory/vouchers/[id]/duplicate
 //
@@ -78,6 +79,18 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                 },
                 select: { id: true, type: true, reference: true },
             });
+            // Phase 5 5.0c: the duplicate is a fresh DRAFT — give it a draft spine
+            // (the document anchor) like the main create route. POST attaches its
+            // GL lines + flips it; gated out of balances while DRAFT.
+            const spineId = await engineCreateSpine(tx, {
+                type:           source.type,
+                date:           today,
+                description:    source.description,
+                friendlyRef:    reference,
+                partyAccountId: source.accountId,
+                userId:         user!.id,
+            });
+            await tx.invVoucher.update({ where: { id: voucher.id }, data: { universalVoucherId: spineId } });
             return voucher;
         });
 
