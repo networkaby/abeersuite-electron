@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth, userCanVoucher } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
-import { syncSpineLifecycle } from "@/modules/accountancy/lib/transactionEngine";
+import { setSpineLifecycle } from "@/modules/accountancy/lib/transactionEngine";
 import { ensureCancelable, cancelFields, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
@@ -43,18 +43,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 await tx.account.update({ where: { id: line.accountId }, data: { balance: { decrement: delta } } });
             }
 
-            // Mark the mirror JE CANCELLED → excluded from every POSTED-only aggregation.
+            // Mark the spine CANCELLED → excluded from every POSTED-only aggregation.
             if (voucher.journalEntryId) {
-                await tx.journalEntry.update({
-                    where: { id: voucher.journalEntryId },
-                    data:  {
-                        status:        "CANCELLED",
-                        cancelledAt:   new Date(),
-                        cancelledById: user!.id,
-                        cancelReason:  `Voucher ${voucher.reference} cancelled: ${data.reason}`,
-                    },
+                await setSpineLifecycle(tx, voucher.journalEntryId, {
+                    status:        "CANCELLED",
+                    cancelledAt:   new Date(),
+                    cancelledById: user!.id,
+                    cancelReason:  `Voucher ${voucher.reference} cancelled: ${data.reason}`,
                 });
-                await syncSpineLifecycle(tx, voucher.journalEntryId);
             }
 
             await tx.voucher.update({

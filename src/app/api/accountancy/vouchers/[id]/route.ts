@@ -3,7 +3,6 @@ import { NextResponse } from "next/server";
 import { requirePermission, requireAuth, userCanVoucher } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { isBalanced, balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
-import { resyncSpineFromJe } from "@/modules/accountancy/lib/transactionEngine";
 import { auditSnapshot } from "@/modules/accountancy/lib/voucherLifecycle";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
@@ -109,8 +108,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             if (existing.status === "POSTED") {
                 // Phase 4 ②: snapshot the pre-edit state to AuditLog (matches the
                 // inventory edit) — the voucher + JE are rewritten in place below.
+                // `journalEntryId` carries the spine id (self-ref since G5).
                 const origJe = existing.journalEntryId
-                    ? await tx.journalEntry.findUnique({ where: { id: existing.journalEntryId }, include: { lines: true } })
+                    ? await tx.universalVoucher.findUnique({ where: { id: existing.journalEntryId }, include: { lines: true } })
                     : null;
                 await tx.auditLog.create({
                     data: auditSnapshot({
@@ -139,10 +139,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             // Delete old voucher lines (always)
             await tx.voucherLine.deleteMany({ where: { voucherId } });
 
-            // Delete linked JE's lines (POSTED only — DRAFT has no JE).
+            // Delete the spine's GL lines (POSTED only — DRAFT has no spine).
             if (existing.status === "POSTED" && existing.journalEntryId) {
-                await tx.journalLine.deleteMany({
-                    where: { journalEntryId: existing.journalEntryId },
+                await tx.voucherGlLine.deleteMany({
+                    where: { universalVoucherId: existing.journalEntryId },
                 });
             }
 
@@ -157,15 +157,16 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 })),
             });
 
-            // Create new JE lines mirroring the new voucher lines (POSTED only).
+            // Create new spine GL lines mirroring the new voucher lines (POSTED only).
             if (existing.status === "POSTED" && existing.journalEntryId) {
-                await tx.journalLine.createMany({
-                    data: body.lines.map((l) => ({
-                        journalEntryId: existing.journalEntryId!,
-                        accountId:      l.accountId,
-                        type:           l.type,
-                        amount:         l.amount,
-                        description:    l.description ?? null,
+                await tx.voucherGlLine.createMany({
+                    data: body.lines.map((l, idx) => ({
+                        universalVoucherId: existing.journalEntryId!,
+                        accountId:          l.accountId,
+                        type:               l.type,
+                        amount:             l.amount,
+                        description:        l.description ?? null,
+                        seq:                idx,
                     })),
                 });
 
@@ -183,19 +184,16 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                     });
                 }
 
-                // Update the linked JE header — JE.description is required,
-                // so only swap it when we have a non-empty narration; otherwise
-                // leave the existing description untouched.
-                await tx.journalEntry.update({
+                // Update the spine header — description is required, so only swap
+                // it when we have a non-empty narration; otherwise leave it.
+                await tx.universalVoucher.update({
                     where: { id: existing.journalEntryId },
                     data:  {
-                        date: new Date(body.date),
+                        date:           new Date(body.date),
+                        friendlyRef:    existing.reference,
+                        partyAccountId: body.partyAccountId ?? null,
                         ...(body.narration ? { description: body.narration } : {}),
                     },
-                });
-                // Phase 4: rebuild the spine row from the edited JE (lines + header).
-                await resyncSpineFromJe(tx, existing.journalEntryId, {
-                    type: existing.type, friendlyRef: existing.reference, partyAccountId: body.partyAccountId ?? null,
                 });
             }
 

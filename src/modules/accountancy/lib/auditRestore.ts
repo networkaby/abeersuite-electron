@@ -36,20 +36,35 @@ function scalarsOf(row: Row, drop: string[]): Row {
     return out;
 }
 
-/** Re-create a JournalEntry (+ its lines) from a snapshot, preserving its reference. Returns the new id. */
+/**
+ * Re-create the GL spine row (UniversalVoucher + its VoucherGlLine lines) from a
+ * snapshot, preserving its reference. Returns the new spine id. Since G5 the spine
+ * is the only GL representation, so "journalEntry" in old snapshots IS the spine.
+ * The vestigial self-ref / line back-link columns are dropped (they pointed at the
+ * now-deleted id and are @unique — re-inserting them risks a collision).
+ */
 async function recreateJournalEntry(tx: Tx, je: JeSnapshot): Promise<number> {
-    const scalars = scalarsOf(je, ["lines", "actor", "createdBy", "cancelledBy", "deletedBy", "posShiftVariances"]);
-    const lines = (je.lines ?? []).map((l) => scalarsOf(l, ["journalEntryId", "account", "branch", "additionalCostAllocations"]));
-    const created = await tx.journalEntry.create({
-        data: { ...scalars, lines: { create: lines } } as unknown as Prisma.JournalEntryUncheckedCreateInput,
+    const scalars = scalarsOf(je, ["lines", "actor", "createdBy", "cancelledBy", "deletedBy", "invVoucher", "voucher", "sourceJournalEntryId"]);
+    const lines = (je.lines ?? []).map((l) =>
+        scalarsOf(l, ["universalVoucherId", "universalVoucher", "account", "branch", "additionalCostAllocations", "sourceJournalLineId"]));
+    const created = await tx.universalVoucher.create({
+        data: { ...scalars, lines: { create: lines } } as unknown as Prisma.UniversalVoucherUncheckedCreateInput,
     });
     return created.id;
 }
 
-/** Apply a JE's POSTED, non-deleted lines forward to the cached Account.balance. */
+/**
+ * Apply POSTED, non-deleted lines forward to the cached Account.balance. Lines may
+ * carry an `account.normalBalance` (voucher-line snapshots) or be scalar-only (spine
+ * GL-line snapshots); the latter resolve normalBalance from the DB in one lookup.
+ */
 async function reapplyBalance(tx: Tx, lines: JeLine[]): Promise<void> {
+    if (lines.length === 0) return;
+    const ids = [...new Set(lines.map((l) => l.accountId).filter((x): x is number => x != null))];
+    const rows = await tx.account.findMany({ where: { id: { in: ids } }, select: { id: true, normalBalance: true } });
+    const nbById = new Map(rows.map((a) => [a.id, a.normalBalance]));
     for (const l of lines) {
-        const nb = l.account?.normalBalance;
+        const nb = l.account?.normalBalance ?? nbById.get(l.accountId);
         if (!nb) continue;
         await tx.account.update({
             where: { id: l.accountId },

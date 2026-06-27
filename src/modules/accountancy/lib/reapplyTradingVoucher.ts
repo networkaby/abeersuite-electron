@@ -9,13 +9,12 @@
 // state to AuditLog and written the new voucher lines/charges/tenders/header.
 // The exact sequence here is proven by the parity harness `runEditCycle`.
 //
-// ORDER MATTERS: rewrite JE lines → resyncSpineFromJe → recomputeAccountBalances
+// ORDER MATTERS: rewrite spine GL lines → recomputeAccountBalances
 // (it reads the spine); stock rows → recomputeProductStock.
 
 import type { Prisma } from "@/generated/prisma/client";
 import { saleToSpec, type TradingStockLine } from "./voucherMappers";
 import type { PostVoucherInput } from "./postInvVoucher";
-import { resyncSpineFromJe } from "./transactionEngine";
 import { recomputeAccountBalances } from "./aggregateLedger";
 import { recordStockMovement, recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
 
@@ -38,26 +37,27 @@ export async function reapplyTradingVoucherInPlace(
     // Recompute the spec (GL lines + stock moves) from the edited voucher.
     const spec = await saleToSpec(tx, voucher, { voucherId: voucher.id, branchId, lines });
 
-    // ── GL: rewrite the lines on the SAME JE id (allocation-safe) ─────────────
+    // ── GL: rewrite the spine lines on the SAME UniversalVoucher id ───────────
+    // `journalEntryId` carries the spine id (self-ref since G5); receipts
+    // allocated against it stay linked because we keep the same header.
     if (journalEntryId != null && spec.glLines.length > 0) {
-        const oldAccountIds = (await tx.journalLine.findMany({
-            where:  { journalEntryId },
+        const oldAccountIds = (await tx.voucherGlLine.findMany({
+            where:  { universalVoucherId: journalEntryId },
             select: { accountId: true },
         })).map((l) => l.accountId);
 
-        await tx.journalLine.deleteMany({ where: { journalEntryId } });
-        await tx.journalLine.createMany({
-            data: spec.glLines.map((l) => ({
-                journalEntryId,
+        await tx.voucherGlLine.deleteMany({ where: { universalVoucherId: journalEntryId } });
+        await tx.voucherGlLine.createMany({
+            data: spec.glLines.map((l, idx) => ({
+                universalVoucherId: journalEntryId,
                 accountId:   l.accountId,
                 type:        l.type,
                 amount:      l.amount,
                 description: l.description ?? null,
+                seq:         idx,
             })),
         });
 
-        // Spine mirrors this JE; rebuild it before recomputing balances (which read it).
-        await resyncSpineFromJe(tx, journalEntryId, { type: voucher.type, friendlyRef: voucher.reference });
         await recomputeAccountBalances(tx, [...new Set([...oldAccountIds, ...spec.glLines.map((l) => l.accountId)])]);
     }
 

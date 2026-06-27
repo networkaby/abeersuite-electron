@@ -6,13 +6,13 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 // GET /api/accountancy/journal-entries
 //
-// By default this endpoint hides **engine-output** JournalEntries — the
-// double-entry postings auto-created by Sale/Purchase/Contra/Payment/Receipt/
-// Journal-Voucher posts. Those events already show up in the Day Book via
-// their primary InvVoucher / Voucher rows; surfacing the mirror JE again
-// duplicates every transaction. Engine output is identified by reference
-// prefix `GL-` (the `GL_POSTING` VoucherSeries). Set `?includeEngine=1`
-// to opt back in for debugging / admin views.
+// Reads the spine (UniversalVoucher) — the single GL representation since the
+// JournalEntry drop (G5). By default this endpoint shows only **user journal
+// vouchers** (spine `type = JOURNAL`); the engine postings behind Sale/
+// Purchase/Contra/Payment/Receipt already surface in the Day Book via their
+// primary InvVoucher / Voucher rows, so re-listing every spine row here would
+// duplicate every transaction. Set `?includeEngine=1` to list all spine rows
+// for debugging / admin views.
 export async function GET(req: Request) {
     const { user, response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
     if (response) return response;
@@ -27,7 +27,7 @@ export async function GET(req: Request) {
     const includeEngine = searchParams.get("includeEngine") === "1";
 
     try {
-        const entries = await prisma.journalEntry.findMany({
+        const entries = await prisma.universalVoucher.findMany({
             where: {
                 ...(status ? { status: status as "DRAFT" | "POSTED" | "CANCELLED" } : {}),
                 ...(includeDeleted ? {} : { deletedAt: null }),
@@ -37,21 +37,28 @@ export async function GET(req: Request) {
                         ...(to ? { lte: new Date(to) } : {}),
                     },
                 } : {}),
-                ...(includeEngine ? {} : { NOT: { reference: { startsWith: "GL-" } } }),
+                ...(includeEngine ? {} : { type: "JOURNAL" }),
             },
             orderBy: [{ date: "desc" }, { createdAt: "desc" }],
             include: {
-                createdBy: { select: { id: true, name: true } },
                 _count: { select: { lines: true } },
                 lines: { select: { type: true, amount: true } },
             },
         });
 
+        // createdBy is a scalar id on the spine — enrich names in one lookup.
+        const creatorIds = [...new Set(entries.map((e) => e.createdById))];
+        const creators = await prisma.user.findMany({
+            where:  { id: { in: creatorIds } },
+            select: { id: true, name: true },
+        });
+        const creatorById = new Map(creators.map((u) => [u.id, u]));
+
         const result = entries.map((e) => {
             const totalDebit = e.lines
                 .filter((l) => l.type === "DEBIT")
                 .reduce((s, l) => s + Number(l.amount), 0);
-            return { ...e, lines: undefined, totalDebit };
+            return { ...e, createdBy: creatorById.get(e.createdById) ?? null, lines: undefined, totalDebit };
         });
 
         return NextResponse.json(result);

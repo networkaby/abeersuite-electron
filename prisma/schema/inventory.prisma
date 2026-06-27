@@ -691,10 +691,6 @@ model AdditionalCostAllocation {
   // is ever hard-deleted; soft-cancelled entries are filtered out at read time.
   sourceVoucherGlLineId Int?
   sourceVoucherGlLine   VoucherGlLine?             @relation(fields: [sourceVoucherGlLineId], references: [id], onDelete: Cascade)
-  // LEGACY (pre-G2) link to the JournalLine. Nullable now that writes are
-  // spine-only; retained for already-migrated rows until G5 drops JournalLine.
-  sourceJournalLineId Int?
-  sourceJournalLine   JournalLine?                 @relation(fields: [sourceJournalLineId], references: [id], onDelete: Cascade)
   amountPaise         Int
   // ALLOCATION-only fields (null on DISMISSAL):
   productId           Int?
@@ -713,7 +709,6 @@ model AdditionalCostAllocation {
   createdAt           DateTime                     @default(now())
 
   @@index([sourceVoucherGlLineId])
-  @@index([sourceJournalLineId])
   @@index([productId, createdAt])
   @@index([sourceInvVoucherId])
   @@index([kind])

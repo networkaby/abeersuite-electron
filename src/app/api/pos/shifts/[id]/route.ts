@@ -36,7 +36,6 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
                 closedBy:             { select: { id: true, name: true } },
                 openingContraVoucher: { select: { id: true, reference: true, date: true } },
                 closingContraVoucher: { select: { id: true, reference: true, date: true } },
-                varianceJournalEntry: { select: { id: true, reference: true, date: true } },
                 handover: {
                     select: {
                         id: true, status: true,

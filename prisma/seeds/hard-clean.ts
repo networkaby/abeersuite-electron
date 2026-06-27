@@ -50,10 +50,10 @@ const ADMIN_EMAIL = "admin@networkservice.in";
 // Phase 1 — pure-transaction tables (CASCADE handles cross-FK)
 const TRANSACTION_TABLES = [
     "pos_handovers", "pos_cash_drops", "pos_expenditures", "pos_receipts", "pos_shifts",
-    "JournalLine", "JournalEntry",
-    // Phase 4 universal-voucher spine + GL-arm lines (transitional dual-write
-    // target; transactional, never bootstrap). Child before parent; cascade also
-    // covers the child when the spine is truncated.
+    // Phase 4 universal-voucher spine + GL-arm lines — the lone GL representation
+    // since the JournalEntry/JournalLine drop (G5); transactional, never
+    // bootstrap. Child before parent; cascade also covers the child when the
+    // spine is truncated.
     "VoucherGlLine", "UniversalVoucher",
     "VoucherAllocation", "VoucherLine", "Voucher",
     // AuditLog — unified recycle-bin for hard-deleted vouchers/JEs (2026-06-09,
@@ -63,7 +63,7 @@ const TRANSACTION_TABLES = [
     // were dropped on 2026-05-24 (Invoice → InvVoucher consolidation, Layer 5b).
     "InvStockLedger", "InvVoucherLine", "InvVoucher",
     // Pricing-strategy additional-cost pool draws — transaction/history data,
-    // not bootstrap config. FKs to JournalLine + InvProduct (both wiped here /
+    // not bootstrap config. FKs to VoucherGlLine + InvProduct (both wiped here /
     // phase 5), so truncate it in phase 1. Bootstrap seeds nothing into it.
     "additional_cost_allocations",
     "ShopOrderLine", "ShopOrder",

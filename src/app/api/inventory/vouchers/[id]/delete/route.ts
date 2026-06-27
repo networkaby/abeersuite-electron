@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { toNumber, balanceDelta } from "@/modules/accountancy/lib/balance";
-import { syncSpineLifecycle } from "@/modules/accountancy/lib/transactionEngine";
+import { setSpineLifecycle } from "@/modules/accountancy/lib/transactionEngine";
 import { recordStockMovement, reverseStockMovement } from "@/modules/inventory/lib/stockMovement";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import { ensureDeletable, deleteFields, isPosted, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
@@ -102,24 +102,24 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 }
 
                 if (voucher.journalEntryId) {
-                    const origJe = await tx.journalEntry.findUnique({
-                        where: { id: voucher.journalEntryId },
-                        include: { lines: { include: { account: { select: { normalBalance: true } } } } },
+                    const spine = await tx.universalVoucher.findUnique({
+                        where:  { id: voucher.journalEntryId },
+                        select: { status: true, deletedAt: true, lines: { select: { accountId: true, type: true, amount: true } } },
                     });
-                    if (origJe && origJe.status === "POSTED" && !origJe.deletedAt) {
-                        for (const line of origJe.lines) {
-                            const delta = balanceDelta(line.account.normalBalance!, line.type, toNumber(line.amount));
+                    if (spine && spine.status === "POSTED" && !spine.deletedAt) {
+                        const accIds = [...new Set(spine.lines.map((l) => l.accountId))];
+                        const nbById = new Map(
+                            (await tx.account.findMany({ where: { id: { in: accIds } }, select: { id: true, normalBalance: true } }))
+                                .map((a) => [a.id, a.normalBalance]),
+                        );
+                        for (const line of spine.lines) {
+                            const delta = balanceDelta(nbById.get(line.accountId)!, line.type, toNumber(line.amount));
                             await tx.account.update({ where: { id: line.accountId }, data: { balance: { decrement: delta } } });
                         }
-                        await tx.journalEntry.update({
-                            where: { id: origJe.id },
-                            data: {
-                                deletedAt: new Date(),
-                                deletedById: user!.id,
-                                deleteReason: `Voucher ${voucher.reference} deleted: ${data.reason}`,
-                            },
+                        await setSpineLifecycle(tx, voucher.journalEntryId, {
+                            deletedAt: new Date(), deletedById: user!.id,
+                            deleteReason: `Voucher ${voucher.reference} deleted: ${data.reason}`,
                         });
-                        await syncSpineLifecycle(tx, origJe.id);
                     }
                 }
             }

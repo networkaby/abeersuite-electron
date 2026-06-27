@@ -29,9 +29,10 @@ const TABLES = [
     "TicketLog",
     "TicketParticipant",
     "Ticket",
-    // GL side
-    "JournalLine",
-    "JournalEntry",
+    // GL side — the UniversalVoucher spine is the lone GL representation since the
+    // JournalEntry/JournalLine drop (G5); VoucherGlLine cascades off the spine.
+    "VoucherGlLine",
+    "UniversalVoucher",
     // Voucher side
     "VoucherAllocation",
     "VoucherLine",

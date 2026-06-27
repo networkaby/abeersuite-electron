@@ -772,7 +772,7 @@ export async function mergeParty(
     return prisma.$transaction(async (tx) => {
         // 1. Re-point every Account FK from loser's Account → winner's Account.
         const [jl, vp, vl, iv, gll, t, d, so] = await Promise.all([
-            tx.journalLine.updateMany({ where: { accountId: loserAccountId }, data: { accountId: winnerAccountId } }),
+            Promise.resolve({ count: 0 }),   // G5: JournalLine dropped — spine re-point is `gll` below
             tx.voucher.updateMany({ where: { partyAccountId: loserAccountId }, data: { partyAccountId: winnerAccountId } }),
             tx.voucherLine.updateMany({ where: { accountId: loserAccountId }, data: { accountId: winnerAccountId } }),
             tx.invVoucher.updateMany({ where: { accountId: loserAccountId }, data: { accountId: winnerAccountId } }),

@@ -32,15 +32,17 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
             children: {
                 select: { id: true, code: true, name: true, normalBalance: true },
             },
-            _count: { select: { lines: true } },
         },
     });
     if (!account) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    // Truth-path closing from JournalLine for this account + any children.
+    // GL activity count from the spine (G5 — JournalLine dropped).
+    const lineCount = await prisma.voucherGlLine.count({ where: { accountId: Number(id) } });
+    // Truth-path closing from the spine GL for this account + any children.
     const nbMap = await loadNormalBalanceMap();
     const closingMap = await aggregateClosingAsOf(new Date(), nbMap);
     return NextResponse.json({
         ...account,
+        _count: { lines: lineCount },
         balance: closingMap.get(account.id) ?? 0,
         children: account.children.map((c) => ({
             id: c.id, code: c.code, name: c.name,

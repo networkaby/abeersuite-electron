@@ -158,13 +158,21 @@ async function buildGlSample(id: number): Promise<VoucherReceiptData> {
     return { kind, sample, docTitle: `${v.type} ${v.reference}` };
 }
 
-// ── Journal entry (standalone / engine-output JE) ───────────────────────────
+// ── Journal entry (GL spine row) ────────────────────────────────────────────
 async function buildJeSample(id: number): Promise<VoucherReceiptData> {
-    const v = await prisma.journalEntry.findUnique({
+    const v = await prisma.universalVoucher.findUnique({
         where: { id },
-        include: { lines: { include: { account: { select: { name: true } } } } },
+        include: { lines: true },
     });
     if (!v) return notFoundData();
+
+    // Spine lines are scalar — resolve account names in one lookup.
+    const acctIds = [...new Set(v.lines.map((l) => l.accountId))];
+    const accounts = await prisma.account.findMany({
+        where:  { id: { in: acctIds } },
+        select: { id: true, name: true },
+    });
+    const nameById = new Map(accounts.map((a) => [a.id, a.name]));
 
     // Total = Σ debits (== Σ credits for a balanced entry).
     const total = v.lines
@@ -177,7 +185,7 @@ async function buildJeSample(id: number): Promise<VoucherReceiptData> {
         partyName:  null,
         partyPhone: null,
         lines: v.lines.map((l) => ({
-            description: `${l.account.name} (${l.type === "DEBIT" ? "Dr" : "Cr"})`,
+            description: `${nameById.get(l.accountId) ?? "—"} (${l.type === "DEBIT" ? "Dr" : "Cr"})`,
             quantity:    1,
             amount:      toNumber(l.amount),
         })),

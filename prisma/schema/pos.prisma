@@ -164,8 +164,8 @@ model PosShift {
   toVaultPaise           BigInt? // amount swept to vault (declared − carryOverNext)
   closingContraVoucherId Int? // null when toVaultPaise = 0
   closingContraVoucher   Voucher?      @relation("PosShiftClosingContra", fields: [closingContraVoucherId], references: [id])
+  // Vestigial — now carries the SPINE id of the variance posting (JournalEntry dropped, G5).
   varianceJournalEntryId Int?
-  varianceJournalEntry   JournalEntry? @relation("PosShiftVarianceJe", fields: [varianceJournalEntryId], references: [id])
 
   // ── Handover chain ────────────────────────────────────────────────────────
   // Set when A's AWAITING_HANDOVER shift is accepted by B: points to B's shift.

@@ -188,7 +188,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                     counter: { include: { tillAccount: { select: { id: true, name: true } }, paymentAccounts: { where: { isActive: true }, select: { channel: true, label: true, accountId: true } } } },
                     branch:  { select: { id: true, name: true } },
                     closingContraVoucher: { select: { id: true, reference: true } },
-                    varianceJournalEntry: { select: { id: true, reference: true } },
                 },
             });
         });
@@ -229,7 +228,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             },
             branch:              result.branch,
             closingContraVoucher: result.closingContraVoucher,
-            varianceJournalEntry: result.varianceJournalEntry,
+            varianceUniversalVoucherId: result.varianceJournalEntryId,   // spine id (JE dropped)
         });
     } catch (e) {
         return handleApiError(e, "Failed to close shift");

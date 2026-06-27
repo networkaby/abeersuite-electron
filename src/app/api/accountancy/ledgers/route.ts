@@ -45,7 +45,6 @@ export async function GET(req: Request) {
                     take: limit,
                     include: {
                         group: { select: { id: true, name: true, type: true } },
-                        _count: { select: { lines: true } },
                     },
                 }),
                 prisma.account.count({ where }),
@@ -63,7 +62,6 @@ export async function GET(req: Request) {
             orderBy: [{ groupId: "asc" }, { name: "asc" }],
             include: {
                 group: { select: { id: true, name: true, type: true } },
-                _count: { select: { lines: true } },
             },
         });
         return NextResponse.json(ledgers);

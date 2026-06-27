@@ -7,33 +7,10 @@
 // (inventory.prisma); customer receipts are Voucher type=RECEIPT with a
 // VoucherAllocation tying them to the InvVoucher's JournalEntry.
 
-model JournalEntry {
-  id                Int           @id @default(autoincrement())
-  date              DateTime      @db.Date
-  reference         String        @unique
-  description       String
-  status            VoucherStatus @default(DRAFT)
-  postedAt          DateTime?
-  cancelledAt       DateTime?
-  cancelReason      String?
-  cancelledById     Int?
-  deletedAt         DateTime?
-  deletedById       Int?
-  deleteReason      String?
-  createdById       Int
-  createdBy         User          @relation("JournalCreatedBy", fields: [createdById], references: [id])
-  cancelledBy       User?         @relation("JournalCancelledBy", fields: [cancelledById], references: [id])
-  deletedBy         User?         @relation("JournalDeletedBy", fields: [deletedById], references: [id])
-  lines             JournalLine[]
-  // POS shift variance adjustment JEs link back here
-  posShiftVariances PosShift[]    @relation("PosShiftVarianceJe")
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
-
-  @@index([status, date])
-  @@index([date])
-  @@index([deletedAt])
-}
+// Phase 4 G5 (2026-06-27): `JournalEntry` + `JournalLine` were DROPPED — the
+// universal-voucher spine (`UniversalVoucher` + `VoucherGlLine`) is now the sole
+// GL. The engine writes only the spine; `journalEntryId` / `sourceJournalEntryId`
+// columns are kept as vestigial ints carrying the SPINE id (self-reference).
 
 // Unified audit / recycle-bin for every hard-deleted entity (vouchers + journal
 // entries). One row per removed entity, discriminated by `entityType`, with the
@@ -64,29 +41,7 @@ model AuditLog {
   @@index([restoredAt])
 }
 
-model JournalLine {
-  id             Int          @id @default(autoincrement())
-  journalEntryId Int
-  journalEntry   JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
-  accountId      Int
-  account        Account      @relation(fields: [accountId], references: [id])
-  type           EntryType
-  amount         Decimal      @db.Decimal(14, 2)
-  description    String?
-  // Branch context where this entry was posted. Nullable for legacy entries and
-  // rare org-wide adjustments. New entries stamp the active branch on POST.
-  branchId       String?
-  branch         Branch?      @relation("JournalLineBranch", fields: [branchId], references: [id])
-
-  // Pricing-strategy additional-cost allocations that consume this posted debit.
-  // Read-only relative to the GL — never mutates JournalLine.
-  additionalCostAllocations AdditionalCostAllocation[]
-
-  @@index([accountId])
-  @@index([accountId, journalEntryId])
-  @@index([branchId, accountId])
-  @@index([accountId, branchId])
-}
+// (JournalLine dropped — see the G5 note above; spine VoucherGlLine is the GL.)
 
 // ── Unified accounting voucher (Contra / Payment / Receipt / Credit Note / Debit Note) ───────────
 // Each row's lines must sum to zero (Σ debits = Σ credits). On POST the helper

@@ -2,7 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { isBalanced, balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
-import { mirrorJeToSpine } from "@/modules/accountancy/lib/transactionEngine";
+import { setSpineLifecycle } from "@/modules/accountancy/lib/transactionEngine";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
@@ -13,13 +13,15 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
 
     const { id } = await params;
 
-    const entry = await prisma.journalEntry.findUnique({
-        where: { id: Number(id) },
-        include: {
-            lines: { include: { account: { select: { normalBalance: true } } } },
-        },
+    const entry = await prisma.universalVoucher.findUnique({
+        where:  { id: Number(id) },
+        select: { status: true, deletedAt: true, lines: { select: { accountId: true, type: true, amount: true } } },
     });
     if (!entry) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    const nbById = new Map(
+        (await prisma.account.findMany({ where: { id: { in: [...new Set(entry.lines.map((l) => l.accountId))] } }, select: { id: true, normalBalance: true } }))
+            .map((a) => [a.id, a.normalBalance]),
+    );
     if (entry.deletedAt) {
         return NextResponse.json({ error: "Cannot post a deleted entry — restore it first" }, { status: 409 });
     }
@@ -35,30 +37,20 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
         await prisma.$transaction(async (tx) => {
             // Update each account balance atomically
             for (const line of entry.lines) {
-                const delta = balanceDelta(
-                    line.account.normalBalance!,
-                    line.type,
-                    toNumber(line.amount),
-                );
+                const delta = balanceDelta(nbById.get(line.accountId)!, line.type, toNumber(line.amount));
                 await tx.account.update({
                     where: { id: line.accountId },
                     data: { balance: { increment: delta } },
                 });
             }
-            await tx.journalEntry.update({
-                where: { id: Number(id) },
-                data: { status: "POSTED", postedAt: new Date() },
-            });
-            // Phase 4: a manual JE created DRAFT has no spine row; create it now
-            // that it's POSTED so reports (which read the spine) include it.
-            await mirrorJeToSpine(tx, Number(id), { type: "JOURNAL" });
+            await setSpineLifecycle(tx, Number(id), { status: "POSTED", postedAt: new Date() });
         // Per-line account.update over the Supabase pooler can exceed the
         // default 5s interactive-tx ceiling (P2028) on multi-line entries.
         }, { timeout: 30_000, maxWait: 10_000 });
 
-        const posted = await prisma.journalEntry.findUnique({
-            where: { id: Number(id) },
-            include: { lines: { include: { account: { select: { id: true, code: true, name: true } } } } },
+        const posted = await prisma.universalVoucher.findUnique({
+            where:   { id: Number(id) },
+            include: { lines: { select: { accountId: true, type: true, amount: true, description: true } } },
         });
         return NextResponse.json(posted);
     } catch (e) {

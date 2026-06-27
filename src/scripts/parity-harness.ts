@@ -25,7 +25,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import type { PostVoucherInput } from "@/modules/accountancy/lib/postInvVoucher";
 import { saleToSpec, buildTradingStockMoves } from "@/modules/accountancy/lib/voucherMappers";
-import { enginePost, engineCreateVoucher, mirrorJeToSpine, syncSpineLifecycle } from "@/modules/accountancy/lib/transactionEngine";
+import { enginePost, engineCreateVoucher } from "@/modules/accountancy/lib/transactionEngine";
 import { recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
 import { recomputeAccountBalances } from "@/modules/accountancy/lib/aggregateLedger";
 import { reapplyTradingVoucherInPlace } from "@/modules/accountancy/lib/reapplyTradingVoucher";
@@ -45,26 +45,27 @@ const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
 const ROLLBACK = "ROLLBACK_OK";
 type GlLine = { accountId: number; account: string; type: string; amount: number };
 
-async function captureJe(tx: Prisma.TransactionClient, jeId: number): Promise<GlLine[]> {
-    const lines = await tx.journalLine.findMany({
-        where: { journalEntryId: jeId },
-        select: { accountId: true, type: true, amount: true, account: { select: { name: true } } },
+// Since G5 the spine IS the GL — `id` is the UniversalVoucher id that enginePost
+// returns as `journalEntryId` (self-ref). Read the GL lines straight off the spine
+// and enrich account names in one lookup (spine lines are scalar/id-only).
+async function captureJe(tx: Prisma.TransactionClient, id: number): Promise<GlLine[]> {
+    const lines = await tx.voucherGlLine.findMany({
+        where:  { universalVoucherId: id },
+        select: { accountId: true, type: true, amount: true },
     });
+    const ids = [...new Set(lines.map((l) => l.accountId))];
+    const accts = await tx.account.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } });
+    const nameById = new Map(accts.map((a) => [a.id, a.name]));
     return lines
-        .map((l) => ({ accountId: l.accountId, account: l.account.name, type: String(l.type), amount: Number(l.amount) }))
+        .map((l) => ({ accountId: l.accountId, account: nameById.get(l.accountId) ?? "—", type: String(l.type), amount: Number(l.amount) }))
         .sort((a, b) => a.account.localeCompare(b.account) || a.type.localeCompare(b.type));
 }
 
-// Phase 4 Stage C: read the universal-voucher spine mirror for a given legacy JE.
+// Read the spine GL lines for a given spine id (== journalEntryId via self-ref).
 type ArmLine = { accountId: number; type: string; amount: number };
-async function captureSpine(tx: Prisma.TransactionClient, jeId: number): Promise<ArmLine[]> {
-    const uv = await tx.universalVoucher.findUnique({
-        where: { sourceJournalEntryId: jeId },
-        select: { id: true },
-    });
-    if (!uv) return [];
+async function captureSpine(tx: Prisma.TransactionClient, id: number): Promise<ArmLine[]> {
     const lines = await tx.voucherGlLine.findMany({
-        where: { universalVoucherId: uv.id },
+        where:  { universalVoucherId: id },
         select: { accountId: true, type: true, amount: true },
     });
     return lines.map((l) => ({ accountId: l.accountId, type: String(l.type), amount: Number(l.amount) }));
@@ -272,79 +273,6 @@ async function runGolden(): Promise<boolean> {
     return results.every(Boolean);
 }
 
-/** Stage D.5: a bypass writer's raw JE → mirrorJeToSpine must produce a parity
- *  spine, and a second call must be idempotent (no duplicate). Rolled back. */
-async function runMirror(): Promise<boolean> {
-    const acc = await loadAccounts();
-    if (!acc || acc.cash == null || acc.expense == null) { console.log("\nmirror skipped — no accounts"); return true; }
-    let ok = false;
-    try {
-        await prisma.$transaction(async (tx) => {
-            const jeRef = `PARITY-MIRROR-${Date.now()}`;
-            const je = await tx.journalEntry.create({
-                data: {
-                    date: new Date(), reference: jeRef, description: "parity mirror reversal",
-                    status: "POSTED", postedAt: new Date(), createdById: acc.userId,
-                    lines: { create: [
-                        { accountId: acc.expense!, type: "DEBIT",  amount: 500 },
-                        { accountId: acc.cash!,    type: "CREDIT", amount: 500 },
-                    ] },
-                },
-                select: { id: true },
-            });
-            await mirrorJeToSpine(tx, je.id, { type: "JOURNAL", friendlyRef: jeRef });
-            const jeLines = await captureJe(tx, je.id);
-            const spine   = await captureSpine(tx, je.id);
-            await mirrorJeToSpine(tx, je.id, { type: "JOURNAL" });   // idempotency
-            const spine2  = await captureSpine(tx, je.id);
-            ok = sameLines(jeLines, spine) && spine.length === spine2.length && spine.length === 2;
-            throw new Error(ROLLBACK);
-        }, { timeout: 30_000, maxWait: 10_000 });
-    } catch (e) {
-        if ((e as Error)?.message !== ROLLBACK) throw e;
-    }
-    console.log("\n=== mirror (raw JE → mirrorJeToSpine, idempotent, rolled back) ===");
-    console.log("spine parity + idempotent:", ok ? "✓" : "✗");
-    return ok;
-}
-
-/** Stage F: a JE's delete/restore must propagate to its spine mirror so reports
- *  (which read the spine) hide/show it in step with legacy. Rolled back. */
-async function runLifecycle(): Promise<boolean> {
-    const acc = await loadAccounts();
-    if (!acc || acc.cash == null || acc.expense == null) { console.log("\nlifecycle skipped — no accounts"); return true; }
-    let ok = false;
-    try {
-        await prisma.$transaction(async (tx) => {
-            const je = await tx.journalEntry.create({
-                data: {
-                    date: new Date(), reference: `PARITY-LIFE-${Date.now()}`, description: "parity lifecycle",
-                    status: "POSTED", postedAt: new Date(), createdById: acc.userId,
-                    lines: { create: [
-                        { accountId: acc.expense!, type: "DEBIT",  amount: 700 },
-                        { accountId: acc.cash!,    type: "CREDIT", amount: 700 },
-                    ] },
-                },
-                select: { id: true },
-            });
-            await mirrorJeToSpine(tx, je.id, { type: "JOURNAL" });
-            await tx.journalEntry.update({ where: { id: je.id }, data: { deletedAt: new Date(), deleteReason: "t" } });
-            await syncSpineLifecycle(tx, je.id);
-            const afterDelete = await tx.universalVoucher.findUnique({ where: { sourceJournalEntryId: je.id }, select: { deletedAt: true } });
-            await tx.journalEntry.update({ where: { id: je.id }, data: { deletedAt: null, deleteReason: null } });
-            await syncSpineLifecycle(tx, je.id);
-            const afterRestore = await tx.universalVoucher.findUnique({ where: { sourceJournalEntryId: je.id }, select: { deletedAt: true } });
-            ok = afterDelete?.deletedAt != null && afterRestore?.deletedAt == null;
-            throw new Error(ROLLBACK);
-        }, { timeout: 30_000, maxWait: 10_000 });
-    } catch (e) {
-        if ((e as Error)?.message !== ROLLBACK) throw e;
-    }
-    console.log("\n=== lifecycle (delete → spine.deletedAt set; restore → cleared, rolled back) ===");
-    console.log("lifecycle propagation:", ok ? "✓" : "✗");
-    return ok;
-}
-
 /** ②-foundation: recomputeProductStock (rebuild cache from openingStock + ledger)
  *  must agree with the incremental stock arm. Post a sale, recompute, assert the
  *  cache is unchanged (zero drift). Rolled back. */
@@ -541,53 +469,6 @@ async function runAllocationDualTarget(): Promise<boolean> {
     return ok;
 }
 
-/** G2: every spine VoucherGlLine carries sourceJournalLineId == its legacy
- *  JournalLine twin (the line-level link the cost-pool re-home rides on). Posts a
- *  voucher through the engine, asserts the twin set matches by id and by
- *  account/type/amount, rolled back. */
-async function runGlLineTwin(): Promise<boolean> {
-    const acc = await loadAccounts();
-    if (!acc || acc.expense == null || acc.cash == null) { console.log("\ngl-line-twin skipped — no accounts"); return true; }
-    let ok = false;
-    try {
-        await prisma.$transaction(async (tx) => {
-            const v = await engineCreateVoucher(tx, {
-                type: "JOURNAL", date: new Date(), userId: acc.userId,
-                lines: [
-                    { accountId: acc.expense!, type: "DEBIT",  amount: 321 },
-                    { accountId: acc.cash!,    type: "CREDIT", amount: 321 },
-                ],
-                narration: "parity gl-line-twin", post: true, referenceSeries: "JOURNAL",
-            });
-            if (!v.journalEntryId) throw new Error(ROLLBACK);
-            const jeLines = await tx.journalLine.findMany({
-                where: { journalEntryId: v.journalEntryId },
-                select: { id: true, accountId: true, type: true, amount: true },
-            });
-            const uv = await tx.universalVoucher.findUnique({ where: { sourceJournalEntryId: v.journalEntryId }, select: { id: true } });
-            const spineLines = uv ? await tx.voucherGlLine.findMany({
-                where: { universalVoucherId: uv.id },
-                select: { sourceJournalLineId: true, accountId: true, type: true, amount: true },
-            }) : [];
-            const jeById = new Map(jeLines.map((l) => [l.id, l]));
-            const allLinked = spineLines.length === jeLines.length
-                && spineLines.every((s) => s.sourceJournalLineId != null && jeById.has(s.sourceJournalLineId));
-            const allMatch = spineLines.every((s) => {
-                const jl = s.sourceJournalLineId != null ? jeById.get(s.sourceJournalLineId) : undefined;
-                return jl != null && jl.accountId === s.accountId
-                    && String(jl.type) === String(s.type) && Number(jl.amount) === Number(s.amount);
-            });
-            ok = allLinked && allMatch && spineLines.length === 2;
-            throw new Error(ROLLBACK);
-        }, { timeout: 30_000, maxWait: 10_000 });
-    } catch (e) {
-        if ((e as Error)?.message !== ROLLBACK) throw e;
-    }
-    console.log("\n=== G2 gl-line twin (spine line → JournalLine, engine post, rolled back) ===");
-    console.log("twin link set matches + account/type/amount parity:", ok ? "✓" : "✗");
-    return ok;
-}
-
 /** G4b-3: POS shift cash reconciliation reads tenders from the spine (role=TENDER)
  *  instead of InvVoucherTender. Post a POS sale with a ₹118 cash tender, assert
  *  sumShiftCashSalesPaise + sumShiftTendersByAccount both report 11800 paise on
@@ -679,12 +560,9 @@ async function main() {
     const editOk     = await runEditCycle();
     const allocOk    = await runAllocationDualTarget();
     const vchAllocOk = await runVoucherAllocation();
-    const twinOk     = await runGlLineTwin();
     const shiftOk    = await runShiftCashMath();
     const goldenOk   = await runGolden();
-    const mirrorOk   = await runMirror();
-    const lifecycleOk = await runLifecycle();
-    const green      = stockOk && e2eOk && recompOk && editOk && allocOk && vchAllocOk && twinOk && shiftOk && goldenOk && mirrorOk && lifecycleOk;
+    const green      = stockOk && e2eOk && recompOk && editOk && allocOk && vchAllocOk && shiftOk && goldenOk;
     console.log(green ? "\nHARNESS GREEN ✓" : "\nHARNESS FAILED ✗");
     if (!green) process.exitCode = 1;
 }

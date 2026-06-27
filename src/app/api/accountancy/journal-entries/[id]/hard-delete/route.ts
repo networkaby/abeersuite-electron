@@ -22,16 +22,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const { data, error } = await validateRequest(req, hardDeleteSchema);
     if (error) return error;
 
-    const entry = await prisma.journalEntry.findUnique({
-        where: { id: Number(id) },
-        include: {
-            lines: {
-                include: { account: { select: { id: true, code: true, name: true, normalBalance: true } } },
-            },
-            createdBy: { select: { id: true, name: true } },
-        },
+    const entry = await prisma.universalVoucher.findUnique({
+        where:   { id: Number(id) },
+        include: { lines: { select: { accountId: true, type: true, amount: true, description: true } } },
     });
     if (!entry) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    const nbById = new Map(
+        (await prisma.account.findMany({ where: { id: { in: [...new Set(entry.lines.map((l) => l.accountId))] } }, select: { id: true, normalBalance: true } }))
+            .map((a) => [a.id, a.normalBalance]),
+    );
 
     // Live balance is currently affected only by entries that are POSTED and not deleted.
     // cancel() reverses + writes a counter-entry; delete() reverses without a counter-entry.
@@ -41,11 +40,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         const audit = await prisma.$transaction(async (tx) => {
             if (needsLedgerReversal) {
                 for (const line of entry.lines) {
-                    const delta = balanceDelta(
-                        line.account.normalBalance!,
-                        line.type,
-                        toNumber(line.amount),
-                    );
+                    const delta = balanceDelta(nbById.get(line.accountId)!, line.type, toNumber(line.amount));
                     await tx.account.update({
                         where: { id: line.accountId },
                         data: { balance: { decrement: delta } },
@@ -65,8 +60,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 },
             });
 
-            // Cascade deletes JournalLine via FK onDelete: Cascade
-            await tx.journalEntry.delete({ where: { id: entry.id } });
+            // Cascade deletes VoucherGlLine via FK onDelete: Cascade
+            await tx.universalVoucher.delete({ where: { id: entry.id } });
 
             return created;
         // Per-line reversal over the Supabase pooler can exceed the default

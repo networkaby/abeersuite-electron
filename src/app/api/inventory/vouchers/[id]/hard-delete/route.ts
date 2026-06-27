@@ -43,11 +43,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     try {
         const audit = await prisma.$transaction(async (tx) => {
-            // Linked GL entry (for the snapshot + the cached-balance reversal).
+            // Linked GL spine row (for the snapshot + the cached-balance reversal).
+            // `journalEntryId` carries the spine id (self-ref since G5).
             const origJe = voucher.journalEntryId
-                ? await tx.journalEntry.findUnique({
+                ? await tx.universalVoucher.findUnique({
                     where: { id: voucher.journalEntryId },
-                    include: { lines: { include: { account: { select: { normalBalance: true } } } } },
+                    include: { lines: true },
                 })
                 : null;
 
@@ -79,8 +80,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 // the JE is currently live (a cancelled / soft-deleted JE was already
                 // neutralised, so needsReversal is false and we never get here).
                 if (origJe && origJe.status === "POSTED" && !origJe.deletedAt) {
+                    // Spine lines are scalar — resolve normalBalance in one lookup.
+                    const nbRows = await tx.account.findMany({
+                        where:  { id: { in: [...new Set(origJe.lines.map((l) => l.accountId))] } },
+                        select: { id: true, normalBalance: true },
+                    });
+                    const nbById = new Map(nbRows.map((a) => [a.id, a.normalBalance]));
                     for (const line of origJe.lines) {
-                        const delta = balanceDelta(line.account.normalBalance!, line.type, toNumber(line.amount));
+                        const nb = nbById.get(line.accountId);
+                        if (!nb) continue;
+                        const delta = balanceDelta(nb, line.type, toNumber(line.amount));
                         await tx.account.update({ where: { id: line.accountId }, data: { balance: { decrement: delta } } });
                     }
                 }
@@ -100,12 +109,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 }),
             });
 
-            // Physically remove everything. The JE goes in ALL cases (its snapshot is
-            // safe in AuditLog) so nothing orphans — cancel no longer writes counter-JEs,
-            // so deleting a cancelled JE leaves no dangling reversal. JournalLines +
-            // AdditionalCostAllocation cascade off the JE; InvVoucherLine/Charge/Tender
-            // cascade off the voucher; InvStockLedger has no cascade so wipe it explicitly.
-            if (origJe) await tx.journalEntry.delete({ where: { id: origJe.id } });
+            // Physically remove everything. The spine row goes in ALL cases (its snapshot
+            // is safe in AuditLog) so nothing orphans — cancel no longer writes counter-
+            // postings, so deleting a cancelled spine leaves no dangling reversal.
+            // VoucherGlLine + AdditionalCostAllocation cascade off the spine;
+            // VoucherInventoryLine cascades off the voucher; InvStockLedger has no
+            // cascade so wipe it explicitly.
+            if (origJe) await tx.universalVoucher.delete({ where: { id: origJe.id } });
             await tx.invStockLedger.deleteMany({ where: { voucherId: voucher.id } });
             await tx.invVoucher.delete({ where: { id: voucher.id } });
             return created;

@@ -58,7 +58,6 @@ model Account {
   group                    AccountGroup?              @relation(fields: [groupId], references: [id])
   person                   Person?                    @relation(fields: [personId], references: [id])
   company                  Company?                   @relation(fields: [companyId], references: [id])
-  lines                    JournalLine[]
   voucherLines             VoucherLine[]
   billedTickets            Ticket[]                   @relation("TicketBillingAccount")
   devices                  Device[]

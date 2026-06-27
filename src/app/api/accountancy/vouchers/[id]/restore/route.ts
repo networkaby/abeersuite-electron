@@ -2,7 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth, userCanVoucher } from "@/shared/lib/auth/permissions";
 import { balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
-import { syncSpineLifecycle } from "@/modules/accountancy/lib/transactionEngine";
+import { setSpineLifecycle } from "@/modules/accountancy/lib/transactionEngine";
 import { ensureRestorable, restoreFields, isPosted, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
 import { handleApiError } from "@/shared/lib/api";
 
@@ -33,11 +33,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                     await tx.account.update({ where: { id: line.accountId }, data: { balance: { increment: delta } } });
                 }
                 if (voucher.journalEntryId) {
-                    await tx.journalEntry.update({
-                        where: { id: voucher.journalEntryId },
-                        data:  { deletedAt: null, deletedById: null, deleteReason: null },
-                    });
-                    await syncSpineLifecycle(tx, voucher.journalEntryId);
+                    await setSpineLifecycle(tx, voucher.journalEntryId, { deletedAt: null, deletedById: null, deleteReason: null });
                 }
             }
 

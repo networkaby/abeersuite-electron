@@ -2,7 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { toNumber, balanceDelta } from "@/modules/accountancy/lib/balance";
-import { syncSpineLifecycle } from "@/modules/accountancy/lib/transactionEngine";
+import { setSpineLifecycle } from "@/modules/accountancy/lib/transactionEngine";
 import { recordStockMovement } from "@/modules/inventory/lib/stockMovement";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import { ensureRestorable, restoreFields, isPosted, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
@@ -50,20 +50,21 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                 }
 
                 if (voucher.journalEntryId) {
-                    const origJe = await tx.journalEntry.findUnique({
-                        where: { id: voucher.journalEntryId },
-                        include: { lines: { include: { account: { select: { normalBalance: true } } } } },
+                    const spine = await tx.universalVoucher.findUnique({
+                        where:  { id: voucher.journalEntryId },
+                        select: { deletedAt: true, lines: { select: { accountId: true, type: true, amount: true } } },
                     });
-                    if (origJe && origJe.deletedAt) {
-                        for (const line of origJe.lines) {
-                            const delta = balanceDelta(line.account.normalBalance!, line.type, toNumber(line.amount));
+                    if (spine && spine.deletedAt) {
+                        const accIds = [...new Set(spine.lines.map((l) => l.accountId))];
+                        const nbById = new Map(
+                            (await tx.account.findMany({ where: { id: { in: accIds } }, select: { id: true, normalBalance: true } }))
+                                .map((a) => [a.id, a.normalBalance]),
+                        );
+                        for (const line of spine.lines) {
+                            const delta = balanceDelta(nbById.get(line.accountId)!, line.type, toNumber(line.amount));
                             await tx.account.update({ where: { id: line.accountId }, data: { balance: { increment: delta } } });
                         }
-                        await tx.journalEntry.update({
-                            where: { id: origJe.id },
-                            data: { deletedAt: null, deletedById: null, deleteReason: null },
-                        });
-                        await syncSpineLifecycle(tx, origJe.id);
+                        await setSpineLifecycle(tx, voucher.journalEntryId, { deletedAt: null, deletedById: null, deleteReason: null });
                     }
                 }
             }

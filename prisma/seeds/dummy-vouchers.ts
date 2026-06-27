@@ -28,7 +28,7 @@ const pool = new Pool({ connectionString: rawUrl, ssl: /@(localhost|127\.0\.0\.1
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
-const PAYMENT_REF = "DUMMY-COURIER-PAY-1"; // JournalEntry reference (GL side)
+const PAYMENT_REF = "DUMMY-COURIER-PAY-1"; // UniversalVoucher spine reference (GL side)
 const VOUCHER_REF = "PMT-DEMO-1";          // the Payment voucher number shown in the UI
 const POOL_GROUP_NAME = "Courier & Shipping Cost Pool";
 const COURIER_LEDGER_NAME = "DTDC Counter";
@@ -59,69 +59,49 @@ async function seedCostPoolDemo(): Promise<void> {
 
     const today = new Date();
 
-    // 3. POSTED Payment entry (Dr courier ₹5,000 / Cr Cash ₹5,000) — find or create.
-    let je = await prisma.journalEntry.findUnique({ where: { reference: PAYMENT_REF }, include: { lines: true } });
-    if (!je) {
-        je = await prisma.journalEntry.create({
+    // 3. POSTED Payment spine row (Dr courier ₹5,000 / Cr Cash ₹5,000) — the GL.
+    //    Since G5 the UniversalVoucher spine IS the GL; this seed bypasses the
+    //    engine, so it writes the spine directly and self-refs it (matching
+    //    engineGlArm, which sets sourceJournalEntryId = the spine's own id).
+    let spine = await prisma.universalVoucher.findUnique({ where: { reference: PAYMENT_REF }, include: { lines: true } });
+    if (!spine) {
+        spine = await prisma.universalVoucher.create({
             data: {
-                date: today, reference: PAYMENT_REF, description: "Courier payment to DTDC (dummy)",
+                type: "PAYMENT", reference: PAYMENT_REF, friendlyRef: VOUCHER_REF, date: today,
+                description: "Courier payment to DTDC (dummy)", narration: "Courier payment to DTDC (dummy)",
                 status: "POSTED", postedAt: today, createdById: admin.id,
                 lines: {
                     create: [
-                        { accountId: courier.id, type: "DEBIT", amount: 5000, description: "Courier charges" },
-                        { accountId: cash.id, type: "CREDIT", amount: 5000, description: "Paid in cash" },
+                        { accountId: courier.id, type: "DEBIT", amount: 5000, description: "Courier charges", seq: 0 },
+                        { accountId: cash.id, type: "CREDIT", amount: 5000, description: "Paid in cash", seq: 1 },
                     ],
                 },
             },
             include: { lines: true },
         });
-        // Keep Account.balance in step with this directly-created JE (engineGlArm
-        // maintains it for engine-posted vouchers; this seed bypasses the engine,
-        // so without this the cache drifts). Courier (expense, Dr) +5000; Cash
-        // (asset, Cr) −5000.
+        await prisma.universalVoucher.update({ where: { id: spine.id }, data: { sourceJournalEntryId: spine.id } });
+        // Keep Account.balance in step (engineGlArm maintains it for engine-posted
+        // vouchers; this seed bypasses the engine). Courier (expense, Dr) +5000;
+        // Cash (asset, Cr) −5000.
         await prisma.account.update({ where: { id: courier.id }, data: { balance: { increment: 5000 } } });
         await prisma.account.update({ where: { id: cash.id },    data: { balance: { decrement: 5000 } } });
     }
-    const courierLine = je.lines.find((l) => l.accountId === courier.id && l.type === "DEBIT");
-    if (!courierLine) { console.log("    courier debit line missing — skipping."); return; }
-    const cashLine = je.lines.find((l) => l.accountId === cash.id && l.type === "CREDIT");
 
-    // 4. A PAYMENT Voucher tied to that JE → the real voucher number the UI shows.
+    // 4. A PAYMENT Voucher tied to that spine → the real voucher number the UI
+    //    shows. journalEntryId carries the spine id (self-ref since G5).
     if (!(await prisma.voucher.findUnique({ where: { reference: VOUCHER_REF } }))) {
         await prisma.voucher.create({
             data: {
                 type: "PAYMENT", reference: VOUCHER_REF, date: today,
                 narration: "Courier payment to DTDC (dummy)", totalAmount: 5000,
-                status: "POSTED", postedAt: today, journalEntryId: je.id, createdById: admin.id,
-            },
-        });
-    }
-
-    // 4b. Phase 4 dual-write parity: mirror the dummy JE into the universal-voucher
-    //     spine (this seed creates the JE directly, bypassing the engine, so the
-    //     spine must be written explicitly to stay consistent — §5).
-    if (!(await prisma.universalVoucher.findUnique({ where: { reference: PAYMENT_REF } }))) {
-        await prisma.universalVoucher.create({
-            data: {
-                type: "PAYMENT", reference: PAYMENT_REF, friendlyRef: VOUCHER_REF, date: today,
-                description: "Courier payment to DTDC (dummy)", narration: "Courier payment to DTDC (dummy)",
-                status: "POSTED", postedAt: today, createdById: admin.id, sourceJournalEntryId: je.id,
-                lines: {
-                    create: [
-                        { accountId: courier.id, type: "DEBIT", amount: 5000, description: "Courier charges", seq: 0, sourceJournalLineId: courierLine.id },
-                        { accountId: cash.id, type: "CREDIT", amount: 5000, description: "Paid in cash", seq: 1, sourceJournalLineId: cashLine?.id ?? null },
-                    ],
-                },
+                status: "POSTED", postedAt: today, journalEntryId: spine.id, createdById: admin.id,
             },
         });
     }
 
     // 5. Draws against the ₹5,000 entry: ₹2,000 onto a product, ₹3,000 dismissed.
-    //    Cost-pool rows reference the SPINE debit line (G2), not the legacy JE line.
-    const spineCourierLine = await prisma.voucherGlLine.findFirst({
-        where:  { universalVoucher: { sourceJournalEntryId: je.id }, accountId: courier.id, type: "DEBIT" },
-        select: { id: true },
-    });
+    //    Cost-pool rows reference the SPINE debit line (G2).
+    const spineCourierLine = spine.lines.find((l) => l.accountId === courier.id && l.type === "DEBIT");
     if (!spineCourierLine) { console.log("    spine courier line missing — skipping draws."); return; }
     if ((await prisma.additionalCostAllocation.count({ where: { sourceVoucherGlLineId: spineCourierLine.id } })) === 0) {
         await prisma.additionalCostAllocation.createMany({

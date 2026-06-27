@@ -112,30 +112,6 @@ export async function engineGlArm(
     const { date, description, lines, userId, branchId, postedAt } = args;
 
     const jeRef = await nextRefFromSeries(tx, "GL_POSTING", userId);
-    const je = await tx.journalEntry.create({
-        data: {
-            date,
-            reference:   jeRef,
-            description,
-            status:      "POSTED",
-            postedAt,
-            createdById: userId,
-            lines: {
-                create: lines.map((l) => ({
-                    accountId:   l.accountId,
-                    type:        l.type,
-                    amount:      l.amount,
-                    description: l.description ?? null,
-                    branchId,
-                })),
-            },
-        },
-        // Select the created JournalLines back (id-asc == nested-create array
-        // order) so the spine mirror can stamp each VoucherGlLine with its legacy
-        // twin's id (Phase 4 G2 line-level link).
-        select: { id: true, lines: { select: { id: true }, orderBy: { id: "asc" } } },
-    });
-    const jeLineIds = je.lines.map((l) => l.id);
 
     // Resolve each ledger's normal side for the balance delta. Use the caller's
     // pre-loaded `account` when present; batch-load the rest. Null-normalBalance
@@ -175,11 +151,8 @@ export async function engineGlArm(
         });
     }
 
-    // ── Phase 4 dual-write (Stage C) ─────────────────────────────────────────
-    // Mirror this post into the universal-voucher spine + VoucherGlLine children,
-    // alongside the legacy JE above. No reader uses these yet — this keeps the
-    // spine populated so Stage D can reconcile and Stage E can cut readers over.
-    // Byte-identical lines to the JE; `sourceJournalEntryId` ties the two.
+    // ── The single GL writer (Phase 4 G5 — legacy JournalEntry/JournalLine dropped) ─
+    // The universal-voucher spine + VoucherGlLine children ARE the GL now.
     const uv = await tx.universalVoucher.create({
         select: { id: true },
         data: {
@@ -191,10 +164,9 @@ export async function engineGlArm(
             narration:            args.narration ?? null,
             status:               "POSTED",
             postedAt,
-            sourceCreatedAt:      postedAt,   // G5: faithful txn wall-clock for windowed readers
+            sourceCreatedAt:      postedAt,   // faithful txn wall-clock for windowed readers
             partyAccountId:       args.partyAccountId ?? null,
             createdById:          userId,
-            sourceJournalEntryId: je.id,
             lines: {
                 create: lines.map((l, idx) => ({
                     accountId:           l.accountId,
@@ -202,130 +174,41 @@ export async function engineGlArm(
                     amount:              l.amount,
                     description:         l.description ?? null,
                     branchId,
-                    role:                l.role ?? null,        // G4 form-section tag
-                    seq:                 l.seq ?? idx,          // G4 ordinal (form order)
-                    method:              l.method ?? null,      // G4b tender channel
-                    reference:           l.reference ?? null,   // G4b tender ref
-                    sourceJournalLineId: jeLineIds[idx],   // G2 line-level twin
+                    role:                l.role ?? null,        // form-section tag
+                    seq:                 l.seq ?? idx,          // ordinal (form order)
+                    method:              l.method ?? null,      // tender channel
+                    reference:           l.reference ?? null,   // tender ref
                 })),
             },
         },
     });
+    // Self-reference: `sourceJournalEntryId`/voucher `journalEntryId` now carry the
+    // SPINE id (the JE is gone), so the lifecycle helpers that key by it still
+    // resolve. Vestigial — dropped in a follow-up rename.
+    await tx.universalVoucher.update({ where: { id: uv.id }, data: { sourceJournalEntryId: uv.id } });
 
-    return { journalEntryId: je.id, universalVoucherId: uv.id };
+    return { journalEntryId: uv.id, universalVoucherId: uv.id };
 }
 
-// ── Spine mirror for bypass GL writers (Phase 4 Stage D.5) ────────────────────
+// ── Spine lifecycle helper (Phase 4 G5 — the JE mirror is gone) ───────────────
 
-/**
- * Mirror an ALREADY-written `JournalEntry` into the universal-voucher spine.
- * For the GL writers that bypass `engineGlArm` and post a `JournalEntry`
- * directly (reversal / cancel / cash-variance / gift-card JEs): call this right
- * after the `journalEntry.create`, in the SAME tx, so the spine never falls
- * behind the legacy GL once readers cut over (Stage E). Idempotent — skips if a
- * spine row already exists for the JE. (`auditRestore` is the one deliberate
- * non-mirror exception: it rebuilds from a snapshot with the original ids.)
- */
-export async function mirrorJeToSpine(
+/** Lifecycle fields the cancel/delete/restore routes set on the spine directly
+ *  (the spine IS the GL now; `id` is the same value the routes hold as the
+ *  voucher's `journalEntryId`/`universalVoucherId`). */
+export type SpineLifecycle = Partial<{
+    status: "DRAFT" | "POSTED" | "CANCELLED";
+    postedAt: Date | null;
+    cancelledAt: Date | null; cancelledById: number | null; cancelReason: string | null;
+    deletedAt: Date | null; deletedById: number | null; deleteReason: string | null;
+}>;
+
+/** Apply a lifecycle change to the spine row by id (no-op when it doesn't exist). */
+export async function setSpineLifecycle(
     tx: Prisma.TransactionClient,
-    journalEntryId: number,
-    meta: { type?: string; friendlyRef?: string | null; partyAccountId?: number | null } = {},
+    universalVoucherId: number,
+    data: SpineLifecycle,
 ): Promise<void> {
-    const exists = await tx.universalVoucher.findUnique({
-        where:  { sourceJournalEntryId: journalEntryId },
-        select: { id: true },
-    });
-    if (exists) return;
-    const je = await tx.journalEntry.findUnique({
-        where:   { id: journalEntryId },
-        include: { lines: { select: { id: true, accountId: true, type: true, amount: true, description: true, branchId: true } } },
-    });
-    if (!je) return;
-    await tx.universalVoucher.create({
-        data: {
-            type:                 meta.type ?? "JOURNAL",
-            reference:            je.reference,
-            friendlyRef:          meta.friendlyRef ?? null,
-            date:                 je.date,
-            description:          je.description,
-            narration:            null,
-            status:               je.status,
-            partyAccountId:       meta.partyAccountId ?? null,
-            postedAt:             je.postedAt,
-            sourceCreatedAt:      je.postedAt ?? je.date,   // G5: faithful txn wall-clock
-
-            cancelledAt:          je.cancelledAt,
-            cancelledById:        je.cancelledById,
-            cancelReason:         je.cancelReason,
-            deletedAt:            je.deletedAt,
-            deletedById:          je.deletedById,
-            deleteReason:         je.deleteReason,
-            createdById:          je.createdById,
-            sourceJournalEntryId: je.id,
-            lines: {
-                create: je.lines.map((l, idx) => ({
-                    accountId:           l.accountId,
-                    type:                l.type,
-                    amount:              l.amount,
-                    description:         l.description,
-                    branchId:            l.branchId,
-                    seq:                 idx,    // G4 ordinal (form order); role null on raw/reversal JEs
-                    sourceJournalLineId: l.id,   // G2 line-level twin
-                })),
-            },
-        },
-    });
-}
-
-/**
- * Propagate a legacy JE's CURRENT lifecycle (status / posted / cancelled /
- * deleted fields) onto its universal-voucher spine mirror (Phase 4 Stage F).
- * Call in the SAME tx right after any `journalEntry.update` that changes
- * deletedAt / status / cancelledAt / restored state — otherwise the spine
- * (which reports now read) keeps showing a deleted/cancelled voucher. Safe when
- * no spine row exists yet (updateMany over zero rows is a no-op).
- */
-export async function syncSpineLifecycle(
-    tx: Prisma.TransactionClient,
-    journalEntryId: number,
-): Promise<void> {
-    const je = await tx.journalEntry.findUnique({
-        where:  { id: journalEntryId },
-        select: {
-            status: true, postedAt: true,
-            cancelledAt: true, cancelledById: true, cancelReason: true,
-            deletedAt: true, deletedById: true, deleteReason: true,
-        },
-    });
-    if (!je) return;
-    await tx.universalVoucher.updateMany({
-        where: { sourceJournalEntryId: journalEntryId },
-        data:  {
-            status:        je.status,
-            postedAt:      je.postedAt,
-            cancelledAt:   je.cancelledAt,
-            cancelledById: je.cancelledById,
-            cancelReason:  je.cancelReason,
-            deletedAt:     je.deletedAt,
-            deletedById:   je.deletedById,
-            deleteReason:  je.deleteReason,
-        },
-    });
-}
-
-/**
- * Re-sync the spine's GL-arm lines + header after an IN-PLACE JE edit (the
- * financial-voucher / journal-entry PATCH paths that delete & recreate
- * `JournalLine`s on the same JE rather than reversing). Drops the stale spine
- * row and rebuilds it from the now-current JE. Same tx.
- */
-export async function resyncSpineFromJe(
-    tx: Prisma.TransactionClient,
-    journalEntryId: number,
-    meta: { type?: string; friendlyRef?: string | null; partyAccountId?: number | null } = {},
-): Promise<void> {
-    await tx.universalVoucher.deleteMany({ where: { sourceJournalEntryId: journalEntryId } });
-    await mirrorJeToSpine(tx, journalEntryId, meta);
+    await tx.universalVoucher.updateMany({ where: { id: universalVoucherId }, data });
 }
 
 // ── Stock arm ───────────────────────────────────────────────────────────────

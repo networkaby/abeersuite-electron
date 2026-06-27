@@ -250,7 +250,7 @@ export async function PATCH(req: Request, { params }: Params) {
                 // voucher and its journalEntryId are preserved, so receipts
                 // allocated against the JE stay linked.
                 const origJe = existing.journalEntryId
-                    ? await tx.journalEntry.findUnique({ where: { id: existing.journalEntryId }, include: { lines: true } })
+                    ? await tx.universalVoucher.findUnique({ where: { id: existing.journalEntryId }, include: { lines: true } })
                     : null;
                 const oldSnap = await tx.invVoucher.findUnique({
                     where:   { id },

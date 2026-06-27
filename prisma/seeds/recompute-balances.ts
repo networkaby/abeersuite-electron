@@ -60,10 +60,10 @@ async function main() {
     const nbMap = await loadNormalBalanceMap();
 
     console.log("Aggregating JournalLines (POSTED, not deleted)…");
-    const sums = await prisma.journalLine.groupBy({
+    const sums = await prisma.voucherGlLine.groupBy({
         by: ["accountId", "type"],
         _sum: { amount: true },
-        where: { journalEntry: { status: "POSTED", deletedAt: null } },
+        where: { universalVoucher: { status: "POSTED", deletedAt: null } },
     });
 
     const computed = new Map<number, number>();

@@ -42,10 +42,6 @@ model Branch {
   vaultAccount   Account?     @relation("BranchVaultAccount", fields: [vaultAccountId], references: [id])
   posCounters    PosCounter[] @relation("BranchCounters")
   posShifts      PosShift[]   @relation("PosShiftBranch")
-
-  // GL branch-tag back-relation — each JournalLine optionally stamps a branch
-  // so branch reports can filter org-wide accounts (Sales, COGS, GST, etc.)
-  journalLines JournalLine[] @relation("JournalLineBranch")
 }
 
 model Department {

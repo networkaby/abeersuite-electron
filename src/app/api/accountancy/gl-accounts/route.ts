@@ -52,7 +52,6 @@ export async function GET(req: Request) {
             include: {
                 parent: { select: { id: true, code: true, name: true } },
                 group:  { select: { id: true, name: true, type: true } },
-                _count: { select: { lines: true } },
             },
         });
         // Truth-path closing from JournalLine (folds in master openings),

@@ -44,7 +44,7 @@ export async function GET(req: Request) {
             // Legacy invoice counts retired with the Invoice → InvVoucher
             // consolidation (Layer 3e, 2026-05-24). Sale counts are now
             // exposed via invVoucherTypes[SALE / POS] in the same payload.
-            prisma.journalEntry.count({
+            prisma.universalVoucher.count({
                 where: { date: dateRange, deletedAt: null },
             }),
             prisma.accountGroup.count({ where: { isActive: true } }),

@@ -33,7 +33,7 @@ export async function seedVoucherSeries(prisma: PrismaClient) {
     // GL postings — engine output behind every primary voucher. Continues from
     // existing JournalEntry count so new GL-… references don't collide with
     // legacy JE-… references in the same table.
-    const glPostingCount = await prisma.journalEntry.count();
+    const glPostingCount = await prisma.universalVoucher.count();
     // Inventory voucher counts — needed for new-install continuity so the next
     // SV / PV / EV reference picks up where the legacy invNextRef left off.
     const saleCount     = await prisma.invVoucher.count({ where: { type: "SALE" } });

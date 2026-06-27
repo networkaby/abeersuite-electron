@@ -43,8 +43,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             // Mirror GL entry (for the snapshot + physical removal). The cached balance is
             // reversed via voucher.lines below — the JE lines mirror them, so don't
             // double-apply from the JE.
+            // `journalEntryId` carries the spine id (self-ref since G5).
             const origJe = voucher.journalEntryId
-                ? await tx.journalEntry.findUnique({
+                ? await tx.universalVoucher.findUnique({
                     where: { id: voucher.journalEntryId },
                     include: { lines: true },
                   })
@@ -71,10 +72,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 }),
             });
 
-            // Physically remove the mirror JE (journalEntryId is a soft pointer — no
+            // Physically remove the spine row (journalEntryId is a soft pointer — no
             // cascade — so the voucher delete alone would orphan it POSTED in the Balance
-            // Sheet). JournalLines cascade off the JE; VoucherLine cascades off the voucher.
-            if (origJe) await tx.journalEntry.delete({ where: { id: origJe.id } });
+            // Sheet). VoucherGlLine cascades off the spine; VoucherLine off the voucher.
+            if (origJe) await tx.universalVoucher.delete({ where: { id: origJe.id } });
             await tx.voucher.delete({ where: { id: voucher.id } });
             return created;
         // Per-line balance reversal over the Supabase pooler can exceed the
