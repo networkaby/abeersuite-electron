@@ -44,10 +44,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     try {
         const audit = await prisma.$transaction(async (tx) => {
             // Linked GL spine row (for the snapshot + the cached-balance reversal).
-            // `journalEntryId` carries the spine id (self-ref since G5).
-            const origJe = voucher.journalEntryId
+            // `journalEntryId` carries the spine id for POSTED (self-ref since G5);
+            // a DRAFT voucher has only universalVoucherId (Phase 5 5.0d) — fall back
+            // to it so the draft spine is physically removed too (no orphan).
+            const spineId = voucher.journalEntryId ?? voucher.universalVoucherId;
+            const origJe = spineId
                 ? await tx.universalVoucher.findUnique({
-                    where: { id: voucher.journalEntryId },
+                    where: { id: spineId },
                     include: { lines: true },
                 })
                 : null;

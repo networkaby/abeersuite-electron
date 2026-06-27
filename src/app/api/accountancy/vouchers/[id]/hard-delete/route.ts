@@ -43,10 +43,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             // Mirror GL entry (for the snapshot + physical removal). The cached balance is
             // reversed via voucher.lines below — the JE lines mirror them, so don't
             // double-apply from the JE.
-            // `journalEntryId` carries the spine id (self-ref since G5).
-            const origJe = voucher.journalEntryId
+            // `journalEntryId` carries the spine id for POSTED (self-ref since G5);
+            // a DRAFT voucher has only universalVoucherId (5.0d) — fall back to it so
+            // the draft spine is physically removed too (no orphan).
+            const spineId = voucher.journalEntryId ?? voucher.universalVoucherId;
+            const origJe = spineId
                 ? await tx.universalVoucher.findUnique({
-                    where: { id: voucher.journalEntryId },
+                    where: { id: spineId },
                     include: { lines: true },
                   })
                 : null;

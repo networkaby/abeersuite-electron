@@ -124,6 +124,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 }
             }
 
+            // Phase 5 5.0d: a DRAFT voucher carries a draft spine (no GL lines, no
+            // balance impact) — hide it with the voucher so it doesn't linger as an
+            // orphan draft. POSTED spines are already handled in the isPosted block
+            // above (journalEntryId == universalVoucherId via self-ref).
+            if (!isPosted(voucher) && voucher.universalVoucherId) {
+                await setSpineLifecycle(tx, voucher.universalVoucherId, {
+                    deletedAt: new Date(), deletedById: user!.id,
+                    deleteReason: `Voucher ${voucher.reference} deleted: ${data.reason}`,
+                });
+            }
+
             await tx.invVoucher.update({
                 where: { id: Number(id) },
                 data: deleteFields(user!.id, data.reason),

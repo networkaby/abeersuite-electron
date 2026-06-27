@@ -37,6 +37,11 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                 }
             }
 
+            // Phase 5 5.0d: undelete the DRAFT voucher's draft spine with it.
+            if (!isPosted(voucher) && voucher.universalVoucherId) {
+                await setSpineLifecycle(tx, voucher.universalVoucherId, { deletedAt: null, deletedById: null, deleteReason: null });
+            }
+
             await tx.voucher.update({
                 where: { id: voucher.id },
                 data:  restoreFields(),

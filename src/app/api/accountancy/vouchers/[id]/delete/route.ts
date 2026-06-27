@@ -48,6 +48,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 }
             }
 
+            // Phase 5 5.0d: a DRAFT voucher carries a draft spine (no GL lines) —
+            // hide it with the voucher so it doesn't orphan (POSTED handled above).
+            if (!isPosted(voucher) && voucher.universalVoucherId) {
+                await setSpineLifecycle(tx, voucher.universalVoucherId, {
+                    deletedAt:    new Date(),
+                    deletedById:  user!.id,
+                    deleteReason: `Voucher ${voucher.reference} deleted: ${data.reason}`,
+                });
+            }
+
             await tx.voucher.update({
                 where: { id: voucher.id },
                 data:  deleteFields(user!.id, data.reason),
