@@ -51,18 +51,16 @@ export async function GET(req: NextRequest) {
         const lines = await prisma.voucherGlLine.findMany({
             where:   { accountId: tid, universalVoucher: { ...ledgerStatusFilterUv(), date: { gte: from, lte: to } } },
             orderBy: [{ universalVoucher: { date: "asc" } }, { id: "asc" }],
-            include: { universalVoucher: { select: { id: true, date: true, reference: true, description: true } } },
+            include: { universalVoucher: { select: { id: true, date: true, reference: true, description: true, type: true } } },
         });
 
         // Resolve reprint targets via the direct spine link (G5): InvVoucher (POS
-        // sale) → /receipt/invoice; GL RECEIPT/PAYMENT voucher → /receipt/payment.
+        // sale) → /receipt/invoice; GL RECEIPT/PAYMENT spine → /receipt/payment.
+        // Phase 5 5E: the spine IS the financial voucher, so the RECEIPT/PAYMENT
+        // case reads straight off the spine — no separate Voucher lookup.
         const uvIds = [...new Set(lines.map((l) => l.universalVoucher.id))];
-        const [invs, vouchers] = await Promise.all([
-            prisma.invVoucher.findMany({ where: { universalVoucherId: { in: uvIds } }, select: { id: true, universalVoucherId: true, reference: true } }),
-            prisma.voucher.findMany({ where: { universalVoucherId: { in: uvIds } }, select: { id: true, universalVoucherId: true, type: true, reference: true } }),
-        ]);
+        const invs = await prisma.invVoucher.findMany({ where: { universalVoucherId: { in: uvIds } }, select: { id: true, universalVoucherId: true, reference: true } });
         const invByUv = new Map(invs.filter((i) => i.universalVoucherId != null).map((i) => [i.universalVoucherId!, i]));
-        const vByUv   = new Map(vouchers.filter((v) => v.universalVoucherId != null).map((v) => [v.universalVoucherId!, v]));
 
         let balance = openingBalance;
         const rows = lines.map((l) => {
@@ -72,16 +70,15 @@ export async function GET(req: NextRequest) {
             balance += delta(l.type, amt);
             const je  = l.universalVoucher;
             const inv = invByUv.get(je.id);
-            const v   = vByUv.get(je.id);
             const printUrl =
-                inv                                                 ? `/receipt/invoice/${inv.id}?kind=POS`
-              : v && (v.type === "RECEIPT" || v.type === "PAYMENT") ? `/receipt/payment/${v.id}`
-              :                                                       null;
+                inv                                                   ? `/receipt/invoice/${inv.id}?kind=POS`
+              : je.type === "RECEIPT" || je.type === "PAYMENT"        ? `/receipt/payment/${je.id}`
+              :                                                         null;
             return {
                 id:          l.id,
                 date:        je.date,
-                // Prefer the user-facing voucher ref (POS-/RV-/PV-/CV-) over the GL ref.
-                reference:   inv?.reference ?? v?.reference ?? je.reference,
+                // Prefer the user-facing voucher ref (POS-/RV-/PMT-/CV-) over the GL ref.
+                reference:   inv?.reference ?? je.reference,
                 particulars: je.description ?? l.description ?? "",
                 debit,
                 credit,

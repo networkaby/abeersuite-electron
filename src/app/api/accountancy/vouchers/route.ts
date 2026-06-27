@@ -37,10 +37,15 @@ export async function GET(req: Request) {
         searchParams.get("includeDeleted") === "1" &&
         (user!.permissions.includes(PERMISSIONS.ADMIN_BYPASS) || user!.permissions.includes(PERMISSIONS.FINANCE_VOUCHER_DELETE));
 
+    // Phase 5 5E: the spine IS the financial voucher (Voucher table dropped). Filter
+    // to the financial kinds that used to live in Voucher (the spine also holds
+    // SALE/POS/etc., which belong to the inventory registers).
+    const FINANCIAL_TYPES = ["CONTRA", "PAYMENT", "RECEIPT", "CREDIT_NOTE", "DEBIT_NOTE", "JOURNAL"];
+
     try {
-        const vouchers = await prisma.voucher.findMany({
+        const rows = await prisma.universalVoucher.findMany({
             where: {
-                ...(type ? { type } : {}),
+                ...(type ? { type } : { type: { in: FINANCIAL_TYPES } }),
                 ...(status ? { status } : {}),
                 ...(includeDeleted ? {} : { deletedAt: null }),
                 ...(from || to ? {
@@ -51,12 +56,25 @@ export async function GET(req: Request) {
                 } : {}),
             },
             orderBy: [{ date: "desc" }, { createdAt: "desc" }],
-            include: {
-                createdBy:    { select: { id: true, name: true } },
-                partyAccount: { select: { id: true, code: true, name: true, personId: true, companyId: true } },
-                _count:       { select: { lines: true } },
-            },
+            include: { lines: { select: { type: true, amount: true } } },
         });
+        // Enrich the relations the scalar spine lacks (createdBy / partyAccount) and
+        // compute totalAmount (Σ debit legs) — preserving the old Voucher response shape.
+        const creatorIds = [...new Set(rows.map((v) => v.createdById))];
+        const partyIds   = [...new Set(rows.map((v) => v.partyAccountId).filter((x): x is number => x != null))];
+        const [creators, parties] = await Promise.all([
+            prisma.user.findMany({ where: { id: { in: creatorIds } }, select: { id: true, name: true } }),
+            partyIds.length === 0 ? Promise.resolve([]) : prisma.account.findMany({ where: { id: { in: partyIds } }, select: { id: true, code: true, name: true, personId: true, companyId: true } }),
+        ]);
+        const creatorById = new Map(creators.map((u) => [u.id, u]));
+        const partyById   = new Map(parties.map((a) => [a.id, a]));
+        const vouchers = rows.map((v) => ({
+            ...v,
+            createdBy:    creatorById.get(v.createdById) ?? null,
+            partyAccount: v.partyAccountId != null ? (partyById.get(v.partyAccountId) ?? null) : null,
+            totalAmount:  v.lines.filter((l) => l.type === "DEBIT").reduce((s, l) => s + Number(l.amount), 0),
+            _count:       { lines: v.lines.length },
+        }));
 
         // Voucher has no branch column — branch lives on the GL-arm lines
         // (VoucherGlLine.branchId, stamped on POST; read from the spine). Surface a
@@ -64,7 +82,7 @@ export async function GET(req: Request) {
         // views like the Day Book can show it. Most office/legacy GL vouchers have
         // none → null. The spine line is scalar/id-only (no `branch` relation until
         // G4), so resolve the branch name from the masters.
-        const uvIds = vouchers.map((v) => v.universalVoucherId).filter((x): x is number => x != null);
+        const uvIds = vouchers.map((v) => v.id);
         const branchLines = uvIds.length
             ? await prisma.voucherGlLine.findMany({
                 where:    { universalVoucherId: { in: uvIds }, branchId: { not: null } },
@@ -86,7 +104,7 @@ export async function GET(req: Request) {
         return NextResponse.json(
             vouchers.map((v) => ({
                 ...v,
-                branch: v.universalVoucherId != null ? (branchByUv.get(v.universalVoucherId) ?? null) : null,
+                branch: branchByUv.get(v.id) ?? null,
             })),
         );
     } catch (e) {

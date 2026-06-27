@@ -72,14 +72,21 @@ export async function GET(req: NextRequest) {
                 user:    { select: { id: true, name: true, email: true } },
                 branch:  { select: { id: true, name: true } },
                 counter: { select: { id: true, name: true, tillAccount: { select: { id: true, name: true } } } },
-                openingContraVoucher: { select: { id: true, reference: true } },
-                closingContraVoucher: { select: { id: true, reference: true } },
                 _count: { select: { drops: true } },
             },
         });
 
+        // Phase 5 5E: opening/closing contras are spines now — batch-resolve by id.
+        const contraIds = [...new Set(rows.flatMap((s) => [s.openingContraVoucherId, s.closingContraVoucherId]).filter((x): x is number => x != null))];
+        const contras = contraIds.length === 0 ? [] : await prisma.universalVoucher.findMany({
+            where: { id: { in: contraIds } }, select: { id: true, reference: true },
+        });
+        const contraById = new Map(contras.map((c) => [c.id, c]));
+
         return NextResponse.json(rows.map((s) => ({
             ...s,
+            openingContraVoucher: s.openingContraVoucherId != null ? (contraById.get(s.openingContraVoucherId) ?? null) : null,
+            closingContraVoucher: s.closingContraVoucherId != null ? (contraById.get(s.closingContraVoucherId) ?? null) : null,
             openingFloatPaise:   s.openingFloatPaise.toString(),
             carryOverFloatPaise: s.carryOverFloatPaise.toString(),
             vaultTopUpPaise:     s.vaultTopUpPaise.toString(),

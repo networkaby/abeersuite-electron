@@ -93,7 +93,8 @@ export async function getRefundForPayout(refundId: number): Promise<{
     let customerAccountId: number | null = null;
     let cashBankAccountId: number | null = null;
     if (refund.sourceVoucherId) {
-        const src = await prisma.voucher.findUnique({
+        // Phase 5 5E: sourceVoucherId points at the spine; lines are VoucherGlLine.
+        const src = await prisma.universalVoucher.findUnique({
             where: { id: refund.sourceVoucherId },
             select: { partyAccountId: true, lines: { select: { accountId: true, type: true } } },
         });

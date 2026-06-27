@@ -187,7 +187,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 include: {
                     counter: { include: { tillAccount: { select: { id: true, name: true } }, paymentAccounts: { where: { isActive: true }, select: { channel: true, label: true, accountId: true } } } },
                     branch:  { select: { id: true, name: true } },
-                    closingContraVoucher: { select: { id: true, reference: true } },
                 },
             });
         });
@@ -227,7 +226,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 tillAccount: { id: result.counter.tillAccount.id, name: result.counter.tillAccount.name },
             },
             branch:              result.branch,
-            closingContraVoucher: result.closingContraVoucher,
+            // Phase 5 5E: the closing contra IS a spine now — resolve by id.
+            closingContraVoucher: result.closingContraVoucherId != null
+                ? await prisma.universalVoucher.findUnique({ where: { id: result.closingContraVoucherId }, select: { id: true, reference: true } })
+                : null,
             varianceUniversalVoucherId: result.varianceJournalEntryId,   // spine id (JE dropped)
         });
     } catch (e) {

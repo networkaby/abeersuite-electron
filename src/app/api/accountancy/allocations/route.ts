@@ -56,17 +56,12 @@ export async function POST(req: Request) {
     if (error) return error;
 
     try {
-        // G5: re-home a VOUCHER target onto the universal-voucher spine
-        // (UNIVERSAL_VOUCHER + the bill's universalVoucherId) so settlements read
-        // off the spine and the Voucher table can retire. Falls back to VOUCHER
-        // when the bill has no spine yet (defensive — posted bills always do).
+        // Phase 5 5E: the spine IS the finance voucher, so a VOUCHER target id
+        // already IS the spine id — just normalise the target type onto the spine
+        // (UNIVERSAL_VOUCHER) so all settlements read off one place.
         let { targetType, targetId } = data;
         if (targetType === "VOUCHER") {
-            const bill = await prisma.voucher.findUnique({ where: { id: targetId }, select: { universalVoucherId: true } });
-            if (bill?.universalVoucherId != null) {
-                targetType = "UNIVERSAL_VOUCHER";
-                targetId   = bill.universalVoucherId;
-            }
+            targetType = "UNIVERSAL_VOUCHER";
         }
         const allocation = await prisma.voucherAllocation.create({
             data: { ...data, targetType, targetId, createdById: user!.id },

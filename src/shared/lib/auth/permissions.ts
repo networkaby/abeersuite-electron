@@ -58,8 +58,10 @@ export function isAdmin(user: ResolvedUser): boolean {
  * Use in `[id]` routes that must load the voucher (for its `type`) before they
  * can know which permission applies. `action: "cancel"` also covers editing.
  */
-export function userCanVoucher(user: ResolvedUser, type: VoucherType, action: VoucherAction): boolean {
-    const { perKind, generic } = requiredVoucherPermission(type, action);
+// Phase 5 5E: `type` widened to string — the spine's `type` is a plain string
+// (spans every voucher kind). Unknown kinds fall back to the generic permission.
+export function userCanVoucher(user: ResolvedUser, type: VoucherType | string, action: VoucherAction): boolean {
+    const { perKind, generic } = requiredVoucherPermission(type as VoucherType, action);
     return (perKind != null && hasPermission(user, perKind)) || hasPermission(user, generic);
 }
 

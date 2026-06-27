@@ -77,31 +77,36 @@ export async function GET(req: Request) {
     // RECEIPT/PAYMENT are settlements, not bills — they appear as the
     // source side of an allocation, not the target side. Same logic as
     // outstandings.ts post-2026-05-24.
-    const vouchers = await prisma.voucher.findMany({
+    // Phase 5 5E: the spine IS the finance voucher; total is computed from the
+    // debit legs (no stored totalAmount).
+    const vouchers = await prisma.universalVoucher.findMany({
         where: {
             partyAccountId: accountId,
             type:           { in: ["CREDIT_NOTE", "DEBIT_NOTE"] },
             deletedAt:      null,
             status:         { not: "CANCELLED" },
         },
-        select: { id: true, type: true, reference: true, date: true, totalAmount: true },
+        select: { id: true, type: true, reference: true, date: true, lines: { select: { type: true, amount: true } } },
         orderBy: [{ date: "asc" }],
     });
     const vchIds = vouchers.map((v) => v.id);
-    // G5: CREDIT_NOTE/DEBIT_NOTE settlements via the spine (keyed by Voucher id).
+    // 5E: CREDIT_NOTE/DEBIT_NOTE settlements via the spine (keyed by spine id).
     const vchAllocSum = await sumVoucherAllocations(prisma, vchIds);
 
     const openVouchers = vouchers
-        .map((v) => ({
-            kind:        "voucher" as const,
-            id:          v.id,
-            voucherType: v.type,
-            reference:   v.reference,
-            date:        v.date,
-            totalAmount: Number(v.totalAmount),
-            allocated:   vchAllocSum[v.id] ?? 0,
-            outstanding: Number(v.totalAmount) - (vchAllocSum[v.id] ?? 0),
-        }))
+        .map((v) => {
+            const total = v.lines.filter((l) => l.type === "DEBIT").reduce((s, l) => s + Number(l.amount), 0);
+            return {
+                kind:        "voucher" as const,
+                id:          v.id,
+                voucherType: v.type,
+                reference:   v.reference,
+                date:        v.date,
+                totalAmount: total,
+                allocated:   vchAllocSum[v.id] ?? 0,
+                outstanding: total - (vchAllocSum[v.id] ?? 0),
+            };
+        })
         .filter((row) => row.outstanding > 0.005);
 
     return NextResponse.json({

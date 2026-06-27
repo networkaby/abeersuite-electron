@@ -47,61 +47,10 @@ model AuditLog {
 // Each row's lines must sum to zero (Σ debits = Σ credits). On POST the helper
 // in src/modules/accountancy/lib/voucherLifecycle.ts creates a JournalEntry with the
 // same lines so the GL stays consistent with traditional double-entry tooling.
-model Voucher {
-  id             Int           @id @default(autoincrement())
-  type           VoucherType
-  reference      String        @unique
-  date           DateTime      @db.Date
-  narration      String?
-  partyAccountId Int?
-  totalAmount    Decimal       @db.Decimal(14, 2)
-  status         VoucherStatus @default(DRAFT)
-  postedAt       DateTime?
-  // Counter-entry created on POST — lets reports tie back to GL.
-  journalEntryId Int?
-  // Phase 4 G4d: direct link to the universal-voucher spine (set on POST).
-  universalVoucherId Int?         @unique
-  universalVoucher   UniversalVoucher? @relation("VoucherSpine", fields: [universalVoucherId], references: [id])
-  createdById    Int
-
-  // ── Lifecycle metadata ──────────────────────────────────────────────────
-  cancelledAt   DateTime?
-  cancelledById Int?
-  cancelReason  String?
-  deletedAt     DateTime?
-  deletedById   Int?
-  deleteReason  String?
-
-  partyAccount     Account?      @relation("VoucherPartyAccount", fields: [partyAccountId], references: [id])
-  createdBy        User          @relation("VoucherCreatedBy", fields: [createdById], references: [id])
-  cancelledBy      User?         @relation("VoucherCancelledBy", fields: [cancelledById], references: [id])
-  deletedBy        User?         @relation("VoucherDeletedBy", fields: [deletedById], references: [id])
-  lines            VoucherLine[]
-  // POS shift back-relations (Contra vouchers posted on shift open / close)
-  posShiftOpenings PosShift[]    @relation("PosShiftOpeningContra")
-  posShiftClosings PosShift[]    @relation("PosShiftClosingContra")
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
-
-  @@index([type, status])
-  @@index([date])
-  @@index([deletedAt])
-  @@index([partyAccountId])
-}
-
-model VoucherLine {
-  id          Int       @id @default(autoincrement())
-  voucherId   Int
-  voucher     Voucher   @relation(fields: [voucherId], references: [id], onDelete: Cascade)
-  accountId   Int
-  account     Account   @relation(fields: [accountId], references: [id])
-  type        EntryType
-  amount      Decimal   @db.Decimal(14, 2)
-  description String?
-
-  @@index([voucherId])
-  @@index([accountId])
-}
+// Phase 5 5E: the financial-voucher tables (Voucher + VoucherLine) are DROPPED.
+// The UniversalVoucher spine + VoucherGlLine children ARE the financial voucher
+// now — type/reference/date/status/lifecycle on the spine, Dr/Cr legs as
+// VoucherGlLine. Financial vouchers are spine-only (no document sidecar).
 
 // ── Phase 4: Universal Voucher (the posting spine) ───────────────────────────
 // Added Stage C as a TRANSITIONAL dual-write target: `engineGlArm` writes these
@@ -149,7 +98,6 @@ model UniversalVoucher {
   // sourceJournalEntryId↔journalEntryId hop, so the spine↔voucher relationship
   // survives the JournalEntry/Voucher drop in G5).
   invVoucher           InvVoucher?     @relation("InvVoucherSpine")
-  voucher              Voucher?        @relation("VoucherSpine")
   // Phase 5 5A: cross-module workflow links (loose, FK-free — see VoucherLink).
   links                VoucherLink[]   @relation("VoucherLinks")
   // Phase 5 5C: inventory children re-homed onto the spine (dual-written; sole

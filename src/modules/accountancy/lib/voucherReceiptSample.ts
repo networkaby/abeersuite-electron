@@ -126,17 +126,28 @@ async function buildInvSample(id: number): Promise<VoucherReceiptData> {
 
 // ── GL voucher (PAYMENT / RECEIPT / CONTRA / CREDIT_NOTE / DEBIT_NOTE / JOURNAL) ──
 async function buildGlSample(id: number): Promise<VoucherReceiptData> {
-    const v = await prisma.voucher.findUnique({
+    // Phase 5 5E: the spine IS the GL voucher. Lines (VoucherGlLine) and the party
+    // are scalar/id-only, so account names + the party are enriched via lookups.
+    const spine = await prisma.universalVoucher.findUnique({
         where: { id },
-        include: {
-            lines:        { include: { account: { select: { name: true } } } },
-            partyAccount: { select: partyAccountSelect },
-        },
+        include: { lines: { orderBy: [{ type: "asc" }, { id: "asc" }] } },
     });
-    if (!v) return notFoundData();
+    if (!spine) return notFoundData();
+
+    const lineAcctIds = [...new Set(spine.lines.map((l) => l.accountId))];
+    const [partyAcct, lineAccts] = await Promise.all([
+        spine.partyAccountId != null ? prisma.account.findUnique({ where: { id: spine.partyAccountId }, select: partyAccountSelect }) : Promise.resolve(null),
+        lineAcctIds.length ? prisma.account.findMany({ where: { id: { in: lineAcctIds } }, select: { id: true, name: true } }) : Promise.resolve([]),
+    ]);
+    const nameById = new Map(lineAccts.map((a) => [a.id, a.name]));
+    const v = {
+        ...spine,
+        partyAccount: partyAcct,
+        lines: spine.lines.map((l) => ({ ...l, account: { name: nameById.get(l.accountId) ?? "—" } })),
+    };
 
     const party = partyFromAccount(v.partyAccount);
-    const total = toNumber(v.totalAmount);
+    const total = v.lines.filter((l) => l.type === "DEBIT").reduce((s, l) => s + toNumber(l.amount), 0);
 
     // GL vouchers have no qty×rate goods — render each ledger line as
     // "<Account> (Dr|Cr)" with its amount so the slip reads as a journal.

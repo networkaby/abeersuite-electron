@@ -20,16 +20,15 @@ export async function seedVoucherSeries(prisma: PrismaClient) {
 
     // Count existing records per kind so the next reference continues from the
     // correct number (not from 1).
+    // Phase 5 5E: financial vouchers ARE spine rows now — count off the spine by type.
     const voucherCounts = await Promise.all(
         KINDS.map(async ({ kind, voucherType }) => {
-            const count = await prisma.voucher.count({ where: { type: voucherType } });
+            const count = await prisma.universalVoucher.count({ where: { type: voucherType } });
             return { kind, count };
         }),
     );
-    // User-entered Journal Vouchers — counted from Voucher rows of type=JOURNAL.
-    // (Was previously counted from JournalEntry table, which conflated user JVs
-    // with the engine's GL postings — see GL_POSTING series below.)
-    const userJournalCount = await prisma.voucher.count({ where: { type: "JOURNAL" } });
+    // User-entered Journal Vouchers — counted from spine rows of type=JOURNAL.
+    const userJournalCount = await prisma.universalVoucher.count({ where: { type: "JOURNAL" } });
     // GL postings — engine output behind every primary voucher. Continues from
     // existing JournalEntry count so new GL-… references don't collide with
     // legacy JE-… references in the same table.

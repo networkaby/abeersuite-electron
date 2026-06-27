@@ -8,48 +8,49 @@ import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
+// Phase 5 5E: the UniversalVoucher spine IS the financial voucher (Voucher table
+// dropped). `id` is the spine id; lines are VoucherGlLine. The spine is scalar/
+// id-only for party/creator/account, so those are enriched from lookups to keep
+// the old response shape the voucher UI consumes.
+
+async function enrichVoucher(v: { id: number; createdById: number; cancelledById: number | null; deletedById: number | null; partyAccountId: number | null; lines: { accountId: number; type: string; amount: unknown }[] } & Record<string, unknown>) {
+    const userIds = [v.createdById, v.cancelledById, v.deletedById].filter((x): x is number => x != null);
+    const acctIds = [...new Set([...(v.partyAccountId != null ? [v.partyAccountId] : []), ...v.lines.map((l) => l.accountId)])];
+    const [users, accounts] = await Promise.all([
+        prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true } }),
+        acctIds.length === 0 ? Promise.resolve([]) : prisma.account.findMany({ where: { id: { in: acctIds } }, select: { id: true, code: true, name: true, normalBalance: true } }),
+    ]);
+    const userById = new Map(users.map((u) => [u.id, u]));
+    const acctById = new Map(accounts.map((a) => [a.id, a]));
+    return {
+        ...v,
+        createdBy:    userById.get(v.createdById) ?? null,
+        cancelledBy:  v.cancelledById != null ? (userById.get(v.cancelledById) ?? null) : null,
+        deletedBy:    v.deletedById   != null ? (userById.get(v.deletedById)   ?? null) : null,
+        partyAccount: v.partyAccountId != null ? (acctById.get(v.partyAccountId) ?? null) : null,
+        totalAmount:  v.lines.filter((l) => l.type === "DEBIT").reduce((s, l) => s + Number(l.amount), 0),
+        lines:        v.lines.map((l) => ({ ...l, account: acctById.get(l.accountId) ?? null })),
+    };
+}
+
 // GET /api/accountancy/vouchers/[id]
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
     if (response) return response;
 
     const { id } = await params;
-    const voucher = await prisma.voucher.findUnique({
-        where: { id: Number(id) },
-        include: {
-            createdBy:    { select: { id: true, name: true } },
-            cancelledBy:  { select: { id: true, name: true } },
-            deletedBy:    { select: { id: true, name: true } },
-            partyAccount: { select: { id: true, code: true, name: true } },
-            lines: {
-                include: { account: { select: { id: true, code: true, name: true, normalBalance: true } } },
-            },
-        },
+    const voucher = await prisma.universalVoucher.findUnique({
+        where:   { id: Number(id) },
+        include: { lines: { orderBy: [{ type: "asc" }, { id: "asc" }] } },
     });
     if (!voucher) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    return NextResponse.json(voucher);
+    return NextResponse.json(await enrichVoucher(voucher));
 }
 
-// ── PATCH ──────────────────────────────────────────────────────────────────
-//
-// Edit an existing GL voucher in place — reference + audit timestamps stay.
-//
-//   • DRAFT  → straightforward swap: delete old lines, create new lines,
-//              update header. No GL impact (DRAFT never touched balances).
-//
-//   • POSTED → Tally-style atomic reversal + re-apply:
-//                1. Decrement account.balance by the OLD line impact.
-//                2. Delete old voucher.lines and the linked JE's lines.
-//                3. Create new voucher.lines + JE.lines from payload.
-//                4. Increment account.balance by the NEW line impact.
-//                5. Update headers (date, narration, totalAmount, partyAccountId
-//                   on the voucher; date + description on the JE).
-//              The reference number and status stay; Trial Balance reflects
-//              the new values without a counter-entry.
-//
-// CANCELLED / soft-deleted vouchers are rejected (409). Clients should
-// short-circuit this call client-side when no fields actually changed.
-
+// ── PATCH — edit a financial voucher in place (the spine), reference + audit kept.
+//   • DRAFT  → swap GL lines + header. No balance impact (gated out until POSTED).
+//   • POSTED → reverse old balance, rewrite GL lines, re-apply, update header.
+//   • CANCELLED / deleted → 409.
 const lineSchema = z.object({
     accountId:   z.number().int().positive(),
     type:        z.enum(["DEBIT", "CREDIT"]),
@@ -71,12 +72,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const { id } = await params;
     const voucherId = Number(id);
 
-    const existing = await prisma.voucher.findUnique({
+    const existing = await prisma.universalVoucher.findUnique({
         where:   { id: voucherId },
-        include: { lines: { include: { account: { select: { normalBalance: true } } } } },
+        include: { lines: true },
     });
     if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    // "Who can cancel can edit also" — editing is gated by the per-kind cancel permission.
+    // "Who can cancel can edit also" — gated by the per-kind cancel permission.
     if (!userCanVoucher(user, existing.type, "cancel")) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
@@ -92,26 +93,19 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const body = data;
 
     if (!isBalanced(body.lines)) {
-        return NextResponse.json(
-            { error: "Voucher is not balanced — debits must equal credits" },
-            { status: 422 },
-        );
+        return NextResponse.json({ error: "Voucher is not balanced — debits must equal credits" }, { status: 422 });
     }
 
-    const newTotalAmount = body.lines
-        .filter((l) => l.type === "DEBIT")
-        .reduce((s, l) => s + l.amount, 0);
+    // Spine lines are scalar — resolve normalBalance for the reverse/apply.
+    const allAcctIds = [...new Set([...existing.lines.map((l) => l.accountId), ...body.lines.map((l) => l.accountId)])];
+    const nbRows = await prisma.account.findMany({ where: { id: { in: allAcctIds } }, select: { id: true, normalBalance: true } });
+    const nbById = new Map(nbRows.map((a) => [a.id, a.normalBalance]));
 
     try {
         await prisma.$transaction(async (tx) => {
-            // ── POSTED: reverse the old GL impact first ─────────────────
-            if (existing.status === "POSTED") {
-                // Phase 4 ②: snapshot the pre-edit state to AuditLog (matches the
-                // inventory edit) — the voucher + JE are rewritten in place below.
-                // `journalEntryId` carries the spine id (self-ref since G5).
-                const origJe = existing.journalEntryId
-                    ? await tx.universalVoucher.findUnique({ where: { id: existing.journalEntryId }, include: { lines: true } })
-                    : null;
+            const wasPosted = existing.status === "POSTED";
+            if (wasPosted) {
+                // Snapshot the pre-edit spine to AuditLog (matches the inventory edit).
                 await tx.auditLog.create({
                     data: auditSnapshot({
                         entityType:  "GL_VOUCHER",
@@ -119,110 +113,53 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                         originalId:  existing.id,
                         originalRef: existing.reference,
                         reason:      `Edit (in-place) of ${existing.reference}`,
-                        snapshot:    { ...existing, journalEntry: origJe },
+                        snapshot:    { ...existing },
                         actorId:     user!.id,
                     }),
                 });
+                // Reverse the old GL impact.
                 for (const line of existing.lines) {
-                    const delta = balanceDelta(
-                        line.account.normalBalance!,
-                        line.type,
-                        toNumber(line.amount),
-                    );
-                    await tx.account.update({
-                        where: { id: line.accountId },
-                        data:  { balance: { decrement: delta } },
-                    });
+                    const nb = nbById.get(line.accountId);
+                    if (!nb) continue;
+                    await tx.account.update({ where: { id: line.accountId }, data: { balance: { decrement: balanceDelta(nb, line.type, toNumber(line.amount)) } } });
                 }
             }
 
-            // Delete old voucher lines (always)
-            await tx.voucherLine.deleteMany({ where: { voucherId } });
-
-            // Delete the spine's GL lines (POSTED only — DRAFT has no spine).
-            if (existing.status === "POSTED" && existing.journalEntryId) {
-                await tx.voucherGlLine.deleteMany({
-                    where: { universalVoucherId: existing.journalEntryId },
-                });
-            }
-
-            // Create new voucher lines
-            await tx.voucherLine.createMany({
-                data: body.lines.map((l) => ({
-                    voucherId,
+            // Rewrite the spine's GL lines.
+            await tx.voucherGlLine.deleteMany({ where: { universalVoucherId: voucherId } });
+            await tx.voucherGlLine.createMany({
+                data: body.lines.map((l, idx) => ({
+                    universalVoucherId: voucherId,
                     accountId:   l.accountId,
                     type:        l.type,
                     amount:      l.amount,
                     description: l.description ?? null,
+                    seq:         idx,
                 })),
             });
 
-            // Create new spine GL lines mirroring the new voucher lines (POSTED only).
-            if (existing.status === "POSTED" && existing.journalEntryId) {
-                await tx.voucherGlLine.createMany({
-                    data: body.lines.map((l, idx) => ({
-                        universalVoucherId: existing.journalEntryId!,
-                        accountId:          l.accountId,
-                        type:               l.type,
-                        amount:             l.amount,
-                        description:        l.description ?? null,
-                        seq:                idx,
-                    })),
-                });
-
-                // Apply the NEW GL impact
+            if (wasPosted) {
+                // Apply the new GL impact.
                 for (const line of body.lines) {
-                    const acct = await tx.account.findUnique({
-                        where:  { id: line.accountId },
-                        select: { normalBalance: true },
-                    });
-                    if (!acct?.normalBalance) continue;
-                    const delta = balanceDelta(acct.normalBalance, line.type, line.amount);
-                    await tx.account.update({
-                        where: { id: line.accountId },
-                        data:  { balance: { increment: delta } },
-                    });
+                    const nb = nbById.get(line.accountId);
+                    if (!nb) continue;
+                    await tx.account.update({ where: { id: line.accountId }, data: { balance: { increment: balanceDelta(nb, line.type, line.amount) } } });
                 }
-
-                // Update the spine header — description is required, so only swap
-                // it when we have a non-empty narration; otherwise leave it.
-                await tx.universalVoucher.update({
-                    where: { id: existing.journalEntryId },
-                    data:  {
-                        date:           new Date(body.date),
-                        friendlyRef:    existing.reference,
-                        partyAccountId: body.partyAccountId ?? null,
-                        ...(body.narration ? { description: body.narration } : {}),
-                    },
-                });
             }
 
-            // Update voucher header
-            await tx.voucher.update({
+            // Update the spine header.
+            await tx.universalVoucher.update({
                 where: { id: voucherId },
                 data:  {
                     date:           new Date(body.date),
-                    narration:      body.narration ?? null,
                     partyAccountId: body.partyAccountId ?? null,
-                    totalAmount:    newTotalAmount,
+                    ...(body.narration ? { narration: body.narration, description: body.narration } : {}),
                 },
             });
-        // Posted edit = reverse + per-new-line findUnique + re-apply + JE/voucher
-        // header updates; over the Supabase pooler this can exceed the default
-        // 5s interactive-tx ceiling (P2028).
         }, { timeout: 30_000, maxWait: 10_000 });
 
-        const updated = await prisma.voucher.findUnique({
-            where: { id: voucherId },
-            include: {
-                createdBy:    { select: { id: true, name: true } },
-                partyAccount: { select: { id: true, code: true, name: true } },
-                lines: {
-                    include: { account: { select: { id: true, code: true, name: true, normalBalance: true } } },
-                },
-            },
-        });
-        return NextResponse.json(updated);
+        const updated = await prisma.universalVoucher.findUnique({ where: { id: voucherId }, include: { lines: true } });
+        return NextResponse.json(updated ? await enrichVoucher(updated) : null);
     } catch (e) {
         return handleApiError(e, "Failed to update voucher");
     }

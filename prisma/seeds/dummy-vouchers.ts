@@ -87,17 +87,9 @@ async function seedCostPoolDemo(): Promise<void> {
         await prisma.account.update({ where: { id: cash.id },    data: { balance: { decrement: 5000 } } });
     }
 
-    // 4. A PAYMENT Voucher tied to that spine → the real voucher number the UI
-    //    shows. journalEntryId carries the spine id (self-ref since G5).
-    if (!(await prisma.voucher.findUnique({ where: { reference: VOUCHER_REF } }))) {
-        await prisma.voucher.create({
-            data: {
-                type: "PAYMENT", reference: VOUCHER_REF, date: today,
-                narration: "Courier payment to DTDC (dummy)", totalAmount: 5000,
-                status: "POSTED", postedAt: today, journalEntryId: spine.id, createdById: admin.id,
-            },
-        });
-    }
+    // 4. Phase 5 5E: the spine IS the PAYMENT voucher (Voucher table dropped). The
+    //    user-facing number lives on the spine's `friendlyRef` (= VOUCHER_REF), set
+    //    in step 3 — no separate Voucher row to create.
 
     // 5. Draws against the ₹5,000 entry: ₹2,000 onto a product, ₹3,000 dismissed.
     //    Cost-pool rows reference the SPINE debit line (G2).

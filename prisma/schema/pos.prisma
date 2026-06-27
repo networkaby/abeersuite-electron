@@ -150,8 +150,8 @@ model PosShift {
   openingFloatPaise      BigInt   @default(0)
   carryOverFloatPaise    BigInt   @default(0) // already in counter from previous close
   vaultTopUpPaise        BigInt   @default(0) // fresh draw from vault (Contra posted)
+  // Phase 5 5E: carries the SPINE id of the opening Contra (Voucher table dropped).
   openingContraVoucherId Int? // null when vaultTopUpPaise = 0
-  openingContraVoucher   Voucher? @relation("PosShiftOpeningContra", fields: [openingContraVoucherId], references: [id])
 
   // ── Close ─────────────────────────────────────────────────────────────────
   closedAt               DateTime?
@@ -162,8 +162,8 @@ model PosShift {
   variancePaise          BigInt? // declared − expected; +ve = over, −ve = short
   carryOverNextPaise     BigInt? // float left in counter for next shift
   toVaultPaise           BigInt? // amount swept to vault (declared − carryOverNext)
+  // Phase 5 5E: carries the SPINE id of the closing Contra (Voucher table dropped).
   closingContraVoucherId Int? // null when toVaultPaise = 0
-  closingContraVoucher   Voucher?      @relation("PosShiftClosingContra", fields: [closingContraVoucherId], references: [id])
   // Vestigial — now carries the SPINE id of the variance posting (JournalEntry dropped, G5).
   varianceJournalEntryId Int?
 

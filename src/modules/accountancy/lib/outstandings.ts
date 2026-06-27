@@ -141,24 +141,16 @@ export async function sumVoucherAllocations(
     db: Prisma.TransactionClient,
     voucherIds: number[],
 ): Promise<Record<number, number>> {
+    // Phase 5 5E: the spine IS the finance voucher — `voucherIds` ARE spine ids,
+    // so this is now a direct allocation lookup (the old Voucher→spine hop is gone).
     const ids = [...new Set(voucherIds)];
     if (ids.length === 0) return {};
-    const vchs = await db.voucher.findMany({
-        where:  { id: { in: ids }, universalVoucherId: { not: null } },
-        select: { id: true, universalVoucherId: true },
-    });
-    if (vchs.length === 0) return {};
-    const spineToVoucher = new Map(vchs.map((v) => [v.universalVoucherId!, v.id]));
     const allocs = await db.voucherAllocation.findMany({
-        where:  { targetType: "UNIVERSAL_VOUCHER", targetId: { in: vchs.map((v) => v.universalVoucherId!) } },
+        where:  { targetType: "UNIVERSAL_VOUCHER", targetId: { in: ids } },
         select: { targetId: true, amount: true },
     });
     const out: Record<number, number> = {};
-    for (const a of allocs) {
-        const vid = spineToVoucher.get(a.targetId);
-        if (vid == null) continue;
-        out[vid] = (out[vid] ?? 0) + Number(a.amount);
-    }
+    for (const a of allocs) out[a.targetId] = (out[a.targetId] ?? 0) + Number(a.amount);
     return out;
 }
 
@@ -218,7 +210,9 @@ async function loadOpenBills(
         // in VoucherAllocation as `sourceType=VOUCHER` and nett against the
         // bill's JE; including them again as "open bills" would double-count
         // them as false positives. CONTRA / JOURNAL never sit against a party.
-        prisma.voucher.findMany({
+        // Phase 5 5E: bill-shaped finance vouchers ARE spines now. Total is computed
+        // from the debit legs (no stored totalAmount on the spine).
+        prisma.universalVoucher.findMany({
             where: {
                 partyAccountId: { in: accountIds },
                 type:           { in: ["CREDIT_NOTE", "DEBIT_NOTE"] },
@@ -227,8 +221,8 @@ async function loadOpenBills(
                 date:           { lte: asOf },
             },
             select: {
-                id: true, partyAccountId: true, reference: true,
-                date: true, totalAmount: true,
+                id: true, partyAccountId: true, reference: true, date: true,
+                lines: { select: { type: true, amount: true } },
             },
         }),
         prisma.account.findMany({
@@ -317,7 +311,7 @@ async function loadOpenBills(
             ref:         v.reference,
             billDate:    v.date,
             dueDate:     due,
-            totalAmount: Number(v.totalAmount),
+            totalAmount: v.lines.filter((l) => l.type === "DEBIT").reduce((s, l) => s + Number(l.amount), 0),
             paid:        paidByVch[v.id] ?? 0,
         });
     }

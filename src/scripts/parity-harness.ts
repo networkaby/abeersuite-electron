@@ -690,10 +690,10 @@ async function runVoucherAllocation(): Promise<boolean> {
                 lines: [{ accountId: acc.income!, type: "DEBIT", amount: 300 }, { accountId: acc.debtor!, type: "CREDIT", amount: 300 }],
                 partyAccountId: acc.debtor, post: true,
             });
-            const bill = await tx.voucher.findUnique({ where: { id: v.id }, select: { universalVoucherId: true } });
-            if (bill?.universalVoucherId == null) throw new Error("CREDIT_NOTE has no spine link");
+            // Phase 5 5E: the spine IS the CREDIT_NOTE — v.id is the spine id.
+            if (v.id == null) throw new Error("CREDIT_NOTE has no spine");
             // Settle 120 against the bill on the spine.
-            await tx.voucherAllocation.create({ data: { targetType: "UNIVERSAL_VOUCHER", targetId: bill.universalVoucherId, sourceType: "VOUCHER", sourceId: v.id, amount: 120, method: "AGAINST_REF", createdById: acc.userId } });
+            await tx.voucherAllocation.create({ data: { targetType: "UNIVERSAL_VOUCHER", targetId: v.id, sourceType: "VOUCHER", sourceId: v.id, amount: 120, method: "AGAINST_REF", createdById: acc.userId } });
             const paid = await sumVoucherAllocations(tx, [v.id]);
             ok = Math.abs((paid[v.id] ?? 0) - 120) < 0.005;
             throw new Error(ROLLBACK);

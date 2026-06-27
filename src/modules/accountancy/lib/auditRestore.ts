@@ -93,19 +93,11 @@ export async function restoreFromAudit(
     }
 
     if (audit.entityType === "GL_VOUCHER") {
+        // Phase 5 5E: the spine IS the GL voucher. The hard-delete snapshot is the
+        // spine itself (lines = VoucherGlLine), so recreate it ONCE via the spine
+        // rebuilder and re-apply balances if the restored voucher is live.
         const lines = (snap.lines as VoucherLine[]) ?? [];
-        const journalEntry = (snap.journalEntry as JeSnapshot | null) ?? null;
-        const newJeId = journalEntry ? await recreateJournalEntry(tx, journalEntry) : null;
-        const scalars = scalarsOf(snap, ["lines", "createdBy", "journalEntry"]);
-        await tx.voucher.create({
-            data: {
-                ...scalars,
-                journalEntryId: newJeId,
-                lines: { create: lines.map((l) => scalarsOf(l, ["voucherId", "account"])) },
-            } as unknown as Prisma.VoucherUncheckedCreateInput,
-        });
-        // Balance re-apply uses the VOUCHER lines (they carry account.normalBalance; the GL
-        // JE snapshot's lines don't). Only when the restored voucher is live.
+        await recreateJournalEntry(tx, snap as JeSnapshot);
         if (isLive(snap.status, snap.deletedAt, snap.cancelledAt)) {
             await reapplyBalance(tx, lines.filter((l): l is JeLine => l.accountId != null && l.type != null));
         }

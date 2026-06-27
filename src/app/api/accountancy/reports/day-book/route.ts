@@ -46,58 +46,17 @@ export async function GET(req: Request) {
         ...ledgerStatusFilterUv(),
         date: { gte: from, lte: to },
     };
-    // Kind filters reverse-join the source tables by their `universalVoucherId`
-    // (G5 — the direct spine link); the spine matches via its own `id`.
-    let kindIdsFilter:
-        | { id: { in: number[] } }
-        | { id: { notIn: number[] } }
-        | undefined;
-    if (kind !== "All") {
-        if (kind === "Sale" || kind === "POS" || kind === "Purchase" || kind === "Estimate" || kind === "Sale Return" || kind === "Purchase Return") {
-            // Each Day Book kind maps to exactly one InvVoucher.type value.
-            const types =
-                kind === "Sale"            ? (["SALE"] as const) :
-                kind === "POS"             ? (["POS"] as const) :
-                kind === "Purchase"        ? (["PURCHASE"] as const) :
-                kind === "Estimate"        ? (["ESTIMATE"] as const) :
-                kind === "Sale Return"     ? (["SALE_RETURN"] as const) :
-                                             (["PURCHASE_RETURN"] as const);
-            const rows = await prisma.invVoucher.findMany({
-                where: { type: { in: [...types] }, universalVoucherId: { not: null } },
-                select: { universalVoucherId: true },
-            });
-            kindIdsFilter = { id: { in: rows.map((r) => r.universalVoucherId!).filter(Boolean) } };
-        } else if (kind === "Journal") {
-            // "Journal" covers: (1) spines linked to a Voucher of type=JOURNAL, and
-            // (2) stand-alone spines not linked to any source. Equivalent: exclude
-            // spines linked to any non-JOURNAL source voucher.
-            const [journalVchs, invs, vchs] = await Promise.all([
-                prisma.voucher.findMany({ where: { type: "JOURNAL", universalVoucherId: { not: null } }, select: { universalVoucherId: true } }),
-                prisma.invVoucher.findMany({ where: { universalVoucherId: { not: null } }, select: { universalVoucherId: true } }),
-                prisma.voucher.findMany({ where: { universalVoucherId: { not: null } }, select: { universalVoucherId: true } }),
-            ]);
-            const linkedSet = new Set<number>();
-            for (const r of invs) if (r.universalVoucherId != null) linkedSet.add(r.universalVoucherId);
-            for (const r of vchs) if (r.universalVoucherId != null) linkedSet.add(r.universalVoucherId);
-            const journalIds = new Set<number>();
-            for (const r of journalVchs) if (r.universalVoucherId != null) journalIds.add(r.universalVoucherId);
-            const linkedNonJournal = [...linkedSet].filter((id) => !journalIds.has(id));
-            kindIdsFilter = { id: { notIn: linkedNonJournal } };
-        } else {
-            // GL voucher types: CONTRA / PAYMENT / RECEIPT / CREDIT_NOTE / DEBIT_NOTE.
-            const dbType =
-                kind === "Contra"      ? "CONTRA"      :
-                kind === "Payment"     ? "PAYMENT"     :
-                kind === "Receipt"     ? "RECEIPT"     :
-                kind === "Credit Note" ? "CREDIT_NOTE" :
-                /* Debit Note */         "DEBIT_NOTE";
-            const rows = await prisma.voucher.findMany({
-                where: { type: dbType, universalVoucherId: { not: null } },
-                select: { universalVoucherId: true },
-            });
-            kindIdsFilter = { id: { in: rows.map((r) => r.universalVoucherId!).filter(Boolean) } };
-        }
-    }
+    // Phase 5 5E: the spine's own `type` spans every kind (InvVoucherType,
+    // VoucherType, and JOURNAL), so the kind filter is a direct `type` match —
+    // no reverse-join through InvVoucher / Voucher needed.
+    const KIND_TO_SPINE_TYPE: Partial<Record<Kind, string>> = {
+        Sale: "SALE", POS: "POS", Purchase: "PURCHASE", Estimate: "ESTIMATE",
+        "Sale Return": "SALE_RETURN", "Purchase Return": "PURCHASE_RETURN",
+        Contra: "CONTRA", Payment: "PAYMENT", Receipt: "RECEIPT",
+        "Credit Note": "CREDIT_NOTE", "Debit Note": "DEBIT_NOTE", Journal: "JOURNAL",
+    };
+    const kindTypeFilter: { type: string } | undefined =
+        kind !== "All" && KIND_TO_SPINE_TYPE[kind] ? { type: KIND_TO_SPINE_TYPE[kind]! } : undefined;
 
     const where = {
         ...baseWhere,
@@ -107,7 +66,7 @@ export async function GET(req: Request) {
                 { description: { contains: search, mode: "insensitive" as const } },
             ],
         } : {}),
-        ...(kindIdsFilter ?? {}),
+        ...(kindTypeFilter ?? {}),
     };
 
     try {
@@ -118,7 +77,7 @@ export async function GET(req: Request) {
                 skip: (page - 1) * limit,
                 take: limit,
                 select: {
-                    id: true, reference: true, description: true, date: true,
+                    id: true, reference: true, description: true, date: true, type: true,
                     // Stable line order — first line is the principal "By" account
                     // shown in the row's single Amount column. VoucherGlLine is
                     // id-only (no account relation); account fields are resolved
@@ -139,23 +98,11 @@ export async function GET(req: Request) {
             : [];
         const accById = new Map(accountRows.map((a) => [a.id, a]));
 
-        // Source/label lookups key off the spine voucher id (G5).
+        // Source lookups key off the spine voucher id (G5). Phase 5 5E: GL kind
+        // labels read straight off the spine's own `type` (Voucher table dropped).
         const uvIds = entries.map((e) => e.id);
-        const [sourceMap, glVouchers] = await Promise.all([
-            resolveSourceBatch(uvIds),
-            // Also look up GL Voucher rows so we can label rows as
-            // Contra / Payment / Receipt / Credit Note / Debit Note instead
-            // of the generic "Journal".
-            prisma.voucher.findMany({
-                where: { universalVoucherId: { in: uvIds } },
-                select: { universalVoucherId: true, type: true, id: true, reference: true },
-            }),
-        ]);
-        const glMap = new Map<number, { type: string; id: number; reference: string }>();
-        for (const v of glVouchers) {
-            if (v.universalVoucherId == null) continue;
-            glMap.set(v.universalVoucherId, { type: v.type, id: v.id, reference: v.reference });
-        }
+        const sourceMap = await resolveSourceBatch(uvIds);
+        const GL_TYPES = new Set(["CONTRA", "PAYMENT", "RECEIPT", "CREDIT_NOTE", "DEBIT_NOTE", "JOURNAL"]);
         const VOUCHER_KIND_LABEL: Record<string, "Contra" | "Payment" | "Receipt" | "Credit Note" | "Debit Note" | "Journal"> = {
             CONTRA:      "Contra",
             PAYMENT:     "Payment",
@@ -184,7 +131,7 @@ export async function GET(req: Request) {
                 else                    cr += amt;
             }
             const source  = sourceMap.get(e.id) ?? null;
-            const gl      = glMap.get(e.id);
+            const isGl    = GL_TYPES.has(e.type);
             const kind: Kind =
                 source?.kind === "sale"            ? "Sale"
               : source?.kind === "pos"             ? "POS"
@@ -192,7 +139,7 @@ export async function GET(req: Request) {
               : source?.kind === "estimate"        ? "Estimate"
               : source?.kind === "sale-return"     ? "Sale Return"
               : source?.kind === "purchase-return" ? "Purchase Return"
-              : gl                                 ? VOUCHER_KIND_LABEL[gl.type] ?? "Journal"
+              : isGl                               ? VOUCHER_KIND_LABEL[e.type] ?? "Journal"
               :                                      "Journal";
             // Principal account = first line in stable order. Tally-style display:
             // single Amount column with Dr/Cr suffix matching this side.
@@ -227,10 +174,11 @@ export async function GET(req: Request) {
                 }),
                 // Prefer the InvVoucher/Invoice source link; fall back to the
                 // per-type GL voucher detail page (contras / payments / etc.).
-                source: source ?? (gl ? {
+                // 5E: the spine id IS the GL voucher id.
+                source: source ?? (isGl ? {
                     kind: "voucher" as const,
-                    id: gl.id, reference: gl.reference,
-                    url: `/office/accountancy/${VOUCHER_URL_SEG[gl.type] ?? "journal-entries"}/${gl.id}`,
+                    id: e.id, reference: e.reference,
+                    url: `/office/accountancy/${VOUCHER_URL_SEG[e.type] ?? "journal-entries"}/${e.id}`,
                 } : null),
             };
         });

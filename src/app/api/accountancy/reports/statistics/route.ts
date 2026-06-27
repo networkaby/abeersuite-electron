@@ -31,9 +31,11 @@ export async function GET(req: Request) {
             categoryCount,
             brandCount,
         ] = await Promise.all([
-            prisma.voucher.groupBy({
+            // Phase 5 5E: financial vouchers are spine rows now — filter to the
+            // financial types so we don't double-count the inv kinds (grouped below).
+            prisma.universalVoucher.groupBy({
                 by: ["type", "status"],
-                where: { date: dateRange, deletedAt: null },
+                where: { date: dateRange, deletedAt: null, type: { in: ["CONTRA", "PAYMENT", "RECEIPT", "CREDIT_NOTE", "DEBIT_NOTE", "JOURNAL"] } },
                 _count: { _all: true },
             }),
             prisma.invVoucher.groupBy({

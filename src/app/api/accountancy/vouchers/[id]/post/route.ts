@@ -1,23 +1,19 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth, userCanVoucher } from "@/shared/lib/auth/permissions";
-import { enginePostVoucher } from "@/modules/accountancy/lib/transactionEngine";
+import { enginePostSpine } from "@/modules/accountancy/lib/transactionEngine";
 import { handleApiError } from "@/shared/lib/api";
 
 // POST /api/accountancy/vouchers/[id]/post
-// DRAFT → POSTED: applies GL impact, creates a mirror JournalEntry for the audit
-// trail, and updates Account.balance per line.
+// DRAFT → POSTED: applies the GL impact (Account.balance deltas) and flips the
+// spine. Phase 5 5E: the UniversalVoucher spine IS the financial voucher (the
+// Voucher table is dropped), so `id` is the spine id.
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { user, response } = await requireAuth();
     if (response) return response;
 
     const { id } = await params;
-    const voucher = await prisma.voucher.findUnique({
-        where: { id: Number(id) },
-        include: {
-            lines: { include: { account: { select: { id: true, normalBalance: true, group: { select: { type: true } } } } } },
-        },
-    });
+    const voucher = await prisma.universalVoucher.findUnique({ where: { id: Number(id) } });
     if (!voucher) return NextResponse.json({ error: "Not found" }, { status: 404 });
     // Per-kind post gate (falls back to generic finance:voucher:post).
     if (!userCanVoucher(user, voucher.type, "post")) {
@@ -27,17 +23,13 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     if (voucher.status !== "DRAFT") return NextResponse.json({ error: "Only DRAFT vouchers can be posted" }, { status: 409 });
 
     try {
-        // DRAFT → POSTED via the Transaction Engine (mirror JE + balance deltas).
-        // Per-line account.update + mirror-JE over the Supabase pooler can exceed
-        // the default 5s interactive-tx ceiling (P2028) — match the 30s headroom.
-        const posted = await prisma.$transaction(async (tx) => {
-            // Phase 5 5.0: attach to the voucher's pre-created DRAFT spine (set at
-            // create) so POST fills its GL lines + flips it, rather than minting a
-            // fresh spine. Null for pre-5.0 drafts → engine create-posted fallback.
-            await enginePostVoucher(tx, voucher, user!.id, null, new Date(), voucher.universalVoucherId ?? null);
-            return tx.voucher.findUnique({ where: { id: voucher.id } });
+        // Per-line account.update over the Supabase pooler can exceed the default
+        // 5s interactive-tx ceiling (P2028) — match the 30s headroom.
+        await prisma.$transaction(async (tx) => {
+            await enginePostSpine(tx, voucher.id, { postedAt: new Date() });
         }, { timeout: 30_000, maxWait: 10_000 });
 
+        const posted = await prisma.universalVoucher.findUnique({ where: { id: Number(id) } });
         return NextResponse.json(posted);
     } catch (e) {
         return handleApiError(e, "Failed to post voucher");

@@ -30,7 +30,8 @@ export async function GET(req: NextRequest) {
         const voucherIds = [...receipts, ...expenditures].map((m) => m.voucherId).filter((x): x is number => x != null);
         const accountIds = [...receipts.map((r) => r.accountId), ...expenditures.map((e) => e.expenseAccountId)];
         const [vouchers, accounts] = await Promise.all([
-            prisma.voucher.findMany({ where: { id: { in: voucherIds } }, select: { id: true, reference: true } }),
+            // Phase 5 5E: receipt/expenditure voucherId points at the spine now.
+            prisma.universalVoucher.findMany({ where: { id: { in: voucherIds } }, select: { id: true, reference: true } }),
             prisma.account.findMany({ where: { id: { in: accountIds } }, select: { id: true, name: true } }),
         ]);
         const refById  = new Map(vouchers.map((v) => [v.id, v.reference]));

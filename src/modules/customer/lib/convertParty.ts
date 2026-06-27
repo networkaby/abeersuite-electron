@@ -736,8 +736,9 @@ export async function previewMerge(
 async function countAccountRefs(accountId: number) {
     const [jl, vp, vl, iv, t, d, so, settlementRows] = await Promise.all([
         prisma.voucherGlLine.count({ where: { accountId } }),   // Phase 4 G3: GL activity from the spine
-        prisma.voucher.count({ where: { partyAccountId: accountId } }),
-        prisma.voucherLine.count({ where: { accountId } }),
+        // Phase 5 5E: party + GL lines live on the spine (Voucher/VoucherLine dropped).
+        prisma.universalVoucher.count({ where: { partyAccountId: accountId } }),
+        Promise.resolve(0),   // legacy VoucherLine refs are now the spine GL lines (counted as `jl`)
         prisma.invVoucher.count({ where: { accountId } }),
         prisma.ticket.count({ where: { billingAccountId: accountId } }),
         prisma.device.count({ where: { accountId } }),
@@ -773,8 +774,9 @@ export async function mergeParty(
         // 1. Re-point every Account FK from loser's Account → winner's Account.
         const [jl, vp, vl, iv, gll, t, d, so] = await Promise.all([
             Promise.resolve({ count: 0 }),   // G5: JournalLine dropped — spine re-point is `gll` below
-            tx.voucher.updateMany({ where: { partyAccountId: loserAccountId }, data: { partyAccountId: winnerAccountId } }),
-            tx.voucherLine.updateMany({ where: { accountId: loserAccountId }, data: { accountId: winnerAccountId } }),
+            // Phase 5 5E: party lives on the spine; VoucherLine is the spine GL line.
+            tx.universalVoucher.updateMany({ where: { partyAccountId: loserAccountId }, data: { partyAccountId: winnerAccountId } }),
+            Promise.resolve({ count: 0 }),   // 5E: legacy VoucherLine re-point folded into `gll` below
             tx.invVoucher.updateMany({ where: { accountId: loserAccountId }, data: { accountId: winnerAccountId } }),
             // G4b: re-point the spine GL lines (covers role=TENDER/CHARGE + body legs
             // pointing at the loser ledger — the InvVoucherTender/Charge tables retired).

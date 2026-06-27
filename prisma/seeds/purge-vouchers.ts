@@ -33,10 +33,9 @@ const TABLES = [
     // JournalEntry/JournalLine drop (G5); VoucherGlLine cascades off the spine.
     "VoucherGlLine",
     "UniversalVoucher",
-    // Voucher side
+    // Voucher side — Phase 5 5E dropped Voucher + VoucherLine (the spine IS the
+    // voucher now); only the allocation table remains on this side.
     "VoucherAllocation",
-    "VoucherLine",
-    "Voucher",
     // Inventory side
     "InvStockLedger",
     "InvVoucherLine",

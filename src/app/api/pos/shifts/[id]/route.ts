@@ -34,8 +34,6 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
                 },
                 openedBy:             { select: { id: true, name: true } },
                 closedBy:             { select: { id: true, name: true } },
-                openingContraVoucher: { select: { id: true, reference: true, date: true } },
-                closingContraVoucher: { select: { id: true, reference: true, date: true } },
                 handover: {
                     select: {
                         id: true, status: true,
@@ -82,6 +80,16 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         const dropsPaise        = sumPaise(shift.drops);
         const expendituresPaise = sumPaise(shift.expenditures);
 
+        // Phase 5 5E: the opening/closing contras ARE spines now (Voucher dropped).
+        // Resolve them by id to keep the old response shape the UI consumes.
+        const contraIds = [shift.openingContraVoucherId, shift.closingContraVoucherId].filter((x): x is number => x != null);
+        const contras = contraIds.length === 0 ? [] : await prisma.universalVoucher.findMany({
+            where: { id: { in: contraIds } }, select: { id: true, reference: true, date: true },
+        });
+        const contraById = new Map(contras.map((c) => [c.id, c]));
+        const openingContraVoucher = shift.openingContraVoucherId != null ? (contraById.get(shift.openingContraVoucherId) ?? null) : null;
+        const closingContraVoucher = shift.closingContraVoucherId != null ? (contraById.get(shift.closingContraVoucherId) ?? null) : null;
+
         // Per-method tally of everything collected this shift (cash + digital).
         const tenderBreakdown = await buildShiftTenderBreakdown(prisma, {
             counter:  shift.counter,
@@ -91,6 +99,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
         return NextResponse.json({
             ...shift,
+            openingContraVoucher,
+            closingContraVoucher,
             tenderBreakdown,
             openingFloatPaise:   shift.openingFloatPaise.toString(),
             carryOverFloatPaise: shift.carryOverFloatPaise.toString(),

@@ -346,45 +346,7 @@ export async function enginePost(
     return { journalEntryId, universalVoucherId };
 }
 
-// ── Legacy GL-voucher helpers (being subsumed by enginePost) ──────────────────
-
-/**
- * Post a DRAFT financial voucher: write its GL via `engineGlArm`, then flip the
- * `Voucher` to POSTED with its `journalEntryId`. Caller loads + guards the
- * voucher (DRAFT, not deleted) and owns the tx. Returns the JE id.
- */
-export async function enginePostVoucher(
-    tx: Prisma.TransactionClient,
-    voucher: PostableVoucher,
-    /** Stamped on the mirror-JE lines for branch-scoped GL reports. Office GL
-     * vouchers pass null (org-level); POS callers pass the shift/active branch. */
-    userId: number,
-    branchId: string | null = null,
-    /** Posting timestamp. Defaults to now; auto-settled receipts pass the voucher
-     * date to preserve their prior `postedAt` semantics. */
-    postedAt: Date = new Date(),
-    /** Phase 5 5.0 — the voucher's pre-created DRAFT spine id; when set, POST
-     * attaches GL lines + flips it instead of minting a fresh spine. */
-    existingSpineId: number | null = null,
-): Promise<number> {
-    const { journalEntryId: jeId, universalVoucherId } = await engineGlArm(tx, {
-        date:        voucher.date,
-        description: `${voucher.type} ${voucher.reference}: ${voucher.narration ?? ""}`.trim(),
-        lines:       voucher.lines,
-        userId,
-        branchId,
-        postedAt,
-        type:        voucher.type,
-        friendlyRef: voucher.reference,
-        narration:   voucher.narration,
-        existingSpineId,
-    });
-    await tx.voucher.update({
-        where: { id: voucher.id },
-        data:  { status: "POSTED", postedAt, journalEntryId: jeId, universalVoucherId },  // G4d direct spine link
-    });
-    return jeId;
-}
+// ── Financial-voucher helpers (spine-only since Phase 5 5E) ───────────────────
 
 export interface CreateGlVoucherSpec {
     type:            VoucherType;
@@ -404,44 +366,67 @@ export interface CreateGlVoucherSpec {
     postedAt?:        Date;
 }
 
+/** The shape engineCreateVoucher returns — Voucher table dropped (Phase 5 5E), so
+ *  this is a spine-shaped snapshot. `id` / `journalEntryId` / `universalVoucherId`
+ *  are all the spine id (self-ref). */
+export interface CreatedVoucher {
+    id:                 number;
+    reference:          string;
+    universalVoucherId: number;
+    journalEntryId:     number | null;
+    status:             "DRAFT" | "POSTED";
+    totalAmount:        number;
+}
+
 /**
- * Create a financial transaction (the `Voucher` row + lines), optionally posting
- * it. `totalAmount` is the sum of debit lines. Returns the created voucher with
- * its lines (DRAFT snapshot; re-fetch if you need the posted state).
+ * Phase 5 5E: flip a DRAFT spine (its VoucherGlLine already written at create) to
+ * POSTED and apply the Account.balance deltas. The spine IS the financial voucher
+ * now (Voucher table dropped), so there is no second row to flip.
+ */
+export async function enginePostSpine(
+    tx: Prisma.TransactionClient,
+    spineId: number,
+    opts: { postedAt?: Date } = {},
+): Promise<void> {
+    const postedAt = opts.postedAt ?? new Date();
+    const lines = await tx.voucherGlLine.findMany({
+        where:  { universalVoucherId: spineId },
+        select: { accountId: true, type: true, amount: true },
+    });
+    const ids = [...new Set(lines.map((l) => l.accountId))];
+    const rows = ids.length === 0 ? [] : await tx.account.findMany({
+        where:  { id: { in: ids } },
+        select: { id: true, normalBalance: true, group: { select: { type: true } } },
+    });
+    const natureById = new Map<number, Drcr | null>();
+    for (const r of rows) {
+        natureById.set(r.id, (r.normalBalance as Drcr | null)
+            ?? (r.group?.type ? defaultNormalBalanceForGroupType(r.group.type as GroupTypeStr) : null));
+    }
+    for (const l of lines) {
+        const side = natureById.get(l.accountId) ?? null;
+        if (!side) continue;
+        await tx.account.update({ where: { id: l.accountId }, data: { balance: { increment: balanceDelta(side, l.type, toNumber(l.amount)) } } });
+    }
+    await tx.universalVoucher.updateMany({ where: { id: spineId }, data: { status: "POSTED", postedAt, sourceCreatedAt: postedAt } });
+}
+
+/**
+ * Create a financial voucher — the UniversalVoucher spine IS the voucher (Phase 5
+ * 5E dropped the Voucher table). Writes a DRAFT spine + its VoucherGlLine lines
+ * (gated out of balances until POSTED); when `spec.post`, flips it POSTED + applies
+ * the balance deltas. Returns a spine-shaped snapshot.
  */
 export async function engineCreateVoucher(
     tx: Prisma.TransactionClient,
     spec: CreateGlVoucherSpec,
-) {
+): Promise<CreatedVoucher> {
     const totalAmount = spec.lines
         .filter((l) => l.type === "DEBIT")
         .reduce((s, l) => s + l.amount, 0);
 
     const reference = await nextRefFromSeries(tx, spec.referenceSeries ?? spec.type, spec.userId);
 
-    const voucher = await tx.voucher.create({
-        data: {
-            type:           spec.type,
-            reference,
-            date:           spec.date,
-            narration:      spec.narration ?? null,
-            partyAccountId: spec.partyAccountId ?? null,
-            totalAmount,
-            createdById:    spec.userId,
-            lines: {
-                create: spec.lines.map((l) => ({
-                    accountId:   l.accountId,
-                    type:        l.type,
-                    amount:      l.amount,
-                    description: l.description ?? null,
-                })),
-            },
-        },
-        include: { lines: true },
-    });
-
-    // Phase 5 5.0: every financial voucher carries a DRAFT spine from create — the
-    // document anchor. POST attaches its GL lines + flips it (existingSpineId).
     const spineId = await engineCreateSpine(tx, {
         type:           spec.type,
         date:           spec.date,
@@ -451,22 +436,24 @@ export async function engineCreateVoucher(
         partyAccountId: spec.partyAccountId ?? null,
         userId:         spec.userId,
     });
-    await tx.voucher.update({ where: { id: voucher.id }, data: { universalVoucherId: spineId } });
-    voucher.universalVoucherId = spineId;
+    await tx.voucherGlLine.createMany({
+        data: spec.lines.map((l, idx) => ({
+            universalVoucherId: spineId,
+            accountId:   l.accountId,
+            type:        l.type,
+            amount:      l.amount,
+            description: l.description ?? null,
+            seq:         idx,
+        })),
+    });
 
+    let status: "DRAFT" | "POSTED" = "DRAFT";
+    let journalEntryId: number | null = null;
     if (spec.post) {
-        const loaded = await tx.voucher.findUnique({
-            where:   { id: voucher.id },
-            include: { lines: { include: { account: { select: { normalBalance: true, group: { select: { type: true } } } } } } },
-        });
-        if (loaded) {
-            const jeId = await enginePostVoucher(tx, loaded as unknown as PostableVoucher, spec.userId, spec.branchId ?? null, spec.postedAt ?? new Date(), spineId);
-            // Reflect the posted state on the returned snapshot so callers that
-            // need the mirror-JE id (postContra et al.) can read it without a re-fetch.
-            voucher.journalEntryId = jeId;
-            voucher.status = "POSTED";
-        }
+        await enginePostSpine(tx, spineId, { postedAt: spec.postedAt ?? new Date() });
+        status = "POSTED";
+        journalEntryId = spineId;
     }
 
-    return voucher;
+    return { id: spineId, reference, universalVoucherId: spineId, journalEntryId, status, totalAmount };
 }

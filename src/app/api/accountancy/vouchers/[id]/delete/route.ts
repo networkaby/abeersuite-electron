@@ -3,7 +3,6 @@ import { NextResponse } from "next/server";
 import { requireAuth, userCanVoucher } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
-import { setSpineLifecycle } from "@/modules/accountancy/lib/transactionEngine";
 import { ensureDeletable, deleteFields, isPosted, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
@@ -11,7 +10,8 @@ import { handleApiError } from "@/shared/lib/api";
 const schema = z.object({ reason: z.string().trim().min(1, "Delete reason required") });
 
 // POST /api/accountancy/vouchers/[id]/delete
-// Soft-delete: hides from views and reverses GL impact (no counter-entry). Recoverable.
+// Soft-delete: hides from views and reverses the GL impact (POSTED only).
+// Phase 5 5E: the spine IS the financial voucher; `id` is the spine id.
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { user, response } = await requireAuth();
     if (response) return response;
@@ -20,15 +20,20 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const { data, error } = await validateRequest(req, schema);
     if (error) return error;
 
-    const voucher = await prisma.voucher.findUnique({
-        where: { id: Number(id) },
-        include: { lines: { include: { account: { select: { normalBalance: true } } } } },
+    const voucher = await prisma.universalVoucher.findUnique({
+        where:   { id: Number(id) },
+        include: { lines: true },
     });
     if (!voucher) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    // Per-kind delete gate (falls back to generic finance:voucher:delete).
     if (!userCanVoucher(user, voucher.type, "delete")) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
+
+    const nbRows = await prisma.account.findMany({
+        where:  { id: { in: [...new Set(voucher.lines.map((l) => l.accountId))] } },
+        select: { id: true, normalBalance: true },
+    });
+    const nbById = new Map(nbRows.map((a) => [a.id, a.normalBalance]));
 
     try {
         ensureDeletable(voucher);
@@ -36,37 +41,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         await prisma.$transaction(async (tx) => {
             if (isPosted(voucher)) {
                 for (const line of voucher.lines) {
-                    const delta = balanceDelta(line.account.normalBalance!, line.type, toNumber(line.amount));
-                    await tx.account.update({ where: { id: line.accountId }, data: { balance: { decrement: delta } } });
-                }
-                if (voucher.journalEntryId) {
-                    await setSpineLifecycle(tx, voucher.journalEntryId, {
-                        deletedAt:    new Date(),
-                        deletedById:  user!.id,
-                        deleteReason: `Voucher ${voucher.reference} deleted: ${data.reason}`,
-                    });
+                    const nb = nbById.get(line.accountId);
+                    if (!nb) continue;
+                    await tx.account.update({ where: { id: line.accountId }, data: { balance: { decrement: balanceDelta(nb, line.type, toNumber(line.amount)) } } });
                 }
             }
-
-            // Phase 5 5.0d: a DRAFT voucher carries a draft spine (no GL lines) —
-            // hide it with the voucher so it doesn't orphan (POSTED handled above).
-            if (!isPosted(voucher) && voucher.universalVoucherId) {
-                await setSpineLifecycle(tx, voucher.universalVoucherId, {
-                    deletedAt:    new Date(),
-                    deletedById:  user!.id,
-                    deleteReason: `Voucher ${voucher.reference} deleted: ${data.reason}`,
-                });
-            }
-
-            await tx.voucher.update({
-                where: { id: voucher.id },
-                data:  deleteFields(user!.id, data.reason),
-            });
-        // Per-line balance reversal over the Supabase pooler can exceed the
-        // default 5s interactive-tx ceiling (P2028) — match 30s.
+            await tx.universalVoucher.update({ where: { id: voucher.id }, data: deleteFields(user!.id, data.reason) });
         }, { timeout: 30_000, maxWait: 10_000 });
 
-        const updated = await prisma.voucher.findUnique({ where: { id: Number(id) } });
+        const updated = await prisma.universalVoucher.findUnique({ where: { id: Number(id) } });
         return NextResponse.json(updated);
     } catch (e) {
         const lifecycle = lifecycleErrorResponse(e);

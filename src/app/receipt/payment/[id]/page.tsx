@@ -11,24 +11,34 @@ import { formatDateTime } from "@/shared/lib/format/formatDate";
 export default async function PaymentReceiptPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params;
 
-    const voucher = await prisma.voucher.findUnique({
+    // Phase 5 5E: the spine IS the financial voucher. Lines (VoucherGlLine) and the
+    // party are scalar/id-only, so account names + the party are enriched via lookups
+    // to keep the receipt's display shape. Total is computed from the debit legs.
+    const spine = await prisma.universalVoucher.findUnique({
         where: { id: Number(id) },
-        include: {
-            lines: { include: { account: { select: { name: true } } } },
-            partyAccount: {
-                select: {
-                    name:    true,
-                    person:  { select: { name: true, phones: { take: 1, orderBy: [{ isPrimary: "desc" }] } } },
-                    company: { select: { name: true, phones: { take: 1, orderBy: [{ isPrimary: "desc" }] } } },
-                },
-            },
+        include: { lines: { orderBy: [{ type: "asc" }, { id: "asc" }] } },
+    });
+    if (!spine || (spine.type !== "RECEIPT" && spine.type !== "PAYMENT")) notFound();
+
+    const acctIds = [...new Set([...(spine.partyAccountId != null ? [spine.partyAccountId] : []), ...spine.lines.map((l) => l.accountId)])];
+    const accounts = await prisma.account.findMany({
+        where:  { id: { in: acctIds } },
+        select: {
+            id: true, name: true,
+            person:  { select: { name: true, phones: { take: 1, orderBy: [{ isPrimary: "desc" as const }] } } },
+            company: { select: { name: true, phones: { take: 1, orderBy: [{ isPrimary: "desc" as const }] } } },
         },
     });
-    if (!voucher || (voucher.type !== "RECEIPT" && voucher.type !== "PAYMENT")) notFound();
+    const acctById = new Map(accounts.map((a) => [a.id, a]));
+    const voucher = {
+        ...spine,
+        partyAccount: spine.partyAccountId != null ? (acctById.get(spine.partyAccountId) ?? null) : null,
+        lines: spine.lines.map((l) => ({ ...l, account: { name: acctById.get(l.accountId)?.name ?? "—" } })),
+    };
 
     const org = await getOrganisation();
     const isReceipt = voucher.type === "RECEIPT";
-    const total = Number(voucher.totalAmount);
+    const total = voucher.lines.filter((l) => l.type === "DEBIT").reduce((s, l) => s + Number(l.amount), 0);
 
     const debitLine  = voucher.lines.find((l) => l.type === "DEBIT");
     const creditLine = voucher.lines.find((l) => l.type === "CREDIT");
