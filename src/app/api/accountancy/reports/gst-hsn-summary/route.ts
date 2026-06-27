@@ -19,7 +19,7 @@ export async function GET(req: Request) {
     const invType = direction === "OUTWARD" ? "SALE" : "PURCHASE";
 
     try {
-        const lines = await prisma.invVoucherLine.findMany({
+        const lines = await prisma.voucherInventoryLine.findMany({
             where: {
                 voucher: {
                     type:      invType,

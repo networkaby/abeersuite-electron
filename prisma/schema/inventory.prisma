@@ -277,7 +277,7 @@ model InvProduct {
 
   codes                     InvProductCode[]
   orderLines                ShopOrderLine[]
-  voucherLines              InvVoucherLine[]
+  voucherLines              VoucherInventoryLine[]
   stockEntries              InvStockLedger[]
   branchStocks              InvProductBranch[]
   reservations              StockReservation[]
@@ -503,7 +503,7 @@ model InvVoucher {
   createdBy                 User                       @relation("InvVoucherCreatedBy", fields: [createdById], references: [id])
   cancelledBy               User?                      @relation("InvVoucherCancelledBy", fields: [cancelledById], references: [id])
   deletedBy                 User?                      @relation("InvVoucherDeletedBy", fields: [deletedById], references: [id])
-  lines                     InvVoucherLine[]
+  lines                     VoucherInventoryLine[]
   // Phase 4 G4b: tender + charge INPUT (re-rendered for edit, never aggregated —
   // money/reporting read the posted spine's role=TENDER/CHARGE VoucherGlLine).
   // Shape: { tenders: [{accountId, amount, method?, reference?}],
@@ -532,7 +532,9 @@ model InvVoucher {
   @@index([orderStatusId])
 }
 
-model InvVoucherLine {
+// Phase 4 G4c: renamed InvVoucherLine → VoucherInventoryLine (vocabulary.md — the
+// "goods" line face). Table kept via @@map so the rename is code-only, no migration.
+model VoucherInventoryLine {
   id                  Int        @id @default(autoincrement())
   voucherId           Int
   voucher             InvVoucher @relation(fields: [voucherId], references: [id], onDelete: Cascade)
@@ -570,6 +572,7 @@ model InvVoucherLine {
 
   @@index([voucherId])
   @@index([productId])
+  @@map("InvVoucherLine")
 }
 
 /// Immutable audit trail — one row per product per voucher line posted.

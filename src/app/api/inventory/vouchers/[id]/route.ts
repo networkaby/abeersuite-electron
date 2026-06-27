@@ -273,7 +273,7 @@ export async function PATCH(req: Request, { params }: Params) {
             // PHASE 2 — Apply the user's edits (header + lines)
             // ────────────────────────────────────────────────────────────
             if (computedLines) {
-                await tx.invVoucherLine.deleteMany({ where: { voucherId: id } });
+                await tx.voucherInventoryLine.deleteMany({ where: { voucherId: id } });
             }
             // G4b: tender + charge input lives in settlementJson now. A PATCH may
             // touch either section independently (undefined = leave as-is), so
@@ -409,7 +409,7 @@ export async function DELETE(_req: Request, { params }: Params) {
     if (existing.status !== "DRAFT") {
         return NextResponse.json({ error: "Only DRAFT vouchers can be deleted via this route. Use /cancel or /delete for lifecycle." }, { status: 409 });
     }
-    await prisma.invVoucherLine.deleteMany({ where: { voucherId: Number(id) } });
+    await prisma.voucherInventoryLine.deleteMany({ where: { voucherId: Number(id) } });
     await prisma.invVoucher.delete({ where: { id: Number(id) } });
     return NextResponse.json({ ok: true });
 }

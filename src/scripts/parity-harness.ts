@@ -446,7 +446,7 @@ async function runEditCycle(): Promise<boolean> {
             await tx.invVoucher.update({ where: { id: v.id }, data: { journalEntryId: saleJe } });
 
             // 2. EDIT in place: qty 1 → 2 (line 236 = taxable 200 + 18% tax 36).
-            await tx.invVoucherLine.updateMany({ where: { voucherId: v.id }, data: { quantity: 2, amount: 236, taxAmount: 36 } });
+            await tx.voucherInventoryLine.updateMany({ where: { voucherId: v.id }, data: { quantity: 2, amount: 236, taxAmount: 36 } });
             await tx.invVoucher.update({ where: { id: v.id }, data: { subtotal: 236, taxAmount: 36, totalAmount: 236, settlementJson: buildSettlementJson([{ accountId: cash.id, amount: 236 }], []) } });
             const edited = await reload(tx, v.id);
             // Reapply through the SHARED helper the PATCH route uses — so a green

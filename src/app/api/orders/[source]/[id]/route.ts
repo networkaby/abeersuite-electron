@@ -113,7 +113,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ source
         const { subtotal, taxAmount, totalAmount } = calcVoucherTotals(computed, shippingAmt, overallDiscount, roundOff, 0);
 
         await prisma.$transaction(async (tx) => {
-            await tx.invVoucherLine.deleteMany({ where: { voucherId: id } });
+            await tx.voucherInventoryLine.deleteMany({ where: { voucherId: id } });
             await tx.invVoucher.update({
                 where: { id },
                 data: {

@@ -51,7 +51,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         const lastInward = await loadLastInwardCostMap([{ id: product.id, stock: product.stock }]);
         const lastPurchasePaise = lastInward.get(product.id) ?? null;
 
-        const lines = await prisma.invVoucherLine.findMany({
+        const lines = await prisma.voucherInventoryLine.findMany({
             where: {
                 productId: id,
                 voucher: {
