@@ -524,16 +524,64 @@ async function runAllocationDualTarget(): Promise<boolean> {
     return ok;
 }
 
+/** G2: every spine VoucherGlLine carries sourceJournalLineId == its legacy
+ *  JournalLine twin (the line-level link the cost-pool re-home rides on). Posts a
+ *  voucher through the engine, asserts the twin set matches by id and by
+ *  account/type/amount, rolled back. */
+async function runGlLineTwin(): Promise<boolean> {
+    const acc = await loadAccounts();
+    if (!acc || acc.expense == null || acc.cash == null) { console.log("\ngl-line-twin skipped — no accounts"); return true; }
+    let ok = false;
+    try {
+        await prisma.$transaction(async (tx) => {
+            const v = await engineCreateVoucher(tx, {
+                type: "JOURNAL", date: new Date(), userId: acc.userId,
+                lines: [
+                    { accountId: acc.expense!, type: "DEBIT",  amount: 321 },
+                    { accountId: acc.cash!,    type: "CREDIT", amount: 321 },
+                ],
+                narration: "parity gl-line-twin", post: true, referenceSeries: "JOURNAL",
+            });
+            if (!v.journalEntryId) throw new Error(ROLLBACK);
+            const jeLines = await tx.journalLine.findMany({
+                where: { journalEntryId: v.journalEntryId },
+                select: { id: true, accountId: true, type: true, amount: true },
+            });
+            const uv = await tx.universalVoucher.findUnique({ where: { sourceJournalEntryId: v.journalEntryId }, select: { id: true } });
+            const spineLines = uv ? await tx.voucherGlLine.findMany({
+                where: { universalVoucherId: uv.id },
+                select: { sourceJournalLineId: true, accountId: true, type: true, amount: true },
+            }) : [];
+            const jeById = new Map(jeLines.map((l) => [l.id, l]));
+            const allLinked = spineLines.length === jeLines.length
+                && spineLines.every((s) => s.sourceJournalLineId != null && jeById.has(s.sourceJournalLineId));
+            const allMatch = spineLines.every((s) => {
+                const jl = s.sourceJournalLineId != null ? jeById.get(s.sourceJournalLineId) : undefined;
+                return jl != null && jl.accountId === s.accountId
+                    && String(jl.type) === String(s.type) && Number(jl.amount) === Number(s.amount);
+            });
+            ok = allLinked && allMatch && spineLines.length === 2;
+            throw new Error(ROLLBACK);
+        }, { timeout: 30_000, maxWait: 10_000 });
+    } catch (e) {
+        if ((e as Error)?.message !== ROLLBACK) throw e;
+    }
+    console.log("\n=== G2 gl-line twin (spine line → JournalLine, engine post, rolled back) ===");
+    console.log("twin link set matches + account/type/amount parity:", ok ? "✓" : "✗");
+    return ok;
+}
+
 async function main() {
     const stockOk    = stockCheck();
     const e2eOk      = await runE2E();
     const recompOk   = await runStockRecompute();
     const editOk     = await runEditCycle();
     const allocOk    = await runAllocationDualTarget();
+    const twinOk     = await runGlLineTwin();
     const goldenOk   = await runGolden();
     const mirrorOk   = await runMirror();
     const lifecycleOk = await runLifecycle();
-    const green      = stockOk && e2eOk && recompOk && editOk && allocOk && goldenOk && mirrorOk && lifecycleOk;
+    const green      = stockOk && e2eOk && recompOk && editOk && allocOk && twinOk && goldenOk && mirrorOk && lifecycleOk;
     console.log(green ? "\nHARNESS GREEN ✓" : "\nHARNESS FAILED ✗");
     if (!green) process.exitCode = 1;
 }

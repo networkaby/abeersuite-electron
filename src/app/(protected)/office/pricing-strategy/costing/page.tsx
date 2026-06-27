@@ -28,7 +28,7 @@ const STICKY_HEAD = "sticky top-0 z-20 bg-muted [&_th]:bg-muted [&_th]:shadow-[i
 
 // ── Types (mirror the API DTOs) ───────────────────────────────────────────────
 interface PoolEntry {
-    journalLineId: number;
+    glLineId: number;
     date: string;
     ledgerId: number;
     ledgerName: string;
@@ -62,7 +62,7 @@ interface DrawRow {
     productId: number | null;
     productName: string | null;
     productSku: string | null;
-    sourceJournalLineId: number;
+    sourceGlLineId: number | null;
     ledgerName: string | null;
     reference: string | null;
     referenceType: string | null;
@@ -151,7 +151,7 @@ export default function CostingPage() {
     const documents = useMemo(() => {
         const m = new Map<string, Doc>();
         for (const d of draws) {
-            const key = `${d.sourceJournalLineId}|${d.invVoucherId ?? "x"}|${d.kind}`;
+            const key = `${d.sourceGlLineId ?? "x"}|${d.invVoucherId ?? "x"}|${d.kind}`;
             let g = m.get(key);
             if (!g) {
                 g = {
@@ -339,7 +339,7 @@ export default function CostingPage() {
         try {
             await axios.post("/api/pricing-strategy/costing/draws", {
                 kind: "DISMISSAL",
-                sourceJournalLineId: entry.journalLineId,
+                sourceGlLineId: entry.glLineId,
                 amountPaise,
                 note: note.trim() || undefined,
             });
@@ -419,7 +419,7 @@ export default function CostingPage() {
                                 <TableEmptyRow colSpan={8} message="Nothing waiting — every courier/shipping debit is fully allocated or dismissed." />
                             ) : (
                                 pool.entries.map((e) => (
-                                    <TableRow key={e.journalLineId} className="hover:bg-muted/40">
+                                    <TableRow key={e.glLineId} className="hover:bg-muted/40">
                                         <TableCell className="text-xs whitespace-nowrap">{e.date.slice(0, 10)}</TableCell>
                                         <TableCell className="text-xs">{e.ledgerName}</TableCell>
                                         <TableCell className="text-xs">

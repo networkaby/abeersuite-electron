@@ -4,13 +4,13 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { costPoolDrawCreateSchema } from "@/shared/lib/schemas/costPoolSchemas";
-import { getEntryRemainingPaise, resolveSourceVoucherRefs } from "@/modules/pricing-strategy/lib/costPool";
+import { getEntryRemainingPaise } from "@/modules/pricing-strategy/lib/costPool";
 import { readPartyName } from "@/shared/lib/accountancy/partySnapshot";
 
 // GET /api/pricing-strategy/costing/draws — draw history.
-//   ?productId=N            → allocations for one product
-//   ?sourceJournalLineId=N  → draws against one pool entry
-//   ?invVoucherId=N         → all allocations spread from one purchase/GRN (its legs)
+//   ?productId=N       → allocations for one product
+//   ?sourceGlLineId=N  → draws against one pool entry (a spine VoucherGlLine)
+//   ?invVoucherId=N    → all allocations spread from one purchase/GRN (its legs)
 // Otherwise: the whole history (most recent first).
 export async function GET(req: Request) {
     const { response } = await requirePermission(PERMISSIONS.INVENTORY_MANAGE);
@@ -18,13 +18,13 @@ export async function GET(req: Request) {
     try {
         const { searchParams } = new URL(req.url);
         const productId = Number(searchParams.get("productId")) || undefined;
-        const sourceJournalLineId = Number(searchParams.get("sourceJournalLineId")) || undefined;
+        const sourceGlLineId = Number(searchParams.get("sourceGlLineId")) || undefined;
         const sourceInvVoucherId = Number(searchParams.get("invVoucherId")) || undefined;
 
         const rows = await prisma.additionalCostAllocation.findMany({
             where: {
                 ...(productId ? { productId } : {}),
-                ...(sourceJournalLineId ? { sourceJournalLineId } : {}),
+                ...(sourceGlLineId ? { sourceVoucherGlLineId: sourceGlLineId } : {}),
                 ...(sourceInvVoucherId ? { sourceInvVoucherId } : {}),
             },
             orderBy: [{ createdAt: "desc" }, { id: "desc" }],
@@ -40,12 +40,14 @@ export async function GET(req: Request) {
                 createdAt: true,
                 productId: true,
                 product: { select: { name: true, sku: true } },
-                sourceJournalLineId: true,
-                sourceJournalLine: {
+                sourceVoucherGlLineId: true,
+                // Originating document number / type + orphan status come straight
+                // off the spine header — no JE→voucher lookup needed (G2). The spine
+                // line is scalar/id-only, so the ledger name is resolved separately.
+                sourceVoucherGlLine: {
                     select: {
-                        journalEntryId: true,
-                        account: { select: { name: true } },
-                        journalEntry: { select: { status: true, deletedAt: true } },
+                        accountId: true,
+                        universalVoucher: { select: { friendlyRef: true, type: true, status: true, deletedAt: true } },
                     },
                 },
                 sourceInvVoucherId: true,
@@ -54,9 +56,12 @@ export async function GET(req: Request) {
             },
         });
 
-        // Resolve each source debit's originating voucher number (not the GL ref).
-        const refMap = await resolveSourceVoucherRefs(
-            rows.map((r) => r.sourceJournalLine?.journalEntryId).filter((x): x is number => x != null),
+        // Ledger names for the source debits (VoucherGlLine has no `account`
+        // relation until G4) — one batched lookup keyed by accountId.
+        const acctIds = [...new Set(rows.map((r) => r.sourceVoucherGlLine?.accountId).filter((x): x is number => x != null))];
+        const acctNameById = new Map(
+            (acctIds.length === 0 ? [] : await prisma.account.findMany({ where: { id: { in: acctIds } }, select: { id: true, name: true } }))
+                .map((a) => [a.id, a.name]),
         );
 
         const draws = rows.map((r) => ({
@@ -71,10 +76,10 @@ export async function GET(req: Request) {
             productId: r.productId,
             productName: r.product?.name ?? null,
             productSku: r.product?.sku ?? null,
-            sourceJournalLineId: r.sourceJournalLineId,
-            ledgerName: r.sourceJournalLine?.account?.name ?? null,
-            reference: (r.sourceJournalLine?.journalEntryId != null ? refMap.get(r.sourceJournalLine.journalEntryId)?.ref : null) ?? null,
-            referenceType: (r.sourceJournalLine?.journalEntryId != null ? refMap.get(r.sourceJournalLine.journalEntryId)?.type : null) ?? null,
+            sourceGlLineId: r.sourceVoucherGlLineId,
+            ledgerName: r.sourceVoucherGlLine?.accountId != null ? (acctNameById.get(r.sourceVoucherGlLine.accountId) ?? null) : null,
+            reference: r.sourceVoucherGlLine?.universalVoucher?.friendlyRef ?? null,
+            referenceType: r.sourceVoucherGlLine?.universalVoucher?.type ?? null,
             invVoucherId: r.sourceInvVoucherId,
             invVoucherRef: r.sourceInvVoucher?.reference ?? null,
             invVoucherType: r.sourceInvVoucher?.type ?? null,
@@ -82,8 +87,8 @@ export async function GET(req: Request) {
             createdByName: r.createdBy?.name ?? null,
             // The source entry was cancelled/deleted after this draw was made.
             orphaned:
-                r.sourceJournalLine?.journalEntry?.status !== "POSTED" ||
-                r.sourceJournalLine?.journalEntry?.deletedAt != null,
+                r.sourceVoucherGlLine?.universalVoucher?.status !== "POSTED" ||
+                r.sourceVoucherGlLine?.universalVoucher?.deletedAt != null,
         }));
 
         return NextResponse.json(draws);
@@ -103,7 +108,7 @@ export async function POST(req: Request) {
 
         // The source debit must still be a live pool-eligible posted debit, and
         // the draw must fit within its remaining un-drawn amount.
-        const remaining = await getEntryRemainingPaise(data.sourceJournalLineId);
+        const remaining = await getEntryRemainingPaise(data.sourceGlLineId);
         if (remaining == null) {
             return NextResponse.json(
                 { error: "Source entry is not a posted debit (or was cancelled)." },
@@ -121,7 +126,7 @@ export async function POST(req: Request) {
         const draw = await prisma.additionalCostAllocation.create({
             data: {
                 kind: data.kind,
-                sourceJournalLineId: data.sourceJournalLineId,
+                sourceVoucherGlLineId: data.sourceGlLineId,
                 amountPaise: data.amountPaise,
                 note: data.note ?? null,
                 date,

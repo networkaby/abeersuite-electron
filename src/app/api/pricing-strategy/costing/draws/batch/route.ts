@@ -17,7 +17,7 @@ export async function POST(req: Request) {
         const { data, error } = await validateRequest(req, costPoolAllocateBatchSchema);
         if (error) return error;
 
-        const remaining = await getEntryRemainingPaise(data.sourceJournalLineId);
+        const remaining = await getEntryRemainingPaise(data.sourceGlLineId);
         if (remaining == null) {
             return NextResponse.json(
                 { error: "Source entry is not a posted debit (or was cancelled)." },
@@ -36,7 +36,7 @@ export async function POST(req: Request) {
         await prisma.additionalCostAllocation.createMany({
             data: data.lines.map((l) => ({
                 kind: "ALLOCATION" as const,
-                sourceJournalLineId: data.sourceJournalLineId,
+                sourceVoucherGlLineId: data.sourceGlLineId,
                 sourceInvVoucherId: data.sourceInvVoucherId ?? null,
                 amountPaise: l.amountPaise,
                 productId: l.productId,

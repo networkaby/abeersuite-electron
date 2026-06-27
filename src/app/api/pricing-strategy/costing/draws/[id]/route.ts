@@ -24,17 +24,17 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
 
         const draw = await prisma.additionalCostAllocation.findUnique({
             where: { id: drawId },
-            select: { id: true, kind: true, sourceJournalLineId: true, amountPaise: true },
+            select: { id: true, kind: true, sourceVoucherGlLineId: true, amountPaise: true },
         });
         if (!draw) return NextResponse.json({ error: "Draw not found" }, { status: 404 });
 
         // Re-cap the amount: line total − every other draw on the same entry.
         if (data.amountPaise != null && data.amountPaise !== draw.amountPaise) {
             const [line, others] = await Promise.all([
-                prisma.journalLine.findUnique({ where: { id: draw.sourceJournalLineId }, select: { amount: true } }),
+                prisma.voucherGlLine.findUnique({ where: { id: draw.sourceVoucherGlLineId ?? -1 }, select: { amount: true } }),
                 prisma.additionalCostAllocation.aggregate({
                     _sum: { amountPaise: true },
-                    where: { sourceJournalLineId: draw.sourceJournalLineId, id: { not: draw.id } },
+                    where: { sourceVoucherGlLineId: draw.sourceVoucherGlLineId, id: { not: draw.id } },
                 }),
             ]);
             if (!line) return NextResponse.json({ error: "Source entry no longer exists." }, { status: 400 });

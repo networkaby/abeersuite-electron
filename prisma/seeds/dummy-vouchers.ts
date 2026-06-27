@@ -84,6 +84,7 @@ async function seedCostPoolDemo(): Promise<void> {
     }
     const courierLine = je.lines.find((l) => l.accountId === courier.id && l.type === "DEBIT");
     if (!courierLine) { console.log("    courier debit line missing — skipping."); return; }
+    const cashLine = je.lines.find((l) => l.accountId === cash.id && l.type === "CREDIT");
 
     // 4. A PAYMENT Voucher tied to that JE → the real voucher number the UI shows.
     if (!(await prisma.voucher.findUnique({ where: { reference: VOUCHER_REF } }))) {
@@ -107,8 +108,8 @@ async function seedCostPoolDemo(): Promise<void> {
                 status: "POSTED", postedAt: today, createdById: admin.id, sourceJournalEntryId: je.id,
                 lines: {
                     create: [
-                        { accountId: courier.id, type: "DEBIT", amount: 5000, description: "Courier charges" },
-                        { accountId: cash.id, type: "CREDIT", amount: 5000, description: "Paid in cash" },
+                        { accountId: courier.id, type: "DEBIT", amount: 5000, description: "Courier charges", sourceJournalLineId: courierLine.id },
+                        { accountId: cash.id, type: "CREDIT", amount: 5000, description: "Paid in cash", sourceJournalLineId: cashLine?.id ?? null },
                     ],
                 },
             },
@@ -116,16 +117,22 @@ async function seedCostPoolDemo(): Promise<void> {
     }
 
     // 5. Draws against the ₹5,000 entry: ₹2,000 onto a product, ₹3,000 dismissed.
-    if ((await prisma.additionalCostAllocation.count({ where: { sourceJournalLineId: courierLine.id } })) === 0) {
+    //    Cost-pool rows reference the SPINE debit line (G2), not the legacy JE line.
+    const spineCourierLine = await prisma.voucherGlLine.findFirst({
+        where:  { universalVoucher: { sourceJournalEntryId: je.id }, accountId: courier.id, type: "DEBIT" },
+        select: { id: true },
+    });
+    if (!spineCourierLine) { console.log("    spine courier line missing — skipping draws."); return; }
+    if ((await prisma.additionalCostAllocation.count({ where: { sourceVoucherGlLineId: spineCourierLine.id } })) === 0) {
         await prisma.additionalCostAllocation.createMany({
             data: [
                 {
-                    kind: "ALLOCATION", sourceJournalLineId: courierLine.id, amountPaise: 200000,
+                    kind: "ALLOCATION", sourceVoucherGlLineId: spineCourierLine.id, amountPaise: 200000,
                     productId: product.id, perUnitPaise: 2000, quantity: 100,
                     note: "Inbound freight share", date: today, createdById: admin.id,
                 },
                 {
-                    kind: "DISMISSAL", sourceJournalLineId: courierLine.id, amountPaise: 300000,
+                    kind: "DISMISSAL", sourceVoucherGlLineId: spineCourierLine.id, amountPaise: 300000,
                     note: "Office courier — not product freight", date: today, createdById: admin.id,
                 },
             ],

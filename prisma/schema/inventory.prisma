@@ -734,10 +734,15 @@ model StrategyPoint {
 model AdditionalCostAllocation {
   id                  Int                          @id @default(autoincrement())
   kind                AdditionalCostAllocationKind
-  // The specific POSTED debit this row consumes. Cascades if the journal line
+  // Phase 4 G2: the specific POSTED debit this row consumes — now the spine
+  // `VoucherGlLine` (re-homed off the legacy `JournalLine`). Cascades if the line
   // is ever hard-deleted; soft-cancelled entries are filtered out at read time.
-  sourceJournalLineId Int
-  sourceJournalLine   JournalLine                  @relation(fields: [sourceJournalLineId], references: [id], onDelete: Cascade)
+  sourceVoucherGlLineId Int?
+  sourceVoucherGlLine   VoucherGlLine?             @relation(fields: [sourceVoucherGlLineId], references: [id], onDelete: Cascade)
+  // LEGACY (pre-G2) link to the JournalLine. Nullable now that writes are
+  // spine-only; retained for already-migrated rows until G5 drops JournalLine.
+  sourceJournalLineId Int?
+  sourceJournalLine   JournalLine?                 @relation(fields: [sourceJournalLineId], references: [id], onDelete: Cascade)
   amountPaise         Int
   // ALLOCATION-only fields (null on DISMISSAL):
   productId           Int?
@@ -755,6 +760,7 @@ model AdditionalCostAllocation {
   createdBy           User                         @relation("AdditionalCostAllocationCreatedBy", fields: [createdById], references: [id])
   createdAt           DateTime                     @default(now())
 
+  @@index([sourceVoucherGlLineId])
   @@index([sourceJournalLineId])
   @@index([productId, createdAt])
   @@index([sourceInvVoucherId])

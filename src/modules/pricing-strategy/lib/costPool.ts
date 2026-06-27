@@ -24,7 +24,8 @@ function rupeesToPaise(d: unknown): number {
 }
 
 export interface PoolEntry {
-    journalLineId: number;
+    /** The spine VoucherGlLine this pool entry is — the draw's `sourceGlLineId`. */
+    glLineId: number;
     /** ISO date of the posted entry. */
     date: string;
     ledgerId: number;
@@ -88,40 +89,13 @@ async function getPoolLedgers(groupId: number): Promise<{ id: number; name: stri
 }
 
 /**
- * Resolve each GL `JournalEntry` back to the VOUCHER that created it, so the UI
- * shows the real document number (Payment / Purchase / Journal …) instead of the
- * internal `GL-…` reference. A `Voucher` (Payment/Receipt/Contra/JV) wins over an
- * `InvVoucher` (Purchase/Sale…) on the rare chance both point at the same JE.
- * Returns Map<journalEntryId, { ref, type }>. Entries with no originating voucher
- * (e.g. a raw engine/manual JE) are simply absent → caller shows "—".
- *
- * NOTE: the GL reference itself is intentionally NOT exposed here — surfacing GL
- * numbers to normal users is a separate admin-diagnosis concern (TODO).
- */
-export async function resolveSourceVoucherRefs(
-    jeIds: number[],
-): Promise<Map<number, { ref: string; type: string }>> {
-    const out = new Map<number, { ref: string; type: string }>();
-    const ids = [...new Set(jeIds)];
-    if (ids.length === 0) return out;
-    const [vouchers, invVouchers] = await Promise.all([
-        prisma.voucher.findMany({
-            where: { journalEntryId: { in: ids } },
-            select: { journalEntryId: true, reference: true, type: true },
-        }),
-        prisma.invVoucher.findMany({
-            where: { journalEntryId: { in: ids } },
-            select: { journalEntryId: true, reference: true, type: true },
-        }),
-    ]);
-    for (const v of invVouchers) if (v.journalEntryId != null) out.set(v.journalEntryId, { ref: v.reference, type: v.type });
-    for (const v of vouchers) if (v.journalEntryId != null) out.set(v.journalEntryId, { ref: v.reference, type: v.type });
-    return out;
-}
-
-/**
  * Full pool snapshot: waiting entries (remaining > 0) + summary totals.
  * `asOf` optionally caps which posted debits are considered (defaults to all).
+ *
+ * Reads the universal-voucher spine (`VoucherGlLine`) — each POSTED DEBIT to a
+ * pool ledger is one pool entry. The originating document number / type come
+ * straight off the spine header (`friendlyRef` / `type`); the internal GL
+ * reference is never surfaced.
  */
 export async function getPoolSummary(asOf?: Date): Promise<PoolSummary> {
     const groupId = await getShippingPoolGroupId();
@@ -138,41 +112,40 @@ export async function getPoolSummary(asOf?: Date): Promise<PoolSummary> {
         getPoolLedgers(groupId),
     ]);
     const ledgerIds = ledgers.map((l) => l.id);
+    // Ledger names — VoucherGlLine is a scalar/id-only spine record (no `account`
+    // relation; that lands in G4), so resolve the display name from the masters.
+    const ledgerNameById = new Map(ledgers.map((l) => [l.id, l.name]));
 
-    // Every POSTED debit to a pool ledger = one pool entry.
-    const lines = ledgerIds.length === 0 ? [] : await prisma.journalLine.findMany({
+    // Every POSTED debit to a pool ledger = one pool entry (read from the spine).
+    const lines = ledgerIds.length === 0 ? [] : await prisma.voucherGlLine.findMany({
         where: {
             type: "DEBIT",
             accountId: { in: ledgerIds },
-            journalEntry: { status: "POSTED", deletedAt: null, ...(asOf ? { date: { lte: asOf } } : {}) },
+            universalVoucher: { status: "POSTED", deletedAt: null, ...(asOf ? { date: { lte: asOf } } : {}) },
         },
         select: {
             id: true,
             amount: true,
             accountId: true,
-            journalEntryId: true,
-            account: { select: { name: true } },
-            journalEntry: { select: { date: true } },
+            universalVoucher: { select: { date: true, friendlyRef: true, type: true } },
         },
         orderBy: { id: "desc" },
     });
 
-    // Resolve each entry's originating voucher number (never surface GL refs).
-    const refMap = await resolveSourceVoucherRefs(lines.map((l) => l.journalEntryId));
-
     // Sum draws per source line + kind.
     const lineIds = lines.map((l) => l.id);
     const drawSums = lineIds.length === 0 ? [] : await prisma.additionalCostAllocation.groupBy({
-        by: ["sourceJournalLineId", "kind"],
+        by: ["sourceVoucherGlLineId", "kind"],
         _sum: { amountPaise: true },
-        where: { sourceJournalLineId: { in: lineIds } },
+        where: { sourceVoucherGlLineId: { in: lineIds } },
     });
     const allocByLine = new Map<number, number>();
     const dismissByLine = new Map<number, number>();
     for (const d of drawSums) {
+        if (d.sourceVoucherGlLineId == null) continue;
         const sum = d._sum.amountPaise ?? 0;
-        if (d.kind === "ALLOCATION") allocByLine.set(d.sourceJournalLineId, sum);
-        else dismissByLine.set(d.sourceJournalLineId, sum);
+        if (d.kind === "ALLOCATION") allocByLine.set(d.sourceVoucherGlLineId, sum);
+        else dismissByLine.set(d.sourceVoucherGlLineId, sum);
     }
 
     let poolTotalPaise = 0, allocatedTotalPaise = 0, dismissedTotalPaise = 0, waitingTotalPaise = 0;
@@ -187,14 +160,13 @@ export async function getPoolSummary(asOf?: Date): Promise<PoolSummary> {
         dismissedTotalPaise += dismissedPaise;
         if (remainingPaise > 0) {
             waitingTotalPaise += remainingPaise;
-            const vref = refMap.get(l.journalEntryId);
             entries.push({
-                journalLineId: l.id,
-                date: l.journalEntry.date.toISOString(),
+                glLineId: l.id,
+                date: l.universalVoucher.date.toISOString(),
                 ledgerId: l.accountId,
-                ledgerName: l.account?.name ?? "—",
-                reference: vref?.ref ?? "—",
-                referenceType: vref?.type ?? null,
+                ledgerName: ledgerNameById.get(l.accountId) ?? "—",
+                reference: l.universalVoucher.friendlyRef ?? "—",
+                referenceType: l.universalVoucher.type ?? null,
                 amountPaise, allocatedPaise, dismissedPaise, remainingPaise,
             });
         }
@@ -213,20 +185,21 @@ export async function getPoolSummary(asOf?: Date): Promise<PoolSummary> {
     };
 }
 
-/** Remaining (un-drawn) paise on one posted debit. Used to validate a new draw. */
-export async function getEntryRemainingPaise(journalLineId: number): Promise<number | null> {
-    const line = await prisma.journalLine.findFirst({
+/** Remaining (un-drawn) paise on one posted debit (a spine VoucherGlLine). Used
+ *  to validate a new draw. */
+export async function getEntryRemainingPaise(glLineId: number): Promise<number | null> {
+    const line = await prisma.voucherGlLine.findFirst({
         where: {
-            id: journalLineId,
+            id: glLineId,
             type: "DEBIT",
-            journalEntry: { status: "POSTED", deletedAt: null },
+            universalVoucher: { status: "POSTED", deletedAt: null },
         },
         select: { amount: true },
     });
     if (!line) return null; // not a live pool-eligible debit
     const draws = await prisma.additionalCostAllocation.aggregate({
         _sum: { amountPaise: true },
-        where: { sourceJournalLineId: journalLineId },
+        where: { sourceVoucherGlLineId: glLineId },
     });
     return rupeesToPaise(line.amount) - (draws._sum.amountPaise ?? 0);
 }

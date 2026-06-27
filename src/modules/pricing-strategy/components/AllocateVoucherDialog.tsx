@@ -17,7 +17,7 @@ import { SearchableSelect } from "@/shared/components/SearchableSelect";
 
 // The pool entry being allocated (subset of the Costing page's PoolEntry).
 export interface AllocEntry {
-    journalLineId: number;
+    glLineId: number;
     ledgerName: string;
     reference: string;
     remainingPaise: number;
@@ -214,7 +214,7 @@ export function AllocateVoucherDialog({
         setSubmitting(true);
         try {
             await axios.post("/api/pricing-strategy/costing/draws/batch", {
-                sourceJournalLineId: entry.journalLineId,
+                sourceGlLineId: entry.glLineId,
                 sourceInvVoucherId: voucherId ?? undefined,
                 // Effective date = the inward voucher's date, so the updated cost
                 // takes effect from when the goods (and their freight) came in.

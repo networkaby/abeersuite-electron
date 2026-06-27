@@ -193,6 +193,61 @@ async function dropLegacyAllocations(): Promise<number> {
     return toDelete.length;
 }
 
+// Phase 4 G2: stamp each pre-existing spine line with its legacy JournalLine
+// twin's id (`VoucherGlLine.sourceJournalLineId`). New rows are stamped at
+// write-time by the engine; this fills in spines created before G2. Pairs lines
+// positionally — both sides were created from the same ordered `lines` array, so
+// id-asc on each is the same logical order. Idempotent (skips already-stamped).
+async function backfillGlLineSourceIds(): Promise<number> {
+    const spines = await prisma.universalVoucher.findMany({
+        where:  { sourceJournalEntryId: { not: null }, lines: { some: { sourceJournalLineId: null } } },
+        select: { sourceJournalEntryId: true, lines: { select: { id: true, sourceJournalLineId: true }, orderBy: { id: "asc" } } },
+    });
+    if (spines.length === 0) return 0;
+    const jes = await prisma.journalEntry.findMany({
+        where:  { id: { in: spines.map((s) => s.sourceJournalEntryId!) } },
+        select: { id: true, lines: { select: { id: true }, orderBy: { id: "asc" } } },
+    });
+    const jeLinesById = new Map(jes.map((j) => [j.id, j.lines.map((l) => l.id)]));
+
+    let updated = 0;
+    for (const s of spines) {
+        const jeLineIds = jeLinesById.get(s.sourceJournalEntryId!) ?? [];
+        if (jeLineIds.length !== s.lines.length) continue; // arity mismatch — skip rather than mis-link
+        for (let i = 0; i < s.lines.length; i++) {
+            if (s.lines[i].sourceJournalLineId != null) continue;
+            await prisma.voucherGlLine.update({ where: { id: s.lines[i].id }, data: { sourceJournalLineId: jeLineIds[i] } });
+            updated++;
+        }
+    }
+    return updated;
+}
+
+// Phase 4 G2: re-home cost-pool rows off the legacy JournalLine onto the spine —
+// set `sourceVoucherGlLineId` from the VoucherGlLine that twins the row's
+// `sourceJournalLineId`. Idempotent. Leaves the legacy column intact (G5 drops).
+async function backfillCostPoolGlLines(): Promise<number> {
+    const rows = await prisma.additionalCostAllocation.findMany({
+        where:  { sourceVoucherGlLineId: null, sourceJournalLineId: { not: null } },
+        select: { id: true, sourceJournalLineId: true },
+    });
+    if (rows.length === 0) return 0;
+    const glLines = await prisma.voucherGlLine.findMany({
+        where:  { sourceJournalLineId: { in: [...new Set(rows.map((r) => r.sourceJournalLineId!))] } },
+        select: { id: true, sourceJournalLineId: true },
+    });
+    const glByJl = new Map(glLines.map((g) => [g.sourceJournalLineId!, g.id]));
+
+    let updated = 0;
+    for (const r of rows) {
+        const glId = glByJl.get(r.sourceJournalLineId!);
+        if (glId == null) continue; // no twin yet — backfillGlLineSourceIds should have made it
+        await prisma.additionalCostAllocation.update({ where: { id: r.id }, data: { sourceVoucherGlLineId: glId } });
+        updated++;
+    }
+    return updated;
+}
+
 async function main() {
     if (!CHECK_ONLY) {
         await backfill();
@@ -200,6 +255,10 @@ async function main() {
         console.log(`allocation backfill: created ${allocs} parallel UNIVERSAL_VOUCHER allocation(s).`);
         const dropped = await dropLegacyAllocations();
         console.log(`legacy allocations dropped: ${dropped} JOURNAL_ENTRY allocation(s) removed.`);
+        const glLineLinks = await backfillGlLineSourceIds();
+        console.log(`G2 spine-line back-refs: stamped ${glLineLinks} VoucherGlLine.sourceJournalLineId.`);
+        const costPoolLinks = await backfillCostPoolGlLines();
+        console.log(`G2 cost-pool re-home: linked ${costPoolLinks} AdditionalCostAllocation to spine lines.`);
     } else {
         console.log("--check: skipping writes, asserting drift only.");
     }

@@ -4,8 +4,8 @@ import { z } from "zod";
 // Discriminated by `kind`:
 //   ALLOCATION → must name a product + per-unit surcharge (GST-exclusive paise).
 //   DISMISSAL  → office-expense write-off; product/per-unit omitted.
-// Both draw `amountPaise` from a specific posted debit (`sourceJournalLineId`);
-// the route re-checks amountPaise ≤ the entry's remaining server-side.
+// Both draw `amountPaise` from a specific posted debit (`sourceGlLineId`, a spine
+// VoucherGlLine); the route re-checks amountPaise ≤ the entry's remaining server-side.
 
 const noteField = z
     .union([z.string(), z.null(), z.undefined()])
@@ -18,13 +18,13 @@ const noteField = z
 /** Optional ISO date string; the route defaults to "now" when omitted. */
 const dateField = z.string().trim().min(1).optional();
 
-const sourceJournalLineId = z.number().int().positive();
+const sourceGlLineId = z.number().int().positive();
 const amountPaise = z.number().int().positive();
 
 export const costPoolDrawCreateSchema = z.discriminatedUnion("kind", [
     z.object({
         kind: z.literal("ALLOCATION"),
-        sourceJournalLineId,
+        sourceGlLineId,
         amountPaise,
         productId: z.number().int().positive(),
         perUnitPaise: z.number().int().min(0),
@@ -34,7 +34,7 @@ export const costPoolDrawCreateSchema = z.discriminatedUnion("kind", [
     }),
     z.object({
         kind: z.literal("DISMISSAL"),
-        sourceJournalLineId,
+        sourceGlLineId,
         amountPaise,
         note: noteField.optional(),
         date: dateField,
@@ -59,7 +59,7 @@ export type CostPoolDrawUpdateInput = z.infer<typeof costPoolDrawUpdateSchema>;
 // a purchase/GRN voucher. One CostPoolDraw (kind ALLOCATION) per line. The route
 // caps the SUM of amountPaise against the entry's remaining.
 export const costPoolAllocateBatchSchema = z.object({
-    sourceJournalLineId: z.number().int().positive(),
+    sourceGlLineId: z.number().int().positive(),
     /// The PURCHASE/GRN voucher the freight is being spread from.
     sourceInvVoucherId: z.number().int().positive().optional(),
     date: dateField,

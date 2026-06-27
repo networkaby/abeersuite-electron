@@ -122,8 +122,12 @@ export async function engineGlArm(
                 })),
             },
         },
-        select: { id: true },
+        // Select the created JournalLines back (id-asc == nested-create array
+        // order) so the spine mirror can stamp each VoucherGlLine with its legacy
+        // twin's id (Phase 4 G2 line-level link).
+        select: { id: true, lines: { select: { id: true }, orderBy: { id: "asc" } } },
     });
+    const jeLineIds = je.lines.map((l) => l.id);
 
     // Resolve each ledger's normal side for the balance delta. Use the caller's
     // pre-loaded `account` when present; batch-load the rest. Null-normalBalance
@@ -182,12 +186,13 @@ export async function engineGlArm(
             createdById:          userId,
             sourceJournalEntryId: je.id,
             lines: {
-                create: lines.map((l) => ({
-                    accountId:   l.accountId,
-                    type:        l.type,
-                    amount:      l.amount,
-                    description: l.description ?? null,
+                create: lines.map((l, idx) => ({
+                    accountId:           l.accountId,
+                    type:                l.type,
+                    amount:              l.amount,
+                    description:         l.description ?? null,
                     branchId,
+                    sourceJournalLineId: jeLineIds[idx],   // G2 line-level twin
                 })),
             },
         },
@@ -219,7 +224,7 @@ export async function mirrorJeToSpine(
     if (exists) return;
     const je = await tx.journalEntry.findUnique({
         where:   { id: journalEntryId },
-        include: { lines: { select: { accountId: true, type: true, amount: true, description: true, branchId: true } } },
+        include: { lines: { select: { id: true, accountId: true, type: true, amount: true, description: true, branchId: true } } },
     });
     if (!je) return;
     await tx.universalVoucher.create({
@@ -243,11 +248,12 @@ export async function mirrorJeToSpine(
             sourceJournalEntryId: je.id,
             lines: {
                 create: je.lines.map((l) => ({
-                    accountId:   l.accountId,
-                    type:        l.type,
-                    amount:      l.amount,
-                    description: l.description,
-                    branchId:    l.branchId,
+                    accountId:           l.accountId,
+                    type:                l.type,
+                    amount:              l.amount,
+                    description:         l.description,
+                    branchId:            l.branchId,
+                    sourceJournalLineId: l.id,   // G2 line-level twin
                 })),
             },
         },
