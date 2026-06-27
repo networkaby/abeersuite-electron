@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { parseRange } from "@/modules/accountancy/lib/period";
-import { sumReceiptAllocationsByJe } from "@/modules/accountancy/lib/outstandings";
+import { sumReceiptAllocationsByJe, loadTenderLinesByJe } from "@/modules/accountancy/lib/outstandings";
 
 // GET /api/person/[id]/transactions?from=YYYY-MM-DD&to=YYYY-MM-DD
 //
@@ -50,7 +50,6 @@ export async function GET(
                     totalAmount: true,
                     accountId: true,
                     journalEntryId: true,
-                    tenders:   { select: { accountId: true, amount: true } },
                     branch:    { select: { name: true } },
                     createdBy: { select: { name: true } },
                 },
@@ -65,15 +64,16 @@ export async function GET(
         const jeIds = rawVouchers
             .map((v) => v.journalEntryId)
             .filter((x): x is number => x !== null);
-        // RECEIPT settlements via the universal-voucher spine (keyed by JE id).
-        const paidByJe = await sumReceiptAllocationsByJe(prisma, jeIds);
+        // RECEIPT settlements + up-front tenders, both via the universal-voucher spine.
+        const [paidByJe, tendersByJe] = await Promise.all([
+            sumReceiptAllocationsByJe(prisma, jeIds),
+            loadTenderLinesByJe(prisma, jeIds),
+        ]);
 
         const invVouchers = rawVouchers.map((v) => {
             const arAccountId = v.accountId ?? account?.id ?? null;
-            const nonArTenderSum = v.tenders.reduce(
-                (s, t) => s + (t.accountId === arAccountId ? 0 : Number(t.amount)),
-                0,
-            );
+            const nonArTenderSum = (v.journalEntryId !== null ? (tendersByJe.get(v.journalEntryId) ?? []) : [])
+                .reduce((s, t) => s + (t.accountId === arAccountId ? 0 : t.amount), 0);
             const jePaid = v.journalEntryId !== null ? (paidByJe[v.journalEntryId] ?? 0) : 0;
             const amountPaid = nonArTenderSum + jePaid;
             return {

@@ -120,6 +120,35 @@ export async function sumReceiptAllocationsByJe(
     return out;
 }
 
+/**
+ * Phase 4 G4b: the role=TENDER GL lines for each given journal entry, read from
+ * the universal-voucher spine, keyed by the LEGACY JE id — a drop-in for the old
+ * `InvVoucherTender.findMany` grouped by InvVoucher. Callers apply the non-AR
+ * filter themselves (each knows its bill's AR-party account). Accepts the global
+ * client or a tx. Historical spine lines are role-tagged by `backfillTenderRoles`
+ * in the backfill script; new posts are tagged at write time by the GL builder.
+ */
+export async function loadTenderLinesByJe(
+    db: Prisma.TransactionClient,
+    journalEntryIds: number[],
+): Promise<Map<number, { accountId: number; amount: number }[]>> {
+    const out = new Map<number, { accountId: number; amount: number }[]>();
+    const ids = [...new Set(journalEntryIds)];
+    if (ids.length === 0) return out;
+    const lines = await db.voucherGlLine.findMany({
+        where:  { role: "TENDER", universalVoucher: { sourceJournalEntryId: { in: ids } } },
+        select: { accountId: true, amount: true, universalVoucher: { select: { sourceJournalEntryId: true } } },
+    });
+    for (const l of lines) {
+        const je = l.universalVoucher?.sourceJournalEntryId;
+        if (je == null) continue;
+        const arr = out.get(je) ?? [];
+        arr.push({ accountId: l.accountId, amount: Number(l.amount) });
+        out.set(je, arr);
+    }
+    return out;
+}
+
 async function accountIdsUnderGroup(groupName: string): Promise<number[]> {
     const groups = await prisma.accountGroup.findMany({
         where: { isActive: true },
@@ -257,33 +286,20 @@ async function loadOpenBills(
     // for each voucher: AR tender amount = the bill portion that landed
     // on the customer's ledger (= what's still outstanding before later
     // receipts apply); non-AR tender sum = paid up-front at sale time.
-    const invIdList = invVouchers.map((v) => v.id);
-    const [vchAllocs, tenderRows, paidByJe] = await Promise.all([
+    const [vchAllocs, tendersByJe, paidByJe] = await Promise.all([
         vchIds.length > 0
             ? prisma.voucherAllocation.findMany({
                 where: { targetType: "VOUCHER", targetId: { in: vchIds } },
                 select: { targetId: true, amount: true },
             })
             : Promise.resolve([] as { targetId: number; amount: unknown }[]),
-        invIdList.length > 0
-            ? prisma.invVoucherTender.findMany({
-                where:  { voucherId: { in: invIdList } },
-                select: { voucherId: true, accountId: true, amount: true },
-            })
-            : Promise.resolve([] as { voucherId: number; accountId: number; amount: unknown }[]),
+        // Up-front tenders via the universal-voucher spine (role=TENDER), keyed by JE.
+        loadTenderLinesByJe(prisma, jeIds),
         // RECEIPT settlements via the universal-voucher spine (keyed by JE id).
         sumReceiptAllocationsByJe(prisma, jeIds),
     ]);
 
     const paidByVch = sumByTarget(vchAllocs);
-
-    // Group tender rows by voucher for the per-voucher paid calculation.
-    const tendersByVoucher = new Map<number, { accountId: number; amount: number }[]>();
-    for (const t of tenderRows) {
-        const arr = tendersByVoucher.get(t.voucherId) ?? [];
-        arr.push({ accountId: t.accountId, amount: Number(t.amount) });
-        tendersByVoucher.set(t.voucherId, arr);
-    }
 
     const bills: RawBill[] = [];
 
@@ -323,7 +339,7 @@ async function loadOpenBills(
         // (cash / bank / card / wallet). The AR tender row IS the
         // unsettled remainder; later Receipt vouchers chip away at it
         // via the VoucherAllocation → journalEntryId chain (paidByJe).
-        const vTenders = tendersByVoucher.get(v.id) ?? [];
+        const vTenders = v.journalEntryId !== null ? (tendersByJe.get(v.journalEntryId) ?? []) : [];
         const paidAtSale = vTenders
             .filter((t) => t.accountId !== accountId)
             .reduce((s, t) => s + t.amount, 0);
@@ -391,31 +407,20 @@ export async function getOpenSaleBillsForFifo(
     const jeIds = invVouchers
         .map((v) => v.journalEntryId)
         .filter((x): x is number => x !== null);
-    const invIdList = invVouchers.map((v) => v.id);
 
-    const [tenderRows, paidByJe] = await Promise.all([
-        invIdList.length > 0
-            ? tx.invVoucherTender.findMany({
-                where:  { voucherId: { in: invIdList } },
-                select: { voucherId: true, accountId: true, amount: true },
-            })
-            : Promise.resolve([] as { voucherId: number; accountId: number; amount: unknown }[]),
+    const [tendersByJe, paidByJe] = await Promise.all([
+        // Up-front tenders via the universal-voucher spine (role=TENDER), keyed by JE.
+        loadTenderLinesByJe(tx, jeIds),
         // RECEIPT settlements via the universal-voucher spine (keyed by JE id).
         sumReceiptAllocationsByJe(tx, jeIds),
     ]);
-    const tendersByVoucher = new Map<number, { accountId: number; amount: number }[]>();
-    for (const t of tenderRows) {
-        const arr = tendersByVoucher.get(t.voucherId) ?? [];
-        arr.push({ accountId: t.accountId, amount: Number(t.amount) });
-        tendersByVoucher.set(t.voucherId, arr);
-    }
 
     const out: { journalEntryId: number; outstanding: number; billDate: Date; ref: string }[] = [];
     for (const v of invVouchers) {
         if (v.journalEntryId === null) continue;
         const resolved = v.accountId ?? accountId; // single-ledger scope — partyOr already matched
         const total = Number(v.totalAmount);
-        const vTenders = tendersByVoucher.get(v.id) ?? [];
+        const vTenders = tendersByJe.get(v.journalEntryId) ?? [];
         const paidAtSale = vTenders
             .filter((t) => t.accountId !== resolved)
             .reduce((s, t) => s + t.amount, 0);

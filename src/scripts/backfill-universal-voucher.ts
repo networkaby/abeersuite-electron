@@ -249,6 +249,41 @@ async function backfillCostPoolGlLines(): Promise<number> {
     return updated;
 }
 
+// Phase 4 G4b: role-tag historical spine tender lines (role=TENDER + method +
+// reference) by matching each InvVoucherTender to its counter-side VoucherGlLine
+// (same JE, accountId, amount; role still null). New posts are tagged at
+// write-time by the GL builder — this fills in vouchers posted before G4a.
+// Idempotent (only touches role=null lines) and conservative (skips when no
+// unambiguous match). Lets the receivables readers retire InvVoucherTender.
+async function backfillTenderRoles(): Promise<number> {
+    const vouchers = await prisma.invVoucher.findMany({
+        where:  { status: "POSTED", journalEntryId: { not: null }, tenders: { some: {} } },
+        select: { journalEntryId: true, tenders: { select: { accountId: true, amount: true, method: true, reference: true } } },
+    });
+    if (vouchers.length === 0) return 0;
+
+    let stamped = 0;
+    for (const v of vouchers) {
+        const uv = await prisma.universalVoucher.findUnique({ where: { sourceJournalEntryId: v.journalEntryId! }, select: { id: true } });
+        if (!uv) continue;
+        const glLines = await prisma.voucherGlLine.findMany({
+            where:  { universalVoucherId: uv.id, role: null },
+            select: { id: true, accountId: true, amount: true },
+            orderBy: { seq: "asc" },
+        });
+        const claimed = new Set<number>();
+        for (const t of v.tenders) {
+            const tAmt = Number(t.amount);
+            const match = glLines.find((g) => !claimed.has(g.id) && g.accountId === t.accountId && Math.abs(Number(g.amount) - tAmt) < 0.005);
+            if (!match) continue;
+            claimed.add(match.id);
+            await prisma.voucherGlLine.update({ where: { id: match.id }, data: { role: "TENDER", method: t.method, reference: t.reference } });
+            stamped++;
+        }
+    }
+    return stamped;
+}
+
 async function main() {
     if (!CHECK_ONLY) {
         await backfill();
@@ -260,6 +295,8 @@ async function main() {
         console.log(`G2 spine-line back-refs: stamped ${glLineLinks} VoucherGlLine.sourceJournalLineId.`);
         const costPoolLinks = await backfillCostPoolGlLines();
         console.log(`G2 cost-pool re-home: linked ${costPoolLinks} AdditionalCostAllocation to spine lines.`);
+        const tenderRoles = await backfillTenderRoles();
+        console.log(`G4b tender roles: stamped ${tenderRoles} spine VoucherGlLine(s) role=TENDER.`);
     } else {
         console.log("--check: skipping writes, asserting drift only.");
     }

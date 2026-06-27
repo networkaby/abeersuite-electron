@@ -30,7 +30,7 @@ import { recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
 import { recomputeAccountBalances } from "@/modules/accountancy/lib/aggregateLedger";
 import { reapplyTradingVoucherInPlace } from "@/modules/accountancy/lib/reapplyTradingVoucher";
 import { postReceiptVoucher } from "@/modules/accountancy/lib/postReceiptVoucher";
-import { sumReceiptAllocationsByJe } from "@/modules/accountancy/lib/outstandings";
+import { sumReceiptAllocationsByJe, loadTenderLinesByJe } from "@/modules/accountancy/lib/outstandings";
 
 // Self-built client (the app singleton reads env at import-time; tsx doesn't load
 // .env.local for us). Mirror prismaClient.ts's local-vs-remote SSL detection.
@@ -143,11 +143,15 @@ async function runE2E(): Promise<boolean> {
             const tenderLine = roleLines.find((l) => l.role === "TENDER");
             const tenderMetaOk = tenderLine?.method === "CASH" && tenderLine?.reference === "E2E-TENDER-REF"
                 && roleLines.filter((l) => l.role !== "TENDER").every((l) => l.method == null && l.reference == null);
+            // G4b-2: the receivables reader helper returns the cash tender for this JE.
+            const tenderMap = journalEntryId ? await loadTenderLinesByJe(tx, [journalEntryId]) : new Map();
+            const readerTenders = journalEntryId ? (tenderMap.get(journalEntryId) ?? []) : [];
+            const readerOk = readerTenders.length === 1 && readerTenders[0].accountId === cash.id && Math.abs(readerTenders[0].amount - 118) < 0.005;
             const rolesOk = roleLines.length === 4
                 && roleLines.every((l) => l.role != null)
                 && roles.has("TENDER") && roles.has("BODY") && roles.has("TAX")
                 && roleLines.every((l, i) => l.seq === i)
-                && tenderMetaOk;
+                && tenderMetaOk && readerOk;
             box.cap = { jeLines, spineOk: sameLines(jeLines, spine), stock: stock.map((s) => ({ productId: s.productId, inQty: Number(s.inQty), outQty: Number(s.outQty) })), rolesOk };
             throw new Error(ROLLBACK);
         }, { timeout: 30_000, maxWait: 10_000 });
@@ -160,7 +164,7 @@ async function runE2E(): Promise<boolean> {
     if (!box.cap) return false;
     const glOk    = box.cap.jeLines.length === 4;                                  // Dr Cash + Cr Sales + CGST + SGST
     const stockOk = box.cap.stock.length === 1 && box.cap.stock[0].outQty === 1 && box.cap.stock[0].inQty === 0;
-    console.log("GL 4 lines:", glOk ? "✓" : "✗", "· stock OUT 1:", stockOk ? "✓" : "✗", "· spine parity:", box.cap.spineOk ? "✓" : "✗", "· G4 role/seq + tender meta:", box.cap.rolesOk ? "✓" : "✗");
+    console.log("GL 4 lines:", glOk ? "✓" : "✗", "· stock OUT 1:", stockOk ? "✓" : "✗", "· spine parity:", box.cap.spineOk ? "✓" : "✗", "· G4 role/seq + tender meta + reader:", box.cap.rolesOk ? "✓" : "✗");
     return glOk && stockOk && box.cap.spineOk && box.cap.rolesOk;
 }
 

@@ -1,7 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
-import { sumReceiptAllocationsByJe } from "@/modules/accountancy/lib/outstandings";
+import { sumReceiptAllocationsByJe, loadTenderLinesByJe } from "@/modules/accountancy/lib/outstandings";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 // GET /api/accountancy/allocations/open?accountId=N
@@ -36,7 +36,6 @@ export async function GET(req: Request) {
             id: true, type: true, reference: true, date: true,
             totalAmount: true,
             accountId: true,
-            tenders: { select: { accountId: true, amount: true } },
             journalEntryId: true, creditPeriodDays: true,
         },
         orderBy: [{ date: "asc" }],
@@ -44,17 +43,20 @@ export async function GET(req: Request) {
     const jeIds = invVouchers
         .map((v) => v.journalEntryId)
         .filter((x): x is number => x !== null);
-    // RECEIPT settlements via the universal-voucher spine (keyed by JE id).
-    const jeAllocSum = await sumReceiptAllocationsByJe(prisma, jeIds);
+    // RECEIPT settlements + up-front tenders, both via the universal-voucher spine.
+    const [jeAllocSum, tendersByJe] = await Promise.all([
+        sumReceiptAllocationsByJe(prisma, jeIds),
+        loadTenderLinesByJe(prisma, jeIds),
+    ]);
 
     const openInvoices = invVouchers
         .map((v) => {
             const total = Number(v.totalAmount);
             // Paid at sale time = non-AR tender rows (cash/bank/card).
             // Later receipts add via the JE-allocation chain.
-            const upfront = v.tenders
+            const upfront = (v.journalEntryId !== null ? (tendersByJe.get(v.journalEntryId) ?? []) : [])
                 .filter((t) => t.accountId !== v.accountId)
-                .reduce((s, t) => s + Number(t.amount), 0);
+                .reduce((s, t) => s + t.amount, 0);
             const allocated = upfront + (v.journalEntryId !== null ? (jeAllocSum[v.journalEntryId] ?? 0) : 0);
             const due = new Date(v.date);
             due.setDate(due.getDate() + (v.creditPeriodDays ?? 30));
