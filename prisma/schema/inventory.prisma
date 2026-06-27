@@ -504,8 +504,12 @@ model InvVoucher {
   cancelledBy               User?                      @relation("InvVoucherCancelledBy", fields: [cancelledById], references: [id])
   deletedBy                 User?                      @relation("InvVoucherDeletedBy", fields: [deletedById], references: [id])
   lines                     InvVoucherLine[]
-  charges                   InvVoucherCharge[]
-  tenders                   InvVoucherTender[]
+  // Phase 4 G4b: tender + charge INPUT (re-rendered for edit, never aggregated —
+  // money/reporting read the posted spine's role=TENDER/CHARGE VoucherGlLine).
+  // Shape: { tenders: [{accountId, amount, method?, reference?}],
+  //          charges: [{accountId, amount, description?}] }. Replaced the
+  // InvVoucherTender / InvVoucherCharge tables (folded into the spine on POST).
+  settlementJson            Json?
   stockEntries              InvStockLedger[]
   loyaltyLots               LoyaltyLot[]               @relation("InvVoucherLoyaltyLots")
   loyaltyLedger             LoyaltyLedger[]            @relation("InvVoucherLoyaltyLedger")
@@ -631,70 +635,12 @@ model InvBomLine {
   @@index([productId])
 }
 
-// ── Additional GL allocation rows on a voucher (charges / incomes) ───────────
-//
-// General-purpose "+ Add Account" rows below the item table on SALE /
-// PURCHASE forms (packing charges, service charges, insurance, courier,
-// etc.) and the Manufacturing-Journal "Charges" section (labour wages,
-// electricity). Each row posts one extra JE leg on the same voucher.
-//
-// Direction convention (set at GL-bridge time, not stored):
-//   SALE / POS / SALE_RETURN     — amount > 0 → CREDIT (body side); amount < 0 → DEBIT with |amount|
-//   PURCHASE / PURCHASE_RETURN   — amount > 0 → DEBIT  (body side); amount < 0 → CREDIT with |amount|
-//   MANUFACTURING_JOURNAL        — amount > 0 → DEBIT  (expense); negative not used today
-//
-// `amount` is therefore signed — the sign encodes direction relative to
-// the voucher type's body side. Adds to / subtracts from totalAmount on
-// SALE / PURCHASE via calcVoucherTotals(chargesNet = Σ amount).
-//
-// Renamed from `InvVoucherExpenseLine` on 2026-05-24 (Layer 7a of the
-// multi-tender / multi-charge consolidation) — same fields, broader scope.
-
-model InvVoucherCharge {
-  id          Int        @id @default(autoincrement())
-  voucherId   Int
-  voucher     InvVoucher @relation(fields: [voucherId], references: [id], onDelete: Cascade)
-  accountId   Int
-  account     Account    @relation("InvVoucherChargeAccount", fields: [accountId], references: [id])
-  description String?
-  /// Signed. Positive = body direction for this voucher type
-  /// (Cr on sale, Dr on purchase). Negative = opposite with |amount|.
-  amount      Decimal    @db.Decimal(14, 2)
-
-  @@index([voucherId])
-  @@index([accountId])
-}
-
-// ── Multi-tender "Received In" rows ──────────────────────────────────────────
-//
-// Each row = one debit (on a sale-side voucher) / one credit (on a
-// purchase-side voucher) — i.e. one cash/bank/card/UPI/AR account that
-// participated in settling the bill. Replaces the legacy single
-// `paymentAccountId` + `amountReceived` columns on InvVoucher (dropped in
-// Layer 7g).
-//
-// AR portion of a credit sale is represented as a tender row whose
-// `accountId` points at the customer's ledger account. The form's
-// "Balance" auto-fill row gets persisted as a real tender row so every JE
-// debit is backed by an explicit InvVoucherTender — no implicit math.
-//
-// `method` is a display-only label (CASH / UPI / CARD / CHEQUE /
-// BANK_TRANSFER / OTHER) — the actual GL behaviour is driven entirely by
-// `accountId`. `reference` carries UPI ref / cheque # / txn id for audit.
-
-model InvVoucherTender {
-  id        Int            @id @default(autoincrement())
-  voucherId Int
-  voucher   InvVoucher     @relation(fields: [voucherId], references: [id], onDelete: Cascade)
-  accountId Int
-  account   Account        @relation("InvVoucherTenderAccount", fields: [accountId], references: [id])
-  amount    Decimal        @db.Decimal(14, 2)
-  method    PaymentMethod?
-  reference String?
-
-  @@index([voucherId])
-  @@index([accountId])
-}
+// Phase 4 G4b (2026-06-27): `InvVoucherCharge` + `InvVoucherTender` were RETIRED —
+// folded into the universal-voucher spine. Their INPUT now lives in
+// `InvVoucher.settlementJson` (re-rendered for edit); on POST the GL builder
+// emits role=TENDER / role=CHARGE/SHIPPING/DISCOUNT/ROUNDOFF `VoucherGlLine`
+// rows, which every money/reporting reader uses. Tender method/reference live on
+// the role=TENDER GL line.
 
 // ── Strategy points (additive-margin model — the single pricing engine) ──────
 //

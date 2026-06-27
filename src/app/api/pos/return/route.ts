@@ -34,6 +34,7 @@ import { invNextRef } from "@/modules/inventory/lib/stock";
 import { recordStockMovement } from "@/modules/inventory/lib/stockMovement";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import { saleToSpec } from "@/modules/accountancy/lib/voucherMappers";
+import { buildSettlementJson } from "@/shared/lib/accountancy/settlement";
 import { enginePost } from "@/modules/accountancy/lib/transactionEngine";
 import { reverseLoyaltyForReturn, ratesFromConfig } from "@/modules/loyalty/lib";
 import { reverseCouponRedemption } from "@/modules/coupons/lib";
@@ -202,16 +203,13 @@ export async function POST(req: Request) {
                             };
                         }),
                     },
-                    tenders: {
-                        create: [{
-                            accountId: refundAccountId,
-                            amount:    returnTotal,
-                            method:    data.refundMode === "CASH" ? "CASH" : null,
-                            reference: null,
-                        }],
-                    },
+                    // G4b: refund tender → settlementJson.
+                    settlementJson: buildSettlementJson(
+                        [{ accountId: refundAccountId, amount: returnTotal, method: data.refundMode === "CASH" ? "CASH" : null, reference: null }],
+                        [],
+                    ),
                 },
-                include: { lines: true, tenders: { include: { account: { select: { id: true, name: true, normalBalance: true, group: { select: { type: true } } } } } } },
+                include: { lines: true },
             });
 
             // 2. GL post — SALE_RETURN is purchase-shape (counter Cr).
@@ -229,11 +227,7 @@ export async function POST(req: Request) {
                 shippingAmt: voucher.shippingAmt,
                 roundOff:    voucher.roundOff,
                 totalAmount: voucher.totalAmount,
-                tenders:     voucher.tenders.map((t) => ({
-                    accountId: t.accountId,
-                    amount:    Number(t.amount),
-                    account:   t.account,
-                })),
+                tenders:     [{ accountId: refundAccountId, amount: returnTotal }],
                 sellerStateCode,
                 buyerStateCode: sellerStateCode,
             });   // GL only — stock IN handled below

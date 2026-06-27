@@ -12,8 +12,8 @@ Be ready for major refactors toward one GL path through the engine; don't be con
 
 ## 1. Core principles
 
-- **This is NOT the Next.js you know.** APIs, conventions, and file structure differ from training data. Before writing code, read the relevant guide in `node_modules/next/dist/docs/` and respect deprecation notices.
-- **Explain before you code.** For every change, first explain in simple English what you understand and what you plan to do, then confirm before editing.
+- **This is NOT the Next.js you know.**
+- **Explain before you code.** For every change, first explain in simple Indian English what you understand and what you plan to do, then confirm before editing.
 - **Stack defaults:** **shadcn/ui** for UI; **Zustand** for state. Don't introduce alternatives without explicit approval.
 - **Numeric input rule:** do not use `input type="number"`. Use text inputs and validate/sanitize at the UI level.
 - **Escape special characters** in strings, regex, SQL, and shell commands when needed.
@@ -29,12 +29,6 @@ Single-module code lives in `src/modules/<m>/{lib,hooks,components}/`. Promote l
 
 **Naming:** components `PascalCase.tsx`; hooks `useFooBar.ts`; utilities / schemas / constants `camelCase.ts`; directories `kebab-case`.
 
-## 3. Module-specific maps
-
-For module-specific URLs, permissions, models, and wiring, read `docs/modules/<module>.md` first.
-
-Each module doc follows the same template: URLs (UI + API), Permissions, Prisma models, Key components, Common workflows, Gotchas. Module docs are **reference only** — they don't carry "shipped" / "pending" status.
-
 ## 5. Seeds — keep production & dummy in sync with the schema
 
 All seed scripts live in `prisma/seeds/`. Read [docs/seeds.md](docs/seeds.md) before changing any of them.
@@ -42,9 +36,8 @@ All seed scripts live in `prisma/seeds/`. Read [docs/seeds.md](docs/seeds.md) be
 - **Database is disposable.** No important data lives in the dev database — reset it anytime (`pnpm prisma db push --force-reset`, migrate reset, or a fresh DB) when schema drift or bad data blocks progress.
 - **Before resetting:** update `prisma/seeds/bootstrap-seed.ts` so it matches the current schema and seeds everything bootstrap needs. Fix seeds first, then reset and run `pnpm prisma db seed` (optional `pnpm seed:dummy-*` after).
 - **Production seed:** `prisma/seeds/bootstrap-seed.ts`, run via `pnpm prisma db seed`. Single source of truth for RBAC, pipelines, statuses, branches, departments, chart of accounts, DB constraints.
-- **Dummy seeds:** `prisma/seeds/dummy-*.ts`, run manually via `pnpm seed:dummy-*`. Canonical demo for the current schema.
+
 - **Cleaner:** `prisma/seeds/hard-clean.ts` (`pnpm seed:hard-clean`) — wipes everything bootstrap doesn't seed.
-- **Fixture data** (hardcoded product lists, demo content) lives in `prisma/seeds/data/`, never in `src/`.
 
 **Hard rule:** any commit that changes `prisma/schema/*.prisma` must also update `bootstrap-seed.ts` and any affected `dummy-*.ts` in the same commit. If a column is added, seeds must populate it. If a model is renamed, seeds must rename too. `pnpm seed:dummy-all` must stay runnable.
 

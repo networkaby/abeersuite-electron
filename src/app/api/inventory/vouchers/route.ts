@@ -4,6 +4,7 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { invNextRef, calcLineTotals, calcVoucherTotals } from "@/modules/inventory/lib/stock";
 import { InvVoucherType, Prisma, type InvVoucherDeliveryMode } from "@/generated/prisma/client";
 import { buildPartyJson, readPartyName, readPartyPhone, readPartyAddress } from "@/shared/lib/accountancy/partySnapshot";
+import { buildSettlementJson } from "@/shared/lib/accountancy/settlement";
 import { resolveActiveBranchId, requireBranchAccess, BranchAccessError } from "@/shared/lib/auth/activeBranch";
 import { auth } from "@/auth";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -487,25 +488,8 @@ export async function POST(req: NextRequest) {
                             amount:      l.amount,
                         })),
                     },
-                    ...(charges.length > 0 ? {
-                        charges: {
-                            create: charges.map((e) => ({
-                                accountId:   e.accountId,
-                                description: e.description?.trim() || null,
-                                amount:      e.amount,
-                            })),
-                        },
-                    } : {}),
-                    ...(tenders.length > 0 ? {
-                        tenders: {
-                            create: tenders.map((t) => ({
-                                accountId: t.accountId,
-                                amount:    t.amount,
-                                method:    t.method ?? null,
-                                reference: t.reference?.trim() || null,
-                            })),
-                        },
-                    } : {}),
+                    // G4b: tender + charge INPUT → settlementJson.
+                    settlementJson: buildSettlementJson(tenders, charges),
                 },
                 include: {
                     lines: { include: { product: { select: { id: true, sku: true, name: true } } } },

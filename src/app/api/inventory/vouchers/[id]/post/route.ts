@@ -6,6 +6,7 @@ import { recordStockMovement } from "@/modules/inventory/lib/stockMovement";
 import { valueStockBatch } from "@/modules/inventory/lib/valuation";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import { saleToSpec } from "@/modules/accountancy/lib/voucherMappers";
+import { readSettlement } from "@/shared/lib/accountancy/settlement";
 import { enginePost } from "@/modules/accountancy/lib/transactionEngine";
 import * as Sentry from "@sentry/nextjs";
 import { handleApiError } from "@/shared/lib/api";
@@ -44,20 +45,6 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
             lines: {
                 include: {
                     product: { select: { id: true, mrpPaise: true, stock: true } },
-                },
-            },
-            // Additional GL legs ("+ Add Account" rows + MJ Charges) +
-            // multi-tender settlement rows. Both passed through to
-            // postInvVoucherToGl so the JE includes one leg per row.
-            charges: {
-                include: {
-                    account: { select: { id: true, name: true, normalBalance: true, group: { select: { type: true } } } },
-                },
-            },
-            tenders: {
-                orderBy: { id: "asc" },
-                include: {
-                    account: { select: { id: true, name: true, normalBalance: true, group: { select: { type: true } } } },
                 },
             },
             // Branch state drives the seller-state in the CGST/SGST vs IGST split.
@@ -304,6 +291,8 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
             // Purchase Order) intentionally don't touch GL on POST.
             let journalEntryId: number | null = null;
             const postNotes: string[] = [];
+            // G4b: tender/charge input from settlementJson (replaced the tables).
+            const settlement = readSettlement(voucher.settlementJson);
             if (isFixedDirection) {
                 // Stock + GL through the Transaction Engine in ONE call (one tx).
                 // `saleToSpec` builds the GL lines (shared with the legacy bridge
@@ -314,7 +303,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                 // bridge produced them (no branchId passed to the engine).
                 const spec = await saleToSpec(
                     tx,
-                    { ...voucher, sellerStateCode, buyerStateCode },
+                    { ...voucher, tenders: settlement.tenders, charges: settlement.charges, sellerStateCode, buyerStateCode },
                     { voucherId: voucher.id, branchId: voucher.branchId, lines: voucher.lines },
                 );
                 const out = await enginePost(tx, spec, userId);
@@ -330,55 +319,51 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                         [],
                     );
                 }
-            } else if (isManufacturingJournal && voucher.charges.length > 0) {
+            } else if (isManufacturingJournal && settlement.charges.length > 0) {
                 // Build the JE: N expense debits + 1 payment-account credit.
                 // The payment account is the single tender row on the MJ
-                // voucher (Layer 7g — replaces the legacy `paymentAccountId`
-                // column). Total of all charges = total credited to that
-                // account.
-                const totalCharges = voucher.charges.reduce(
-                    (s, e) => s + toNumber(e.amount),
-                    0,
-                );
-                const paymentTender = voucher.tenders[0];
+                // voucher. Total of all charges = total credited to that account.
+                const totalCharges = settlement.charges.reduce((s, e) => s + toNumber(e.amount), 0);
+                const paymentTender = settlement.tenders[0];
                 if (totalCharges <= 0) {
                     postNotes.push("Manufacturing Journal has expense lines but total charges = 0; skipping JE.");
                 } else if (!paymentTender) {
                     throw new Error("Manufacturing Journal with Charges requires a payment tender row (cash / bank / sundry creditors).");
                 } else {
-                    // Validate each expense account is an EXPENSE-type ledger.
-                    for (const e of voucher.charges) {
-                        if (e.account?.group?.type !== "EXPENSE") {
-                            throw new Error(`Charge line account "${e.account?.name ?? e.accountId}" must be an EXPENSE-type ledger.`);
+                    // Settlement is id-only (no account relation) — load the charge
+                    // ledgers to validate they're EXPENSE-type + for descriptions.
+                    const accIds = [...new Set(settlement.charges.map((e) => e.accountId))];
+                    const accs = await tx.account.findMany({ where: { id: { in: accIds } }, select: { id: true, name: true, group: { select: { type: true } } } });
+                    const accById = new Map(accs.map((a) => [a.id, a]));
+                    for (const e of settlement.charges) {
+                        if (accById.get(e.accountId)?.group?.type !== "EXPENSE") {
+                            throw new Error(`Charge line account "${accById.get(e.accountId)?.name ?? e.accountId}" must be an EXPENSE-type ledger.`);
                         }
                     }
                     // N expense debits + 1 payment-account credit → the engine
-                    // (engineGlArm writes the JE + balance deltas). Bespoke
-                    // description, not the type prefix.
+                    // (engineGlArm writes the JE + balance deltas + loads natures).
                     const out = await enginePost(tx, {
                         type:        "MANUFACTURING_JOURNAL",
                         date:        voucher.date,
                         description: `Manufacturing Charges for ${voucher.reference}`,
                         glLines: [
-                            ...voucher.charges.map((e) => ({
+                            ...settlement.charges.map((e) => ({
                                 accountId:   e.accountId,
                                 type:        "DEBIT" as const,
                                 amount:      toNumber(e.amount),
-                                description: e.description ?? `Manufacturing charge: ${e.account?.name ?? ""}`.trim(),
-                                account:     e.account,
+                                description: e.description ?? `Manufacturing charge: ${accById.get(e.accountId)?.name ?? ""}`.trim(),
                             })),
                             {
                                 accountId:   paymentTender.accountId,
                                 type:        "CREDIT" as const,
                                 amount:      totalCharges,
                                 description: `Charges paid for ${voucher.reference}`,
-                                account:     paymentTender.account,
                             },
                         ],
                         stockMoves: [],
                     }, userId);
                     journalEntryId = out.journalEntryId;
-                    postNotes.push(`Posted ${voucher.charges.length} expense debit(s) totalling ${totalCharges.toFixed(2)} → ${paymentTender.account?.name ?? "payment account"}.`);
+                    postNotes.push(`Posted ${settlement.charges.length} expense debit(s) totalling ${totalCharges.toFixed(2)}.`);
                 }
             }
 

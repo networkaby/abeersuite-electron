@@ -1,6 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { notFound } from "next/navigation";
 import { readPartyName } from "@/shared/lib/accountancy/partySnapshot";
+import { readSettlement } from "@/shared/lib/accountancy/settlement";
 import ReceiptButtons from "@/shared/components/ReceiptButtons";
 import ThermalAutoPrint from "@/modules/pos/components/ThermalAutoPrint";
 import ReceiptPreview from "@/shared/components/print/ReceiptPreview";
@@ -41,7 +42,6 @@ export default async function PosReceiptPage({
         where: { id: Number(id) },
         include: {
             lines: { include: { product: { select: { sku: true, name: true } } } },
-            charges: { include: { account: { select: { id: true, name: true } } } },
             account: {
                 select: {
                     id: true,
@@ -53,6 +53,14 @@ export default async function PosReceiptPage({
         },
     });
     if (!voucher) notFound();
+
+    // G4b: additional-charge rows come from settlementJson (with account names).
+    const settlement = readSettlement(voucher.settlementJson);
+    const chargeAcctById = new Map(
+        (settlement.charges.length === 0 ? [] : await prisma.account.findMany({ where: { id: { in: [...new Set(settlement.charges.map((c) => c.accountId))] } }, select: { id: true, name: true } }))
+            .map((a) => [a.id, a]),
+    );
+    const charges = settlement.charges.map((c) => ({ ...c, account: chargeAcctById.get(c.accountId) ?? null }));
 
     const owner = voucher.account?.person ?? voucher.account?.company ?? null;
     const partyName  = owner?.name ?? voucher.account?.name ?? readPartyName(voucher.partyJson) ?? "Walk-in";
@@ -121,7 +129,7 @@ export default async function PosReceiptPage({
     // Bill-level adjustments (everything that isn't a goods discount): shipping,
     // round-off and any manual charge. Signed: + adds, − reduces.
     const extraCharges: { label: string; amount: number }[] = [];
-    for (const c of voucher.charges) {
+    for (const c of charges) {
         const amt = Number(c.amount);
         if (amt < 0 && loyaltyConfig?.redeemExpenseAccountId && c.accountId === loyaltyConfig.redeemExpenseAccountId) {
             loyaltyDiscount += Math.abs(amt);

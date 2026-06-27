@@ -99,12 +99,11 @@ export async function restoreFromAudit(
 
     // INV_VOUCHER
     const lines = (snap.lines as Row[]) ?? [];
-    const charges = (snap.charges as Row[]) ?? [];
-    const tenders = (snap.tenders as Row[]) ?? [];
     const stockEntries = (snap.stockEntries as Row[]) ?? [];
     const journalEntry = (snap.journalEntry as JeSnapshot | null) ?? null;
 
     const newJeId = journalEntry ? await recreateJournalEntry(tx, journalEntry) : null;
+    // G4b: tender/charge input is `settlementJson` (a scalar) — restored via ...scalars.
     const scalars = scalarsOf(snap, ["lines", "charges", "tenders", "stockEntries", "createdBy", "journalEntry"]);
     const voucher = await tx.invVoucher.create({
         data: {
@@ -113,8 +112,6 @@ export async function restoreFromAudit(
             // Sever volatile soft-links — targets may be gone; truth path self-corrects.
             shopOrderId: null, ticketId: null, dealId: null, refVoucherId: null,
             lines: { create: lines.map((l) => scalarsOf(l, ["voucherId", "product"])) },
-            charges: { create: charges.map((c) => scalarsOf(c, ["voucherId", "account"])) },
-            tenders: { create: tenders.map((t) => scalarsOf(t, ["voucherId", "account"])) },
         } as unknown as Prisma.InvVoucherUncheckedCreateInput,
     });
 

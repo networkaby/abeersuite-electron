@@ -11,7 +11,8 @@
 // remove it once they're sure the conversion is correct.
 
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import type { Prisma } from "@/generated/prisma/client";
+import { Prisma } from "@/generated/prisma/client";
+import { readSettlement, buildSettlementJson } from "@/shared/lib/accountancy/settlement";
 
 export type ConvertDirection = "personToCompany" | "companyToPerson";
 
@@ -733,17 +734,23 @@ export async function previewMerge(
 }
 
 async function countAccountRefs(accountId: number) {
-    const [jl, vp, vl, iv, ivc, ivt, t, d, so] = await Promise.all([
+    const [jl, vp, vl, iv, t, d, so, settlementRows] = await Promise.all([
         prisma.voucherGlLine.count({ where: { accountId } }),   // Phase 4 G3: GL activity from the spine
         prisma.voucher.count({ where: { partyAccountId: accountId } }),
         prisma.voucherLine.count({ where: { accountId } }),
         prisma.invVoucher.count({ where: { accountId } }),
-        prisma.invVoucherCharge.count({ where: { accountId } }),
-        prisma.invVoucherTender.count({ where: { accountId } }),
         prisma.ticket.count({ where: { billingAccountId: accountId } }),
         prisma.device.count({ where: { accountId } }),
         prisma.shopOrder.count({ where: { accountId } }),
+        // G4b: tender/charge input lives in settlementJson now — scan for refs.
+        prisma.invVoucher.findMany({ where: { settlementJson: { not: Prisma.DbNull } }, select: { settlementJson: true } }),
     ]);
+    let ivc = 0, ivt = 0;
+    for (const r of settlementRows) {
+        const s = readSettlement(r.settlementJson);
+        ivc += s.charges.filter((c) => c.accountId === accountId).length;
+        ivt += s.tenders.filter((t2) => t2.accountId === accountId).length;
+    }
     return {
         journalLines: jl, voucherParty: vp, voucherLines: vl,
         invVouchers: iv, invVoucherCharges: ivc, invVoucherTenders: ivt,
@@ -764,17 +771,36 @@ export async function mergeParty(
 
     return prisma.$transaction(async (tx) => {
         // 1. Re-point every Account FK from loser's Account → winner's Account.
-        const [jl, vp, vl, iv, ivc, ivt, t, d, so] = await Promise.all([
+        const [jl, vp, vl, iv, gll, t, d, so] = await Promise.all([
             tx.journalLine.updateMany({ where: { accountId: loserAccountId }, data: { accountId: winnerAccountId } }),
             tx.voucher.updateMany({ where: { partyAccountId: loserAccountId }, data: { partyAccountId: winnerAccountId } }),
             tx.voucherLine.updateMany({ where: { accountId: loserAccountId }, data: { accountId: winnerAccountId } }),
             tx.invVoucher.updateMany({ where: { accountId: loserAccountId }, data: { accountId: winnerAccountId } }),
-            tx.invVoucherCharge.updateMany({ where: { accountId: loserAccountId }, data: { accountId: winnerAccountId } }),
-            tx.invVoucherTender.updateMany({ where: { accountId: loserAccountId }, data: { accountId: winnerAccountId } }),
+            // G4b: re-point the spine GL lines (covers role=TENDER/CHARGE + body legs
+            // pointing at the loser ledger — the InvVoucherTender/Charge tables retired).
+            tx.voucherGlLine.updateMany({ where: { accountId: loserAccountId }, data: { accountId: winnerAccountId } }),
             tx.ticket.updateMany({ where: { billingAccountId: loserAccountId }, data: { billingAccountId: winnerAccountId } }),
             tx.device.updateMany({ where: { accountId: loserAccountId }, data: { accountId: winnerAccountId } }),
             tx.shopOrder.updateMany({ where: { accountId: loserAccountId }, data: { accountId: winnerAccountId } }),
         ]);
+
+        // G4b: re-point tender/charge input inside settlementJson (drafts + posted echo).
+        const settlementRows = await tx.invVoucher.findMany({ where: { settlementJson: { not: Prisma.DbNull } }, select: { id: true, settlementJson: true } });
+        let ivc = 0, ivt = 0;
+        for (const sv of settlementRows) {
+            const s = readSettlement(sv.settlementJson);
+            const tHit = s.tenders.filter((x) => x.accountId === loserAccountId).length;
+            const cHit = s.charges.filter((x) => x.accountId === loserAccountId).length;
+            if (tHit + cHit === 0) continue;
+            ivt += tHit; ivc += cHit;
+            await tx.invVoucher.update({
+                where: { id: sv.id },
+                data:  { settlementJson: buildSettlementJson(
+                    s.tenders.map((x) => x.accountId === loserAccountId ? { ...x, accountId: winnerAccountId } : x),
+                    s.charges.map((x) => x.accountId === loserAccountId ? { ...x, accountId: winnerAccountId } : x),
+                ) },
+            });
+        }
 
         // 2. Roll the loser's cached balance + opening balance into the winner.
         //    Cached `Account.balance` is read by dashboards. `openingBalance`
@@ -893,8 +919,9 @@ export async function mergeParty(
                 voucherParty: vp.count,
                 voucherLines: vl.count,
                 invVouchers: iv.count,
-                invVoucherCharges: ivc.count,
-                invVoucherTenders: ivt.count,
+                invVoucherCharges: ivc,
+                invVoucherTenders: ivt,
+                voucherGlLines: gll.count,
                 tickets: t.count,
                 devices: d.count,
                 shopOrders: so.count,

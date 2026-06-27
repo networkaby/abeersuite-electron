@@ -10,6 +10,7 @@ import * as Sentry from "@sentry/nextjs";
 import { handleApiError } from "@/shared/lib/api";
 import { Prisma } from "@/generated/prisma/client";
 import { buildPartyJson, readPartyName, readPartyPhone, readPartyAddress } from "@/shared/lib/accountancy/partySnapshot";
+import { readSettlement, buildSettlementJson } from "@/shared/lib/accountancy/settlement";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -35,24 +36,27 @@ export async function GET(_req: Request, { params }: Params) {
             // refVoucher powers parent-link surfaces — "Replaces <old ref>"
             // for a SALE_RETURN against a SALE, or "Linked to PO-…" on a GRN.
             refVoucher: { select: { id: true, reference: true, type: true } },
-            // Multi-tender + additional charges so the form's edit-mode
-            // hydration (?voucherId=) can rebuild the rows it presented
-            // to the operator on the original save.
-            tenders: {
-                orderBy: { id: "asc" },
-                include: { account: { select: { id: true, name: true, code: true } } },
-            },
-            charges: {
-                orderBy: { id: "asc" },
-                include: { account: { select: { id: true, name: true, code: true } } },
-            },
         },
     });
     if (!voucher) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    // G4b: tender + charge input comes from settlementJson now. Re-shape it into
+    // the `tenders` / `charges` arrays (with account id/name/code) the edit form
+    // already consumes, so the form's edit-mode hydration is unchanged.
+    const settlement = readSettlement(voucher.settlementJson);
+    const acctIds = [...new Set([...settlement.tenders, ...settlement.charges].map((r) => r.accountId))];
+    const acctById = new Map(
+        (acctIds.length === 0 ? [] : await prisma.account.findMany({ where: { id: { in: acctIds } }, select: { id: true, name: true, code: true } }))
+            .map((a) => [a.id, a]),
+    );
+    const withAccount = <T extends { accountId: number }>(r: T) => ({ ...r, account: acctById.get(r.accountId) ?? null });
+
     // Derive party display fields from the frozen snapshot so the detail page +
     // form edit-load keep reading partyName / partyPhone / partyAddress.
     return NextResponse.json({
         ...voucher,
+        tenders:      settlement.tenders.map(withAccount),
+        charges:      settlement.charges.map(withAccount),
         partyName:    readPartyName(voucher.partyJson),
         partyPhone:   readPartyPhone(voucher.partyJson),
         partyAddress: readPartyAddress(voucher.partyJson),
@@ -250,7 +254,7 @@ export async function PATCH(req: Request, { params }: Params) {
                     : null;
                 const oldSnap = await tx.invVoucher.findUnique({
                     where:   { id },
-                    include: { lines: true, charges: true, tenders: true },
+                    include: { lines: true },   // settlementJson is a scalar — auto-included
                 });
                 await tx.auditLog.create({
                     data: auditSnapshot({
@@ -271,17 +275,18 @@ export async function PATCH(req: Request, { params }: Params) {
             if (computedLines) {
                 await tx.invVoucherLine.deleteMany({ where: { voucherId: id } });
             }
-            // Additional Charges + Tenders — delete-and-recreate when
-            // provided (even as empty arrays, signalling "clear them all").
-            // The same pattern the lines block uses above. Keeps the
-            // post → reverse → re-post lifecycle simple: every PATCH that
-            // touches these sections fully replaces the rows.
-            if (charges !== undefined) {
-                await tx.invVoucherCharge.deleteMany({ where: { voucherId: id } });
-            }
-            if (tenders !== undefined) {
-                await tx.invVoucherTender.deleteMany({ where: { voucherId: id } });
-            }
+            // G4b: tender + charge input lives in settlementJson now. A PATCH may
+            // touch either section independently (undefined = leave as-is), so
+            // merge the provided arrays over the existing settlement and rewrite
+            // the column below. An empty array clears that section.
+            const existingSettlement = readSettlement(existing.settlementJson);
+            const settlementChanged = charges !== undefined || tenders !== undefined;
+            const newSettlementJson = settlementChanged
+                ? buildSettlementJson(
+                    tenders !== undefined ? tenders : existingSettlement.tenders,
+                    charges !== undefined ? charges : existingSettlement.charges,
+                )
+                : undefined;
             // Resolve the canonical ledger account from the (possibly updated)
             // party identity so accountId tracks the routing pair.
             let patchAccountId: number | null = null;
@@ -338,25 +343,7 @@ export async function PATCH(req: Request, { params }: Params) {
                             })),
                         },
                     } : {}),
-                    ...(charges && charges.length > 0 ? {
-                        charges: {
-                            create: charges.map((e) => ({
-                                accountId:   e.accountId,
-                                description: e.description?.trim() || null,
-                                amount:      e.amount,
-                            })),
-                        },
-                    } : {}),
-                    ...(tenders && tenders.length > 0 ? {
-                        tenders: {
-                            create: tenders.map((t) => ({
-                                accountId: t.accountId,
-                                amount:    t.amount,
-                                method:    t.method ?? null,
-                                reference: t.reference?.trim() || null,
-                            })),
-                        },
-                    } : {}),
+                    ...(newSettlementJson !== undefined ? { settlementJson: newSettlementJson } : {}),
                 },
             });
 
@@ -368,18 +355,17 @@ export async function PATCH(req: Request, { params }: Params) {
                     where: { id },
                     include: {
                         lines:   { include: { product: { select: { id: true, mrpPaise: true, stock: true } } } },
-                        // Tenders + charges flow into saleToSpec (one GL leg per row).
-                        tenders: { orderBy: { id: "asc" }, include: { account: { select: { id: true, name: true, normalBalance: true, group: { select: { type: true } } } } } },
-                        charges: { include: { account: { select: { id: true, name: true, normalBalance: true, group: { select: { type: true } } } } } },
                     },
                 });
                 if (!fresh) throw new Error("Voucher disappeared mid-transaction");
 
-                // Rewrite the SAME JE in place + replace stock rows + recompute the
-                // caches from truth (no reversal, no re-minted JE — journalEntryId
-                // is preserved so receipts allocated against it stay linked).
+                // Tenders + charges (settlementJson) flow into saleToSpec — one GL
+                // leg per row. Rewrite the SAME JE in place + replace stock rows +
+                // recompute the caches from truth (no reversal, no re-minted JE —
+                // journalEntryId is preserved so receipts allocated against it stay linked).
+                const freshSettlement = readSettlement(fresh.settlementJson);
                 await reapplyTradingVoucherInPlace(tx, {
-                    voucher:        fresh as unknown as PostVoucherInput["voucher"],
+                    voucher:        { ...fresh, tenders: freshSettlement.tenders, charges: freshSettlement.charges } as unknown as PostVoucherInput["voucher"],
                     branchId:       fresh.branchId,
                     lines:          fresh.lines,
                     journalEntryId: existing.journalEntryId,

@@ -32,6 +32,7 @@ import { reapplyTradingVoucherInPlace } from "@/modules/accountancy/lib/reapplyT
 import { postReceiptVoucher } from "@/modules/accountancy/lib/postReceiptVoucher";
 import { sumReceiptAllocationsByJe, loadTenderLinesByJe } from "@/modules/accountancy/lib/outstandings";
 import { sumShiftCashSalesPaise, sumShiftTendersByAccount } from "@/modules/pos/lib/shiftMath";
+import { buildSettlementJson } from "@/shared/lib/accountancy/settlement";
 
 // Self-built client (the app singleton reads env at import-time; tsx doesn't load
 // .env.local for us). Mirror prismaClient.ts's local-vs-remote SSL detection.
@@ -122,13 +123,13 @@ async function runE2E(): Promise<boolean> {
                     subtotal: 118, taxAmount: 18, totalAmount: 118,
                     deliveryMode: "COUNTER", placeOfSupply: "19", createdById: user.id,
                     lines:   { create: [{ productId: product.id, quantity: 1, rate: 100, taxRate: 18, taxAmount: 18, amount: 118 }] },
-                    tenders: { create: [{ accountId: cash.id, amount: 118, method: "CASH", reference: "E2E-TENDER-REF" }] },
+                    settlementJson: buildSettlementJson([{ accountId: cash.id, amount: 118, method: "CASH", reference: "E2E-TENDER-REF" }], []),
                 },
-                include: { lines: { include: { product: { select: { id: true, stock: true, mrpPaise: true } } } }, tenders: true },
+                include: { lines: { include: { product: { select: { id: true, stock: true, mrpPaise: true } } } } },
             });
             const spec = await saleToSpec(
                 tx,
-                { ...v, sellerStateCode: "19", buyerStateCode: "19" } as unknown as PostVoucherInput["voucher"],
+                { ...v, tenders: [{ accountId: cash.id, amount: 118, method: "CASH", reference: "E2E-TENDER-REF" }], charges: [], sellerStateCode: "19", buyerStateCode: "19" } as unknown as PostVoucherInput["voucher"],
                 { voucherId: v.id, branchId: v.branchId, lines: v.lines },
             );
             const { journalEntryId } = await enginePost(tx, spec, user.id);
@@ -366,13 +367,13 @@ async function runStockRecompute(): Promise<boolean> {
                     subtotal: 118, taxAmount: 18, totalAmount: 118,
                     deliveryMode: "COUNTER", placeOfSupply: "19", createdById: user.id,
                     lines:   { create: [{ productId: product.id, quantity: 1, rate: 100, taxRate: 18, taxAmount: 18, amount: 118 }] },
-                    tenders: { create: [{ accountId: cash.id, amount: 118 }] },
+                    settlementJson: buildSettlementJson([{ accountId: cash.id, amount: 118 }], []),
                 },
-                include: { lines: { include: { product: { select: { id: true, stock: true, mrpPaise: true } } } }, tenders: true },
+                include: { lines: { include: { product: { select: { id: true, stock: true, mrpPaise: true } } } } },
             });
             const spec = await saleToSpec(
                 tx,
-                { ...v, sellerStateCode: "19", buyerStateCode: "19" } as unknown as PostVoucherInput["voucher"],
+                { ...v, tenders: [{ accountId: cash.id, amount: 118 }], charges: [], sellerStateCode: "19", buyerStateCode: "19" } as unknown as PostVoucherInput["voucher"],
                 { voucherId: v.id, branchId: v.branchId, lines: v.lines },
             );
             await enginePost(tx, spec, user.id);   // incremental: stock arm + Account.balance deltas
@@ -423,7 +424,7 @@ async function runEditCycle(): Promise<boolean> {
     const log: string[] = [];
     const reload = (tx: Prisma.TransactionClient, id: number) => tx.invVoucher.findUnique({
         where: { id },
-        include: { lines: { include: { product: { select: { id: true, stock: true, mrpPaise: true } } } }, tenders: true },
+        include: { lines: { include: { product: { select: { id: true, stock: true, mrpPaise: true } } } } },
     });
     try {
         await prisma.$transaction(async (tx) => {
@@ -435,24 +436,23 @@ async function runEditCycle(): Promise<boolean> {
                     subtotal: 118, taxAmount: 18, totalAmount: 118,
                     deliveryMode: "COUNTER", placeOfSupply: "19", createdById: user.id,
                     lines:   { create: [{ productId: product.id, quantity: 1, rate: 100, taxRate: 18, taxAmount: 18, amount: 118 }] },
-                    tenders: { create: [{ accountId: cash.id, amount: 118 }] },
+                    settlementJson: buildSettlementJson([{ accountId: cash.id, amount: 118 }], []),
                 },
-                include: { lines: { include: { product: { select: { id: true, stock: true, mrpPaise: true } } } }, tenders: true },
+                include: { lines: { include: { product: { select: { id: true, stock: true, mrpPaise: true } } } } },
             });
-            const spec1 = await saleToSpec(tx, { ...v, sellerStateCode: "19", buyerStateCode: "19" } as unknown as PostVoucherInput["voucher"], { voucherId: v.id, branchId: v.branchId, lines: v.lines });
+            const spec1 = await saleToSpec(tx, { ...v, tenders: [{ accountId: cash.id, amount: 118 }], charges: [], sellerStateCode: "19", buyerStateCode: "19" } as unknown as PostVoucherInput["voucher"], { voucherId: v.id, branchId: v.branchId, lines: v.lines });
             const { journalEntryId: saleJe } = await enginePost(tx, spec1, user.id);
             if (saleJe == null) throw new Error("no saleJe");
             await tx.invVoucher.update({ where: { id: v.id }, data: { journalEntryId: saleJe } });
 
             // 2. EDIT in place: qty 1 → 2 (line 236 = taxable 200 + 18% tax 36).
             await tx.invVoucherLine.updateMany({ where: { voucherId: v.id }, data: { quantity: 2, amount: 236, taxAmount: 36 } });
-            await tx.invVoucherTender.updateMany({ where: { voucherId: v.id }, data: { amount: 236 } });
-            await tx.invVoucher.update({ where: { id: v.id }, data: { subtotal: 236, taxAmount: 36, totalAmount: 236 } });
+            await tx.invVoucher.update({ where: { id: v.id }, data: { subtotal: 236, taxAmount: 36, totalAmount: 236, settlementJson: buildSettlementJson([{ accountId: cash.id, amount: 236 }], []) } });
             const edited = await reload(tx, v.id);
             // Reapply through the SHARED helper the PATCH route uses — so a green
             // harness verifies the route's actual edit logic, not a parallel copy.
             await reapplyTradingVoucherInPlace(tx, {
-                voucher:        { ...edited!, sellerStateCode: "19", buyerStateCode: "19" } as unknown as PostVoucherInput["voucher"],
+                voucher:        { ...edited!, tenders: [{ accountId: cash.id, amount: 236 }], charges: [], sellerStateCode: "19", buyerStateCode: "19" } as unknown as PostVoucherInput["voucher"],
                 branchId:       v.branchId,
                 lines:          edited!.lines,
                 journalEntryId: saleJe,
@@ -508,11 +508,11 @@ async function runAllocationDualTarget(): Promise<boolean> {
                     subtotal: 118, taxAmount: 18, totalAmount: 118,
                     deliveryMode: "COUNTER", placeOfSupply: "19", createdById: user.id,
                     lines:   { create: [{ productId: product.id, quantity: 1, rate: 100, taxRate: 18, taxAmount: 18, amount: 118 }] },
-                    tenders: { create: [{ accountId: cash.id, amount: 118 }] },
+                    settlementJson: buildSettlementJson([{ accountId: cash.id, amount: 118 }], []),
                 },
-                include: { lines: { include: { product: { select: { id: true, stock: true, mrpPaise: true } } } }, tenders: true },
+                include: { lines: { include: { product: { select: { id: true, stock: true, mrpPaise: true } } } } },
             });
-            const spec = await saleToSpec(tx, { ...v, sellerStateCode: "19", buyerStateCode: "19" } as unknown as PostVoucherInput["voucher"], { voucherId: v.id, branchId: v.branchId, lines: v.lines });
+            const spec = await saleToSpec(tx, { ...v, tenders: [{ accountId: cash.id, amount: 118 }], charges: [], sellerStateCode: "19", buyerStateCode: "19" } as unknown as PostVoucherInput["voucher"], { voucherId: v.id, branchId: v.branchId, lines: v.lines });
             const { journalEntryId: saleJe } = await enginePost(tx, spec, user.id);
 
             const r = await postReceiptVoucher(tx, {
@@ -613,11 +613,11 @@ async function runShiftCashMath(): Promise<boolean> {
                     subtotal: 118, taxAmount: 18, totalAmount: 118,
                     deliveryMode: "COUNTER", placeOfSupply: "19", createdById: user.id,
                     lines:   { create: [{ productId: product.id, quantity: 1, rate: 100, taxRate: 18, taxAmount: 18, amount: 118 }] },
-                    tenders: { create: [{ accountId: cash.id, amount: 118, method: "CASH" }] },
+                    settlementJson: buildSettlementJson([{ accountId: cash.id, amount: 118, method: "CASH" }], []),
                 },
-                include: { lines: { include: { product: { select: { id: true, stock: true, mrpPaise: true } } } }, tenders: true },
+                include: { lines: { include: { product: { select: { id: true, stock: true, mrpPaise: true } } } } },
             });
-            const spec = await saleToSpec(tx, { ...v, sellerStateCode: "19", buyerStateCode: "19" } as unknown as PostVoucherInput["voucher"], { voucherId: v.id, branchId: v.branchId, lines: v.lines });
+            const spec = await saleToSpec(tx, { ...v, tenders: [{ accountId: cash.id, amount: 118, method: "CASH" }], charges: [], sellerStateCode: "19", buyerStateCode: "19" } as unknown as PostVoucherInput["voucher"], { voucherId: v.id, branchId: v.branchId, lines: v.lines });
             const { journalEntryId } = await enginePost(tx, spec, user.id);
             // POS route links the JE to the voucher — replicate so the window→JE resolution finds it.
             await tx.invVoucher.update({ where: { id: v.id }, data: { status: "POSTED", journalEntryId } });

@@ -14,6 +14,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse, type NextRequest } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
+import { readSettlement } from "@/shared/lib/accountancy/settlement";
 import { handleApiError, parsePagination } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
@@ -62,7 +63,7 @@ export async function GET(req: NextRequest) {
                     branch:         { select: { id: true, name: true } },
                     createdBy:      { select: { name: true } },
                     _count:         { select: { lines: true } },
-                    tenders:        { select: { accountId: true, amount: true, method: true } },
+                    settlementJson: true,
                 },
             }),
         ]);
@@ -70,14 +71,16 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({
             total,
             items: vouchers.map((v) => {
+                // Tender input from settlementJson (G4b).
+                const tenders = readSettlement(v.settlementJson).tenders;
                 // Paid-at-counter = sum of non-AR tenders (cash/bank/card).
                 // The AR tender (if any) sits as customer credit going forward.
-                const paid = v.tenders
+                const paid = tenders
                     .filter((t) => t.accountId !== v.accountId)
                     .reduce((s, t) => s + Number(t.amount), 0);
                 // paymentMode equivalent: first tender's method, or "MIXED" when
                 // the cashier used more than one channel.
-                const methods = [...new Set(v.tenders.map((t) => t.method).filter((m): m is NonNullable<typeof m> => !!m))];
+                const methods = [...new Set(tenders.map((t) => t.method).filter((m): m is NonNullable<typeof m> => !!m))];
                 const paymentMode = methods.length > 1 ? "MIXED" : (methods[0] ?? null);
                 return {
                     id:             v.id,

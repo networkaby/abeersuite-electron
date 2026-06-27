@@ -32,8 +32,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         where: { id: Number(id) },
         include: {
             lines: { include: { product: { select: { id: true, sku: true, name: true } } } },
-            charges: true,
-            tenders: true,
+            // settlementJson (tender/charge input) is a scalar — captured in the snapshot automatically.
             stockEntries: true,
             createdBy: { select: { id: true, name: true } },
         },

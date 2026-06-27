@@ -6,6 +6,7 @@ import { invNextRef, calcVoucherTotals } from "@/modules/inventory/lib/stock";
 import { recordStockMovementsBatch } from "@/modules/inventory/lib/stockMovement";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import { saleToSpec } from "@/modules/accountancy/lib/voucherMappers";
+import { buildSettlementJson } from "@/shared/lib/accountancy/settlement";
 import { enginePost } from "@/modules/accountancy/lib/transactionEngine";
 import { postReceiptVoucher } from "@/modules/accountancy/lib/postReceiptVoucher";
 import { channelToPaymentMethod } from "@/modules/pos/lib/counterTenders";
@@ -579,29 +580,11 @@ export async function POST(req: Request) {
                             savedSalePricePaise: l.savedSalePricePaise,
                         })),
                     },
-                    tenders: {
-                        create: tenderPayload.map((t) => ({
-                            accountId: t.accountId,
-                            amount:    t.amount,
-                            method:    t.method,
-                            reference: t.reference,
-                        })),
-                    },
-                    ...(allCharges.length > 0 ? {
-                        charges: {
-                            create: allCharges.map((c) => ({
-                                accountId:   c.accountId,
-                                description: c.description?.trim() || null,
-                                amount:      c.amount,
-                            })),
-                        },
-                    } : {}),
+                    // G4b: tender + charge INPUT → settlementJson (the spine's
+                    // role=TENDER/CHARGE GL lines are emitted from it on POST).
+                    settlementJson: buildSettlementJson(tenderPayload, allCharges),
                 },
-                include: {
-                    lines:   true,
-                    tenders: { include: { account: { select: { id: true, name: true, normalBalance: true, group: { select: { type: true } } } } } },
-                    charges: { include: { account: { select: { id: true, name: true, normalBalance: true, group: { select: { type: true } } } } } },
-                },
+                include: { lines: true },
             });
 
             // ── 2. GL post (Dr Till/Bank + (optional) Dr Customer AR / Cr Sales / Cr GST) ─
@@ -623,17 +606,9 @@ export async function POST(req: Request) {
                 discountAmt: voucher.discountAmt,
                 roundOff:    voucher.roundOff,
                 totalAmount: voucher.totalAmount,
-                tenders:     voucher.tenders.map((t) => ({
-                    accountId: t.accountId,
-                    amount:    Number(t.amount),
-                    account:   t.account,
-                })),
-                charges:     voucher.charges.map((c) => ({
-                    accountId:   c.accountId,
-                    amount:      Number(c.amount),
-                    description: c.description,
-                    account:     c.account,
-                })),
+                // Tenders/charges straight from the in-memory input (no DB round-trip).
+                tenders:     tenderPayload.map((t) => ({ accountId: t.accountId, amount: Number(t.amount), method: t.method, reference: t.reference })),
+                charges:     allCharges.map((c) => ({ accountId: c.accountId, amount: Number(c.amount), description: c.description })),
                 sellerStateCode,
                 buyerStateCode: sellerStateCode, // counter pickup → intra-state
             });
