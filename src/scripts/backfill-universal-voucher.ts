@@ -168,11 +168,38 @@ async function backfillAllocations(): Promise<number> {
     return created;
 }
 
+// Phase 4 G1 (legacy retire): drop JOURNAL_ENTRY allocations now that
+// postReceiptVoucher is spine-only and every reader reads UNIVERSAL_VOUCHER.
+// Only deletes a JE allocation when its UV parallel exists (safety) —
+// backfillAllocations above guarantees that.
+async function dropLegacyAllocations(): Promise<number> {
+    const jeAllocs = await prisma.voucherAllocation.findMany({
+        where:  { targetType: "JOURNAL_ENTRY" },
+        select: { id: true, targetId: true, sourceType: true, sourceId: true },
+    });
+    if (jeAllocs.length === 0) return 0;
+    const spineByJe = new Map(
+        (await prisma.universalVoucher.findMany({ where: { sourceJournalEntryId: { in: [...new Set(jeAllocs.map((a) => a.targetId))] } }, select: { id: true, sourceJournalEntryId: true } }))
+            .map((s) => [s.sourceJournalEntryId!, s.id]),
+    );
+    const uvSet = new Set(
+        (await prisma.voucherAllocation.findMany({ where: { targetType: "UNIVERSAL_VOUCHER" }, select: { sourceType: true, sourceId: true, targetId: true } }))
+            .map((a) => `${a.sourceType}:${a.sourceId}:${a.targetId}`),
+    );
+    const toDelete = jeAllocs
+        .filter((a) => { const sp = spineByJe.get(a.targetId); return sp != null && uvSet.has(`${a.sourceType}:${a.sourceId}:${sp}`); })
+        .map((a) => a.id);
+    if (toDelete.length > 0) await prisma.voucherAllocation.deleteMany({ where: { id: { in: toDelete } } });
+    return toDelete.length;
+}
+
 async function main() {
     if (!CHECK_ONLY) {
         await backfill();
         const allocs = await backfillAllocations();
         console.log(`allocation backfill: created ${allocs} parallel UNIVERSAL_VOUCHER allocation(s).`);
+        const dropped = await dropLegacyAllocations();
+        console.log(`legacy allocations dropped: ${dropped} JOURNAL_ENTRY allocation(s) removed.`);
     } else {
         console.log("--check: skipping writes, asserting drift only.");
     }

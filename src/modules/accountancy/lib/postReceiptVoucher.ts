@@ -118,11 +118,10 @@ export async function postReceiptVoucher(
         );
     }
 
-    // Phase 4 G1 (dual-target): also allocate against the universal-voucher spine
-    // (UNIVERSAL_VOUCHER) so spine-based receivables work, while the legacy
-    // JOURNAL_ENTRY allocation keeps current readers correct. Additive — readers
-    // filter by targetType, so they never double-count. Reader cutover + dropping
-    // the JOURNAL_ENTRY allocations come later in G1.
+    // Phase 4 G1 (spine-only): allocate against the universal-voucher spine.
+    // The legacy JOURNAL_ENTRY allocation is retired — every posted JE has a spine
+    // (engine dual-write), and all receivables readers (outstandings,
+    // allocations/open, person transactions) read the spine.
     const spineByJe = new Map(
         (await tx.universalVoucher.findMany({
             where:  { sourceJournalEntryId: { in: allocationPlan.map((a) => a.journalEntryId) } },
@@ -132,10 +131,12 @@ export async function postReceiptVoucher(
 
     const allocationIds: number[] = [];
     for (const a of allocationPlan) {
+        const spineId = spineByJe.get(a.journalEntryId);
+        if (spineId == null) continue; // every posted JE has a spine; skip defensively
         const alloc = await tx.voucherAllocation.create({
             data: {
-                targetType:  "JOURNAL_ENTRY",
-                targetId:    a.journalEntryId,
+                targetType:  "UNIVERSAL_VOUCHER",
+                targetId:    spineId,
                 sourceType:  "VOUCHER",
                 sourceId:    voucher.id,
                 amount:      a.amount,
@@ -146,22 +147,6 @@ export async function postReceiptVoucher(
             select: { id: true },
         });
         allocationIds.push(alloc.id);
-
-        const spineId = spineByJe.get(a.journalEntryId);
-        if (spineId != null) {
-            await tx.voucherAllocation.create({
-                data: {
-                    targetType:  "UNIVERSAL_VOUCHER",
-                    targetId:    spineId,
-                    sourceType:  "VOUCHER",
-                    sourceId:    voucher.id,
-                    amount:      a.amount,
-                    method:      "AGAINST_REF",
-                    reference:   voucherRef,
-                    createdById: args.userId,
-                },
-            });
-        }
     }
 
     return {

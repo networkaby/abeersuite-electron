@@ -6,7 +6,9 @@ import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
-const TARGET_TYPES = ["INVOICE", "VOUCHER", "JOURNAL_ENTRY"] as const;
+// Phase 4 G1: UNIVERSAL_VOUCHER is the spine target receipts now allocate against;
+// JOURNAL_ENTRY kept for back-compat until G5 retires the legacy GL tables.
+const TARGET_TYPES = ["INVOICE", "VOUCHER", "JOURNAL_ENTRY", "UNIVERSAL_VOUCHER"] as const;
 const SOURCE_TYPES = ["VOUCHER", "PAYMENT", "INVOICE", "JOURNAL_ENTRY"] as const;
 const METHODS = ["NEW_REF", "AGAINST_REF", "ADVANCE", "ON_ACCOUNT"] as const;
 

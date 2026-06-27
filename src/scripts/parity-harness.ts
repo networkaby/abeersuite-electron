@@ -506,19 +506,21 @@ async function runAllocationDualTarget(): Promise<boolean> {
 
             const allocs = await tx.voucherAllocation.findMany({ where: { sourceType: "VOUCHER", sourceId: r.voucherId }, select: { targetType: true, targetId: true } });
             const spine  = await tx.universalVoucher.findUnique({ where: { sourceJournalEntryId: saleJe! }, select: { id: true } });
-            const jeAlloc = allocs.find((a) => a.targetType === "JOURNAL_ENTRY" && a.targetId === saleJe);
-            const uvAlloc = allocs.find((a) => a.targetType === "UNIVERSAL_VOUCHER" && a.targetId === spine?.id);
-            // G1c: the spine-based reader helper returns the settled amount keyed by JE id.
+            // Spine-only now (G1 legacy retired): one UNIVERSAL_VOUCHER allocation,
+            // no JOURNAL_ENTRY allocation.
+            const uvAlloc   = allocs.find((a) => a.targetType === "UNIVERSAL_VOUCHER" && a.targetId === spine?.id);
+            const noJeAlloc = !allocs.some((a) => a.targetType === "JOURNAL_ENTRY");
+            // The spine-based reader helper returns the settled amount keyed by JE id.
             const paidViaSpine = await sumReceiptAllocationsByJe(tx, [saleJe!]);
             const helperOk = Math.abs((paidViaSpine[saleJe!] ?? 0) - 118) < 0.01;
-            ok = !!jeAlloc && !!uvAlloc && allocs.length === 2 && helperOk;
+            ok = !!uvAlloc && noJeAlloc && allocs.length === 1 && helperOk;
             throw new Error(ROLLBACK);
         }, { timeout: 30_000, maxWait: 10_000 });
     } catch (e) {
         if ((e as Error)?.message !== ROLLBACK) throw e;
     }
-    console.log("\n=== G1 dual-target alloc (receipt → JE + spine allocations, rolled back) ===");
-    console.log("dual allocation (JOURNAL_ENTRY + UNIVERSAL_VOUCHER):", ok ? "✓" : "✗");
+    console.log("\n=== G1 spine-only alloc (receipt → UNIVERSAL_VOUCHER only, rolled back) ===");
+    console.log("spine-only allocation (UNIVERSAL_VOUCHER, no JE) + reader helper:", ok ? "✓" : "✗");
     return ok;
 }
 
