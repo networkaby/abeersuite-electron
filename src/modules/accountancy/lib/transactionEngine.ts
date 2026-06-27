@@ -19,7 +19,7 @@
 // `enginePostVoucher` / `engineCreateVoucher` still target the GL `Voucher` table
 // and are being subsumed by `enginePost` as callers migrate (see plan Phase 3).
 
-import type { Prisma, VoucherType, VoucherGlRole } from "@/generated/prisma/client";
+import type { Prisma, VoucherType, VoucherGlRole, PaymentMethod } from "@/generated/prisma/client";
 import { balanceDelta, nextRefFromSeries, toNumber } from "./balance";
 import { defaultNormalBalanceForGroupType, type GroupTypeStr } from "./groupNature";
 import { recordStockMovementsBatch, type RecordStockMovementArgs } from "@/modules/inventory/lib/stockMovement";
@@ -40,6 +40,9 @@ export interface EngineGlLine {
      *  line's position when omitted). Mirrored onto `VoucherGlLine`, not JournalLine. */
     role?:        VoucherGlRole | null;
     seq?:         number | null;
+    /** Phase 4 G4b — tender metadata, only meaningful on role=TENDER lines. */
+    method?:      PaymentMethod | null;
+    reference?:   string | null;
 }
 
 /** A stock movement for the engine's stock arm (re-export of the stock helper's shape). */
@@ -199,6 +202,8 @@ export async function engineGlArm(
                     branchId,
                     role:                l.role ?? null,        // G4 form-section tag
                     seq:                 l.seq ?? idx,          // G4 ordinal (form order)
+                    method:              l.method ?? null,      // G4b tender channel
+                    reference:           l.reference ?? null,   // G4b tender ref
                     sourceJournalLineId: jeLineIds[idx],   // G2 line-level twin
                 })),
             },

@@ -210,6 +210,12 @@ model VoucherGlLine {
   // the trading GL builder tags roles; generic financial legs leave role null.
   role               VoucherGlRole?
   seq                Int?
+  // Phase 4 G4b: tender metadata, populated only on role=TENDER lines — the
+  // display-only channel label + the UPI ref / cheque # / txn id. Folding
+  // InvVoucherTender's `method`/`reference` onto the GL line is what lets that
+  // table retire (the role=TENDER GL lines become the complete tender record).
+  method             PaymentMethod?
+  reference          String?
 
   // Phase 4 G2: line-level twin link to the legacy JournalLine this spine line
   // mirrors — the per-line analog of UniversalVoucher.sourceJournalEntryId. Lets

@@ -23,7 +23,7 @@
 //   • Missing buyer state (legacy callers) falls back to seller state →
 //     intra-state, matching pre-refactor behaviour.
 
-import type { Prisma, PrismaClient, VoucherGlRole } from "@/generated/prisma/client";
+import type { Prisma, PrismaClient, VoucherGlRole, PaymentMethod } from "@/generated/prisma/client";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { toNumber } from "./balance";
 import { computeGstSplit } from "@/shared/lib/gst/computeGstSplit";
@@ -47,6 +47,9 @@ type JeLine = {
     /// emission order just before return so the spine reconstructs the form.
     role?:       VoucherGlRole;
     seq?:        number;
+    /// Phase 4 G4b — tender channel + ref (only on role=TENDER lines).
+    method?:     PaymentMethod | null;
+    reference?:  string | null;
 };
 
 const NAMES = {
@@ -135,6 +138,9 @@ export type PostVoucherInput = {
         tenders?: Array<{
             accountId: number;
             amount:    Prisma.Decimal | number;
+            /// G4b — channel label + txn ref carried onto the role=TENDER GL line.
+            method?:    PaymentMethod | null;
+            reference?: string | null;
             account?: {
                 normalBalance: "DEBIT" | "CREDIT" | null;
                 group: { type: "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE" | null } | null;
@@ -383,6 +389,8 @@ export async function buildInvVoucherGlLines(
             amount:      amt,
             description: partyName ?? voucher.description,
             role:        "TENDER",
+            method:      t.method ?? null,
+            reference:   t.reference ?? null,
         });
         if (t.account) {
             extraLedgers.push({
