@@ -58,19 +58,30 @@ export async function GET(req: Request) {
             },
         });
 
-        // Voucher has no branch column — branch lives on the JE lines
-        // (JournalLine.branchId, stamped on POST). Surface a single branch per
-        // voucher (the first line carrying one) so branch-aware views like the
-        // Day Book can show it. Most office/legacy GL vouchers have none → null.
+        // Voucher has no branch column — branch lives on the GL-arm lines
+        // (VoucherGlLine.branchId, stamped on POST; read from the spine). Surface a
+        // single branch per voucher (the first line carrying one) so branch-aware
+        // views like the Day Book can show it. Most office/legacy GL vouchers have
+        // none → null. The spine line is scalar/id-only (no `branch` relation until
+        // G4), so resolve the branch name from the masters.
         const jeIds = vouchers.map((v) => v.journalEntryId).filter((x): x is number => x != null);
         const branchLines = jeIds.length
-            ? await prisma.journalLine.findMany({
-                where:    { journalEntryId: { in: jeIds }, branchId: { not: null } },
-                distinct: ["journalEntryId"],
-                select:   { journalEntryId: true, branch: { select: { id: true, name: true } } },
+            ? await prisma.voucherGlLine.findMany({
+                where:    { universalVoucher: { sourceJournalEntryId: { in: jeIds } }, branchId: { not: null } },
+                distinct: ["universalVoucherId"],
+                select:   { branchId: true, universalVoucher: { select: { sourceJournalEntryId: true } } },
             })
             : [];
-        const branchByJe = new Map(branchLines.map((l) => [l.journalEntryId, l.branch]));
+        const branchIds = [...new Set(branchLines.map((l) => l.branchId).filter((x): x is string => x != null))];
+        const branchNameById = new Map(
+            (branchIds.length === 0 ? [] : await prisma.branch.findMany({ where: { id: { in: branchIds } }, select: { id: true, name: true } }))
+                .map((b) => [b.id, b.name]),
+        );
+        const branchByJe = new Map(
+            branchLines
+                .filter((l) => l.universalVoucher?.sourceJournalEntryId != null && l.branchId != null)
+                .map((l) => [l.universalVoucher!.sourceJournalEntryId!, { id: l.branchId!, name: branchNameById.get(l.branchId!) ?? null }]),
+        );
 
         return NextResponse.json(
             vouchers.map((v) => ({
