@@ -25,9 +25,9 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import type { PostVoucherInput } from "@/modules/accountancy/lib/postInvVoucher";
 import { saleToSpec, buildTradingStockMoves } from "@/modules/accountancy/lib/voucherMappers";
-import { enginePost, engineCreateVoucher } from "@/modules/accountancy/lib/transactionEngine";
+import { enginePost, engineCreateVoucher, engineCreateSpine, engineGlArm } from "@/modules/accountancy/lib/transactionEngine";
 import { recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
-import { recomputeAccountBalances } from "@/modules/accountancy/lib/aggregateLedger";
+import { recomputeAccountBalances, ledgerStatusFilterUv } from "@/modules/accountancy/lib/aggregateLedger";
 import { reapplyTradingVoucherInPlace } from "@/modules/accountancy/lib/reapplyTradingVoucher";
 import { postReceiptVoucher } from "@/modules/accountancy/lib/postReceiptVoucher";
 import { sumReceiptAllocations, loadTenderLines, sumVoucherAllocations } from "@/modules/accountancy/lib/outstandings";
@@ -271,6 +271,56 @@ async function runGolden(): Promise<boolean> {
         golden(acc, "Debit Note", "DEBIT_NOTE", pair(L(acc.creditor, "DEBIT"), L(acc.expense, "CREDIT")), acc.creditor),
     ]);
     return results.every(Boolean);
+}
+
+/** Phase 5 5.0: draft-on-spine. engineCreateSpine writes a DRAFT spine HEADER
+ *  (no GL lines, invisible to the status gate); engineGlArm({existingSpineId})
+ *  attaches the lines + flips it to POSTED (now gate-visible). Rolled back. */
+async function runDraftPost(): Promise<boolean> {
+    const acc = await loadAccounts();
+    if (!acc || acc.cash == null || acc.expense == null) { console.log("\ndraft-post skipped — no accounts"); return true; }
+    let ok = false;
+    try {
+        await prisma.$transaction(async (tx) => {
+            // 1. DRAFT spine header — no lines, no balance impact.
+            const spineId = await engineCreateSpine(tx, {
+                type: "JOURNAL", date: new Date(), description: "parity draft-post", userId: acc.userId,
+            });
+            const draft = await tx.universalVoucher.findUnique({
+                where: { id: spineId }, select: { status: true, _count: { select: { lines: true } } },
+            });
+            // Gate: a DRAFT spine is excluded by ledgerStatusFilterUv (reports won't see it).
+            const hiddenWhileDraft = await tx.universalVoucher.findFirst({
+                where: { id: spineId, ...ledgerStatusFilterUv() }, select: { id: true },
+            });
+            // 2. POST: attach GL lines + flip DRAFT→POSTED on the SAME spine id.
+            const gl = await engineGlArm(tx, {
+                date: new Date(), description: "parity draft-post", userId: acc.userId, branchId: null, postedAt: new Date(),
+                type: "JOURNAL", existingSpineId: spineId,
+                lines: [
+                    { accountId: acc.expense!, type: "DEBIT",  amount: 300 },
+                    { accountId: acc.cash!,    type: "CREDIT", amount: 300 },
+                ],
+            });
+            const posted = await tx.universalVoucher.findUnique({ where: { id: spineId }, select: { status: true } });
+            const visibleAfterPost = await tx.universalVoucher.findFirst({
+                where: { id: spineId, ...ledgerStatusFilterUv() }, select: { id: true },
+            });
+            const linesNow = await captureJe(tx, spineId);
+            ok = draft?.status === "DRAFT" && draft._count.lines === 0
+                && hiddenWhileDraft == null                 // gated out while DRAFT
+                && gl.universalVoucherId === spineId         // attached to the same spine
+                && posted?.status === "POSTED"
+                && visibleAfterPost != null                  // gate-visible after POST
+                && linesNow.length === 2;
+            throw new Error(ROLLBACK);
+        }, { timeout: 30_000, maxWait: 10_000 });
+    } catch (e) {
+        if ((e as Error)?.message !== ROLLBACK) throw e;
+    }
+    console.log("\n=== 5.0 draft→post (DRAFT spine hidden by gate → POST attaches lines + flips visible, rolled back) ===");
+    console.log("draft hidden then posted-visible with 2 lines:", ok ? "✓" : "✗");
+    return ok;
 }
 
 /** ②-foundation: recomputeProductStock (rebuild cache from openingStock + ledger)
@@ -562,7 +612,8 @@ async function main() {
     const vchAllocOk = await runVoucherAllocation();
     const shiftOk    = await runShiftCashMath();
     const goldenOk   = await runGolden();
-    const green      = stockOk && e2eOk && recompOk && editOk && allocOk && vchAllocOk && shiftOk && goldenOk;
+    const draftOk    = await runDraftPost();
+    const green      = stockOk && e2eOk && recompOk && editOk && allocOk && vchAllocOk && shiftOk && goldenOk && draftOk;
     console.log(green ? "\nHARNESS GREEN ✓" : "\nHARNESS FAILED ✗");
     if (!green) process.exitCode = 1;
 }

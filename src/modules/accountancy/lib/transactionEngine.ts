@@ -107,11 +107,13 @@ export async function engineGlArm(
         friendlyRef?:    string | null;
         narration?:      string | null;
         partyAccountId?: number | null;
+        // Phase 5 5.0 — when set, ATTACH the GL lines to this pre-created DRAFT
+        // spine and flip it to POSTED (instead of minting a fresh spine). Lets a
+        // draft carry a spine id from create time; POST fills its lines + balances.
+        existingSpineId?: number | null;
     },
 ): Promise<{ journalEntryId: number; universalVoucherId: number }> {
     const { date, description, lines, userId, branchId, postedAt } = args;
-
-    const jeRef = await nextRefFromSeries(tx, "GL_POSTING", userId);
 
     // Resolve each ledger's normal side for the balance delta. Use the caller's
     // pre-loaded `account` when present; batch-load the rest. Null-normalBalance
@@ -153,6 +155,41 @@ export async function engineGlArm(
 
     // ── The single GL writer (Phase 4 G5 — legacy JournalEntry/JournalLine dropped) ─
     // The universal-voucher spine + VoucherGlLine children ARE the GL now.
+    const glLineBase = lines.map((l, idx) => ({
+        accountId:   l.accountId,
+        type:        l.type,
+        amount:      l.amount,
+        description: l.description ?? null,
+        branchId,
+        role:        l.role ?? null,        // form-section tag
+        seq:         l.seq ?? idx,          // ordinal (form order)
+        method:      l.method ?? null,      // tender channel
+        reference:   l.reference ?? null,   // tender ref
+    }));
+
+    // Phase 5 5.0 — ATTACH mode: the draft spine already exists (created at
+    // voucher-save by engineCreateSpine). Fill its GL lines + flip DRAFT→POSTED.
+    if (args.existingSpineId != null) {
+        const id = args.existingSpineId;
+        await tx.voucherGlLine.createMany({ data: glLineBase.map((d) => ({ universalVoucherId: id, ...d })) });
+        await tx.universalVoucher.update({
+            where: { id },
+            data: {
+                status:          "POSTED",
+                postedAt,
+                sourceCreatedAt: postedAt,
+                description,
+                ...(args.type        != null ? { type:           args.type }        : {}),
+                ...(args.friendlyRef != null ? { friendlyRef:    args.friendlyRef } : {}),
+                ...(args.narration   != null ? { narration:      args.narration }   : {}),
+                ...(args.partyAccountId != null ? { partyAccountId: args.partyAccountId } : {}),
+            },
+        });
+        return { journalEntryId: id, universalVoucherId: id };
+    }
+
+    // CREATE-POSTED-directly: no pre-created draft spine — mint a fresh POSTED one.
+    const jeRef = await nextRefFromSeries(tx, "GL_POSTING", userId);
     const uv = await tx.universalVoucher.create({
         select: { id: true },
         data: {
@@ -167,19 +204,7 @@ export async function engineGlArm(
             sourceCreatedAt:      postedAt,   // faithful txn wall-clock for windowed readers
             partyAccountId:       args.partyAccountId ?? null,
             createdById:          userId,
-            lines: {
-                create: lines.map((l, idx) => ({
-                    accountId:           l.accountId,
-                    type:                l.type,
-                    amount:              l.amount,
-                    description:         l.description ?? null,
-                    branchId,
-                    role:                l.role ?? null,        // form-section tag
-                    seq:                 l.seq ?? idx,          // ordinal (form order)
-                    method:              l.method ?? null,      // tender channel
-                    reference:           l.reference ?? null,   // tender ref
-                })),
-            },
+            lines: { create: glLineBase },
         },
     });
     // Self-reference: `sourceJournalEntryId`/voucher `journalEntryId` now carry the
@@ -188,6 +213,49 @@ export async function engineGlArm(
     await tx.universalVoucher.update({ where: { id: uv.id }, data: { sourceJournalEntryId: uv.id } });
 
     return { journalEntryId: uv.id, universalVoucherId: uv.id };
+}
+
+// ── Draft spine (Phase 5 5.0) ─────────────────────────────────────────────────
+
+/**
+ * Create a DRAFT universal-voucher spine HEADER (no GL lines, no balance impact)
+ * at voucher-save time, so the document carries a `universalVoucherId` from the
+ * start. The central status gate (ledgerStatusFilter) excludes non-POSTED rows,
+ * so a draft spine is invisible to balances/reports until POST attaches its GL
+ * lines + flips it to POSTED via `engineGlArm({ existingSpineId })`.
+ *
+ * Reference is the internal GL_POSTING series for now (Phase 5 5D re-keys the
+ * spine to the user-facing SV-/PV-/PMT- number and retires the GL- series).
+ */
+export async function engineCreateSpine(
+    tx: Prisma.TransactionClient,
+    args: {
+        type:            string;
+        date:            Date;
+        description:     string;
+        narration?:      string | null;
+        friendlyRef?:    string | null;
+        partyAccountId?: number | null;
+        userId:          number;
+    },
+): Promise<number> {
+    const ref = await nextRefFromSeries(tx, "GL_POSTING", args.userId);
+    const uv = await tx.universalVoucher.create({
+        select: { id: true },
+        data: {
+            type:           args.type,
+            reference:      ref,
+            friendlyRef:    args.friendlyRef ?? null,
+            date:           args.date,
+            description:    args.description,
+            narration:      args.narration ?? null,
+            status:         "DRAFT",
+            partyAccountId: args.partyAccountId ?? null,
+            createdById:    args.userId,
+        },
+    });
+    await tx.universalVoucher.update({ where: { id: uv.id }, data: { sourceJournalEntryId: uv.id } });
+    return uv.id;
 }
 
 // ── Spine lifecycle helper (Phase 4 G5 — the JE mirror is gone) ───────────────
@@ -235,7 +303,7 @@ export async function enginePost(
     tx: Prisma.TransactionClient,
     spec: TransactionSpec,
     userId: number,
-    opts: { branchId?: string | null; postedAt?: Date } = {},
+    opts: { branchId?: string | null; postedAt?: Date; existingSpineId?: number | null } = {},
 ): Promise<{ journalEntryId: number | null; universalVoucherId: number | null }> {
     const branchId = opts.branchId ?? null;
     const postedAt = opts.postedAt ?? new Date();
@@ -255,6 +323,7 @@ export async function enginePost(
             type:        spec.type,
             friendlyRef: spec.reference ?? null,
             narration:   spec.narration ?? null,
+            existingSpineId: opts.existingSpineId ?? null,   // Phase 5 5.0: attach to draft spine
         });
         journalEntryId = gl.journalEntryId;
         universalVoucherId = gl.universalVoucherId;   // G4d direct spine link
@@ -282,6 +351,9 @@ export async function enginePostVoucher(
     /** Posting timestamp. Defaults to now; auto-settled receipts pass the voucher
      * date to preserve their prior `postedAt` semantics. */
     postedAt: Date = new Date(),
+    /** Phase 5 5.0 — the voucher's pre-created DRAFT spine id; when set, POST
+     * attaches GL lines + flips it instead of minting a fresh spine. */
+    existingSpineId: number | null = null,
 ): Promise<number> {
     const { journalEntryId: jeId, universalVoucherId } = await engineGlArm(tx, {
         date:        voucher.date,
@@ -293,6 +365,7 @@ export async function enginePostVoucher(
         type:        voucher.type,
         friendlyRef: voucher.reference,
         narration:   voucher.narration,
+        existingSpineId,
     });
     await tx.voucher.update({
         where: { id: voucher.id },
