@@ -51,9 +51,9 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                     });
                 }
 
-                if (voucher.journalEntryId) {
+                if (voucher.universalVoucherId) {
                     const spine = await tx.universalVoucher.findUnique({
-                        where:  { id: voucher.journalEntryId },
+                        where:  { id: voucher.universalVoucherId },
                         select: { deletedAt: true, lines: { select: { accountId: true, type: true, amount: true } } },
                     });
                     if (spine && spine.deletedAt) {
@@ -66,7 +66,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                             const delta = balanceDelta(nbById.get(line.accountId)!, line.type, toNumber(line.amount));
                             await tx.account.update({ where: { id: line.accountId }, data: { balance: { increment: delta } } });
                         }
-                        await setSpineLifecycle(tx, voucher.journalEntryId, { deletedAt: null, deletedById: null, deleteReason: null });
+                        await setSpineLifecycle(tx, voucher.universalVoucherId, { deletedAt: null, deletedById: null, deleteReason: null });
                     }
                 }
             }

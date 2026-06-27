@@ -255,8 +255,8 @@ export async function PATCH(req: Request, { params }: Params) {
                 // recompute caches). No reversal JE, no counter stock entries — the
                 // voucher and its journalEntryId are preserved, so receipts
                 // allocated against the JE stay linked.
-                const origJe = existing.journalEntryId
-                    ? await tx.universalVoucher.findUnique({ where: { id: existing.journalEntryId }, include: { lines: true } })
+                const origJe = existing.universalVoucherId
+                    ? await tx.universalVoucher.findUnique({ where: { id: existing.universalVoucherId }, include: { lines: true } })
                     : null;
                 const oldSnapRow = await tx.invVoucher.findUnique({ where: { id } });
                 const oldSnap = oldSnapRow ? {
@@ -378,12 +378,12 @@ export async function PATCH(req: Request, { params }: Params) {
                     voucher:        { ...fresh, tenders: freshSettlement.tenders, charges: freshSettlement.charges } as unknown as PostVoucherInput["voucher"],
                     branchId:       fresh.branchId,
                     lines:          fresh.lines,
-                    journalEntryId: existing.journalEntryId,
+                    journalEntryId: existing.universalVoucherId,
                 });
                 // G4d: reapply resyncs the spine (delete + re-mirror → new spine id);
                 // refresh the direct link so InvVoucher.universalVoucherId stays valid.
-                const newSpine = existing.journalEntryId != null
-                    ? await tx.universalVoucher.findUnique({ where: { sourceJournalEntryId: existing.journalEntryId }, select: { id: true } })
+                const newSpine = existing.universalVoucherId != null
+                    ? await tx.universalVoucher.findUnique({ where: { sourceJournalEntryId: existing.universalVoucherId }, select: { id: true } })
                     : null;
                 await tx.invVoucher.update({ where: { id }, data: { postedAt: new Date(), universalVoucherId: newSpine?.id ?? null } });
                 // Phase 5 5C: link the rewritten stock rows (+ any new goods lines) to the spine.

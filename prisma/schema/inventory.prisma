@@ -449,8 +449,8 @@ model InvVoucher {
   subtotal            Decimal                @db.Decimal(14, 2)
   taxAmount           Decimal                @default(0) @db.Decimal(14, 2)
   totalAmount         Decimal                @db.Decimal(14, 2)
-  /// Linked GL journal entry — auto-created on post
-  journalEntryId      Int?
+  /// Phase 5 5D-1: vestigial `journalEntryId` dropped — since G5 it always equalled
+  /// `universalVoucherId` (the spine self-refs). Use `universalVoucherId` as the link.
   /// Phase 4 G4d: direct link to the universal-voucher spine (set on post).
   universalVoucherId  Int?                   @unique
   universalVoucher    UniversalVoucher?      @relation("InvVoucherSpine", fields: [universalVoucherId], references: [id])

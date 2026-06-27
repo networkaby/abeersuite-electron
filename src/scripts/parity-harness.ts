@@ -520,7 +520,8 @@ async function runEditCycle(): Promise<boolean> {
             const spec1 = await saleToSpec(tx, { ...v, tenders: [{ accountId: cash.id, amount: 118 }], charges: [], sellerStateCode: "19", buyerStateCode: "19" } as unknown as PostVoucherInput["voucher"], { branchId: v.branchId, lines: vLines });
             const { journalEntryId: saleJe } = await enginePost(tx, spec1, user.id, { existingSpineId: spineId });
             if (saleJe == null) throw new Error("no saleJe");
-            await tx.invVoucher.update({ where: { id: v.id }, data: { journalEntryId: saleJe } });
+            // 5D-1: InvVoucher.journalEntryId dropped — the spine link is universalVoucherId
+            // (already = spineId, set at create; saleJe == spineId via existingSpineId).
 
             // 2. EDIT in place: qty 1 → 2 (line 236 = taxable 200 + 18% tax 36).
             await tx.voucherInventoryLine.updateMany({ where: { universalVoucherId: spineId }, data: { quantity: 2, amount: 236, taxAmount: 36 } });
@@ -536,14 +537,14 @@ async function runEditCycle(): Promise<boolean> {
             });
 
             // 3. Assertions.
-            const vAfter = await tx.invVoucher.findUnique({ where: { id: v.id }, select: { journalEntryId: true } });
+            const vAfter = await tx.invVoucher.findUnique({ where: { id: v.id }, select: { universalVoucherId: true } });
             const jeCap  = await captureJe(tx, saleJe);
             const spine  = await captureSpine(tx, saleJe);
             const dr = jeCap.filter((l) => l.type === "DEBIT").reduce((s, l) => s + l.amount, 0);
             const cr = jeCap.filter((l) => l.type === "CREDIT").reduce((s, l) => s + l.amount, 0);
             const outQty = (await tx.invStockLedger.findMany({ where: { universalVoucherId: spineId }, select: { outQty: true } })).reduce((s, r) => s + Number(r.outQty), 0);
 
-            const jeSameId = vAfter?.journalEntryId === saleJe;
+            const jeSameId = vAfter?.universalVoucherId === saleJe;
             const balanced = Math.abs(dr - cr) < 0.01 && Math.abs(dr - 236) < 0.01;
             const stockOk2 = Math.abs(outQty - 2) < 0.001;
             const spineOk  = sameLines(jeCap, spine);
@@ -651,9 +652,9 @@ async function runShiftCashMath(): Promise<boolean> {
             await tx.voucherInventoryLine.createMany({ data: [{ universalVoucherId: spineId, productId: product.id, quantity: 1, rate: 100, taxRate: 18, taxAmount: 18, amount: 118 }] });
             const vLines = await tx.voucherInventoryLine.findMany({ where: { universalVoucherId: spineId }, include: { product: { select: { id: true, stock: true, mrpPaise: true } } } });
             const spec = await saleToSpec(tx, { ...v, tenders: [{ accountId: cash.id, amount: 118, method: "CASH" }], charges: [], sellerStateCode: "19", buyerStateCode: "19" } as unknown as PostVoucherInput["voucher"], { branchId: v.branchId, lines: vLines });
-            const { journalEntryId, universalVoucherId } = await enginePost(tx, spec, user.id, { existingSpineId: spineId });
+            const { universalVoucherId } = await enginePost(tx, spec, user.id, { existingSpineId: spineId });
             // POS route links the spine to the voucher — replicate so the window→spine resolution finds it.
-            await tx.invVoucher.update({ where: { id: v.id }, data: { status: "POSTED", journalEntryId, universalVoucherId } });
+            await tx.invVoucher.update({ where: { id: v.id }, data: { status: "POSTED", universalVoucherId } });
             // G5: an office RECEIPT at the till (Dr Till 50 / Cr Debtor) must ALSO
             // count toward shift cash — now read off the spine (sourceCreatedAt window).
             const expectReceipt = debtor != null;

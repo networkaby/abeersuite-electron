@@ -56,7 +56,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             // `journalEntryId` carries the spine id for POSTED (self-ref since G5);
             // a DRAFT voucher has only universalVoucherId (Phase 5 5.0d) — fall back
             // to it so the draft spine is physically removed too (no orphan).
-            const spineId = voucher.journalEntryId ?? voucher.universalVoucherId;
+            const spineId = voucher.universalVoucherId;
             const origJe = spineId
                 ? await tx.universalVoucher.findUnique({
                     where: { id: spineId },

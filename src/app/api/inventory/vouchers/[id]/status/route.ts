@@ -34,10 +34,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
         const v = await prisma.invVoucher.findUnique({
             where: { id },
-            select: { id: true, type: true, journalEntryId: true, deletedAt: true },
+            select: { id: true, type: true, universalVoucherId: true, deletedAt: true },
         });
         if (!v || v.deletedAt) return NextResponse.json({ error: "Voucher not found" }, { status: 404 });
-        if (!TOGGLEABLE.has(v.type) || v.journalEntryId != null) {
+        // A posted trading voucher has a spine link (universalVoucherId) → GL-controlled.
+        if (!TOGGLEABLE.has(v.type) || v.universalVoucherId != null) {
             return NextResponse.json(
                 { error: "This voucher's status is GL-controlled and can't be changed here." },
                 { status: 422 },

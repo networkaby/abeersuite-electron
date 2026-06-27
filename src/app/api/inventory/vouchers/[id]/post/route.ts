@@ -393,7 +393,6 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                 data:  {
                     status:        "POSTED",
                     postedAt:      new Date(),
-                    journalEntryId,
                     universalVoucherId,
                 },
                 include: { createdBy: { select: { name: true } } },

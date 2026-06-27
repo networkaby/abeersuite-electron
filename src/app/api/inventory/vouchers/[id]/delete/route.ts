@@ -103,9 +103,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                     }
                 }
 
-                if (voucher.journalEntryId) {
+                if (voucher.universalVoucherId) {
                     const spine = await tx.universalVoucher.findUnique({
-                        where:  { id: voucher.journalEntryId },
+                        where:  { id: voucher.universalVoucherId },
                         select: { status: true, deletedAt: true, lines: { select: { accountId: true, type: true, amount: true } } },
                     });
                     if (spine && spine.status === "POSTED" && !spine.deletedAt) {
@@ -118,7 +118,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                             const delta = balanceDelta(nbById.get(line.accountId)!, line.type, toNumber(line.amount));
                             await tx.account.update({ where: { id: line.accountId }, data: { balance: { decrement: delta } } });
                         }
-                        await setSpineLifecycle(tx, voucher.journalEntryId, {
+                        await setSpineLifecycle(tx, voucher.universalVoucherId, {
                             deletedAt: new Date(), deletedById: user!.id,
                             deleteReason: `Voucher ${voucher.reference} deleted: ${data.reason}`,
                         });
