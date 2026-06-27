@@ -77,6 +77,7 @@ async function backfill(): Promise<number> {
                 status:               je.status,
                 partyAccountId,
                 postedAt:             je.postedAt,
+                sourceCreatedAt:      je.postedAt ?? je.date,   // G5 groundwork
                 cancelledAt:          je.cancelledAt,
                 cancelledById:        je.cancelledById,
                 cancelReason:         je.cancelReason,
@@ -276,6 +277,34 @@ async function backfillVoucherSpineLinks(): Promise<number> {
     return updated;
 }
 
+// Phase 4 G5 groundwork: populate UniversalVoucher.sourceCreatedAt on existing
+// rows from the source voucher's createdAt (legacy windowing key) — falls back to
+// the JE/spine timestamp for stand-alone JEs. Idempotent (only null rows).
+async function backfillSpineCreatedAt(): Promise<number> {
+    const spines = await prisma.universalVoucher.findMany({
+        where:  { sourceCreatedAt: null, sourceJournalEntryId: { not: null } },
+        select: { id: true, sourceJournalEntryId: true, postedAt: true, date: true },
+    });
+    if (spines.length === 0) return 0;
+    const jeIds = spines.map((s) => s.sourceJournalEntryId!);
+    const [vouchers, invs, jes] = await Promise.all([
+        prisma.voucher.findMany({ where: { journalEntryId: { in: jeIds } }, select: { journalEntryId: true, createdAt: true } }),
+        prisma.invVoucher.findMany({ where: { journalEntryId: { in: jeIds } }, select: { journalEntryId: true, createdAt: true } }),
+        prisma.journalEntry.findMany({ where: { id: { in: jeIds } }, select: { id: true, postedAt: true, date: true } }),
+    ]);
+    const vMap = new Map(vouchers.map((v) => [v.journalEntryId!, v.createdAt]));
+    const iMap = new Map(invs.map((v) => [v.journalEntryId!, v.createdAt]));
+    const jMap = new Map(jes.map((j) => [j.id, j.postedAt ?? j.date]));
+    let updated = 0;
+    for (const s of spines) {
+        const je = s.sourceJournalEntryId!;
+        const ts = vMap.get(je) ?? iMap.get(je) ?? jMap.get(je) ?? s.postedAt ?? s.date;
+        await prisma.universalVoucher.update({ where: { id: s.id }, data: { sourceCreatedAt: ts } });
+        updated++;
+    }
+    return updated;
+}
+
 async function main() {
     if (!CHECK_ONLY) {
         await backfill();
@@ -289,6 +318,8 @@ async function main() {
         console.log(`G2 cost-pool re-home: linked ${costPoolLinks} AdditionalCostAllocation to spine lines.`);
         const spineLinks = await backfillVoucherSpineLinks();
         console.log(`G4d spine links: set ${spineLinks} InvVoucher/Voucher.universalVoucherId.`);
+        const spineTs = await backfillSpineCreatedAt();
+        console.log(`G5 spine timestamps: set ${spineTs} UniversalVoucher.sourceCreatedAt.`);
     } else {
         console.log("--check: skipping writes, asserting drift only.");
     }

@@ -595,11 +595,12 @@ async function runGlLineTwin(): Promise<boolean> {
  *  sumShiftCashSalesPaise + sumShiftTendersByAccount both report 11800 paise on
  *  the till for the window. Rolled back. */
 async function runShiftCashMath(): Promise<boolean> {
-    const [branch, product, cash, user] = await Promise.all([
+    const [branch, product, cash, user, debtor] = await Promise.all([
         prisma.branch.findFirst({ select: { id: true } }),
         prisma.invProduct.findFirst({ select: { id: true, stock: true } }),
         prisma.account.findFirst({ where: { name: { equals: "Cash", mode: "insensitive" }, personId: null, companyId: null }, select: { id: true } }),
         prisma.user.findFirst({ select: { id: true } }),
+        prisma.account.findFirst({ where: { isActive: true, group: { name: { equals: "Sundry Debtors", mode: "insensitive" } } }, select: { id: true } }),
     ]);
     if (!branch || !product || !cash || !user) { console.log("\nshift-cash skipped — missing seed data"); return true; }
     let ok = false;
@@ -621,17 +622,24 @@ async function runShiftCashMath(): Promise<boolean> {
             const { journalEntryId } = await enginePost(tx, spec, user.id);
             // POS route links the JE to the voucher — replicate so the window→JE resolution finds it.
             await tx.invVoucher.update({ where: { id: v.id }, data: { status: "POSTED", journalEntryId } });
+            // G5: an office RECEIPT at the till (Dr Till 50 / Cr Debtor) must ALSO
+            // count toward shift cash — now read off the spine (sourceCreatedAt window).
+            const expectReceipt = debtor != null;
+            if (debtor) {
+                await postReceiptVoucher(tx, { customerAccountId: debtor.id, tenders: [{ accountId: cash.id, amount: 50 }], date: new Date(), userId: user.id });
+            }
             const end = new Date(Date.now() + 60_000);
             const cashPaise = await sumShiftCashSalesPaise(tx, { tillAccountId: cash.id, openedAt, closedAt: end });
             const byAcct = await sumShiftTendersByAccount(tx, { accountIds: [cash.id], openedAt, closedAt: end });
-            ok = cashPaise === BigInt(11800) && (byAcct.get(cash.id) ?? BigInt(0)) === BigInt(11800);
+            const expected = BigInt(expectReceipt ? 16800 : 11800);   // POS 11800 + receipt 5000
+            ok = cashPaise === expected && (byAcct.get(cash.id) ?? BigInt(0)) === expected;
             throw new Error(ROLLBACK);
         }, { timeout: 30_000, maxWait: 10_000 });
     } catch (e) {
         if ((e as Error)?.message !== ROLLBACK) throw e;
     }
-    console.log("\n=== G4b-3 shift cash math (POS sale → spine tenders, rolled back) ===");
-    console.log("till cash sales + per-account == 11800 paise:", ok ? "✓" : "✗");
+    console.log("\n=== G4b-3/G5 shift cash math (POS sale + RECEIPT → spine, rolled back) ===");
+    console.log("till cash (POS tender + RECEIPT debit) from spine:", ok ? "✓" : "✗");
     return ok;
 }
 

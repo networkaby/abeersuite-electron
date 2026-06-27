@@ -191,6 +191,7 @@ export async function engineGlArm(
             narration:            args.narration ?? null,
             status:               "POSTED",
             postedAt,
+            sourceCreatedAt:      postedAt,   // G5: faithful txn wall-clock for windowed readers
             partyAccountId:       args.partyAccountId ?? null,
             createdById:          userId,
             sourceJournalEntryId: je.id,
@@ -251,6 +252,8 @@ export async function mirrorJeToSpine(
             status:               je.status,
             partyAccountId:       meta.partyAccountId ?? null,
             postedAt:             je.postedAt,
+            sourceCreatedAt:      je.postedAt ?? je.date,   // G5: faithful txn wall-clock
+
             cancelledAt:          je.cancelledAt,
             cancelledById:        je.cancelledById,
             cancelReason:         je.cancelReason,

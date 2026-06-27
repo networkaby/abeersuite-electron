@@ -90,16 +90,17 @@ export async function sumShiftCashSalesPaise(
         select: { amount: true },
     });
 
-    // Office RECEIPT vouchers (Customer pays old credit bill).
-    const receiptLines = await tx.voucherLine.findMany({
+    // Office RECEIPT vouchers (Customer pays old credit bill) — read the till
+    // debit off the spine (G5); windowed on the spine's faithful sourceCreatedAt.
+    const receiptLines = await tx.voucherGlLine.findMany({
         where: {
             accountId: args.tillAccountId,
             type:      "DEBIT",
-            voucher: {
-                type:      "RECEIPT",
-                status:    "POSTED",
-                deletedAt: null,
-                createdAt: { gte: args.openedAt, lte: end },
+            universalVoucher: {
+                type:            "RECEIPT",
+                status:          "POSTED",
+                deletedAt:       null,
+                sourceCreatedAt: { gte: args.openedAt, lte: end },
             },
         },
         select: { amount: true },
@@ -154,13 +155,14 @@ export async function sumShiftTendersByAccount(
     });
     for (const r of posTenders) add(r.accountId, toPaise(r._sum.amount));
 
-    // Office RECEIPT vouchers settled at this counter (old credit bill paid).
-    const receiptLines = await tx.voucherLine.groupBy({
+    // Office RECEIPT vouchers settled at this counter (old credit bill paid) —
+    // read off the spine (G5), windowed on the faithful sourceCreatedAt.
+    const receiptLines = await tx.voucherGlLine.groupBy({
         by:    ["accountId"],
         where: {
             accountId: { in: args.accountIds },
             type:      "DEBIT",
-            voucher:   { type: "RECEIPT", status: "POSTED", deletedAt: null, createdAt: { gte: args.openedAt, lte: end } },
+            universalVoucher: { type: "RECEIPT", status: "POSTED", deletedAt: null, sourceCreatedAt: { gte: args.openedAt, lte: end } },
         },
         _sum:  { amount: true },
     });

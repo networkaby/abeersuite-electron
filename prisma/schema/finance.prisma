@@ -182,6 +182,11 @@ model UniversalVoucher {
   deletedById          Int?
   deleteReason         String?
   createdById          Int
+  // Phase 4 G5 groundwork: faithful transaction wall-clock (= the source
+  // voucher's posting time). Lets intra-day windowed readers (POS shift
+  // reconciliation) move off Voucher.createdAt onto the spine before the drop —
+  // `createdAt` alone is backfill-time for historical rows, so it can't window.
+  sourceCreatedAt      DateTime?
   // Back-link to the legacy JE written in the same enginePost (dual-write).
   sourceJournalEntryId Int?            @unique
   lines                VoucherGlLine[]
