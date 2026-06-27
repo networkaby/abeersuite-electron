@@ -734,7 +734,7 @@ export async function previewMerge(
 
 async function countAccountRefs(accountId: number) {
     const [jl, vp, vl, iv, ivc, ivt, t, d, so] = await Promise.all([
-        prisma.journalLine.count({ where: { accountId } }),
+        prisma.voucherGlLine.count({ where: { accountId } }),   // Phase 4 G3: GL activity from the spine
         prisma.voucher.count({ where: { partyAccountId: accountId } }),
         prisma.voucherLine.count({ where: { accountId } }),
         prisma.invVoucher.count({ where: { accountId } }),

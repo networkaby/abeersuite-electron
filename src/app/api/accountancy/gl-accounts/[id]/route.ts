@@ -85,7 +85,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     if (response) return response;
 
     const { id } = await params;
-    const lineCount = await prisma.journalLine.count({ where: { accountId: Number(id) } });
+    const lineCount = await prisma.voucherGlLine.count({ where: { accountId: Number(id) } }); // Phase 4 G3: spine
     if (lineCount > 0) {
         return NextResponse.json({ error: "Cannot deactivate — account has posted journal lines" }, { status: 409 });
     }
