@@ -4,7 +4,6 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { calcLineTotals, calcVoucherTotals } from "@/modules/inventory/lib/stock";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import { reapplyTradingVoucherInPlace } from "@/modules/accountancy/lib/reapplyTradingVoucher";
-import { linkVoucherChildrenToSpine } from "@/modules/inventory/lib/voucherSpineLink";
 import { auditSnapshot } from "@/modules/accountancy/lib/voucherLifecycle";
 import type { PostVoucherInput } from "@/modules/accountancy/lib/postInvVoucher";
 import * as Sentry from "@sentry/nextjs";
@@ -21,17 +20,9 @@ export async function GET(_req: Request, { params }: Params) {
     if (response) return response;
 
     const { id } = await params;
-    const voucher = await prisma.invVoucher.findUnique({
+    const voucherRow = await prisma.invVoucher.findUnique({
         where: { id: Number(id) },
         include: {
-            lines: {
-                include: {
-                    product: {
-                        select: { id: true, sku: true, name: true, unit: { select: { code: true, label: true } } },
-                    },
-                },
-            },
-            stockEntries: { include: { product: { select: { id: true, sku: true, name: true } } } },
             createdBy: { select: { name: true } },
             branch:    { select: { id: true, name: true } },
             // refVoucher powers parent-link surfaces — "Replaces <old ref>"
@@ -39,7 +30,19 @@ export async function GET(_req: Request, { params }: Params) {
             refVoucher: { select: { id: true, reference: true, type: true } },
         },
     });
-    if (!voucher) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    if (!voucherRow) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    // Phase 5 5C: goods lines + stock ledger hang off the spine — load + attach.
+    const voucher = {
+        ...voucherRow,
+        lines: await prisma.voucherInventoryLine.findMany({
+            where:   { universalVoucherId: voucherRow.universalVoucherId ?? -1 },
+            include: { product: { select: { id: true, sku: true, name: true, unit: { select: { code: true, label: true } } } } },
+        }),
+        stockEntries: await prisma.invStockLedger.findMany({
+            where:   { universalVoucherId: voucherRow.universalVoucherId ?? -1 },
+            include: { product: { select: { id: true, sku: true, name: true } } },
+        }),
+    };
 
     // G4b: tender + charge input comes from settlementJson now. Re-shape it into
     // the `tenders` / `charges` arrays (with account id/name/code) the edit form
@@ -95,11 +98,13 @@ export async function PATCH(req: Request, { params }: Params) {
     const id = Number(idStr);
     if (!Number.isFinite(id)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
 
-    const existing = await prisma.invVoucher.findUnique({
-        where: { id },
-        include: { lines: { include: { product: { select: { id: true, stock: true } } } } },
-    });
+    const existing = await prisma.invVoucher.findUnique({ where: { id } });
     if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    // Phase 5 5C: capture old line product ids (goods hang off the spine) for the
+    // after-commit pricing recompute — the lines themselves are rewritten below.
+    const existingLineProductIds = (await prisma.voucherInventoryLine.findMany({
+        where: { universalVoucherId: existing.universalVoucherId ?? -1 }, select: { productId: true },
+    })).map((l) => l.productId);
     if (existing.deletedAt) return NextResponse.json({ error: "Voucher is deleted" }, { status: 409 });
     if (existing.status === "CANCELLED") {
         return NextResponse.json({ error: "Voucher is cancelled — use Duplicate to create a fresh copy." }, { status: 409 });
@@ -253,10 +258,11 @@ export async function PATCH(req: Request, { params }: Params) {
                 const origJe = existing.journalEntryId
                     ? await tx.universalVoucher.findUnique({ where: { id: existing.journalEntryId }, include: { lines: true } })
                     : null;
-                const oldSnap = await tx.invVoucher.findUnique({
-                    where:   { id },
-                    include: { lines: true },   // settlementJson is a scalar — auto-included
-                });
+                const oldSnapRow = await tx.invVoucher.findUnique({ where: { id } });
+                const oldSnap = oldSnapRow ? {
+                    ...oldSnapRow,
+                    lines: await tx.voucherInventoryLine.findMany({ where: { universalVoucherId: existing.universalVoucherId ?? -1 } }),
+                } : null;
                 await tx.auditLog.create({
                     data: auditSnapshot({
                         entityType:  "INV_VOUCHER",
@@ -274,7 +280,7 @@ export async function PATCH(req: Request, { params }: Params) {
             // PHASE 2 — Apply the user's edits (header + lines)
             // ────────────────────────────────────────────────────────────
             if (computedLines) {
-                await tx.voucherInventoryLine.deleteMany({ where: { voucherId: id } });
+                await tx.voucherInventoryLine.deleteMany({ where: { universalVoucherId: existing.universalVoucherId ?? -1 } });
             }
             // G4b: tender + charge input lives in settlementJson now. A PATCH may
             // touch either section independently (undefined = leave as-is), so
@@ -324,41 +330,44 @@ export async function PATCH(req: Request, { params }: Params) {
                     ...(discountPct      !== undefined ? { discountPct }     : {}),
                     ...(discountAmt      !== undefined ? { discountAmt }     : {}),
                     ...(totals ? totals : {}),
-                    // Phase 4 ②: keep the existing journalEntryId — the JE is
-                    // rewritten in place in Phase 3, not re-minted.
-                    ...(computedLines ? {
-                        lines: {
-                            create: computedLines.map((l) => ({
-                                productId:   l.productId,
-                                description: l.description || null,
-                                direction:   isManufacturingJournal ? l.direction ?? null : null,
-                                quantity:    l.quantity,
-                                freeQty:     l.freeQty ?? null,
-                                rate:        l.rate,
-                                mrpPaise:    l.mrpPaise ?? null,
-                                discountPct: l.discountPct ?? 0,
-                                discountAmt: l.discountAmt,
-                                taxRate:     l.taxRate    ?? 0,
-                                taxAmount:   l.taxAmount,
-                                amount:      l.amount,
-                            })),
-                        },
-                    } : {}),
                     ...(newSettlementJson !== undefined ? { settlementJson: newSettlementJson } : {}),
                 },
             });
+            // Phase 5 5C: rewrite the goods lines on the spine (deleted above).
+            if (computedLines) {
+                await tx.voucherInventoryLine.createMany({
+                    data: computedLines.map((l) => ({
+                        universalVoucherId: existing.universalVoucherId!,
+                        productId:   l.productId,
+                        description: l.description || null,
+                        direction:   isManufacturingJournal ? l.direction ?? null : null,
+                        quantity:    l.quantity,
+                        freeQty:     l.freeQty ?? null,
+                        rate:        l.rate,
+                        mrpPaise:    l.mrpPaise ?? null,
+                        discountPct: l.discountPct ?? 0,
+                        discountAmt: l.discountAmt,
+                        taxRate:     l.taxRate    ?? 0,
+                        taxAmount:   l.taxAmount,
+                        amount:      l.amount,
+                    })),
+                });
+            }
 
             // ────────────────────────────────────────────────────────────
             // PHASE 3 — Reapply IN PLACE (POSTED only)
             // ────────────────────────────────────────────────────────────
             if (wasPosted) {
-                const fresh = await tx.invVoucher.findUnique({
-                    where: { id },
-                    include: {
-                        lines:   { include: { product: { select: { id: true, mrpPaise: true, stock: true } } } },
-                    },
-                });
-                if (!fresh) throw new Error("Voucher disappeared mid-transaction");
+                const freshRow = await tx.invVoucher.findUnique({ where: { id } });
+                if (!freshRow) throw new Error("Voucher disappeared mid-transaction");
+                // Phase 5 5C: goods lines hang off the spine.
+                const fresh = {
+                    ...freshRow,
+                    lines: await tx.voucherInventoryLine.findMany({
+                        where:   { universalVoucherId: freshRow.universalVoucherId ?? -1 },
+                        include: { product: { select: { id: true, mrpPaise: true, stock: true } } },
+                    }),
+                };
 
                 // Tenders + charges (settlementJson) flow into saleToSpec — one GL
                 // leg per row. Rewrite the SAME JE in place + replace stock rows +
@@ -378,22 +387,26 @@ export async function PATCH(req: Request, { params }: Params) {
                     : null;
                 await tx.invVoucher.update({ where: { id }, data: { postedAt: new Date(), universalVoucherId: newSpine?.id ?? null } });
                 // Phase 5 5C: link the rewritten stock rows (+ any new goods lines) to the spine.
-                await linkVoucherChildrenToSpine(tx, id, newSpine?.id ?? existing.journalEntryId);
             }
 
-            return tx.invVoucher.findUnique({
+            const updatedRow = await tx.invVoucher.findUnique({
                 where: { id },
-                include: {
-                    lines: { include: { product: { select: { id: true, sku: true, name: true } } } },
-                    createdBy: { select: { name: true } },
-                },
+                include: { createdBy: { select: { name: true } } },
             });
+            // Phase 5 5C: goods lines hang off the spine.
+            return updatedRow ? {
+                ...updatedRow,
+                lines: await tx.voucherInventoryLine.findMany({
+                    where:   { universalVoucherId: updatedRow.universalVoucherId ?? -1 },
+                    include: { product: { select: { id: true, sku: true, name: true } } },
+                }),
+            } : null;
         }, { timeout: 30_000, maxWait: 10_000 });
 
         // After-commit pricing recompute — union of old lines (just reversed)
         // and new lines (just posted). Both sets can affect cost basis.
         const touchedProductIds = new Set<number>();
-        for (const l of existing.lines) touchedProductIds.add(l.productId);
+        for (const pid of existingLineProductIds) touchedProductIds.add(pid);
         for (const l of computedLines ?? []) touchedProductIds.add(l.productId);
         await recomputePricesForProducts([...touchedProductIds]).catch((err: unknown) => {
             Sentry.captureException(err, { tags: { source: "price-recompute", voucherId: String(id) } });
@@ -417,7 +430,7 @@ export async function DELETE(_req: Request, { params }: Params) {
     if (existing.status !== "DRAFT") {
         return NextResponse.json({ error: "Only DRAFT vouchers can be deleted via this route. Use /cancel or /delete for lifecycle." }, { status: 409 });
     }
-    await prisma.voucherInventoryLine.deleteMany({ where: { voucherId: Number(id) } });
+    await prisma.voucherInventoryLine.deleteMany({ where: { universalVoucherId: existing.universalVoucherId ?? -1 } });
     await prisma.invVoucher.delete({ where: { id: Number(id) } });
     return NextResponse.json({ ok: true });
 }

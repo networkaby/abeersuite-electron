@@ -7,7 +7,6 @@ import { buildPartyJson, readPartyName, readPartyPhone, readPartyAddress } from 
 import { buildSettlementJson } from "@/shared/lib/accountancy/settlement";
 import { engineCreateSpine } from "@/modules/accountancy/lib/transactionEngine";
 import { syncVoucherLinks } from "@/modules/accountancy/lib/voucherLinks";
-import { linkVoucherChildrenToSpine } from "@/modules/inventory/lib/voucherSpineLink";
 import { resolveActiveBranchId, requireBranchAccess, BranchAccessError } from "@/shared/lib/auth/activeBranch";
 import { auth } from "@/auth";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -95,7 +94,8 @@ export async function GET(req: NextRequest) {
             // refReturns = vouchers that reference THIS one via refVoucherId. For a
             // POS_ORDER / POS_ESTIMATE it means a sale was raised against it →
             // "converted" (not pending). (For SALE etc. it's the returns count.)
-            _count:    { select: { lines: true, refReturns: true } },
+            // Phase 5 5C: goods lines hang off the spine, not InvVoucher.
+            _count:    { select: { refReturns: true } },
         },
     });
 
@@ -445,11 +445,23 @@ export async function POST(req: NextRequest) {
     try {
         const voucher = await prisma.$transaction(async (tx) => {
             const reference = await invNextRef(tx, type);
+            // Phase 5 5.0/5C: spine FIRST (the document anchor) so the goods lines
+            // can hang off it. POST attaches GL lines + flips the spine; non-GL
+            // types just flip the status. Gated out of balances while DRAFT.
+            const spineId = await engineCreateSpine(tx, {
+                type,
+                date:           new Date(date),
+                description:    description.trim(),
+                friendlyRef:    reference,
+                partyAccountId: resolvedAccountId,
+                userId,
+            });
             const created = await tx.invVoucher.create({
                 data: {
                     type,
                     reference,
                     branchId,
+                    universalVoucherId: spineId,
                     orderPipelineId,
                     orderStatusId,
                     date:         new Date(date),
@@ -475,48 +487,36 @@ export async function POST(req: NextRequest) {
                     deliveryMode:  resolvedDeliveryMode,
                     placeOfSupply: resolvedPlaceOfSupply || null,
                     createdById: userId,
-                    lines: {
-                        create: computedLines.map((l) => ({
-                            productId:   l.productId,
-                            description: l.description || null,
-                            direction:   isManufacturingJournal ? l.direction ?? null : null,
-                            quantity:    l.quantity,
-                            freeQty:     l.freeQty != null && l.freeQty > 0 ? l.freeQty : null,
-                            rate:        l.rate,
-                            mrpPaise:    l.mrpPaise ?? null,
-                            discountPct: l.discountPct ?? 0,
-                            discountAmt: l.discountAmt,
-                            taxRate:     l.taxRate    ?? 0,
-                            taxAmount:   l.taxAmount,
-                            amount:      l.amount,
-                        })),
-                    },
                     // G4b: tender + charge INPUT → settlementJson.
                     settlementJson: buildSettlementJson(tenders, charges),
                 },
-                include: {
-                    lines: { include: { product: { select: { id: true, sku: true, name: true } } } },
-                    createdBy: { select: { name: true } },
-                },
+                include: { createdBy: { select: { name: true } } },
             });
-            // Phase 5 5.0: every voucher carries a DRAFT spine from create (the
-            // document anchor). POST attaches its GL lines + flips it; non-GL
-            // types just flip the spine status. Gated out of balances while DRAFT.
-            const spineId = await engineCreateSpine(tx, {
-                type,
-                date:           new Date(date),
-                description:    description.trim(),
-                friendlyRef:    reference,
-                partyAccountId: resolvedAccountId,
-                userId,
+            // Phase 5 5C: goods lines hang off the spine (universalVoucherId).
+            await tx.voucherInventoryLine.createMany({
+                data: computedLines.map((l) => ({
+                    universalVoucherId: spineId,
+                    productId:   l.productId,
+                    description: l.description || null,
+                    direction:   isManufacturingJournal ? l.direction ?? null : null,
+                    quantity:    l.quantity,
+                    freeQty:     l.freeQty != null && l.freeQty > 0 ? l.freeQty : null,
+                    rate:        l.rate,
+                    mrpPaise:    l.mrpPaise ?? null,
+                    discountPct: l.discountPct ?? 0,
+                    discountAmt: l.discountAmt,
+                    taxRate:     l.taxRate    ?? 0,
+                    taxAmount:   l.taxAmount,
+                    amount:      l.amount,
+                })),
             });
-            await tx.invVoucher.update({ where: { id: created.id }, data: { universalVoucherId: spineId } });
-            (created as { universalVoucherId: number | null }).universalVoucherId = spineId;
-            // Phase 5 5A: dual-write the order-pipeline link onto the spine's
-            // VoucherLink (SALES_ORDER rides the Orders board). Columns kept until 5A-3.
+            const lines = await tx.voucherInventoryLine.findMany({
+                where:   { universalVoucherId: spineId },
+                include: { product: { select: { id: true, sku: true, name: true } } },
+            });
+            // Phase 5 5A: dual-write the order-pipeline link (SALES_ORDER rides the board).
             await syncVoucherLinks(tx, spineId, { orderPipelineId, orderStatusId });
-            await linkVoucherChildrenToSpine(tx, created.id, spineId);   // 5C: link goods lines
-            return created;
+            return { ...created, lines };
         });
 
         return NextResponse.json(voucher, { status: 201 });

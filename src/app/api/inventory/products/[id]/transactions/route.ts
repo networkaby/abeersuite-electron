@@ -51,10 +51,12 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         const lastInward = await loadLastInwardCostMap([{ id: product.id, stock: product.stock }]);
         const lastPurchasePaise = lastInward.get(product.id) ?? null;
 
-        const lines = await prisma.voucherInventoryLine.findMany({
+        // Phase 5 5C: goods lines hang off the spine — the InvVoucher is reached
+        // via universalVoucher.invVoucher.
+        const linesRaw = await prisma.voucherInventoryLine.findMany({
             where: {
                 productId: id,
-                voucher: {
+                universalVoucher: {
                     status: "POSTED",
                     deletedAt: null,
                     ...(from || to ? { date: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } } : {}),
@@ -65,21 +67,28 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
                 quantity: true,
                 rate: true,
                 amount: true,
-                voucher: {
+                universalVoucher: {
                     select: {
-                        id: true,
-                        reference: true,
-                        type: true,
-                        date: true,
-                        partyJson: true,
-                        partyType: true,
-                        partyId: true,
-                        totalAmount: true,
+                        invVoucher: {
+                            select: {
+                                id: true,
+                                reference: true,
+                                type: true,
+                                date: true,
+                                partyJson: true,
+                                partyType: true,
+                                partyId: true,
+                                totalAmount: true,
+                            },
+                        },
                     },
                 },
             },
-            orderBy: { voucher: { date: "desc" } },
+            orderBy: { universalVoucher: { date: "desc" } },
         });
+        const lines = linesRaw
+            .filter((l) => l.universalVoucher.invVoucher != null)
+            .map((l) => ({ id: l.id, quantity: l.quantity, rate: l.rate, amount: l.amount, voucher: l.universalVoucher.invVoucher! }));
 
         type TxRow = {
             lineId:    number;

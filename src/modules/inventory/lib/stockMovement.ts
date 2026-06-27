@@ -14,7 +14,8 @@ import { toNumber } from "@/modules/accountancy/lib/balance";
 type Numeric = number | string | { toString(): string };
 
 export interface RecordStockMovementArgs {
-    voucherId: number;
+    // Phase 5 5C: stock rows hang off the spine — callers pass the universalVoucherId.
+    universalVoucherId: number;
     productId: number;
     branchId:  string;
     date:      Date;
@@ -47,7 +48,7 @@ export async function recordStockMovement(
     await tx.invStockLedger.create({
         data: {
             productId: args.productId,
-            voucherId: args.voucherId,
+            universalVoucherId: args.universalVoucherId,
             branchId:  args.branchId,
             date:      args.date,
             inQty:     args.inQty as never,
@@ -111,7 +112,7 @@ export async function recordStockMovementsBatch(
     await tx.invStockLedger.createMany({
         data: items.map((a) => ({
             productId: a.productId,
-            voucherId: a.voucherId,
+            universalVoucherId: a.universalVoucherId,
             branchId:  a.branchId,
             date:      a.date,
             inQty:     a.inQty as never,
@@ -157,7 +158,7 @@ export interface ReverseStockMovementArgs {
     ledgerRow: {
         productId: number;
         branchId:  string;
-        voucherId: number;
+        universalVoucherId: number;
         inQty:     Numeric;
         outQty:    Numeric;
         rate:      Numeric;
@@ -185,7 +186,7 @@ export async function reverseStockMovement(
     await tx.invStockLedger.create({
         data: {
             productId: ledgerRow.productId,
-            voucherId: ledgerRow.voucherId,
+            universalVoucherId: ledgerRow.universalVoucherId,
             branchId:  ledgerRow.branchId,
             date:      reversalDate,
             inQty:     outN as never,

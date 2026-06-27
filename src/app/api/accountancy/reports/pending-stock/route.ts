@@ -70,20 +70,26 @@ export async function GET(req: NextRequest) {
         }),
     };
 
-    const vouchers = await prisma.invVoucher.findMany({
+    const voucherRows = await prisma.invVoucher.findMany({
         where,
         orderBy: [{ date: "asc" }, { id: "asc" }],
-        include: {
-            branch: { select: { id: true, name: true } },
-            lines: {
-                include: {
-                    product: {
-                        select: { id: true, sku: true, name: true, unit: { select: { code: true } } },
-                    },
-                },
-            },
-        },
+        include: { branch: { select: { id: true, name: true } } },
     });
+    // Phase 5 5C: goods lines hang off the spine — batch-load + group by spine id.
+    const uvIds = voucherRows.map((v) => v.universalVoucherId).filter((x): x is number => x != null);
+    const allLines = await prisma.voucherInventoryLine.findMany({
+        where:   { universalVoucherId: { in: uvIds } },
+        include: { product: { select: { id: true, sku: true, name: true, unit: { select: { code: true } } } } },
+    });
+    const linesByUv = new Map<number, typeof allLines>();
+    for (const l of allLines) {
+        const arr = linesByUv.get(l.universalVoucherId) ?? [];
+        arr.push(l); linesByUv.set(l.universalVoucherId, arr);
+    }
+    const vouchers = voucherRows.map((v) => ({
+        ...v,
+        lines: v.universalVoucherId != null ? (linesByUv.get(v.universalVoucherId) ?? []) : [],
+    }));
 
     const today = new Date(); today.setHours(0, 0, 0, 0);
 

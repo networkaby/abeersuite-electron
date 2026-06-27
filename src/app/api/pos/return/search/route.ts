@@ -48,23 +48,23 @@ export async function GET(req: NextRequest) {
             take:    10,
             include: {
                 account: { select: { id: true, name: true } },
-                lines: {
-                    select: {
-                        id: true,
-                        productId: true,
-                        description: true,
-                        quantity: true,
-                        rate: true,
-                        taxRate: true,
-                        taxAmount: true,
-                        amount: true,
-                        product: { select: { id: true, name: true, sku: true } },
-                    },
-                },
                 // SALE_RETURN children of this voucher — for the dialog's "already returned" guard
                 refReturns: { select: { id: true, reference: true, totalAmount: true } },
             },
         });
+        // Phase 5 5C: goods lines hang off the spine — batch-load + group by spine id.
+        const uvIds = vouchers.map((v) => v.universalVoucherId).filter((x): x is number => x != null);
+        const allLines = await prisma.voucherInventoryLine.findMany({
+            where:   { universalVoucherId: { in: uvIds } },
+            select:  { id: true, universalVoucherId: true, productId: true, description: true, quantity: true, rate: true, taxRate: true, taxAmount: true, amount: true, product: { select: { id: true, name: true, sku: true } } },
+        });
+        const linesByUv = new Map<number, typeof allLines>();
+        for (const l of allLines) {
+            const arr = linesByUv.get(l.universalVoucherId) ?? [];
+            arr.push(l); linesByUv.set(l.universalVoucherId, arr);
+        }
+        const linesFor = (v: { universalVoucherId: number | null }) =>
+            v.universalVoucherId != null ? (linesByUv.get(v.universalVoucherId) ?? []) : [];
 
         return NextResponse.json(vouchers.map((v) => ({
             id:          v.id,
@@ -73,7 +73,7 @@ export async function GET(req: NextRequest) {
             status:      "PAID", // legacy field — POS sales are always settled at counter; UI uses it as a "OK to return" sentinel
             totalAmount: v.totalAmount.toString(),
             account:     v.account ? { id: v.account.id, name: v.account.name } : null,
-            lines:       v.lines.map((l) => ({
+            lines:       linesFor(v).map((l) => ({
                 id:          l.id,
                 productId:   l.productId,
                 description: l.description ?? "",

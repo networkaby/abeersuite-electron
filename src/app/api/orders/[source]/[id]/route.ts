@@ -33,10 +33,15 @@ export async function GET(_req: Request, { params }: { params: Promise<{ source:
                 // in edit mode (the line description alone embeds them but isn't reliable).
                 // stock/reserved drive the Review popup's per-line "deliverable?" check
                 // (available-to-sell = stock − reserved); sku/name rebuild cart rows on edit.
-                lines: { select: { id: true, productId: true, description: true, quantity: true, rate: true, taxRate: true, mrpPaise: true, savedSalePricePaise: true, amount: true, product: { select: { sku: true, name: true, stock: true, reserved: true } } } },
+                universalVoucherId: true,
             },
         });
         if (!v || (v.type !== "POS_ORDER" && v.type !== "SALES_ORDER" && v.type !== "POS_ESTIMATE")) return NextResponse.json({ error: "Order not found" }, { status: 404 });
+        // Phase 5 5C: goods lines hang off the spine.
+        const lines = await prisma.voucherInventoryLine.findMany({
+            where:   { universalVoucherId: v.universalVoucherId ?? -1 },
+            select:  { id: true, productId: true, description: true, quantity: true, rate: true, taxRate: true, mrpPaise: true, savedSalePricePaise: true, amount: true, product: { select: { sku: true, name: true, stock: true, reserved: true } } },
+        });
 
         // Customer delivery address for the Review popup's "address deliverable?" flag.
         // Resolve from the order's ledger account → Person / Company.
@@ -55,7 +60,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ source:
             // Estimates are GL-silent quotes → always editable; orders only at New / Under-Review.
             editable: v.type === "POS_ESTIMATE" ? true : (v.orderStatusId != null && EDITABLE_STAGES.includes(v.orderStatusId)),
             subtotal: toNumber(v.subtotal), taxAmount: toNumber(v.taxAmount), discountAmt: v.discountAmt != null ? toNumber(v.discountAmt) : 0, discountPct: v.discountPct != null ? toNumber(v.discountPct) : null, totalAmount: toNumber(v.totalAmount),
-            lines: v.lines.map((l) => {
+            lines: lines.map((l) => {
                 const qty = toNumber(l.quantity);
                 // Untracked products (stock = null) are always deliverable; tracked ones
                 // are deliverable when available-to-sell (stock − reserved) covers the line.
@@ -113,7 +118,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ source
         const { subtotal, taxAmount, totalAmount } = calcVoucherTotals(computed, shippingAmt, overallDiscount, roundOff, 0);
 
         await prisma.$transaction(async (tx) => {
-            await tx.voucherInventoryLine.deleteMany({ where: { voucherId: id } });
+            // Phase 5 5C: goods lines hang off the spine.
+            const inv = await tx.invVoucher.findUnique({ where: { id }, select: { universalVoucherId: true } });
+            const spineId = inv?.universalVoucherId ?? -1;
+            await tx.voucherInventoryLine.deleteMany({ where: { universalVoucherId: spineId } });
             await tx.invVoucher.update({
                 where: { id },
                 data: {
@@ -121,14 +129,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ source
                     discountAmt: overallDiscount > 0 ? overallDiscount : null,
                     discountPct: body.discountPct != null ? Number(body.discountPct) : null,
                     shippingAmt, roundOff,
-                    lines: {
-                        create: computed.map((l) => ({
-                            productId: l.productId, description: l.description || null,
-                            quantity: l.quantity, rate: l.rate, mrpPaise: l.mrpPaise ?? null, savedSalePricePaise: l.savedSalePricePaise ?? null,
-                            discountPct: 0, discountAmt: l.discountAmt, taxRate: l.taxRate ?? 0, taxAmount: l.taxAmount, amount: l.amount,
-                        })),
-                    },
                 },
+            });
+            await tx.voucherInventoryLine.createMany({
+                data: computed.map((l) => ({
+                    universalVoucherId: spineId,
+                    productId: l.productId, description: l.description || null,
+                    quantity: l.quantity, rate: l.rate, mrpPaise: l.mrpPaise ?? null, savedSalePricePaise: l.savedSalePricePaise ?? null,
+                    discountPct: 0, discountAmt: l.discountAmt, taxRate: l.taxRate ?? 0, taxAmount: l.taxAmount, amount: l.amount,
+                })),
             });
         }, { timeout: 30_000, maxWait: 10_000 });
 

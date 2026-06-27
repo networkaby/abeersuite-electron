@@ -72,16 +72,23 @@ export async function GET(req: Request) {
             skip: (page - 1) * limit,
             take: limit,
             include: {
-                _count:     { select: { lines: true } },
                 refVoucher: { select: { id: true, reference: true, type: true } },
-                lines: {
-                    include: {
-                        product: { select: { id: true, sku: true, name: true } },
-                    },
-                },
             },
         }),
     ]);
+    // Phase 5 5C: goods lines hang off the spine — batch-load + group by spine id.
+    const uvIds = rows.map((v) => v.universalVoucherId).filter((x): x is number => x != null);
+    const allLines = await prisma.voucherInventoryLine.findMany({
+        where:   { universalVoucherId: { in: uvIds } },
+        include: { product: { select: { id: true, sku: true, name: true } } },
+    });
+    const linesByUv = new Map<number, typeof allLines>();
+    for (const l of allLines) {
+        const arr = linesByUv.get(l.universalVoucherId) ?? [];
+        arr.push(l); linesByUv.set(l.universalVoucherId, arr);
+    }
+    const linesFor = (v: { universalVoucherId: number | null }) =>
+        v.universalVoucherId != null ? (linesByUv.get(v.universalVoucherId) ?? []) : [];
 
     const shaped = rows.map((v) => ({
         id:          v.id,
@@ -99,8 +106,8 @@ export async function GET(req: Request) {
                    : STOCK_OUT_TYPES.has(v.type) ? "OUT"
                    : "NONE",
         refVoucher: v.refVoucher,
-        lineCount:  v._count.lines,
-        lines: v.lines.map((l) => ({
+        lineCount:  linesFor(v).length,
+        lines: linesFor(v).map((l) => ({
             id:          l.id,
             productId:   l.productId,
             productName: l.product.name,

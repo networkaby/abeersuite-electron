@@ -22,12 +22,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     const userId = user!.id;
 
-    const voucher = await prisma.invVoucher.findUnique({
-        where: { id: Number(id) },
-        include: { lines: { include: { product: { select: { id: true } } } } },
+    const voucherRow = await prisma.invVoucher.findUnique({ where: { id: Number(id) } });
+    if (!voucherRow) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    // Phase 5 5C: goods lines hang off the spine — load + attach as `voucher.lines`.
+    const goodsLines = await prisma.voucherInventoryLine.findMany({
+        where:   { universalVoucherId: voucherRow.universalVoucherId ?? -1 },
+        include: { product: { select: { id: true } } },
     });
-
-    if (!voucher) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    const voucher = { ...voucherRow, lines: goodsLines };
 
     const isPurchase = voucher.type === "PURCHASE" || voucher.type === "GRN";
     // POS = counter sale: it moves stock OUT like SALE, so reversing it must put
@@ -52,8 +54,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 // entries via the shared helper. Works regardless of the per-
                 // line direction logic used at post time.
                 const origRows = await tx.invStockLedger.findMany({
-                    where:  { voucherId: voucher.id, amount: { gte: 0 } },
-                    select: { id: true, productId: true, branchId: true, voucherId: true, inQty: true, outQty: true, rate: true, amount: true },
+                    where:  { universalVoucherId: voucher.universalVoucherId ?? -1, amount: { gte: 0 } },
+                    select: { id: true, productId: true, branchId: true, universalVoucherId: true, inQty: true, outQty: true, rate: true, amount: true },
                 });
                 const now = new Date();
                 for (const row of origRows) {
@@ -67,7 +69,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                     if (!(qty > 0)) continue;
 
                     await recordStockMovement(tx, {
-                        voucherId: voucher.id,
+                        universalVoucherId: voucher.universalVoucherId!,
                         productId: line.productId,
                         branchId:  voucher.branchId,
                         date:      now,
@@ -79,7 +81,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                     });
 
                     await recordStockMovement(tx, {
-                        voucherId: voucher.id,
+                        universalVoucherId: voucher.universalVoucherId!,
                         productId: line.productId,
                         branchId:  voucher.destinationBranchId,
                         date:      now,
@@ -99,7 +101,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                     // write a zero-qty audit row; the helper's delta === 0
                     // guard skips the cache updates.
                     await recordStockMovement(tx, {
-                        voucherId: voucher.id,
+                        universalVoucherId: voucher.universalVoucherId!,
                         productId: line.productId,
                         branchId:  voucher.branchId,
                         date:      now,
@@ -154,13 +156,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             console.error("[price-recompute] failed for voucher", voucher.id, err);
         });
 
-        const updated = await prisma.invVoucher.findUnique({
+        const updatedRow = await prisma.invVoucher.findUnique({
             where: { id: Number(id) },
-            include: {
-                lines: { include: { product: { select: { id: true, sku: true, name: true } } } },
-                createdBy: { select: { name: true } },
-            },
+            include: { createdBy: { select: { name: true } } },
         });
+        // Phase 5 5C: goods lines hang off the spine.
+        const updated = updatedRow ? {
+            ...updatedRow,
+            lines: await prisma.voucherInventoryLine.findMany({
+                where:   { universalVoucherId: updatedRow.universalVoucherId ?? -1 },
+                include: { product: { select: { id: true, sku: true, name: true } } },
+            }),
+        } : null;
         return NextResponse.json(updated);
     } catch (e) {
         const lifecycle = lifecycleErrorResponse(e);

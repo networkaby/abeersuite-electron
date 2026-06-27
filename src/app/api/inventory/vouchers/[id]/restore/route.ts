@@ -17,11 +17,13 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     if (response) return response;
 
     const { id } = await params;
-    const voucher = await prisma.invVoucher.findUnique({
-        where: { id: Number(id) },
-        include: { lines: true },
+    const voucherRow = await prisma.invVoucher.findUnique({ where: { id: Number(id) } });
+    if (!voucherRow) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    // Phase 5 5C: goods lines hang off the spine.
+    const goodsLines = await prisma.voucherInventoryLine.findMany({
+        where: { universalVoucherId: voucherRow.universalVoucherId ?? -1 },
     });
-    if (!voucher) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    const voucher = { ...voucherRow, lines: goodsLines };
 
     const isPurchase = voucher.type === "PURCHASE" || voucher.type === "GRN";
     const isSale     = voucher.type === "SALE"     || voucher.type === "CHALLAN";
@@ -37,7 +39,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                     // Non-sale, non-purchase types still write a zero-qty audit
                     // row; the helper's delta === 0 guard skips cache updates.
                     await recordStockMovement(tx, {
-                        voucherId: voucher.id,
+                        universalVoucherId: voucher.universalVoucherId!,
                         productId: line.productId,
                         branchId:  voucher.branchId,
                         date:      now,

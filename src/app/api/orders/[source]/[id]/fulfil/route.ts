@@ -45,16 +45,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ sou
                 accountId: true, totalAmount: true,
                 partyJson: true, partyType: true, partyId: true,
                 discountAmt: true, discountPct: true, shippingAmt: true, roundOff: true,
-                lines: { select: { productId: true, quantity: true, rate: true, taxRate: true, mrpPaise: true } },
+                universalVoucherId: true,
             },
         });
         if (!order || (order.type !== "POS_ORDER" && order.type !== "SALES_ORDER")) {
             return NextResponse.json({ error: "Order not found" }, { status: 404 });
         }
+        // Phase 5 5C: goods lines hang off the spine.
+        const orderLines = await prisma.voucherInventoryLine.findMany({
+            where:  { universalVoucherId: order.universalVoucherId ?? -1 },
+            select: { productId: true, quantity: true, rate: true, taxRate: true, mrpPaise: true },
+        });
         if (order.orderStatusId === ORDER_STAGE.DELIVERED || order.orderStatusId === ORDER_STAGE.CANCELLED || order.orderStatusId === ORDER_STAGE.RETURNED) {
             return NextResponse.json({ error: "This order is already finalised." }, { status: 409 });
         }
-        if (order.lines.length === 0) {
+        if (orderLines.length === 0) {
             return NextResponse.json({ error: "Order has no lines to fulfil." }, { status: 400 });
         }
         // Every order has a mandatory customer, so accountId is set — guard for
@@ -102,7 +107,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ sou
                 discountPct: order.discountPct != null ? Number(order.discountPct) : undefined,
                 shippingAmt: order.shippingAmt != null ? Number(order.shippingAmt) : 0,
                 roundOff: order.roundOff != null ? Number(order.roundOff) : 0,
-                lines: order.lines.map((l) => ({
+                lines: orderLines.map((l) => ({
                     productId: l.productId,
                     quantity: toNumber(l.quantity),
                     rate: toNumber(l.rate),

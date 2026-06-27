@@ -56,14 +56,17 @@ const partyAccountSelect = {
 
 // ── Inventory voucher (SALE / PURCHASE / returns / GRN / CHALLAN / …) ────────
 async function buildInvSample(id: number): Promise<VoucherReceiptData> {
-    const v = await prisma.invVoucher.findUnique({
+    const vRow = await prisma.invVoucher.findUnique({
         where: { id },
-        include: {
-            lines:   { include: { product: { select: { sku: true, name: true } } } },
-            account: { select: partyAccountSelect },
-        },
+        include: { account: { select: partyAccountSelect } },
     });
-    if (!v) return notFoundData();
+    if (!vRow) return notFoundData();
+    // Phase 5 5C: goods lines hang off the spine.
+    const invLines = await prisma.voucherInventoryLine.findMany({
+        where:   { universalVoucherId: vRow.universalVoucherId ?? -1 },
+        include: { product: { select: { sku: true, name: true } } },
+    });
+    const v = { ...vRow, lines: invLines };
 
     const party = partyFromAccount(v.account);
     // Strip the POS "<sku> — <name>" prefix so the printed line reads cleanly.

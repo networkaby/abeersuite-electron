@@ -66,7 +66,7 @@ async function loadInwardLots(productIds: number[]): Promise<Map<number, Lot[]>>
             where:   {
                 productId: { in: productIds },
                 inQty:     { gt: 0 },
-                voucher:   { status: "POSTED", deletedAt: null },
+                universalVoucher:   { status: "POSTED", deletedAt: null },
             },
             select:  { id: true, productId: true, date: true, inQty: true, rate: true },
             orderBy: [{ date: "asc" }, { id: "asc" }],

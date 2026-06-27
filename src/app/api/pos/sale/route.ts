@@ -4,11 +4,10 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { invNextRef, calcVoucherTotals } from "@/modules/inventory/lib/stock";
 import { recordStockMovementsBatch } from "@/modules/inventory/lib/stockMovement";
-import { linkVoucherChildrenToSpine } from "@/modules/inventory/lib/voucherSpineLink";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import { saleToSpec } from "@/modules/accountancy/lib/voucherMappers";
 import { buildSettlementJson } from "@/shared/lib/accountancy/settlement";
-import { enginePost } from "@/modules/accountancy/lib/transactionEngine";
+import { enginePost, engineCreateSpine } from "@/modules/accountancy/lib/transactionEngine";
 import { postReceiptVoucher } from "@/modules/accountancy/lib/postReceiptVoucher";
 import { channelToPaymentMethod } from "@/modules/pos/lib/counterTenders";
 import { Prisma, type PaymentMethod } from "@/generated/prisma/client";
@@ -543,11 +542,22 @@ export async function POST(req: Request) {
                         ? [{ accountId: customerAccount.id, amount: arRemainder, method: null as null, reference: null as null }]
                         : []),
                 ];
+            // Phase 5 5.0/5C: spine FIRST (the document anchor) so goods lines hang
+            // off it; enginePost attaches the GL lines + flips it via existingSpineId.
+            const spineId = await engineCreateSpine(tx, {
+                type:           "POS",
+                date:           new Date(body.issueDate),
+                description:    body.notes?.trim() || `POS sale — ${partyName}`,
+                friendlyRef:    voucherRef,
+                partyAccountId: customerAccount.id,
+                userId:         user!.id,
+            });
             const voucher = await tx.invVoucher.create({
                 data: {
                     type:           "POS",
                     reference:      voucherRef,
                     branchId:       activeBranchId,
+                    universalVoucherId: spineId,
                     date:           new Date(body.issueDate),
                     description:    body.notes?.trim() || `POS sale — ${partyName}`,
                     status:         "POSTED",
@@ -568,24 +578,25 @@ export async function POST(req: Request) {
                     taxAmount,
                     totalAmount,
                     createdById:    user!.id,
-                    lines: {
-                        create: computedLines.map((l) => ({
-                            productId:   l.productId,
-                            description: l.description,
-                            quantity:    l.quantity,
-                            rate:        l.unitPrice,
-                            taxRate:     l.taxRate,
-                            taxAmount:   l.taxAmount,
-                            amount:      l.amount,
-                            mrpPaise:            l.mrpPaise,
-                            savedSalePricePaise: l.savedSalePricePaise,
-                        })),
-                    },
                     // G4b: tender + charge INPUT → settlementJson (the spine's
                     // role=TENDER/CHARGE GL lines are emitted from it on POST).
                     settlementJson: buildSettlementJson(tenderPayload, allCharges),
                 },
-                include: { lines: true },
+            });
+            // Phase 5 5C: goods lines hang off the spine.
+            await tx.voucherInventoryLine.createMany({
+                data: computedLines.map((l) => ({
+                    universalVoucherId: spineId,
+                    productId:   l.productId,
+                    description: l.description,
+                    quantity:    l.quantity,
+                    rate:        l.unitPrice,
+                    taxRate:     l.taxRate,
+                    taxAmount:   l.taxAmount,
+                    amount:      l.amount,
+                    mrpPaise:            l.mrpPaise,
+                    savedSalePricePaise: l.savedSalePricePaise,
+                })),
             });
 
             // ── 2. GL post (Dr Till/Bank + (optional) Dr Customer AR / Cr Sales / Cr GST) ─
@@ -613,7 +624,7 @@ export async function POST(req: Request) {
                 sellerStateCode,
                 buyerStateCode: sellerStateCode, // counter pickup → intra-state
             });
-            const gl = await enginePost(tx, spec, user!.id);
+            const gl = await enginePost(tx, spec, user!.id, { existingSpineId: spineId });
             if (gl.journalEntryId === null) {
                 throw new GlPostFailedError(
                     `Cannot post POS sale ${voucherRef}: engine produced no journal entry.`,
@@ -624,7 +635,6 @@ export async function POST(req: Request) {
                 where: { id: voucher.id },
                 data:  { journalEntryId: gl.journalEntryId, universalVoucherId: gl.universalVoucherId },
             });
-            await linkVoucherChildrenToSpine(tx, voucher.id, gl.universalVoucherId);   // 5C
 
             // ── 3a. Coupon: log the redemption (enforces usage limits + powers
             // return reversal). Non-GL — the discount already posted as a charge.
@@ -693,16 +703,16 @@ export async function POST(req: Request) {
             const date = new Date(body.issueDate);
             await recordStockMovementsBatch(
                 tx,
-                voucher.lines
+                computedLines
                     .filter((line) => Number(line.quantity) > 0)
                     .map((line) => ({
-                        voucherId: voucher.id,
+                        universalVoucherId: spineId,
                         productId: line.productId,
                         branchId:  activeBranchId,
                         date,
                         inQty:  0,
                         outQty: Number(line.quantity),
-                        rate:   line.rate,
+                        rate:   line.unitPrice,
                         amount: line.amount,
                     })),
             );

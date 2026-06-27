@@ -47,6 +47,10 @@ export interface EngineGlLine {
 
 /** A stock movement for the engine's stock arm (re-export of the stock helper's shape). */
 export type EngineStockMove = RecordStockMovementArgs;
+/** Phase 5 5C: a stock move as the MAPPER builds it — without `universalVoucherId`.
+ *  The mapper runs before the spine id is known (create-posted), so `enginePost`
+ *  injects it after the GL arm yields the spine id. */
+export type EngineStockMoveSpec = Omit<EngineStockMove, "universalVoucherId">;
 
 /** The canonical thing the engine writes. Either arm may be empty:
  *  empty `glLines` → skip the GL arm; empty `stockMoves` → skip the stock arm. */
@@ -58,7 +62,7 @@ export interface TransactionSpec {
     reference?:  string;
     narration?:  string | null;
     glLines:     EngineGlLine[];
-    stockMoves:  EngineStockMove[];
+    stockMoves:  EngineStockMoveSpec[];
 }
 
 /** A voucher loaded with the fields the GL post routine needs.
@@ -309,7 +313,9 @@ export async function enginePost(
     const postedAt = opts.postedAt ?? new Date();
 
     let journalEntryId: number | null = null;
-    let universalVoucherId: number | null = null;
+    // Stock-only vouchers (GRN/Challan/…) have no GL arm but DO have a spine
+    // (created at voucher-save, passed as existingSpineId) — seed from it.
+    let universalVoucherId: number | null = opts.existingSpineId ?? null;
     if (spec.glLines.length > 0) {
         const description = spec.description
             ?? `${spec.type} ${spec.reference ?? ""}: ${spec.narration ?? ""}`.trim();
@@ -329,7 +335,13 @@ export async function enginePost(
         universalVoucherId = gl.universalVoucherId;   // G4d direct spine link
     }
     if (spec.stockMoves.length > 0) {
-        await engineStockArm(tx, spec.stockMoves);
+        // Phase 5 5C: stamp the spine id onto each stock row (the mapper builds
+        // them spine-less since it runs before the spine exists for create-posted).
+        if (universalVoucherId == null) {
+            throw new Error("enginePost: stock moves need a spine — pass existingSpineId or GL lines.");
+        }
+        const uv = universalVoucherId;
+        await engineStockArm(tx, spec.stockMoves.map((m) => ({ ...m, universalVoucherId: uv })));
     }
     return { journalEntryId, universalVoucherId };
 }

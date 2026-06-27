@@ -24,11 +24,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const { data, error } = await validateRequest(req, schema);
     if (error) return error;
 
-    const voucher = await prisma.invVoucher.findUnique({
-        where: { id: Number(id) },
-        include: { lines: true },
+    const voucherRow = await prisma.invVoucher.findUnique({ where: { id: Number(id) } });
+    if (!voucherRow) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    // Phase 5 5C: goods lines hang off the spine.
+    const goodsLines = await prisma.voucherInventoryLine.findMany({
+        where: { universalVoucherId: voucherRow.universalVoucherId ?? -1 },
     });
-    if (!voucher) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    const voucher = { ...voucherRow, lines: goodsLines };
 
     const isPurchase = voucher.type === "PURCHASE" || voucher.type === "GRN";
     // POS = counter sale: moves stock OUT like SALE, so reversing must restore it.
@@ -48,8 +50,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 if (isLedgerMirror) {
                     // Mirror the original ledger rows in reverse via the helper.
                     const origRows = await tx.invStockLedger.findMany({
-                        where:  { voucherId: voucher.id, amount: { gte: 0 } },
-                        select: { id: true, productId: true, branchId: true, voucherId: true, inQty: true, outQty: true, rate: true, amount: true },
+                        where:  { universalVoucherId: voucher.universalVoucherId ?? -1, amount: { gte: 0 } },
+                        select: { id: true, productId: true, branchId: true, universalVoucherId: true, inQty: true, outQty: true, rate: true, amount: true },
                     });
                     for (const row of origRows) {
                         await reverseStockMovement(tx, { ledgerRow: row, reversalDate: now });
@@ -59,7 +61,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                         const qty = toNumber(line.quantity);
                         if (!(qty > 0)) continue;
                         await recordStockMovement(tx, {
-                            voucherId: voucher.id,
+                            universalVoucherId: voucher.universalVoucherId!,
                             productId: line.productId,
                             branchId:  voucher.branchId,
                             date:      now,
@@ -70,7 +72,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                             updateOrgWideStock: false,
                         });
                         await recordStockMovement(tx, {
-                            voucherId: voucher.id,
+                            universalVoucherId: voucher.universalVoucherId!,
                             productId: line.productId,
                             branchId:  voucher.destinationBranchId,
                             date:      now,
@@ -88,7 +90,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                         // audit row; the helper's delta === 0 guard skips the
                         // cache updates.
                         await recordStockMovement(tx, {
-                            voucherId: voucher.id,
+                            universalVoucherId: voucher.universalVoucherId!,
                             productId: line.productId,
                             branchId:  voucher.branchId,
                             date:      now,

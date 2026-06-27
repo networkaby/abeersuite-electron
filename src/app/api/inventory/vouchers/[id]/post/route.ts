@@ -3,7 +3,6 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { toNumber } from "@/modules/accountancy/lib/balance";
 import { recordStockMovement } from "@/modules/inventory/lib/stockMovement";
-import { linkVoucherChildrenToSpine } from "@/modules/inventory/lib/voucherSpineLink";
 import { valueStockBatch } from "@/modules/inventory/lib/valuation";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import { saleToSpec } from "@/modules/accountancy/lib/voucherMappers";
@@ -40,20 +39,23 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     const { id } = await params;
     const userId = user!.id;
 
-    const voucher = await prisma.invVoucher.findUnique({
+    const voucherRow = await prisma.invVoucher.findUnique({
         where: { id: Number(id) },
         include: {
-            lines: {
-                include: {
-                    product: { select: { id: true, mrpPaise: true, stock: true } },
-                },
-            },
             // Branch state drives the seller-state in the CGST/SGST vs IGST split.
             branch: {
                 select: { id: true, gstStateCode: true },
             },
         },
     });
+    // Phase 5 5C: goods lines hang off the spine — load + attach as `voucher.lines`.
+    const goodsLines = voucherRow
+        ? await prisma.voucherInventoryLine.findMany({
+            where:   { universalVoucherId: voucherRow.universalVoucherId ?? -1 },
+            include: { product: { select: { id: true, mrpPaise: true, stock: true } } },
+        })
+        : [];
+    const voucher = voucherRow ? { ...voucherRow, lines: goodsLines } : null;
 
     if (!voucher)                  return NextResponse.json({ error: "Not found" }, { status: 404 });
     if (voucher.status !== "DRAFT") return NextResponse.json({ error: `Voucher is already ${voucher.status}` }, { status: 409 });
@@ -149,7 +151,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
 
                     // Source side: OUT
                     await recordStockMovement(tx, {
-                        voucherId: voucher.id,
+                        universalVoucherId: voucher.universalVoucherId!,
                         productId: line.productId,
                         branchId:  voucher.branchId,
                         date:      voucher.date,
@@ -162,7 +164,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
 
                     // Destination side: IN
                     await recordStockMovement(tx, {
-                        voucherId: voucher.id,
+                        universalVoucherId: voucher.universalVoucherId!,
                         productId: line.productId,
                         branchId:  destBranchId,
                         date:      voucher.date,
@@ -209,7 +211,8 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                                 branchId: voucher.branchId,
                                 date:     voucher.date,
                                 id:       { not: voucher.id },
-                                lines:    { some: { productId: line.productId } },
+                                // Phase 5 5C: goods lines hang off the spine.
+                                universalVoucher: { inventoryLines: { some: { productId: line.productId } } },
                             },
                         });
                         if (priorSameDay === 0) {
@@ -227,7 +230,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                                     productId: line.productId,
                                     branchId:  voucher.branchId,
                                     date:      { lt: voucher.date },
-                                    voucher:   { status: "POSTED", deletedAt: null },
+                                    universalVoucher: { status: "POSTED", deletedAt: null },
                                 },
                                 select: { inQty: true, outQty: true },
                             });
@@ -267,7 +270,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                         // box, not derived, so we still stamp it from supplier
                         // paperwork on purchase lines.
                         await recordStockMovement(tx, {
-                            voucherId: voucher.id,
+                            universalVoucherId: voucher.universalVoucherId!,
                             productId: line.productId,
                             branchId:  voucher.branchId,
                             date:      voucher.date,
@@ -308,7 +311,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                 const spec = await saleToSpec(
                     tx,
                     { ...voucher, tenders: settlement.tenders, charges: settlement.charges, sellerStateCode, buyerStateCode },
-                    { voucherId: voucher.id, branchId: voucher.branchId, lines: voucher.lines },
+                    { branchId: voucher.branchId, lines: voucher.lines },
                 );
                 const out = await enginePost(tx, spec, userId, { existingSpineId: voucher.universalVoucherId });
                 journalEntryId = out.journalEntryId; universalVoucherId = out.universalVoucherId;
@@ -383,7 +386,6 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                 });
             }
             // Phase 5 5C: link the just-written stock rows (+ goods lines) to the spine.
-            await linkVoucherChildrenToSpine(tx, voucher.id, universalVoucherId);
 
             // ── 3. Mark voucher as POSTED ─────────────────────────────────
             const updated = await tx.invVoucher.update({
@@ -394,12 +396,17 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                     journalEntryId,
                     universalVoucherId,
                 },
-                include: {
-                    lines: { include: { product: { select: { id: true, sku: true, name: true } } } },
-                    createdBy: { select: { name: true } },
-                },
+                include: { createdBy: { select: { name: true } } },
             });
-            return { result: updated, notes: postNotes };
+            // Phase 5 5C: goods lines hang off the spine.
+            const updatedWithLines = {
+                ...updated,
+                lines: await tx.voucherInventoryLine.findMany({
+                    where:   { universalVoucherId: updated.universalVoucherId ?? -1 },
+                    include: { product: { select: { id: true, sku: true, name: true } } },
+                }),
+            };
+            return { result: updatedWithLines, notes: postNotes };
         // Stock-ledger walk + GL post + N account-balance updates are all
         // sequential round-trips; over the Supabase pooler this overruns the
         // default 5s interactive-transaction ceiling (P2028) even though the

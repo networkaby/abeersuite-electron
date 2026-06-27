@@ -21,7 +21,7 @@ export async function loadLastSaleAgeDays(
         where: {
             productId: { in: productIds },
             outQty:    { gt: 0 },
-            voucher:   {
+            universalVoucher:   {
                 status: "POSTED",
                 type:   { in: ["SALE", "POS"] },
             },

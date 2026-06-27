@@ -35,7 +35,7 @@ export async function reapplyTradingVoucherInPlace(
     const { voucher, branchId, lines, journalEntryId } = args;
 
     // Recompute the spec (GL lines + stock moves) from the edited voucher.
-    const spec = await saleToSpec(tx, voucher, { voucherId: voucher.id, branchId, lines });
+    const spec = await saleToSpec(tx, voucher, { branchId, lines });
 
     // ── GL: rewrite the spine lines on the SAME UniversalVoucher id ───────────
     // `journalEntryId` carries the spine id (self-ref since G5); receipts
@@ -62,9 +62,14 @@ export async function reapplyTradingVoucherInPlace(
     }
 
     // ── Stock: replace this voucher's ledger rows, then recompute on-hand ─────
-    await tx.invStockLedger.deleteMany({ where: { voucherId: voucher.id } });
-    for (const move of spec.stockMoves) await recordStockMovement(tx, move);
-    await recomputeProductStock(tx, [...new Set(spec.stockMoves.map((m) => m.productId))]);
+    // Phase 5 5C: stock hangs off the spine. `journalEntryId` carries the spine id
+    // (self-ref since G5). Re-apply is only called for posted trading vouchers (JE present).
+    const spineId = journalEntryId;
+    if (spineId != null) {
+        await tx.invStockLedger.deleteMany({ where: { universalVoucherId: spineId } });
+        for (const move of spec.stockMoves) await recordStockMovement(tx, { ...move, universalVoucherId: spineId });
+        await recomputeProductStock(tx, [...new Set(spec.stockMoves.map((m) => m.productId))]);
+    }
 
     return journalEntryId;
 }

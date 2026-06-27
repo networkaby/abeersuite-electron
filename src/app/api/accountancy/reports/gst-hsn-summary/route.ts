@@ -21,7 +21,8 @@ export async function GET(req: Request) {
     try {
         const lines = await prisma.voucherInventoryLine.findMany({
             where: {
-                voucher: {
+                // Phase 5 5C: goods lines hang off the spine (type/status/date on it).
+                universalVoucher: {
                     type:      invType,
                     status:    "POSTED",
                     deletedAt: null,
@@ -33,7 +34,7 @@ export async function GET(req: Request) {
                 taxRate:   true,
                 taxAmount: true,
                 amount:    true,
-                voucher:   { select: { id: true } },
+                universalVoucherId: true,
                 product:   { select: { hsnCode: true, name: true } },
             },
         });
@@ -69,7 +70,7 @@ export async function GET(req: Request) {
             b.taxAmount    += Number(l.taxAmount);
             b.grossValue   += Number(l.amount);
             b.quantity     += Number(l.quantity);
-            b.invoices.add(l.voucher.id);
+            b.invoices.add(l.universalVoucherId);
             if (b.sampleNames.size < 3 && l.product.name) b.sampleNames.add(l.product.name);
         }
 

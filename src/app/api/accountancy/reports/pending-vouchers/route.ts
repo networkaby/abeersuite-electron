@@ -102,24 +102,31 @@ export async function GET(req: NextRequest) {
         }),
     };
 
-    const [total, rows] = await Promise.all([
+    const [total, rowsRaw] = await Promise.all([
         prisma.invVoucher.count({ where }),
         prisma.invVoucher.findMany({
             where,
             orderBy: [{ date: "asc" }, { id: "asc" }], // oldest first — drives attention
             skip:    (page - 1) * limit,
             take:    limit,
-            include: {
-                _count: { select: { lines: true } },
-                branch: { select: { id: true, name: true } },
-                lines: {
-                    include: {
-                        product: { select: { id: true, sku: true, name: true } },
-                    },
-                },
-            },
+            include: { branch: { select: { id: true, name: true } } },
         }),
     ]);
+    // Phase 5 5C: goods lines hang off the spine — batch-load + group by spine id.
+    const uvIds = rowsRaw.map((v) => v.universalVoucherId).filter((x): x is number => x != null);
+    const allLines = await prisma.voucherInventoryLine.findMany({
+        where:   { universalVoucherId: { in: uvIds } },
+        include: { product: { select: { id: true, sku: true, name: true } } },
+    });
+    const linesByUv = new Map<number, typeof allLines>();
+    for (const l of allLines) {
+        const arr = linesByUv.get(l.universalVoucherId) ?? [];
+        arr.push(l); linesByUv.set(l.universalVoucherId, arr);
+    }
+    const rows = rowsRaw.map((v) => ({
+        ...v,
+        lines: v.universalVoucherId != null ? (linesByUv.get(v.universalVoucherId) ?? []) : [],
+    }));
 
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const shaped = rows.map((v) => {
@@ -135,7 +142,7 @@ export async function GET(req: NextRequest) {
             partyName:   readPartyName(v.partyJson),
             description: v.description,
             totalAmount: Number(v.totalAmount),
-            lineCount:   v._count.lines,
+            lineCount:   v.lines.length,
             branchName:  v.branch?.name ?? null,
             daysOpen,
             lines: v.lines.map((l) => ({

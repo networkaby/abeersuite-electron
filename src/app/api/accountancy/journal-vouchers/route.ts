@@ -5,7 +5,6 @@ import { z } from "zod";
 import { isBalanced } from "@/modules/accountancy/lib/balance";
 import { engineCreateVoucher } from "@/modules/accountancy/lib/transactionEngine";
 import { invNextRef } from "@/modules/inventory/lib/stock";
-import { linkVoucherChildrenToSpine } from "@/modules/inventory/lib/voucherSpineLink";
 import { recordStockMovement } from "@/modules/inventory/lib/stockMovement";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import * as Sentry from "@sentry/nextjs";
@@ -140,6 +139,10 @@ export async function POST(req: NextRequest) {
 
                 // Carrier InvVoucher so InvStockLedger.voucherId FK is satisfied.
                 const sjRef = await invNextRef(tx, "MANUFACTURING_JOURNAL");
+                // Phase 5 5C: the JV's stock + goods lines hang off ITS spine
+                // (voucher.universalVoucherId). The carrier InvVoucher is kept as a
+                // thin sidecar pointing at the same spine.
+                const jvSpineId = (voucher as { universalVoucherId: number | null }).universalVoucherId!;
                 const carrier = await tx.invVoucher.create({
                     data: {
                         type:        "MANUFACTURING_JOURNAL",
@@ -152,26 +155,22 @@ export async function POST(req: NextRequest) {
                         subtotal:    flatItems.reduce((s, i) => s + i.amount, 0),
                         totalAmount: flatItems.reduce((s, i) => s + i.amount, 0),
                         createdById: user!.id,
-                        lines: {
-                            create: flatItems.map((i) => ({
-                                productId: i.productId,
-                                quantity:  i.qty,
-                                rate:      i.rate,
-                                // Sign of amount drives IN/OUT in postInvVoucher.ts conventions —
-                                // we apply the stock delta directly below, but mirror the
-                                // convention here so anyone reading the voucher sees direction.
-                                amount:    i.side === "DEBIT" ? i.amount : -i.amount,
-                            })),
-                        },
                     },
-                    include: { lines: true },
+                });
+                void carrier;
+                await tx.voucherInventoryLine.createMany({
+                    data: flatItems.map((i) => ({
+                        universalVoucherId: jvSpineId,
+                        productId: i.productId,
+                        quantity:  i.qty,
+                        rate:      i.rate,
+                        amount:    i.side === "DEBIT" ? i.amount : -i.amount,
+                    })),
                 });
 
-                // Pair carrier lines back to their direction by index, then write
-                // the stock ledger + update cached InvProduct.stock.
+                // Write the stock ledger + update cached InvProduct.stock.
                 for (let i = 0; i < flatItems.length; i++) {
                     const item        = flatItems[i];
-                    const carrierLine = carrier.lines[i];
                     const inQty       = item.side === "DEBIT" ? item.qty : 0;
                     const outQty      = item.side === "CREDIT" ? item.qty : 0;
 
@@ -183,7 +182,7 @@ export async function POST(req: NextRequest) {
                         select: { stock: true },
                     });
                     await recordStockMovement(tx, {
-                        voucherId: carrier.id,
+                        universalVoucherId: jvSpineId,
                         productId: item.productId,
                         branchId:  activeBranchId,
                         date:      new Date(body.date),
@@ -194,13 +193,9 @@ export async function POST(req: NextRequest) {
                         productCurrentStock: current?.stock ?? null,
                         updateBranchBalance: false,
                     });
-
-                    // Suppress unused-var lint for carrierLine — kept for readability.
-                    void carrierLine;
                 }
                 // Phase 5 5C: the carrier's stock rows + lines belong to the journal
                 // voucher — link them onto its spine (the carrier has no spine of its own).
-                await linkVoucherChildrenToSpine(tx, carrier.id, voucher.universalVoucherId);
             }
 
             return { voucherId: voucher.id, reference: voucher.reference, posted: true };

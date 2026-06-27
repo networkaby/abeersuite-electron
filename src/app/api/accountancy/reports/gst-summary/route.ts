@@ -25,7 +25,8 @@ export async function GET(req: Request) {
     try {
         const lines = await prisma.voucherInventoryLine.findMany({
             where: {
-                voucher: {
+                // Phase 5 5C: goods lines hang off the spine.
+                universalVoucher: {
                     type:      invType,
                     status:    "POSTED",
                     deletedAt: null,
@@ -39,7 +40,7 @@ export async function GET(req: Request) {
                 quantity:  true,
                 rate:      true,
                 discountAmt: true,
-                voucher:   { select: { id: true, reference: true, date: true, totalAmount: true } },
+                universalVoucherId: true,
             },
         });
 
@@ -63,7 +64,7 @@ export async function GET(req: Request) {
             b.taxableValue += taxable;
             b.taxAmount    += tax;
             b.grossValue   += Number(l.amount);
-            b.invoices.add(l.voucher.id);
+            b.invoices.add(l.universalVoucherId);
         }
 
         const buckets = Array.from(map.values())

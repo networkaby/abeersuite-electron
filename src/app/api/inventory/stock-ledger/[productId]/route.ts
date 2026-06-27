@@ -44,7 +44,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ prod
         const openingEntries = await prisma.invStockLedger.findMany({
             where: {
                 productId: Number(productId),
-                voucher:   { status: "POSTED" },
+                universalVoucher:   { status: "POSTED" },
                 date:      { lt: from },
                 ...branchFilter,
             },
@@ -59,14 +59,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ prod
         const entries = await prisma.invStockLedger.findMany({
             where: {
                 productId: Number(productId),
-                voucher:   { status: "POSTED" },
+                universalVoucher:   { status: "POSTED" },
                 date:      { gte: from, lte: to },
                 ...branchFilter,
             },
             orderBy: [{ date: "asc" }, { id: "asc" }],
             include: {
-                voucher: {
-                    select: { id: true, reference: true, type: true, description: true, partyJson: true },
+                // Phase 5 5C: the InvVoucher is reached via universalVoucher.invVoucher.
+                universalVoucher: {
+                    select: { invVoucher: { select: { id: true, reference: true, type: true, description: true, partyJson: true } } },
                 },
             },
         });
@@ -77,13 +78,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ prod
             const inQ  = toNumber(e.inQty);
             const outQ = toNumber(e.outQty);
             runningQty += inQ - outQ;
+            const v = e.universalVoucher.invVoucher;
             return {
                 id:          e.id,
                 date:        e.date,
-                reference:   e.voucher.reference,
-                voucherType: e.voucher.type,
-                description: e.voucher.description,
-                partyName:   readPartyName(e.voucher.partyJson),
+                reference:   v?.reference ?? "—",
+                voucherType: v?.type ?? "—",
+                description: v?.description ?? null,
+                partyName:   readPartyName(v?.partyJson ?? null),
                 inQty:       inQ  > 0 ? inQ  : null,
                 outQty:      outQ > 0 ? outQ : null,
                 rate:        toNumber(e.rate),

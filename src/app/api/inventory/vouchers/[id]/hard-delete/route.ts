@@ -28,15 +28,24 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     // Load the full graph up-front so the snapshot captures everything a faithful
     // restore needs (charges/tenders/stock-ledger included — they were missing before).
-    const voucher = await prisma.invVoucher.findUnique({
+    const voucherRow = await prisma.invVoucher.findUnique({
         where: { id: Number(id) },
         include: {
-            lines: { include: { product: { select: { id: true, sku: true, name: true } } } },
             // settlementJson (tender/charge input) is a scalar — captured in the snapshot automatically.
-            stockEntries: true,
             createdBy: { select: { id: true, name: true } },
         },
     });
+    // Phase 5 5C: goods lines + stock ledger hang off the spine — load + attach.
+    const voucher = voucherRow ? {
+        ...voucherRow,
+        lines: await prisma.voucherInventoryLine.findMany({
+            where:   { universalVoucherId: voucherRow.universalVoucherId ?? -1 },
+            include: { product: { select: { id: true, sku: true, name: true } } },
+        }),
+        stockEntries: await prisma.invStockLedger.findMany({
+            where: { universalVoucherId: voucherRow.universalVoucherId ?? -1 },
+        }),
+    } : null;
     if (!voucher) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     const needsReversal = isPosted(voucher) && !isDeleted(voucher) && !isCancelled(voucher);
@@ -119,7 +128,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             // VoucherInventoryLine cascades off the voucher; InvStockLedger has no
             // cascade so wipe it explicitly.
             if (origJe) await tx.universalVoucher.delete({ where: { id: origJe.id } });
-            await tx.invStockLedger.deleteMany({ where: { voucherId: voucher.id } });
+            await tx.invStockLedger.deleteMany({ where: { universalVoucherId: voucher.universalVoucherId ?? -1 } });
             await tx.invVoucher.delete({ where: { id: voucher.id } });
             return created;
         // Reverse stock + GL over the Supabase pooler can exceed the default 5s

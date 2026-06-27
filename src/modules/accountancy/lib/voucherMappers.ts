@@ -17,7 +17,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import { readPartyName } from "@/shared/lib/accountancy/partySnapshot";
 import { toNumber } from "./balance";
 import { buildInvVoucherGlLines, type PostVoucherInput } from "./postInvVoucher";
-import type { TransactionSpec, EngineStockMove } from "./transactionEngine";
+import type { TransactionSpec, EngineStockMoveSpec } from "./transactionEngine";
 
 type Tx = Prisma.TransactionClient;
 
@@ -47,16 +47,15 @@ export type TradingStockLine = {
  */
 export function buildTradingStockMoves(args: {
     type:      string;
-    voucherId: number;
     branchId:  string;
     date:      Date;
     lines:     TradingStockLine[];
-}): EngineStockMove[] {
+}): EngineStockMoveSpec[] {
     const isPurchase = STOCK_IN_TYPES.has(args.type);
     const isSale     = STOCK_OUT_TYPES.has(args.type);
     if (!isPurchase && !isSale) return [];
 
-    const moves: EngineStockMove[] = [];
+    const moves: EngineStockMoveSpec[] = [];
     for (const line of args.lines) {
         const qty      = toNumber(line.quantity);
         const freeQty  = line.freeQty != null ? toNumber(line.freeQty) : 0;
@@ -65,7 +64,6 @@ export function buildTradingStockMoves(args: {
         const outQty   = isSale     ? totalQty : 0;
         if (inQty <= 0 && outQty <= 0) continue;
         moves.push({
-            voucherId:           args.voucherId,
             productId:           line.productId,
             branchId:            args.branchId,
             date:                args.date,
@@ -90,7 +88,7 @@ export function buildTradingStockMoves(args: {
 export async function saleToSpec(
     tx: Tx,
     voucher: PostVoucherInput["voucher"],
-    stock?: { voucherId: number; branchId: string; lines: TradingStockLine[] },
+    stock?: { branchId: string; lines: TradingStockLine[] },
 ): Promise<TransactionSpec> {
     const built = await buildInvVoucherGlLines(tx, voucher);
     return {
@@ -102,7 +100,6 @@ export async function saleToSpec(
         stockMoves: stock
             ? buildTradingStockMoves({
                 type:      voucher.type,
-                voucherId: stock.voucherId,
                 branchId:  stock.branchId,
                 date:      voucher.date,
                 lines:     stock.lines,

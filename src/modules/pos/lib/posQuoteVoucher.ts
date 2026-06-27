@@ -17,7 +17,6 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { invNextRef, calcLineTotals, calcVoucherTotals } from "@/modules/inventory/lib/stock";
 import { engineCreateSpine } from "@/modules/accountancy/lib/transactionEngine";
 import { syncVoucherLinks, syncVoucherLink } from "@/modules/accountancy/lib/voucherLinks";
-import { linkVoucherChildrenToSpine } from "@/modules/inventory/lib/voucherSpineLink";
 import { getDealsPipeline, findOpenDealForParty } from "@/modules/deals/lib/dealsPipeline";
 import { getOrderPipeline, orderEntryStatus } from "@/modules/order/lib/orderPipeline";
 import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
@@ -119,18 +118,30 @@ export async function createPosQuoteVoucher(opts: {
 
     return prisma.$transaction(async (tx) => {
         const reference = await invNextRef(tx, type, userId);
+        // Phase 5 5.0c/5C: spine FIRST (the document anchor) so the goods lines hang
+        // off it. These quotes are "issued" the moment they're saved (no GL, no
+        // stock) → spine POSTED with no GL lines, gate-neutral.
+        const spineId = await engineCreateSpine(tx, {
+            type,
+            date:           body.date ? new Date(body.date) : new Date(),
+            description,
+            friendlyRef:    reference,
+            partyAccountId: body.accountId ?? null,
+            userId,
+        });
+        await tx.universalVoucher.updateMany({
+            where: { id: spineId },
+            data:  { status: "POSTED", postedAt: new Date(), sourceCreatedAt: new Date() },
+        });
         const voucher = await tx.invVoucher.create({
             data: {
                 type,
-                // Issued/final the moment it's saved — these never go through the
-                // GL-post step (no GL, no stock), so leaving the default DRAFT made
-                // them read as unfinished in the Day Book. POSTED here means "issued"
-                // (journalEntryId stays null → no GL impact; Day Book/BS/P&L totals,
-                // which are journal-entry based, are unaffected).
+                // POSTED here means "issued" (no GL impact — no GL lines on the spine).
                 status: "POSTED",
                 postedAt: new Date(),
                 reference,
                 branchId,
+                universalVoucherId: spineId,
                 date: body.date ? new Date(body.date) : new Date(),
                 description,
                 accountId: body.accountId ?? null,
@@ -148,46 +159,28 @@ export async function createPosQuoteVoucher(opts: {
                 taxAmount,
                 totalAmount,
                 createdById: userId,
-                lines: {
-                    create: computedLines.map((l) => ({
-                        productId: l.productId,
-                        description: l.description || null,
-                        quantity: l.quantity,
-                        rate: l.rate,
-                        mrpPaise: l.mrpPaise ?? null,
-                        savedSalePricePaise: l.savedSalePricePaise ?? null,
-                        discountPct: 0,
-                        discountAmt: l.discountAmt,
-                        taxRate: l.taxRate ?? 0,
-                        taxAmount: l.taxAmount,
-                        amount: l.amount,
-                    })),
-                },
             },
             select: { id: true, reference: true },
         });
-
-        // Phase 5 5.0c: anchor the quote on the spine (the document table) so its
-        // deal / order-pipeline links can become VoucherLinks in 5A. These are
-        // "issued" the moment they're saved (no GL, no stock), so the spine is
-        // POSTED with no GL lines — gate-neutral (no lines → no balance effect).
-        const spineId = await engineCreateSpine(tx, {
-            type,
-            date:           body.date ? new Date(body.date) : new Date(),
-            description,
-            friendlyRef:    reference,
-            partyAccountId: body.accountId ?? null,
-            userId,
+        // Phase 5 5C: goods lines hang off the spine.
+        await tx.voucherInventoryLine.createMany({
+            data: computedLines.map((l) => ({
+                universalVoucherId: spineId,
+                productId: l.productId,
+                description: l.description || null,
+                quantity: l.quantity,
+                rate: l.rate,
+                mrpPaise: l.mrpPaise ?? null,
+                savedSalePricePaise: l.savedSalePricePaise ?? null,
+                discountPct: 0,
+                discountAmt: l.discountAmt,
+                taxRate: l.taxRate ?? 0,
+                taxAmount: l.taxAmount,
+                amount: l.amount,
+            })),
         });
-        await tx.universalVoucher.updateMany({
-            where: { id: spineId },
-            data:  { status: "POSTED", postedAt: new Date(), sourceCreatedAt: new Date() },
-        });
-        await tx.invVoucher.update({ where: { id: voucher.id }, data: { universalVoucherId: spineId } });
-        // Phase 5 5A: dual-write the order-pipeline link (POS_ORDER rides the
-        // Orders board). The deal link is dual-written below once resolved.
+        // Phase 5 5A: dual-write the order-pipeline link (POS_ORDER rides the board).
         await syncVoucherLinks(tx, spineId, { orderPipelineId: orderPipeline?.id ?? null, orderStatusId });
-        await linkVoucherChildrenToSpine(tx, voucher.id, spineId);   // 5C: link goods lines
 
         let dealId: number | null = null;
         if (hasParty && entry && actor) {

@@ -26,11 +26,10 @@ import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { invNextRef } from "@/modules/inventory/lib/stock";
 import { recordStockMovement } from "@/modules/inventory/lib/stockMovement";
-import { linkVoucherChildrenToSpine } from "@/modules/inventory/lib/voucherSpineLink";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import { saleToSpec } from "@/modules/accountancy/lib/voucherMappers";
 import { buildSettlementJson } from "@/shared/lib/accountancy/settlement";
-import { enginePost } from "@/modules/accountancy/lib/transactionEngine";
+import { enginePost, engineCreateSpine } from "@/modules/accountancy/lib/transactionEngine";
 import * as Sentry from "@sentry/nextjs";
 
 const lostLineSchema = z.object({
@@ -127,11 +126,21 @@ export async function POST(req: Request) {
             const today = new Date();
 
             const vRef = await invNextRef(tx, "SALE_RETURN");
+            // Phase 5 5.0/5C: spine FIRST; enginePost attaches GL via existingSpineId.
+            const spineId = await engineCreateSpine(tx, {
+                type:           "SALE_RETURN",
+                date:           today,
+                description:    `Lost-invoice return — ${data.reason.slice(0, 200)}`,
+                friendlyRef:    vRef,
+                partyAccountId: customerAcct.id,
+                userId:         user!.id,
+            });
             const voucher = await tx.invVoucher.create({
                 data: {
                     type:           "SALE_RETURN",
                     reference:      vRef,
                     branchId,
+                    universalVoucherId: spineId,
                     date:           today,
                     description:    `Lost-invoice return — ${data.reason.slice(0, 200)}`,
                     status:         "POSTED",
@@ -144,37 +153,34 @@ export async function POST(req: Request) {
                     refVoucherId:   null,
                     deliveryMode:   "COUNTER",
                     placeOfSupply:  sellerStateCode,
-                    // TAX-INCLUSIVE subtotal (goods + tax) — the GL bridge
-                    // derives pure goods as `subtotal − taxAmount`. A goods-only
-                    // subtotal here would leave the JE short by the GST amount.
                     subtotal:       subtotal + taxAmt,
                     taxAmount:      taxAmt,
                     totalAmount:    total,
                     createdById:    user!.id,
-                    lines: {
-                        create: data.lines.map((l) => {
-                            const p       = productById.get(l.productId)!;
-                            const goods   = l.qty * l.unitPrice;
-                            const lineTax = (goods * l.taxRate) / 100;
-                            return {
-                                productId:   l.productId,
-                                description: `${p.sku} — ${p.name}`,
-                                quantity:    l.qty,
-                                rate:        l.unitPrice,
-                                taxRate:     l.taxRate,
-                                taxAmount:   lineTax,
-                                // Tax-inclusive line amount — matches SALE/POS.
-                                amount:      goods + lineTax,
-                            };
-                        }),
-                    },
                     // G4b: refund tender → settlementJson.
                     settlementJson: buildSettlementJson(
                         [{ accountId: refundAccountId, amount: total, method: data.refundMode === "CASH" ? "CASH" : null, reference: null }],
                         [],
                     ),
                 },
-                include: { lines: true },
+            });
+            // Phase 5 5C: goods lines hang off the spine.
+            await tx.voucherInventoryLine.createMany({
+                data: data.lines.map((l) => {
+                    const p       = productById.get(l.productId)!;
+                    const goods   = l.qty * l.unitPrice;
+                    const lineTax = (goods * l.taxRate) / 100;
+                    return {
+                        universalVoucherId: spineId,
+                        productId:   l.productId,
+                        description: `${p.sku} — ${p.name}`,
+                        quantity:    l.qty,
+                        rate:        l.unitPrice,
+                        taxRate:     l.taxRate,
+                        taxAmount:   lineTax,
+                        amount:      goods + lineTax,
+                    };
+                }),
             });
 
             const spec = await saleToSpec(tx, {
@@ -193,7 +199,7 @@ export async function POST(req: Request) {
                 sellerStateCode,
                 buyerStateCode: sellerStateCode,
             });   // GL only — stock IN handled below
-            const gl = await enginePost(tx, spec, user!.id);
+            const gl = await enginePost(tx, spec, user!.id, { existingSpineId: spineId });
             if (gl.journalEntryId === null) {
                 throw new GlPostFailedError(
                     `Cannot post lost-invoice return ${vRef}: engine produced no journal entry.`,
@@ -204,12 +210,11 @@ export async function POST(req: Request) {
                 where: { id: voucher.id },
                 data:  { journalEntryId: gl.journalEntryId, universalVoucherId: gl.universalVoucherId },
             });
-            await linkVoucherChildrenToSpine(tx, voucher.id, gl.universalVoucherId);   // 5C
 
             // Stock IN.
             for (const l of data.lines) {
                 await recordStockMovement(tx, {
-                    voucherId: voucher.id,
+                    universalVoucherId: spineId,
                     productId: l.productId,
                     branchId,
                     date:   today,

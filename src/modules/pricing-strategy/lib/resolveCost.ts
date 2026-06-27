@@ -59,7 +59,7 @@ export async function resolveCostBatch(
                 productId: { in: products.map((p) => p.id) },
                 date:      { gte: since },
                 inQty:     { gt: 0 },
-                voucher:   { status: "POSTED" },
+                universalVoucher: { status: "POSTED" },
             },
             _sum: { inQty: true, amount: true },
         });

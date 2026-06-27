@@ -38,10 +38,9 @@ export default async function PosReceiptPage({
     // → intra-state → single "Tax" row (legacy behaviour).
     const placeOfSupplyParam = (sp.placeOfSupply ?? "").trim();
 
-    const voucher = await prisma.invVoucher.findUnique({
+    const voucherRow = await prisma.invVoucher.findUnique({
         where: { id: Number(id) },
         include: {
-            lines: { include: { product: { select: { sku: true, name: true } } } },
             account: {
                 select: {
                     id: true,
@@ -52,7 +51,13 @@ export default async function PosReceiptPage({
             },
         },
     });
-    if (!voucher) notFound();
+    if (!voucherRow) notFound();
+    // Phase 5 5C: goods lines hang off the spine.
+    const invLines = await prisma.voucherInventoryLine.findMany({
+        where:   { universalVoucherId: voucherRow.universalVoucherId ?? -1 },
+        include: { product: { select: { sku: true, name: true } } },
+    });
+    const voucher = { ...voucherRow, lines: invLines };
 
     // G4b: additional-charge rows come from settlementJson (with account names).
     const settlement = readSettlement(voucher.settlementJson);

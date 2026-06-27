@@ -506,14 +506,14 @@ model InvVoucher {
   createdBy                 User                       @relation("InvVoucherCreatedBy", fields: [createdById], references: [id])
   cancelledBy               User?                      @relation("InvVoucherCancelledBy", fields: [cancelledById], references: [id])
   deletedBy                 User?                      @relation("InvVoucherDeletedBy", fields: [deletedById], references: [id])
-  lines                     VoucherInventoryLine[]
+  // Phase 5 5C: goods lines (VoucherInventoryLine) + stock rows (InvStockLedger)
+  // hang off the SPINE now, not InvVoucher — reach them via universalVoucher.
   // Phase 4 G4b: tender + charge INPUT (re-rendered for edit, never aggregated —
   // money/reporting read the posted spine's role=TENDER/CHARGE VoucherGlLine).
   // Shape: { tenders: [{accountId, amount, method?, reference?}],
   //          charges: [{accountId, amount, description?}] }. Replaced the
   // InvVoucherTender / InvVoucherCharge tables (folded into the spine on POST).
   settlementJson            Json?
-  stockEntries              InvStockLedger[]
   loyaltyLots               LoyaltyLot[]               @relation("InvVoucherLoyaltyLots")
   loyaltyLedger             LoyaltyLedger[]            @relation("InvVoucherLoyaltyLedger")
   loyaltyMilestoneAwards    LoyaltyMilestoneAward[]    @relation("InvVoucherLoyaltyMilestoneAwards")
@@ -539,12 +539,10 @@ model InvVoucher {
 // "goods" line face). Table kept via @@map so the rename is code-only, no migration.
 model VoucherInventoryLine {
   id                  Int        @id @default(autoincrement())
-  voucherId           Int
-  voucher             InvVoucher @relation(fields: [voucherId], references: [id], onDelete: Cascade)
-  // Phase 5 5C: re-point goods lines onto the spine. Nullable + dual-written in
-  // 5C-1; becomes the sole parent FK when voucherId is dropped (5C-3).
-  universalVoucherId  Int?
-  universalVoucher    UniversalVoucher? @relation("SpineInventoryLines", fields: [universalVoucherId], references: [id], onDelete: Cascade)
+  // Phase 5 5C: goods lines hang off the spine (UniversalVoucher) — voucherId
+  // (→ InvVoucher) dropped. The inventory voucher reaches them via its spine.
+  universalVoucherId  Int
+  universalVoucher    UniversalVoucher @relation("SpineInventoryLines", fields: [universalVoucherId], references: [id], onDelete: Cascade)
   productId           Int
   product             InvProduct @relation(fields: [productId], references: [id])
   description         String?
@@ -577,7 +575,6 @@ model VoucherInventoryLine {
   /// (qty × rate) − discountAmt + taxAmount
   amount              Decimal    @db.Decimal(14, 2)
 
-  @@index([voucherId])
   @@index([universalVoucherId])
   @@index([productId])
   @@map("InvVoucherLine")
@@ -589,11 +586,9 @@ model InvStockLedger {
   id        Int        @id @default(autoincrement())
   productId Int
   product   InvProduct @relation(fields: [productId], references: [id])
-  voucherId Int
-  voucher   InvVoucher @relation(fields: [voucherId], references: [id])
-  // Phase 5 5C: re-point stock rows onto the spine (dual-written in 5C-1).
-  universalVoucherId Int?
-  universalVoucher   UniversalVoucher? @relation("SpineStockLedger", fields: [universalVoucherId], references: [id], onDelete: Cascade)
+  // Phase 5 5C: stock rows hang off the spine — voucherId (→ InvVoucher) dropped.
+  universalVoucherId Int
+  universalVoucher   UniversalVoucher @relation("SpineStockLedger", fields: [universalVoucherId], references: [id], onDelete: Cascade)
   /// Branch where this stock movement happened — stamped at post time from
   /// the parent voucher's branchId. Required for per-branch ledger queries.
   branchId  String
@@ -605,7 +600,6 @@ model InvStockLedger {
   amount    Decimal    @db.Decimal(14, 2)
 
   @@index([productId, date])
-  @@index([voucherId])
   @@index([universalVoucherId])
   @@index([productId, branchId, date])
 }

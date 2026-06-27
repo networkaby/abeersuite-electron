@@ -62,11 +62,18 @@ export async function GET(req: NextRequest) {
                     accountId:      true,
                     branch:         { select: { id: true, name: true } },
                     createdBy:      { select: { name: true } },
-                    _count:         { select: { lines: true } },
+                    universalVoucherId: true,
                     settlementJson: true,
                 },
             }),
         ]);
+
+        // Phase 5 5C: goods lines hang off the spine — batch line counts.
+        const uvIds = vouchers.map((v) => v.universalVoucherId).filter((x): x is number => x != null);
+        const lineCounts = uvIds.length === 0 ? [] : await prisma.voucherInventoryLine.groupBy({
+            by: ["universalVoucherId"], where: { universalVoucherId: { in: uvIds } }, _count: { _all: true },
+        });
+        const lineCountByUv = new Map(lineCounts.map((c) => [c.universalVoucherId, c._count._all]));
 
         return NextResponse.json({
             total,
@@ -92,7 +99,7 @@ export async function GET(req: NextRequest) {
                     amountReceived: paid.toFixed(2),
                     branch:         v.branch?.name ?? "—",
                     cashier:        v.createdBy?.name ?? "—",
-                    lineCount:      v._count.lines,
+                    lineCount:      v.universalVoucherId != null ? (lineCountByUv.get(v.universalVoucherId) ?? 0) : 0,
                 };
             }),
         });

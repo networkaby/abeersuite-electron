@@ -5,7 +5,6 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { invNextRef } from "@/modules/inventory/lib/stock";
 import { engineCreateSpine } from "@/modules/accountancy/lib/transactionEngine";
-import { linkVoucherChildrenToSpine } from "@/modules/inventory/lib/voucherSpineLink";
 
 // POST /api/inventory/vouchers/[id]/duplicate
 //
@@ -28,21 +27,33 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     }
 
     try {
-        const source = await prisma.invVoucher.findUnique({
-            where:   { id },
-            include: { lines: true },
-        });
+        const source = await prisma.invVoucher.findUnique({ where: { id } });
         if (!source) return NextResponse.json({ error: "Not found" }, { status: 404 });
+        // Phase 5 5C: source goods lines hang off the source's spine.
+        const sourceLines = await prisma.voucherInventoryLine.findMany({
+            where: { universalVoucherId: source.universalVoucherId ?? -1 },
+        });
 
         const created = await prisma.$transaction(async (tx) => {
             const reference = await invNextRef(tx, source.type, user!.id);
             const today = new Date();
 
+            // Phase 5 5.0c/5C: spine FIRST (the document anchor) — the duplicate is
+            // a fresh DRAFT; POST attaches its GL lines + flips it.
+            const spineId = await engineCreateSpine(tx, {
+                type:           source.type,
+                date:           today,
+                description:    source.description,
+                friendlyRef:    reference,
+                partyAccountId: source.accountId,
+                userId:         user!.id,
+            });
             const voucher = await tx.invVoucher.create({
                 data: {
                     type:             source.type,
                     reference,
                     branchId:         source.branchId,
+                    universalVoucherId: spineId,
                     date:             today,
                     description:      source.description,
                     status:           "DRAFT",
@@ -63,36 +74,25 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                     // refNumber / refDate / refVoucherId intentionally null —
                     // a duplicate of a SALE is not a SALE_RETURN.
                     createdById:      user!.id,
-                    lines: {
-                        create: source.lines.map((l) => ({
-                            productId:   l.productId,
-                            description: l.description,
-                            quantity:    l.quantity,
-                            freeQty:     l.freeQty,
-                            rate:        l.rate,
-                            discountPct: l.discountPct,
-                            discountAmt: l.discountAmt,
-                            taxRate:     l.taxRate,
-                            taxAmount:   l.taxAmount,
-                            amount:      l.amount,
-                        })),
-                    },
                 },
                 select: { id: true, type: true, reference: true },
             });
-            // Phase 5 5.0c: the duplicate is a fresh DRAFT — give it a draft spine
-            // (the document anchor) like the main create route. POST attaches its
-            // GL lines + flips it; gated out of balances while DRAFT.
-            const spineId = await engineCreateSpine(tx, {
-                type:           source.type,
-                date:           today,
-                description:    source.description,
-                friendlyRef:    reference,
-                partyAccountId: source.accountId,
-                userId:         user!.id,
+            // Phase 5 5C: goods lines hang off the new spine.
+            await tx.voucherInventoryLine.createMany({
+                data: sourceLines.map((l) => ({
+                    universalVoucherId: spineId,
+                    productId:   l.productId,
+                    description: l.description,
+                    quantity:    l.quantity,
+                    freeQty:     l.freeQty,
+                    rate:        l.rate,
+                    discountPct: l.discountPct,
+                    discountAmt: l.discountAmt,
+                    taxRate:     l.taxRate,
+                    taxAmount:   l.taxAmount,
+                    amount:      l.amount,
+                })),
             });
-            await tx.invVoucher.update({ where: { id: voucher.id }, data: { universalVoucherId: spineId } });
-            await linkVoucherChildrenToSpine(tx, voucher.id, spineId);   // 5C
             return voucher;
         });
 

@@ -32,11 +32,10 @@ import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { invNextRef } from "@/modules/inventory/lib/stock";
 import { recordStockMovement } from "@/modules/inventory/lib/stockMovement";
-import { linkVoucherChildrenToSpine } from "@/modules/inventory/lib/voucherSpineLink";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import { saleToSpec } from "@/modules/accountancy/lib/voucherMappers";
 import { buildSettlementJson } from "@/shared/lib/accountancy/settlement";
-import { enginePost } from "@/modules/accountancy/lib/transactionEngine";
+import { enginePost, engineCreateSpine } from "@/modules/accountancy/lib/transactionEngine";
 import { reverseLoyaltyForReturn, ratesFromConfig } from "@/modules/loyalty/lib";
 import { reverseCouponRedemption } from "@/modules/coupons/lib";
 import * as Sentry from "@sentry/nextjs";
@@ -69,12 +68,15 @@ export async function POST(req: Request) {
         const original = await prisma.invVoucher.findUnique({
             where: { id: data.originalInvoiceId },
             include: {
-                lines: true,
                 account: { select: { id: true, name: true, personId: true, companyId: true } },
                 branch:  { select: { id: true, gstStateCode: true } },
             },
         });
         if (!original) return NextResponse.json({ error: "Voucher not found" }, { status: 404 });
+        // Phase 5 5C: goods lines hang off the spine.
+        const originalLines = await prisma.voucherInventoryLine.findMany({
+            where: { universalVoucherId: original.universalVoucherId ?? -1 },
+        });
         if (original.status !== "POSTED") {
             return NextResponse.json({ error: "Only POSTED vouchers can be returned" }, { status: 409 });
         }
@@ -86,8 +88,8 @@ export async function POST(req: Request) {
         }
 
         // ── Validate return lines ─────────────────────────────────────────────
-        const lineMap = new Map(original.lines.map((l) => [l.id, l]));
-        const returnLines: { voucherLine: typeof original.lines[number]; qty: number }[] = [];
+        const lineMap = new Map(originalLines.map((l) => [l.id, l]));
+        const returnLines: { voucherLine: typeof originalLines[number]; qty: number }[] = [];
         for (const rl of data.lines) {
             const orig = lineMap.get(rl.invoiceLineId);
             if (!orig) return NextResponse.json({ error: `Line ${rl.invoiceLineId} not found on this voucher` }, { status: 400 });
@@ -146,7 +148,7 @@ export async function POST(req: Request) {
         // ── Loyalty reversal context ──────────────────────────────────────────
         // Fraction of the original sale being returned (by pre-tax goods value),
         // used to claw back earned / restore redeemed points proportionally.
-        const originalGoods = original.lines.reduce((s, l) => s + Number(l.quantity) * Number(l.rate), 0);
+        const originalGoods = originalLines.reduce((s, l) => s + Number(l.quantity) * Number(l.rate), 0);
         const returnFraction = originalGoods > 0 ? returnSubtotal / originalGoods : 1;
         const loyaltyConfig = await prisma.loyaltyConfig.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} });
         const loyaltyRates = ratesFromConfig(loyaltyConfig);
@@ -158,11 +160,21 @@ export async function POST(req: Request) {
             // 1. SALE_RETURN InvVoucher + refund tender row.
             const vRef = await invNextRef(tx, "SALE_RETURN");
             const stockLines = returnLines.filter((rl) => rl.voucherLine.productId !== null);
+            // Phase 5 5.0/5C: spine FIRST; enginePost attaches GL via existingSpineId.
+            const spineId = await engineCreateSpine(tx, {
+                type:           "SALE_RETURN",
+                date:           today,
+                description:    `Sale return of ${original.reference}${data.notes ? ` — ${data.notes}` : ""}`,
+                friendlyRef:    vRef,
+                partyAccountId: original.accountId,
+                userId:         user!.id,
+            });
             const voucher = await tx.invVoucher.create({
                 data: {
                     type:           "SALE_RETURN",
                     reference:      vRef,
                     branchId,
+                    universalVoucherId: spineId,
                     date:           today,
                     description:    `Sale return of ${original.reference}${data.notes ? ` — ${data.notes}` : ""}`,
                     status:         "POSTED",
@@ -175,42 +187,35 @@ export async function POST(req: Request) {
                     refVoucherId:   original.id,
                     deliveryMode:   "COUNTER",
                     placeOfSupply:  sellerStateCode,
-                    // `subtotal` is TAX-INCLUSIVE (goods + tax), matching the
-                    // SALE/POS convention from calcVoucherTotals. The GL bridge
-                    // derives pure goods as `subtotal − taxAmount`; passing a
-                    // goods-only subtotal here makes it double-subtract the tax
-                    // and the JE comes out short by exactly the GST amount.
                     subtotal:       returnSubtotal + returnTaxAmount,
                     taxAmount:      returnTaxAmount,
                     totalAmount:    returnTotal,
                     createdById:    user!.id,
-                    lines: {
-                        create: stockLines.map(({ voucherLine, qty }) => {
-                            const rate    = Number(voucherLine.rate);
-                            const taxRate = Number(voucherLine.taxRate ?? 0);
-                            const goods   = qty * rate;
-                            const lineTax = (goods * taxRate) / 100;
-                            return {
-                                productId:   voucherLine.productId!,
-                                description: voucherLine.description,
-                                quantity:    qty,
-                                rate,
-                                taxRate,
-                                taxAmount:   lineTax,
-                                // Tax-inclusive line amount — same convention as
-                                // SALE/POS lines (stock valuation uses qty×rate
-                                // directly, see recordStockMovement below).
-                                amount:      goods + lineTax,
-                            };
-                        }),
-                    },
                     // G4b: refund tender → settlementJson.
                     settlementJson: buildSettlementJson(
                         [{ accountId: refundAccountId, amount: returnTotal, method: data.refundMode === "CASH" ? "CASH" : null, reference: null }],
                         [],
                     ),
                 },
-                include: { lines: true },
+            });
+            // Phase 5 5C: goods lines hang off the spine.
+            await tx.voucherInventoryLine.createMany({
+                data: stockLines.map(({ voucherLine, qty }) => {
+                    const rate    = Number(voucherLine.rate);
+                    const taxRate = Number(voucherLine.taxRate ?? 0);
+                    const goods   = qty * rate;
+                    const lineTax = (goods * taxRate) / 100;
+                    return {
+                        universalVoucherId: spineId,
+                        productId:   voucherLine.productId!,
+                        description: voucherLine.description,
+                        quantity:    qty,
+                        rate,
+                        taxRate,
+                        taxAmount:   lineTax,
+                        amount:      goods + lineTax,
+                    };
+                }),
             });
 
             // 2. GL post — SALE_RETURN is purchase-shape (counter Cr).
@@ -232,7 +237,7 @@ export async function POST(req: Request) {
                 sellerStateCode,
                 buyerStateCode: sellerStateCode,
             });   // GL only — stock IN handled below
-            const gl = await enginePost(tx, spec, user!.id);
+            const gl = await enginePost(tx, spec, user!.id, { existingSpineId: spineId });
             if (gl.journalEntryId === null) {
                 throw new GlPostFailedError(
                     `Cannot post sale return ${vRef}: engine produced no journal entry.`,
@@ -243,7 +248,6 @@ export async function POST(req: Request) {
                 where: { id: voucher.id },
                 data:  { journalEntryId: gl.journalEntryId, universalVoucherId: gl.universalVoucherId },
             });
-            await linkVoucherChildrenToSpine(tx, voucher.id, gl.universalVoucherId);   // 5C
 
             // 2b. Loyalty reversal — claw back earned / restore redeemed points
             // proportional to the value returned. No-ops (returns null) when the
@@ -270,7 +274,7 @@ export async function POST(req: Request) {
                 const productId = voucherLine.productId!;
                 const rate      = Number(voucherLine.rate);
                 await recordStockMovement(tx, {
-                    voucherId: voucher.id,
+                    universalVoucherId: spineId,
                     productId,
                     branchId,
                     date:   today,

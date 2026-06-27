@@ -9,11 +9,12 @@ import type { OrderRef } from "./orderAdapter";
 
 async function orderLines(ref: OrderRef): Promise<{ productId: number; quantity: number }[]> {
     if (ref.source === "inv") {
-        const v = await prisma.invVoucher.findUnique({
-            where: { id: ref.id },
-            select: { lines: { select: { productId: true, quantity: true } } },
-        });
-        return (v?.lines ?? []).map((l) => ({ productId: l.productId, quantity: Math.round(Number(l.quantity)) }));
+        // Phase 5 5C: goods lines hang off the spine.
+        const v = await prisma.invVoucher.findUnique({ where: { id: ref.id }, select: { universalVoucherId: true } });
+        const lines = v?.universalVoucherId != null
+            ? await prisma.voucherInventoryLine.findMany({ where: { universalVoucherId: v.universalVoucherId }, select: { productId: true, quantity: true } })
+            : [];
+        return lines.map((l) => ({ productId: l.productId, quantity: Math.round(Number(l.quantity)) }));
     }
     const o = await prisma.shopOrder.findUnique({
         where: { id: ref.id },
