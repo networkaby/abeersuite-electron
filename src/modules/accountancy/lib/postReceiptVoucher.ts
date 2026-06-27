@@ -36,18 +36,18 @@ export type PostReceiptVoucherArgs = {
     branchId?:         string;
     /**
      * When set, a VoucherAllocation row links this receipt to the originating
-     * InvVoucher's journal entry — Receivables nets the amount out automatically.
-     * Pass `InvVoucher.journalEntryId` for POS sales / office credit settlements.
+     * bill's universal-voucher spine — Receivables nets the amount out. Pass
+     * `InvVoucher.universalVoucherId` for POS sales / office credit settlements.
      */
-    allocateToJournalEntryId?: number;
+    allocateToUniversalVoucherId?: number;
     /**
      * Multi-bill allocation (FIFO collect-on-the-go): one VoucherAllocation per
-     * entry, tying parts of this receipt to several invoices' journal entries.
-     * Takes precedence over `allocateToJournalEntryId` when present. The sum is
+     * entry, tying parts of this receipt to several bills' spine rows. Takes
+     * precedence over `allocateToUniversalVoucherId` when present. The sum is
      * asserted ≤ the receipt total so a receipt can never allocate more than it
      * received (an unallocated remainder simply stays as a customer advance).
      */
-    allocations?: { journalEntryId: number; amount: number }[];
+    allocations?: { universalVoucherId: number; amount: number }[];
 };
 
 export type PostReceiptVoucherResult = {
@@ -102,11 +102,11 @@ export async function postReceiptVoucher(
     // 4. Bill-wise allocation against the originating InvVoucher JE(s).
     //    `allocations` (multi-bill FIFO) wins; else the single-target shortcut;
     //    else nothing (pure advance — the Cr to the customer stands as credit).
-    const allocationPlan: { journalEntryId: number; amount: number }[] =
+    const allocationPlan: { universalVoucherId: number; amount: number }[] =
         args.allocations != null && args.allocations.length > 0
             ? args.allocations.filter((a) => a.amount > 0.005)
-            : args.allocateToJournalEntryId != null
-                ? [{ journalEntryId: args.allocateToJournalEntryId, amount: total }]
+            : args.allocateToUniversalVoucherId != null
+                ? [{ universalVoucherId: args.allocateToUniversalVoucherId, amount: total }]
                 : [];
 
     // Never allocate more than the receipt actually received — an over-allocation
@@ -118,25 +118,15 @@ export async function postReceiptVoucher(
         );
     }
 
-    // Phase 4 G1 (spine-only): allocate against the universal-voucher spine.
-    // The legacy JOURNAL_ENTRY allocation is retired — every posted JE has a spine
-    // (engine dual-write), and all receivables readers (outstandings,
-    // allocations/open, person transactions) read the spine.
-    const spineByJe = new Map(
-        (await tx.universalVoucher.findMany({
-            where:  { sourceJournalEntryId: { in: allocationPlan.map((a) => a.journalEntryId) } },
-            select: { id: true, sourceJournalEntryId: true },
-        })).map((s) => [s.sourceJournalEntryId!, s.id]),
-    );
-
+    // Allocate directly against the bill's universal-voucher spine (G5 — the JE
+    // hop is gone; the caller passes the spine id). All receivables readers net
+    // these UNIVERSAL_VOUCHER allocations out.
     const allocationIds: number[] = [];
     for (const a of allocationPlan) {
-        const spineId = spineByJe.get(a.journalEntryId);
-        if (spineId == null) continue; // every posted JE has a spine; skip defensively
         const alloc = await tx.voucherAllocation.create({
             data: {
                 targetType:  "UNIVERSAL_VOUCHER",
-                targetId:    spineId,
+                targetId:    a.universalVoucherId,
                 sourceType:  "VOUCHER",
                 sourceId:    voucher.id,
                 amount:      a.amount,

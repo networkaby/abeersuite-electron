@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { parseRange } from "@/modules/accountancy/lib/period";
-import { sumReceiptAllocationsByJe, loadTenderLinesByJe } from "@/modules/accountancy/lib/outstandings";
+import { sumReceiptAllocations, loadTenderLines } from "@/modules/accountancy/lib/outstandings";
 
 // GET /api/person/[id]/transactions?from=YYYY-MM-DD&to=YYYY-MM-DD
 //
@@ -49,7 +49,7 @@ export async function GET(
                     date: true,
                     totalAmount: true,
                     accountId: true,
-                    journalEntryId: true,
+                    universalVoucherId: true,
                     branch:    { select: { name: true } },
                     createdBy: { select: { name: true } },
                 },
@@ -58,23 +58,23 @@ export async function GET(
             : [];
 
         // amountPaid = Σ(non-AR tenders on this voucher) + Σ(later RECEIPT
-        // VoucherAllocations against this voucher's JournalEntry). Mirrors
-        // the per-bill paid calc in src/modules/accountancy/lib/outstandings.ts
-        // (loadOpenBills) so customer Transactions and Receivables agree.
-        const jeIds = rawVouchers
-            .map((v) => v.journalEntryId)
+        // VoucherAllocations against this voucher's spine). Mirrors the per-bill
+        // paid calc in src/modules/accountancy/lib/outstandings.ts (loadOpenBills)
+        // so customer Transactions and Receivables agree.
+        const uvIds = rawVouchers
+            .map((v) => v.universalVoucherId)
             .filter((x): x is number => x !== null);
-        // RECEIPT settlements + up-front tenders, both via the universal-voucher spine.
-        const [paidByJe, tendersByJe] = await Promise.all([
-            sumReceiptAllocationsByJe(prisma, jeIds),
-            loadTenderLinesByJe(prisma, jeIds),
+        // RECEIPT settlements + up-front tenders, both via the spine (universalVoucherId).
+        const [paidBySpine, tendersBySpine] = await Promise.all([
+            sumReceiptAllocations(prisma, uvIds),
+            loadTenderLines(prisma, uvIds),
         ]);
 
         const invVouchers = rawVouchers.map((v) => {
             const arAccountId = v.accountId ?? account?.id ?? null;
-            const nonArTenderSum = (v.journalEntryId !== null ? (tendersByJe.get(v.journalEntryId) ?? []) : [])
+            const nonArTenderSum = (v.universalVoucherId !== null ? (tendersBySpine.get(v.universalVoucherId) ?? []) : [])
                 .reduce((s, t) => s + (t.accountId === arAccountId ? 0 : t.amount), 0);
-            const jePaid = v.journalEntryId !== null ? (paidByJe[v.journalEntryId] ?? 0) : 0;
+            const jePaid = v.universalVoucherId !== null ? (paidBySpine[v.universalVoucherId] ?? 0) : 0;
             const amountPaid = nonArTenderSum + jePaid;
             return {
                 id:         v.id,

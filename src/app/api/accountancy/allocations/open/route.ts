@@ -1,7 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
-import { sumReceiptAllocationsByJe, loadTenderLinesByJe, sumVoucherAllocations } from "@/modules/accountancy/lib/outstandings";
+import { sumReceiptAllocations, loadTenderLines, sumVoucherAllocations } from "@/modules/accountancy/lib/outstandings";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 // GET /api/accountancy/allocations/open?accountId=N
@@ -36,28 +36,28 @@ export async function GET(req: Request) {
             id: true, type: true, reference: true, date: true,
             totalAmount: true,
             accountId: true,
-            journalEntryId: true, creditPeriodDays: true,
+            universalVoucherId: true, creditPeriodDays: true,
         },
         orderBy: [{ date: "asc" }],
     });
-    const jeIds = invVouchers
-        .map((v) => v.journalEntryId)
+    const uvIds = invVouchers
+        .map((v) => v.universalVoucherId)
         .filter((x): x is number => x !== null);
-    // RECEIPT settlements + up-front tenders, both via the universal-voucher spine.
-    const [jeAllocSum, tendersByJe] = await Promise.all([
-        sumReceiptAllocationsByJe(prisma, jeIds),
-        loadTenderLinesByJe(prisma, jeIds),
+    // RECEIPT settlements + up-front tenders, both via the spine (universalVoucherId).
+    const [jeAllocSum, tendersBySpine] = await Promise.all([
+        sumReceiptAllocations(prisma, uvIds),
+        loadTenderLines(prisma, uvIds),
     ]);
 
     const openInvoices = invVouchers
         .map((v) => {
             const total = Number(v.totalAmount);
             // Paid at sale time = non-AR tender rows (cash/bank/card).
-            // Later receipts add via the JE-allocation chain.
-            const upfront = (v.journalEntryId !== null ? (tendersByJe.get(v.journalEntryId) ?? []) : [])
+            // Later receipts add via the spine-allocation chain.
+            const upfront = (v.universalVoucherId !== null ? (tendersBySpine.get(v.universalVoucherId) ?? []) : [])
                 .filter((t) => t.accountId !== v.accountId)
                 .reduce((s, t) => s + t.amount, 0);
-            const allocated = upfront + (v.journalEntryId !== null ? (jeAllocSum[v.journalEntryId] ?? 0) : 0);
+            const allocated = upfront + (v.universalVoucherId !== null ? (jeAllocSum[v.universalVoucherId] ?? 0) : 0);
             const due = new Date(v.date);
             due.setDate(due.getDate() + (v.creditPeriodDays ?? 30));
             return {

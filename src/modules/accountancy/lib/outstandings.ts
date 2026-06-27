@@ -88,28 +88,18 @@ function bucketFor(days: number): AgeingBucket {
  * to the old JOURNAL_ENTRY sums; reading the spine lets us drop the JE
  * allocations in G1d/G5. Accepts the global client or a tx.
  */
-export async function sumReceiptAllocationsByJe(
+export async function sumReceiptAllocations(
     db: Prisma.TransactionClient,
-    journalEntryIds: number[],
+    universalVoucherIds: number[],
 ): Promise<Record<number, number>> {
-    const ids = [...new Set(journalEntryIds)];
+    const ids = [...new Set(universalVoucherIds)];
     if (ids.length === 0) return {};
-    const spines = await db.universalVoucher.findMany({
-        where:  { sourceJournalEntryId: { in: ids } },
-        select: { id: true, sourceJournalEntryId: true },
-    });
-    if (spines.length === 0) return {};
-    const spineToJe = new Map(spines.map((s) => [s.id, s.sourceJournalEntryId!]));
     const allocs = await db.voucherAllocation.findMany({
-        where:  { targetType: "UNIVERSAL_VOUCHER", targetId: { in: spines.map((s) => s.id) } },
+        where:  { targetType: "UNIVERSAL_VOUCHER", targetId: { in: ids } },
         select: { targetId: true, amount: true },
     });
     const out: Record<number, number> = {};
-    for (const a of allocs) {
-        const jeId = spineToJe.get(a.targetId);
-        if (jeId == null) continue;
-        out[jeId] = (out[jeId] ?? 0) + Number(a.amount);
-    }
+    for (const a of allocs) out[a.targetId] = (out[a.targetId] ?? 0) + Number(a.amount);
     return out;
 }
 
@@ -121,23 +111,21 @@ export async function sumReceiptAllocationsByJe(
  * client or a tx. Historical spine lines are role-tagged by `backfillTenderRoles`
  * in the backfill script; new posts are tagged at write time by the GL builder.
  */
-export async function loadTenderLinesByJe(
+export async function loadTenderLines(
     db: Prisma.TransactionClient,
-    journalEntryIds: number[],
+    universalVoucherIds: number[],
 ): Promise<Map<number, { accountId: number; amount: number }[]>> {
     const out = new Map<number, { accountId: number; amount: number }[]>();
-    const ids = [...new Set(journalEntryIds)];
+    const ids = [...new Set(universalVoucherIds)];
     if (ids.length === 0) return out;
     const lines = await db.voucherGlLine.findMany({
-        where:  { role: "TENDER", universalVoucher: { sourceJournalEntryId: { in: ids } } },
-        select: { accountId: true, amount: true, universalVoucher: { select: { sourceJournalEntryId: true } } },
+        where:  { role: "TENDER", universalVoucherId: { in: ids } },
+        select: { accountId: true, amount: true, universalVoucherId: true },
     });
     for (const l of lines) {
-        const je = l.universalVoucher?.sourceJournalEntryId;
-        if (je == null) continue;
-        const arr = out.get(je) ?? [];
+        const arr = out.get(l.universalVoucherId) ?? [];
         arr.push({ accountId: l.accountId, amount: Number(l.amount) });
-        out.set(je, arr);
+        out.set(l.universalVoucherId, arr);
     }
     return out;
 }
@@ -296,28 +284,24 @@ async function loadOpenBills(
             id: true, type: true, reference: true, date: true,
             totalAmount: true,
             accountId: true,
-            partyType: true, partyId: true, journalEntryId: true,
+            partyType: true, partyId: true, universalVoucherId: true,
             creditPeriodDays: true,
         },
     });
 
-    // Allocations may target any of the three voucher kinds — JournalEntry is
-    // how a Receipt voucher settles a posted Sale (whose JE was created at post).
-    const jeIds = invVouchers
-        .map((v) => v.journalEntryId)
+    // Settlements + tenders read off the universal-voucher spine, keyed by the
+    // bill's universalVoucherId (G5 — the direct spine link, replaces the JE hop).
+    const uvIds = invVouchers
+        .map((v) => v.universalVoucherId)
         .filter((x): x is number => x !== null);
 
-    // Tender rows for the InvVouchers in scope. Sum split by AR-vs-non-AR
-    // for each voucher: AR tender amount = the bill portion that landed
-    // on the customer's ledger (= what's still outstanding before later
-    // receipts apply); non-AR tender sum = paid up-front at sale time.
-    const [paidByVch, tendersByJe, paidByJe] = await Promise.all([
-        // CREDIT_NOTE/DEBIT_NOTE bill settlements via the spine (G5 — keyed by Voucher id).
+    const [paidByVch, tendersBySpine, paidBySpine] = await Promise.all([
+        // CREDIT_NOTE/DEBIT_NOTE bill settlements via the spine (keyed by Voucher id).
         sumVoucherAllocations(prisma, vchIds),
-        // Up-front tenders via the universal-voucher spine (role=TENDER), keyed by JE.
-        loadTenderLinesByJe(prisma, jeIds),
-        // RECEIPT settlements via the universal-voucher spine (keyed by JE id).
-        sumReceiptAllocationsByJe(prisma, jeIds),
+        // Up-front tenders via the spine (role=TENDER), keyed by universalVoucherId.
+        loadTenderLines(prisma, uvIds),
+        // RECEIPT settlements via the spine, keyed by universalVoucherId.
+        sumReceiptAllocations(prisma, uvIds),
     ]);
 
     const bills: RawBill[] = [];
@@ -358,14 +342,14 @@ async function loadOpenBills(
         // (cash / bank / card / wallet). The AR tender row IS the
         // unsettled remainder; later Receipt vouchers chip away at it
         // via the VoucherAllocation → journalEntryId chain (paidByJe).
-        const vTenders = v.journalEntryId !== null ? (tendersByJe.get(v.journalEntryId) ?? []) : [];
+        const vTenders = v.universalVoucherId !== null ? (tendersBySpine.get(v.universalVoucherId) ?? []) : [];
         const paidAtSale = vTenders
             .filter((t) => t.accountId !== accountId)
             .reduce((s, t) => s + t.amount, 0);
-        // Plus any later receipts allocated against the voucher's JE.
+        // Plus any later receipts allocated against the voucher's spine row.
         const paid =
             paidAtSale +
-            (v.journalEntryId !== null ? (paidByJe[v.journalEntryId] ?? 0) : 0);
+            (v.universalVoucherId !== null ? (paidBySpine[v.universalVoucherId] ?? 0) : 0);
         bills.push({
             kind:        v.type === "SALE" || v.type === "POS" ? "sale" : "purchase",
             id:          v.id,
@@ -392,7 +376,7 @@ export async function getOpenSaleBillsForFifo(
     tx: Prisma.TransactionClient,
     accountId: number,
     asOf: Date = new Date(),
-): Promise<{ journalEntryId: number; outstanding: number; billDate: Date; ref: string }[]> {
+): Promise<{ universalVoucherId: number; outstanding: number; billDate: Date; ref: string }[]> {
     const account = await tx.account.findUnique({
         where:  { id: accountId },
         select: { id: true, personId: true, companyId: true },
@@ -419,34 +403,34 @@ export async function getOpenSaleBillsForFifo(
         select: {
             id: true, type: true, reference: true, date: true,
             totalAmount: true, accountId: true,
-            partyType: true, partyId: true, journalEntryId: true,
+            partyType: true, partyId: true, universalVoucherId: true,
         },
     });
 
-    const jeIds = invVouchers
-        .map((v) => v.journalEntryId)
+    const uvIds = invVouchers
+        .map((v) => v.universalVoucherId)
         .filter((x): x is number => x !== null);
 
-    const [tendersByJe, paidByJe] = await Promise.all([
-        // Up-front tenders via the universal-voucher spine (role=TENDER), keyed by JE.
-        loadTenderLinesByJe(tx, jeIds),
-        // RECEIPT settlements via the universal-voucher spine (keyed by JE id).
-        sumReceiptAllocationsByJe(tx, jeIds),
+    const [tendersBySpine, paidBySpine] = await Promise.all([
+        // Up-front tenders via the spine (role=TENDER), keyed by universalVoucherId.
+        loadTenderLines(tx, uvIds),
+        // RECEIPT settlements via the spine, keyed by universalVoucherId.
+        sumReceiptAllocations(tx, uvIds),
     ]);
 
-    const out: { journalEntryId: number; outstanding: number; billDate: Date; ref: string }[] = [];
+    const out: { universalVoucherId: number; outstanding: number; billDate: Date; ref: string }[] = [];
     for (const v of invVouchers) {
-        if (v.journalEntryId === null) continue;
+        if (v.universalVoucherId === null) continue;
         const resolved = v.accountId ?? accountId; // single-ledger scope — partyOr already matched
         const total = Number(v.totalAmount);
-        const vTenders = tendersByJe.get(v.journalEntryId) ?? [];
+        const vTenders = tendersBySpine.get(v.universalVoucherId) ?? [];
         const paidAtSale = vTenders
             .filter((t) => t.accountId !== resolved)
             .reduce((s, t) => s + t.amount, 0);
-        const paid = paidAtSale + (paidByJe[v.journalEntryId] ?? 0);
+        const paid = paidAtSale + (paidBySpine[v.universalVoucherId] ?? 0);
         const outstanding = total - paid;
         if (outstanding > 0.005) {
-            out.push({ journalEntryId: v.journalEntryId, outstanding, billDate: v.date, ref: v.reference });
+            out.push({ universalVoucherId: v.universalVoucherId, outstanding, billDate: v.date, ref: v.reference });
         }
     }
     // Oldest-first → FIFO.

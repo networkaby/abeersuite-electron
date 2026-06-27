@@ -30,7 +30,7 @@ import { recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
 import { recomputeAccountBalances } from "@/modules/accountancy/lib/aggregateLedger";
 import { reapplyTradingVoucherInPlace } from "@/modules/accountancy/lib/reapplyTradingVoucher";
 import { postReceiptVoucher } from "@/modules/accountancy/lib/postReceiptVoucher";
-import { sumReceiptAllocationsByJe, loadTenderLinesByJe, sumVoucherAllocations } from "@/modules/accountancy/lib/outstandings";
+import { sumReceiptAllocations, loadTenderLines, sumVoucherAllocations } from "@/modules/accountancy/lib/outstandings";
 import { sumShiftCashSalesPaise, sumShiftTendersByAccount } from "@/modules/pos/lib/shiftMath";
 import { buildSettlementJson } from "@/shared/lib/accountancy/settlement";
 
@@ -145,9 +145,9 @@ async function runE2E(): Promise<boolean> {
             const tenderLine = roleLines.find((l) => l.role === "TENDER");
             const tenderMetaOk = tenderLine?.method === "CASH" && tenderLine?.reference === "E2E-TENDER-REF"
                 && roleLines.filter((l) => l.role !== "TENDER").every((l) => l.method == null && l.reference == null);
-            // G4b-2: the receivables reader helper returns the cash tender for this JE.
-            const tenderMap = journalEntryId ? await loadTenderLinesByJe(tx, [journalEntryId]) : new Map();
-            const readerTenders = journalEntryId ? (tenderMap.get(journalEntryId) ?? []) : [];
+            // G4b-2: the receivables reader helper returns the cash tender for this spine.
+            const tenderMap = uv ? await loadTenderLines(tx, [uv.id]) : new Map();
+            const readerTenders = uv ? (tenderMap.get(uv.id) ?? []) : [];
             const readerOk = readerTenders.length === 1 && readerTenders[0].accountId === cash.id && Math.abs(readerTenders[0].amount - 118) < 0.005;
             const rolesOk = roleLines.length === 4
                 && roleLines.every((l) => l.role != null)
@@ -513,25 +513,23 @@ async function runAllocationDualTarget(): Promise<boolean> {
                 include: { lines: { include: { product: { select: { id: true, stock: true, mrpPaise: true } } } } },
             });
             const spec = await saleToSpec(tx, { ...v, tenders: [{ accountId: cash.id, amount: 118 }], charges: [], sellerStateCode: "19", buyerStateCode: "19" } as unknown as PostVoucherInput["voucher"], { voucherId: v.id, branchId: v.branchId, lines: v.lines });
-            const { journalEntryId: saleJe } = await enginePost(tx, spec, user.id);
+            const { universalVoucherId: saleSpine } = await enginePost(tx, spec, user.id);
 
             const r = await postReceiptVoucher(tx, {
                 customerAccountId: debtor.id,
                 tenders:           [{ accountId: cash.id, amount: 118 }],
                 date:              new Date(),
                 userId:            user.id,
-                allocateToJournalEntryId: saleJe!,
+                allocateToUniversalVoucherId: saleSpine!,
             });
 
             const allocs = await tx.voucherAllocation.findMany({ where: { sourceType: "VOUCHER", sourceId: r.voucherId }, select: { targetType: true, targetId: true } });
-            const spine  = await tx.universalVoucher.findUnique({ where: { sourceJournalEntryId: saleJe! }, select: { id: true } });
-            // Spine-only now (G1 legacy retired): one UNIVERSAL_VOUCHER allocation,
-            // no JOURNAL_ENTRY allocation.
-            const uvAlloc   = allocs.find((a) => a.targetType === "UNIVERSAL_VOUCHER" && a.targetId === spine?.id);
+            // Spine-only: one UNIVERSAL_VOUCHER allocation against the sale's spine.
+            const uvAlloc   = allocs.find((a) => a.targetType === "UNIVERSAL_VOUCHER" && a.targetId === saleSpine);
             const noJeAlloc = !allocs.some((a) => a.targetType === "JOURNAL_ENTRY");
-            // The spine-based reader helper returns the settled amount keyed by JE id.
-            const paidViaSpine = await sumReceiptAllocationsByJe(tx, [saleJe!]);
-            const helperOk = Math.abs((paidViaSpine[saleJe!] ?? 0) - 118) < 0.01;
+            // The spine-based reader helper returns the settled amount keyed by spine id.
+            const paidViaSpine = await sumReceiptAllocations(tx, [saleSpine!]);
+            const helperOk = Math.abs((paidViaSpine[saleSpine!] ?? 0) - 118) < 0.01;
             ok = !!uvAlloc && noJeAlloc && allocs.length === 1 && helperOk;
             throw new Error(ROLLBACK);
         }, { timeout: 30_000, maxWait: 10_000 });

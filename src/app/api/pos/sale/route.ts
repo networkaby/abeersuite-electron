@@ -718,16 +718,16 @@ export async function POST(req: Request) {
             let receiptVoucherRef: string | null = null;
             if (collectingSurplus) {
                 surplusCollected = surplus;
-                const allocations: { journalEntryId: number; amount: number }[] = [
-                    { journalEntryId: gl.journalEntryId, amount: totalAmount },
+                const allocations: { universalVoucherId: number; amount: number }[] = [
+                    { universalVoucherId: gl.universalVoucherId!, amount: totalAmount },
                 ];
                 let remaining = surplus;
                 for (const b of await getOpenSaleBillsForFifo(tx, customerAccount.id)) {
                     if (remaining <= 0.005) break;
-                    if (b.journalEntryId === gl.journalEntryId) continue; // the sale just posted
+                    if (b.universalVoucherId === gl.universalVoucherId) continue; // the sale just posted
                     const take = Math.min(remaining, b.outstanding);
                     if (take > 0.005) {
-                        allocations.push({ journalEntryId: b.journalEntryId, amount: round2(take) });
+                        allocations.push({ universalVoucherId: b.universalVoucherId, amount: round2(take) });
                         remaining = round2(remaining - take);
                     }
                 }
