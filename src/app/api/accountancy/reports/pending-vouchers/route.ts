@@ -112,12 +112,12 @@ export async function GET(req: NextRequest) {
         prisma.invVoucher.count({ where }),
         prisma.invVoucher.findMany({
             where,
-            orderBy: [{ date: "asc" }, { id: "asc" }], // oldest first — drives attention
+            orderBy: [{ universalVoucher: { date: "asc" } }, { id: "asc" }], // oldest first — drives attention (5D-10)
             skip:    (page - 1) * limit,
             take:    limit,
             include: {
                 branch: { select: { id: true, name: true } },
-                universalVoucher: { select: { description: true, voucherNo: true } },   // 5D-5 desc + 5D-6 ref
+                universalVoucher: { select: { description: true, voucherNo: true, date: true } },   // 5D-5 desc + 5D-6 ref + 5D-10 date
             },
         }),
     ]);
@@ -139,13 +139,13 @@ export async function GET(req: NextRequest) {
 
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const shaped = rows.map((v) => {
-        const d = new Date(v.date); d.setHours(0, 0, 0, 0);
+        const d = new Date(v.universalVoucher!.date); d.setHours(0, 0, 0, 0);   // 5D-10: date on spine
         const daysOpen = Math.max(0, Math.floor((today.getTime() - d.getTime()) / 86_400_000));
         return {
             id:          v.id,
             reference:   v.universalVoucher?.voucherNo ?? "",
             type:        v.type,
-            date:        v.date,
+            date:        v.universalVoucher!.date,   // 5D-10
             partyId:     v.partyId,
             partyType:   v.partyType,
             partyName:   readPartyName(v.partyJson),

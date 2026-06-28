@@ -59,7 +59,7 @@ const partyAccountSelect = {
 async function buildInvSample(id: number): Promise<VoucherReceiptData> {
     const vRow = await prisma.invVoucher.findUnique({
         where: { id },
-        include: { universalVoucher: { select: { partyAccountId: true, description: true, voucherNo: true } } },   // 5D-4 party + 5D-5 desc + 5D-6 ref
+        include: { universalVoucher: { select: { partyAccountId: true, description: true, voucherNo: true, date: true } } },   // 5D-4 party + 5D-5 desc + 5D-6 ref + 5D-10 date
     });
     if (!vRow) return notFoundData();
     // Phase 5 5C: goods lines hang off the spine.
@@ -114,7 +114,7 @@ async function buildInvSample(id: number): Promise<VoucherReceiptData> {
 
     const sample: ThermalReceiptSample = {
         reference:  v.universalVoucher?.voucherNo ?? "",
-        date:       isoDate(v.date),
+        date:       isoDate(v.universalVoucher!.date),   // 5D-10: date on spine
         partyName:  party.name ?? readPartyName(v.partyJson) ?? "Walk-in",
         partyPhone: party.phone,
         partyGstin: party.gstin,

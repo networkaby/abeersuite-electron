@@ -33,12 +33,12 @@ export async function GET(req: Request) {
             type:      { in: ["SALE", "POS", "PURCHASE"] },
         },
         select: {
-            id: true, type: true, date: true,
+            id: true, type: true,
             totalAmount: true,
-            universalVoucher: { select: { partyAccountId: true, voucherNo: true } },   // 5D-4 + 5D-6
+            universalVoucher: { select: { partyAccountId: true, voucherNo: true, date: true } },   // 5D-4 + 5D-6 + 5D-10 date
             universalVoucherId: true, creditPeriodDays: true,
         },
-        orderBy: [{ date: "asc" }],
+        orderBy: [{ universalVoucher: { date: "asc" } }],   // 5D-10
     });
     const uvIds = invVouchers
         .map((v) => v.universalVoucherId)
@@ -58,13 +58,13 @@ export async function GET(req: Request) {
                 .filter((t) => t.accountId !== v.universalVoucher?.partyAccountId)
                 .reduce((s, t) => s + t.amount, 0);
             const allocated = upfront + (v.universalVoucherId !== null ? (jeAllocSum[v.universalVoucherId] ?? 0) : 0);
-            const due = new Date(v.date);
+            const due = new Date(v.universalVoucher!.date);   // 5D-10: date on spine
             due.setDate(due.getDate() + (v.creditPeriodDays ?? 30));
             return {
                 kind:        "invoice" as const, // keep the wire key the dialog already consumes
                 id:          v.id,
                 reference:   v.universalVoucher?.voucherNo ?? "",
-                date:        v.date,
+                date:        v.universalVoucher!.date,   // 5D-10
                 dueDate:     due,
                 totalAmount: total,
                 allocated,

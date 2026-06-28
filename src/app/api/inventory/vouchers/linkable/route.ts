@@ -65,13 +65,12 @@ export async function GET(req: NextRequest) {
             ...branchFilter,
             ...partyFilter,
         },
-        orderBy: [{ date: "desc" }, { id: "desc" }],
+        orderBy: [{ universalVoucher: { date: "desc" } }, { id: "desc" }],   // 5D-10
         take: 100,
         select: {
             id:          true,
-            universalVoucher: { select: { voucherNo: true } },   // 5D-6: ref on spine
+            universalVoucher: { select: { voucherNo: true, date: true } },   // 5D-6: ref + 5D-10 date on spine
             type:        true,
-            date:        true,
             partyId:     true,
             partyJson:   true,
             totalAmount: true,
@@ -79,6 +78,6 @@ export async function GET(req: NextRequest) {
     });
 
     return NextResponse.json({
-        rows: rows.map(({ universalVoucher, ...r }) => ({ ...r, reference: universalVoucher?.voucherNo ?? "", partyName: readPartyName(r.partyJson), totalAmount: Number(r.totalAmount) })),
+        rows: rows.map(({ universalVoucher, ...r }) => ({ ...r, date: universalVoucher?.date, reference: universalVoucher?.voucherNo ?? "", partyName: readPartyName(r.partyJson), totalAmount: Number(r.totalAmount) })),
     });
 }

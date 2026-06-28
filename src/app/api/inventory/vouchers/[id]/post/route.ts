@@ -46,8 +46,8 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
             branch: {
                 select: { id: true, gstStateCode: true },
             },
-            // 5D-5 description + 5D-6 ref + 5D-8 status live on the spine — needed for saleToSpec / messages / the DRAFT gate.
-            universalVoucher: { select: { description: true, voucherNo: true, status: true } },
+            // 5D-5 description + 5D-6 ref + 5D-8 status + 5D-10 date live on the spine — needed for saleToSpec / messages / the DRAFT gate / stock rows.
+            universalVoucher: { select: { description: true, voucherNo: true, status: true, date: true } },
         },
     });
     // Phase 5 5C: goods lines hang off the spine — load + attach as `voucher.lines`.
@@ -137,7 +137,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
             // (SALE/PURCHASE/etc.) use a fixed direction. Manufacturing
             // Journal uses per-line `direction` to decide IN vs OUT.
             // Physical Stock is a stock-take override: the entered qty is
-            // the OPENING for voucher.date. We insert one adjustment row at
+            // the OPENING for voucher.universalVoucher!.date. We insert one adjustment row at
             // start-of-day = (counted_qty − running_stock_pre_date), so any
             // same-date sales/purchases that already exist still apply on
             // top of the new opening when the running stock is recomputed.
@@ -157,7 +157,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                         universalVoucherId: voucher.universalVoucherId!,
                         productId: line.productId,
                         branchId:  voucher.branchId,
-                        date:      voucher.date,
+                        date:      voucher.universalVoucher!.date,
                         inQty:     0,
                         outQty:    qty,
                         rate:      line.rate,
@@ -170,7 +170,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                         universalVoucherId: voucher.universalVoucherId!,
                         productId: line.productId,
                         branchId:  destBranchId,
-                        date:      voucher.date,
+                        date:      voucher.universalVoucher!.date,
                         inQty:     qty,
                         outQty:    0,
                         rate:      line.rate,
@@ -211,10 +211,9 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                             where: {
                                 type:     "PHYSICAL_STOCK",
                                 branchId: voucher.branchId,
-                                date:     voucher.date,
                                 id:       { not: voucher.id },
-                                // 5D-8 status on spine + Phase 5 5C: goods lines hang off the spine.
-                                universalVoucher: { status: "POSTED", inventoryLines: { some: { productId: line.productId } } },
+                                // 5D-8 status + 5D-10 date on spine + Phase 5 5C: goods lines hang off the spine.
+                                universalVoucher: { status: "POSTED", date: voucher.universalVoucher!.date, inventoryLines: { some: { productId: line.productId } } },
                             },
                         });
                         if (priorSameDay === 0) {
@@ -223,7 +222,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                             // is still POSTED (and not soft-deleted). Cancelled
                             // vouchers leave their original entry in place with a
                             // counter-entry dated when the cancel happened — that
-                            // counter-entry is often outside the < voucher.date
+                            // counter-entry is often outside the < voucher.universalVoucher!.date
                             // window, which would double-count the original. The
                             // join via voucher.status guarantees we only see the
                             // true pre-date balance.
@@ -231,7 +230,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                                 where: {
                                     productId: line.productId,
                                     branchId:  voucher.branchId,
-                                    date:      { lt: voucher.date },
+                                    date:      { lt: voucher.universalVoucher!.date },
                                     universalVoucher: { status: "POSTED", deletedAt: null },
                                 },
                                 select: { inQty: true, outQty: true },
@@ -275,7 +274,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                             universalVoucherId: voucher.universalVoucherId!,
                             productId: line.productId,
                             branchId:  voucher.branchId,
-                            date:      voucher.date,
+                            date:      voucher.universalVoucher!.date,
                             inQty,
                             outQty,
                             rate:      stampedRate,
@@ -312,7 +311,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                 // bridge produced them (no branchId passed to the engine).
                 const spec = await saleToSpec(
                     tx,
-                    { ...voucher, reference: voucher.universalVoucher?.voucherNo ?? "", description: voucher.universalVoucher?.description ?? voucher.type, tenders: settlement.tenders, charges: settlement.charges, sellerStateCode, buyerStateCode },
+                    { ...voucher, date: voucher.universalVoucher!.date, reference: voucher.universalVoucher?.voucherNo ?? "", description: voucher.universalVoucher?.description ?? voucher.type, tenders: settlement.tenders, charges: settlement.charges, sellerStateCode, buyerStateCode },
                     { branchId: voucher.branchId, lines: voucher.lines },
                 );
                 const out = await enginePost(tx, spec, userId, { existingSpineId: voucher.universalVoucherId });
@@ -353,7 +352,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                     // (engineGlArm writes the JE + balance deltas + loads natures).
                     const out = await enginePost(tx, {
                         type:        "MANUFACTURING_JOURNAL",
-                        date:        voucher.date,
+                        date:        voucher.universalVoucher!.date,
                         description: `Manufacturing Charges for ${voucher.universalVoucher?.voucherNo ?? ""}`,
                         glLines: [
                             ...settlement.charges.map((e) => ({

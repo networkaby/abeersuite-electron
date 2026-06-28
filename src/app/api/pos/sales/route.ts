@@ -12,6 +12,7 @@
 // Requires: pos:shift:open
 
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import type { Prisma } from "@/generated/prisma/client";
 import { NextResponse, type NextRequest } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { readSettlement } from "@/shared/lib/accountancy/settlement";
@@ -29,20 +30,24 @@ export async function GET(req: NextRequest) {
     const { take, skip } = parsePagination(url.searchParams);
 
     try {
-        const where = {
-            type:   "POS" as const,
-            status: "POSTED" as const,
+        // 5D-8/5D-10: status + date live on the spine. (Typed so excess-property
+        // drift is caught — the prior untyped literal silently kept status/date.)
+        const where: Prisma.InvVoucherWhereInput = {
+            type: "POS",
+            universalVoucher: {
+                status: "POSTED",
+                ...(from || to ? {
+                    date: {
+                        ...(from ? { gte: new Date(from) } : {}),
+                        ...(to   ? { lte: new Date(to + "T23:59:59.999Z") } : {}),
+                    },
+                } : {}),
+            },
             ...(q ? {
                 OR: [
                     { universalVoucher: { voucherNo:  { contains: q, mode: "insensitive" as const } } },   // 5D-6
                     { universalVoucher: { description:   { contains: q, mode: "insensitive" as const } } },   // 5D-5
                 ],
-            } : {}),
-            ...(from || to ? {
-                date: {
-                    ...(from ? { gte: new Date(from) } : {}),
-                    ...(to   ? { lte: new Date(to + "T23:59:59.999Z") } : {}),
-                },
             } : {}),
         };
 
@@ -50,15 +55,14 @@ export async function GET(req: NextRequest) {
             prisma.invVoucher.count({ where }),
             prisma.invVoucher.findMany({
                 where,
-                orderBy: { date: "desc" },
+                orderBy: { universalVoucher: { date: "desc" } },   // 5D-10
                 take,
                 skip,
                 select: {
                     id:             true,
-                    date:           true,
                     totalAmount:    true,
                     branch:         { select: { id: true, name: true } },
-                    universalVoucher: { select: { createdById: true, partyAccountId: true, description: true, voucherNo: true } },   // 5D-2/4/5/6
+                    universalVoucher: { select: { createdById: true, partyAccountId: true, description: true, voucherNo: true, date: true } },   // 5D-2/4/5/6 + 5D-10 date
                     universalVoucherId: true,
                     settlementJson: true,
                 },
@@ -96,7 +100,7 @@ export async function GET(req: NextRequest) {
                 return {
                     id:             v.id,
                     reference:      v.universalVoucher?.voucherNo ?? "",
-                    date:           v.date,
+                    date:           v.universalVoucher?.date,   // 5D-10: date on spine
                     description:    v.universalVoucher?.description ?? "",
                     paymentMode,
                     totalAmount:    v.totalAmount.toString(),

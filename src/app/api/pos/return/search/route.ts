@@ -48,10 +48,10 @@ export async function GET(req: NextRequest) {
                         : { voucherNo: { contains: q, mode: "insensitive" } }),
                 },
             },
-            orderBy: { date: "desc" },
+            orderBy: { universalVoucher: { date: "desc" } },   // 5D-10
             take:    10,
             include: {
-                universalVoucher: { select: { partyAccountId: true, voucherNo: true } },   // 5D-4 party + 5D-6 ref
+                universalVoucher: { select: { partyAccountId: true, voucherNo: true, date: true } },   // 5D-4 party + 5D-6 ref + 5D-10 date
                 // SALE_RETURN children of this voucher — for the dialog's "already returned" guard
                 refReturns: { select: { id: true, totalAmount: true, universalVoucher: { select: { voucherNo: true } } } },
             },
@@ -79,7 +79,7 @@ export async function GET(req: NextRequest) {
         return NextResponse.json(vouchers.map((v) => ({
             id:          v.id,
             number:      v.universalVoucher?.voucherNo ?? "",
-            issueDate:   v.date,
+            issueDate:   v.universalVoucher?.date,   // 5D-10: date on spine
             status:      "PAID", // legacy field — POS sales are always settled at counter; UI uses it as a "OK to return" sentinel
             totalAmount: v.totalAmount.toString(),
             account:     v.universalVoucher?.partyAccountId != null ? (partyAcctById.get(v.universalVoucher.partyAccountId) ?? null) : null,

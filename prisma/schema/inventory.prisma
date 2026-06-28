@@ -396,7 +396,8 @@ model InvVoucher {
   /// list filtering, and reporting. Required on every new voucher.
   branchId            String
   branch              Branch                 @relation("InvVoucherBranch", fields: [branchId], references: [id])
-  date                DateTime               @db.Date
+  // Phase 5 5D-10: `date` dropped — lives on the spine (UniversalVoucher.date).
+  // Readers reach it via `universalVoucher.date` (order/filter via the relation).
   // Phase 5 5D-5: `description` dropped — lives on the spine (UniversalVoucher.description).
   // Phase 5 5D-8: `status` dropped — lives on the spine (UniversalVoucher.status).
   // Phase 5 5D-4: `accountId`/`account` dropped — the LIVE party ledger link
@@ -507,8 +508,7 @@ model InvVoucher {
   updatedAt                 DateTime                   @updatedAt
 
   @@index([type])
-  @@index([date])
-  @@index([branchId, type, date])
+  @@index([branchId, type])
   @@index([ticketId])
   @@index([dealId])
   @@index([orderStatusId])

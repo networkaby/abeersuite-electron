@@ -32,8 +32,7 @@ export async function GET(
         const rawVouchers = account
             ? await prisma.invVoucher.findMany({
                 where: {
-                    universalVoucher: { deletedAt: null },   // 5D-8: lifecycle on spine
-                    date: { gte: from, lte: to },
+                    universalVoucher: { deletedAt: null, date: { gte: from, lte: to } },   // 5D-8 lifecycle + 5D-10 date on spine
                     OR: [
                         { universalVoucher: { partyAccountId: account.id } },   // 5D-4: party on spine
                         // Legacy rows resolve via the partyType+partyId pair.
@@ -43,13 +42,12 @@ export async function GET(
                 select: {
                     id: true,
                     type: true,
-                    date: true,
                     totalAmount: true,
                     universalVoucherId: true,
                     branch:    { select: { name: true } },
-                    universalVoucher: { select: { createdById: true, partyAccountId: true, voucherNo: true, status: true } },   // 5D-2 creator + 5D-4 party + 5D-6 ref + 5D-8 status
+                    universalVoucher: { select: { createdById: true, partyAccountId: true, voucherNo: true, status: true, date: true } },   // 5D-2 creator + 5D-4 party + 5D-6 ref + 5D-8 status + 5D-10 date
                 },
-                orderBy: { date: "desc" },
+                orderBy: { universalVoucher: { date: "desc" } },   // 5D-10
             })
             : [];
 
@@ -83,7 +81,7 @@ export async function GET(
                 reference:  v.universalVoucher?.voucherNo ?? "",
                 type:       v.type,
                 status:     v.universalVoucher?.status ?? "DRAFT",
-                date:       v.date,
+                date:       v.universalVoucher?.date,   // 5D-10: date on spine
                 totalAmount: v.totalAmount,
                 amountPaid: amountPaid.toFixed(2),
                 branch:     v.branch,

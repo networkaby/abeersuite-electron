@@ -141,8 +141,7 @@ export async function POST(req: Request) {
                     type:           "SALE_RETURN",
                     branchId,
                     universalVoucherId: spineId,
-                    date:           today,
-                    // 5D-5/5D-8: description + postedAt + status + 5D-4 party live on the spine.
+                    // 5D-5/5D-8/5D-10: description + postedAt + status + date + 5D-4 party live on the spine.
                     partyJson:      buildPartyJson({ name: customerAcct.name }) ?? Prisma.DbNull,
                     partyType,
                     partyId,
@@ -184,7 +183,7 @@ export async function POST(req: Request) {
                 id:          voucher.id,
                 type:        voucher.type,
                 reference:   vRef,
-                date:        voucher.date,
+                date:        today,   // 5D-10: date on the spine (attach-mode ignores spec.date)
                 description: voucherDescription,
                 partyJson:   voucher.partyJson,
                 subtotal:    voucher.subtotal,

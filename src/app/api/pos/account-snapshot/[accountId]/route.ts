@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import type { Prisma } from "@/generated/prisma/client";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { selectPrimaryPhone, selectPrimaryEmail } from "@/shared/lib/prisma/fragments";
@@ -98,11 +99,10 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
         const oneYearAgo = new Date();
         oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
 
-        const baseWhere = {
-            accountId,
-            type:      { in: [...SALE_TYPES] },
-            status:    "POSTED" as const,
-            deletedAt: null,
+        // 5D-4/5D-8/5D-10: party + status + deletedAt + date all live on the spine.
+        const baseWhere: Prisma.InvVoucherWhereInput = {
+            type: { in: [...SALE_TYPES] },
+            universalVoucher: { partyAccountId: accountId, status: "POSTED", deletedAt: null },
         };
 
         const [lifetimeAgg, ytdAgg, latestVoucher, latestTicket, recentTickets, ledgerOutstanding, loyaltyConfig, spendTiers] = await Promise.all([
@@ -112,13 +112,13 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
                 _count: { _all: true },
             }),
             prisma.invVoucher.aggregate({
-                where: { ...baseWhere, date: { gte: oneYearAgo } },
+                where: { type: { in: [...SALE_TYPES] }, universalVoucher: { partyAccountId: accountId, status: "POSTED", deletedAt: null, date: { gte: oneYearAgo } } },
                 _sum: { totalAmount: true },
             }),
             prisma.invVoucher.findFirst({
                 where: baseWhere,
-                orderBy: { date: "desc" },
-                select: { date: true, totalAmount: true, universalVoucher: { select: { voucherNo: true } } },
+                orderBy: { universalVoucher: { date: "desc" } },   // 5D-10
+                select: { totalAmount: true, universalVoucher: { select: { voucherNo: true, date: true } } },
             }),
             prisma.ticket.findFirst({
                 where: { billingAccountId: accountId },
@@ -179,7 +179,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
         const availableCredit: number = Math.max(0, creditLimit - balanceDue);
 
         const lastVisitAt = (() => {
-            const a = latestVoucher?.date ?? null;
+            const a = latestVoucher?.universalVoucher?.date ?? null;
             const b = latestTicket?.createdAt ?? null;
             if (!a) return b;
             if (!b) return a;

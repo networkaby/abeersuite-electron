@@ -87,10 +87,10 @@ export async function GET(req: NextRequest) {
             ...(shopOrderIdParam ? { shopOrderId: Number(shopOrderIdParam) } : {}),
             ...branchFilter,
         },
-        orderBy: [{ date: "desc" }, { id: "desc" }],
+        orderBy: [{ universalVoucher: { date: "desc" } }, { id: "desc" }],   // 5D-10: date on spine
         include: {
             // 5D-2: creator lives on the spine — pull its createdById, resolve names below.
-            universalVoucher: { select: { createdById: true, voucherNo: true } },   // 5D-2 creator + 5D-6 ref
+            universalVoucher: { select: { createdById: true, voucherNo: true, date: true } },   // 5D-2 creator + 5D-6 ref + 5D-10 date
             branch:    { select: { id: true, name: true } },
             // refReturns = vouchers that reference THIS one via refVoucherId. For a
             // POS_ORDER / POS_ESTIMATE it means a sale was raised against it →
@@ -137,7 +137,7 @@ export async function GET(req: NextRequest) {
         // clients keep reading `partyName` / `partyPhone` unchanged.
         const partyDisplay = { partyName: readPartyName(v.partyJson), partyPhone: readPartyPhone(v.partyJson), partyAddress: readPartyAddress(v.partyJson) };
         if (v.partyId == null) {
-            return { ...v, reference: v.universalVoucher?.voucherNo ?? "", ...partyDisplay, createdBy: creatorName(v), partyAccountId: null, partyPersonId: null, partyCompanyId: null };
+            return { ...v, date: v.universalVoucher?.date, reference: v.universalVoucher?.voucherNo ?? "", ...partyDisplay, createdBy: creatorName(v), partyAccountId: null, partyPersonId: null, partyCompanyId: null };
         }
         // Same partyId may resolve as either a Person or a Company id depending
         // on which lookup matches. Person wins when both are set (shouldn't
@@ -148,6 +148,7 @@ export async function GET(req: NextRequest) {
         const accFromCompany = companyToAccount.get(v.partyId);
         return {
             ...v,
+            date:            v.universalVoucher?.date,   // 5D-10: date on spine
             reference:       v.universalVoucher?.voucherNo ?? "",   // 5D-6
             ...partyDisplay,
             createdBy:       creatorName(v),
@@ -475,8 +476,7 @@ export async function POST(req: NextRequest) {
                     universalVoucherId: spineId,
                     orderPipelineId,
                     orderStatusId,
-                    date:         new Date(date),
-                    // 5D-5: description + 5D-4 party ledger live on the spine (set at engineCreateSpine).
+                    // 5D-5/5D-10: description + date + 5D-4 party ledger live on the spine (set at engineCreateSpine).
                     partyJson:    buildPartyJson({ name: partyName, phone: partyPhone, address: partyAddress }) ?? Prisma.DbNull,
                     partyType:    partyType  || null,
                     partyId:      partyId    || null,

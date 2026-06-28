@@ -270,14 +270,13 @@ async function loadOpenBills(
                 : invType === "SALE"
                     ? { type: { in: [...saleSideTypes] } }
                     : { type: { in: [...purchaseSideTypes] } }),
-            universalVoucher: { status: "POSTED", deletedAt: null },   // 5D-8: lifecycle on spine
-            date:      { lte: asOf },
+            universalVoucher: { status: "POSTED", deletedAt: null, date: { lte: asOf } },   // 5D-8 lifecycle + 5D-10 date on spine
             OR: partyOr,
         },
         select: {
-            id: true, type: true, date: true,
+            id: true, type: true,
             totalAmount: true,
-            universalVoucher: { select: { partyAccountId: true, voucherNo: true } },   // 5D-4 party + 5D-6 ref
+            universalVoucher: { select: { partyAccountId: true, voucherNo: true, date: true } },   // 5D-4 party + 5D-6 ref + 5D-10 date
             partyType: true, partyId: true, universalVoucherId: true,
             creditPeriodDays: true,
         },
@@ -328,7 +327,7 @@ async function loadOpenBills(
                         ? companyToAcc[v.partyId] ?? null
                         : null);
         if (accountId === null) continue;
-        const due = new Date(v.date);
+        const due = new Date(v.universalVoucher!.date);   // 5D-10: date on spine
         due.setDate(due.getDate() + (v.creditPeriodDays ?? DEFAULT_DUE_DAYS));
         const total = Number(v.totalAmount);
         // Paid at sale time = sum of non-AR tenders on this voucher
@@ -348,7 +347,7 @@ async function loadOpenBills(
             id:          v.id,
             accountId,
             ref:         v.universalVoucher?.voucherNo ?? "",
-            billDate:    v.date,
+            billDate:    v.universalVoucher!.date,   // 5D-10
             dueDate:     due,
             totalAmount: total,
             paid,
@@ -388,13 +387,12 @@ export async function getOpenSaleBillsForFifo(
     const invVouchers = await tx.invVoucher.findMany({
         where: {
             type:      { in: ["SALE", "POS"] },
-            universalVoucher: { status: "POSTED", deletedAt: null },   // 5D-8: lifecycle on spine
-            date:      { lte: asOf },
+            universalVoucher: { status: "POSTED", deletedAt: null, date: { lte: asOf } },   // 5D-8 lifecycle + 5D-10 date on spine
             OR:        partyOr,
         },
         select: {
-            id: true, type: true, date: true,
-            totalAmount: true, universalVoucher: { select: { partyAccountId: true, voucherNo: true } },   // 5D-4 + 5D-6
+            id: true, type: true,
+            totalAmount: true, universalVoucher: { select: { partyAccountId: true, voucherNo: true, date: true } },   // 5D-4 + 5D-6 + 5D-10 date
             partyType: true, partyId: true, universalVoucherId: true,
         },
     });
@@ -422,7 +420,7 @@ export async function getOpenSaleBillsForFifo(
         const paid = paidAtSale + (paidBySpine[v.universalVoucherId] ?? 0);
         const outstanding = total - paid;
         if (outstanding > 0.005) {
-            out.push({ universalVoucherId: v.universalVoucherId, outstanding, billDate: v.date, ref: v.universalVoucher?.voucherNo ?? "" });
+            out.push({ universalVoucherId: v.universalVoucherId, outstanding, billDate: v.universalVoucher!.date, ref: v.universalVoucher?.voucherNo ?? "" });
         }
     }
     // Oldest-first → FIFO.

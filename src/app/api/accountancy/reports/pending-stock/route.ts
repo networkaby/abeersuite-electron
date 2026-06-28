@@ -72,8 +72,8 @@ export async function GET(req: NextRequest) {
 
     const voucherRows = await prisma.invVoucher.findMany({
         where,
-        orderBy: [{ date: "asc" }, { id: "asc" }],
-        include: { branch: { select: { id: true, name: true } }, universalVoucher: { select: { voucherNo: true } } },   // 5D-6
+        orderBy: [{ universalVoucher: { date: "asc" } }, { id: "asc" }],   // 5D-10
+        include: { branch: { select: { id: true, name: true } }, universalVoucher: { select: { voucherNo: true, date: true } } },   // 5D-6 + 5D-10 date
     });
     // Phase 5 5C: goods lines hang off the spine — batch-load + group by spine id.
     const uvIds = voucherRows.map((v) => v.universalVoucherId).filter((x): x is number => x != null);
@@ -117,7 +117,7 @@ export async function GET(req: NextRequest) {
 
     for (const v of vouchers) {
         const direction: "in" | "out" = OUT_TYPES.has(v.type as PendingType) ? "out" : "in";
-        const d = new Date(v.date); d.setHours(0, 0, 0, 0);
+        const d = new Date(v.universalVoucher!.date); d.setHours(0, 0, 0, 0);   // 5D-10: date on spine
         const daysOpen = Math.max(0, Math.floor((today.getTime() - d.getTime()) / 86_400_000));
 
         for (const l of v.lines) {
@@ -145,7 +145,7 @@ export async function GET(req: NextRequest) {
                 voucherId:  v.id,
                 reference:  v.universalVoucher?.voucherNo ?? "",
                 type:       v.type,
-                date:       v.date.toISOString(),
+                date:       v.universalVoucher!.date.toISOString(),   // 5D-10
                 quantity:   qty,
                 direction,
                 branchId:   v.branchId,

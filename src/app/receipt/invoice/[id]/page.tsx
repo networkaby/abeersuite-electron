@@ -40,7 +40,7 @@ export default async function PosReceiptPage({
 
     const voucherRow = await prisma.invVoucher.findUnique({
         where: { id: Number(id) },
-        include: { universalVoucher: { select: { partyAccountId: true, voucherNo: true } } },   // 5D-4 party + 5D-6 ref
+        include: { universalVoucher: { select: { partyAccountId: true, voucherNo: true, date: true } } },   // 5D-4 party + 5D-6 ref + 5D-10 date
     });
     if (!voucherRow) notFound();
     // Phase 5 5C: goods lines hang off the spine.
@@ -199,7 +199,7 @@ export default async function PosReceiptPage({
     // a clean record of the sale at the bill amount.
     const sample: ThermalReceiptSample = {
         reference:  voucher.universalVoucher?.voucherNo ?? "",
-        date:       voucher.date.toISOString().slice(0, 10),
+        date:       voucher.universalVoucher!.date.toISOString().slice(0, 10),   // 5D-10: date on spine
         partyName,
         partyPhone,
         partyGstin,
@@ -239,7 +239,7 @@ export default async function PosReceiptPage({
     // POS (the ladder surface); SALE invoices print in the browser.
     const posRelayPayload = isSaleKind ? {
         invoiceNumber:  voucher.universalVoucher?.voucherNo ?? "",
-        date:           voucher.date.toISOString(),
+        date:           voucher.universalVoucher!.date.toISOString(),   // 5D-10: date on spine
         customerName:   partyName,
         customerGstin:  partyGstin,
         template,

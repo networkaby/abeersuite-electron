@@ -44,15 +44,16 @@ export async function GET(req: Request) {
         type: type && (OPTIONAL_TYPES as string[]).includes(type)
             ? type
             : { in: OPTIONAL_TYPES },
-        ...(from ? { date: { gte: new Date(from) } } : {}),
-        ...(to   ? { date: { lte: new Date(to)   } } : {}),
         // Hide hard-deleted rows; cancelled / soft-deleted still surface
         // so users can audit the trail.
     };
     if (from || to) {
-        where.date = {
-            ...(from ? { gte: new Date(from) } : {}),
-            ...(to   ? { lte: new Date(to)   } : {}),
+        // 5D-10: date lives on the spine.
+        where.universalVoucher = {
+            date: {
+                ...(from ? { gte: new Date(from) } : {}),
+                ...(to   ? { lte: new Date(to)   } : {}),
+            },
         };
     }
     if (search) {
@@ -73,12 +74,12 @@ export async function GET(req: Request) {
         prisma.invVoucher.count({ where }),
         prisma.invVoucher.findMany({
             where,
-            orderBy: [{ date: "desc" }, { id: "desc" }],
+            orderBy: [{ universalVoucher: { date: "desc" } }, { id: "desc" }],   // 5D-10
             skip: (page - 1) * limit,
             take: limit,
             include: {
                 refVoucher: { select: { id: true, type: true, universalVoucher: { select: { voucherNo: true } } } },
-                universalVoucher: { select: { description: true, voucherNo: true, status: true, deletedAt: true } },   // 5D-5 desc + 5D-6 ref + 5D-8 lifecycle
+                universalVoucher: { select: { description: true, voucherNo: true, status: true, deletedAt: true, date: true } },   // 5D-5 desc + 5D-6 ref + 5D-8 lifecycle + 5D-10 date
             },
         }),
     ]);
@@ -98,7 +99,7 @@ export async function GET(req: Request) {
 
     const shaped = rows.map((v) => ({
         id:          v.id,
-        date:        v.date,
+        date:        v.universalVoucher?.date,   // 5D-10: date on spine
         type:        v.type,
         reference:   v.universalVoucher?.voucherNo ?? "",
         description: v.universalVoucher?.description ?? "",

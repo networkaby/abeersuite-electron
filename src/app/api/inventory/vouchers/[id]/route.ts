@@ -317,16 +317,14 @@ export async function PATCH(req: Request, { params }: Params) {
             await tx.invVoucher.update({
                 where: { id },
                 data: {
-                    ...(date        ? { date: new Date(date) } : {}),
-                    ...(description ? { description: description.trim() } : {}),
+                    // 5D-5/5D-10: description + date live on the spine (updated below).
                     // Party display fields move together as one frozen snapshot.
                     ...(partyName !== undefined || partyPhone !== undefined || partyAddress !== undefined
                         ? { partyJson: buildPartyJson({ name: partyName, phone: partyPhone, address: partyAddress }) ?? Prisma.DbNull }
                         : {}),
                     ...(partyType        !== undefined ? { partyType:        partyType        || null } : {}),
                     ...(partyId          !== undefined ? { partyId:          partyId          || null } : {}),
-                    // Keep the canonical FK in step with the routing pair.
-                    ...(partyId !== undefined ? { accountId: patchAccountId } : {}),
+                    // 5D-4: the canonical party ledger (partyAccountId) lives on the spine (updated below).
                     ...(creditPeriodDays  !== undefined ? { creditPeriodDays:  creditPeriodDays ?? null } : {}),
                     ...(refNumber        !== undefined ? { refNumber:        refNumber        || null } : {}),
                     ...(refDate          !== undefined ? { refDate:          refDate ? new Date(refDate) : null } : {}),
@@ -343,6 +341,17 @@ export async function PATCH(req: Request, { params }: Params) {
                     ...(newSettlementJson !== undefined ? { settlementJson: newSettlementJson } : {}),
                 },
             });
+            // 5D-4/5D-5/5D-10: date + description + party ledger live on the spine.
+            if (existing.universalVoucherId != null) {
+                const spinePatch: Prisma.UniversalVoucherUncheckedUpdateInput = {
+                    ...(date        ? { date: new Date(date) } : {}),
+                    ...(description ? { description: description.trim() } : {}),
+                    ...(partyId !== undefined ? { partyAccountId: patchAccountId } : {}),
+                };
+                if (Object.keys(spinePatch).length > 0) {
+                    await tx.universalVoucher.update({ where: { id: existing.universalVoucherId }, data: spinePatch });
+                }
+            }
             // Phase 5 5C: rewrite the goods lines on the spine (deleted above).
             if (computedLines) {
                 await tx.voucherInventoryLine.createMany({
@@ -368,11 +377,13 @@ export async function PATCH(req: Request, { params }: Params) {
             // PHASE 3 — Reapply IN PLACE (POSTED only)
             // ────────────────────────────────────────────────────────────
             if (wasPosted) {
-                const freshRow = await tx.invVoucher.findUnique({ where: { id } });
+                const freshRow = await tx.invVoucher.findUnique({ where: { id }, include: { universalVoucher: { select: { date: true } } } });   // 5D-10 date
                 if (!freshRow) throw new Error("Voucher disappeared mid-transaction");
-                // Phase 5 5C: goods lines hang off the spine.
+                // Phase 5 5C: goods lines hang off the spine. 5D-10: date from the spine
+                // (drives the rewritten InvStockLedger row dates).
                 const fresh = {
                     ...freshRow,
+                    date: freshRow.universalVoucher!.date,
                     lines: await tx.voucherInventoryLine.findMany({
                         where:   { universalVoucherId: freshRow.universalVoucherId ?? -1 },
                         include: { product: { select: { id: true, mrpPaise: true, stock: true } } },
