@@ -27,8 +27,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ source:
         const v = await prisma.invVoucher.findUnique({
             where: { id },
             select: {
-                id: true, reference: true, type: true, orderStatusId: true, partyJson: true,
-                universalVoucher: { select: { partyAccountId: true } },   // 5D-4: party on spine
+                id: true, type: true, orderStatusId: true, partyJson: true,
+                universalVoucher: { select: { partyAccountId: true, friendlyRef: true } },   // 5D-4 party + 5D-6 ref
                 subtotal: true, taxAmount: true, discountAmt: true, discountPct: true, totalAmount: true,
                 // sku/name let the POS screen rebuild cart rows when an order is reopened
                 // in edit mode (the line description alone embeds them but isn't reliable).
@@ -57,7 +57,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ source:
         }
 
         return NextResponse.json({
-            id: v.id, ref: v.reference, customer: readPartyName(v.partyJson), statusId: v.orderStatusId, accountId: partyAccountId,
+            id: v.id, ref: v.universalVoucher?.friendlyRef ?? "", customer: readPartyName(v.partyJson), statusId: v.orderStatusId, accountId: partyAccountId,
             address,
             // Estimates are GL-silent quotes → always editable; orders only at New / Under-Review.
             editable: v.type === "POS_ESTIMATE" ? true : (v.orderStatusId != null && EDITABLE_STAGES.includes(v.orderStatusId)),

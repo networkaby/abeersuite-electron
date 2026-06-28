@@ -23,12 +23,12 @@ export async function GET(_req: Request, { params }: Params) {
     const voucherRow = await prisma.invVoucher.findUnique({
         where: { id: Number(id) },
         include: {
-            // 5D-2: creator lives on the spine — pull createdById, resolve name below.
-            universalVoucher: { select: { createdById: true } },
+            // 5D-2 creator + 5D-6 ref live on the spine.
+            universalVoucher: { select: { createdById: true, friendlyRef: true } },
             branch:    { select: { id: true, name: true } },
             // refVoucher powers parent-link surfaces — "Replaces <old ref>"
             // for a SALE_RETURN against a SALE, or "Linked to PO-…" on a GRN.
-            refVoucher: { select: { id: true, reference: true, type: true } },
+            refVoucher: { select: { id: true, type: true, universalVoucher: { select: { friendlyRef: true } } } },
         },
     });
     if (!voucherRow) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -65,6 +65,9 @@ export async function GET(_req: Request, { params }: Params) {
     // form edit-load keep reading partyName / partyPhone / partyAddress.
     return NextResponse.json({
         ...voucher,
+        // 5D-6: the user-facing number is the spine's friendlyRef now.
+        reference:    voucher.universalVoucher?.friendlyRef ?? "",
+        refVoucher:   voucher.refVoucher ? { id: voucher.refVoucher.id, type: voucher.refVoucher.type, reference: voucher.refVoucher.universalVoucher?.friendlyRef ?? "" } : null,
         createdBy:    creator,
         tenders:      settlement.tenders.map(withAccount),
         charges:      settlement.charges.map(withAccount),
@@ -105,7 +108,7 @@ export async function PATCH(req: Request, { params }: Params) {
     const id = Number(idStr);
     if (!Number.isFinite(id)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
 
-    const existing = await prisma.invVoucher.findUnique({ where: { id } });
+    const existing = await prisma.invVoucher.findUnique({ where: { id }, include: { universalVoucher: { select: { friendlyRef: true } } } });   // 5D-6
     if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
     // Phase 5 5C: capture old line product ids (goods hang off the spine) for the
     // after-commit pricing recompute — the lines themselves are rewritten below.
@@ -275,8 +278,8 @@ export async function PATCH(req: Request, { params }: Params) {
                         entityType:  "INV_VOUCHER",
                         subtype:     existing.type,
                         originalId:  existing.id,
-                        originalRef: existing.reference,
-                        reason:      `Edit (in-place) of ${existing.reference}`,
+                        originalRef: existing.universalVoucher?.friendlyRef ?? "",
+                        reason:      `Edit (in-place) of ${existing.universalVoucher?.friendlyRef ?? ""}`,
                         snapshot:    { ...oldSnap, journalEntry: origJe },
                         actorId:     userId,
                     }),

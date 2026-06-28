@@ -556,7 +556,6 @@ export async function POST(req: Request) {
             const voucher = await tx.invVoucher.create({
                 data: {
                     type:           "POS",
-                    reference:      voucherRef,
                     branchId:       activeBranchId,
                     universalVoucherId: spineId,
                     date:           new Date(body.issueDate),
@@ -607,7 +606,7 @@ export async function POST(req: Request) {
             const spec = await saleToSpec(tx, {
                 id:          voucher.id,
                 type:        voucher.type,
-                reference:   voucher.reference,
+                reference:   voucherRef,
                 date:        voucher.date,
                 description: voucherDescription,
                 partyJson:   voucher.partyJson,
@@ -752,7 +751,7 @@ export async function POST(req: Request) {
                     amount:      p.amount,
                     description: `${METHOD_LABEL[p.method]}${p.reference ? ` ref ${p.reference}` : ""}`,
                 }));
-                const narration = `POS surplus on ${voucher.reference} — arrear ₹${arrearCleared.toFixed(2)}, advance ₹${advanceCredited.toFixed(2)}`;
+                const narration = `POS surplus on ${voucherRef} — arrear ₹${arrearCleared.toFixed(2)}, advance ₹${advanceCredited.toFixed(2)}`;
                 const receipt = await postReceiptVoucher(tx, {
                     customerAccountId: customerAccount.id,
                     tenders:           receiptTenders,
@@ -780,7 +779,7 @@ export async function POST(req: Request) {
 
             return {
                 voucherId:      voucher.id,
-                voucherRef:     voucher.reference,
+                voucherRef:     voucherRef,
                 journalEntryId: gl.journalEntryId,
                 shiftId:        shift.id,
                 // Surplus outcome — surfaced on the POS success toast + print.
@@ -801,7 +800,7 @@ export async function POST(req: Request) {
                 giftCardRedeemed: giftCardRedeem,
                 // Back-compat aliases — PosScreen still reads these names.
                 invoiceId:      voucher.id,
-                invoiceNumber:  voucher.reference,
+                invoiceNumber:  voucherRef,
             };
         }, {
             // POS does voucher + GL post + per-line stock movement in ONE

@@ -35,13 +35,12 @@ export async function GET(
                 },
                 select: {
                     id: true,
-                    reference: true,
                     type: true,
                     status: true,
                     date: true,
                     totalAmount: true,
                     branch:    { select: { name: true } },
-                    universalVoucher: { select: { createdById: true } },   // 5D-2: creator on spine
+                    universalVoucher: { select: { createdById: true, friendlyRef: true } },   // 5D-2 creator + 5D-6 ref
                 },
                 orderBy: { date: "desc" },
             })
@@ -55,6 +54,7 @@ export async function GET(
         );
         const invVouchers = rawVouchers.map(({ universalVoucher, ...v }) => ({
             ...v,
+            reference: universalVoucher?.friendlyRef ?? "",   // 5D-6
             createdBy: universalVoucher?.createdById != null ? { name: creatorById.get(universalVoucher.createdById) ?? null } : null,
         }));
 

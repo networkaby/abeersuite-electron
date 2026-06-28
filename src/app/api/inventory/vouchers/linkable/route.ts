@@ -70,7 +70,7 @@ export async function GET(req: NextRequest) {
         take: 100,
         select: {
             id:          true,
-            reference:   true,
+            universalVoucher: { select: { friendlyRef: true } },   // 5D-6: ref on spine
             type:        true,
             date:        true,
             partyId:     true,
@@ -80,6 +80,6 @@ export async function GET(req: NextRequest) {
     });
 
     return NextResponse.json({
-        rows: rows.map((r) => ({ ...r, partyName: readPartyName(r.partyJson), totalAmount: Number(r.totalAmount) })),
+        rows: rows.map(({ universalVoucher, ...r }) => ({ ...r, reference: universalVoucher?.friendlyRef ?? "", partyName: readPartyName(r.partyJson), totalAmount: Number(r.totalAmount) })),
     });
 }

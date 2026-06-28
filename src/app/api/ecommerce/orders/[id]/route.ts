@@ -55,12 +55,16 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
                     },
                 },
                 invVoucher: {
-                    select: { id: true, reference: true, type: true, status: true, totalAmount: true },
+                    select: { id: true, type: true, status: true, totalAmount: true, universalVoucher: { select: { friendlyRef: true } } },   // 5D-6
                 },
             },
         });
         if (!order) return NextResponse.json({ error: "Not found" }, { status: 404 });
-        return NextResponse.json(order);
+        // 5D-6: expose the inv voucher's user-facing number from its spine.
+        return NextResponse.json({
+            ...order,
+            invVoucher: order.invVoucher ? { ...order.invVoucher, reference: order.invVoucher.universalVoucher?.friendlyRef ?? "" } : null,
+        });
     } catch (e) {
         return handleApiError(e, "Failed to load order");
     }

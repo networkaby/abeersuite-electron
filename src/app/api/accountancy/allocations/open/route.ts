@@ -33,9 +33,9 @@ export async function GET(req: Request) {
             deletedAt: null,
         },
         select: {
-            id: true, type: true, reference: true, date: true,
+            id: true, type: true, date: true,
             totalAmount: true,
-            universalVoucher: { select: { partyAccountId: true } },   // 5D-4
+            universalVoucher: { select: { partyAccountId: true, friendlyRef: true } },   // 5D-4 + 5D-6
             universalVoucherId: true, creditPeriodDays: true,
         },
         orderBy: [{ date: "asc" }],
@@ -63,7 +63,7 @@ export async function GET(req: Request) {
             return {
                 kind:        "invoice" as const, // keep the wire key the dialog already consumes
                 id:          v.id,
-                reference:   v.reference,
+                reference:   v.universalVoucher?.friendlyRef ?? "",
                 date:        v.date,
                 dueDate:     due,
                 totalAmount: total,

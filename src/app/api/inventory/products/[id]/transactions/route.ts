@@ -69,10 +69,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
                 amount: true,
                 universalVoucher: {
                     select: {
+                        friendlyRef: true,   // 5D-6: ref on the spine
                         invVoucher: {
                             select: {
                                 id: true,
-                                reference: true,
                                 type: true,
                                 date: true,
                                 partyJson: true,
@@ -88,7 +88,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         });
         const lines = linesRaw
             .filter((l) => l.universalVoucher.invVoucher != null)
-            .map((l) => ({ id: l.id, quantity: l.quantity, rate: l.rate, amount: l.amount, voucher: l.universalVoucher.invVoucher! }));
+            .map((l) => ({ id: l.id, quantity: l.quantity, rate: l.rate, amount: l.amount, voucher: { ...l.universalVoucher.invVoucher!, reference: l.universalVoucher.friendlyRef ?? "" } }));
 
         type TxRow = {
             lineId:    number;

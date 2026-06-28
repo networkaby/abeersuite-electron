@@ -275,9 +275,9 @@ async function loadOpenBills(
             OR: partyOr,
         },
         select: {
-            id: true, type: true, reference: true, date: true,
+            id: true, type: true, date: true,
             totalAmount: true,
-            universalVoucher: { select: { partyAccountId: true } },   // 5D-4: party on spine
+            universalVoucher: { select: { partyAccountId: true, friendlyRef: true } },   // 5D-4 party + 5D-6 ref
             partyType: true, partyId: true, universalVoucherId: true,
             creditPeriodDays: true,
         },
@@ -347,7 +347,7 @@ async function loadOpenBills(
             kind:        v.type === "SALE" || v.type === "POS" ? "sale" : "purchase",
             id:          v.id,
             accountId,
-            ref:         v.reference,
+            ref:         v.universalVoucher?.friendlyRef ?? "",
             billDate:    v.date,
             dueDate:     due,
             totalAmount: total,
@@ -394,8 +394,8 @@ export async function getOpenSaleBillsForFifo(
             OR:        partyOr,
         },
         select: {
-            id: true, type: true, reference: true, date: true,
-            totalAmount: true, universalVoucher: { select: { partyAccountId: true } },   // 5D-4
+            id: true, type: true, date: true,
+            totalAmount: true, universalVoucher: { select: { partyAccountId: true, friendlyRef: true } },   // 5D-4 + 5D-6
             partyType: true, partyId: true, universalVoucherId: true,
         },
     });
@@ -423,7 +423,7 @@ export async function getOpenSaleBillsForFifo(
         const paid = paidAtSale + (paidBySpine[v.universalVoucherId] ?? 0);
         const outstanding = total - paid;
         if (outstanding > 0.005) {
-            out.push({ universalVoucherId: v.universalVoucherId, outstanding, billDate: v.date, ref: v.reference });
+            out.push({ universalVoucherId: v.universalVoucherId, outstanding, billDate: v.date, ref: v.universalVoucher?.friendlyRef ?? "" });
         }
     }
     // Oldest-first → FIFO.

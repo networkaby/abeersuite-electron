@@ -138,8 +138,7 @@ export async function createPosQuoteVoucher(opts: {
                 type,
                 // POSTED here means "issued" (no GL impact — no GL lines on the spine).
                 status: "POSTED",
-                // 5D-5: postedAt lives on the spine.
-                reference,
+                // 5D-5: postedAt + 5D-6 reference (friendlyRef) live on the spine.
                 branchId,
                 universalVoucherId: spineId,
                 date: body.date ? new Date(body.date) : new Date(),
@@ -159,7 +158,7 @@ export async function createPosQuoteVoucher(opts: {
                 totalAmount,
                 // 5D-2: creator lives on the spine.
             },
-            select: { id: true, reference: true },
+            select: { id: true, universalVoucher: { select: { friendlyRef: true } } },   // 5D-6
         });
         // Phase 5 5C: goods lines hang off the spine.
         await tx.voucherInventoryLine.createMany({
@@ -216,6 +215,6 @@ export async function createPosQuoteVoucher(opts: {
             await syncVoucherLink(tx, spineId, "DEAL", dealId);   // Phase 5 5A dual-write
         }
 
-        return { voucherId: voucher.id, reference: voucher.reference, dealId };
+        return { voucherId: voucher.id, reference: voucher.universalVoucher?.friendlyRef ?? "", dealId };
     }, { timeout: 30_000, maxWait: 10_000 });
 }

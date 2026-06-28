@@ -37,14 +37,14 @@ function kindForVoucherType(type: InvVoucherType): SourceDoc["kind"] | null {
 export async function resolveSource(universalVoucherId: number): Promise<SourceDoc | null> {
     const v = await prisma.invVoucher.findFirst({
         where: { universalVoucherId },
-        select: { id: true, type: true, reference: true },
+        select: { id: true, type: true, universalVoucher: { select: { friendlyRef: true } } },   // 5D-6: ref on spine
     });
     if (!v) return null;
     const kind = kindForVoucherType(v.type);
     if (!kind) return null;
     const url = referenceHref("inv", v.id, v.type);
     if (!url) return null;
-    return { kind, id: v.id, reference: v.reference, url };
+    return { kind, id: v.id, reference: v.universalVoucher?.friendlyRef ?? "", url };
 }
 
 /** Bulk resolver — efficient for tables/reports listing many spine vouchers.
@@ -55,7 +55,7 @@ export async function resolveSourceBatch(universalVoucherIds: number[]): Promise
 
     const vouchers = await prisma.invVoucher.findMany({
         where: { universalVoucherId: { in: universalVoucherIds } },
-        select: { id: true, type: true, reference: true, universalVoucherId: true },
+        select: { id: true, type: true, universalVoucherId: true, universalVoucher: { select: { friendlyRef: true } } },   // 5D-6
     });
     for (const v of vouchers) {
         if (v.universalVoucherId === null) continue;
@@ -63,7 +63,7 @@ export async function resolveSourceBatch(universalVoucherIds: number[]): Promise
         if (!kind) continue;
         const url = referenceHref("inv", v.id, v.type);
         if (!url) continue;
-        out.set(v.universalVoucherId, { kind, id: v.id, reference: v.reference, url });
+        out.set(v.universalVoucherId, { kind, id: v.id, reference: v.universalVoucher?.friendlyRef ?? "", url });
     }
     return out;
 }

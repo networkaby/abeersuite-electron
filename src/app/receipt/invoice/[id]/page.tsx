@@ -40,7 +40,7 @@ export default async function PosReceiptPage({
 
     const voucherRow = await prisma.invVoucher.findUnique({
         where: { id: Number(id) },
-        include: { universalVoucher: { select: { partyAccountId: true } } },   // 5D-4: party on spine
+        include: { universalVoucher: { select: { partyAccountId: true, friendlyRef: true } } },   // 5D-4 party + 5D-6 ref
     });
     if (!voucherRow) notFound();
     // Phase 5 5C: goods lines hang off the spine.
@@ -198,7 +198,7 @@ export default async function PosReceiptPage({
     // printed via /receipt/payment/[id]) — NOT on this invoice. The invoice stays
     // a clean record of the sale at the bill amount.
     const sample: ThermalReceiptSample = {
-        reference:  voucher.reference,
+        reference:  voucher.universalVoucher?.friendlyRef ?? "",
         date:       voucher.date.toISOString().slice(0, 10),
         partyName,
         partyPhone,
@@ -238,7 +238,7 @@ export default async function PosReceiptPage({
     // sends at sale time, so a reprint matches the original slip. Only built for
     // POS (the ladder surface); SALE invoices print in the browser.
     const posRelayPayload = isSaleKind ? {
-        invoiceNumber:  voucher.reference,
+        invoiceNumber:  voucher.universalVoucher?.friendlyRef ?? "",
         date:           voucher.date.toISOString(),
         customerName:   partyName,
         customerGstin:  partyGstin,
@@ -276,7 +276,7 @@ export default async function PosReceiptPage({
             toolbar={posRelayPayload
                 ? <ThermalAutoPrint endpoint="/print/pos" payload={posRelayPayload} />
                 : <ReceiptButtons />}
-            docTitle={`Invoice ${voucher.reference}`}
+            docTitle={`Invoice ${voucher.universalVoucher?.friendlyRef ?? ""}`}
         />
     );
 }

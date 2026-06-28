@@ -121,7 +121,7 @@ async function runE2E(): Promise<boolean> {
             const spineId = await engineCreateSpine(tx, { type: "SALE", date: new Date(), description: "e2e parity sale", friendlyRef: `PARITY-E2E-${Date.now()}`, userId: user.id });
             const v = await tx.invVoucher.create({
                 data: {
-                    type: "SALE", reference: `PARITY-E2E-${Date.now()}`, branchId: branch.id,
+                    type: "SALE", branchId: branch.id,
                     universalVoucherId: spineId,
                     date: new Date(), status: "DRAFT",
                     subtotal: 118, taxAmount: 18, totalAmount: 118,
@@ -346,7 +346,7 @@ async function runDraftSale(): Promise<boolean> {
             const spineId = await engineCreateSpine(tx, { type: "SALE", date: new Date(), description: "parity draft-sale", friendlyRef: `PARITY-DRAFTSALE-${Date.now()}`, userId: user.id });
             const v = await tx.invVoucher.create({
                 data: {
-                    type: "SALE", reference: `PARITY-DRAFTSALE-${Date.now()}`, branchId: branch.id,
+                    type: "SALE", branchId: branch.id,
                     universalVoucherId: spineId,
                     date: new Date(), status: "DRAFT",
                     subtotal: 118, taxAmount: 18, totalAmount: 118,
@@ -430,7 +430,7 @@ async function runStockRecompute(): Promise<boolean> {
             const spineId = await engineCreateSpine(tx, { type: "SALE", date: new Date(), description: "recompute check sale", friendlyRef: `PARITY-RECOMP-${Date.now()}`, userId: user.id });
             const v = await tx.invVoucher.create({
                 data: {
-                    type: "SALE", reference: `PARITY-RECOMP-${Date.now()}`, branchId: branch.id,
+                    type: "SALE", branchId: branch.id,
                     universalVoucherId: spineId,
                     date: new Date(), status: "DRAFT",
                     subtotal: 118, taxAmount: 18, totalAmount: 118,
@@ -507,7 +507,7 @@ async function runEditCycle(): Promise<boolean> {
             const spineId = await engineCreateSpine(tx, { type: "SALE", date: new Date(), description: "edit-cycle sale", friendlyRef: `PARITY-EDIT-${Date.now()}`, userId: user.id });
             const v = await tx.invVoucher.create({
                 data: {
-                    type: "SALE", reference: `PARITY-EDIT-${Date.now()}`, branchId: branch.id,
+                    type: "SALE", branchId: branch.id,
                     universalVoucherId: spineId,
                     date: new Date(), status: "POSTED",
                     subtotal: 118, taxAmount: 18, totalAmount: 118,
@@ -582,7 +582,7 @@ async function runAllocationDualTarget(): Promise<boolean> {
             const spineId = await engineCreateSpine(tx, { type: "SALE", date: new Date(), description: "G1 alloc sale", friendlyRef: `PARITY-G1-${Date.now()}`, userId: user.id });
             const v = await tx.invVoucher.create({
                 data: {
-                    type: "SALE", reference: `PARITY-G1-${Date.now()}`, branchId: branch.id,
+                    type: "SALE", branchId: branch.id,
                     universalVoucherId: spineId,
                     date: new Date(), status: "POSTED",
                     subtotal: 118, taxAmount: 18, totalAmount: 118,
@@ -641,7 +641,7 @@ async function runShiftCashMath(): Promise<boolean> {
             const spineId = await engineCreateSpine(tx, { type: "POS", date: new Date(), description: "parity POS shift", friendlyRef: `PARITY-SHIFT-${Date.now()}`, userId: user.id });
             const v = await tx.invVoucher.create({
                 data: {
-                    type: "POS", reference: `PARITY-SHIFT-${Date.now()}`, branchId: branch.id,
+                    type: "POS", branchId: branch.id,
                     universalVoucherId: spineId,
                     date: new Date(), status: "DRAFT",
                     subtotal: 118, taxAmount: 18, totalAmount: 118,

@@ -29,10 +29,10 @@ export async function getRefundPipeline() {
  */
 async function resolveAdvance(ref: OrderRef): Promise<{ amountPaise: number; sourceVoucherId: number | null }> {
     if (ref.source !== "inv") return { amountPaise: 0, sourceVoucherId: null };
-    const order = await prisma.invVoucher.findUnique({ where: { id: ref.id }, select: { reference: true } });
+    const order = await prisma.invVoucher.findUnique({ where: { id: ref.id }, select: { universalVoucher: { select: { friendlyRef: true } } } });   // 5D-6
     if (!order) return { amountPaise: 0, sourceVoucherId: null };
     const receipts = await prisma.posReceipt.findMany({
-        where: { note: { contains: `Advance against ${order.reference}` } },
+        where: { note: { contains: `Advance against ${order.universalVoucher?.friendlyRef ?? ""}` } },
         select: { amountPaise: true, voucherId: true },
     });
     const amountPaise = receipts.reduce((s, r) => s + Number(r.amountPaise), 0);
@@ -105,8 +105,8 @@ export async function getRefundForPayout(refundId: number): Promise<{
 
     let orderRef: string | null = null;
     if (refund.orderSource === "inv") {
-        const v = await prisma.invVoucher.findUnique({ where: { id: refund.orderId }, select: { reference: true } });
-        orderRef = v?.reference ?? null;
+        const v = await prisma.invVoucher.findUnique({ where: { id: refund.orderId }, select: { universalVoucher: { select: { friendlyRef: true } } } });   // 5D-6
+        orderRef = v?.universalVoucher?.friendlyRef ?? null;
     }
 
     return {

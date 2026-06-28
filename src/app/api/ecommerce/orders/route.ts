@@ -86,12 +86,16 @@ export async function GET(req: Request) {
                     },
                 },
                 orderStatus: { select: { id: true, label: true, color: true, isTerminal: true } },
-                invVoucher: { select: { id: true, reference: true, type: true, status: true } },
+                invVoucher: { select: { id: true, type: true, status: true, universalVoucher: { select: { friendlyRef: true } } } },   // 5D-6
                 lines: { include: { product: { select: { id: true, name: true, imageUrl: true } } } },
             },
         });
 
-        return NextResponse.json(orders);
+        // 5D-6: expose each inv voucher's user-facing number from its spine.
+        return NextResponse.json(orders.map((o) => ({
+            ...o,
+            invVoucher: o.invVoucher ? { ...o.invVoucher, reference: o.invVoucher.universalVoucher?.friendlyRef ?? "" } : null,
+        })));
     } catch (e) {
         return handleApiError(e, "Failed to list orders");
     }

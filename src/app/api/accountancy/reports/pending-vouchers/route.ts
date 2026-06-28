@@ -97,7 +97,7 @@ export async function GET(req: NextRequest) {
         ...(search && {
             AND: [{
                 OR: [
-                    { reference:   { contains: search, mode: "insensitive" } },
+                    { universalVoucher: { friendlyRef:  { contains: search, mode: "insensitive" } } },   // 5D-6: ref on spine
                     { universalVoucher: { description: { contains: search, mode: "insensitive" } } },   // 5D-5: description on spine
                     // Party search: live ledger name (via resolved ids) OR the frozen
                     // snapshot name (for walk-ins with no account).
@@ -117,7 +117,7 @@ export async function GET(req: NextRequest) {
             take:    limit,
             include: {
                 branch: { select: { id: true, name: true } },
-                universalVoucher: { select: { description: true } },   // 5D-5: description on spine
+                universalVoucher: { select: { description: true, friendlyRef: true } },   // 5D-5 desc + 5D-6 ref
             },
         }),
     ]);
@@ -143,7 +143,7 @@ export async function GET(req: NextRequest) {
         const daysOpen = Math.max(0, Math.floor((today.getTime() - d.getTime()) / 86_400_000));
         return {
             id:          v.id,
-            reference:   v.reference,
+            reference:   v.universalVoucher?.friendlyRef ?? "",
             type:        v.type,
             date:        v.date,
             partyId:     v.partyId,

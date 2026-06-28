@@ -389,8 +389,8 @@ model RedemptionHold {
 model InvVoucher {
   id                  Int                    @id @default(autoincrement())
   type                InvVoucherType
-  /// Auto-generated: PV-2026-0001 for PURCHASE, SV-2026-0001 for SALE
-  reference           String                 @unique
+  // Phase 5 5D-6: `reference` (the user-facing SV-/PV- number) dropped — it lives
+  // on the spine as `friendlyRef` (the spine's own `reference` is the GL- id).
   /// Branch where this voucher originates — drives per-branch stock balance,
   /// list filtering, and reporting. Required on every new voucher.
   branchId            String

@@ -90,7 +90,7 @@ export async function GET(req: NextRequest) {
         orderBy: [{ date: "desc" }, { id: "desc" }],
         include: {
             // 5D-2: creator lives on the spine — pull its createdById, resolve names below.
-            universalVoucher: { select: { createdById: true } },
+            universalVoucher: { select: { createdById: true, friendlyRef: true } },   // 5D-2 creator + 5D-6 ref
             branch:    { select: { id: true, name: true } },
             // refReturns = vouchers that reference THIS one via refVoucherId. For a
             // POS_ORDER / POS_ESTIMATE it means a sale was raised against it →
@@ -137,7 +137,7 @@ export async function GET(req: NextRequest) {
         // clients keep reading `partyName` / `partyPhone` unchanged.
         const partyDisplay = { partyName: readPartyName(v.partyJson), partyPhone: readPartyPhone(v.partyJson), partyAddress: readPartyAddress(v.partyJson) };
         if (v.partyId == null) {
-            return { ...v, ...partyDisplay, createdBy: creatorName(v), partyAccountId: null, partyPersonId: null, partyCompanyId: null };
+            return { ...v, reference: v.universalVoucher?.friendlyRef ?? "", ...partyDisplay, createdBy: creatorName(v), partyAccountId: null, partyPersonId: null, partyCompanyId: null };
         }
         // Same partyId may resolve as either a Person or a Company id depending
         // on which lookup matches. Person wins when both are set (shouldn't
@@ -148,6 +148,7 @@ export async function GET(req: NextRequest) {
         const accFromCompany = companyToAccount.get(v.partyId);
         return {
             ...v,
+            reference:       v.universalVoucher?.friendlyRef ?? "",   // 5D-6
             ...partyDisplay,
             createdBy:       creatorName(v),
             partyAccountId:  accFromPerson ?? accFromCompany ?? null,
@@ -469,7 +470,7 @@ export async function POST(req: NextRequest) {
             const created = await tx.invVoucher.create({
                 data: {
                     type,
-                    reference,
+                    // 5D-6: reference (friendlyRef) lives on the spine.
                     branchId,
                     universalVoucherId: spineId,
                     orderPipelineId,

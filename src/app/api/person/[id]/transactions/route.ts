@@ -42,14 +42,13 @@ export async function GET(
                 },
                 select: {
                     id: true,
-                    reference: true,
                     type: true,
                     status: true,
                     date: true,
                     totalAmount: true,
                     universalVoucherId: true,
                     branch:    { select: { name: true } },
-                    universalVoucher: { select: { createdById: true, partyAccountId: true } },   // 5D-2 creator + 5D-4 party
+                    universalVoucher: { select: { createdById: true, partyAccountId: true, friendlyRef: true } },   // 5D-2 creator + 5D-4 party + 5D-6 ref
                 },
                 orderBy: { date: "desc" },
             })
@@ -82,7 +81,7 @@ export async function GET(
             const amountPaid = nonArTenderSum + jePaid;
             return {
                 id:         v.id,
-                reference:  v.reference,
+                reference:  v.universalVoucher?.friendlyRef ?? "",
                 type:       v.type,
                 status:     v.status,
                 date:       v.date,

@@ -118,7 +118,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
             prisma.invVoucher.findFirst({
                 where: baseWhere,
                 orderBy: { date: "desc" },
-                select: { date: true, reference: true, totalAmount: true },
+                select: { date: true, totalAmount: true, universalVoucher: { select: { friendlyRef: true } } },
             }),
             prisma.ticket.findFirst({
                 where: { billingAccountId: accountId },

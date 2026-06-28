@@ -73,7 +73,7 @@ export async function GET(req: NextRequest) {
     const voucherRows = await prisma.invVoucher.findMany({
         where,
         orderBy: [{ date: "asc" }, { id: "asc" }],
-        include: { branch: { select: { id: true, name: true } } },
+        include: { branch: { select: { id: true, name: true } }, universalVoucher: { select: { friendlyRef: true } } },   // 5D-6
     });
     // Phase 5 5C: goods lines hang off the spine — batch-load + group by spine id.
     const uvIds = voucherRows.map((v) => v.universalVoucherId).filter((x): x is number => x != null);
@@ -143,7 +143,7 @@ export async function GET(req: NextRequest) {
 
             entry.pendingLines.push({
                 voucherId:  v.id,
-                reference:  v.reference,
+                reference:  v.universalVoucher?.friendlyRef ?? "",
                 type:       v.type,
                 date:       v.date.toISOString(),
                 quantity:   qty,

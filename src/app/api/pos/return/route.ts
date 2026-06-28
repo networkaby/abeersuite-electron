@@ -68,7 +68,7 @@ export async function POST(req: Request) {
         const original = await prisma.invVoucher.findUnique({
             where: { id: data.originalInvoiceId },
             include: {
-                universalVoucher: { select: { partyAccountId: true } },   // 5D-4: party on spine
+                universalVoucher: { select: { partyAccountId: true, friendlyRef: true } },   // 5D-4 party + 5D-6 ref
                 branch:  { select: { id: true, gstStateCode: true } },
             },
         });
@@ -166,7 +166,7 @@ export async function POST(req: Request) {
             const vRef = await invNextRef(tx, "SALE_RETURN");
             const stockLines = returnLines.filter((rl) => rl.voucherLine.productId !== null);
             // Phase 5 5.0/5C: spine FIRST; enginePost attaches GL via existingSpineId.
-            const voucherDescription = `Sale return of ${original.reference}${data.notes ? ` — ${data.notes}` : ""}`;
+            const voucherDescription = `Sale return of ${original.universalVoucher?.friendlyRef ?? ""}${data.notes ? ` — ${data.notes}` : ""}`;
             const spineId = await engineCreateSpine(tx, {
                 type:           "SALE_RETURN",
                 date:           today,
@@ -178,7 +178,6 @@ export async function POST(req: Request) {
             const voucher = await tx.invVoucher.create({
                 data: {
                     type:           "SALE_RETURN",
-                    reference:      vRef,
                     branchId,
                     universalVoucherId: spineId,
                     date:           today,
@@ -187,7 +186,7 @@ export async function POST(req: Request) {
                     partyJson:      buildPartyJson({ name: account?.name ?? readPartyName(original.partyJson) }) ?? Prisma.DbNull,
                     partyType,
                     partyId,
-                    refNumber:      original.reference,
+                    refNumber:      original.universalVoucher?.friendlyRef ?? null,
                     refVoucherId:   original.id,
                     deliveryMode:   "COUNTER",
                     placeOfSupply:  sellerStateCode,
@@ -228,7 +227,7 @@ export async function POST(req: Request) {
             const spec = await saleToSpec(tx, {
                 id:          voucher.id,
                 type:        voucher.type,
-                reference:   voucher.reference,
+                reference:   vRef,
                 date:        voucher.date,
                 description: voucherDescription,
                 partyJson:   voucher.partyJson,
@@ -293,7 +292,7 @@ export async function POST(req: Request) {
 
             return {
                 returnVoucherId: voucher.id,
-                returnVoucherRef: voucher.reference,
+                returnVoucherRef: vRef,
                 journalEntryId:  gl.journalEntryId,
                 returnTotal,
                 pointsClawedBack: loyalty?.pointsClawedBack ?? 0,
@@ -301,7 +300,7 @@ export async function POST(req: Request) {
                 couponsReversed:  couponReversal.reversed,
                 // Back-compat aliases for the dialog
                 returnInvoiceId: voucher.id,
-                returnNumber:    voucher.reference,
+                returnNumber:    vRef,
             };
         }, {
             // Voucher + GL post + per-line stock-IN in one interactive

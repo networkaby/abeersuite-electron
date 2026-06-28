@@ -139,7 +139,6 @@ export async function POST(req: Request) {
             const voucher = await tx.invVoucher.create({
                 data: {
                     type:           "SALE_RETURN",
-                    reference:      vRef,
                     branchId,
                     universalVoucherId: spineId,
                     date:           today,
@@ -185,7 +184,7 @@ export async function POST(req: Request) {
             const spec = await saleToSpec(tx, {
                 id:          voucher.id,
                 type:        voucher.type,
-                reference:   voucher.reference,
+                reference:   vRef,
                 date:        voucher.date,
                 description: voucherDescription,
                 partyJson:   voucher.partyJson,
@@ -226,12 +225,12 @@ export async function POST(req: Request) {
 
             return {
                 returnVoucherId: voucher.id,
-                returnVoucherRef: voucher.reference,
+                returnVoucherRef: vRef,
                 journalEntryId:  gl.journalEntryId,
                 returnTotal:     total,
                 // Back-compat aliases for the dialog
                 returnInvoiceId: voucher.id,
-                returnNumber:    voucher.reference,
+                returnNumber:    vRef,
             };
         }, {
             // Voucher + GL post + per-line stock-IN in one interactive

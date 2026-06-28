@@ -137,8 +137,6 @@ export async function POST(req: NextRequest) {
                     })),
                 );
 
-                // Carrier InvVoucher so InvStockLedger.voucherId FK is satisfied.
-                const sjRef = await invNextRef(tx, "MANUFACTURING_JOURNAL");
                 // Phase 5 5C: the JV's stock + goods lines hang off ITS spine
                 // (voucher.universalVoucherId). The carrier InvVoucher is kept as a
                 // thin sidecar pointing at the same spine.
@@ -146,7 +144,6 @@ export async function POST(req: NextRequest) {
                 const carrier = await tx.invVoucher.create({
                     data: {
                         type:        "MANUFACTURING_JOURNAL",
-                        reference:   sjRef,
                         branchId:    activeBranchId,
                         date:        new Date(body.date),
                         status:      "POSTED",

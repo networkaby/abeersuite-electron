@@ -69,7 +69,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
                 ? prisma.invVoucher.findFirst({
                     where: baseWhere,
                     orderBy: { date: "desc" },
-                    select: { date: true, reference: true, totalAmount: true },
+                    select: { date: true, totalAmount: true, universalVoucher: { select: { friendlyRef: true } } },
                 })
                 : Promise.resolve(null),
             accountId

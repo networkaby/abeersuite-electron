@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
         const lines = await prisma.voucherGlLine.findMany({
             where:   { accountId: tid, universalVoucher: { ...ledgerStatusFilterUv(), date: { gte: from, lte: to } } },
             orderBy: [{ universalVoucher: { date: "asc" } }, { id: "asc" }],
-            include: { universalVoucher: { select: { id: true, date: true, reference: true, description: true, type: true } } },
+            include: { universalVoucher: { select: { id: true, date: true, reference: true, friendlyRef: true, description: true, type: true } } },
         });
 
         // Resolve reprint targets via the direct spine link (G5): InvVoucher (POS
@@ -59,7 +59,7 @@ export async function GET(req: NextRequest) {
         // Phase 5 5E: the spine IS the financial voucher, so the RECEIPT/PAYMENT
         // case reads straight off the spine — no separate Voucher lookup.
         const uvIds = [...new Set(lines.map((l) => l.universalVoucher.id))];
-        const invs = await prisma.invVoucher.findMany({ where: { universalVoucherId: { in: uvIds } }, select: { id: true, universalVoucherId: true, reference: true } });
+        const invs = await prisma.invVoucher.findMany({ where: { universalVoucherId: { in: uvIds } }, select: { id: true, universalVoucherId: true } });
         const invByUv = new Map(invs.filter((i) => i.universalVoucherId != null).map((i) => [i.universalVoucherId!, i]));
 
         let balance = openingBalance;
@@ -78,7 +78,7 @@ export async function GET(req: NextRequest) {
                 id:          l.id,
                 date:        je.date,
                 // Prefer the user-facing voucher ref (POS-/RV-/PMT-/CV-) over the GL ref.
-                reference:   inv?.reference ?? je.reference,
+                reference:   je.friendlyRef ?? je.reference,
                 particulars: je.description ?? l.description ?? "",
                 debit,
                 credit,
