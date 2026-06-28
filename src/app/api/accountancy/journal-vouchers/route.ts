@@ -154,7 +154,7 @@ export async function POST(req: NextRequest) {
                         postedAt:    new Date(),
                         subtotal:    flatItems.reduce((s, i) => s + i.amount, 0),
                         totalAmount: flatItems.reduce((s, i) => s + i.amount, 0),
-                        createdById: user!.id,
+                        // 5D-2: creator lives on the spine.
                     },
                 });
                 void carrier;

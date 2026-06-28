@@ -24,7 +24,7 @@ export async function GET(
             select: { id: true },
         });
 
-        const invVouchers = account
+        const rawVouchers = account
             ? await prisma.invVoucher.findMany({
                 where: {
                     deletedAt: null,
@@ -41,11 +41,22 @@ export async function GET(
                     date: true,
                     totalAmount: true,
                     branch:    { select: { name: true } },
-                    createdBy: { select: { name: true } },
+                    universalVoucher: { select: { createdById: true } },   // 5D-2: creator on spine
                 },
                 orderBy: { date: "desc" },
             })
             : [];
+
+        // 5D-2: resolve creator names from each row's spine createdById.
+        const creatorIds = [...new Set(rawVouchers.map((v) => v.universalVoucher?.createdById).filter((x): x is number => x != null))];
+        const creatorById = new Map(
+            (creatorIds.length === 0 ? [] : await prisma.user.findMany({ where: { id: { in: creatorIds } }, select: { id: true, name: true } }))
+                .map((u) => [u.id, u.name]),
+        );
+        const invVouchers = rawVouchers.map(({ universalVoucher, ...v }) => ({
+            ...v,
+            createdBy: universalVoucher?.createdById != null ? { name: creatorById.get(universalVoucher.createdById) ?? null } : null,
+        }));
 
         return NextResponse.json({ invVouchers });
     } catch (e) {

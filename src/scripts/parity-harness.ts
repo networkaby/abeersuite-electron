@@ -125,7 +125,7 @@ async function runE2E(): Promise<boolean> {
                     universalVoucherId: spineId,
                     date: new Date(), description: "e2e parity sale", status: "DRAFT",
                     subtotal: 118, taxAmount: 18, totalAmount: 118,
-                    deliveryMode: "COUNTER", placeOfSupply: "19", createdById: user.id,
+                    deliveryMode: "COUNTER", placeOfSupply: "19",
                     settlementJson: buildSettlementJson([{ accountId: cash.id, amount: 118, method: "CASH", reference: "E2E-TENDER-REF" }], []),
                 },
             });
@@ -350,7 +350,7 @@ async function runDraftSale(): Promise<boolean> {
                     universalVoucherId: spineId,
                     date: new Date(), description: "parity draft-sale", status: "DRAFT",
                     subtotal: 118, taxAmount: 18, totalAmount: 118,
-                    deliveryMode: "COUNTER", placeOfSupply: "19", createdById: user.id,
+                    deliveryMode: "COUNTER", placeOfSupply: "19",
                     settlementJson: buildSettlementJson([{ accountId: cash.id, amount: 118, method: "CASH" }], []),
                 },
             });
@@ -434,7 +434,7 @@ async function runStockRecompute(): Promise<boolean> {
                     universalVoucherId: spineId,
                     date: new Date(), description: "recompute check sale", status: "DRAFT",
                     subtotal: 118, taxAmount: 18, totalAmount: 118,
-                    deliveryMode: "COUNTER", placeOfSupply: "19", createdById: user.id,
+                    deliveryMode: "COUNTER", placeOfSupply: "19",
                     settlementJson: buildSettlementJson([{ accountId: cash.id, amount: 118 }], []),
                 },
             });
@@ -511,7 +511,7 @@ async function runEditCycle(): Promise<boolean> {
                     universalVoucherId: spineId,
                     date: new Date(), description: "edit-cycle sale", status: "POSTED",
                     subtotal: 118, taxAmount: 18, totalAmount: 118,
-                    deliveryMode: "COUNTER", placeOfSupply: "19", createdById: user.id,
+                    deliveryMode: "COUNTER", placeOfSupply: "19",
                     settlementJson: buildSettlementJson([{ accountId: cash.id, amount: 118 }], []),
                 },
             });
@@ -586,7 +586,7 @@ async function runAllocationDualTarget(): Promise<boolean> {
                     universalVoucherId: spineId,
                     date: new Date(), description: "G1 alloc sale", status: "POSTED",
                     subtotal: 118, taxAmount: 18, totalAmount: 118,
-                    deliveryMode: "COUNTER", placeOfSupply: "19", createdById: user.id,
+                    deliveryMode: "COUNTER", placeOfSupply: "19",
                     settlementJson: buildSettlementJson([{ accountId: cash.id, amount: 118 }], []),
                 },
             });
@@ -645,7 +645,7 @@ async function runShiftCashMath(): Promise<boolean> {
                     universalVoucherId: spineId,
                     date: new Date(), description: "parity POS shift", status: "DRAFT",
                     subtotal: 118, taxAmount: 18, totalAmount: 118,
-                    deliveryMode: "COUNTER", placeOfSupply: "19", createdById: user.id,
+                    deliveryMode: "COUNTER", placeOfSupply: "19",
                     settlementJson: buildSettlementJson([{ accountId: cash.id, amount: 118, method: "CASH" }], []),
                 },
             });

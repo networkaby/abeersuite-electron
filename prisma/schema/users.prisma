@@ -37,7 +37,7 @@ model User {
   reports                          User[]                     @relation("UserHierarchy")
   userRole                         Role?                      @relation(fields: [role], references: [id])
   voucherAllocations               VoucherAllocation[]        @relation("VoucherAllocationCreatedBy")
-  invVouchers                      InvVoucher[]               @relation("InvVoucherCreatedBy")
+  // Phase 5 5D-2: InvVoucher.createdBy dropped — creator lives on the spine.
   invVouchersCancelled             InvVoucher[]               @relation("InvVoucherCancelledBy")
   invVouchersDeleted               InvVoucher[]               @relation("InvVoucherDeletedBy")
   auditLogs                        AuditLog[]                 @relation("AuditLogActor")

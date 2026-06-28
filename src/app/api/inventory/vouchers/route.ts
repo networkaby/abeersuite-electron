@@ -89,7 +89,8 @@ export async function GET(req: NextRequest) {
         },
         orderBy: [{ date: "desc" }, { id: "desc" }],
         include: {
-            createdBy: { select: { name: true } },
+            // 5D-2: creator lives on the spine — pull its createdById, resolve names below.
+            universalVoucher: { select: { createdById: true } },
             branch:    { select: { id: true, name: true } },
             // refReturns = vouchers that reference THIS one via refVoucherId. For a
             // POS_ORDER / POS_ESTIMATE it means a sale was raised against it →
@@ -123,12 +124,20 @@ export async function GET(req: NextRequest) {
         if (a.personId  != null) personToAccount.set(a.personId,  a.id);
         if (a.companyId != null) companyToAccount.set(a.companyId, a.id);
     }
+    // 5D-2: resolve creator names from each row's spine (createdById on the spine).
+    const creatorIds = [...new Set(vouchers.map((v) => v.universalVoucher?.createdById).filter((x): x is number => x != null))];
+    const creatorById = new Map(
+        (creatorIds.length === 0 ? [] : await prisma.user.findMany({ where: { id: { in: creatorIds } }, select: { id: true, name: true } }))
+            .map((u) => [u.id, u.name]),
+    );
+    const creatorName = (v: { universalVoucher: { createdById: number } | null }) =>
+        v.universalVoucher?.createdById != null ? { name: creatorById.get(v.universalVoucher.createdById) ?? null } : null;
     const enriched = vouchers.map((v) => {
         // Derived party display fields from the frozen snapshot so list/register
         // clients keep reading `partyName` / `partyPhone` unchanged.
         const partyDisplay = { partyName: readPartyName(v.partyJson), partyPhone: readPartyPhone(v.partyJson), partyAddress: readPartyAddress(v.partyJson) };
         if (v.partyId == null) {
-            return { ...v, ...partyDisplay, partyAccountId: null, partyPersonId: null, partyCompanyId: null };
+            return { ...v, ...partyDisplay, createdBy: creatorName(v), partyAccountId: null, partyPersonId: null, partyCompanyId: null };
         }
         // Same partyId may resolve as either a Person or a Company id depending
         // on which lookup matches. Person wins when both are set (shouldn't
@@ -140,6 +149,7 @@ export async function GET(req: NextRequest) {
         return {
             ...v,
             ...partyDisplay,
+            createdBy:       creatorName(v),
             partyAccountId:  accFromPerson ?? accFromCompany ?? null,
             partyPersonId:   accFromPerson  != null ? v.partyId : null,
             partyCompanyId:  accFromPerson  == null && accFromCompany != null ? v.partyId : null,
@@ -486,12 +496,14 @@ export async function POST(req: NextRequest) {
                     totalAmount,
                     deliveryMode:  resolvedDeliveryMode,
                     placeOfSupply: resolvedPlaceOfSupply || null,
-                    createdById: userId,
+                    // 5D-2: creator lives on the spine (engineCreateSpine set it).
                     // G4b: tender + charge INPUT → settlementJson.
                     settlementJson: buildSettlementJson(tenders, charges),
                 },
-                include: { createdBy: { select: { name: true } } },
             });
+            // 5D-2: creator name comes from the spine's createdById — resolve it for
+            // the response shape (the create response carried `createdBy.name`).
+            const creator = await tx.user.findUnique({ where: { id: userId }, select: { name: true } });
             // Phase 5 5C: goods lines hang off the spine (universalVoucherId).
             await tx.voucherInventoryLine.createMany({
                 data: computedLines.map((l) => ({
@@ -516,7 +528,7 @@ export async function POST(req: NextRequest) {
             });
             // Phase 5 5A: dual-write the order-pipeline link (SALES_ORDER rides the board).
             await syncVoucherLinks(tx, spineId, { orderPipelineId, orderStatusId });
-            return { ...created, lines };
+            return { ...created, lines, createdBy: creator };
         });
 
         return NextResponse.json(voucher, { status: 201 });

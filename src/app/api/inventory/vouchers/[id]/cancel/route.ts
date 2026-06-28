@@ -158,11 +158,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
         const updatedRow = await prisma.invVoucher.findUnique({
             where: { id: Number(id) },
-            include: { createdBy: { select: { name: true } } },
+            include: { universalVoucher: { select: { createdById: true } } },   // 5D-2: creator on spine
         });
+        const creator = updatedRow?.universalVoucher?.createdById != null
+            ? await prisma.user.findUnique({ where: { id: updatedRow.universalVoucher.createdById }, select: { name: true } })
+            : null;
         // Phase 5 5C: goods lines hang off the spine.
         const updated = updatedRow ? {
             ...updatedRow,
+            createdBy: creator,
             lines: await prisma.voucherInventoryLine.findMany({
                 where:   { universalVoucherId: updatedRow.universalVoucherId ?? -1 },
                 include: { product: { select: { id: true, sku: true, name: true } } },

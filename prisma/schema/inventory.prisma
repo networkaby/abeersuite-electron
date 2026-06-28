@@ -502,8 +502,8 @@ model InvVoucher {
   deletedById   Int?
   deleteReason  String?
 
-  createdById               Int
-  createdBy                 User                       @relation("InvVoucherCreatedBy", fields: [createdById], references: [id])
+  // Phase 5 5D-2: `createdById`/`createdBy` dropped — the creator lives on the
+  // spine (UniversalVoucher.createdById). Resolve the creator's name via the spine.
   cancelledBy               User?                      @relation("InvVoucherCancelledBy", fields: [cancelledById], references: [id])
   deletedBy                 User?                      @relation("InvVoucherDeletedBy", fields: [deletedById], references: [id])
   // Phase 5 5C: goods lines (VoucherInventoryLine) + stock rows (InvStockLedger)

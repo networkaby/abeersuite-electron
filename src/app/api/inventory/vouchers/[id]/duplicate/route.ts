@@ -73,7 +73,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                     showPrices:       source.showPrices,
                     // refNumber / refDate / refVoucherId intentionally null —
                     // a duplicate of a SALE is not a SALE_RETURN.
-                    createdById:      user!.id,
+                    // 5D-2: creator lives on the spine.
                 },
                 select: { id: true, type: true, reference: true },
             });

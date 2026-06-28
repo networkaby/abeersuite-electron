@@ -51,7 +51,7 @@ export async function GET(
                     accountId: true,
                     universalVoucherId: true,
                     branch:    { select: { name: true } },
-                    createdBy: { select: { name: true } },
+                    universalVoucher: { select: { createdById: true } },   // 5D-2: creator on spine
                 },
                 orderBy: { date: "desc" },
             })
@@ -69,6 +69,12 @@ export async function GET(
             sumReceiptAllocations(prisma, uvIds),
             loadTenderLines(prisma, uvIds),
         ]);
+        // 5D-2: resolve creator names from each row's spine createdById.
+        const creatorIds = [...new Set(rawVouchers.map((v) => v.universalVoucher?.createdById).filter((x): x is number => x != null))];
+        const creatorById = new Map(
+            (creatorIds.length === 0 ? [] : await prisma.user.findMany({ where: { id: { in: creatorIds } }, select: { id: true, name: true } }))
+                .map((u) => [u.id, u.name]),
+        );
 
         const invVouchers = rawVouchers.map((v) => {
             const arAccountId = v.accountId ?? account?.id ?? null;
@@ -85,7 +91,7 @@ export async function GET(
                 totalAmount: v.totalAmount,
                 amountPaid: amountPaid.toFixed(2),
                 branch:     v.branch,
-                createdBy:  v.createdBy,
+                createdBy:  v.universalVoucher?.createdById != null ? { name: creatorById.get(v.universalVoucher.createdById) ?? null } : null,
             };
         });
 

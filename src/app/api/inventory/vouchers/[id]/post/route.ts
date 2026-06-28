@@ -395,11 +395,15 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                     postedAt:      new Date(),
                     universalVoucherId,
                 },
-                include: { createdBy: { select: { name: true } } },
+                include: { universalVoucher: { select: { createdById: true } } },   // 5D-2: creator on spine
             });
             // Phase 5 5C: goods lines hang off the spine.
+            const creator = updated.universalVoucher?.createdById != null
+                ? await tx.user.findUnique({ where: { id: updated.universalVoucher.createdById }, select: { name: true } })
+                : null;
             const updatedWithLines = {
                 ...updated,
+                createdBy: creator,
                 lines: await tx.voucherInventoryLine.findMany({
                     where:   { universalVoucherId: updated.universalVoucherId ?? -1 },
                     include: { product: { select: { id: true, sku: true, name: true } } },

@@ -23,7 +23,8 @@ export async function GET(_req: Request, { params }: Params) {
     const voucherRow = await prisma.invVoucher.findUnique({
         where: { id: Number(id) },
         include: {
-            createdBy: { select: { name: true } },
+            // 5D-2: creator lives on the spine — pull createdById, resolve name below.
+            universalVoucher: { select: { createdById: true } },
             branch:    { select: { id: true, name: true } },
             // refVoucher powers parent-link surfaces — "Replaces <old ref>"
             // for a SALE_RETURN against a SALE, or "Linked to PO-…" on a GRN.
@@ -55,10 +56,16 @@ export async function GET(_req: Request, { params }: Params) {
     );
     const withAccount = <T extends { accountId: number }>(r: T) => ({ ...r, account: acctById.get(r.accountId) ?? null });
 
+    // 5D-2: resolve the creator's name from the spine's createdById.
+    const creator = voucher.universalVoucher?.createdById != null
+        ? await prisma.user.findUnique({ where: { id: voucher.universalVoucher.createdById }, select: { name: true } })
+        : null;
+
     // Derive party display fields from the frozen snapshot so the detail page +
     // form edit-load keep reading partyName / partyPhone / partyAddress.
     return NextResponse.json({
         ...voucher,
+        createdBy:    creator,
         tenders:      settlement.tenders.map(withAccount),
         charges:      settlement.charges.map(withAccount),
         partyName:    readPartyName(voucher.partyJson),
@@ -391,11 +398,15 @@ export async function PATCH(req: Request, { params }: Params) {
 
             const updatedRow = await tx.invVoucher.findUnique({
                 where: { id },
-                include: { createdBy: { select: { name: true } } },
+                include: { universalVoucher: { select: { createdById: true } } },   // 5D-2: creator on spine
             });
+            const creator = updatedRow?.universalVoucher?.createdById != null
+                ? await tx.user.findUnique({ where: { id: updatedRow.universalVoucher.createdById }, select: { name: true } })
+                : null;
             // Phase 5 5C: goods lines hang off the spine.
             return updatedRow ? {
                 ...updatedRow,
+                createdBy: creator,
                 lines: await tx.voucherInventoryLine.findMany({
                     where:   { universalVoucherId: updatedRow.universalVoucherId ?? -1 },
                     include: { product: { select: { id: true, sku: true, name: true } } },

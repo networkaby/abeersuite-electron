@@ -61,7 +61,7 @@ export async function GET(req: NextRequest) {
                     totalAmount:    true,
                     accountId:      true,
                     branch:         { select: { id: true, name: true } },
-                    createdBy:      { select: { name: true } },
+                    universalVoucher: { select: { createdById: true } },   // 5D-2: cashier from spine
                     universalVoucherId: true,
                     settlementJson: true,
                 },
@@ -74,6 +74,13 @@ export async function GET(req: NextRequest) {
             by: ["universalVoucherId"], where: { universalVoucherId: { in: uvIds } }, _count: { _all: true },
         });
         const lineCountByUv = new Map(lineCounts.map((c) => [c.universalVoucherId, c._count._all]));
+
+        // 5D-2: resolve cashier (creator) names from each row's spine createdById.
+        const creatorIds = [...new Set(vouchers.map((v) => v.universalVoucher?.createdById).filter((x): x is number => x != null))];
+        const cashierById = new Map(
+            (creatorIds.length === 0 ? [] : await prisma.user.findMany({ where: { id: { in: creatorIds } }, select: { id: true, name: true } }))
+                .map((u) => [u.id, u.name]),
+        );
 
         return NextResponse.json({
             total,
@@ -98,7 +105,7 @@ export async function GET(req: NextRequest) {
                     totalAmount:    v.totalAmount.toString(),
                     amountReceived: paid.toFixed(2),
                     branch:         v.branch?.name ?? "—",
-                    cashier:        v.createdBy?.name ?? "—",
+                    cashier:        (v.universalVoucher?.createdById != null ? cashierById.get(v.universalVoucher.createdById) : null) ?? "—",
                     lineCount:      v.universalVoucherId != null ? (lineCountByUv.get(v.universalVoucherId) ?? 0) : 0,
                 };
             }),

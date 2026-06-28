@@ -30,10 +30,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     // restore needs (charges/tenders/stock-ledger included — they were missing before).
     const voucherRow = await prisma.invVoucher.findUnique({
         where: { id: Number(id) },
-        include: {
-            // settlementJson (tender/charge input) is a scalar — captured in the snapshot automatically.
-            createdBy: { select: { id: true, name: true } },
-        },
+        // settlementJson (tender/charge input) is a scalar — captured in the snapshot
+        // automatically. 5D-2: creator lives on the spine (not needed for the snapshot).
+        include: { universalVoucher: { select: { createdById: true } } },
     });
     // Phase 5 5C: goods lines + stock ledger hang off the spine — load + attach.
     const voucher = voucherRow ? {

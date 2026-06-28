@@ -158,7 +158,7 @@ export async function createPosQuoteVoucher(opts: {
                 subtotal,
                 taxAmount,
                 totalAmount,
-                createdById: userId,
+                // 5D-2: creator lives on the spine.
             },
             select: { id: true, reference: true },
         });

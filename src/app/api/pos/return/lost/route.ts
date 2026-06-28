@@ -156,7 +156,7 @@ export async function POST(req: Request) {
                     subtotal:       subtotal + taxAmt,
                     taxAmount:      taxAmt,
                     totalAmount:    total,
-                    createdById:    user!.id,
+                    // 5D-2: creator lives on the spine.
                     // G4b: refund tender → settlementJson.
                     settlementJson: buildSettlementJson(
                         [{ accountId: refundAccountId, amount: total, method: data.refundMode === "CASH" ? "CASH" : null, reference: null }],

@@ -577,7 +577,7 @@ export async function POST(req: Request) {
                     subtotal,
                     taxAmount,
                     totalAmount,
-                    createdById:    user!.id,
+                    // 5D-2: creator lives on the spine (engineCreateSpine set it).
                     // G4b: tender + charge INPUT → settlementJson (the spine's
                     // role=TENDER/CHARGE GL lines are emitted from it on POST).
                     settlementJson: buildSettlementJson(tenderPayload, allCharges),
