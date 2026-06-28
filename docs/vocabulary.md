@@ -81,15 +81,15 @@ This file unifies what used to be two separate glossaries — the Transaction En
 | Term | Meaning | Series | Current code |
 | --- | --- | --- | --- |
 | **Voucher No** | the user-facing document number each *kind* gets from its **own** series — prefix + running sequence (+ optional suffix): `SV-2026-0001` (sale), `PMT-2026-0001` (payment), `POS-2026-0001` (counter sale), `CV-…` (contra)… What staff/customers see and print. | per voucher-kind | `UniversalVoucher.friendlyRef` → renaming to **`voucherNo`** |
-| **Universal Voucher No (UVNo)** | the **single global sequence across every voucher of every kind** — the spine's own canonical, unique id, prefix **`UV-`** (e.g. `UV-2026-0042`). One continuous run; never resets per kind. | one global | `UniversalVoucher.reference` → renaming to **`uvNo`** |
+| **Universal Voucher No (UVNo)** | the **single global identifier across every voucher of every kind** — the spine's `UniversalVoucher.id` IS it (no separate column). Display label **`UV-<id>`** (e.g. `UV-42`) via `formatUvNo()`. | one global (the row id) | `UniversalVoucher.id` + `formatUvNo()` (src/shared/lib/accountancy/uvNo.ts) |
 
-**Rule:** every voucher (spine row) holds **both** — a sale is Voucher No `SV-2026-0001` *and* Universal Voucher No `UV-2026-0042`. Independent sequences; never conflate them.
+**Rule:** every voucher (spine row) holds **both** — a sale is Voucher No `SV-2026-0001` *and* Universal Voucher No `UV-42`. The Voucher No is a per-kind string column; the UVNo is just the row id with a label.
 
-**The UVNo prefix is `UV-`, not `GL-`.** The spine is the **universal voucher**, not a GL-only artifact — it spans inventory-only and every other kind, so a `GL-` (General Ledger) prefix is wrong. Today the spine reuses the `GL_POSTING` series (`GL-…`); the rename moves it to a `UV-` series.
+**UVNo uses the `UV-` label, never `GL-`.** The spine is the **universal voucher**, not a GL-only artifact — it spans inventory-only and every other kind, so `GL-` (General Ledger) was wrong. There is **no number column** — the `id` already uniquely identifies the row, so a separate string (the old `GL_POSTING`/`reference`) was unnecessary and was dropped.
 
-**"reference" is NOT a number.** The word *reference* is reserved for a future column holding actual cross-references (e.g. "this voucher refers to bill X / PO Y") — descriptive links, not a sequence. Do **not** name either number `reference`.
+**"reference" is NOT a number.** The word *reference* is now free for a future column holding actual cross-references (e.g. "this voucher refers to bill X / PO Y") — descriptive links, not a sequence.
 
-**Status:** vocabulary **adopted (2026-06-28)**. **Pending** in schema + code: (1) `friendlyRef`→`voucherNo`; (2) `reference`→`uvNo` — surgical, since `reference` is overloaded (the spine's number, plus `VoucherGlLine.reference` = a tender's UPI/cheque ref, which is unrelated and stays); (3) the spine's number series moves off the `GL_POSTING`/`GL-` prefix onto a `UV-` series (seed + one-time migration, like PV→PMT).
+**Status:** **DONE (2026-06-28).** `friendlyRef`→`voucherNo` (commit `4a5261c0`); `UniversalVoucher.reference` dropped, `id`+`formatUvNo()` is the UVNo (commit `2071dc64`). Display readers show `voucherNo ?? formatUvNo(id)`. The dead `GL_POSTING` VoucherSeries is now orphaned (nothing mints it) — optional cleanup.
 
 ---
 
@@ -417,4 +417,4 @@ This file unifies what used to be two separate glossaries — the Transaction En
 
 ---
 
-_Last updated: 2026-06-28 — Added "Voucher No · Universal Voucher No (UVNo)": every voucher holds two numbers — the per-kind **Voucher No** (`friendlyRef`→`voucherNo`, e.g. SV-/PMT-/POS-) and the one global **Universal Voucher No** (`reference`→`uvNo`, prefix `UV-` NOT `GL-` since the spine spans inventory too). `reference` the word is reserved for a future cross-reference column, not a number; field rename + UV- series migration pending. Prior: 2026-06-27 — added the "Voucher lines" term (`VoucherGlLine` + `VoucherInventoryLine`; tenders/charges are role-tagged GL rows). 2026-06-25 — merged the transaction- and work-inbox vocabularies into one doc._
+_Last updated: 2026-06-28 — Added + IMPLEMENTED "Voucher No · Universal Voucher No (UVNo)": every voucher holds the per-kind **Voucher No** (`voucherNo`, e.g. SV-/PMT-/POS-, renamed from friendlyRef) and the global **Universal Voucher No** = the spine's `id` (label `UV-<id>` via formatUvNo; the old `reference` string was dropped — the id already identifies the row, and `GL-` wrongly implied GL-only). `reference` the word is now free for a future cross-reference column. Prior: 2026-06-27 — added the "Voucher lines" term (`VoucherGlLine` + `VoucherInventoryLine`; tenders/charges are role-tagged GL rows). 2026-06-25 — merged the transaction- and work-inbox vocabularies into one doc._
