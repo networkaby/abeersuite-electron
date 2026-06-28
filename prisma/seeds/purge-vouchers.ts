@@ -38,8 +38,8 @@ const TABLES = [
     "VoucherAllocation",
     // Inventory side
     "InvStockLedger",
-    "InvVoucherLine",
-    "InvVoucher",
+    "VoucherInventoryLine",
+    "VoucherDetail",
     // AuditLog — unified recycle-bin (replaced the 3 *Audit tables 2026-06-09)
     "AuditLog",
     // Invoice / Payment family was dropped on 2026-05-24 (Invoice →

@@ -509,9 +509,8 @@ model VoucherDetail {
   @@index([ticketId])
   @@index([dealId])
   @@index([orderStatusId])
-  // Phase 5 5D-13: model renamed InvVoucher → VoucherDetail (the 1:1 cosmetic/print
-  // sidecar). @@map keeps the physical table name so the rename is code-only.
-  @@map("InvVoucher")
+  // Phase 5 5D-18: physical table renamed InvVoucher → VoucherDetail to match the
+  // model (the @@map bandage removed). Dev-only ALTER TABLE RENAME, data preserved.
 }
 
 // Phase 4 G4c: renamed InvVoucherLine → VoucherInventoryLine (vocabulary.md — the
@@ -556,7 +555,8 @@ model VoucherInventoryLine {
 
   @@index([universalVoucherId])
   @@index([productId])
-  @@map("InvVoucherLine")
+  // Phase 5 5D-18: physical table renamed InvVoucherLine → VoucherInventoryLine to
+  // match the model (the @@map bandage removed). Dev-only rename, data preserved.
 }
 
 /// Immutable audit trail — one row per product per voucher line posted.
