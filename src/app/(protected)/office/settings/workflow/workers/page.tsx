@@ -232,13 +232,14 @@ function WorkerFormModal({
     // filters which the selector offers. Switching kind clears the selection.
     const humanWorks = works.filter((w) => (w.kind ?? "human") !== "auto");
     const autoWorks = works.filter((w) => w.kind === "auto");
-    const [execKind, setExecKind] = useState<"work" | "action">("work");
-    // Keep the toggle aligned with the currently-selected work's kind (e.g. on edit).
-    useEffect(() => {
-        const w = works.find((x) => x.id === form.workId);
-        if (w) setExecKind(w.kind === "auto" ? "action" : "work");
-    }, [form.workId, works]);
-    const pickExec = (k: "work" | "action") => { setExecKind(k); setForm({ ...form, workId: "" }); };
+    // `execKind` DERIVES from the selected work's kind (so it auto-aligns on edit /
+    // selection) and falls back to the user's manual toggle when no work is picked —
+    // computed during render instead of synced via a setState-in-effect.
+    const [execKindOverride, setExecKindOverride] = useState<"work" | "action">("work");
+    const execKind: "work" | "action" = selectedWork
+        ? (selectedWork.kind === "auto" ? "action" : "work")
+        : execKindOverride;
+    const pickExec = (k: "work" | "action") => { setExecKindOverride(k); setForm({ ...form, workId: "" }); };
 
     // ── Action chain (6th power) editors — each entry = a hook + when + arguments ─
     const addAction = () => setForm({ ...form, actions: [...form.actions, { type: ACTION_TYPES[0].type, on: "success", config: {} }] });

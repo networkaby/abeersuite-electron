@@ -59,7 +59,8 @@ export async function POST(req: Request) {
         // Phase 5 5E: the spine IS the finance voucher, so a VOUCHER target id
         // already IS the spine id — just normalise the target type onto the spine
         // (UNIVERSAL_VOUCHER) so all settlements read off one place.
-        let { targetType, targetId } = data;
+        const { targetId } = data;
+        let targetType = data.targetType;
         if (targetType === "VOUCHER") {
             targetType = "UNIVERSAL_VOUCHER";
         }

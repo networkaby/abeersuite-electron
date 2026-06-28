@@ -44,7 +44,7 @@ function GroupDialog({ open, onOpenChange, form, setForm, id, onSave, saving }: 
                     </div>
                     <label className="flex items-center gap-2 text-sm">
                         <Checkbox checked={form.gated} onCheckedChange={(c) => setForm({ ...form, gated: c === true })} />
-                        Gated <span className="text-xs text-muted-foreground">(only roles you grant the permission to can see this group's tickets in the Work Inbox)</span>
+                        Gated <span className="text-xs text-muted-foreground">(only roles you grant the permission to can see this group&apos;s tickets in the Work Inbox)</span>
                     </label>
                 </div>
                 <DialogFooter>

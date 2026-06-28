@@ -30,6 +30,11 @@ import { TICKET_SOURCES, USER_SOURCE, isUserArg, isEntryArg, isOutcomeArg, conte
 // separate Outcome section — never offered among context sources.
 const CONTEXT_GROUPS = [...new Set(TICKET_SOURCES.filter((s) => s.value !== USER_SOURCE).map((s) => s.group))];
 
+// Stable-enough unique key for a new arg row. Module-level so the random call
+// isn't traced into component render by the React Compiler (these are only ever
+// invoked from event handlers).
+const argKey = (prefix: string) => prefix + Math.random().toString(36).slice(2, 8);
+
 // Editor for a Work's arguments, split by DIRECTION + who fills them:
 //   • Worker context — info shown TO the helper. Two flavours:
 //       – supply rows: auto-pulled from the ticket (source = ticket field / Latest /
@@ -186,7 +191,7 @@ function WorkFormBody({ form, set, groups, contextVars }: {
     const supplyArg = (source: string) => args.find((a) => a.source === source);
     const toggleSupply = (source: string, label: string, on: boolean) => {
         const existing = supplyArg(source);
-        if (on) { if (!existing) onArgs([...args, { key: "c" + Math.random().toString(36).slice(2, 8), label, source }]); }
+        if (on) { if (!existing) onArgs([...args, { key: argKey("c"), label, source }]); }
         else if (existing) onArgs(args.filter((a) => a !== existing));
     };
 
@@ -198,7 +203,7 @@ function WorkFormBody({ form, set, groups, contextVars }: {
         const existing = qArg(on);
         if (!text.trim()) { onArgs(existing ? args.filter((a) => a !== existing) : args); return; }
         if (existing) onArgs(args.map((a) => (a === existing ? { ...a, label: text } : a)));
-        else onArgs([...args, { key: "q" + Math.random().toString(36).slice(2, 8), label: text, source: USER_SOURCE, kind: "text", on }]);
+        else onArgs([...args, { key: argKey("q"), label: text, source: USER_SOURCE, kind: "text", on }]);
     };
     // Plain JSX helper (NOT a nested component — that would drop focus each keystroke).
     const questionRow = (on: "success" | "fail", show: boolean) => show && (
