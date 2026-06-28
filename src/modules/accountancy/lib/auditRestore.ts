@@ -120,7 +120,7 @@ export async function restoreFromAudit(
             // Link the restored detail to the recreated spine (the JE id IS the spine id since G5).
             universalVoucherId: newJeId,
             // Sever volatile soft-links — targets may be gone; truth path self-corrects.
-            ticketId: null, dealId: null, refVoucherId: null,
+            refVoucherId: null,
             lines: { create: lines.map((l) => scalarsOf(l, ["voucherId", "product"])) },
         } as unknown as Prisma.VoucherDetailUncheckedCreateInput,
     });

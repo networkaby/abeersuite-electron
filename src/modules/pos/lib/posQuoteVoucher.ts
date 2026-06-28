@@ -145,8 +145,7 @@ export async function createPosQuoteVoucher(opts: {
                 partyType: body.partyType || null,
                 partyId: body.partyId || null,
                 deliveryMode: "COUNTER",
-                orderPipelineId: orderPipeline?.id ?? null,
-                orderStatusId,
+                // 5A-3: orderPipelineId/orderStatusId dropped — live on VoucherLink (syncVoucherLinks below).
                 discountPct: body.discountPct != null ? Number(body.discountPct) : null,
                 discountAmt: overallDiscount > 0 ? overallDiscount : null,
                 shippingAmt,
@@ -156,7 +155,7 @@ export async function createPosQuoteVoucher(opts: {
                 totalAmount,
                 // 5D-2: creator lives on the spine.
             },
-            select: { id: true, universalVoucher: { select: { voucherNo: true } } },   // 5D-6
+            select: { id: true },
         });
         // Phase 5 5C: goods lines hang off the spine.
         await tx.voucherInventoryLine.createMany({
@@ -209,10 +208,9 @@ export async function createPosQuoteVoucher(opts: {
                     body: `${LABEL[type]} ${reference} created (₹${totalAmount.toFixed(2)})${body.notes ? ` — ${body.notes}` : ""}`,
                 },
             });
-            await tx.voucherDetail.update({ where: { id: voucher.id }, data: { dealId } });
-            await syncVoucherLink(tx, spineId, "DEAL", dealId);   // Phase 5 5A dual-write
+            await syncVoucherLink(tx, spineId, "DEAL", dealId);
         }
 
-        return { voucherId: voucher.id, reference: voucher.universalVoucher?.voucherNo ?? "", dealId };
+        return { voucherId: voucher.id, reference, dealId };
     }, { timeout: 30_000, maxWait: 10_000 });
 }

@@ -88,8 +88,10 @@ export async function GET(req: NextRequest) {
     };
     const vouchers = await prisma.voucherDetail.findMany({
         where: {
-            universalVoucher: spineFilter,
-            ...(ticketIdParam    ? { ticketId:    Number(ticketIdParam) }    : {}),
+            universalVoucher: {
+                ...spineFilter,
+                ...(ticketIdParam ? { links: { some: { kind: "TICKET", targetId: ticketIdParam } } } : {}),
+            },
         },
         orderBy: [{ universalVoucher: { date: "desc" } }, { id: "desc" }],   // 5D-10: date on spine
         include: {
@@ -479,8 +481,7 @@ export async function POST(req: NextRequest) {
                     // 5D-11/5D-12: type + branch live on the spine (engineCreateSpine set them).
                     // 5D-6: reference (voucherNo) lives on the spine.
                     universalVoucherId: spineId,
-                    orderPipelineId,
-                    orderStatusId,
+                    // 5A-3: orderPipelineId/orderStatusId dropped — live on VoucherLink (syncVoucherLinks below).
                     // 5D-5/5D-10: description + date + 5D-4 party ledger live on the spine (set at engineCreateSpine).
                     partyJson:    buildPartyJson({ name: partyName, phone: partyPhone, address: partyAddress }) ?? Prisma.DbNull,
                     partyType:    partyType  || null,

@@ -80,7 +80,6 @@ model Ticket {
   children       Ticket[]            @relation("TicketChildren")
   logs           TicketLog[]
   participants   TicketParticipant[]
-  invVouchers    VoucherDetail[]        @relation("TicketInvVouchers")
 
   @@index([parentTicketId])
   @@index([status])

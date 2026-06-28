@@ -41,8 +41,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ sou
         const order = await prisma.voucherDetail.findUnique({
             where: { id },
             select: {
-                id: true, orderStatusId: true,
-                universalVoucher: { select: { partyAccountId: true, voucherNo: true, type: true, branchId: true } },   // 5D-4 party + 5D-6 ref + 5D-11 type + 5D-12 branch
+                id: true,
+                universalVoucher: { select: { partyAccountId: true, voucherNo: true, type: true, branchId: true, links: { where: { kind: "ORDER_STATUS" }, select: { targetId: true } } } },   // 5D-4 party + 5D-6 ref + 5D-11 type + 5D-12 branch
                 totalAmount: true,
                 partyJson: true, partyType: true, partyId: true,
                 discountAmt: true, discountPct: true, shippingAmt: true, roundOff: true,
@@ -52,12 +52,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ sou
         if (!order || (order.universalVoucher?.type !== "POS_ORDER" && order.universalVoucher?.type !== "SALES_ORDER")) {
             return NextResponse.json({ error: "Order not found" }, { status: 404 });
         }
+        const orderStatusId = order.universalVoucher?.links[0]?.targetId ?? null;
         // Phase 5 5C: goods lines hang off the spine.
         const orderLines = await prisma.voucherInventoryLine.findMany({
             where:  { universalVoucherId: order.universalVoucherId ?? -1 },
             select: { productId: true, quantity: true, rate: true, taxRate: true, mrpPaise: true },
         });
-        if (order.orderStatusId === ORDER_STAGE.DELIVERED || order.orderStatusId === ORDER_STAGE.CANCELLED || order.orderStatusId === ORDER_STAGE.RETURNED) {
+        if (orderStatusId === ORDER_STAGE.DELIVERED || orderStatusId === ORDER_STAGE.CANCELLED || orderStatusId === ORDER_STAGE.RETURNED) {
             return NextResponse.json({ error: "This order is already finalised." }, { status: 409 });
         }
         if (orderLines.length === 0) {
@@ -159,13 +160,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ sou
             // a no-op today since no capture UI produces holds yet.)
             await executeRedemptions({ source: "inv", id }, tx);
             await tx.voucherDetail.update({ where: { id: sale.id }, data: { refVoucherId: id } }); // sale → order
-            const delivered = await tx.voucherDetail.update({
-                where:  { id },
-                data:   { orderStatusId: ORDER_STAGE.DELIVERED },
-                select: { universalVoucherId: true },
-            });
-            // Phase 5 5A: keep the spine's ORDER_STATUS VoucherLink in step.
-            await syncVoucherLink(tx, delivered.universalVoucherId, "ORDER_STATUS", ORDER_STAGE.DELIVERED);
+            await syncVoucherLink(tx, order.universalVoucherId, "ORDER_STATUS", ORDER_STAGE.DELIVERED);
         }, { timeout: 30_000, maxWait: 10_000 });
 
         return NextResponse.json({ saleId: sale.id, saleRef: sale.reference, paid: paidTotal, onCredit });

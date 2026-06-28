@@ -22,8 +22,6 @@ model Pipeline {
   deals         Deal[]
   shopOrders    ShopOrder[]
   tasks         Task[]
-  // Order-type InvVouchers (POS_ORDER / SALES_ORDER) riding this pipeline (O2C P7).
-  orderVouchers VoucherDetail[]   @relation("OrderVoucherPipeline")
   // Deliveries riding this pipeline (O2C P8).
   deliveries    Delivery[]     @relation("DeliveryPipeline")
   // Refunds riding this pipeline (O2C P9).
@@ -64,7 +62,6 @@ model TicketStatus {
   deals           Deal[]
   shopOrders      ShopOrder[]
   tasks           Task[]
-  orderVouchers   VoucherDetail[]       @relation("OrderVoucherStatus")
   deliveries      Delivery[]         @relation("DeliveryStatus")
   refunds         Refund[]           @relation("RefundStatus")
 }

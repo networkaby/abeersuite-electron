@@ -35,13 +35,18 @@ export async function listOrders(opts?: { statusId?: string }): Promise<Normaliz
     const [invs, shops] = await Promise.all([
         prisma.voucherDetail.findMany({
             where: {
-                orderStatusId: statusWhere,
-                universalVoucher: { deletedAt: null, type: { in: ["POS_ORDER", "SALES_ORDER"] } },   // 5D-8 lifecycle + 5D-11 type on spine
+                universalVoucher: {
+                    deletedAt: null,
+                    type: { in: ["POS_ORDER", "SALES_ORDER"] },
+                    ...(opts?.statusId
+                        ? { links: { some: { kind: "ORDER_STATUS", targetId: opts.statusId } } }
+                        : { links: { some: { kind: "ORDER_STATUS" } } }),
+                },
             },
             select: {
                 id: true, partyJson: true,
-                universalVoucher: { select: { partyAccountId: true, voucherNo: true, type: true, branchId: true } },   // 5D-4 party + 5D-6 ref + 5D-11 type + 5D-12 branch
-                totalAmount: true, orderStatusId: true, dealId: true, createdAt: true,
+                universalVoucher: { select: { partyAccountId: true, voucherNo: true, type: true, branchId: true, links: { select: { kind: true, targetId: true } } } },
+                totalAmount: true, createdAt: true,
             },
             orderBy: { createdAt: "desc" },
         }),
@@ -72,6 +77,9 @@ export async function listOrders(opts?: { statusId?: string }): Promise<Normaliz
             const breach = limit === 0 ? total > 0.005 : outstanding + total > limit + 0.005;
             credit = { limit, outstanding: Math.max(0, outstanding), breach };
         }
+        const uvLinks = v.universalVoucher?.links ?? [];
+        const statusId = uvLinks.find((l) => l.kind === "ORDER_STATUS")?.targetId ?? null;
+        const dealIdStr = uvLinks.find((l) => l.kind === "DEAL")?.targetId ?? null;
         return {
             source: "inv",
             id: v.id,
@@ -79,9 +87,9 @@ export async function listOrders(opts?: { statusId?: string }): Promise<Normaliz
             kind: v.universalVoucher?.type as "POS_ORDER" | "SALES_ORDER",
             customerName: readPartyName(v.partyJson),
             total,
-            statusId: v.orderStatusId,
+            statusId,
             branchId: v.universalVoucher?.branchId ?? null,
-            dealId: v.dealId,
+            dealId: dealIdStr != null ? parseInt(dealIdStr, 10) : null,
             createdAt: v.createdAt.toISOString(),
             credit,
         };
@@ -106,9 +114,12 @@ export async function listOrders(opts?: { statusId?: string }): Promise<Normaliz
 /** Resolve an OrderRef to its backing object's current pipeline state. */
 export async function resolveOrderStatus(ref: OrderRef): Promise<{ statusId: string | null } | null> {
     if (ref.source === "inv") {
-        const v = await prisma.voucherDetail.findUnique({ where: { id: ref.id }, select: { orderStatusId: true, universalVoucher: { select: { deletedAt: true } } } });   // 5D-8
+        const v = await prisma.voucherDetail.findUnique({
+            where: { id: ref.id },
+            select: { universalVoucher: { select: { deletedAt: true, links: { where: { kind: "ORDER_STATUS" }, select: { targetId: true } } } } },
+        });
         if (!v || v.universalVoucher?.deletedAt) return null;
-        return { statusId: v.orderStatusId };
+        return { statusId: v.universalVoucher?.links[0]?.targetId ?? null };
     }
     const o = await prisma.shopOrder.findUnique({ where: { id: ref.id }, select: { statusId: true } });
     return o ? { statusId: o.statusId } : null;
@@ -117,16 +128,8 @@ export async function resolveOrderStatus(ref: OrderRef): Promise<{ statusId: str
 /** Write a new P7 stage onto the backing object (the only differing line per source). */
 export async function writeOrderStatus(ref: OrderRef, statusId: string): Promise<void> {
     if (ref.source === "inv") {
-        // Phase 5 5A: keep the spine's ORDER_STATUS VoucherLink in step with the
-        // column (dual-write) — atomically so the board reader can't see a half-move.
-        await prisma.$transaction(async (tx) => {
-            const v = await tx.voucherDetail.update({
-                where:  { id: ref.id },
-                data:   { orderStatusId: statusId },
-                select: { universalVoucherId: true },
-            });
-            await syncVoucherLink(tx, v.universalVoucherId, "ORDER_STATUS", statusId);
-        });
+        const v = await prisma.voucherDetail.findUnique({ where: { id: ref.id }, select: { universalVoucherId: true } });
+        await prisma.$transaction((tx) => syncVoucherLink(tx, v?.universalVoucherId, "ORDER_STATUS", statusId));
     } else {
         await prisma.shopOrder.update({ where: { id: ref.id }, data: { statusId } });
     }
