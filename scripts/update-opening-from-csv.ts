@@ -75,9 +75,9 @@ async function main(): Promise<void> {
 
     // ── Safety gate — refuse to sync cache if vouchers exist ─────────────────
     if (!OPENING_ONLY) {
-        const voucherCount = await prisma.invVoucher.count();
+        const voucherCount = await prisma.voucherDetail.count();
         if (voucherCount > 0) {
-            console.error(`✗ ${voucherCount} InvVoucher rows exist. Re-run with --opening-only so we don't clobber running stock cache.`);
+            console.error(`✗ ${voucherCount} VoucherDetail rows exist. Re-run with --opening-only so we don't clobber running stock cache.`);
             process.exit(1);
         }
     }

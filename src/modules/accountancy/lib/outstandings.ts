@@ -268,7 +268,7 @@ async function loadOpenBills(
         : invType === "SALE"
             ? { in: [...saleSideTypes] }
             : { in: [...purchaseSideTypes] };
-    const invVouchers = accountIds.length === 0 ? [] : await prisma.invVoucher.findMany({
+    const invVouchers = accountIds.length === 0 ? [] : await prisma.voucherDetail.findMany({
         where: {
             // 5D-8 lifecycle + 5D-10 date + 5D-11 type on spine
             universalVoucher: { status: "POSTED", deletedAt: null, date: { lte: asOf }, type: invTypeFilter },
@@ -385,7 +385,7 @@ export async function getOpenSaleBillsForFifo(
     if (account.personId !== null) partyOr.push({ partyType: "customer", partyId: { in: [account.personId] } });
     if (account.companyId !== null) partyOr.push({ partyType: "company", partyId: { in: [account.companyId] } });
 
-    const invVouchers = await tx.invVoucher.findMany({
+    const invVouchers = await tx.voucherDetail.findMany({
         where: {
             // 5D-8 lifecycle + 5D-10 date + 5D-11 type on spine
             universalVoucher: { status: "POSTED", deletedAt: null, date: { lte: asOf }, type: { in: ["SALE", "POS"] } },

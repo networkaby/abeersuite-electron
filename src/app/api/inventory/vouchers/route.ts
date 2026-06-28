@@ -86,7 +86,7 @@ export async function GET(req: NextRequest) {
         ...(accountIdParam ? { partyAccountId: Number(accountIdParam) } : {}),
         ...(branchScopeId ? { branchId: branchScopeId } : {}),
     };
-    const vouchers = await prisma.invVoucher.findMany({
+    const vouchers = await prisma.voucherDetail.findMany({
         where: {
             universalVoucher: spineFilter,
             ...(ticketIdParam    ? { ticketId:    Number(ticketIdParam) }    : {}),
@@ -475,7 +475,7 @@ export async function POST(req: NextRequest) {
                 branchId,   // 5D-12: branch primary on the spine
                 userId,
             });
-            const created = await tx.invVoucher.create({
+            const created = await tx.voucherDetail.create({
                 data: {
                     // 5D-11/5D-12: type + branch live on the spine (engineCreateSpine set them).
                     // 5D-6: reference (voucherNo) lives on the spine.

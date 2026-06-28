@@ -38,7 +38,7 @@ export default async function PosReceiptPage({
     // → intra-state → single "Tax" row (legacy behaviour).
     const placeOfSupplyParam = (sp.placeOfSupply ?? "").trim();
 
-    const voucherRow = await prisma.invVoucher.findUnique({
+    const voucherRow = await prisma.voucherDetail.findUnique({
         where: { id: Number(id) },
         include: { universalVoucher: { select: { partyAccountId: true, voucherNo: true, date: true } } },   // 5D-4 party + 5D-6 ref + 5D-10 date
     });

@@ -19,7 +19,7 @@ const pool = new Pool({ connectionString: rawUrl, ssl: /@(localhost|127\.0\.0\.1
 const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
 
 async function main() {
-    const vouchers = await prisma.invVoucher.findMany({
+    const vouchers = await prisma.voucherDetail.findMany({
         where: {
             universalVoucherId: { not: null },
             OR: [

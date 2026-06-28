@@ -73,7 +73,7 @@ export async function invNextRef(
     const year = new Date().getFullYear();
     const prefix = PREFIX[type];
     const startsWith = `${prefix}-${year}-`;
-    const count = await tx.invVoucher.count({ where: { universalVoucher: { voucherNo: { startsWith } } } });   // 5D-6: ref on spine
+    const count = await tx.voucherDetail.count({ where: { universalVoucher: { voucherNo: { startsWith } } } });   // 5D-6: ref on spine
     return `${startsWith}${String(count + 1).padStart(4, "0")}`;
 }
 

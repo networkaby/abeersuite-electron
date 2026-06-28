@@ -39,7 +39,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     const { id } = await params;
     const userId = user!.id;
 
-    const voucherRow = await prisma.invVoucher.findUnique({
+    const voucherRow = await prisma.voucherDetail.findUnique({
         where: { id: Number(id) },
         include: {
             // 5D-5 description + 5D-6 ref + 5D-8 status + 5D-10 date + 5D-11 type + 5D-12 branch(+state) live on the spine — needed for saleToSpec / messages / the DRAFT gate / stock rows / direction / the CGST/SGST-vs-IGST split.
@@ -203,7 +203,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                         //   POSTED PS voucher exists for this (product, branch,
                         //   date). voucher.id is excluded so re-running on the
                         //   same DRAFT is idempotent.
-                        const priorSameDay = await tx.invVoucher.count({
+                        const priorSameDay = await tx.voucherDetail.count({
                             where: {
                                 id:       { not: voucher.id },
                                 // 5D-8 status + 5D-10 date + 5D-11 type + 5D-12 branch on spine + Phase 5 5C: goods lines hang off the spine.
@@ -384,7 +384,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
 
             // ── 3. Link the detail to its (now POSTED) spine ──────────────
             // 5D-8: status POSTED set on the spine above; 5D-5: postedAt too.
-            const updated = await tx.invVoucher.update({
+            const updated = await tx.voucherDetail.update({
                 where: { id: voucher.id },
                 data:  {
                     universalVoucherId,

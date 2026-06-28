@@ -10,7 +10,7 @@ import type { OrderRef } from "./orderAdapter";
 async function orderLines(ref: OrderRef): Promise<{ productId: number; quantity: number }[]> {
     if (ref.source === "inv") {
         // Phase 5 5C: goods lines hang off the spine.
-        const v = await prisma.invVoucher.findUnique({ where: { id: ref.id }, select: { universalVoucherId: true } });
+        const v = await prisma.voucherDetail.findUnique({ where: { id: ref.id }, select: { universalVoucherId: true } });
         const lines = v?.universalVoucherId != null
             ? await prisma.voucherInventoryLine.findMany({ where: { universalVoucherId: v.universalVoucherId }, select: { productId: true, quantity: true } })
             : [];

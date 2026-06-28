@@ -35,7 +35,7 @@ model Branch {
   // Phase 5 5D-12: the primary voucher branch is on the spine now (UvBranch);
   // InvVoucher keeps only destinationBranch (branch-transfer detail).
   universalVouchers UniversalVoucher[] @relation("UvBranch")
-  invVouchersAsDest InvVoucher[]       @relation("InvVoucherDestBranch")
+  invVouchersAsDest VoucherDetail[]       @relation("InvVoucherDestBranch")
   invStockLedger    InvStockLedger[]   @relation("InvStockLedgerBranch")
   invProductStock   InvProductBranch[]
 

@@ -57,7 +57,7 @@ const partyAccountSelect = {
 
 // ── Inventory voucher (SALE / PURCHASE / returns / GRN / CHALLAN / …) ────────
 async function buildInvSample(id: number): Promise<VoucherReceiptData> {
-    const vRow = await prisma.invVoucher.findUnique({
+    const vRow = await prisma.voucherDetail.findUnique({
         where: { id },
         include: { universalVoucher: { select: { partyAccountId: true, description: true, voucherNo: true, date: true, type: true } } },   // 5D-4 party + 5D-5 desc + 5D-6 ref + 5D-10 date + 5D-11 type
     });

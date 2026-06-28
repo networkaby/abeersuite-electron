@@ -142,7 +142,7 @@ export async function POST(req: NextRequest) {
                 // (voucher.universalVoucherId). The carrier InvVoucher is kept as a
                 // thin sidecar pointing at the same spine.
                 const jvSpineId = (voucher as { universalVoucherId: number | null }).universalVoucherId!;
-                const carrier = await tx.invVoucher.create({
+                const carrier = await tx.voucherDetail.create({
                     data: {
                         // 5D-11: type lives on the spine. NOTE: this carrier previously
                         // tagged itself MANUFACTURING_JOURNAL while its (shared) spine

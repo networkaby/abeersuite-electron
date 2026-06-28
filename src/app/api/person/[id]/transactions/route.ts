@@ -30,7 +30,7 @@ export async function GET(
         });
 
         const rawVouchers = account
-            ? await prisma.invVoucher.findMany({
+            ? await prisma.voucherDetail.findMany({
                 where: {
                     universalVoucher: { deletedAt: null, date: { gte: from, lte: to } },   // 5D-8 lifecycle + 5D-10 date on spine
                     OR: [

@@ -20,7 +20,7 @@ export async function GET(_req: Request, { params }: Params) {
     if (response) return response;
 
     const { id } = await params;
-    const voucherRow = await prisma.invVoucher.findUnique({
+    const voucherRow = await prisma.voucherDetail.findUnique({
         where: { id: Number(id) },
         include: {
             // 5D-2 creator + 5D-6 ref + 5D-11 type + 5D-12 branch live on the spine.
@@ -110,7 +110,7 @@ export async function PATCH(req: Request, { params }: Params) {
     const id = Number(idStr);
     if (!Number.isFinite(id)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
 
-    const existing = await prisma.invVoucher.findUnique({ where: { id }, include: { universalVoucher: { select: { voucherNo: true, status: true, deletedAt: true, type: true } } } });   // 5D-6/5D-8/5D-11
+    const existing = await prisma.voucherDetail.findUnique({ where: { id }, include: { universalVoucher: { select: { voucherNo: true, status: true, deletedAt: true, type: true } } } });   // 5D-6/5D-8/5D-11
     if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
     // Phase 5 5C: capture old line product ids (goods hang off the spine) for the
     // after-commit pricing recompute — the lines themselves are rewritten below.
@@ -270,7 +270,7 @@ export async function PATCH(req: Request, { params }: Params) {
                 const origJe = existing.universalVoucherId
                     ? await tx.universalVoucher.findUnique({ where: { id: existing.universalVoucherId }, include: { lines: true } })
                     : null;
-                const oldSnapRow = await tx.invVoucher.findUnique({ where: { id } });
+                const oldSnapRow = await tx.voucherDetail.findUnique({ where: { id } });
                 const oldSnap = oldSnapRow ? {
                     ...oldSnapRow,
                     lines: await tx.voucherInventoryLine.findMany({ where: { universalVoucherId: existing.universalVoucherId ?? -1 } }),
@@ -316,7 +316,7 @@ export async function PATCH(req: Request, { params }: Params) {
             }
             // Status stays POSTED for posted edits; the re-post below sets a
             // fresh journalEntryId. For draft edits the row is unchanged.
-            await tx.invVoucher.update({
+            await tx.voucherDetail.update({
                 where: { id },
                 data: {
                     // 5D-5/5D-10: description + date live on the spine (updated below).
@@ -380,7 +380,7 @@ export async function PATCH(req: Request, { params }: Params) {
             // PHASE 3 — Reapply IN PLACE (POSTED only)
             // ────────────────────────────────────────────────────────────
             if (wasPosted) {
-                const freshRow = await tx.invVoucher.findUnique({ where: { id }, include: { universalVoucher: { select: { date: true, type: true, branchId: true } } } });   // 5D-10 date + 5D-11 type + 5D-12 branch
+                const freshRow = await tx.voucherDetail.findUnique({ where: { id }, include: { universalVoucher: { select: { date: true, type: true, branchId: true } } } });   // 5D-10 date + 5D-11 type + 5D-12 branch
                 if (!freshRow) throw new Error("Voucher disappeared mid-transaction");
                 // Phase 5 5C: goods lines hang off the spine. 5D-10/11/12: date + type +
                 // branch from the spine drive saleToSpec (GL/stock mapping) + the ledger rows.
@@ -411,11 +411,11 @@ export async function PATCH(req: Request, { params }: Params) {
                 const newSpine = existing.universalVoucherId != null
                     ? await tx.universalVoucher.findUnique({ where: { sourceJournalEntryId: existing.universalVoucherId }, select: { id: true } })
                     : null;
-                await tx.invVoucher.update({ where: { id }, data: { universalVoucherId: newSpine?.id ?? null } });   // 5D-5: postedAt on spine
+                await tx.voucherDetail.update({ where: { id }, data: { universalVoucherId: newSpine?.id ?? null } });   // 5D-5: postedAt on spine
                 // Phase 5 5C: link the rewritten stock rows (+ any new goods lines) to the spine.
             }
 
-            const updatedRow = await tx.invVoucher.findUnique({
+            const updatedRow = await tx.voucherDetail.findUnique({
                 where: { id },
                 include: { universalVoucher: { select: { createdById: true } } },   // 5D-2: creator on spine
             });
@@ -455,12 +455,12 @@ export async function DELETE(_req: Request, { params }: Params) {
     if (response) return response;
 
     const { id } = await params;
-    const existing = await prisma.invVoucher.findUnique({ where: { id: Number(id) }, include: { universalVoucher: { select: { status: true } } } });   // 5D-8
+    const existing = await prisma.voucherDetail.findUnique({ where: { id: Number(id) }, include: { universalVoucher: { select: { status: true } } } });   // 5D-8
     if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
     if (existing.universalVoucher?.status !== "DRAFT") {
         return NextResponse.json({ error: "Only DRAFT vouchers can be deleted via this route. Use /cancel or /delete for lifecycle." }, { status: 409 });
     }
     await prisma.voucherInventoryLine.deleteMany({ where: { universalVoucherId: existing.universalVoucherId ?? -1 } });
-    await prisma.invVoucher.delete({ where: { id: Number(id) } });
+    await prisma.voucherDetail.delete({ where: { id: Number(id) } });
     return NextResponse.json({ ok: true });
 }

@@ -25,7 +25,7 @@ const PENDING_TYPES = Object.keys(SETTLES_BY) as PendingType[];
 // Voucher types that move stock OUT of the warehouse
 const OUT_TYPES = new Set<PendingType>(["CHALLAN", "REJECTION_OUT"]);
 
-function unsettledClause(type: PendingType): Prisma.InvVoucherWhereInput {
+function unsettledClause(type: PendingType): Prisma.VoucherDetailWhereInput {
     return {
         // 5D-11: type lives on the spine (both for this voucher and its returns).
         universalVoucher: { type: InvVoucherType[type] },
@@ -59,7 +59,7 @@ export async function GET(req: NextRequest) {
     }
 
     // 5D-8/5D-10/5D-12: status/deletedAt + date + branch all live on the spine.
-    const where: Prisma.InvVoucherWhereInput = {
+    const where: Prisma.VoucherDetailWhereInput = {
         universalVoucher: {
             status: VoucherStatus.POSTED,
             deletedAt: null,
@@ -69,7 +69,7 @@ export async function GET(req: NextRequest) {
         OR: PENDING_TYPES.map(unsettledClause),
     };
 
-    const voucherRows = await prisma.invVoucher.findMany({
+    const voucherRows = await prisma.voucherDetail.findMany({
         where,
         orderBy: [{ universalVoucher: { date: "asc" } }, { id: "asc" }],   // 5D-10
         include: { universalVoucher: { select: { voucherNo: true, date: true, type: true, branchId: true, branch: { select: { id: true, name: true } } } } },   // 5D-6 + 5D-10 date + 5D-11 type + 5D-12 branch

@@ -134,7 +134,7 @@ export async function createPosQuoteVoucher(opts: {
             where: { id: spineId },
             data:  { status: "POSTED", postedAt: new Date(), sourceCreatedAt: new Date() },
         });
-        const voucher = await tx.invVoucher.create({
+        const voucher = await tx.voucherDetail.create({
             data: {
                 // 5D-11/5D-12: type + branch live on the spine (engineCreateSpine set them).
                 // 5D-8: status "issued"/POSTED set on the spine above (no GL lines → gate-neutral).
@@ -209,7 +209,7 @@ export async function createPosQuoteVoucher(opts: {
                     body: `${LABEL[type]} ${reference} created (₹${totalAmount.toFixed(2)})${body.notes ? ` — ${body.notes}` : ""}`,
                 },
             });
-            await tx.invVoucher.update({ where: { id: voucher.id }, data: { dealId } });
+            await tx.voucherDetail.update({ where: { id: voucher.id }, data: { dealId } });
             await syncVoucherLink(tx, spineId, "DEAL", dealId);   // Phase 5 5A dual-write
         }
 

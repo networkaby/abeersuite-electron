@@ -34,6 +34,17 @@ Guidelines:
 - Always check impact on seeds, APIs, and UI before removing anything.
 - Keep code easy to understand for future developers.
 
+### Evolving concepts
+
+Some domain ideas are still changing during refactoring. **Do not mix old and new concepts** in the same change — one model per flow, one vocabulary per surface.
+
+When old and new conflict:
+
+1. **Ask for confirmation** before picking a direction, or
+2. **Park the conflict** — note it clearly and resolve in a follow-up; use a **temporary bridge** only when something must keep working across both models until migration is done.
+
+Bridges must be obvious (comment, `TODO`, or `PROJECT_BRAIN.md` note) and removed once the new concept wins.
+
 ---
 
 ## 3. Reuse Before Creating

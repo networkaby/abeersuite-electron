@@ -24,7 +24,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ source:
     const id = Number(idStr);
     if (source !== "inv" || !Number.isInteger(id)) return NextResponse.json({ error: "Unsupported order ref" }, { status: 400 });
     try {
-        const v = await prisma.invVoucher.findUnique({
+        const v = await prisma.voucherDetail.findUnique({
             where: { id },
             select: {
                 id: true, orderStatusId: true, partyJson: true,
@@ -98,7 +98,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ source
             if (!l.productId || !(l.quantity > 0)) return NextResponse.json({ error: "Each line needs a product and quantity > 0." }, { status: 400 });
         }
 
-        const order = await prisma.invVoucher.findUnique({ where: { id }, select: { orderStatusId: true, universalVoucher: { select: { type: true } } } });   // 5D-11
+        const order = await prisma.voucherDetail.findUnique({ where: { id }, select: { orderStatusId: true, universalVoucher: { select: { type: true } } } });   // 5D-11
         if (!order || (order.universalVoucher?.type !== "POS_ORDER" && order.universalVoucher?.type !== "SALES_ORDER" && order.universalVoucher?.type !== "POS_ESTIMATE")) return NextResponse.json({ error: "Order not found" }, { status: 404 });
         // Estimates are GL-silent quotes → always editable. Orders only at New / Under-Review.
         if (order.universalVoucher?.type !== "POS_ESTIMATE" && (!order.orderStatusId || !EDITABLE_STAGES.includes(order.orderStatusId))) {
@@ -121,10 +121,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ source
 
         await prisma.$transaction(async (tx) => {
             // Phase 5 5C: goods lines hang off the spine.
-            const inv = await tx.invVoucher.findUnique({ where: { id }, select: { universalVoucherId: true } });
+            const inv = await tx.voucherDetail.findUnique({ where: { id }, select: { universalVoucherId: true } });
             const spineId = inv?.universalVoucherId ?? -1;
             await tx.voucherInventoryLine.deleteMany({ where: { universalVoucherId: spineId } });
-            await tx.invVoucher.update({
+            await tx.voucherDetail.update({
                 where: { id },
                 data: {
                     subtotal, taxAmount, totalAmount,

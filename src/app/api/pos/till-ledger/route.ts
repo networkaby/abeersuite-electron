@@ -60,7 +60,7 @@ export async function GET(req: NextRequest) {
         // Phase 5 5E: the spine IS the financial voucher, so the RECEIPT/PAYMENT
         // case reads straight off the spine — no separate Voucher lookup.
         const uvIds = [...new Set(lines.map((l) => l.universalVoucher.id))];
-        const invs = await prisma.invVoucher.findMany({ where: { universalVoucherId: { in: uvIds } }, select: { id: true, universalVoucherId: true } });
+        const invs = await prisma.voucherDetail.findMany({ where: { universalVoucherId: { in: uvIds } }, select: { id: true, universalVoucherId: true } });
         const invByUv = new Map(invs.filter((i) => i.universalVoucherId != null).map((i) => [i.universalVoucherId!, i]));
 
         let balance = openingBalance;

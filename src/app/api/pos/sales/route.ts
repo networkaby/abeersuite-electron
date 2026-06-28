@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
     try {
         // 5D-8/5D-10: status + date live on the spine. (Typed so excess-property
         // drift is caught — the prior untyped literal silently kept status/date.)
-        const where: Prisma.InvVoucherWhereInput = {
+        const where: Prisma.VoucherDetailWhereInput = {
             universalVoucher: {
                 type: "POS",   // 5D-11
                 status: "POSTED",
@@ -52,8 +52,8 @@ export async function GET(req: NextRequest) {
         };
 
         const [total, vouchers] = await Promise.all([
-            prisma.invVoucher.count({ where }),
-            prisma.invVoucher.findMany({
+            prisma.voucherDetail.count({ where }),
+            prisma.voucherDetail.findMany({
                 where,
                 orderBy: { universalVoucher: { date: "desc" } },   // 5D-10
                 take,

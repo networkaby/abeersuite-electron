@@ -322,7 +322,7 @@ export async function POST(req: Request) {
         couponExpenseAccountId = couponConfig.couponExpenseAccountId;
         // First-time buyer = no prior POSTED SALE/POS voucher (identified only).
         const isNewCustomer = isIdentified
-            ? (await prisma.invVoucher.count({ where: { universalVoucher: { partyAccountId: customerAccount.id, status: "POSTED", deletedAt: null, type: { in: ["SALE", "POS"] } } } })) === 0
+            ? (await prisma.voucherDetail.count({ where: { universalVoucher: { partyAccountId: customerAccount.id, status: "POSTED", deletedAt: null, type: { in: ["SALE", "POS"] } } } })) === 0
             : false;
         // Coupon eligibility needs each line's taxonomy (include/exclude rules).
         // Reuse the loyalty earn lines when present; else load just for the coupon.
@@ -554,7 +554,7 @@ export async function POST(req: Request) {
                 branchId:       activeBranchId,   // 5D-12: branch primary on the spine
                 userId:         user!.id,
             });
-            const voucher = await tx.invVoucher.create({
+            const voucher = await tx.voucherDetail.create({
                 data: {
                     // 5D-11/5D-12: type + branch live on the spine (engineCreateSpine set them).
                     universalVoucherId: spineId,
@@ -627,7 +627,7 @@ export async function POST(req: Request) {
                     [],
                 );
             }
-            await tx.invVoucher.update({
+            await tx.voucherDetail.update({
                 where: { id: voucher.id },
                 data:  { universalVoucherId: gl.universalVoucherId },
             });
@@ -673,7 +673,7 @@ export async function POST(req: Request) {
                 // customer has now crossed (one-time per tier). Lifetime spend is
                 // aggregated inside the tx so it includes the just-posted sale.
                 if (milestoneTiers.length > 0) {
-                    const spendAgg = await tx.invVoucher.aggregate({
+                    const spendAgg = await tx.voucherDetail.aggregate({
                         where: { universalVoucher: { partyAccountId: customerAccount.id, status: "POSTED", deletedAt: null, type: { in: ["SALE", "POS"] } } },
                         _sum: { totalAmount: true },
                     });

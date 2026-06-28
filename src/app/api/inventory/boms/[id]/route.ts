@@ -74,7 +74,7 @@ export async function DELETE(_req: Request, { params }: Params) {
         // Refuse to delete BOMs that have been used on any voucher so the
         // audit trail (InvVoucher.bomId) doesn't dangle. Cancelled/draft
         // vouchers still count — operators can deactivate instead.
-        const used = await prisma.invVoucher.count({ where: { bomId: id } });
+        const used = await prisma.voucherDetail.count({ where: { bomId: id } });
         if (used > 0) {
             return NextResponse.json({ error: "Cannot delete a BOM that's been used on a voucher. Deactivate it instead." }, { status: 400 });
         }

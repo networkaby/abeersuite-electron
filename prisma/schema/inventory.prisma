@@ -386,7 +386,7 @@ model RedemptionHold {
 
 // ── Stock Vouchers (Purchase / Sale) ─────────────────────────────────────────
 
-model InvVoucher {
+model VoucherDetail {
   id                  Int                    @id @default(autoincrement())
   // Phase 5 5D-11: `type` dropped — lives on the spine (UniversalVoucher.type, a
   // String spanning every voucher kind). Readers reach it via `universalVoucher.type`.
@@ -423,8 +423,8 @@ model InvVoucher {
   /// lets a SALE_RETURN link to the original SALE (and PURCHASE_RETURN to
   /// the original PURCHASE) so the detail page can show the relationship.
   refVoucherId        Int?
-  refVoucher          InvVoucher?            @relation("InvVoucherRef", fields: [refVoucherId], references: [id])
-  refReturns          InvVoucher[]           @relation("InvVoucherRef")
+  refVoucher          VoucherDetail?            @relation("InvVoucherRef", fields: [refVoucherId], references: [id])
+  refReturns          VoucherDetail[]           @relation("InvVoucherRef")
   /// Number of days from voucher date until payment is due. Only for CREDIT mode.
   creditPeriodDays    Int?
   /// State code where the supply happens — drives intra/inter-state GST split.
@@ -510,6 +510,9 @@ model InvVoucher {
   @@index([ticketId])
   @@index([dealId])
   @@index([orderStatusId])
+  // Phase 5 5D-13: model renamed InvVoucher → VoucherDetail (the 1:1 cosmetic/print
+  // sidecar). @@map keeps the physical table name so the rename is code-only.
+  @@map("InvVoucher")
 }
 
 // Phase 4 G4c: renamed InvVoucherLine → VoucherInventoryLine (vocabulary.md — the
@@ -599,7 +602,7 @@ model InvBom {
   description     String?
   isActive        Boolean      @default(true)
   lines           InvBomLine[]
-  vouchers        InvVoucher[]
+  vouchers        VoucherDetail[]
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 

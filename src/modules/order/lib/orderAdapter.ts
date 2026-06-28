@@ -33,7 +33,7 @@ export async function listOrders(opts?: { statusId?: string }): Promise<Normaliz
     const statusWhere = opts?.statusId ? opts.statusId : { not: null };
 
     const [invs, shops] = await Promise.all([
-        prisma.invVoucher.findMany({
+        prisma.voucherDetail.findMany({
             where: {
                 orderStatusId: statusWhere,
                 universalVoucher: { deletedAt: null, type: { in: ["POS_ORDER", "SALES_ORDER"] } },   // 5D-8 lifecycle + 5D-11 type on spine
@@ -106,7 +106,7 @@ export async function listOrders(opts?: { statusId?: string }): Promise<Normaliz
 /** Resolve an OrderRef to its backing object's current pipeline state. */
 export async function resolveOrderStatus(ref: OrderRef): Promise<{ statusId: string | null } | null> {
     if (ref.source === "inv") {
-        const v = await prisma.invVoucher.findUnique({ where: { id: ref.id }, select: { orderStatusId: true, universalVoucher: { select: { deletedAt: true } } } });   // 5D-8
+        const v = await prisma.voucherDetail.findUnique({ where: { id: ref.id }, select: { orderStatusId: true, universalVoucher: { select: { deletedAt: true } } } });   // 5D-8
         if (!v || v.universalVoucher?.deletedAt) return null;
         return { statusId: v.orderStatusId };
     }
@@ -120,7 +120,7 @@ export async function writeOrderStatus(ref: OrderRef, statusId: string): Promise
         // Phase 5 5A: keep the spine's ORDER_STATUS VoucherLink in step with the
         // column (dual-write) — atomically so the board reader can't see a half-move.
         await prisma.$transaction(async (tx) => {
-            const v = await tx.invVoucher.update({
+            const v = await tx.voucherDetail.update({
                 where:  { id: ref.id },
                 data:   { orderStatusId: statusId },
                 select: { universalVoucherId: true },

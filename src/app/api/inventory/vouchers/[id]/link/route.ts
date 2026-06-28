@@ -38,11 +38,11 @@ export async function POST(req: Request, { params }: Params) {
         return NextResponse.json({ error: "Invalid id" }, { status: 400 });
 
     const [settling, source] = await Promise.all([
-        prisma.invVoucher.findUnique({
+        prisma.voucherDetail.findUnique({
             where:  { id: settlingId },
             select: { id: true, universalVoucher: { select: { status: true } }, refVoucherId: true, partyId: true, partyJson: true },   // 5D-8
         }),
-        prisma.invVoucher.findUnique({
+        prisma.voucherDetail.findUnique({
             where:  { id: refVoucherId },
             select: { id: true, universalVoucher: { select: { status: true } }, partyId: true, partyJson: true },   // 5D-8
         }),
@@ -75,7 +75,7 @@ export async function POST(req: Request, { params }: Params) {
     }
     // If source has neither partyId nor partyName (CASH no-name), skip the party check.
 
-    await prisma.invVoucher.update({
+    await prisma.voucherDetail.update({
         where: { id: settlingId },
         data:  { refVoucherId },
     });

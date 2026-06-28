@@ -119,7 +119,7 @@ async function runE2E(): Promise<boolean> {
     try {
         await prisma.$transaction(async (tx) => {
             const spineId = await engineCreateSpine(tx, { type: "SALE", date: new Date(), description: "e2e parity sale", voucherNo: `PARITY-E2E-${Date.now()}`, userId: user.id });
-            const v = await tx.invVoucher.create({
+            const v = await tx.voucherDetail.create({
                 data: {
                     // 5D-11/5D-12: type + branch on the spine
                     universalVoucherId: spineId,
@@ -344,7 +344,7 @@ async function runDraftSale(): Promise<boolean> {
         await prisma.$transaction(async (tx) => {
             // 1. DRAFT InvVoucher + draft spine at create (the route's create path).
             const spineId = await engineCreateSpine(tx, { type: "SALE", date: new Date(), description: "parity draft-sale", voucherNo: `PARITY-DRAFTSALE-${Date.now()}`, userId: user.id });
-            const v = await tx.invVoucher.create({
+            const v = await tx.voucherDetail.create({
                 data: {
                     // 5D-11/5D-12: type + branch on the spine
                     universalVoucherId: spineId,
@@ -428,7 +428,7 @@ async function runStockRecompute(): Promise<boolean> {
     try {
         await prisma.$transaction(async (tx) => {
             const spineId = await engineCreateSpine(tx, { type: "SALE", date: new Date(), description: "recompute check sale", voucherNo: `PARITY-RECOMP-${Date.now()}`, userId: user.id });
-            const v = await tx.invVoucher.create({
+            const v = await tx.voucherDetail.create({
                 data: {
                     // 5D-11/5D-12: type + branch on the spine
                     universalVoucherId: spineId,
@@ -492,7 +492,7 @@ async function runEditCycle(): Promise<boolean> {
     let ok = false;
     const log: string[] = [];
     const reload = async (tx: Prisma.TransactionClient, id: number) => {
-        const row = await tx.invVoucher.findUnique({ where: { id } });
+        const row = await tx.voucherDetail.findUnique({ where: { id } });
         if (!row) return null;
         // Phase 5 5C: goods lines hang off the spine.
         const lines = await tx.voucherInventoryLine.findMany({
@@ -505,7 +505,7 @@ async function runEditCycle(): Promise<boolean> {
         await prisma.$transaction(async (tx) => {
             // 1. Post a SALE qty 1.
             const spineId = await engineCreateSpine(tx, { type: "SALE", date: new Date(), description: "edit-cycle sale", voucherNo: `PARITY-EDIT-${Date.now()}`, userId: user.id });
-            const v = await tx.invVoucher.create({
+            const v = await tx.voucherDetail.create({
                 data: {
                     // 5D-11/5D-12: type + branch on the spine
                     universalVoucherId: spineId,
@@ -525,7 +525,7 @@ async function runEditCycle(): Promise<boolean> {
 
             // 2. EDIT in place: qty 1 → 2 (line 236 = taxable 200 + 18% tax 36).
             await tx.voucherInventoryLine.updateMany({ where: { universalVoucherId: spineId }, data: { quantity: 2, amount: 236, taxAmount: 36 } });
-            await tx.invVoucher.update({ where: { id: v.id }, data: { subtotal: 236, taxAmount: 36, totalAmount: 236, settlementJson: buildSettlementJson([{ accountId: cash.id, amount: 236 }], []) } });
+            await tx.voucherDetail.update({ where: { id: v.id }, data: { subtotal: 236, taxAmount: 36, totalAmount: 236, settlementJson: buildSettlementJson([{ accountId: cash.id, amount: 236 }], []) } });
             const edited = await reload(tx, v.id);
             // Reapply through the SHARED helper the PATCH route uses — so a green
             // harness verifies the route's actual edit logic, not a parallel copy.
@@ -537,7 +537,7 @@ async function runEditCycle(): Promise<boolean> {
             });
 
             // 3. Assertions.
-            const vAfter = await tx.invVoucher.findUnique({ where: { id: v.id }, select: { universalVoucherId: true } });
+            const vAfter = await tx.voucherDetail.findUnique({ where: { id: v.id }, select: { universalVoucherId: true } });
             const jeCap  = await captureJe(tx, saleJe);
             const spine  = await captureSpine(tx, saleJe);
             const dr = jeCap.filter((l) => l.type === "DEBIT").reduce((s, l) => s + l.amount, 0);
@@ -580,7 +580,7 @@ async function runAllocationDualTarget(): Promise<boolean> {
     try {
         await prisma.$transaction(async (tx) => {
             const spineId = await engineCreateSpine(tx, { type: "SALE", date: new Date(), description: "G1 alloc sale", voucherNo: `PARITY-G1-${Date.now()}`, userId: user.id });
-            const v = await tx.invVoucher.create({
+            const v = await tx.voucherDetail.create({
                 data: {
                     // 5D-11/5D-12: type + branch on the spine
                     universalVoucherId: spineId,
@@ -639,7 +639,7 @@ async function runShiftCashMath(): Promise<boolean> {
         await prisma.$transaction(async (tx) => {
             const openedAt = new Date(Date.now() - 60_000);
             const spineId = await engineCreateSpine(tx, { type: "POS", date: new Date(), description: "parity POS shift", voucherNo: `PARITY-SHIFT-${Date.now()}`, userId: user.id });
-            const v = await tx.invVoucher.create({
+            const v = await tx.voucherDetail.create({
                 data: {
                     // 5D-11/5D-12: type + branch on the spine
                     universalVoucherId: spineId,
@@ -654,7 +654,7 @@ async function runShiftCashMath(): Promise<boolean> {
             const spec = await saleToSpec(tx, { ...v, type: "POS", date: new Date(), tenders: [{ accountId: cash.id, amount: 118, method: "CASH" }], charges: [], sellerStateCode: "19", buyerStateCode: "19" } as unknown as PostVoucherInput["voucher"], { branchId: branch.id, lines: vLines });
             const { universalVoucherId } = await enginePost(tx, spec, user.id, { existingSpineId: spineId });
             // POS route links the spine to the voucher — replicate so the window→spine resolution finds it.
-            await tx.invVoucher.update({ where: { id: v.id }, data: { universalVoucherId } });   // 5D-8: status POSTED set on the spine by enginePost
+            await tx.voucherDetail.update({ where: { id: v.id }, data: { universalVoucherId } });   // 5D-8: status POSTED set on the spine by enginePost
             // G5: an office RECEIPT at the till (Dr Till 50 / Cr Debtor) must ALSO
             // count toward shift cash — now read off the spine (sourceCreatedAt window).
             const expectReceipt = debtor != null;

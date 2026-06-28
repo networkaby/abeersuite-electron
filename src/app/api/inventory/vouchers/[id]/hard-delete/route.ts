@@ -28,7 +28,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     // Load the full graph up-front so the snapshot captures everything a faithful
     // restore needs (charges/tenders/stock-ledger included — they were missing before).
-    const voucherRow = await prisma.invVoucher.findUnique({
+    const voucherRow = await prisma.voucherDetail.findUnique({
         where: { id: Number(id) },
         // settlementJson (tender/charge input) is a scalar — captured in the snapshot
         // automatically. 5D-2: creator lives on the spine (not needed for the snapshot).
@@ -132,7 +132,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             // cascade so wipe it explicitly.
             if (origJe) await tx.universalVoucher.delete({ where: { id: origJe.id } });
             await tx.invStockLedger.deleteMany({ where: { universalVoucherId: voucher.universalVoucherId ?? -1 } });
-            await tx.invVoucher.delete({ where: { id: voucher.id } });
+            await tx.voucherDetail.delete({ where: { id: voucher.id } });
             return created;
         // Reverse stock + GL over the Supabase pooler can exceed the default 5s
         // interactive-tx ceiling (P2028) — match the 30s headroom used by post/PATCH.

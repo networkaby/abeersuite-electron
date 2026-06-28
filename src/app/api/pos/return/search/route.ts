@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
     }
 
     try {
-        const vouchers = await prisma.invVoucher.findMany({
+        const vouchers = await prisma.voucherDetail.findMany({
             where: {
                 // 5D-8 status/deletedAt + 5D-11 type + party (5D-4) + voucher-number
                 // search (5D-6) all resolve via the spine.

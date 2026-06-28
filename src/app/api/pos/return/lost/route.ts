@@ -137,7 +137,7 @@ export async function POST(req: Request) {
                 branchId,   // 5D-12: branch primary on the spine
                 userId:         user!.id,
             });
-            const voucher = await tx.invVoucher.create({
+            const voucher = await tx.voucherDetail.create({
                 data: {
                     // 5D-11/5D-12: type + branch live on the spine (engineCreateSpine set them).
                     universalVoucherId: spineId,
@@ -202,7 +202,7 @@ export async function POST(req: Request) {
                     [],
                 );
             }
-            await tx.invVoucher.update({
+            await tx.voucherDetail.update({
                 where: { id: voucher.id },
                 data:  { universalVoucherId: gl.universalVoucherId },
             });

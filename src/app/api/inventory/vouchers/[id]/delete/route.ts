@@ -24,7 +24,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const { data, error } = await validateRequest(req, schema);
     if (error) return error;
 
-    const voucherRow = await prisma.invVoucher.findUnique({ where: { id: Number(id) }, include: { universalVoucher: { select: { voucherNo: true, status: true, deletedAt: true, type: true, branchId: true } } } });   // 5D-6/5D-8/5D-11/5D-12
+    const voucherRow = await prisma.voucherDetail.findUnique({ where: { id: Number(id) }, include: { universalVoucher: { select: { voucherNo: true, status: true, deletedAt: true, type: true, branchId: true } } } });   // 5D-6/5D-8/5D-11/5D-12
     if (!voucherRow) return NextResponse.json({ error: "Not found" }, { status: 404 });
     // Phase 5 5C: goods lines hang off the spine.
     const goodsLines = await prisma.voucherInventoryLine.findMany({
@@ -153,7 +153,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             });
         }
 
-        const updated = await prisma.invVoucher.findUnique({ where: { id: Number(id) } });
+        const updated = await prisma.voucherDetail.findUnique({ where: { id: Number(id) } });
         return NextResponse.json(updated);
     } catch (e) {
         const lifecycle = lifecycleErrorResponse(e);

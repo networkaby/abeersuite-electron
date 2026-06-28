@@ -241,7 +241,7 @@ export async function reverseLoyaltyForReturn(
         // Prior returns of the SAME sale walk the InvVoucher refVoucher graph
         // (InvVoucher id space), but their loyalty rows are keyed by the spine — so
         // select each prior return's universalVoucherId for the ledger aggregate.
-        const priorReturns = await tx.invVoucher.findMany({
+        const priorReturns = await tx.voucherDetail.findMany({
             where: { refVoucherId: args.originalVoucherId, universalVoucher: { type: "SALE_RETURN" }, id: { not: args.returnVoucherId } },   // 5D-11
             select: { universalVoucherId: true },
         });

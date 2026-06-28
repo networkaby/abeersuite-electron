@@ -27,7 +27,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     }
 
     try {
-        const source = await prisma.invVoucher.findUnique({
+        const source = await prisma.voucherDetail.findUnique({
             where: { id },
             include: { universalVoucher: { select: { partyAccountId: true, description: true, type: true, branchId: true } } },   // 5D-4 party + 5D-5 description + 5D-11 type + 5D-12 branch on spine
         });
@@ -53,7 +53,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                 branchId:       source.universalVoucher?.branchId,   // 5D-12: branch primary on the spine
                 userId:         user!.id,
             });
-            const voucher = await tx.invVoucher.create({
+            const voucher = await tx.voucherDetail.create({
                 data: {
                     // 5D-11/5D-12: type + branch live on the spine (engineCreateSpine set them).
                     // 5D-6: reference (voucherNo) lives on the spine.

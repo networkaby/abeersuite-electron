@@ -112,14 +112,14 @@ export async function restoreFromAudit(
     const newJeId = journalEntry ? await recreateJournalEntry(tx, journalEntry) : null;
     // G4b: tender/charge input is `settlementJson` (a scalar) — restored via ...scalars.
     const scalars = scalarsOf(snap, ["lines", "charges", "tenders", "stockEntries", "createdBy", "journalEntry"]);
-    const voucher = await tx.invVoucher.create({
+    const voucher = await tx.voucherDetail.create({
         data: {
             ...scalars,
             journalEntryId: newJeId,
             // Sever volatile soft-links — targets may be gone; truth path self-corrects.
             shopOrderId: null, ticketId: null, dealId: null, refVoucherId: null,
             lines: { create: lines.map((l) => scalarsOf(l, ["voucherId", "product"])) },
-        } as unknown as Prisma.InvVoucherUncheckedCreateInput,
+        } as unknown as Prisma.VoucherDetailUncheckedCreateInput,
     });
 
     // Re-create the immutable stock-ledger rows (no nested relation — own FK to voucher).

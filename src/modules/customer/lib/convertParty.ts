@@ -740,12 +740,12 @@ async function countAccountRefs(accountId: number) {
         prisma.universalVoucher.count({ where: { partyAccountId: accountId } }),
         Promise.resolve(0),   // legacy VoucherLine refs are now the spine GL lines (counted as `jl`)
         // Phase 5 5D-4: InvVoucher party is on the spine — count via the relation.
-        prisma.invVoucher.count({ where: { universalVoucher: { partyAccountId: accountId } } }),
+        prisma.voucherDetail.count({ where: { universalVoucher: { partyAccountId: accountId } } }),
         prisma.ticket.count({ where: { billingAccountId: accountId } }),
         prisma.device.count({ where: { accountId } }),
         prisma.shopOrder.count({ where: { accountId } }),
         // G4b: tender/charge input lives in settlementJson now — scan for refs.
-        prisma.invVoucher.findMany({ where: { settlementJson: { not: Prisma.DbNull } }, select: { settlementJson: true } }),
+        prisma.voucherDetail.findMany({ where: { settlementJson: { not: Prisma.DbNull } }, select: { settlementJson: true } }),
     ]);
     let ivc = 0, ivt = 0;
     for (const r of settlementRows) {
@@ -789,7 +789,7 @@ export async function mergeParty(
         ]);
 
         // G4b: re-point tender/charge input inside settlementJson (drafts + posted echo).
-        const settlementRows = await tx.invVoucher.findMany({ where: { settlementJson: { not: Prisma.DbNull } }, select: { id: true, settlementJson: true } });
+        const settlementRows = await tx.voucherDetail.findMany({ where: { settlementJson: { not: Prisma.DbNull } }, select: { id: true, settlementJson: true } });
         let ivc = 0, ivt = 0;
         for (const sv of settlementRows) {
             const s = readSettlement(sv.settlementJson);
@@ -797,7 +797,7 @@ export async function mergeParty(
             const cHit = s.charges.filter((x) => x.accountId === loserAccountId).length;
             if (tHit + cHit === 0) continue;
             ivt += tHit; ivc += cHit;
-            await tx.invVoucher.update({
+            await tx.voucherDetail.update({
                 where: { id: sv.id },
                 data:  { settlementJson: buildSettlementJson(
                     s.tenders.map((x) => x.accountId === loserAccountId ? { ...x, accountId: winnerAccountId } : x),

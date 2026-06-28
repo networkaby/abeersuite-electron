@@ -30,7 +30,7 @@ const SETTLES_BY: Record<PendingType, InvVoucherType[]> = {
 const PENDING_TYPES = Object.keys(SETTLES_BY) as PendingType[];
 
 // Build a per-type "where" clause: type + unsettled.
-function unsettledClause(type: PendingType): Prisma.InvVoucherWhereInput {
+function unsettledClause(type: PendingType): Prisma.VoucherDetailWhereInput {
     return {
         // 5D-11: type lives on the spine (both for this voucher and its returns).
         universalVoucher: { type: InvVoucherType[type] },
@@ -84,7 +84,7 @@ export async function GET(req: NextRequest) {
         ? (await prisma.account.findMany({ where: { name: { contains: search, mode: "insensitive" } }, select: { id: true } })).map((a) => a.id)
         : [];
 
-    const where: Prisma.InvVoucherWhereInput = {
+    const where: Prisma.VoucherDetailWhereInput = {
         // 5D-8/5D-10/5D-12: status/deletedAt + date + branch all live on the spine.
         universalVoucher: {
             status: VoucherStatus.POSTED,
@@ -108,8 +108,8 @@ export async function GET(req: NextRequest) {
     };
 
     const [total, rowsRaw] = await Promise.all([
-        prisma.invVoucher.count({ where }),
-        prisma.invVoucher.findMany({
+        prisma.voucherDetail.count({ where }),
+        prisma.voucherDetail.findMany({
             where,
             orderBy: [{ universalVoucher: { date: "asc" } }, { id: "asc" }], // oldest first — drives attention (5D-10)
             skip:    (page - 1) * limit,

@@ -52,7 +52,7 @@ export async function GET(req: Request) {
             ...(to   ? { lte: new Date(to)   } : {}),
         };
     }
-    const where: Prisma.InvVoucherWhereInput = {
+    const where: Prisma.VoucherDetailWhereInput = {
         universalVoucher: spineWhere,
         // Hide hard-deleted rows; cancelled / soft-deleted still surface
         // so users can audit the trail.
@@ -72,8 +72,8 @@ export async function GET(req: Request) {
     }
 
     const [total, rows] = await Promise.all([
-        prisma.invVoucher.count({ where }),
-        prisma.invVoucher.findMany({
+        prisma.voucherDetail.count({ where }),
+        prisma.voucherDetail.findMany({
             where,
             orderBy: [{ universalVoucher: { date: "desc" } }, { id: "desc" }],   // 5D-10
             skip: (page - 1) * limit,

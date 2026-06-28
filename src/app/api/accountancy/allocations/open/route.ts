@@ -26,7 +26,7 @@ export async function GET(req: Request) {
     if (!accountId) return NextResponse.json({ error: "accountId required" }, { status: 400 });
 
     // ── InvVoucher bills (SALE / POS / PURCHASE) for the party ────────────
-    const invVouchers = await prisma.invVoucher.findMany({
+    const invVouchers = await prisma.voucherDetail.findMany({
         where: {
             // 5D-4 party + 5D-8 status/deletedAt + 5D-11 type all live on the spine.
             universalVoucher: { partyAccountId: accountId, status: "POSTED", deletedAt: null, type: { in: ["SALE", "POS", "PURCHASE"] } },

@@ -35,7 +35,7 @@ function kindForVoucherType(type: InvVoucherType): SourceDoc["kind"] | null {
 
 /** Single-record resolver — returns SourceDoc for one spine voucher id, or null. */
 export async function resolveSource(universalVoucherId: number): Promise<SourceDoc | null> {
-    const v = await prisma.invVoucher.findFirst({
+    const v = await prisma.voucherDetail.findFirst({
         where: { universalVoucherId },
         select: { id: true, universalVoucher: { select: { voucherNo: true, type: true } } },   // 5D-6 ref + 5D-11 type on spine
     });
@@ -54,7 +54,7 @@ export async function resolveSourceBatch(universalVoucherIds: number[]): Promise
     const out = new Map<number, SourceDoc>();
     if (universalVoucherIds.length === 0) return out;
 
-    const vouchers = await prisma.invVoucher.findMany({
+    const vouchers = await prisma.voucherDetail.findMany({
         where: { universalVoucherId: { in: universalVoucherIds } },
         select: { id: true, universalVoucherId: true, universalVoucher: { select: { voucherNo: true, type: true } } },   // 5D-6 + 5D-11 type
     });

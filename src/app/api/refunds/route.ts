@@ -22,7 +22,7 @@ export async function GET() {
         // Resolve the order reference/customer for each refund (inv vouchers in one batch).
         const invIds = refunds.filter((r) => r.orderSource === "inv").map((r) => r.orderId);
         const invs = invIds.length
-            ? await prisma.invVoucher.findMany({ where: { id: { in: invIds } }, select: { id: true, partyJson: true, universalVoucher: { select: { voucherNo: true } } } })
+            ? await prisma.voucherDetail.findMany({ where: { id: { in: invIds } }, select: { id: true, partyJson: true, universalVoucher: { select: { voucherNo: true } } } })
             : [];
         const refMap = new Map(invs.map((v) => [v.id, { ref: v.universalVoucher?.voucherNo ?? "", customer: readPartyName(v.partyJson) }]));
 

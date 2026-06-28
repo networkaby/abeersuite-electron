@@ -77,7 +77,7 @@ export async function sumShiftCashSalesPaise(
     // window is keyed off `InvVoucher.createdAt` (the sale time) — NOT the spine
     // row's createdAt, which is the backfill time for historical rows — so we
     // resolve the in-window POS vouchers' JEs first, then read their till tenders.
-    const posUvIds = (await tx.invVoucher.findMany({
+    const posUvIds = (await tx.voucherDetail.findMany({
         where:  { universalVoucher: { type: "POS", status: "POSTED", deletedAt: null }, createdAt: { gte: args.openedAt, lte: end } },   // 5D-8/5D-11
         select: { universalVoucherId: true },
     })).map((v) => v.universalVoucherId).filter((x): x is number => x != null);
@@ -140,7 +140,7 @@ export async function sumShiftTendersByAccount(
     // POS sale tenders (Dr Till / Bank / Wallet …) → spine role=TENDER GL lines
     // (G4b-3). Windowed off InvVoucher.createdAt (sale time), then grouped per
     // settlement account from the spine. See sumShiftCashSalesPaise for why.
-    const posUvIds = (await tx.invVoucher.findMany({
+    const posUvIds = (await tx.voucherDetail.findMany({
         where:  { universalVoucher: { type: "POS", status: "POSTED", deletedAt: null }, createdAt: { gte: args.openedAt, lte: end } },   // 5D-8/5D-11
         select: { universalVoucherId: true },
     })).map((v) => v.universalVoucherId).filter((x): x is number => x != null);

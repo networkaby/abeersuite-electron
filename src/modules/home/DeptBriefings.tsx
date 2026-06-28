@@ -140,9 +140,9 @@ export async function ShowroomBriefing() {
         salesDisplay = "—";
     try {
         const [b, s, agg] = await Promise.all([
-            prisma.invVoucher.count({ where: posFilter }),
+            prisma.voucherDetail.count({ where: posFilter }),
             prisma.posShift.count({ where: { closedAt: null } }),
-            prisma.invVoucher.aggregate({ where: posFilter, _sum: { totalAmount: true } }),
+            prisma.voucherDetail.aggregate({ where: posFilter, _sum: { totalAmount: true } }),
         ]);
         billsToday = b;
         openShifts = s;

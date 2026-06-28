@@ -38,7 +38,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ sou
     const paidTotal = payments.reduce((s, p) => s + p.amount, 0);
 
     try {
-        const order = await prisma.invVoucher.findUnique({
+        const order = await prisma.voucherDetail.findUnique({
             where: { id },
             select: {
                 id: true, orderStatusId: true,
@@ -158,8 +158,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ sou
             // onto this sale — loyalty lots / coupon / gift card — is TODO(2b-apply);
             // a no-op today since no capture UI produces holds yet.)
             await executeRedemptions({ source: "inv", id }, tx);
-            await tx.invVoucher.update({ where: { id: sale.id }, data: { refVoucherId: id } }); // sale → order
-            const delivered = await tx.invVoucher.update({
+            await tx.voucherDetail.update({ where: { id: sale.id }, data: { refVoucherId: id } }); // sale → order
+            const delivered = await tx.voucherDetail.update({
                 where:  { id },
                 data:   { orderStatusId: ORDER_STAGE.DELIVERED },
                 select: { universalVoucherId: true },

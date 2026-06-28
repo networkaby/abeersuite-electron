@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
         partyFilter = { partyJson: { path: ["name"], string_contains: partyNameParam } };
     }
 
-    const rows = await prisma.invVoucher.findMany({
+    const rows = await prisma.voucherDetail.findMany({
         where: {
             // 5D-8 lifecycle + 5D-11 type on spine
             universalVoucher: { status: VoucherStatus.POSTED, deletedAt: null, type: { in: types } },

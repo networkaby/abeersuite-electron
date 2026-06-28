@@ -47,7 +47,7 @@ model Deal {
   assignedPosition Position?      @relation("DealPosition", fields: [assignedPositionId], references: [id])
   activities       DealActivity[]
   // Vouchers captured against this deal (POS Estimate → estimate voucher, etc.)
-  vouchers         InvVoucher[]   @relation("DealInvVouchers")
+  vouchers         VoucherDetail[]   @relation("DealInvVouchers")
 
   @@index([pipelineId, status])
   @@index([assignedPositionId])

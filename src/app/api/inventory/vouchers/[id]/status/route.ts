@@ -31,7 +31,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             return NextResponse.json({ error: "status must be DRAFT or POSTED" }, { status: 400 });
         }
 
-        const v = await prisma.invVoucher.findUnique({
+        const v = await prisma.voucherDetail.findUnique({
             where: { id },
             // 5D-8/5D-9: status + deletedAt + binding live on the spine.
             select: { id: true, universalVoucherId: true, universalVoucher: { select: { deletedAt: true, binding: true } } },

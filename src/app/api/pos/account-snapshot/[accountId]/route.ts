@@ -100,21 +100,21 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
         oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
 
         // 5D-4/5D-8/5D-10/5D-11: party + status + deletedAt + date + type all live on the spine.
-        const baseWhere: Prisma.InvVoucherWhereInput = {
+        const baseWhere: Prisma.VoucherDetailWhereInput = {
             universalVoucher: { partyAccountId: accountId, status: "POSTED", deletedAt: null, type: { in: [...SALE_TYPES] } },
         };
 
         const [lifetimeAgg, ytdAgg, latestVoucher, latestTicket, recentTickets, ledgerOutstanding, loyaltyConfig, spendTiers] = await Promise.all([
-            prisma.invVoucher.aggregate({
+            prisma.voucherDetail.aggregate({
                 where: baseWhere,
                 _sum: { totalAmount: true },
                 _count: { _all: true },
             }),
-            prisma.invVoucher.aggregate({
+            prisma.voucherDetail.aggregate({
                 where: { universalVoucher: { partyAccountId: accountId, status: "POSTED", deletedAt: null, date: { gte: oneYearAgo }, type: { in: [...SALE_TYPES] } } },
                 _sum: { totalAmount: true },
             }),
-            prisma.invVoucher.findFirst({
+            prisma.voucherDetail.findFirst({
                 where: baseWhere,
                 orderBy: { universalVoucher: { date: "desc" } },   // 5D-10
                 select: { totalAmount: true, universalVoucher: { select: { voucherNo: true, date: true } } },
