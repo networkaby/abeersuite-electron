@@ -63,7 +63,7 @@ export async function GET(req: Request) {
         })).map((a) => a.id);
         where.OR = [
             { reference:   { contains: search, mode: "insensitive" } },
-            { description: { contains: search, mode: "insensitive" } },
+            { universalVoucher: { description: { contains: search, mode: "insensitive" } } },   // 5D-5: description on spine
             ...(partyAcctIds.length ? [{ universalVoucher: { partyAccountId: { in: partyAcctIds } } }] : []),
             { partyJson: { path: ["name"], string_contains: search } },
         ];
@@ -78,6 +78,7 @@ export async function GET(req: Request) {
             take: limit,
             include: {
                 refVoucher: { select: { id: true, reference: true, type: true } },
+                universalVoucher: { select: { description: true } },   // 5D-5: description on spine
             },
         }),
     ]);
@@ -100,7 +101,7 @@ export async function GET(req: Request) {
         date:        v.date,
         type:        v.type,
         reference:   v.reference,
-        description: v.description,
+        description: v.universalVoucher?.description ?? "",
         partyName:   readPartyName(v.partyJson),
         partyType:   v.partyType,
         partyId:     v.partyId,

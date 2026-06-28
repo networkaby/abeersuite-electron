@@ -392,7 +392,7 @@ export async function PATCH(req: Request, { params }: Params) {
                 const newSpine = existing.universalVoucherId != null
                     ? await tx.universalVoucher.findUnique({ where: { sourceJournalEntryId: existing.universalVoucherId }, select: { id: true } })
                     : null;
-                await tx.invVoucher.update({ where: { id }, data: { postedAt: new Date(), universalVoucherId: newSpine?.id ?? null } });
+                await tx.invVoucher.update({ where: { id }, data: { universalVoucherId: newSpine?.id ?? null } });   // 5D-5: postedAt on spine
                 // Phase 5 5C: link the rewritten stock rows (+ any new goods lines) to the spine.
             }
 

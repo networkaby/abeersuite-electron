@@ -123,7 +123,7 @@ async function runE2E(): Promise<boolean> {
                 data: {
                     type: "SALE", reference: `PARITY-E2E-${Date.now()}`, branchId: branch.id,
                     universalVoucherId: spineId,
-                    date: new Date(), description: "e2e parity sale", status: "DRAFT",
+                    date: new Date(), status: "DRAFT",
                     subtotal: 118, taxAmount: 18, totalAmount: 118,
                     deliveryMode: "COUNTER", placeOfSupply: "19",
                     settlementJson: buildSettlementJson([{ accountId: cash.id, amount: 118, method: "CASH", reference: "E2E-TENDER-REF" }], []),
@@ -348,7 +348,7 @@ async function runDraftSale(): Promise<boolean> {
                 data: {
                     type: "SALE", reference: `PARITY-DRAFTSALE-${Date.now()}`, branchId: branch.id,
                     universalVoucherId: spineId,
-                    date: new Date(), description: "parity draft-sale", status: "DRAFT",
+                    date: new Date(), status: "DRAFT",
                     subtotal: 118, taxAmount: 18, totalAmount: 118,
                     deliveryMode: "COUNTER", placeOfSupply: "19",
                     settlementJson: buildSettlementJson([{ accountId: cash.id, amount: 118, method: "CASH" }], []),
@@ -432,7 +432,7 @@ async function runStockRecompute(): Promise<boolean> {
                 data: {
                     type: "SALE", reference: `PARITY-RECOMP-${Date.now()}`, branchId: branch.id,
                     universalVoucherId: spineId,
-                    date: new Date(), description: "recompute check sale", status: "DRAFT",
+                    date: new Date(), status: "DRAFT",
                     subtotal: 118, taxAmount: 18, totalAmount: 118,
                     deliveryMode: "COUNTER", placeOfSupply: "19",
                     settlementJson: buildSettlementJson([{ accountId: cash.id, amount: 118 }], []),
@@ -509,7 +509,7 @@ async function runEditCycle(): Promise<boolean> {
                 data: {
                     type: "SALE", reference: `PARITY-EDIT-${Date.now()}`, branchId: branch.id,
                     universalVoucherId: spineId,
-                    date: new Date(), description: "edit-cycle sale", status: "POSTED",
+                    date: new Date(), status: "POSTED",
                     subtotal: 118, taxAmount: 18, totalAmount: 118,
                     deliveryMode: "COUNTER", placeOfSupply: "19",
                     settlementJson: buildSettlementJson([{ accountId: cash.id, amount: 118 }], []),
@@ -584,7 +584,7 @@ async function runAllocationDualTarget(): Promise<boolean> {
                 data: {
                     type: "SALE", reference: `PARITY-G1-${Date.now()}`, branchId: branch.id,
                     universalVoucherId: spineId,
-                    date: new Date(), description: "G1 alloc sale", status: "POSTED",
+                    date: new Date(), status: "POSTED",
                     subtotal: 118, taxAmount: 18, totalAmount: 118,
                     deliveryMode: "COUNTER", placeOfSupply: "19",
                     settlementJson: buildSettlementJson([{ accountId: cash.id, amount: 118 }], []),
@@ -643,7 +643,7 @@ async function runShiftCashMath(): Promise<boolean> {
                 data: {
                     type: "POS", reference: `PARITY-SHIFT-${Date.now()}`, branchId: branch.id,
                     universalVoucherId: spineId,
-                    date: new Date(), description: "parity POS shift", status: "DRAFT",
+                    date: new Date(), status: "DRAFT",
                     subtotal: 118, taxAmount: 18, totalAmount: 118,
                     deliveryMode: "COUNTER", placeOfSupply: "19",
                     settlementJson: buildSettlementJson([{ accountId: cash.id, amount: 118, method: "CASH" }], []),

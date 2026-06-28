@@ -544,10 +544,11 @@ export async function POST(req: Request) {
                 ];
             // Phase 5 5.0/5C: spine FIRST (the document anchor) so goods lines hang
             // off it; enginePost attaches the GL lines + flips it via existingSpineId.
+            const voucherDescription = body.notes?.trim() || `POS sale — ${partyName}`;
             const spineId = await engineCreateSpine(tx, {
                 type:           "POS",
                 date:           new Date(body.issueDate),
-                description:    body.notes?.trim() || `POS sale — ${partyName}`,
+                description:    voucherDescription,
                 friendlyRef:    voucherRef,
                 partyAccountId: customerAccount.id,
                 userId:         user!.id,
@@ -559,10 +560,8 @@ export async function POST(req: Request) {
                     branchId:       activeBranchId,
                     universalVoucherId: spineId,
                     date:           new Date(body.issueDate),
-                    description:    body.notes?.trim() || `POS sale — ${partyName}`,
+                    // 5D-5: description + postedAt + 5D-4 party live on the spine.
                     status:         "POSTED",
-                    postedAt:       new Date(),
-                    // 5D-4: party ledger lives on the spine (engineCreateSpine set it).
                     partyJson:      buildPartyJson({ name: partyName }) ?? Prisma.DbNull,
                     partyType,
                     partyId,
@@ -610,7 +609,7 @@ export async function POST(req: Request) {
                 type:        voucher.type,
                 reference:   voucher.reference,
                 date:        voucher.date,
-                description: voucher.description,
+                description: voucherDescription,
                 partyJson:   voucher.partyJson,
                 subtotal:    voucher.subtotal,
                 taxAmount:   voucher.taxAmount,

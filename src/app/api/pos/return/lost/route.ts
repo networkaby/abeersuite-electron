@@ -127,10 +127,11 @@ export async function POST(req: Request) {
 
             const vRef = await invNextRef(tx, "SALE_RETURN");
             // Phase 5 5.0/5C: spine FIRST; enginePost attaches GL via existingSpineId.
+            const voucherDescription = `Lost-invoice return — ${data.reason.slice(0, 200)}`;
             const spineId = await engineCreateSpine(tx, {
                 type:           "SALE_RETURN",
                 date:           today,
-                description:    `Lost-invoice return — ${data.reason.slice(0, 200)}`,
+                description:    voucherDescription,
                 friendlyRef:    vRef,
                 partyAccountId: customerAcct.id,
                 userId:         user!.id,
@@ -142,10 +143,8 @@ export async function POST(req: Request) {
                     branchId,
                     universalVoucherId: spineId,
                     date:           today,
-                    description:    `Lost-invoice return — ${data.reason.slice(0, 200)}`,
+                    // 5D-5: description + postedAt + 5D-4 party live on the spine.
                     status:         "POSTED",
-                    postedAt:       today,
-                    // 5D-4: party ledger lives on the spine (engineCreateSpine set it).
                     partyJson:      buildPartyJson({ name: customerAcct.name }) ?? Prisma.DbNull,
                     partyType,
                     partyId,
@@ -188,7 +187,7 @@ export async function POST(req: Request) {
                 type:        voucher.type,
                 reference:   voucher.reference,
                 date:        voucher.date,
-                description: voucher.description,
+                description: voucherDescription,
                 partyJson:   voucher.partyJson,
                 subtotal:    voucher.subtotal,
                 taxAmount:   voucher.taxAmount,

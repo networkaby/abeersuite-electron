@@ -47,7 +47,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
         const updated = await prisma.invVoucher.update({
             where: { id },
-            data: { status, postedAt: status === "POSTED" ? new Date() : null },
+            data: { status },   // 5D-5: postedAt lives on the spine
             select: { id: true, status: true },
         });
         return NextResponse.json(updated);

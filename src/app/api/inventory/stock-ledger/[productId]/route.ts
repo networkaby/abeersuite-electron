@@ -67,7 +67,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ prod
             include: {
                 // Phase 5 5C: the InvVoucher is reached via universalVoucher.invVoucher.
                 universalVoucher: {
-                    select: { invVoucher: { select: { id: true, reference: true, type: true, description: true, partyJson: true } } },
+                    // 5D-5: description on the spine; invVoucher keeps ref/type/partyJson.
+                    select: { description: true, invVoucher: { select: { id: true, reference: true, type: true, partyJson: true } } },
                 },
             },
         });
@@ -84,7 +85,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ prod
                 date:        e.date,
                 reference:   v?.reference ?? "—",
                 voucherType: v?.type ?? "—",
-                description: v?.description ?? null,
+                description: e.universalVoucher.description ?? null,
                 partyName:   readPartyName(v?.partyJson ?? null),
                 inQty:       inQ  > 0 ? inQ  : null,
                 outQty:      outQ > 0 ? outQ : null,

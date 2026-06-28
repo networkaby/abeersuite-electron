@@ -98,7 +98,7 @@ export async function GET(req: NextRequest) {
             AND: [{
                 OR: [
                     { reference:   { contains: search, mode: "insensitive" } },
-                    { description: { contains: search, mode: "insensitive" } },
+                    { universalVoucher: { description: { contains: search, mode: "insensitive" } } },   // 5D-5: description on spine
                     // Party search: live ledger name (via resolved ids) OR the frozen
                     // snapshot name (for walk-ins with no account).
                     ...(searchPartyAcctIds.length ? [{ universalVoucher: { partyAccountId: { in: searchPartyAcctIds } } }] : []),
@@ -115,7 +115,10 @@ export async function GET(req: NextRequest) {
             orderBy: [{ date: "asc" }, { id: "asc" }], // oldest first — drives attention
             skip:    (page - 1) * limit,
             take:    limit,
-            include: { branch: { select: { id: true, name: true } } },
+            include: {
+                branch: { select: { id: true, name: true } },
+                universalVoucher: { select: { description: true } },   // 5D-5: description on spine
+            },
         }),
     ]);
     // Phase 5 5C: goods lines hang off the spine — batch-load + group by spine id.
@@ -146,7 +149,7 @@ export async function GET(req: NextRequest) {
             partyId:     v.partyId,
             partyType:   v.partyType,
             partyName:   readPartyName(v.partyJson),
-            description: v.description,
+            description: v.universalVoucher?.description ?? "",
             totalAmount: Number(v.totalAmount),
             lineCount:   v.lines.length,
             branchName:  v.branch?.name ?? null,

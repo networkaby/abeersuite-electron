@@ -138,13 +138,12 @@ export async function createPosQuoteVoucher(opts: {
                 type,
                 // POSTED here means "issued" (no GL impact — no GL lines on the spine).
                 status: "POSTED",
-                postedAt: new Date(),
+                // 5D-5: postedAt lives on the spine.
                 reference,
                 branchId,
                 universalVoucherId: spineId,
                 date: body.date ? new Date(body.date) : new Date(),
-                description,
-                // 5D-4: party ledger lives on the spine (engineCreateSpine set it).
+                // 5D-5: description + 5D-4 party live on the spine (engineCreateSpine set it).
                 partyJson: buildPartyJson({ name: body.partyName, phone: body.partyPhone }) ?? Prisma.DbNull,
                 partyType: body.partyType || null,
                 partyId: body.partyId || null,

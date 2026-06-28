@@ -166,10 +166,11 @@ export async function POST(req: Request) {
             const vRef = await invNextRef(tx, "SALE_RETURN");
             const stockLines = returnLines.filter((rl) => rl.voucherLine.productId !== null);
             // Phase 5 5.0/5C: spine FIRST; enginePost attaches GL via existingSpineId.
+            const voucherDescription = `Sale return of ${original.reference}${data.notes ? ` — ${data.notes}` : ""}`;
             const spineId = await engineCreateSpine(tx, {
                 type:           "SALE_RETURN",
                 date:           today,
-                description:    `Sale return of ${original.reference}${data.notes ? ` — ${data.notes}` : ""}`,
+                description:    voucherDescription,
                 friendlyRef:    vRef,
                 partyAccountId: partyAccountId,
                 userId:         user!.id,
@@ -181,10 +182,8 @@ export async function POST(req: Request) {
                     branchId,
                     universalVoucherId: spineId,
                     date:           today,
-                    description:    `Sale return of ${original.reference}${data.notes ? ` — ${data.notes}` : ""}`,
+                    // 5D-5: description + postedAt + 5D-4 party live on the spine.
                     status:         "POSTED",
-                    postedAt:       today,
-                    // 5D-4: party ledger lives on the spine (engineCreateSpine set it).
                     partyJson:      buildPartyJson({ name: account?.name ?? readPartyName(original.partyJson) }) ?? Prisma.DbNull,
                     partyType,
                     partyId,
@@ -231,7 +230,7 @@ export async function POST(req: Request) {
                 type:        voucher.type,
                 reference:   voucher.reference,
                 date:        voucher.date,
-                description: voucher.description,
+                description: voucherDescription,
                 partyJson:   voucher.partyJson,
                 subtotal:    voucher.subtotal,
                 taxAmount:   voucher.taxAmount,

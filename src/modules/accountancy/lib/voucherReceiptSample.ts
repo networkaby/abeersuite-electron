@@ -58,7 +58,7 @@ const partyAccountSelect = {
 async function buildInvSample(id: number): Promise<VoucherReceiptData> {
     const vRow = await prisma.invVoucher.findUnique({
         where: { id },
-        include: { universalVoucher: { select: { partyAccountId: true } } },   // 5D-4: party on spine
+        include: { universalVoucher: { select: { partyAccountId: true, description: true } } },   // 5D-4 party + 5D-5 description
     });
     if (!vRow) return notFoundData();
     // Phase 5 5C: goods lines hang off the spine.
@@ -121,7 +121,7 @@ async function buildInvSample(id: number): Promise<VoucherReceiptData> {
         subtotal:  subtotal || null,
         taxAmount: taxAmount || null,
         total,
-        notes:     v.description?.trim() || null,
+        notes:     v.universalVoucher?.description?.trim() || null,
     };
 
     const kind = isVoucherTemplateKind(v.type) ? v.type : "SALE";

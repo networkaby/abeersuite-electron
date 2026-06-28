@@ -149,9 +149,8 @@ export async function POST(req: NextRequest) {
                         reference:   sjRef,
                         branchId:    activeBranchId,
                         date:        new Date(body.date),
-                        description: `Auto-created from journal voucher ${voucher.reference}`,
                         status:      "POSTED",
-                        postedAt:    new Date(),
+                        // 5D-5: description + postedAt live on the spine.
                         subtotal:    flatItems.reduce((s, i) => s + i.amount, 0),
                         totalAmount: flatItems.reduce((s, i) => s + i.amount, 0),
                         // 5D-2: creator lives on the spine.

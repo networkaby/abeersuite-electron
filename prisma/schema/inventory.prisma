@@ -396,7 +396,7 @@ model InvVoucher {
   branchId            String
   branch              Branch                 @relation("InvVoucherBranch", fields: [branchId], references: [id])
   date                DateTime               @db.Date
-  description         String
+  // Phase 5 5D-5: `description` dropped — lives on the spine (UniversalVoucher.description).
   /// Reuses VoucherStatus enum: DRAFT → POSTED → CANCELLED
   status              VoucherStatus          @default(DRAFT)
   // Phase 5 5D-4: `accountId`/`account` dropped — the LIVE party ledger link
@@ -448,7 +448,7 @@ model InvVoucher {
   /// Phase 4 G4d: direct link to the universal-voucher spine (set on post).
   universalVoucherId  Int?                   @unique
   universalVoucher    UniversalVoucher?      @relation("InvVoucherSpine", fields: [universalVoucherId], references: [id])
-  postedAt            DateTime?
+  // Phase 5 5D-5: `postedAt` dropped — lives on the spine (UniversalVoucher.postedAt).
   // Toggle on Challan vouchers — when false, printed challan hides rate/amount columns.
   showPrices          Boolean                @default(true)
   /// Optional FK to InvBom — only set for MANUFACTURING_JOURNAL vouchers
