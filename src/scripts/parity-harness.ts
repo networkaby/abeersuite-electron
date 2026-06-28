@@ -174,6 +174,55 @@ async function runE2E(): Promise<boolean> {
     return glOk && stockOk && box.cap.spineOk && box.cap.rolesOk;
 }
 
+/** End-to-end PURCHASE: real DRAFT purchase → saleToSpec → enginePost, capture GL +
+ *  stock IN, roll back. Asserts the NEW CONCEPT explicitly — type/status/branch all
+ *  resolve from the spine (UniversalVoucher), not the VoucherDetail sidecar. */
+async function runPurchaseE2E(): Promise<boolean> {
+    const [branch, product, cash, user] = await Promise.all([
+        prisma.branch.findFirst({ select: { id: true } }),
+        prisma.invProduct.findFirst({ select: { id: true, stock: true } }),
+        prisma.account.findFirst({ where: { name: { equals: "Cash", mode: "insensitive" }, personId: null, companyId: null }, select: { id: true } }),
+        prisma.user.findFirst({ select: { id: true } }),
+    ]);
+    if (!branch || !product || !cash || !user) { console.log("\npurchase-e2e skipped — missing seed data"); return false; }
+
+    const box: { cap: { glLen: number; dr: number; cr: number; stockIn: number; spineOk: boolean; spineType: string | null; spineStatus: string | null; spineBranch: string | null } | null } = { cap: null };
+    try {
+        await prisma.$transaction(async (tx) => {
+            const spineId = await engineCreateSpine(tx, { type: "PURCHASE", date: new Date(), description: "e2e parity purchase", voucherNo: `PARITY-PUR-${Date.now()}`, branchId: branch.id, userId: user.id });
+            const v = await tx.voucherDetail.create({
+                data: { universalVoucherId: spineId, subtotal: 118, taxAmount: 18, totalAmount: 118, deliveryMode: "COUNTER", placeOfSupply: "19", settlementJson: buildSettlementJson([{ accountId: cash.id, amount: 118, method: "CASH" }], []) },
+            });
+            await tx.voucherInventoryLine.createMany({ data: [{ universalVoucherId: spineId, productId: product.id, quantity: 1, rate: 100, taxRate: 18, taxAmount: 18, amount: 118 }] });
+            const vLines = await tx.voucherInventoryLine.findMany({ where: { universalVoucherId: spineId }, include: { product: { select: { id: true, stock: true, mrpPaise: true } } } });
+            const spec = await saleToSpec(tx, { ...v, type: "PURCHASE", date: new Date(), tenders: [{ accountId: cash.id, amount: 118, method: "CASH" }], charges: [], sellerStateCode: "19", buyerStateCode: "19" } as unknown as PostVoucherInput["voucher"], { branchId: branch.id, lines: vLines });
+            const { journalEntryId } = await enginePost(tx, spec, user.id, { existingSpineId: spineId });
+            const jeLines = journalEntryId ? await captureJe(tx, journalEntryId) : [];
+            const spine   = journalEntryId ? await captureSpine(tx, journalEntryId) : [];
+            const stock   = await tx.invStockLedger.findMany({ where: { universalVoucherId: spineId }, select: { inQty: true, outQty: true } });
+            const sp      = await tx.universalVoucher.findUnique({ where: { id: spineId }, select: { type: true, status: true, branchId: true } });
+            box.cap = {
+                glLen: jeLines.length,
+                dr: jeLines.filter((l) => l.type === "DEBIT").reduce((s, l) => s + l.amount, 0),
+                cr: jeLines.filter((l) => l.type === "CREDIT").reduce((s, l) => s + l.amount, 0),
+                stockIn: stock.reduce((s, e) => s + Number(e.inQty) - Number(e.outQty), 0),
+                spineOk: sameLines(jeLines, spine),
+                spineType: sp?.type ?? null, spineStatus: sp?.status ?? null, spineBranch: sp?.branchId ?? null,
+            };
+            throw new Error(ROLLBACK);
+        }, { timeout: 30_000, maxWait: 10_000 });
+    } catch (e) { if ((e as Error)?.message !== ROLLBACK) throw e; }
+
+    console.log("\n=== e2e PURCHASE (real DRAFT purchase → enginePost, rolled back) ===");
+    console.log(JSON.stringify(box.cap));
+    if (!box.cap) return false;
+    const balanced  = Math.abs(box.cap.dr - box.cap.cr) < 0.005 && box.cap.dr > 0;
+    const stockOk   = Math.abs(box.cap.stockIn - 1) < 0.005;
+    const conceptOk = box.cap.spineType === "PURCHASE" && box.cap.spineStatus === "POSTED" && box.cap.spineBranch === branch.id;
+    console.log("GL balanced:", balanced ? "✓" : "✗", "· stock IN 1:", stockOk ? "✓" : "✗", "· spine parity:", box.cap.spineOk ? "✓" : "✗", "· new-concept type/status/branch on spine:", conceptOk ? "✓" : "✗");
+    return balanced && stockOk && box.cap.spineOk && conceptOk;
+}
+
 // ── Phase 4 golden baseline — financial voucher kinds ────────────────────────
 
 type EngineLine = { accountId: number; type: "DEBIT" | "CREDIT"; amount: number; description?: string | null };
@@ -710,6 +759,7 @@ async function runVoucherAllocation(): Promise<boolean> {
 async function main() {
     const stockOk    = stockCheck();
     const e2eOk      = await runE2E();
+    const purchaseOk = await runPurchaseE2E();
     const recompOk   = await runStockRecompute();
     const editOk     = await runEditCycle();
     const allocOk    = await runAllocationDualTarget();
@@ -719,7 +769,7 @@ async function main() {
     const draftOk    = await runDraftPost();
     const draftSaleOk = await runDraftSale();
     const linkOk     = await runVoucherLink();
-    const green      = stockOk && e2eOk && recompOk && editOk && allocOk && vchAllocOk && shiftOk && goldenOk && draftOk && draftSaleOk && linkOk;
+    const green      = stockOk && e2eOk && purchaseOk && recompOk && editOk && allocOk && vchAllocOk && shiftOk && goldenOk && draftOk && draftSaleOk && linkOk;
     console.log(green ? "\nHARNESS GREEN ✓" : "\nHARNESS FAILED ✗");
     if (!green) process.exitCode = 1;
 }
