@@ -1,4 +1,5 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
@@ -58,7 +59,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ accountI
             orderBy: [{ universalVoucher: { date: "asc" } }, { id: "asc" }],
             include: {
                 universalVoucher: {
-                    select: { id: true, date: true, reference: true, description: true },
+                    select: { id: true, date: true, voucherNo: true, description: true },   // 5D-7: UVNo = id
                 },
             },
         });
@@ -110,7 +111,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ accountI
                 id: l.id,
                 journalEntryId: srcUvId,
                 date: l.universalVoucher.date,
-                reference: l.universalVoucher.reference,
+                reference: l.universalVoucher.voucherNo ?? formatUvNo(l.universalVoucher.id),
                 description: l.universalVoucher.description,
                 lineDescription: l.description,
                 branchId: l.branchId ?? null,

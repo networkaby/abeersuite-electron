@@ -193,12 +193,11 @@ export async function engineGlArm(
     }
 
     // CREATE-POSTED-directly: no pre-created draft spine — mint a fresh POSTED one.
-    const jeRef = await nextRefFromSeries(tx, "GL_POSTING", userId);
+    // 5D-7: the spine's `id` IS the Universal Voucher No (no `reference` string).
     const uv = await tx.universalVoucher.create({
         select: { id: true },
         data: {
             type:                 args.type ?? "JOURNAL",
-            reference:            jeRef,
             voucherNo:          args.voucherNo ?? null,
             date,
             description,
@@ -243,12 +242,11 @@ export async function engineCreateSpine(
         userId:          number;
     },
 ): Promise<number> {
-    const ref = await nextRefFromSeries(tx, "GL_POSTING", args.userId);
+    // 5D-7: the spine's `id` IS the Universal Voucher No (no `reference` string).
     const uv = await tx.universalVoucher.create({
         select: { id: true },
         data: {
             type:           args.type,
-            reference:      ref,
             voucherNo:    args.voucherNo ?? null,
             date:           args.date,
             description:    args.description,

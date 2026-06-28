@@ -1,4 +1,5 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { sumReceiptAllocations, loadTenderLines, sumVoucherAllocations } from "@/modules/accountancy/lib/outstandings";
@@ -86,7 +87,7 @@ export async function GET(req: Request) {
             deletedAt:      null,
             status:         { not: "CANCELLED" },
         },
-        select: { id: true, type: true, reference: true, date: true, lines: { select: { type: true, amount: true } } },
+        select: { id: true, type: true, voucherNo: true, date: true, lines: { select: { type: true, amount: true } } },
         orderBy: [{ date: "asc" }],
     });
     const vchIds = vouchers.map((v) => v.id);
@@ -100,7 +101,7 @@ export async function GET(req: Request) {
                 kind:        "voucher" as const,
                 id:          v.id,
                 voucherType: v.type,
-                reference:   v.reference,
+                reference:   v.voucherNo ?? formatUvNo(v.id),
                 date:        v.date,
                 totalAmount: total,
                 allocated:   vchAllocSum[v.id] ?? 0,

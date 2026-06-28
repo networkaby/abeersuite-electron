@@ -1,4 +1,5 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { NextResponse } from "next/server";
 import { requireAuth, userCanVoucher } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
@@ -54,7 +55,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                     entityType:  "GL_VOUCHER",
                     subtype:     voucher.type,
                     originalId:  voucher.id,
-                    originalRef: voucher.reference,
+                    originalRef: voucher.voucherNo ?? formatUvNo(voucher.id),
                     reason:      data.reason,
                     snapshot:    { ...voucher, journalEntry: voucher },
                     actorId:     user!.id,

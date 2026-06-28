@@ -6,6 +6,7 @@
 // ShiftCloseDialog, and the audit page.
 
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
@@ -84,9 +85,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         // Resolve them by id to keep the old response shape the UI consumes.
         const contraIds = [shift.openingContraVoucherId, shift.closingContraVoucherId].filter((x): x is number => x != null);
         const contras = contraIds.length === 0 ? [] : await prisma.universalVoucher.findMany({
-            where: { id: { in: contraIds } }, select: { id: true, reference: true, date: true },
+            where: { id: { in: contraIds } }, select: { id: true, voucherNo: true, date: true },
         });
-        const contraById = new Map(contras.map((c) => [c.id, c]));
+        const contraById = new Map(contras.map((c) => [c.id, { id: c.id, date: c.date, reference: c.voucherNo ?? formatUvNo(c.id) }]));   // 5D-7
         const openingContraVoucher = shift.openingContraVoucherId != null ? (contraById.get(shift.openingContraVoucherId) ?? null) : null;
         const closingContraVoucher = shift.closingContraVoucherId != null ? (contraById.get(shift.closingContraVoucherId) ?? null) : null;
 

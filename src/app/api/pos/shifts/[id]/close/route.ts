@@ -22,6 +22,7 @@
 // stays in the counter till GL account (balance remains non-zero overnight).
 
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requirePermission } from "@/shared/lib/auth/permissions";
@@ -228,7 +229,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             branch:              result.branch,
             // Phase 5 5E: the closing contra IS a spine now — resolve by id.
             closingContraVoucher: result.closingContraVoucherId != null
-                ? await prisma.universalVoucher.findUnique({ where: { id: result.closingContraVoucherId }, select: { id: true, reference: true } })
+                ? await prisma.universalVoucher.findUnique({ where: { id: result.closingContraVoucherId }, select: { id: true, voucherNo: true } })
+                    .then((c) => c ? { id: c.id, reference: c.voucherNo ?? formatUvNo(c.id) } : null)
                 : null,
             varianceUniversalVoucherId: result.varianceJournalEntryId,   // spine id (JE dropped)
         });

@@ -5,6 +5,7 @@
 
 import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 
 export type AgeingBucket = "b0_30" | "b30_60" | "b60_90" | "b90_plus";
@@ -221,7 +222,7 @@ async function loadOpenBills(
                 date:           { lte: asOf },
             },
             select: {
-                id: true, partyAccountId: true, reference: true, date: true,
+                id: true, partyAccountId: true, voucherNo: true, date: true,
                 lines: { select: { type: true, amount: true } },
             },
         }),
@@ -308,7 +309,7 @@ async function loadOpenBills(
             kind:        "voucher",
             id:          v.id,
             accountId:   v.partyAccountId,
-            ref:         v.reference,
+            ref:         v.voucherNo ?? formatUvNo(v.id),
             billDate:    v.date,
             dueDate:     due,
             totalAmount: v.lines.filter((l) => l.type === "DEBIT").reduce((s, l) => s + Number(l.amount), 0),

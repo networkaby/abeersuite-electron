@@ -8,6 +8,7 @@
 //        (Vault → Counter till). If 0, no Contra is posted.
 
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { requirePermission } from "@/shared/lib/auth/permissions";
@@ -79,9 +80,9 @@ export async function GET(req: NextRequest) {
         // Phase 5 5E: opening/closing contras are spines now — batch-resolve by id.
         const contraIds = [...new Set(rows.flatMap((s) => [s.openingContraVoucherId, s.closingContraVoucherId]).filter((x): x is number => x != null))];
         const contras = contraIds.length === 0 ? [] : await prisma.universalVoucher.findMany({
-            where: { id: { in: contraIds } }, select: { id: true, reference: true },
+            where: { id: { in: contraIds } }, select: { id: true, voucherNo: true },
         });
-        const contraById = new Map(contras.map((c) => [c.id, c]));
+        const contraById = new Map(contras.map((c) => [c.id, { id: c.id, reference: c.voucherNo ?? formatUvNo(c.id) }]));   // 5D-7
 
         return NextResponse.json(rows.map((s) => ({
             ...s,

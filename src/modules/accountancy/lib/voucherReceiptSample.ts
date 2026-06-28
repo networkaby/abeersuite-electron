@@ -1,4 +1,5 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import type { Prisma } from "@/generated/prisma/client";
 import type {
     ThermalReceiptSample,
@@ -156,7 +157,7 @@ async function buildGlSample(id: number): Promise<VoucherReceiptData> {
     // GL vouchers have no qty×rate goods — render each ledger line as
     // "<Account> (Dr|Cr)" with its amount so the slip reads as a journal.
     const sample: ThermalReceiptSample = {
-        reference:  v.reference,
+        reference:  (v.voucherNo ?? formatUvNo(v.id)),
         date:       isoDate(v.date),
         partyName:  party.name,
         partyPhone: party.phone,
@@ -173,7 +174,7 @@ async function buildGlSample(id: number): Promise<VoucherReceiptData> {
     };
 
     const kind = isVoucherTemplateKind(v.type) ? v.type : "JOURNAL";
-    return { kind, sample, docTitle: `${v.type} ${v.reference}` };
+    return { kind, sample, docTitle: `${v.type} ${(v.voucherNo ?? formatUvNo(v.id))}` };
 }
 
 // ── Journal entry (GL spine row) ────────────────────────────────────────────
@@ -198,7 +199,7 @@ async function buildJeSample(id: number): Promise<VoucherReceiptData> {
         .reduce((s, l) => s + toNumber(l.amount), 0);
 
     const sample: ThermalReceiptSample = {
-        reference:  v.reference,
+        reference:  (v.voucherNo ?? formatUvNo(v.id)),
         date:       isoDate(v.date),
         partyName:  null,
         partyPhone: null,
@@ -213,7 +214,7 @@ async function buildJeSample(id: number): Promise<VoucherReceiptData> {
         notes:     v.description?.trim() || null,
     };
 
-    return { kind: "JOURNAL", sample, docTitle: `JOURNAL ${v.reference}` };
+    return { kind: "JOURNAL", sample, docTitle: `JOURNAL ${(v.voucherNo ?? formatUvNo(v.id))}` };
 }
 
 /** Sentinel returned when a voucher id doesn't resolve — the route maps it to notFound(). */

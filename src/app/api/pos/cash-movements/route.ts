@@ -1,4 +1,5 @@
 // GET /api/pos/cash-movements
+import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 //
 // Recent counter cash movements for the POS register's "Cash In/Out" tab:
 // receipts collected from parties (the Rcv flow) and expenditures paid from the
@@ -31,10 +32,10 @@ export async function GET(req: NextRequest) {
         const accountIds = [...receipts.map((r) => r.accountId), ...expenditures.map((e) => e.expenseAccountId)];
         const [vouchers, accounts] = await Promise.all([
             // Phase 5 5E: receipt/expenditure voucherId points at the spine now.
-            prisma.universalVoucher.findMany({ where: { id: { in: voucherIds } }, select: { id: true, reference: true } }),
+            prisma.universalVoucher.findMany({ where: { id: { in: voucherIds } }, select: { id: true, voucherNo: true } }),
             prisma.account.findMany({ where: { id: { in: accountIds } }, select: { id: true, name: true } }),
         ]);
-        const refById  = new Map(vouchers.map((v) => [v.id, v.reference]));
+        const refById  = new Map(vouchers.map((v) => [v.id, v.voucherNo ?? formatUvNo(v.id)]));
         const nameById = new Map(accounts.map((a) => [a.id, a.name]));
 
         const items = [

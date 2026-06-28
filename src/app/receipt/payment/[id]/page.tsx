@@ -1,4 +1,5 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { notFound } from "next/navigation";
 import ThermalAutoPrint from "@/modules/pos/components/ThermalAutoPrint";
 import { getOrganisation } from "@/shared/lib/org/getOrganisation";
@@ -64,7 +65,7 @@ export default async function PaymentReceiptPage({ params }: { params: Promise<{
     // Relay payload for the thermal bridge (/print/payment). Tender breakdown =
     // the money-side ledgers; the narration carries any arrear/advance note.
     const relayPayload = {
-        reference:  voucher.reference,
+        reference:  (voucher.voucherNo ?? formatUvNo(voucher.id)),
         date:       voucher.date.toISOString(),
         party:      counterparty,
         tenders:    tenderLines.map((l) => ({ label: l.account.name, amount: Number(l.amount) })),
@@ -78,7 +79,7 @@ export default async function PaymentReceiptPage({ params }: { params: Promise<{
     return (
         <html>
             <head>
-                <title>{isReceipt ? "Receipt" : "Payment"} {voucher.reference}</title>
+                <title>{isReceipt ? "Receipt" : "Payment"} {(voucher.voucherNo ?? formatUvNo(voucher.id))}</title>
                 <style>{`
           * { margin: 0; padding: 0; box-sizing: border-box; }
           body { font-family: 'Courier New', monospace; font-size: 12px; width: 80mm; margin: 0 auto; padding: 4mm; background: #fff; color: #000; }
@@ -105,7 +106,7 @@ export default async function PaymentReceiptPage({ params }: { params: Promise<{
 
                 <div className="divider" />
 
-                <div className="row"><span className="muted">No.</span><span className="v bold">{voucher.reference}</span></div>
+                <div className="row"><span className="muted">No.</span><span className="v bold">{(voucher.voucherNo ?? formatUvNo(voucher.id))}</span></div>
                 <div className="row"><span className="muted">Date</span><span className="v">{formatDateTime(voucher.date)}</span></div>
 
                 <div className="divider" />

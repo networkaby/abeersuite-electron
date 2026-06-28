@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { parseRange } from "@/modules/accountancy/lib/period";
@@ -62,7 +63,7 @@ export async function GET(req: Request) {
         ...baseWhere,
         ...(search ? {
             OR: [
-                { reference:   { contains: search, mode: "insensitive" as const } },
+                { voucherNo:   { contains: search, mode: "insensitive" as const } },   // 5D-7: UVNo = id
                 { description: { contains: search, mode: "insensitive" as const } },
             ],
         } : {}),
@@ -77,7 +78,7 @@ export async function GET(req: Request) {
                 skip: (page - 1) * limit,
                 take: limit,
                 select: {
-                    id: true, reference: true, description: true, date: true, type: true,
+                    id: true, voucherNo: true, description: true, date: true, type: true,
                     // Stable line order — first line is the principal "By" account
                     // shown in the row's single Amount column. VoucherGlLine is
                     // id-only (no account relation); account fields are resolved
@@ -154,7 +155,7 @@ export async function GET(req: Request) {
             return {
                 id: e.id,
                 date: e.date,
-                reference: e.reference,
+                reference: e.voucherNo ?? formatUvNo(e.id),
                 description: e.description,
                 kind,
                 debit: dr,
@@ -177,7 +178,7 @@ export async function GET(req: Request) {
                 // 5E: the spine id IS the GL voucher id.
                 source: source ?? (isGl ? {
                     kind: "voucher" as const,
-                    id: e.id, reference: e.reference,
+                    id: e.id, reference: e.voucherNo ?? formatUvNo(e.id),
                     url: `/office/accountancy/${VOUCHER_URL_SEG[e.type] ?? "journal-entries"}/${e.id}`,
                 } : null),
             };

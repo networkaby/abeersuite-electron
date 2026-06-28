@@ -52,7 +52,7 @@ export async function GET(req: Request) {
                 },
                 // Phase 5 5B: the source document is the spine (not InvVoucher).
                 sourceUniversalVoucherId: true,
-                sourceUniversalVoucher: { select: { reference: true, voucherNo: true, type: true, partyAccountId: true } },
+                sourceUniversalVoucher: { select: { voucherNo: true, type: true, partyAccountId: true } },
                 createdBy: { select: { name: true } },
             },
         });
@@ -86,7 +86,7 @@ export async function GET(req: Request) {
             reference: r.sourceVoucherGlLine?.universalVoucher?.voucherNo ?? null,
             referenceType: r.sourceVoucherGlLine?.universalVoucher?.type ?? null,
             invVoucherId: r.sourceUniversalVoucherId,
-            invVoucherRef: r.sourceUniversalVoucher?.voucherNo ?? r.sourceUniversalVoucher?.reference ?? null,
+            invVoucherRef: r.sourceUniversalVoucher?.voucherNo ?? null,
             invVoucherType: r.sourceUniversalVoucher?.type ?? null,
             invVoucherParty: r.sourceUniversalVoucher?.partyAccountId != null ? (acctNameById.get(r.sourceUniversalVoucher.partyAccountId) ?? null) : null,
             createdByName: r.createdBy?.name ?? null,

@@ -28,7 +28,7 @@ const pool = new Pool({ connectionString: rawUrl, ssl: /@(localhost|127\.0\.0\.1
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
-const PAYMENT_REF = "DUMMY-COURIER-PAY-1"; // UniversalVoucher spine reference (GL side)
+// 5D-7: the spine has no `reference` string — its `id` is the Universal Voucher No.
 const VOUCHER_REF = "PMT-DEMO-1";          // the Payment voucher number shown in the UI
 const POOL_GROUP_NAME = "Courier & Shipping Cost Pool";
 const COURIER_LEDGER_NAME = "DTDC Counter";
@@ -63,11 +63,11 @@ async function seedCostPoolDemo(): Promise<void> {
     //    Since G5 the UniversalVoucher spine IS the GL; this seed bypasses the
     //    engine, so it writes the spine directly and self-refs it (matching
     //    engineGlArm, which sets sourceJournalEntryId = the spine's own id).
-    let spine = await prisma.universalVoucher.findUnique({ where: { reference: PAYMENT_REF }, include: { lines: true } });
+    let spine = await prisma.universalVoucher.findFirst({ where: { voucherNo: VOUCHER_REF }, include: { lines: true } });
     if (!spine) {
         spine = await prisma.universalVoucher.create({
             data: {
-                type: "PAYMENT", reference: PAYMENT_REF, voucherNo: VOUCHER_REF, date: today,
+                type: "PAYMENT", voucherNo: VOUCHER_REF, date: today,   // 5D-7: id is the UVNo; no reference
                 description: "Courier payment to DTDC (dummy)", narration: "Courier payment to DTDC (dummy)",
                 status: "POSTED", postedAt: today, createdById: admin.id,
                 lines: {

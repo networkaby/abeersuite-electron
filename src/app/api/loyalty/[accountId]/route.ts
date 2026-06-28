@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { ratesFromConfig, liveBalance, expiryCutoff } from "@/modules/loyalty/lib";
@@ -34,7 +35,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ account
                     id: true, delta: true, reason: true, balanceAfter: true, note: true, createdAt: true,
                     // Phase 5 5B: the linked document is the spine; aliased to `voucher`
                     // below so the wire shape the loyalty UI consumes is unchanged.
-                    universalVoucher: { select: { id: true, reference: true } },
+                    universalVoucher: { select: { id: true, voucherNo: true } },
                 },
             }),
         ]);
@@ -52,7 +53,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ account
             totalEarned:   wallet?.totalEarned ?? 0,
             totalRedeemed: wallet?.totalRedeemed ?? 0,
             lots: lotsOut,
-            ledger: ledger.map(({ universalVoucher, ...row }) => ({ ...row, voucher: universalVoucher })),
+            ledger: ledger.map(({ universalVoucher, ...row }) => ({ ...row, voucher: universalVoucher ? { id: universalVoucher.id, reference: universalVoucher.voucherNo ?? formatUvNo(universalVoucher.id) } : null })),
         });
     } catch (e) {
         return handleApiError(e, "Failed to fetch loyalty wallet");

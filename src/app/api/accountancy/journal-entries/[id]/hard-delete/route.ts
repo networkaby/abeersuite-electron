@@ -1,4 +1,5 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
@@ -52,7 +53,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 data: {
                     entityType: "JOURNAL_ENTRY",
                     originalId: entry.id,
-                    originalRef: entry.reference,
+                    originalRef: entry.voucherNo ?? formatUvNo(entry.id),
                     action: "HARD_DELETED",
                     reason: data.reason,
                     snapshot: entry as unknown as object,

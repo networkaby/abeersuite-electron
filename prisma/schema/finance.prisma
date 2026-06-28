@@ -64,50 +64,51 @@ model AuditLog {
 // promoted in Stage G when these become canonical. `sourceJournalEntryId` is the
 // provenance back-link used by Stage D backfill reconciliation.
 model UniversalVoucher {
-  id                   Int             @id @default(autoincrement())
+  id                        Int                        @id @default(autoincrement())
+  //uvNo                 Int                       @id @default (auto increment)  //todo: add this back in User recomendetion
   // Spans EVERY kind — VoucherType (CONTRA/PAYMENT/…), InvVoucherType (SALE/…),
   // and JOURNAL. String (not enum) so the spine isn't coupled to either enum.
-  type                 String
-  // Universal Voucher No (UVNo) — the ONE global sequence across every voucher
-  // (vocabulary.md). Currently reuses the GL_POSTING ref; the prefix moves GL-→UV-
-  // in a follow-up. `reference` (the field name) stays for now; rename to `uvNo`
-  // is the surgical follow-up (the word `reference` is reserved for a future
-  // cross-reference column, NOT this number).
-  reference            String          @unique
+  type                      String
+  // Universal Voucher No (UVNo) — the spine's `id` (above) IS the universal
+  // identifier; there is no separate number column. Display label = `UV-<id>`
+  // via formatUvNo() (src/shared/lib/accountancy/uvNo.ts). The old `reference`
+  // string (GL_POSTING ref) was dropped (Phase 5 5D-7) — it was unnecessary
+  // and `GL-` wrongly implied GL-only. The word `reference` is reserved for a
+  // FUTURE cross-reference column, never a number. (vocabulary.md)
   // Voucher No — the per-kind user-facing document number (SV-/PMT-/POS-/CV-…)
   // carried from the source voucher. Not unique (drafts/series may collide).
-  voucherNo            String?
-  date                 DateTime        @db.Date
-  description          String
-  narration            String?
-  status               VoucherStatus   @default(DRAFT)
-  partyAccountId       Int?
-  postedAt             DateTime?
-  cancelledAt          DateTime?
-  cancelledById        Int?
-  cancelReason         String?
-  deletedAt            DateTime?
-  deletedById          Int?
-  deleteReason         String?
-  createdById          Int
+  voucherNo                 String?
+  date                      DateTime                   @db.Date
+  description               String
+  narration                 String?
+  status                    VoucherStatus              @default(DRAFT)
+  partyAccountId            Int?
+  postedAt                  DateTime?
+  cancelledAt               DateTime?
+  cancelledById             Int?
+  cancelReason              String?
+  deletedAt                 DateTime?
+  deletedById               Int?
+  deleteReason              String?
+  createdById               Int
   // Phase 4 G5 groundwork: faithful transaction wall-clock (= the source
   // voucher's posting time). Lets intra-day windowed readers (POS shift
   // reconciliation) move off Voucher.createdAt onto the spine before the drop —
   // `createdAt` alone is backfill-time for historical rows, so it can't window.
-  sourceCreatedAt      DateTime?
+  sourceCreatedAt           DateTime?
   // Back-link to the legacy JE written in the same enginePost (dual-write).
-  sourceJournalEntryId Int?            @unique
-  lines                VoucherGlLine[]
+  sourceJournalEntryId      Int?                       @unique
+  lines                     VoucherGlLine[]
   // Phase 4 G4d: direct sidecar back-links (replace the indirect
   // sourceJournalEntryId↔journalEntryId hop, so the spine↔voucher relationship
   // survives the JournalEntry/Voucher drop in G5).
-  invVoucher           InvVoucher?     @relation("InvVoucherSpine")
+  invVoucher                InvVoucher?                @relation("InvVoucherSpine")
   // Phase 5 5A: cross-module workflow links (loose, FK-free — see VoucherLink).
-  links                VoucherLink[]   @relation("VoucherLinks")
+  links                     VoucherLink[]              @relation("VoucherLinks")
   // Phase 5 5C: inventory children re-homed onto the spine (dual-written; sole
   // parent once InvVoucher.voucherId is dropped in 5C-3).
-  inventoryLines       VoucherInventoryLine[] @relation("SpineInventoryLines")
-  stockLedger          InvStockLedger[]       @relation("SpineStockLedger")
+  inventoryLines            VoucherInventoryLine[]     @relation("SpineInventoryLines")
+  stockLedger               InvStockLedger[]           @relation("SpineStockLedger")
   // Phase 5 5B: loyalty / coupon / gift-card / cost-pool satellites anchored on the
   // spine (the document), re-pointed off InvVoucher.
   loyaltyLots               LoyaltyLot[]               @relation("SpineLoyaltyLots")
@@ -116,8 +117,8 @@ model UniversalVoucher {
   couponRedemptions         CouponRedemption[]         @relation("SpineCouponRedemptions")
   giftCardTxns              GiftCardTxn[]              @relation("SpineGiftCardTxns")
   additionalCostAllocations AdditionalCostAllocation[] @relation("SpineAdditionalCostAllocations")
-  createdAt            DateTime        @default(now())
-  updatedAt            DateTime        @updatedAt
+  createdAt                 DateTime                   @default(now())
+  updatedAt                 DateTime                   @updatedAt
 
   @@index([status, date])
   @@index([date])
@@ -142,14 +143,14 @@ model VoucherGlLine {
   // GL lines (filter by role, sort by seq) and is the foundation for folding
   // InvVoucherTender/InvVoucherCharge into role-tagged GL lines. Nullable: only
   // the trading GL builder tags roles; generic financial legs leave role null.
-  role               VoucherGlRole?
-  seq                Int?
+  role      VoucherGlRole?
+  seq       Int?
   // Phase 4 G4b: tender metadata, populated only on role=TENDER lines — the
   // display-only channel label + the UPI ref / cheque # / txn id. Folding
   // InvVoucherTender's `method`/`reference` onto the GL line is what lets that
   // table retire (the role=TENDER GL lines become the complete tender record).
-  method             PaymentMethod?
-  reference          String?
+  method    PaymentMethod?
+  reference String?
 
   // Phase 4 G2: line-level twin link to the legacy JournalLine this spine line
   // mirrors — the per-line analog of UniversalVoucher.sourceJournalEntryId. Lets

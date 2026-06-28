@@ -1,4 +1,5 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { NextResponse } from "next/server";
 import { requirePermission, requireAuth, userCanVoucher } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
@@ -111,8 +112,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                         entityType:  "GL_VOUCHER",
                         subtype:     existing.type,
                         originalId:  existing.id,
-                        originalRef: existing.reference,
-                        reason:      `Edit (in-place) of ${existing.reference}`,
+                        originalRef: (existing.voucherNo ?? formatUvNo(existing.id)),
+                        reason:      `Edit (in-place) of ${(existing.voucherNo ?? formatUvNo(existing.id))}`,
                         snapshot:    { ...existing },
                         actorId:     user!.id,
                     }),
