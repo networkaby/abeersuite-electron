@@ -11,11 +11,10 @@ import { handleApiError } from "@/shared/lib/api";
 // party — NOT a GL-posting state. POS saves them POSTED; the reviewer can flip a
 // row back to Draft (or re-issue) here.
 //
-// HARD GUARD: only non-GL types with no journal entry may be toggled. A real GL
-// voucher's status is owned by the post/cancel flow and must never be flipped here
-// (that would desync the books).
-const TOGGLEABLE = new Set<string>(["POS_ESTIMATE", "POS_ORDER", "ESTIMATE", "SALES_ORDER", "PURCHASE_ORDER"]);
-
+// HARD GUARD: only OPTIONAL (non-binding) documents may be toggled. A REGULAR
+// voucher's status is owned by the post/cancel flow and must never be flipped
+// here (that would desync the books). 5D-9: bindingness is the spine's `binding`
+// flag, NOT a hardcoded type-list.
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
     // Reverting a finalised (POSTED) document back to DRAFT is an un-finalize action —
     // same gravity as Cancel, NOT a mere view. (Was gated only on ACCOUNTANCY_VIEW_ORG.)
@@ -34,15 +33,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
         const v = await prisma.invVoucher.findUnique({
             where: { id },
-            // 5D-8: status + deletedAt live on the spine.
-            select: { id: true, type: true, universalVoucherId: true, universalVoucher: { select: { deletedAt: true } } },
+            // 5D-8/5D-9: status + deletedAt + binding live on the spine.
+            select: { id: true, universalVoucherId: true, universalVoucher: { select: { deletedAt: true, binding: true } } },
         });
         if (!v || v.universalVoucher?.deletedAt) return NextResponse.json({ error: "Voucher not found" }, { status: 404 });
-        // Only non-GL document types (estimates / orders) carry a document-lifecycle
-        // status that may be toggled here. Their status is NOT a GL-posting state.
-        // Real GL vouchers' status is owned by the post/cancel flow and must never
-        // be flipped here (that would desync the books).
-        if (!TOGGLEABLE.has(v.type) || v.universalVoucherId == null) {
+        // Only OPTIONAL (non-binding) documents carry a free document-lifecycle status
+        // that may be toggled here. A REGULAR voucher's status is owned by the
+        // post/cancel flow and must never be flipped here (that would desync the books).
+        if (v.universalVoucherId == null || v.universalVoucher?.binding !== "OPTIONAL") {
             return NextResponse.json(
                 { error: "This voucher's status is GL-controlled and can't be changed here." },
                 { status: 422 },

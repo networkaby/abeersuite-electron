@@ -82,6 +82,9 @@ model UniversalVoucher {
   description               String
   narration                 String?
   status                    VoucherStatus              @default(DRAFT)
+  // Phase 5 5D-9: REGULAR (real txn: GL/stock) vs OPTIONAL (non-binding document:
+  // estimate/order/quote, no GL/stock). Derived from `type` at creation.
+  binding                   VoucherBinding             @default(REGULAR)
   partyAccountId            Int?
   postedAt                  DateTime?
   cancelledAt               DateTime?

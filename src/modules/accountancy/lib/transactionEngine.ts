@@ -23,6 +23,7 @@ import type { Prisma, VoucherType, VoucherGlRole, PaymentMethod } from "@/genera
 import { balanceDelta, nextRefFromSeries, toNumber } from "./balance";
 import { defaultNormalBalanceForGroupType, type GroupTypeStr } from "./groupNature";
 import { recordStockMovementsBatch, type RecordStockMovementArgs } from "@/modules/inventory/lib/stockMovement";
+import { bindingForType } from "@/shared/lib/accountancy/voucherBinding";
 
 type Drcr = "DEBIT" | "CREDIT";
 
@@ -198,6 +199,7 @@ export async function engineGlArm(
         select: { id: true },
         data: {
             type:                 args.type ?? "JOURNAL",
+            binding:              bindingForType(args.type ?? "JOURNAL"),   // 5D-9
             voucherNo:          args.voucherNo ?? null,
             date,
             description,
@@ -247,6 +249,7 @@ export async function engineCreateSpine(
         select: { id: true },
         data: {
             type:           args.type,
+            binding:        bindingForType(args.type),   // 5D-9
             voucherNo:    args.voucherNo ?? null,
             date:           args.date,
             description:    args.description,

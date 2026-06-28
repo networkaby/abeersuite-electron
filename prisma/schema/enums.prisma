@@ -57,6 +57,19 @@ enum VoucherStatus {
   CANCELLED
 }
 
+// Phase 5 5D-9: bindingness of a voucher — separates real transactions from
+// non-binding paper documents. REGULAR posts GL / moves stock (sale, purchase,
+// payment, receipt, journal…); OPTIONAL is a non-binding document with no GL
+// and no stock impact (estimate, order, quote) whose status is a free document
+// lifecycle. Replaces scattered hardcoded type-lists (e.g. the status-toggle
+// route's TOGGLEABLE set) — `type` stays purely descriptive, this carries
+// behaviour. Derived from `type` at spine creation via bindingForType()
+// (src/shared/lib/accountancy/voucherBinding.ts).
+enum VoucherBinding {
+  REGULAR
+  OPTIONAL
+}
+
 enum EntryType {
   DEBIT
   CREDIT
