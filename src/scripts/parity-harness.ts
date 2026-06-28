@@ -142,7 +142,7 @@ async function runE2E(): Promise<boolean> {
             const stock = await tx.invStockLedger.findMany({ where: { universalVoucherId: spineId }, select: { productId: true, inQty: true, outQty: true } });
             // G4: every spine GL line of a trading sale must carry a role tag
             // (TENDER + BODY + TAX here) and a contiguous seq 0..n-1.
-            const uv = journalEntryId ? await tx.universalVoucher.findUnique({ where: { sourceJournalEntryId: journalEntryId }, select: { id: true } }) : null;
+            const uv = journalEntryId ? await tx.universalVoucher.findUnique({ where: { id: journalEntryId }, select: { id: true } }) : null;   // 5D-16: spine id directly
             const roleLines = uv ? await tx.voucherGlLine.findMany({ where: { universalVoucherId: uv.id }, select: { role: true, seq: true, method: true, reference: true }, orderBy: { seq: "asc" } }) : [];
             const roles = new Set(roleLines.map((l) => l.role));
             // G4b: the TENDER line carries its channel + ref; non-tender legs don't.

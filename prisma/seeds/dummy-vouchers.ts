@@ -61,8 +61,8 @@ async function seedCostPoolDemo(): Promise<void> {
 
     // 3. POSTED Payment spine row (Dr courier ₹5,000 / Cr Cash ₹5,000) — the GL.
     //    Since G5 the UniversalVoucher spine IS the GL; this seed bypasses the
-    //    engine, so it writes the spine directly and self-refs it (matching
-    //    engineGlArm, which sets sourceJournalEntryId = the spine's own id).
+    //    engine and writes the spine directly. (5D-16: the vestigial
+    //    sourceJournalEntryId self-ref is gone — callers key by the spine id.)
     let spine = await prisma.universalVoucher.findFirst({ where: { voucherNo: VOUCHER_REF }, include: { lines: true } });
     if (!spine) {
         spine = await prisma.universalVoucher.create({
@@ -79,7 +79,6 @@ async function seedCostPoolDemo(): Promise<void> {
             },
             include: { lines: true },
         });
-        await prisma.universalVoucher.update({ where: { id: spine.id }, data: { sourceJournalEntryId: spine.id } });
         // Keep Account.balance in step (engineGlArm maintains it for engine-posted
         // vouchers; this seed bypasses the engine). Courier (expense, Dr) +5000;
         // Cash (asset, Cr) −5000.

@@ -214,11 +214,9 @@ export async function engineGlArm(
             lines: { create: glLineBase },
         },
     });
-    // Self-reference: `sourceJournalEntryId`/voucher `journalEntryId` now carry the
-    // SPINE id (the JE is gone), so the lifecycle helpers that key by it still
-    // resolve. Vestigial — dropped in a follow-up rename.
-    await tx.universalVoucher.update({ where: { id: uv.id }, data: { sourceJournalEntryId: uv.id } });
-
+    // 5D-16: the vestigial self-ref `sourceJournalEntryId` is dropped — callers key
+    // by the spine `id` directly. The engine's `journalEntryId` RETURN value (= the
+    // spine id) is kept for caller compatibility.
     return { journalEntryId: uv.id, universalVoucherId: uv.id };
 }
 
@@ -264,8 +262,7 @@ export async function engineCreateSpine(
             createdById:    args.userId,
         },
     });
-    await tx.universalVoucher.update({ where: { id: uv.id }, data: { sourceJournalEntryId: uv.id } });
-    return uv.id;
+    return uv.id;   // 5D-16: vestigial sourceJournalEntryId self-ref dropped
 }
 
 // ── Spine lifecycle helper (Phase 4 G5 — the JE mirror is gone) ───────────────

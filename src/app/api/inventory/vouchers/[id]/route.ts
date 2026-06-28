@@ -409,7 +409,7 @@ export async function PATCH(req: Request, { params }: Params) {
                 // G4d: reapply resyncs the spine (delete + re-mirror → new spine id);
                 // refresh the direct link so InvVoucher.universalVoucherId stays valid.
                 const newSpine = existing.universalVoucherId != null
-                    ? await tx.universalVoucher.findUnique({ where: { sourceJournalEntryId: existing.universalVoucherId }, select: { id: true } })
+                    ? await tx.universalVoucher.findUnique({ where: { id: existing.universalVoucherId }, select: { id: true } })   // 5D-16: spine id directly (was sourceJournalEntryId self-ref)
                     : null;
                 await tx.voucherDetail.update({ where: { id }, data: { universalVoucherId: newSpine?.id ?? null } });   // 5D-5: postedAt on spine
                 // Phase 5 5C: link the rewritten stock rows (+ any new goods lines) to the spine.

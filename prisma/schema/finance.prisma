@@ -104,12 +104,10 @@ model UniversalVoucher {
   // reconciliation) move off Voucher.createdAt onto the spine before the drop —
   // `createdAt` alone is backfill-time for historical rows, so it can't window.
   sourceCreatedAt           DateTime?
-  // Back-link to the legacy JE written in the same enginePost (dual-write).
-  sourceJournalEntryId      Int?                       @unique
+  // Phase 5 5D-16: the vestigial `sourceJournalEntryId` self-ref (= this row's own
+  // `id` since G5 dropped JournalEntry) is removed — callers key by `id` directly.
   lines                     VoucherGlLine[]
-  // Phase 4 G4d: direct sidecar back-links (replace the indirect
-  // sourceJournalEntryId↔journalEntryId hop, so the spine↔voucher relationship
-  // survives the JournalEntry/Voucher drop in G5).
+  // Phase 4 G4d: direct 1:1 sidecar (the document/print detail).
   voucherDetail             VoucherDetail?             @relation("InvVoucherSpine")
   // Phase 5 5A: cross-module workflow links (loose, FK-free — see VoucherLink).
   links                     VoucherLink[]              @relation("VoucherLinks")
