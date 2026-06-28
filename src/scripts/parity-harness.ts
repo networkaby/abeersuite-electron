@@ -123,7 +123,7 @@ async function runE2E(): Promise<boolean> {
                 data: {
                     type: "SALE", branchId: branch.id,
                     universalVoucherId: spineId,
-                    date: new Date(), status: "DRAFT",
+                    date: new Date(),   // 5D-8: status lives on the spine
                     subtotal: 118, taxAmount: 18, totalAmount: 118,
                     deliveryMode: "COUNTER", placeOfSupply: "19",
                     settlementJson: buildSettlementJson([{ accountId: cash.id, amount: 118, method: "CASH", reference: "E2E-TENDER-REF" }], []),
@@ -348,7 +348,7 @@ async function runDraftSale(): Promise<boolean> {
                 data: {
                     type: "SALE", branchId: branch.id,
                     universalVoucherId: spineId,
-                    date: new Date(), status: "DRAFT",
+                    date: new Date(),   // 5D-8: status lives on the spine
                     subtotal: 118, taxAmount: 18, totalAmount: 118,
                     deliveryMode: "COUNTER", placeOfSupply: "19",
                     settlementJson: buildSettlementJson([{ accountId: cash.id, amount: 118, method: "CASH" }], []),
@@ -432,7 +432,7 @@ async function runStockRecompute(): Promise<boolean> {
                 data: {
                     type: "SALE", branchId: branch.id,
                     universalVoucherId: spineId,
-                    date: new Date(), status: "DRAFT",
+                    date: new Date(),   // 5D-8: status lives on the spine
                     subtotal: 118, taxAmount: 18, totalAmount: 118,
                     deliveryMode: "COUNTER", placeOfSupply: "19",
                     settlementJson: buildSettlementJson([{ accountId: cash.id, amount: 118 }], []),
@@ -509,7 +509,7 @@ async function runEditCycle(): Promise<boolean> {
                 data: {
                     type: "SALE", branchId: branch.id,
                     universalVoucherId: spineId,
-                    date: new Date(), status: "POSTED",
+                    date: new Date(),   // 5D-8: status lives on the spine (set by enginePost)
                     subtotal: 118, taxAmount: 18, totalAmount: 118,
                     deliveryMode: "COUNTER", placeOfSupply: "19",
                     settlementJson: buildSettlementJson([{ accountId: cash.id, amount: 118 }], []),
@@ -584,7 +584,7 @@ async function runAllocationDualTarget(): Promise<boolean> {
                 data: {
                     type: "SALE", branchId: branch.id,
                     universalVoucherId: spineId,
-                    date: new Date(), status: "POSTED",
+                    date: new Date(),   // 5D-8: status lives on the spine (set by enginePost)
                     subtotal: 118, taxAmount: 18, totalAmount: 118,
                     deliveryMode: "COUNTER", placeOfSupply: "19",
                     settlementJson: buildSettlementJson([{ accountId: cash.id, amount: 118 }], []),
@@ -643,7 +643,7 @@ async function runShiftCashMath(): Promise<boolean> {
                 data: {
                     type: "POS", branchId: branch.id,
                     universalVoucherId: spineId,
-                    date: new Date(), status: "DRAFT",
+                    date: new Date(),   // 5D-8: status lives on the spine
                     subtotal: 118, taxAmount: 18, totalAmount: 118,
                     deliveryMode: "COUNTER", placeOfSupply: "19",
                     settlementJson: buildSettlementJson([{ accountId: cash.id, amount: 118, method: "CASH" }], []),
@@ -654,7 +654,7 @@ async function runShiftCashMath(): Promise<boolean> {
             const spec = await saleToSpec(tx, { ...v, tenders: [{ accountId: cash.id, amount: 118, method: "CASH" }], charges: [], sellerStateCode: "19", buyerStateCode: "19" } as unknown as PostVoucherInput["voucher"], { branchId: v.branchId, lines: vLines });
             const { universalVoucherId } = await enginePost(tx, spec, user.id, { existingSpineId: spineId });
             // POS route links the spine to the voucher — replicate so the window→spine resolution finds it.
-            await tx.invVoucher.update({ where: { id: v.id }, data: { status: "POSTED", universalVoucherId } });
+            await tx.invVoucher.update({ where: { id: v.id }, data: { universalVoucherId } });   // 5D-8: status POSTED set on the spine by enginePost
             // G5: an office RECEIPT at the till (Dr Till 50 / Cr Debtor) must ALSO
             // count toward shift cash — now read off the spine (sourceCreatedAt window).
             const expectReceipt = debtor != null;

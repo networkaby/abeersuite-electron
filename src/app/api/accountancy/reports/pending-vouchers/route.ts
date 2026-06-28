@@ -35,7 +35,8 @@ function unsettledClause(type: PendingType): Prisma.InvVoucherWhereInput {
         type: InvVoucherType[type],
         refReturns: {
             none: {
-                status: { not: VoucherStatus.CANCELLED },
+                // 5D-8: settling voucher's status lives on its spine.
+                universalVoucher: { status: { not: VoucherStatus.CANCELLED } },
                 type:   { in: SETTLES_BY[type] },
             },
         },
@@ -84,8 +85,7 @@ export async function GET(req: NextRequest) {
         : [];
 
     const where: Prisma.InvVoucherWhereInput = {
-        status:    VoucherStatus.POSTED,
-        deletedAt: null,
+        universalVoucher: { status: VoucherStatus.POSTED, deletedAt: null },   // 5D-8: lifecycle on spine
         OR:        typesToInclude.map(unsettledClause),
         ...branchFilter,
         ...((from || to) && {

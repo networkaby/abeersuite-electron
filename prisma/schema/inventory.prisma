@@ -398,8 +398,7 @@ model InvVoucher {
   branch              Branch                 @relation("InvVoucherBranch", fields: [branchId], references: [id])
   date                DateTime               @db.Date
   // Phase 5 5D-5: `description` dropped — lives on the spine (UniversalVoucher.description).
-  /// Reuses VoucherStatus enum: DRAFT → POSTED → CANCELLED
-  status              VoucherStatus          @default(DRAFT)
+  // Phase 5 5D-8: `status` dropped — lives on the spine (UniversalVoucher.status).
   // Phase 5 5D-4: `accountId`/`account` dropped — the LIVE party ledger link
   // lives on the spine (UniversalVoucher.partyAccountId). The frozen partyJson
   // snapshot below + the legacy partyType/partyId routing keys stay on the detail.
@@ -489,12 +488,11 @@ model InvVoucher {
   orderStatusId   String?
   orderStatus     TicketStatus? @relation("OrderVoucherStatus", fields: [orderStatusId], references: [id])
 
-  // ── Lifecycle (Phase 5 5D-3) ────────────────────────────────────────────
-  // `status` (above) + `deletedAt` stay as denormalized filter flags for list
-  // readers; the FULL lifecycle metadata (who/when/why cancelled or deleted)
-  // lives on the spine (UniversalVoucher.cancelledAt/By/Reason + deletedById/
-  // deleteReason). Phase 5 5D-2: createdBy also lives on the spine.
-  deletedAt     DateTime?
+  // ── Lifecycle (Phase 5 5D-8) ────────────────────────────────────────────
+  // `status` + `deletedAt` now live ENTIRELY on the spine (UniversalVoucher).
+  // Readers reach lifecycle state via `universalVoucher.status` / `.deletedAt`;
+  // full metadata (cancelledAt/By/Reason + deletedById/deleteReason) is there too.
+  // Phase 5 5D-2: createdBy also lives on the spine.
   // Phase 5 5C: goods lines (VoucherInventoryLine) + stock rows (InvStockLedger)
   // hang off the SPINE now, not InvVoucher — reach them via universalVoucher.
   // Phase 4 G4b: tender + charge INPUT (re-rendered for edit, never aggregated —
@@ -508,10 +506,8 @@ model InvVoucher {
   createdAt                 DateTime                   @default(now())
   updatedAt                 DateTime                   @updatedAt
 
-  @@index([type, status])
+  @@index([type])
   @@index([date])
-  @@index([status])
-  @@index([deletedAt])
   @@index([branchId, type, date])
   @@index([ticketId])
   @@index([dealId])

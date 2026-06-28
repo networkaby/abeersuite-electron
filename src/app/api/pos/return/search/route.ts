@@ -37,12 +37,16 @@ export async function GET(req: NextRequest) {
     try {
         const vouchers = await prisma.invVoucher.findMany({
             where: {
-                deletedAt: null,
-                status:    "POSTED",
                 type:      { in: ["POS", "SALE"] },
-                ...(customerId
-                    ? { universalVoucher: { partyAccountId: Number(customerId) } }   // 5D-4: party on spine
-                    : { reference: { contains: q, mode: "insensitive" } }),
+                // 5D-8: status + deletedAt live on the spine; party (5D-4) + the
+                // voucher-number search (5D-6 voucherNo) also resolve via the spine.
+                universalVoucher: {
+                    status:    "POSTED",
+                    deletedAt: null,
+                    ...(customerId
+                        ? { partyAccountId: Number(customerId) }
+                        : { voucherNo: { contains: q, mode: "insensitive" } }),
+                },
             },
             orderBy: { date: "desc" },
             take:    10,

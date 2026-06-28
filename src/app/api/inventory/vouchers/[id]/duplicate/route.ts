@@ -58,8 +58,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                     branchId:         source.branchId,
                     universalVoucherId: spineId,
                     date:             today,
-                    // 5D-5: description lives on the spine (set above).
-                    status:           "DRAFT",
+                    // 5D-5/5D-8: description + status (spine defaults DRAFT) live on the spine.
                     // 5D-4: party ledger lives on the spine (set above).
                     partyJson:        source.partyJson ?? Prisma.DbNull,
                     partyType:        source.partyType,

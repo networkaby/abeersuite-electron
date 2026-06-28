@@ -136,8 +136,7 @@ export async function createPosQuoteVoucher(opts: {
         const voucher = await tx.invVoucher.create({
             data: {
                 type,
-                // POSTED here means "issued" (no GL impact — no GL lines on the spine).
-                status: "POSTED",
+                // 5D-8: status "issued"/POSTED set on the spine above (no GL lines → gate-neutral).
                 // 5D-5: postedAt + 5D-6 reference (voucherNo) live on the spine.
                 branchId,
                 universalVoucherId: spineId,

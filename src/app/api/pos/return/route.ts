@@ -68,7 +68,7 @@ export async function POST(req: Request) {
         const original = await prisma.invVoucher.findUnique({
             where: { id: data.originalInvoiceId },
             include: {
-                universalVoucher: { select: { partyAccountId: true, voucherNo: true } },   // 5D-4 party + 5D-6 ref
+                universalVoucher: { select: { partyAccountId: true, voucherNo: true, status: true } },   // 5D-4 party + 5D-6 ref + 5D-8 status
                 branch:  { select: { id: true, gstStateCode: true } },
             },
         });
@@ -82,7 +82,7 @@ export async function POST(req: Request) {
         const originalLines = await prisma.voucherInventoryLine.findMany({
             where: { universalVoucherId: original.universalVoucherId ?? -1 },
         });
-        if (original.status !== "POSTED") {
+        if (original.universalVoucher?.status !== "POSTED") {
             return NextResponse.json({ error: "Only POSTED vouchers can be returned" }, { status: 409 });
         }
         if (original.type !== "POS" && original.type !== "SALE") {
@@ -181,8 +181,7 @@ export async function POST(req: Request) {
                     branchId,
                     universalVoucherId: spineId,
                     date:           today,
-                    // 5D-5: description + postedAt + 5D-4 party live on the spine.
-                    status:         "POSTED",
+                    // 5D-5/5D-8: description + postedAt + status + 5D-4 party live on the spine.
                     partyJson:      buildPartyJson({ name: account?.name ?? readPartyName(original.partyJson) }) ?? Prisma.DbNull,
                     partyType,
                     partyId,

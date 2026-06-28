@@ -60,8 +60,7 @@ export async function GET(req: NextRequest) {
     const rows = await prisma.invVoucher.findMany({
         where: {
             type:         { in: types },
-            status:       VoucherStatus.POSTED,
-            deletedAt:    null,
+            universalVoucher: { status: VoucherStatus.POSTED, deletedAt: null },   // 5D-8: lifecycle on spine
             refVoucherId: null,   // not already linked to a source voucher
             ...branchFilter,
             ...partyFilter,

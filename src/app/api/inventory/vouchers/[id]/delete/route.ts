@@ -24,13 +24,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const { data, error } = await validateRequest(req, schema);
     if (error) return error;
 
-    const voucherRow = await prisma.invVoucher.findUnique({ where: { id: Number(id) }, include: { universalVoucher: { select: { voucherNo: true } } } });   // 5D-6
+    const voucherRow = await prisma.invVoucher.findUnique({ where: { id: Number(id) }, include: { universalVoucher: { select: { voucherNo: true, status: true, deletedAt: true } } } });   // 5D-6/5D-8
     if (!voucherRow) return NextResponse.json({ error: "Not found" }, { status: 404 });
     // Phase 5 5C: goods lines hang off the spine.
     const goodsLines = await prisma.voucherInventoryLine.findMany({
         where: { universalVoucherId: voucherRow.universalVoucherId ?? -1 },
     });
-    const voucher = { ...voucherRow, lines: goodsLines };
+    // 5D-8: lifecycle status/deletedAt live on the spine — attach for the LifecycleVoucher helpers.
+    const voucher = { ...voucherRow, lines: goodsLines, status: voucherRow.universalVoucher?.status ?? "DRAFT", deletedAt: voucherRow.universalVoucher?.deletedAt ?? null };
 
     const isPurchase = voucher.type === "PURCHASE" || voucher.type === "GRN";
     // POS = counter sale: moves stock OUT like SALE, so reversing must restore it.
@@ -137,12 +138,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 });
             }
 
-            // 5D-3: only the deletedAt flag stays on the detail; full metadata
-            // (deletedById/deleteReason) is on the spine (set above).
-            await tx.invVoucher.update({
-                where: { id: Number(id) },
-                data: { deletedAt: new Date() },
-            });
+            // 5D-8: soft-delete is recorded ENTIRELY on the spine (deletedAt +
+            // deletedById/deleteReason, set above). The detail carries no flags now.
         // Reverse stock + GL over the Supabase pooler can exceed the default
         // 5s interactive-tx ceiling (P2028) — match the 30s headroom used by
         // the post/PATCH routes.

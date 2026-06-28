@@ -46,8 +46,8 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
             branch: {
                 select: { id: true, gstStateCode: true },
             },
-            // 5D-5 description + 5D-6 ref live on the spine — needed for saleToSpec / messages.
-            universalVoucher: { select: { description: true, voucherNo: true } },
+            // 5D-5 description + 5D-6 ref + 5D-8 status live on the spine — needed for saleToSpec / messages / the DRAFT gate.
+            universalVoucher: { select: { description: true, voucherNo: true, status: true } },
         },
     });
     // Phase 5 5C: goods lines hang off the spine — load + attach as `voucher.lines`.
@@ -57,7 +57,8 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
             include: { product: { select: { id: true, mrpPaise: true, stock: true } } },
         })
         : [];
-    const voucher = voucherRow ? { ...voucherRow, lines: goodsLines } : null;
+    // 5D-8: status lives on the spine — attach for the DRAFT gate below.
+    const voucher = voucherRow ? { ...voucherRow, lines: goodsLines, status: voucherRow.universalVoucher?.status ?? "DRAFT" } : null;
 
     if (!voucher)                  return NextResponse.json({ error: "Not found" }, { status: 404 });
     if (voucher.status !== "DRAFT") return NextResponse.json({ error: `Voucher is already ${voucher.status}` }, { status: 409 });
@@ -209,12 +210,11 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                         const priorSameDay = await tx.invVoucher.count({
                             where: {
                                 type:     "PHYSICAL_STOCK",
-                                status:   "POSTED",
                                 branchId: voucher.branchId,
                                 date:     voucher.date,
                                 id:       { not: voucher.id },
-                                // Phase 5 5C: goods lines hang off the spine.
-                                universalVoucher: { inventoryLines: { some: { productId: line.productId } } },
+                                // 5D-8 status on spine + Phase 5 5C: goods lines hang off the spine.
+                                universalVoucher: { status: "POSTED", inventoryLines: { some: { productId: line.productId } } },
                             },
                         });
                         if (priorSameDay === 0) {
@@ -389,12 +389,11 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
             }
             // Phase 5 5C: link the just-written stock rows (+ goods lines) to the spine.
 
-            // ── 3. Mark voucher as POSTED ─────────────────────────────────
+            // ── 3. Link the detail to its (now POSTED) spine ──────────────
+            // 5D-8: status POSTED set on the spine above; 5D-5: postedAt too.
             const updated = await tx.invVoucher.update({
                 where: { id: voucher.id },
                 data:  {
-                    status:        "POSTED",
-                    // 5D-5: postedAt lives on the spine (enginePost set it).
                     universalVoucherId,
                 },
                 include: { universalVoucher: { select: { createdById: true } } },   // 5D-2: creator on spine

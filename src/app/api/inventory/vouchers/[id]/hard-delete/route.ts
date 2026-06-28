@@ -32,11 +32,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         where: { id: Number(id) },
         // settlementJson (tender/charge input) is a scalar — captured in the snapshot
         // automatically. 5D-2: creator lives on the spine (not needed for the snapshot).
-        include: { universalVoucher: { select: { createdById: true, voucherNo: true } } },   // 5D-6
+        include: { universalVoucher: { select: { createdById: true, voucherNo: true, status: true, deletedAt: true } } },   // 5D-6/5D-8
     });
     // Phase 5 5C: goods lines + stock ledger hang off the spine — load + attach.
+    // 5D-8: lifecycle status/deletedAt live on the spine — attach for the LifecycleVoucher helpers.
     const voucher = voucherRow ? {
         ...voucherRow,
+        status:    voucherRow.universalVoucher?.status ?? "DRAFT",
+        deletedAt: voucherRow.universalVoucher?.deletedAt ?? null,
         lines: await prisma.voucherInventoryLine.findMany({
             where:   { universalVoucherId: voucherRow.universalVoucherId ?? -1 },
             include: { product: { select: { id: true, sku: true, name: true } } },

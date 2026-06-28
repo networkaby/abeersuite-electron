@@ -37,7 +37,7 @@ export async function listOrders(opts?: { statusId?: string }): Promise<Normaliz
             where: {
                 type: { in: ["POS_ORDER", "SALES_ORDER"] },
                 orderStatusId: statusWhere,
-                deletedAt: null,
+                universalVoucher: { deletedAt: null },   // 5D-8: lifecycle on spine
             },
             select: {
                 id: true, type: true, partyJson: true,
@@ -107,8 +107,8 @@ export async function listOrders(opts?: { statusId?: string }): Promise<Normaliz
 /** Resolve an OrderRef to its backing object's current pipeline state. */
 export async function resolveOrderStatus(ref: OrderRef): Promise<{ statusId: string | null } | null> {
     if (ref.source === "inv") {
-        const v = await prisma.invVoucher.findUnique({ where: { id: ref.id }, select: { orderStatusId: true, deletedAt: true } });
-        if (!v || v.deletedAt) return null;
+        const v = await prisma.invVoucher.findUnique({ where: { id: ref.id }, select: { orderStatusId: true, universalVoucher: { select: { deletedAt: true } } } });   // 5D-8
+        if (!v || v.universalVoucher?.deletedAt) return null;
         return { statusId: v.orderStatusId };
     }
     const o = await prisma.shopOrder.findUnique({ where: { id: ref.id }, select: { statusId: true } });

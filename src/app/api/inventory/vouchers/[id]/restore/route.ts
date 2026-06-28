@@ -17,13 +17,14 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     if (response) return response;
 
     const { id } = await params;
-    const voucherRow = await prisma.invVoucher.findUnique({ where: { id: Number(id) } });
+    const voucherRow = await prisma.invVoucher.findUnique({ where: { id: Number(id) }, include: { universalVoucher: { select: { status: true, deletedAt: true } } } });   // 5D-8
     if (!voucherRow) return NextResponse.json({ error: "Not found" }, { status: 404 });
     // Phase 5 5C: goods lines hang off the spine.
     const goodsLines = await prisma.voucherInventoryLine.findMany({
         where: { universalVoucherId: voucherRow.universalVoucherId ?? -1 },
     });
-    const voucher = { ...voucherRow, lines: goodsLines };
+    // 5D-8: lifecycle status/deletedAt live on the spine — attach for the LifecycleVoucher helpers.
+    const voucher = { ...voucherRow, lines: goodsLines, status: voucherRow.universalVoucher?.status ?? "DRAFT", deletedAt: voucherRow.universalVoucher?.deletedAt ?? null };
 
     const isPurchase = voucher.type === "PURCHASE" || voucher.type === "GRN";
     const isSale     = voucher.type === "SALE"     || voucher.type === "CHALLAN";
@@ -77,12 +78,8 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                 await setSpineLifecycle(tx, voucher.universalVoucherId, { deletedAt: null, deletedById: null, deleteReason: null });
             }
 
-            // 5D-3: clear only the detail's deletedAt flag; full metadata cleared
-            // on the spine above.
-            await tx.invVoucher.update({
-                where: { id: Number(id) },
-                data: { deletedAt: null },
-            });
+            // 5D-8: undelete is recorded ENTIRELY on the spine (deletedAt + metadata
+            // cleared above). The detail carries no lifecycle flags now.
             void user;
         // Re-post stock + GL over the Supabase pooler can exceed the default
         // 5s interactive-tx ceiling (P2028) — match the 30s headroom used by

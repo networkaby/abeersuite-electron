@@ -270,8 +270,7 @@ async function loadOpenBills(
                 : invType === "SALE"
                     ? { type: { in: [...saleSideTypes] } }
                     : { type: { in: [...purchaseSideTypes] } }),
-            status:    "POSTED",
-            deletedAt: null,
+            universalVoucher: { status: "POSTED", deletedAt: null },   // 5D-8: lifecycle on spine
             date:      { lte: asOf },
             OR: partyOr,
         },
@@ -389,8 +388,7 @@ export async function getOpenSaleBillsForFifo(
     const invVouchers = await tx.invVoucher.findMany({
         where: {
             type:      { in: ["SALE", "POS"] },
-            status:    "POSTED",
-            deletedAt: null,
+            universalVoucher: { status: "POSTED", deletedAt: null },   // 5D-8: lifecycle on spine
             date:      { lte: asOf },
             OR:        partyOr,
         },

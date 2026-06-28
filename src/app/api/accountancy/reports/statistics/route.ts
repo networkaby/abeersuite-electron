@@ -38,9 +38,12 @@ export async function GET(req: Request) {
                 where: { date: dateRange, deletedAt: null, type: { in: ["CONTRA", "PAYMENT", "RECEIPT", "CREDIT_NOTE", "DEBIT_NOTE", "JOURNAL"] } },
                 _count: { _all: true },
             }),
-            prisma.invVoucher.groupBy({
+            // 5D-8: inv-voucher status lives on the spine. Group the spine by type+status
+            // for the INVENTORY kinds (the complement of the financial types above),
+            // mirroring how voucherByType handles the financial side.
+            prisma.universalVoucher.groupBy({
                 by: ["type", "status"],
-                where: { date: dateRange, deletedAt: null },
+                where: { date: dateRange, deletedAt: null, type: { notIn: ["CONTRA", "PAYMENT", "RECEIPT", "CREDIT_NOTE", "DEBIT_NOTE", "JOURNAL"] } },
                 _count: { _all: true },
             }),
             // Legacy invoice counts retired with the Invoice → InvVoucher

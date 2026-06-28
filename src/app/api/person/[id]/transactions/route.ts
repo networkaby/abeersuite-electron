@@ -32,7 +32,7 @@ export async function GET(
         const rawVouchers = account
             ? await prisma.invVoucher.findMany({
                 where: {
-                    deletedAt: null,
+                    universalVoucher: { deletedAt: null },   // 5D-8: lifecycle on spine
                     date: { gte: from, lte: to },
                     OR: [
                         { universalVoucher: { partyAccountId: account.id } },   // 5D-4: party on spine
@@ -43,12 +43,11 @@ export async function GET(
                 select: {
                     id: true,
                     type: true,
-                    status: true,
                     date: true,
                     totalAmount: true,
                     universalVoucherId: true,
                     branch:    { select: { name: true } },
-                    universalVoucher: { select: { createdById: true, partyAccountId: true, voucherNo: true } },   // 5D-2 creator + 5D-4 party + 5D-6 ref
+                    universalVoucher: { select: { createdById: true, partyAccountId: true, voucherNo: true, status: true } },   // 5D-2 creator + 5D-4 party + 5D-6 ref + 5D-8 status
                 },
                 orderBy: { date: "desc" },
             })
@@ -83,7 +82,7 @@ export async function GET(
                 id:         v.id,
                 reference:  v.universalVoucher?.voucherNo ?? "",
                 type:       v.type,
-                status:     v.status,
+                status:     v.universalVoucher?.status ?? "DRAFT",
                 date:       v.date,
                 totalAmount: v.totalAmount,
                 amountPaid: amountPaid.toFixed(2),

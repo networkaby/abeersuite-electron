@@ -146,8 +146,7 @@ export async function POST(req: NextRequest) {
                         type:        "MANUFACTURING_JOURNAL",
                         branchId:    activeBranchId,
                         date:        new Date(body.date),
-                        status:      "POSTED",
-                        // 5D-5: description + postedAt live on the spine.
+                        // 5D-5/5D-8: description + postedAt + status live on the spine.
                         subtotal:    flatItems.reduce((s, i) => s + i.amount, 0),
                         totalAmount: flatItems.reduce((s, i) => s + i.amount, 0),
                         // 5D-2: creator lives on the spine.

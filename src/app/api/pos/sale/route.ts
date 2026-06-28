@@ -322,7 +322,7 @@ export async function POST(req: Request) {
         couponExpenseAccountId = couponConfig.couponExpenseAccountId;
         // First-time buyer = no prior POSTED SALE/POS voucher (identified only).
         const isNewCustomer = isIdentified
-            ? (await prisma.invVoucher.count({ where: { universalVoucher: { partyAccountId: customerAccount.id }, type: { in: ["SALE", "POS"] }, status: "POSTED", deletedAt: null } })) === 0
+            ? (await prisma.invVoucher.count({ where: { universalVoucher: { partyAccountId: customerAccount.id, status: "POSTED", deletedAt: null }, type: { in: ["SALE", "POS"] } } })) === 0
             : false;
         // Coupon eligibility needs each line's taxonomy (include/exclude rules).
         // Reuse the loyalty earn lines when present; else load just for the coupon.
@@ -559,8 +559,7 @@ export async function POST(req: Request) {
                     branchId:       activeBranchId,
                     universalVoucherId: spineId,
                     date:           new Date(body.issueDate),
-                    // 5D-5: description + postedAt + 5D-4 party live on the spine.
-                    status:         "POSTED",
+                    // 5D-5/5D-8: description + postedAt + status + 5D-4 party live on the spine.
                     partyJson:      buildPartyJson({ name: partyName }) ?? Prisma.DbNull,
                     partyType,
                     partyId,
@@ -676,7 +675,7 @@ export async function POST(req: Request) {
                 // aggregated inside the tx so it includes the just-posted sale.
                 if (milestoneTiers.length > 0) {
                     const spendAgg = await tx.invVoucher.aggregate({
-                        where: { universalVoucher: { partyAccountId: customerAccount.id }, type: { in: ["SALE", "POS"] }, status: "POSTED", deletedAt: null },
+                        where: { universalVoucher: { partyAccountId: customerAccount.id, status: "POSTED", deletedAt: null }, type: { in: ["SALE", "POS"] } },
                         _sum: { totalAmount: true },
                     });
                     const lifetimeSpend = Number(spendAgg._sum.totalAmount ?? 0);

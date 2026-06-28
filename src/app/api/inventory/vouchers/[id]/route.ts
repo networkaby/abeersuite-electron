@@ -108,15 +108,15 @@ export async function PATCH(req: Request, { params }: Params) {
     const id = Number(idStr);
     if (!Number.isFinite(id)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
 
-    const existing = await prisma.invVoucher.findUnique({ where: { id }, include: { universalVoucher: { select: { voucherNo: true } } } });   // 5D-6
+    const existing = await prisma.invVoucher.findUnique({ where: { id }, include: { universalVoucher: { select: { voucherNo: true, status: true, deletedAt: true } } } });   // 5D-6/5D-8
     if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
     // Phase 5 5C: capture old line product ids (goods hang off the spine) for the
     // after-commit pricing recompute — the lines themselves are rewritten below.
     const existingLineProductIds = (await prisma.voucherInventoryLine.findMany({
         where: { universalVoucherId: existing.universalVoucherId ?? -1 }, select: { productId: true },
     })).map((l) => l.productId);
-    if (existing.deletedAt) return NextResponse.json({ error: "Voucher is deleted" }, { status: 409 });
-    if (existing.status === "CANCELLED") {
+    if (existing.universalVoucher?.deletedAt) return NextResponse.json({ error: "Voucher is deleted" }, { status: 409 });
+    if (existing.universalVoucher?.status === "CANCELLED") {
         return NextResponse.json({ error: "Voucher is cancelled — use Duplicate to create a fresh copy." }, { status: 409 });
     }
 
@@ -235,7 +235,7 @@ export async function PATCH(req: Request, { params }: Params) {
         );
     }
 
-    const wasPosted = existing.status === "POSTED";
+    const wasPosted = existing.universalVoucher?.status === "POSTED";   // 5D-8
     const userId = user!.id;
 
     // POSTED edits on PHYSICAL_STOCK / MANUFACTURING_JOURNAL aren't supported
@@ -439,9 +439,9 @@ export async function DELETE(_req: Request, { params }: Params) {
     if (response) return response;
 
     const { id } = await params;
-    const existing = await prisma.invVoucher.findUnique({ where: { id: Number(id) } });
+    const existing = await prisma.invVoucher.findUnique({ where: { id: Number(id) }, include: { universalVoucher: { select: { status: true } } } });   // 5D-8
     if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    if (existing.status !== "DRAFT") {
+    if (existing.universalVoucher?.status !== "DRAFT") {
         return NextResponse.json({ error: "Only DRAFT vouchers can be deleted via this route. Use /cancel or /delete for lifecycle." }, { status: 409 });
     }
     await prisma.voucherInventoryLine.deleteMany({ where: { universalVoucherId: existing.universalVoucherId ?? -1 } });

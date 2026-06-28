@@ -40,17 +40,17 @@ export async function POST(req: Request, { params }: Params) {
     const [settling, source] = await Promise.all([
         prisma.invVoucher.findUnique({
             where:  { id: settlingId },
-            select: { id: true, status: true, refVoucherId: true, partyId: true, partyJson: true },
+            select: { id: true, universalVoucher: { select: { status: true } }, refVoucherId: true, partyId: true, partyJson: true },   // 5D-8
         }),
         prisma.invVoucher.findUnique({
             where:  { id: refVoucherId },
-            select: { id: true, status: true, partyId: true, partyJson: true },
+            select: { id: true, universalVoucher: { select: { status: true } }, partyId: true, partyJson: true },   // 5D-8
         }),
     ]);
 
     if (!settling) return NextResponse.json({ error: "Settling voucher not found" }, { status: 404 });
     if (!source)   return NextResponse.json({ error: "Source voucher not found"   }, { status: 404 });
-    if (settling.status !== "POSTED")
+    if (settling.universalVoucher?.status !== "POSTED")
         return NextResponse.json({ error: "Settling voucher must be POSTED" }, { status: 409 });
     if (settling.refVoucherId !== null)
         return NextResponse.json({ error: "Settling voucher is already linked to another source" }, { status: 409 });

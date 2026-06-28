@@ -142,8 +142,7 @@ export async function POST(req: Request) {
                     branchId,
                     universalVoucherId: spineId,
                     date:           today,
-                    // 5D-5: description + postedAt + 5D-4 party live on the spine.
-                    status:         "POSTED",
+                    // 5D-5/5D-8: description + postedAt + status + 5D-4 party live on the spine.
                     partyJson:      buildPartyJson({ name: customerAcct.name }) ?? Prisma.DbNull,
                     partyType,
                     partyId,

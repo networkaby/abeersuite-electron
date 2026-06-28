@@ -34,23 +34,28 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
         const v = await prisma.invVoucher.findUnique({
             where: { id },
-            select: { id: true, type: true, universalVoucherId: true, deletedAt: true },
+            // 5D-8: status + deletedAt live on the spine.
+            select: { id: true, type: true, universalVoucherId: true, universalVoucher: { select: { deletedAt: true } } },
         });
-        if (!v || v.deletedAt) return NextResponse.json({ error: "Voucher not found" }, { status: 404 });
-        // A posted trading voucher has a spine link (universalVoucherId) → GL-controlled.
-        if (!TOGGLEABLE.has(v.type) || v.universalVoucherId != null) {
+        if (!v || v.universalVoucher?.deletedAt) return NextResponse.json({ error: "Voucher not found" }, { status: 404 });
+        // Only non-GL document types (estimates / orders) carry a document-lifecycle
+        // status that may be toggled here. Their status is NOT a GL-posting state.
+        // Real GL vouchers' status is owned by the post/cancel flow and must never
+        // be flipped here (that would desync the books).
+        if (!TOGGLEABLE.has(v.type) || v.universalVoucherId == null) {
             return NextResponse.json(
                 { error: "This voucher's status is GL-controlled and can't be changed here." },
                 { status: 422 },
             );
         }
 
-        const updated = await prisma.invVoucher.update({
-            where: { id },
+        // 5D-8: the toggle now writes the SPINE status (the single source of truth).
+        const updated = await prisma.universalVoucher.update({
+            where: { id: v.universalVoucherId },
             data: { status },   // 5D-5: postedAt lives on the spine
-            select: { id: true, status: true },
+            select: { status: true },
         });
-        return NextResponse.json(updated);
+        return NextResponse.json({ id: v.id, status: updated.status });
     } catch (e) {
         return handleApiError(e, "Failed to change status");
     }

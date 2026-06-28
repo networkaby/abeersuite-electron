@@ -78,7 +78,7 @@ export async function GET(req: Request) {
             take: limit,
             include: {
                 refVoucher: { select: { id: true, type: true, universalVoucher: { select: { voucherNo: true } } } },
-                universalVoucher: { select: { description: true, voucherNo: true } },   // 5D-5 desc + 5D-6 ref
+                universalVoucher: { select: { description: true, voucherNo: true, status: true, deletedAt: true } },   // 5D-5 desc + 5D-6 ref + 5D-8 lifecycle
             },
         }),
     ]);
@@ -105,8 +105,8 @@ export async function GET(req: Request) {
         partyName:   readPartyName(v.partyJson),
         partyType:   v.partyType,
         partyId:     v.partyId,
-        status:      v.status,
-        deletedAt:   v.deletedAt,
+        status:      v.universalVoucher?.status ?? "DRAFT",
+        deletedAt:   v.universalVoucher?.deletedAt ?? null,
         totalAmount: Number(v.totalAmount),
         stockDir:    STOCK_IN_TYPES.has(v.type) ? "IN"
                    : STOCK_OUT_TYPES.has(v.type) ? "OUT"
