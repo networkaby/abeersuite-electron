@@ -399,15 +399,9 @@ model InvVoucher {
   description         String
   /// Reuses VoucherStatus enum: DRAFT → POSTED → CANCELLED
   status              VoucherStatus          @default(DRAFT)
-  /// Single FK to the party's ledger account. Required at the
-  /// application layer for trading vouchers (SALE / PURCHASE / POS /
-  /// SALE_RETURN / PURCHASE_RETURN) — replaces the legacy
-  /// (partyType, partyId, partyName) triple. Nullable in the schema
-  /// because non-trading types (MANUFACTURING_JOURNAL, PHYSICAL_STOCK,
-  /// BRANCH_TRANSFER, GRN, CHALLAN, REJECTION_*) legitimately have no
-  /// party.
-  accountId           Int?
-  account             Account?               @relation("InvVoucherAccount", fields: [accountId], references: [id])
+  // Phase 5 5D-4: `accountId`/`account` dropped — the LIVE party ledger link
+  // lives on the spine (UniversalVoucher.partyAccountId). The frozen partyJson
+  // snapshot below + the legacy partyType/partyId routing keys stay on the detail.
   /// Frozen party snapshot — { name, phone, address } as-of the transaction
   /// (immutable on a tax invoice). Replaced the partyName / partyPhone /
   /// partyAddress scalar columns (2026-06-10). `accountId` above is the canonical
@@ -518,7 +512,6 @@ model InvVoucher {
   @@index([status])
   @@index([deletedAt])
   @@index([branchId, type, date])
-  @@index([accountId])
   @@index([ticketId])
   @@index([dealId])
   @@index([orderStatusId])

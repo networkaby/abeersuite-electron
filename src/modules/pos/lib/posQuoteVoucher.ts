@@ -144,7 +144,7 @@ export async function createPosQuoteVoucher(opts: {
                 universalVoucherId: spineId,
                 date: body.date ? new Date(body.date) : new Date(),
                 description,
-                accountId: body.accountId ?? null,
+                // 5D-4: party ledger lives on the spine (engineCreateSpine set it).
                 partyJson: buildPartyJson({ name: body.partyName, phone: body.partyPhone }) ?? Prisma.DbNull,
                 partyType: body.partyType || null,
                 partyId: body.partyId || null,

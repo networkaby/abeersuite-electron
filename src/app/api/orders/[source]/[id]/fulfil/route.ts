@@ -42,7 +42,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ sou
             where: { id },
             select: {
                 id: true, type: true, reference: true, branchId: true, orderStatusId: true,
-                accountId: true, totalAmount: true,
+                universalVoucher: { select: { partyAccountId: true } },   // 5D-4: party on spine
+                totalAmount: true,
                 partyJson: true, partyType: true, partyId: true,
                 discountAmt: true, discountPct: true, shippingAmt: true, roundOff: true,
                 universalVoucherId: true,
@@ -64,10 +65,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ sou
         }
         // Every order has a mandatory customer, so accountId is set — guard for
         // legacy rows that predate that rule.
-        if (!order.accountId) {
+        if (!order.universalVoucher?.partyAccountId) {
             return NextResponse.json({ error: "This order has no customer account to invoice — attach a customer to the order first." }, { status: 400 });
         }
-        const accountId = order.accountId;
+        const accountId = order.universalVoucher.partyAccountId;
 
         // Credit limit is ENFORCED (deny-by-default: no positive limit ⇒ no credit
         // sale). G4b: any payment collected at fulfilment reduces the on-credit amount,

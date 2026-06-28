@@ -244,14 +244,14 @@ async function loadOpenBills(
     const personIds = Object.keys(personToAcc).map(Number);
     const companyIds  = Object.keys(companyToAcc).map(Number);
 
-    // OR-match clauses for the InvVoucher lookup. Modern rows carry
-    // `accountId` directly (added 2026-05-24); legacy rows are resolved via
-    // the partyType+partyId pair against the person/company identity maps.
+    // OR-match clauses for the InvVoucher lookup. Phase 5 5D-4: the live party
+    // link is on the spine (universalVoucher.partyAccountId); legacy rows are
+    // resolved via the partyType+partyId pair against the identity maps.
     const partyOr: Array<
-        | { accountId: { in: number[] } }
+        | { universalVoucher: { partyAccountId: { in: number[] } } }
         | { partyType: string; partyId: { in: number[] } }
     > = [];
-    partyOr.push({ accountId: { in: accountIds } });
+    partyOr.push({ universalVoucher: { partyAccountId: { in: accountIds } } });
     if (personIds.length > 0) partyOr.push({ partyType: "customer", partyId: { in: personIds } });
     if (companyIds.length  > 0) partyOr.push({ partyType: "company",  partyId: { in: companyIds  } });
 
@@ -277,7 +277,7 @@ async function loadOpenBills(
         select: {
             id: true, type: true, reference: true, date: true,
             totalAmount: true,
-            accountId: true,
+            universalVoucher: { select: { partyAccountId: true } },   // 5D-4: party on spine
             partyType: true, partyId: true, universalVoucherId: true,
             creditPeriodDays: true,
         },
@@ -317,10 +317,9 @@ async function loadOpenBills(
     }
 
     for (const v of invVouchers) {
-        // Prefer the explicit `accountId` FK added on 2026-05-24; fall back
-        // to the legacy partyType+partyId resolution dance for old rows
-        // written before the column existed.
-        const accountId = v.accountId
+        // Prefer the spine's live party link (5D-4); fall back to the legacy
+        // partyType+partyId resolution dance for old rows.
+        const accountId = v.universalVoucher?.partyAccountId
             ?? (v.partyId === null
                 ? null
                 : v.partyType === "customer"
@@ -377,12 +376,12 @@ export async function getOpenSaleBillsForFifo(
     });
     if (!account) return [];
 
-    // Same OR-match as loadOpenBills: modern rows carry accountId; legacy rows
-    // resolve via partyType+partyId against the identity maps.
+    // Same OR-match as loadOpenBills: the live party link is on the spine (5D-4);
+    // legacy rows resolve via partyType+partyId against the identity maps.
     const partyOr: Array<
-        | { accountId: { in: number[] } }
+        | { universalVoucher: { partyAccountId: { in: number[] } } }
         | { partyType: string; partyId: { in: number[] } }
-    > = [{ accountId: { in: [accountId] } }];
+    > = [{ universalVoucher: { partyAccountId: { in: [accountId] } } }];
     if (account.personId !== null) partyOr.push({ partyType: "customer", partyId: { in: [account.personId] } });
     if (account.companyId !== null) partyOr.push({ partyType: "company", partyId: { in: [account.companyId] } });
 
@@ -396,7 +395,7 @@ export async function getOpenSaleBillsForFifo(
         },
         select: {
             id: true, type: true, reference: true, date: true,
-            totalAmount: true, accountId: true,
+            totalAmount: true, universalVoucher: { select: { partyAccountId: true } },   // 5D-4
             partyType: true, partyId: true, universalVoucherId: true,
         },
     });
@@ -415,7 +414,7 @@ export async function getOpenSaleBillsForFifo(
     const out: { universalVoucherId: number; outstanding: number; billDate: Date; ref: string }[] = [];
     for (const v of invVouchers) {
         if (v.universalVoucherId === null) continue;
-        const resolved = v.accountId ?? accountId; // single-ledger scope — partyOr already matched
+        const resolved = v.universalVoucher?.partyAccountId ?? accountId; // single-ledger scope — partyOr already matched
         const total = Number(v.totalAmount);
         const vTenders = tendersBySpine.get(v.universalVoucherId) ?? [];
         const paidAtSale = vTenders

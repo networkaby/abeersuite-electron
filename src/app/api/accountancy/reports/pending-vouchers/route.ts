@@ -77,6 +77,12 @@ export async function GET(req: NextRequest) {
             ? [typeParam as PendingType]
             : PENDING_TYPES;
 
+    // 5D-4: live party-ledger name search resolves account ids first, then matches
+    // the spine's partyAccountId (the spine has no account relation).
+    const searchPartyAcctIds = search
+        ? (await prisma.account.findMany({ where: { name: { contains: search, mode: "insensitive" } }, select: { id: true } })).map((a) => a.id)
+        : [];
+
     const where: Prisma.InvVoucherWhereInput = {
         status:    VoucherStatus.POSTED,
         deletedAt: null,
@@ -93,9 +99,9 @@ export async function GET(req: NextRequest) {
                 OR: [
                     { reference:   { contains: search, mode: "insensitive" } },
                     { description: { contains: search, mode: "insensitive" } },
-                    // Party search: live ledger name (case-insensitive) OR the frozen
+                    // Party search: live ledger name (via resolved ids) OR the frozen
                     // snapshot name (for walk-ins with no account).
-                    { account: { is: { name: { contains: search, mode: "insensitive" } } } },
+                    ...(searchPartyAcctIds.length ? [{ universalVoucher: { partyAccountId: { in: searchPartyAcctIds } } }] : []),
                     { partyJson: { path: ["name"], string_contains: search } },
                 ],
             }],

@@ -739,7 +739,8 @@ async function countAccountRefs(accountId: number) {
         // Phase 5 5E: party + GL lines live on the spine (Voucher/VoucherLine dropped).
         prisma.universalVoucher.count({ where: { partyAccountId: accountId } }),
         Promise.resolve(0),   // legacy VoucherLine refs are now the spine GL lines (counted as `jl`)
-        prisma.invVoucher.count({ where: { accountId } }),
+        // Phase 5 5D-4: InvVoucher party is on the spine — count via the relation.
+        prisma.invVoucher.count({ where: { universalVoucher: { partyAccountId: accountId } } }),
         prisma.ticket.count({ where: { billingAccountId: accountId } }),
         prisma.device.count({ where: { accountId } }),
         prisma.shopOrder.count({ where: { accountId } }),
@@ -777,7 +778,8 @@ export async function mergeParty(
             // Phase 5 5E: party lives on the spine; VoucherLine is the spine GL line.
             tx.universalVoucher.updateMany({ where: { partyAccountId: loserAccountId }, data: { partyAccountId: winnerAccountId } }),
             Promise.resolve({ count: 0 }),   // 5E: legacy VoucherLine re-point folded into `gll` below
-            tx.invVoucher.updateMany({ where: { accountId: loserAccountId }, data: { accountId: winnerAccountId } }),
+            // 5D-4: InvVoucher party is on the spine — the universalVoucher re-point (vp) covers it.
+            Promise.resolve({ count: 0 }),
             // G4b: re-point the spine GL lines (covers role=TENDER/CHARGE + body legs
             // pointing at the loser ledger — the InvVoucherTender/Charge tables retired).
             tx.voucherGlLine.updateMany({ where: { accountId: loserAccountId }, data: { accountId: winnerAccountId } }),

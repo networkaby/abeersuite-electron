@@ -27,7 +27,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ source:
         const v = await prisma.invVoucher.findUnique({
             where: { id },
             select: {
-                id: true, reference: true, type: true, orderStatusId: true, partyJson: true, accountId: true,
+                id: true, reference: true, type: true, orderStatusId: true, partyJson: true,
+                universalVoucher: { select: { partyAccountId: true } },   // 5D-4: party on spine
                 subtotal: true, taxAmount: true, discountAmt: true, discountPct: true, totalAmount: true,
                 // sku/name let the POS screen rebuild cart rows when an order is reopened
                 // in edit mode (the line description alone embeds them but isn't reliable).
@@ -45,17 +46,18 @@ export async function GET(_req: Request, { params }: { params: Promise<{ source:
 
         // Customer delivery address for the Review popup's "address deliverable?" flag.
         // Resolve from the order's ledger account → Person / Company.
+        const partyAccountId = v.universalVoucher?.partyAccountId ?? null;
         let address: string | null = null;
-        if (v.accountId) {
+        if (partyAccountId) {
             const acct = await prisma.account.findUnique({
-                where: { id: v.accountId },
+                where: { id: partyAccountId },
                 select: { person: { select: { address: true } }, company: { select: { address: true } } },
             });
             address = acct?.person?.address ?? acct?.company?.address ?? null;
         }
 
         return NextResponse.json({
-            id: v.id, ref: v.reference, customer: readPartyName(v.partyJson), statusId: v.orderStatusId, accountId: v.accountId,
+            id: v.id, ref: v.reference, customer: readPartyName(v.partyJson), statusId: v.orderStatusId, accountId: partyAccountId,
             address,
             // Estimates are GL-silent quotes → always editable; orders only at New / Under-Review.
             editable: v.type === "POS_ESTIMATE" ? true : (v.orderStatusId != null && EDITABLE_STAGES.includes(v.orderStatusId)),

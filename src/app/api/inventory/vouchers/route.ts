@@ -476,7 +476,7 @@ export async function POST(req: NextRequest) {
                     orderStatusId,
                     date:         new Date(date),
                     description:  description.trim(),
-                    accountId:    resolvedAccountId,
+                    // 5D-4: party ledger lives on the spine (engineCreateSpine set it).
                     partyJson:    buildPartyJson({ name: partyName, phone: partyPhone, address: partyAddress }) ?? Prisma.DbNull,
                     partyType:    partyType  || null,
                     partyId:      partyId    || null,

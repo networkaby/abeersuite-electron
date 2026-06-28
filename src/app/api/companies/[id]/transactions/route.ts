@@ -29,7 +29,7 @@ export async function GET(
                 where: {
                     deletedAt: null,
                     OR: [
-                        { accountId: account.id },
+                        { universalVoucher: { partyAccountId: account.id } },   // 5D-4: party on spine
                         { partyType: "company", partyId: companyId },
                     ],
                 },

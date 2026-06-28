@@ -58,7 +58,7 @@ const partyAccountSelect = {
 async function buildInvSample(id: number): Promise<VoucherReceiptData> {
     const vRow = await prisma.invVoucher.findUnique({
         where: { id },
-        include: { account: { select: partyAccountSelect } },
+        include: { universalVoucher: { select: { partyAccountId: true } } },   // 5D-4: party on spine
     });
     if (!vRow) return notFoundData();
     // Phase 5 5C: goods lines hang off the spine.
@@ -66,7 +66,11 @@ async function buildInvSample(id: number): Promise<VoucherReceiptData> {
         where:   { universalVoucherId: vRow.universalVoucherId ?? -1 },
         include: { product: { select: { sku: true, name: true } } },
     });
-    const v = { ...vRow, lines: invLines };
+    // 5D-4: resolve the party ledger from the spine's partyAccountId.
+    const account = vRow.universalVoucher?.partyAccountId != null
+        ? await prisma.account.findUnique({ where: { id: vRow.universalVoucher.partyAccountId }, select: partyAccountSelect })
+        : null;
+    const v = { ...vRow, lines: invLines, account };
 
     const party = partyFromAccount(v.account);
     // Strip the POS "<sku> — <name>" prefix so the printed line reads cleanly.

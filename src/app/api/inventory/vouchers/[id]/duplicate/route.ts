@@ -27,7 +27,10 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     }
 
     try {
-        const source = await prisma.invVoucher.findUnique({ where: { id } });
+        const source = await prisma.invVoucher.findUnique({
+            where: { id },
+            include: { universalVoucher: { select: { partyAccountId: true } } },   // 5D-4: party on spine
+        });
         if (!source) return NextResponse.json({ error: "Not found" }, { status: 404 });
         // Phase 5 5C: source goods lines hang off the source's spine.
         const sourceLines = await prisma.voucherInventoryLine.findMany({
@@ -45,7 +48,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                 date:           today,
                 description:    source.description,
                 friendlyRef:    reference,
-                partyAccountId: source.accountId,
+                partyAccountId: source.universalVoucher?.partyAccountId ?? null,
                 userId:         user!.id,
             });
             const voucher = await tx.invVoucher.create({
@@ -57,7 +60,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                     date:             today,
                     description:      source.description,
                     status:           "DRAFT",
-                    accountId:        source.accountId,
+                    // 5D-4: party ledger lives on the spine (set above).
                     partyJson:        source.partyJson ?? Prisma.DbNull,
                     partyType:        source.partyType,
                     partyId:          source.partyId,

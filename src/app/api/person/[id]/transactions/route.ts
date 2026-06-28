@@ -35,9 +35,8 @@ export async function GET(
                     deletedAt: null,
                     date: { gte: from, lte: to },
                     OR: [
-                        { accountId: account.id },
-                        // Legacy rows written before InvVoucher.accountId existed
-                        // still resolve via the partyType+partyId pair.
+                        { universalVoucher: { partyAccountId: account.id } },   // 5D-4: party on spine
+                        // Legacy rows resolve via the partyType+partyId pair.
                         { partyType: "customer", partyId: personId },
                     ],
                 },
@@ -48,10 +47,9 @@ export async function GET(
                     status: true,
                     date: true,
                     totalAmount: true,
-                    accountId: true,
                     universalVoucherId: true,
                     branch:    { select: { name: true } },
-                    universalVoucher: { select: { createdById: true } },   // 5D-2: creator on spine
+                    universalVoucher: { select: { createdById: true, partyAccountId: true } },   // 5D-2 creator + 5D-4 party
                 },
                 orderBy: { date: "desc" },
             })
@@ -77,7 +75,7 @@ export async function GET(
         );
 
         const invVouchers = rawVouchers.map((v) => {
-            const arAccountId = v.accountId ?? account?.id ?? null;
+            const arAccountId = v.universalVoucher?.partyAccountId ?? account?.id ?? null;
             const nonArTenderSum = (v.universalVoucherId !== null ? (tendersBySpine.get(v.universalVoucherId) ?? []) : [])
                 .reduce((s, t) => s + (t.accountId === arAccountId ? 0 : t.amount), 0);
             const jePaid = v.universalVoucherId !== null ? (paidBySpine[v.universalVoucherId] ?? 0) : 0;

@@ -27,7 +27,7 @@ export async function GET(req: Request) {
     // ── InvVoucher bills (SALE / POS / PURCHASE) for the party ────────────
     const invVouchers = await prisma.invVoucher.findMany({
         where: {
-            accountId,
+            universalVoucher: { partyAccountId: accountId },   // 5D-4: party on spine
             type:      { in: ["SALE", "POS", "PURCHASE"] },
             status:    "POSTED",
             deletedAt: null,
@@ -35,7 +35,7 @@ export async function GET(req: Request) {
         select: {
             id: true, type: true, reference: true, date: true,
             totalAmount: true,
-            accountId: true,
+            universalVoucher: { select: { partyAccountId: true } },   // 5D-4
             universalVoucherId: true, creditPeriodDays: true,
         },
         orderBy: [{ date: "asc" }],
@@ -55,7 +55,7 @@ export async function GET(req: Request) {
             // Paid at sale time = non-AR tender rows (cash/bank/card).
             // Later receipts add via the spine-allocation chain.
             const upfront = (v.universalVoucherId !== null ? (tendersBySpine.get(v.universalVoucherId) ?? []) : [])
-                .filter((t) => t.accountId !== v.accountId)
+                .filter((t) => t.accountId !== v.universalVoucher?.partyAccountId)
                 .reduce((s, t) => s + t.amount, 0);
             const allocated = upfront + (v.universalVoucherId !== null ? (jeAllocSum[v.universalVoucherId] ?? 0) : 0);
             const due = new Date(v.date);

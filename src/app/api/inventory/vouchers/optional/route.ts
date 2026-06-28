@@ -56,10 +56,15 @@ export async function GET(req: Request) {
         };
     }
     if (search) {
+        // 5D-4: live party-ledger name search resolves account ids first, then
+        // matches the spine's partyAccountId (the spine has no account relation).
+        const partyAcctIds = (await prisma.account.findMany({
+            where: { name: { contains: search, mode: "insensitive" } }, select: { id: true },
+        })).map((a) => a.id);
         where.OR = [
             { reference:   { contains: search, mode: "insensitive" } },
             { description: { contains: search, mode: "insensitive" } },
-            { account: { is: { name: { contains: search, mode: "insensitive" } } } },
+            ...(partyAcctIds.length ? [{ universalVoucher: { partyAccountId: { in: partyAcctIds } } }] : []),
             { partyJson: { path: ["name"], string_contains: search } },
         ];
     }

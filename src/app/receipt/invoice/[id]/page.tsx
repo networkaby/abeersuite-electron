@@ -40,16 +40,7 @@ export default async function PosReceiptPage({
 
     const voucherRow = await prisma.invVoucher.findUnique({
         where: { id: Number(id) },
-        include: {
-            account: {
-                select: {
-                    id: true,
-                    name: true,
-                    person:  { select: { name: true, gstin: true, phones: { take: 1, orderBy: [{ isPrimary: "desc" }] } } },
-                    company: { select: { name: true, gstin: true, phones: { take: 1, orderBy: [{ isPrimary: "desc" }] } } },
-                },
-            },
-        },
+        include: { universalVoucher: { select: { partyAccountId: true } } },   // 5D-4: party on spine
     });
     if (!voucherRow) notFound();
     // Phase 5 5C: goods lines hang off the spine.
@@ -57,7 +48,18 @@ export default async function PosReceiptPage({
         where:   { universalVoucherId: voucherRow.universalVoucherId ?? -1 },
         include: { product: { select: { sku: true, name: true } } },
     });
-    const voucher = { ...voucherRow, lines: invLines };
+    // 5D-4: resolve the party ledger from the spine's partyAccountId.
+    const account = voucherRow.universalVoucher?.partyAccountId != null
+        ? await prisma.account.findUnique({
+            where:  { id: voucherRow.universalVoucher.partyAccountId },
+            select: {
+                id: true, name: true,
+                person:  { select: { name: true, gstin: true, phones: { take: 1, orderBy: [{ isPrimary: "desc" as const }] } } },
+                company: { select: { name: true, gstin: true, phones: { take: 1, orderBy: [{ isPrimary: "desc" as const }] } } },
+            },
+        })
+        : null;
+    const voucher = { ...voucherRow, lines: invLines, account };
 
     // G4b: additional-charge rows come from settlementJson (with account names).
     const settlement = readSettlement(voucher.settlementJson);

@@ -41,17 +41,23 @@ export async function GET(req: NextRequest) {
                 status:    "POSTED",
                 type:      { in: ["POS", "SALE"] },
                 ...(customerId
-                    ? { accountId: Number(customerId) }
+                    ? { universalVoucher: { partyAccountId: Number(customerId) } }   // 5D-4: party on spine
                     : { reference: { contains: q, mode: "insensitive" } }),
             },
             orderBy: { date: "desc" },
             take:    10,
             include: {
-                account: { select: { id: true, name: true } },
+                universalVoucher: { select: { partyAccountId: true } },   // 5D-4: party on spine
                 // SALE_RETURN children of this voucher — for the dialog's "already returned" guard
                 refReturns: { select: { id: true, reference: true, totalAmount: true } },
             },
         });
+        // 5D-4: resolve party ledger names from each row's spine partyAccountId.
+        const partyAcctIds = [...new Set(vouchers.map((v) => v.universalVoucher?.partyAccountId).filter((x): x is number => x != null))];
+        const partyAcctById = new Map(
+            (partyAcctIds.length === 0 ? [] : await prisma.account.findMany({ where: { id: { in: partyAcctIds } }, select: { id: true, name: true } }))
+                .map((a) => [a.id, a]),
+        );
         // Phase 5 5C: goods lines hang off the spine — batch-load + group by spine id.
         const uvIds = vouchers.map((v) => v.universalVoucherId).filter((x): x is number => x != null);
         const allLines = await prisma.voucherInventoryLine.findMany({
@@ -72,7 +78,7 @@ export async function GET(req: NextRequest) {
             issueDate:   v.date,
             status:      "PAID", // legacy field — POS sales are always settled at counter; UI uses it as a "OK to return" sentinel
             totalAmount: v.totalAmount.toString(),
-            account:     v.account ? { id: v.account.id, name: v.account.name } : null,
+            account:     v.universalVoucher?.partyAccountId != null ? (partyAcctById.get(v.universalVoucher.partyAccountId) ?? null) : null,
             lines:       linesFor(v).map((l) => ({
                 id:          l.id,
                 productId:   l.productId,

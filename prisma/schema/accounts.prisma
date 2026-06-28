@@ -61,7 +61,8 @@ model Account {
   billedTickets            Ticket[]                   @relation("TicketBillingAccount")
   devices                  Device[]
   shopOrders               ShopOrder[]
-  invVouchers              InvVoucher[]               @relation("InvVoucherAccount")
+  // Phase 5 5D-4: InvVoucher.accountId dropped — the party lives on the spine
+  // (UniversalVoucher.partyAccountId), so no InvVoucher back-relation here.
   // POS reverse rels
   branchVaults             Branch[]                   @relation("BranchVaultAccount")
   counterTills             PosCounter[]               @relation("CounterTill")

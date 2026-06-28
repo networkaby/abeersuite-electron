@@ -145,7 +145,7 @@ export async function POST(req: Request) {
                     description:    `Lost-invoice return — ${data.reason.slice(0, 200)}`,
                     status:         "POSTED",
                     postedAt:       today,
-                    accountId:      customerAcct.id,
+                    // 5D-4: party ledger lives on the spine (engineCreateSpine set it).
                     partyJson:      buildPartyJson({ name: customerAcct.name }) ?? Prisma.DbNull,
                     partyType,
                     partyId,

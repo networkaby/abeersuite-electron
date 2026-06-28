@@ -68,11 +68,16 @@ export async function POST(req: Request) {
         const original = await prisma.invVoucher.findUnique({
             where: { id: data.originalInvoiceId },
             include: {
-                account: { select: { id: true, name: true, personId: true, companyId: true } },
+                universalVoucher: { select: { partyAccountId: true } },   // 5D-4: party on spine
                 branch:  { select: { id: true, gstStateCode: true } },
             },
         });
         if (!original) return NextResponse.json({ error: "Voucher not found" }, { status: 404 });
+        // 5D-4: resolve the party ledger from the spine's partyAccountId.
+        const partyAccountId = original.universalVoucher?.partyAccountId ?? null;
+        const account = partyAccountId != null
+            ? await prisma.account.findUnique({ where: { id: partyAccountId }, select: { id: true, name: true, personId: true, companyId: true } })
+            : null;
         // Phase 5 5C: goods lines hang off the spine.
         const originalLines = await prisma.voucherInventoryLine.findMany({
             where: { universalVoucherId: original.universalVoucherId ?? -1 },
@@ -83,7 +88,7 @@ export async function POST(req: Request) {
         if (original.type !== "POS" && original.type !== "SALE") {
             return NextResponse.json({ error: `Cannot return a ${original.type} voucher — only POS/SALE` }, { status: 409 });
         }
-        if (!original.accountId) {
+        if (!partyAccountId) {
             return NextResponse.json({ error: "Voucher has no customer account linked" }, { status: 400 });
         }
 
@@ -133,15 +138,15 @@ export async function POST(req: Request) {
         // CASH refund → tender.accountId = till (money leaves the drawer).
         // CREDIT note → tender.accountId = customer AR (sits as a credit
         //               on their ledger until next sale draws it down).
-        const refundAccountId = data.refundMode === "CASH" ? tillAccountId! : original.accountId!;
+        const refundAccountId = data.refundMode === "CASH" ? tillAccountId! : partyAccountId!;
 
         // ── Mirror partyType/partyId for legacy GL resolver fallbacks ────
-        const partyType = original.account?.personId !== null && original.account?.personId !== undefined ? "customer"
-                         : original.account?.companyId !== null && original.account?.companyId !== undefined ? "company"
+        const partyType = account?.personId !== null && account?.personId !== undefined ? "customer"
+                         : account?.companyId !== null && account?.companyId !== undefined ? "company"
                          : "account";
-        const partyId = original.account?.personId
-                       ?? original.account?.companyId
-                       ?? original.accountId;
+        const partyId = account?.personId
+                       ?? account?.companyId
+                       ?? partyAccountId;
 
         const sellerStateCode = (original.branch.gstStateCode || "").trim() || null;
 
@@ -166,7 +171,7 @@ export async function POST(req: Request) {
                 date:           today,
                 description:    `Sale return of ${original.reference}${data.notes ? ` — ${data.notes}` : ""}`,
                 friendlyRef:    vRef,
-                partyAccountId: original.accountId,
+                partyAccountId: partyAccountId,
                 userId:         user!.id,
             });
             const voucher = await tx.invVoucher.create({
@@ -179,8 +184,8 @@ export async function POST(req: Request) {
                     description:    `Sale return of ${original.reference}${data.notes ? ` — ${data.notes}` : ""}`,
                     status:         "POSTED",
                     postedAt:       today,
-                    accountId:      original.accountId,
-                    partyJson:      buildPartyJson({ name: original.account?.name ?? readPartyName(original.partyJson) }) ?? Prisma.DbNull,
+                    // 5D-4: party ledger lives on the spine (engineCreateSpine set it).
+                    partyJson:      buildPartyJson({ name: account?.name ?? readPartyName(original.partyJson) }) ?? Prisma.DbNull,
                     partyType,
                     partyId,
                     refNumber:      original.reference,
@@ -253,7 +258,7 @@ export async function POST(req: Request) {
             // proportional to the value returned. No-ops (returns null) when the
             // original sale had no loyalty activity (walk-in / pre-loyalty / SALE).
             const loyalty = await reverseLoyaltyForReturn(tx, {
-                accountId:                  original.accountId!,
+                accountId:                  partyAccountId!,
                 originalUniversalVoucherId: original.universalVoucherId,
                 originalVoucherId:          original.id,
                 returnUniversalVoucherId:   spineId,

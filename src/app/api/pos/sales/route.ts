@@ -59,9 +59,8 @@ export async function GET(req: NextRequest) {
                     date:           true,
                     description:    true,
                     totalAmount:    true,
-                    accountId:      true,
                     branch:         { select: { id: true, name: true } },
-                    universalVoucher: { select: { createdById: true } },   // 5D-2: cashier from spine
+                    universalVoucher: { select: { createdById: true, partyAccountId: true } },   // 5D-2 cashier + 5D-4 party
                     universalVoucherId: true,
                     settlementJson: true,
                 },
@@ -90,7 +89,7 @@ export async function GET(req: NextRequest) {
                 // Paid-at-counter = sum of non-AR tenders (cash/bank/card).
                 // The AR tender (if any) sits as customer credit going forward.
                 const paid = tenders
-                    .filter((t) => t.accountId !== v.accountId)
+                    .filter((t) => t.accountId !== v.universalVoucher?.partyAccountId)
                     .reduce((s, t) => s + Number(t.amount), 0);
                 // paymentMode equivalent: first tender's method, or "MIXED" when
                 // the cashier used more than one channel.
