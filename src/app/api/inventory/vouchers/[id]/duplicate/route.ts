@@ -29,7 +29,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     try {
         const source = await prisma.invVoucher.findUnique({
             where: { id },
-            include: { universalVoucher: { select: { partyAccountId: true, description: true, type: true } } },   // 5D-4 party + 5D-5 description + 5D-11 type on spine
+            include: { universalVoucher: { select: { partyAccountId: true, description: true, type: true, branchId: true } } },   // 5D-4 party + 5D-5 description + 5D-11 type + 5D-12 branch on spine
         });
         if (!source) return NextResponse.json({ error: "Not found" }, { status: 404 });
         // Phase 5 5C: source goods lines hang off the source's spine.
@@ -50,13 +50,13 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                 description:    source.universalVoucher?.description ?? srcType,
                 voucherNo:    reference,
                 partyAccountId: source.universalVoucher?.partyAccountId ?? null,
+                branchId:       source.universalVoucher?.branchId,   // 5D-12: branch primary on the spine
                 userId:         user!.id,
             });
             const voucher = await tx.invVoucher.create({
                 data: {
-                    // 5D-11: type lives on the spine (engineCreateSpine set it).
+                    // 5D-11/5D-12: type + branch live on the spine (engineCreateSpine set them).
                     // 5D-6: reference (voucherNo) lives on the spine.
-                    branchId:         source.branchId,
                     universalVoucherId: spineId,
                     // 5D-5/5D-8/5D-10: description + status (spine defaults DRAFT) + date live on the spine.
                     // 5D-4: party ledger lives on the spine (set above).

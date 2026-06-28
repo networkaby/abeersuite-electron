@@ -40,8 +40,8 @@ export async function listOrders(opts?: { statusId?: string }): Promise<Normaliz
             },
             select: {
                 id: true, partyJson: true,
-                universalVoucher: { select: { partyAccountId: true, voucherNo: true, type: true } },   // 5D-4 party + 5D-6 ref + 5D-11 type
-                totalAmount: true, orderStatusId: true, branchId: true, dealId: true, createdAt: true,
+                universalVoucher: { select: { partyAccountId: true, voucherNo: true, type: true, branchId: true } },   // 5D-4 party + 5D-6 ref + 5D-11 type + 5D-12 branch
+                totalAmount: true, orderStatusId: true, dealId: true, createdAt: true,
             },
             orderBy: { createdAt: "desc" },
         }),
@@ -80,7 +80,7 @@ export async function listOrders(opts?: { statusId?: string }): Promise<Normaliz
             customerName: readPartyName(v.partyJson),
             total,
             statusId: v.orderStatusId,
-            branchId: v.branchId,
+            branchId: v.universalVoucher?.branchId ?? null,
             dealId: v.dealId,
             createdAt: v.createdAt.toISOString(),
             credit,

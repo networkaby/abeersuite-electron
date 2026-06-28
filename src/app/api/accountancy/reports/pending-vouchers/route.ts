@@ -61,7 +61,7 @@ export async function GET(req: NextRequest) {
     // Branch filter — reports default to org-wide. Pass `branchId=<id>` to
     // scope to a specific branch (with access check), or omit / `=all` for
     // org-wide. The top-bar working-branch cookie is intentionally NOT used.
-    let branchFilter: { branchId?: string } = {};
+    let branchScopeId: string | undefined;
     if (branchParam === "all" || !branchParam) {
         // No branch filter — org-wide.
     } else {
@@ -69,7 +69,7 @@ export async function GET(req: NextRequest) {
             if (e instanceof BranchAccessError) return NextResponse.json({ error: e.message }, { status: 403 });
             throw e;
         }
-        branchFilter = { branchId: branchParam };
+        branchScopeId = branchParam;
     }
 
     // Type filter — narrow to one pending type, or OR-combine all four.
@@ -85,15 +85,14 @@ export async function GET(req: NextRequest) {
         : [];
 
     const where: Prisma.InvVoucherWhereInput = {
-        universalVoucher: { status: VoucherStatus.POSTED, deletedAt: null },   // 5D-8: lifecycle on spine
+        // 5D-8/5D-10/5D-12: status/deletedAt + date + branch all live on the spine.
+        universalVoucher: {
+            status: VoucherStatus.POSTED,
+            deletedAt: null,
+            ...(branchScopeId ? { branchId: branchScopeId } : {}),
+            ...((from || to) ? { date: { ...(from ? { gte: new Date(from) } : {}), ...(to ? { lte: new Date(to) } : {}) } } : {}),
+        },
         OR:        typesToInclude.map(unsettledClause),
-        ...branchFilter,
-        ...((from || to) && {
-            date: {
-                ...(from ? { gte: new Date(from) } : {}),
-                ...(to   ? { lte: new Date(to)   } : {}),
-            },
-        }),
         ...(search && {
             AND: [{
                 OR: [
@@ -116,8 +115,7 @@ export async function GET(req: NextRequest) {
             skip:    (page - 1) * limit,
             take:    limit,
             include: {
-                branch: { select: { id: true, name: true } },
-                universalVoucher: { select: { description: true, voucherNo: true, date: true, type: true } },   // 5D-5 desc + 5D-6 ref + 5D-10 date + 5D-11 type
+                universalVoucher: { select: { description: true, voucherNo: true, date: true, type: true, branch: { select: { id: true, name: true } } } },   // 5D-5 desc + 5D-6 ref + 5D-10 date + 5D-11 type + 5D-12 branch
             },
         }),
     ]);
@@ -152,7 +150,7 @@ export async function GET(req: NextRequest) {
             description: v.universalVoucher?.description ?? "",
             totalAmount: Number(v.totalAmount),
             lineCount:   v.lines.length,
-            branchName:  v.branch?.name ?? null,
+            branchName:  v.universalVoucher?.branch?.name ?? null,
             daysOpen,
             lines: v.lines.map((l) => ({
                 id:          l.id,

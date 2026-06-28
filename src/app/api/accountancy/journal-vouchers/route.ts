@@ -119,6 +119,7 @@ export async function POST(req: NextRequest) {
                 narration:       body.narration ?? null,
                 referenceSeries: "JOURNAL",
                 post:            body.postImmediately,
+                branchId:        activeBranchId,   // 5D-12: branch primary on the spine
             });
 
             if (!body.postImmediately) {
@@ -148,8 +149,7 @@ export async function POST(req: NextRequest) {
                         // carried body.type (e.g. JOURNAL) — a pre-existing divergence.
                         // It now reflects the spine's single type. (Behaviour to confirm:
                         // stock-bearing journals are no longer typed MANUFACTURING_JOURNAL.)
-                        branchId:    activeBranchId,
-                        // 5D-5/5D-8/5D-10: description + postedAt + status + date live on the spine.
+                        // 5D-5/5D-8/5D-10/5D-12: description + postedAt + status + date + branch live on the spine.
                         subtotal:    flatItems.reduce((s, i) => s + i.amount, 0),
                         totalAmount: flatItems.reduce((s, i) => s + i.amount, 0),
                         // 5D-2: creator lives on the spine.

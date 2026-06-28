@@ -188,6 +188,7 @@ export async function engineGlArm(
                 ...(args.voucherNo != null ? { voucherNo:    args.voucherNo } : {}),
                 ...(args.narration   != null ? { narration:      args.narration }   : {}),
                 ...(args.partyAccountId != null ? { partyAccountId: args.partyAccountId } : {}),
+                ...(branchId != null ? { branchId } : {}),   // 5D-12: branch primary on the spine
             },
         });
         return { journalEntryId: id, universalVoucherId: id };
@@ -208,6 +209,7 @@ export async function engineGlArm(
             postedAt,
             sourceCreatedAt:      postedAt,   // faithful txn wall-clock for windowed readers
             partyAccountId:       args.partyAccountId ?? null,
+            branchId:             branchId ?? null,   // 5D-12: branch primary on the spine
             createdById:          userId,
             lines: { create: glLineBase },
         },
@@ -241,6 +243,7 @@ export async function engineCreateSpine(
         narration?:      string | null;
         voucherNo?:    string | null;
         partyAccountId?: number | null;
+        branchId?:       string | null;
         userId:          number;
     },
 ): Promise<number> {
@@ -256,6 +259,7 @@ export async function engineCreateSpine(
             narration:      args.narration ?? null,
             status:         "DRAFT",
             partyAccountId: args.partyAccountId ?? null,
+            branchId:       args.branchId ?? null,   // 5D-12: branch primary on the spine
             createdById:    args.userId,
         },
     });
@@ -435,6 +439,7 @@ export async function engineCreateVoucher(
         narration:      spec.narration ?? null,
         voucherNo:    reference,
         partyAccountId: spec.partyAccountId ?? null,
+        branchId:       spec.branchId ?? null,   // 5D-12: branch primary on the spine
         userId:         spec.userId,
     });
     await tx.voucherGlLine.createMany({

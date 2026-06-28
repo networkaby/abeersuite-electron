@@ -85,6 +85,11 @@ model UniversalVoucher {
   // Phase 5 5D-9: REGULAR (real txn: GL/stock) vs OPTIONAL (non-binding document:
   // estimate/order/quote, no GL/stock). Derived from `type` at creation.
   binding                   VoucherBinding             @default(REGULAR)
+  // Phase 5 5D-12: branch where the voucher originates — PRIMARY on the spine
+  // header now (moved off InvVoucher). Nullable: financial vouchers that are
+  // org-level (no branch context) leave it null; inventory/POS vouchers always set it.
+  branchId                  String?
+  branch                    Branch?                    @relation("UvBranch", fields: [branchId], references: [id])
   partyAccountId            Int?
   postedAt                  DateTime?
   cancelledAt               DateTime?
@@ -128,6 +133,7 @@ model UniversalVoucher {
   @@index([type, status])
   @@index([deletedAt])
   @@index([partyAccountId])
+  @@index([branchId])
 }
 
 model VoucherGlLine {

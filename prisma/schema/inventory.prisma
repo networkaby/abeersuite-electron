@@ -393,10 +393,9 @@ model InvVoucher {
   // Phase 5 5D-6: `reference` (the user-facing SV-/PV- number) dropped — it lives
   // on the spine as `voucherNo` (the Voucher No); the spine's own `reference` is
   // the Universal Voucher No (UVNo).
-  /// Branch where this voucher originates — drives per-branch stock balance,
-  /// list filtering, and reporting. Required on every new voucher.
-  branchId            String
-  branch              Branch                 @relation("InvVoucherBranch", fields: [branchId], references: [id])
+  // Phase 5 5D-12: `branchId`/`branch` dropped — the primary branch lives on the
+  // spine now (UniversalVoucher.branchId). Readers reach it via universalVoucher.branch.
+  // `destinationBranchId` (branch-transfer partner) stays here as a trade detail.
   // Phase 5 5D-10: `date` dropped — lives on the spine (UniversalVoucher.date).
   // Readers reach it via `universalVoucher.date` (order/filter via the relation).
   // Phase 5 5D-5: `description` dropped — lives on the spine (UniversalVoucher.description).
@@ -508,7 +507,6 @@ model InvVoucher {
   createdAt                 DateTime                   @default(now())
   updatedAt                 DateTime                   @updatedAt
 
-  @@index([branchId])
   @@index([ticketId])
   @@index([dealId])
   @@index([orderStatusId])

@@ -68,8 +68,7 @@ export async function POST(req: Request) {
         const original = await prisma.invVoucher.findUnique({
             where: { id: data.originalInvoiceId },
             include: {
-                universalVoucher: { select: { partyAccountId: true, voucherNo: true, status: true, type: true } },   // 5D-4 party + 5D-6 ref + 5D-8 status + 5D-11 type
-                branch:  { select: { id: true, gstStateCode: true } },
+                universalVoucher: { select: { partyAccountId: true, voucherNo: true, status: true, type: true, branchId: true, branch: { select: { id: true, gstStateCode: true } } } },   // 5D-4 party + 5D-6 ref + 5D-8 status + 5D-11 type + 5D-12 branch
             },
         });
         if (!original) return NextResponse.json({ error: "Voucher not found" }, { status: 404 });
@@ -121,7 +120,7 @@ export async function POST(req: Request) {
         }
         // Branch context — prefer the shift, fall back to the original voucher's branch
         // (manager could be processing a return from a different branch than the original sale).
-        const branchId = shift?.branchId ?? original.branchId;
+        const branchId = shift?.branchId ?? original.universalVoucher?.branchId ?? "";   // 5D-12: branch on spine
 
         // ── Compute return totals ─────────────────────────────────────────────
         const returnSubtotal = returnLines.reduce((s, { voucherLine, qty }) => {
@@ -148,7 +147,7 @@ export async function POST(req: Request) {
                        ?? account?.companyId
                        ?? partyAccountId;
 
-        const sellerStateCode = (original.branch.gstStateCode || "").trim() || null;
+        const sellerStateCode = (original.universalVoucher?.branch?.gstStateCode || "").trim() || null;   // 5D-12: branch on spine
 
         // ── Loyalty reversal context ──────────────────────────────────────────
         // Fraction of the original sale being returned (by pre-tax goods value),
@@ -173,12 +172,12 @@ export async function POST(req: Request) {
                 description:    voucherDescription,
                 voucherNo:    vRef,
                 partyAccountId: partyAccountId,
+                branchId,   // 5D-12: branch primary on the spine
                 userId:         user!.id,
             });
             const voucher = await tx.invVoucher.create({
                 data: {
-                    // 5D-11: type lives on the spine (engineCreateSpine set SALE_RETURN).
-                    branchId,
+                    // 5D-11/5D-12: type + branch live on the spine (engineCreateSpine set them).
                     universalVoucherId: spineId,
                     // 5D-5/5D-8/5D-10: description + postedAt + status + date + 5D-4 party live on the spine.
                     partyJson:      buildPartyJson({ name: account?.name ?? readPartyName(original.partyJson) }) ?? Prisma.DbNull,

@@ -49,31 +49,30 @@ export async function GET(req: NextRequest) {
     const to          = searchParams.get("to");
     const branchParam = searchParams.get("branchId");
 
-    let branchFilter: { branchId?: string } = {};
+    let branchScopeId: string | undefined;
     if (branchParam && branchParam !== "all") {
         try { requireBranchAccess(session, branchParam); } catch (e) {
             if (e instanceof BranchAccessError) return NextResponse.json({ error: e.message }, { status: 403 });
             throw e;
         }
-        branchFilter = { branchId: branchParam };
+        branchScopeId = branchParam;
     }
 
+    // 5D-8/5D-10/5D-12: status/deletedAt + date + branch all live on the spine.
     const where: Prisma.InvVoucherWhereInput = {
-        universalVoucher: { status: VoucherStatus.POSTED, deletedAt: null },   // 5D-8: lifecycle on spine
-        OR:        PENDING_TYPES.map(unsettledClause),
-        ...branchFilter,
-        ...((from || to) && {
-            date: {
-                ...(from ? { gte: new Date(from) } : {}),
-                ...(to   ? { lte: new Date(to)   } : {}),
-            },
-        }),
+        universalVoucher: {
+            status: VoucherStatus.POSTED,
+            deletedAt: null,
+            ...(branchScopeId ? { branchId: branchScopeId } : {}),
+            ...((from || to) ? { date: { ...(from ? { gte: new Date(from) } : {}), ...(to ? { lte: new Date(to) } : {}) } } : {}),
+        },
+        OR: PENDING_TYPES.map(unsettledClause),
     };
 
     const voucherRows = await prisma.invVoucher.findMany({
         where,
         orderBy: [{ universalVoucher: { date: "asc" } }, { id: "asc" }],   // 5D-10
-        include: { branch: { select: { id: true, name: true } }, universalVoucher: { select: { voucherNo: true, date: true, type: true } } },   // 5D-6 + 5D-10 date + 5D-11 type
+        include: { universalVoucher: { select: { voucherNo: true, date: true, type: true, branchId: true, branch: { select: { id: true, name: true } } } } },   // 5D-6 + 5D-10 date + 5D-11 type + 5D-12 branch
     });
     // Phase 5 5C: goods lines hang off the spine — batch-load + group by spine id.
     const uvIds = voucherRows.map((v) => v.universalVoucherId).filter((x): x is number => x != null);
@@ -148,8 +147,8 @@ export async function GET(req: NextRequest) {
                 date:       v.universalVoucher!.date.toISOString(),   // 5D-10
                 quantity:   qty,
                 direction,
-                branchId:   v.branchId,
-                branchName: v.branch?.name ?? null,
+                branchId:   v.universalVoucher!.branchId ?? "",
+                branchName: v.universalVoucher?.branch?.name ?? null,
                 daysOpen,
             });
         }

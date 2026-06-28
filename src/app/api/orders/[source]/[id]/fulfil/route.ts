@@ -41,8 +41,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ sou
         const order = await prisma.invVoucher.findUnique({
             where: { id },
             select: {
-                id: true, branchId: true, orderStatusId: true,
-                universalVoucher: { select: { partyAccountId: true, voucherNo: true, type: true } },   // 5D-4 party + 5D-6 ref + 5D-11 type
+                id: true, orderStatusId: true,
+                universalVoucher: { select: { partyAccountId: true, voucherNo: true, type: true, branchId: true } },   // 5D-4 party + 5D-6 ref + 5D-11 type + 5D-12 branch
                 totalAmount: true,
                 partyJson: true, partyType: true, partyId: true,
                 discountAmt: true, discountPct: true, shippingAmt: true, roundOff: true,
@@ -100,7 +100,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ sou
                 type: "SALE",
                 date: today,
                 description: `Sale — fulfil ${order.universalVoucher?.voucherNo ?? ""}`,
-                branchId: order.branchId,
+                branchId: order.universalVoucher?.branchId,
                 partyName: readPartyName(order.partyJson),
                 partyType: order.partyType,
                 partyId: order.partyId,

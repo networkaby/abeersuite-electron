@@ -23,9 +23,8 @@ export async function GET(_req: Request, { params }: Params) {
     const voucherRow = await prisma.invVoucher.findUnique({
         where: { id: Number(id) },
         include: {
-            // 5D-2 creator + 5D-6 ref + 5D-11 type live on the spine.
-            universalVoucher: { select: { createdById: true, voucherNo: true, type: true } },
-            branch:    { select: { id: true, name: true } },
+            // 5D-2 creator + 5D-6 ref + 5D-11 type + 5D-12 branch live on the spine.
+            universalVoucher: { select: { createdById: true, voucherNo: true, type: true, branchId: true, branch: { select: { id: true, name: true } } } },
             // refVoucher powers parent-link surfaces — "Replaces <old ref>"
             // for a SALE_RETURN against a SALE, or "Linked to PO-…" on a GRN.
             refVoucher: { select: { id: true, universalVoucher: { select: { voucherNo: true, type: true } } } },   // 5D-11 type on spine
@@ -65,8 +64,10 @@ export async function GET(_req: Request, { params }: Params) {
     // form edit-load keep reading partyName / partyPhone / partyAddress.
     return NextResponse.json({
         ...voucher,
-        // 5D-6/5D-11: the user-facing number + type come from the spine now.
+        // 5D-6/5D-11/5D-12: the user-facing number + type + branch come from the spine now.
         type:         voucher.universalVoucher?.type,
+        branchId:     voucher.universalVoucher?.branchId ?? null,
+        branch:       voucher.universalVoucher?.branch ?? null,
         reference:    voucher.universalVoucher?.voucherNo ?? "",
         refVoucher:   voucher.refVoucher ? { id: voucher.refVoucher.id, type: voucher.refVoucher.universalVoucher?.type, reference: voucher.refVoucher.universalVoucher?.voucherNo ?? "" } : null,
         createdBy:    creator,
@@ -331,7 +332,7 @@ export async function PATCH(req: Request, { params }: Params) {
                     ...(refDate          !== undefined ? { refDate:          refDate ? new Date(refDate) : null } : {}),
                     ...(refVoucherId     !== undefined ? { refVoucherId:     refVoucherId ?? null } : {}),
                     ...(bomId            !== undefined ? { bomId:            bomId ?? null } : {}),
-                    ...(bodyBranchId     !== undefined && !wasPosted ? { branchId:  bodyBranchId } : {}),
+                    // 5D-12: primary branch lives on the spine (updated below).
                     ...(destinationBranchId !== undefined ? { destinationBranchId: destinationBranchId ?? null } : {}),
                     ...(showPrices       !== undefined ? { showPrices }                              : {}),
                     ...(shippingAmt      !== undefined ? { shippingAmt }     : {}),
@@ -342,12 +343,13 @@ export async function PATCH(req: Request, { params }: Params) {
                     ...(newSettlementJson !== undefined ? { settlementJson: newSettlementJson } : {}),
                 },
             });
-            // 5D-4/5D-5/5D-10: date + description + party ledger live on the spine.
+            // 5D-4/5D-5/5D-10/5D-12: date + description + party ledger + branch live on the spine.
             if (existing.universalVoucherId != null) {
                 const spinePatch: Prisma.UniversalVoucherUncheckedUpdateInput = {
                     ...(date        ? { date: new Date(date) } : {}),
                     ...(description ? { description: description.trim() } : {}),
                     ...(partyId !== undefined ? { partyAccountId: patchAccountId } : {}),
+                    ...(bodyBranchId !== undefined && !wasPosted ? { branchId: bodyBranchId } : {}),
                 };
                 if (Object.keys(spinePatch).length > 0) {
                     await tx.universalVoucher.update({ where: { id: existing.universalVoucherId }, data: spinePatch });
@@ -378,13 +380,15 @@ export async function PATCH(req: Request, { params }: Params) {
             // PHASE 3 — Reapply IN PLACE (POSTED only)
             // ────────────────────────────────────────────────────────────
             if (wasPosted) {
-                const freshRow = await tx.invVoucher.findUnique({ where: { id }, include: { universalVoucher: { select: { date: true } } } });   // 5D-10 date
+                const freshRow = await tx.invVoucher.findUnique({ where: { id }, include: { universalVoucher: { select: { date: true, type: true, branchId: true } } } });   // 5D-10 date + 5D-11 type + 5D-12 branch
                 if (!freshRow) throw new Error("Voucher disappeared mid-transaction");
-                // Phase 5 5C: goods lines hang off the spine. 5D-10: date from the spine
-                // (drives the rewritten InvStockLedger row dates).
+                // Phase 5 5C: goods lines hang off the spine. 5D-10/11/12: date + type +
+                // branch from the spine drive saleToSpec (GL/stock mapping) + the ledger rows.
                 const fresh = {
                     ...freshRow,
                     date: freshRow.universalVoucher!.date,
+                    type: freshRow.universalVoucher!.type,
+                    branchId: freshRow.universalVoucher!.branchId ?? "",
                     lines: await tx.voucherInventoryLine.findMany({
                         where:   { universalVoucherId: freshRow.universalVoucherId ?? -1 },
                         include: { product: { select: { id: true, mrpPaise: true, stock: true } } },

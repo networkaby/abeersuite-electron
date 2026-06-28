@@ -43,8 +43,7 @@ export async function GET(
                     id: true,
                     totalAmount: true,
                     universalVoucherId: true,
-                    branch:    { select: { name: true } },
-                    universalVoucher: { select: { createdById: true, partyAccountId: true, voucherNo: true, status: true, date: true, type: true } },   // 5D-2 creator + 5D-4 party + 5D-6 ref + 5D-8 status + 5D-10 date + 5D-11 type
+                    universalVoucher: { select: { createdById: true, partyAccountId: true, voucherNo: true, status: true, date: true, type: true, branch: { select: { name: true } } } },   // 5D-2 creator + 5D-4 party + 5D-6 ref + 5D-8 status + 5D-10 date + 5D-11 type + 5D-12 branch
                 },
                 orderBy: { universalVoucher: { date: "desc" } },   // 5D-10
             })
@@ -83,7 +82,7 @@ export async function GET(
                 date:       v.universalVoucher?.date,   // 5D-10: date on spine
                 totalAmount: v.totalAmount,
                 amountPaid: amountPaid.toFixed(2),
-                branch:     v.branch,
+                branch:     v.universalVoucher?.branch ?? null,
                 createdBy:  v.universalVoucher?.createdById != null ? { name: creatorById.get(v.universalVoucher.createdById) ?? null } : null,
             };
         });

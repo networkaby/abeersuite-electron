@@ -55,7 +55,6 @@ export async function GET(req: NextRequest) {
     } else if (typeParam && ALLOWED_TYPES.has(typeParam as InvVoucherType)) {
         typeList.push(typeParam as InvVoucherType);
     }
-    const typeFilter = typeList.length > 0 ? { type: { in: typeList } } : {};
     // includeDeleted is opt-in and gated on the delete permission so casual
     // viewers don't see soft-deleted rows. The All Vouchers register passes
     // includeDeleted=1 when the user ticks the "Deleted" status filter.
@@ -66,7 +65,7 @@ export async function GET(req: NextRequest) {
             || user.permissions.includes(PERMISSIONS.INVENTORY_VOUCHER_DELETE));
     const includeDeleted = includeDeletedParam && canSeeDeleted;
 
-    let branchFilter: { branchId?: string } = {};
+    let branchScopeId: string | undefined;
     if (branchParam === "all" || !branchParam) {
         // No branch filter — org-wide. Reports land here by omitting the param.
     } else {
@@ -74,24 +73,29 @@ export async function GET(req: NextRequest) {
             if (e instanceof BranchAccessError) return NextResponse.json({ error: e.message }, { status: 403 });
             throw e;
         }
-        branchFilter = { branchId: branchParam };
+        branchScopeId = branchParam;
     }
 
+    // 5D-4/8/10/11/12: type/status/deletedAt/party/branch all live on the spine.
+    // (Typed so future drift is caught — the prior untyped literal silently kept
+    // dropped columns via conditional spreads.)
+    const spineFilter: Prisma.UniversalVoucherWhereInput = {
+        ...(typeList.length > 0 ? { type: { in: typeList } } : {}),
+        ...(status ? { status } : {}),
+        ...(includeDeleted ? {} : { deletedAt: null }),
+        ...(accountIdParam ? { partyAccountId: Number(accountIdParam) } : {}),
+        ...(branchScopeId ? { branchId: branchScopeId } : {}),
+    };
     const vouchers = await prisma.invVoucher.findMany({
         where: {
-            ...typeFilter,
-            ...(status ? { status } : {}),
-            ...(includeDeleted ? {} : { deletedAt: null }),
-            ...(accountIdParam   ? { accountId:   Number(accountIdParam) }   : {}),
+            universalVoucher: spineFilter,
             ...(ticketIdParam    ? { ticketId:    Number(ticketIdParam) }    : {}),
             ...(shopOrderIdParam ? { shopOrderId: Number(shopOrderIdParam) } : {}),
-            ...branchFilter,
         },
         orderBy: [{ universalVoucher: { date: "desc" } }, { id: "desc" }],   // 5D-10: date on spine
         include: {
-            // 5D-2: creator lives on the spine — pull its createdById, resolve names below.
-            universalVoucher: { select: { createdById: true, voucherNo: true, date: true } },   // 5D-2 creator + 5D-6 ref + 5D-10 date
-            branch:    { select: { id: true, name: true } },
+            // 5D-2 creator + 5D-6 ref + 5D-10 date + 5D-12 branch live on the spine.
+            universalVoucher: { select: { createdById: true, voucherNo: true, date: true, type: true, branch: { select: { id: true, name: true } } } },   // +5D-11 type +5D-12 branch
             // refReturns = vouchers that reference THIS one via refVoucherId. For a
             // POS_ORDER / POS_ESTIMATE it means a sale was raised against it →
             // "converted" (not pending). (For SALE etc. it's the returns count.)
@@ -137,7 +141,7 @@ export async function GET(req: NextRequest) {
         // clients keep reading `partyName` / `partyPhone` unchanged.
         const partyDisplay = { partyName: readPartyName(v.partyJson), partyPhone: readPartyPhone(v.partyJson), partyAddress: readPartyAddress(v.partyJson) };
         if (v.partyId == null) {
-            return { ...v, date: v.universalVoucher?.date, reference: v.universalVoucher?.voucherNo ?? "", ...partyDisplay, createdBy: creatorName(v), partyAccountId: null, partyPersonId: null, partyCompanyId: null };
+            return { ...v, type: v.universalVoucher?.type, branch: v.universalVoucher?.branch ?? null, date: v.universalVoucher?.date, reference: v.universalVoucher?.voucherNo ?? "", ...partyDisplay, createdBy: creatorName(v), partyAccountId: null, partyPersonId: null, partyCompanyId: null };
         }
         // Same partyId may resolve as either a Person or a Company id depending
         // on which lookup matches. Person wins when both are set (shouldn't
@@ -148,6 +152,8 @@ export async function GET(req: NextRequest) {
         const accFromCompany = companyToAccount.get(v.partyId);
         return {
             ...v,
+            type:            v.universalVoucher?.type,   // 5D-11: type on spine
+            branch:          v.universalVoucher?.branch ?? null,   // 5D-12: branch on spine
             date:            v.universalVoucher?.date,   // 5D-10: date on spine
             reference:       v.universalVoucher?.voucherNo ?? "",   // 5D-6
             ...partyDisplay,
@@ -466,13 +472,13 @@ export async function POST(req: NextRequest) {
                 description:    description.trim(),
                 voucherNo:    reference,
                 partyAccountId: resolvedAccountId,
+                branchId,   // 5D-12: branch primary on the spine
                 userId,
             });
             const created = await tx.invVoucher.create({
                 data: {
-                    // 5D-11: type lives on the spine (engineCreateSpine set it).
+                    // 5D-11/5D-12: type + branch live on the spine (engineCreateSpine set them).
                     // 5D-6: reference (voucherNo) lives on the spine.
-                    branchId,
                     universalVoucherId: spineId,
                     orderPipelineId,
                     orderStatusId,

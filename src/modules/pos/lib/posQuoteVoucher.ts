@@ -127,6 +127,7 @@ export async function createPosQuoteVoucher(opts: {
             description,
             voucherNo:    reference,
             partyAccountId: body.accountId ?? null,
+            branchId,   // 5D-12: branch primary on the spine
             userId,
         });
         await tx.universalVoucher.updateMany({
@@ -135,10 +136,9 @@ export async function createPosQuoteVoucher(opts: {
         });
         const voucher = await tx.invVoucher.create({
             data: {
-                // 5D-11: type lives on the spine (engineCreateSpine set it).
+                // 5D-11/5D-12: type + branch live on the spine (engineCreateSpine set them).
                 // 5D-8: status "issued"/POSTED set on the spine above (no GL lines → gate-neutral).
                 // 5D-5: postedAt + 5D-6 reference (voucherNo) live on the spine.
-                branchId,
                 universalVoucherId: spineId,
                 // 5D-5/5D-10: description + 5D-4 party + date live on the spine (engineCreateSpine set it).
                 partyJson: buildPartyJson({ name: body.partyName, phone: body.partyPhone }) ?? Prisma.DbNull,

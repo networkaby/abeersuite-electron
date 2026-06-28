@@ -134,12 +134,12 @@ export async function POST(req: Request) {
                 description:    voucherDescription,
                 voucherNo:    vRef,
                 partyAccountId: customerAcct.id,
+                branchId,   // 5D-12: branch primary on the spine
                 userId:         user!.id,
             });
             const voucher = await tx.invVoucher.create({
                 data: {
-                    // 5D-11: type lives on the spine (engineCreateSpine set SALE_RETURN).
-                    branchId,
+                    // 5D-11/5D-12: type + branch live on the spine (engineCreateSpine set them).
                     universalVoucherId: spineId,
                     // 5D-5/5D-8/5D-10: description + postedAt + status + date + 5D-4 party live on the spine.
                     partyJson:      buildPartyJson({ name: customerAcct.name }) ?? Prisma.DbNull,

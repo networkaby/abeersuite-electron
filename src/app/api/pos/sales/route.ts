@@ -61,8 +61,7 @@ export async function GET(req: NextRequest) {
                 select: {
                     id:             true,
                     totalAmount:    true,
-                    branch:         { select: { id: true, name: true } },
-                    universalVoucher: { select: { createdById: true, partyAccountId: true, description: true, voucherNo: true, date: true } },   // 5D-2/4/5/6 + 5D-10 date
+                    universalVoucher: { select: { createdById: true, partyAccountId: true, description: true, voucherNo: true, date: true, branch: { select: { id: true, name: true } } } },   // 5D-2/4/5/6 + 5D-10 date + 5D-12 branch
                     universalVoucherId: true,
                     settlementJson: true,
                 },
@@ -105,7 +104,7 @@ export async function GET(req: NextRequest) {
                     paymentMode,
                     totalAmount:    v.totalAmount.toString(),
                     amountReceived: paid.toFixed(2),
-                    branch:         v.branch?.name ?? "—",
+                    branch:         v.universalVoucher?.branch?.name ?? "—",
                     cashier:        (v.universalVoucher?.createdById != null ? cashierById.get(v.universalVoucher.createdById) : null) ?? "—",
                     lineCount:      v.universalVoucherId != null ? (lineCountByUv.get(v.universalVoucherId) ?? 0) : 0,
                 };

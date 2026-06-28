@@ -42,12 +42,8 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     const voucherRow = await prisma.invVoucher.findUnique({
         where: { id: Number(id) },
         include: {
-            // Branch state drives the seller-state in the CGST/SGST vs IGST split.
-            branch: {
-                select: { id: true, gstStateCode: true },
-            },
-            // 5D-5 description + 5D-6 ref + 5D-8 status + 5D-10 date + 5D-11 type live on the spine — needed for saleToSpec / messages / the DRAFT gate / stock rows / direction.
-            universalVoucher: { select: { description: true, voucherNo: true, status: true, date: true, type: true } },
+            // 5D-5 description + 5D-6 ref + 5D-8 status + 5D-10 date + 5D-11 type + 5D-12 branch(+state) live on the spine — needed for saleToSpec / messages / the DRAFT gate / stock rows / direction / the CGST/SGST-vs-IGST split.
+            universalVoucher: { select: { description: true, voucherNo: true, status: true, date: true, type: true, branchId: true, branch: { select: { id: true, gstStateCode: true } } } },
         },
     });
     // Phase 5 5C: goods lines hang off the spine — load + attach as `voucher.lines`.
@@ -57,8 +53,8 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
             include: { product: { select: { id: true, mrpPaise: true, stock: true } } },
         })
         : [];
-    // 5D-8/5D-11: status + type live on the spine — attach for the DRAFT gate + direction guards.
-    const voucher = voucherRow ? { ...voucherRow, lines: goodsLines, type: voucherRow.universalVoucher?.type ?? "", status: voucherRow.universalVoucher?.status ?? "DRAFT" } : null;
+    // 5D-8/5D-11/5D-12: status + type + branch live on the spine — attach for the DRAFT gate + direction guards + stock rows.
+    const voucher = voucherRow ? { ...voucherRow, lines: goodsLines, type: voucherRow.universalVoucher?.type ?? "", branchId: voucherRow.universalVoucher?.branchId ?? "", status: voucherRow.universalVoucher?.status ?? "DRAFT" } : null;
 
     if (!voucher)                  return NextResponse.json({ error: "Not found" }, { status: 404 });
     if (voucher.status !== "DRAFT") return NextResponse.json({ error: `Voucher is already ${voucher.status}` }, { status: 409 });
@@ -106,7 +102,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
         let buyerStateCode  = "";
         if (isTradingVoucher) {
             const org = await getOrganisation();
-            sellerStateCode = (voucher.branch?.gstStateCode || org.gstStateCode || "").trim();
+            sellerStateCode = (voucher.universalVoucher?.branch?.gstStateCode || org.gstStateCode || "").trim();   // 5D-12: branch on spine
             buyerStateCode = (voucher.placeOfSupply ?? "").trim();
             if (!buyerStateCode) {
                 // Live lookup against party — covers legacy rows where
@@ -209,10 +205,9 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                         //   same DRAFT is idempotent.
                         const priorSameDay = await tx.invVoucher.count({
                             where: {
-                                branchId: voucher.branchId,
                                 id:       { not: voucher.id },
-                                // 5D-8 status + 5D-10 date + 5D-11 type on spine + Phase 5 5C: goods lines hang off the spine.
-                                universalVoucher: { type: "PHYSICAL_STOCK", status: "POSTED", date: voucher.universalVoucher!.date, inventoryLines: { some: { productId: line.productId } } },
+                                // 5D-8 status + 5D-10 date + 5D-11 type + 5D-12 branch on spine + Phase 5 5C: goods lines hang off the spine.
+                                universalVoucher: { type: "PHYSICAL_STOCK", status: "POSTED", date: voucher.universalVoucher!.date, branchId: voucher.branchId, inventoryLines: { some: { productId: line.productId } } },
                             },
                         });
                         if (priorSameDay === 0) {

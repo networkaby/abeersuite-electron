@@ -24,14 +24,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const { data, error } = await validateRequest(req, schema);
     if (error) return error;
 
-    const voucherRow = await prisma.invVoucher.findUnique({ where: { id: Number(id) }, include: { universalVoucher: { select: { voucherNo: true, status: true, deletedAt: true, type: true } } } });   // 5D-6/5D-8/5D-11
+    const voucherRow = await prisma.invVoucher.findUnique({ where: { id: Number(id) }, include: { universalVoucher: { select: { voucherNo: true, status: true, deletedAt: true, type: true, branchId: true } } } });   // 5D-6/5D-8/5D-11/5D-12
     if (!voucherRow) return NextResponse.json({ error: "Not found" }, { status: 404 });
     // Phase 5 5C: goods lines hang off the spine.
     const goodsLines = await prisma.voucherInventoryLine.findMany({
         where: { universalVoucherId: voucherRow.universalVoucherId ?? -1 },
     });
-    // 5D-8/5D-11: lifecycle status/deletedAt + type live on the spine — attach for the helpers + type guards.
-    const voucher = { ...voucherRow, lines: goodsLines, type: voucherRow.universalVoucher?.type ?? "", status: voucherRow.universalVoucher?.status ?? "DRAFT", deletedAt: voucherRow.universalVoucher?.deletedAt ?? null };
+    // 5D-8/5D-11/5D-12: status/deletedAt + type + branch live on the spine — attach for the helpers + guards + stock rows.
+    const voucher = { ...voucherRow, lines: goodsLines, type: voucherRow.universalVoucher?.type ?? "", branchId: voucherRow.universalVoucher?.branchId ?? "", status: voucherRow.universalVoucher?.status ?? "DRAFT", deletedAt: voucherRow.universalVoucher?.deletedAt ?? null };
 
     const isPurchase = voucher.type === "PURCHASE" || voucher.type === "GRN";
     // POS = counter sale: moves stock OUT like SALE, so reversing must restore it.
