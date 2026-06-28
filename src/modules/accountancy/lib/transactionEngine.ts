@@ -88,14 +88,14 @@ export interface PostableVoucher {
 // ── GL arm ──────────────────────────────────────────────────────────────────
 
 /**
- * The single GL writer. Creates the mirror `JournalEntry` (GL_POSTING series) +
- * `JournalLine`s (branch-stamped), and applies per-line `Account.balance` deltas
- * with the null-normalBalance group-nature fallback. Returns the JE id.
+ * The single GL writer (Phase 4 G5: legacy JournalEntry/JournalLine dropped — the
+ * UniversalVoucher spine + VoucherGlLine children ARE the GL). Writes the spine's
+ * GL lines (branch-stamped) and applies per-line `Account.balance` deltas with the
+ * null-normalBalance group-nature fallback. Returns `{journalEntryId, universalVoucherId}`
+ * (both the spine id since G5's self-ref).
  *
  * Ledger nature comes from each line's pre-loaded `account` when present; the
- * engine batch-loads any missing ledgers. Does NOT touch a `Voucher` row — that
- * is the caller's concern (`enginePostVoucher` flips the voucher; `enginePost`
- * leaves it to the route).
+ * engine batch-loads any missing ledgers.
  */
 export async function engineGlArm(
     tx: Prisma.TransactionClient,
@@ -231,8 +231,9 @@ export async function engineGlArm(
  * so a draft spine is invisible to balances/reports until POST attaches its GL
  * lines + flips it to POSTED via `engineGlArm({ existingSpineId })`.
  *
- * Reference is the internal GL_POSTING series for now (Phase 5 5D re-keys the
- * spine to the user-facing SV-/PV-/PMT- number and retires the GL- series).
+ * The spine carries the user-facing Voucher No (`voucherNo`, e.g. SV-/PV-/PMT-);
+ * its `id` IS the Universal Voucher No (Phase 5 5D-7). The old internal GL_POSTING
+ * series was retired (5D-14).
  */
 export async function engineCreateSpine(
     tx: Prisma.TransactionClient,

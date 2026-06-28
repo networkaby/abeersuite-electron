@@ -29,10 +29,8 @@ export async function seedVoucherSeries(prisma: PrismaClient) {
     );
     // User-entered Journal Vouchers — counted from spine rows of type=JOURNAL.
     const userJournalCount = await prisma.universalVoucher.count({ where: { type: "JOURNAL" } });
-    // GL postings — engine output behind every primary voucher. Continues from
-    // existing JournalEntry count so new GL-… references don't collide with
-    // legacy JE-… references in the same table.
-    const glPostingCount = await prisma.universalVoucher.count();
+    // Phase 5 5D-14: the GL_POSTING series is retired — the engine no longer mints a
+    // separate GL-… reference (the spine `id` IS the Universal Voucher No since 5D-7).
     // Inventory voucher counts — needed for new-install continuity so the next
     // SV / PV / EV reference picks up where the legacy invNextRef left off.
     const saleCount     = await prisma.universalVoucher.count({ where: { type: "SALE" } });
@@ -60,10 +58,7 @@ export async function seedVoucherSeries(prisma: PrismaClient) {
         })),
         // User Journal Voucher (primary voucher) — prefix JV.
         { kind: "JOURNAL",     label: "Journal Voucher", typeValue: "JV", nextSeq: userJournalCount },
-        // GL posting engine output — internal, kept for audit drill-down only.
-        // Reference prefix GL deliberately differs from the user-facing JV so the
-        // two never collide in reports or in the Day Book.
-        { kind: "GL_POSTING",  label: "GL Posting",      typeValue: "GL", nextSeq: glPostingCount },
+        // Phase 5 5D-14: GL_POSTING series removed — nothing mints a GL- reference.
         // Legacy "INVOICE" series (typeValue INV) was retired with the
         // Invoice → InvVoucher consolidation on 2026-05-24. SALE / POS
         // below cover the same surface with their own SV / POS prefixes.
@@ -132,4 +127,8 @@ export async function seedVoucherSeries(prisma: PrismaClient) {
         where: { kind: "PAYMENT", typeValue: "PV" },
         data:  { typeValue: "PMT" },
     });
+
+    // Phase 5 5D-14: retire the orphaned GL_POSTING series — the engine stopped
+    // minting GL- references (the spine `id` IS the Universal Voucher No since 5D-7).
+    await prisma.voucherSeries.deleteMany({ where: { kind: "GL_POSTING" } });
 }
