@@ -111,13 +111,16 @@ export async function restoreFromAudit(
 
     const newJeId = journalEntry ? await recreateJournalEntry(tx, journalEntry) : null;
     // G4b: tender/charge input is `settlementJson` (a scalar) — restored via ...scalars.
-    const scalars = scalarsOf(snap, ["lines", "charges", "tenders", "stockEntries", "createdBy", "journalEntry"]);
+    // Strip columns that no longer exist on VoucherDetail (5D-1 journalEntryId,
+    // 5D-17 shopOrderId/shopOrder) so a legacy snapshot doesn't write a dropped column.
+    const scalars = scalarsOf(snap, ["lines", "charges", "tenders", "stockEntries", "createdBy", "journalEntry", "journalEntryId", "shopOrderId", "shopOrder"]);
     const voucher = await tx.voucherDetail.create({
         data: {
             ...scalars,
-            journalEntryId: newJeId,
+            // Link the restored detail to the recreated spine (the JE id IS the spine id since G5).
+            universalVoucherId: newJeId,
             // Sever volatile soft-links — targets may be gone; truth path self-corrects.
-            shopOrderId: null, ticketId: null, dealId: null, refVoucherId: null,
+            ticketId: null, dealId: null, refVoucherId: null,
             lines: { create: lines.map((l) => scalarsOf(l, ["voucherId", "product"])) },
         } as unknown as Prisma.VoucherDetailUncheckedCreateInput,
     });

@@ -463,11 +463,10 @@ model VoucherDetail {
   destinationBranchId String?
   destinationBranch   Branch?                @relation("InvVoucherDestBranch", fields: [destinationBranchId], references: [id])
 
-  /// Back-link to an ecommerce order this voucher was raised against.
-  /// Unique because one shop order produces at most one sale voucher.
-  /// Replaces Invoice.shopOrderId during the Invoice→InvVoucher consolidation.
-  shopOrderId Int?       @unique
-  shopOrder   ShopOrder? @relation("OrderInvVoucher", fields: [shopOrderId], references: [id], onDelete: SetNull)
+  /// Phase 5 5D-17: the ecommerce order↔voucher FK (`shopOrderId`/`shopOrder`) is
+  /// DISCONNECTED — the ecommerce module will rebuild the link (via the SHOP_ORDER
+  /// VoucherLink, already dual-written). A shop order is a customer-portal-created
+  /// POS-style order; its voucher wiring belongs to the ecommerce rebuild.
 
   /// Back-link to a repair ticket this voucher was raised against.
   /// Soft FK — one ticket can have multiple vouchers (estimate + final, etc.).

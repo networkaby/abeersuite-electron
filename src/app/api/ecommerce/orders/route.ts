@@ -86,16 +86,14 @@ export async function GET(req: Request) {
                     },
                 },
                 orderStatus: { select: { id: true, label: true, color: true, isTerminal: true } },
-                invVoucher: { select: { id: true, universalVoucher: { select: { voucherNo: true, status: true, type: true } } } },   // 5D-6 ref + 5D-8 status + 5D-11 type
+                // 5D-17: order↔voucher link disconnected — rebuilt via SHOP_ORDER VoucherLink in the ecommerce module.
                 lines: { include: { product: { select: { id: true, name: true, imageUrl: true } } } },
             },
         });
 
-        // 5D-6/5D-8/5D-11: expose each inv voucher's number + status + type from its spine.
-        return NextResponse.json(orders.map((o) => ({
-            ...o,
-            invVoucher: o.invVoucher ? { ...o.invVoucher, reference: o.invVoucher.universalVoucher?.voucherNo ?? "", status: o.invVoucher.universalVoucher?.status ?? "DRAFT", type: o.invVoucher.universalVoucher?.type } : null,
-        })));
+        // 5D-17: the linked-voucher (invVoucher) field is disconnected — the
+        // ecommerce module will resurface it via the SHOP_ORDER VoucherLink.
+        return NextResponse.json(orders);
     } catch (e) {
         return handleApiError(e, "Failed to list orders");
     }

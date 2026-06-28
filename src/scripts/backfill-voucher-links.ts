@@ -23,13 +23,13 @@ async function main() {
         where: {
             universalVoucherId: { not: null },
             OR: [
-                { ticketId: { not: null } }, { dealId: { not: null } }, { shopOrderId: { not: null } },
+                { ticketId: { not: null } }, { dealId: { not: null } },
                 { orderPipelineId: { not: null } }, { orderStatusId: { not: null } },
             ],
         },
         select: {
             universalVoucherId: true,
-            ticketId: true, dealId: true, shopOrderId: true, orderPipelineId: true, orderStatusId: true,
+            ticketId: true, dealId: true, orderPipelineId: true, orderStatusId: true,
         },
     });
 
@@ -39,7 +39,7 @@ async function main() {
         const links: [VoucherLinkKind, string | null][] = [
             ["TICKET",         v.ticketId        != null ? String(v.ticketId)    : null],
             ["DEAL",           v.dealId          != null ? String(v.dealId)      : null],
-            ["SHOP_ORDER",     v.shopOrderId     != null ? String(v.shopOrderId) : null],
+            // 5D-17: SHOP_ORDER link disconnected — its FK was dropped (ecommerce rebuild).
             ["ORDER_PIPELINE", v.orderPipelineId],
             ["ORDER_STATUS",   v.orderStatusId],
         ];

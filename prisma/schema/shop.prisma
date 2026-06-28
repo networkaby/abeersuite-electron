@@ -70,7 +70,8 @@ model ShopOrder {
   person      Person?         @relation(fields: [personId], references: [id])
   pipeline    Pipeline?       @relation(fields: [pipelineId], references: [id])
   orderStatus TicketStatus?   @relation(fields: [statusId], references: [id])
-  invVoucher  VoucherDetail?     @relation("OrderInvVoucher")
+  // Phase 5 5D-17: the order↔voucher back-relation is disconnected — rebuilt via
+  // the SHOP_ORDER VoucherLink in the ecommerce module.
   lines       ShopOrderLine[]
   tickets     Ticket[]
 

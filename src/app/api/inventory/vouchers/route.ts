@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
     const branchParam = searchParams.get("branchId");
     const accountIdParam = searchParams.get("accountId");
     const ticketIdParam = searchParams.get("ticketId");
-    const shopOrderIdParam = searchParams.get("shopOrderId");
+    // 5D-17: shopOrderId filter removed — the order↔voucher FK is disconnected (ecommerce rebuild).
 
     // Normalise the type filter — accept either ?type=SALE or ?types=SALE,POS.
     const ALLOWED_TYPES = new Set<InvVoucherType>([
@@ -90,7 +90,6 @@ export async function GET(req: NextRequest) {
         where: {
             universalVoucher: spineFilter,
             ...(ticketIdParam    ? { ticketId:    Number(ticketIdParam) }    : {}),
-            ...(shopOrderIdParam ? { shopOrderId: Number(shopOrderIdParam) } : {}),
         },
         orderBy: [{ universalVoucher: { date: "desc" } }, { id: "desc" }],   // 5D-10: date on spine
         include: {
