@@ -494,18 +494,12 @@ model InvVoucher {
   orderStatusId   String?
   orderStatus     TicketStatus? @relation("OrderVoucherStatus", fields: [orderStatusId], references: [id])
 
-  // ── Lifecycle metadata (Cancel / Delete / Hard Delete) ──────────────────
-  cancelledAt   DateTime?
-  cancelledById Int?
-  cancelReason  String?
+  // ── Lifecycle (Phase 5 5D-3) ────────────────────────────────────────────
+  // `status` (above) + `deletedAt` stay as denormalized filter flags for list
+  // readers; the FULL lifecycle metadata (who/when/why cancelled or deleted)
+  // lives on the spine (UniversalVoucher.cancelledAt/By/Reason + deletedById/
+  // deleteReason). Phase 5 5D-2: createdBy also lives on the spine.
   deletedAt     DateTime?
-  deletedById   Int?
-  deleteReason  String?
-
-  // Phase 5 5D-2: `createdById`/`createdBy` dropped — the creator lives on the
-  // spine (UniversalVoucher.createdById). Resolve the creator's name via the spine.
-  cancelledBy               User?                      @relation("InvVoucherCancelledBy", fields: [cancelledById], references: [id])
-  deletedBy                 User?                      @relation("InvVoucherDeletedBy", fields: [deletedById], references: [id])
   // Phase 5 5C: goods lines (VoucherInventoryLine) + stock rows (InvStockLedger)
   // hang off the SPINE now, not InvVoucher — reach them via universalVoucher.
   // Phase 4 G4b: tender + charge INPUT (re-rendered for edit, never aggregated —

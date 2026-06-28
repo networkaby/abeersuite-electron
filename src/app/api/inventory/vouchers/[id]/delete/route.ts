@@ -6,7 +6,7 @@ import { toNumber, balanceDelta } from "@/modules/accountancy/lib/balance";
 import { setSpineLifecycle } from "@/modules/accountancy/lib/transactionEngine";
 import { recordStockMovement, reverseStockMovement } from "@/modules/inventory/lib/stockMovement";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
-import { ensureDeletable, deleteFields, isPosted, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
+import { ensureDeletable, isPosted, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
 import * as Sentry from "@sentry/nextjs";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
@@ -137,9 +137,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 });
             }
 
+            // 5D-3: only the deletedAt flag stays on the detail; full metadata
+            // (deletedById/deleteReason) is on the spine (set above).
             await tx.invVoucher.update({
                 where: { id: Number(id) },
-                data: deleteFields(user!.id, data.reason),
+                data: { deletedAt: new Date() },
             });
         // Reverse stock + GL over the Supabase pooler can exceed the default
         // 5s interactive-tx ceiling (P2028) — match the 30s headroom used by

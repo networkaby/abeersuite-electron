@@ -37,9 +37,8 @@ model User {
   reports                          User[]                     @relation("UserHierarchy")
   userRole                         Role?                      @relation(fields: [role], references: [id])
   voucherAllocations               VoucherAllocation[]        @relation("VoucherAllocationCreatedBy")
-  // Phase 5 5D-2: InvVoucher.createdBy dropped — creator lives on the spine.
-  invVouchersCancelled             InvVoucher[]               @relation("InvVoucherCancelledBy")
-  invVouchersDeleted               InvVoucher[]               @relation("InvVoucherDeletedBy")
+  // Phase 5 5D-2/5D-3: InvVoucher createdBy + cancelledBy/deletedBy dropped —
+  // creator + lifecycle metadata live on the spine (UniversalVoucher).
   auditLogs                        AuditLog[]                 @relation("AuditLogActor")
   auditLogsRestored                AuditLog[]                 @relation("AuditLogRestoredBy")
   ownedChatRooms                   ChatRoom[]                 @relation("OwnedChatRooms")

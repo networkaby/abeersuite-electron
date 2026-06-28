@@ -5,7 +5,7 @@ import { toNumber, balanceDelta } from "@/modules/accountancy/lib/balance";
 import { setSpineLifecycle } from "@/modules/accountancy/lib/transactionEngine";
 import { recordStockMovement, reverseStockMovement } from "@/modules/inventory/lib/stockMovement";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
-import { ensureCancelable, cancelFields, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
+import { ensureCancelable, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
 import * as Sentry from "@sentry/nextjs";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -140,9 +140,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             }
 
             // ── 3. Mark voucher as CANCELLED ──────────────────────────────────
+            // 5D-3: only the status flag stays on the detail; full cancel metadata
+            // (cancelledAt/By/Reason) is on the spine (set in step 2).
             await tx.invVoucher.update({
                 where: { id: voucher.id },
-                data:  cancelFields(userId, reason.trim()),
+                data:  { status: "CANCELLED" },
             });
         // Reverse stock (per-line) + GL reversal (per-JE-line account.update)
         // is a long serial round-trip chain; over the Supabase pooler it

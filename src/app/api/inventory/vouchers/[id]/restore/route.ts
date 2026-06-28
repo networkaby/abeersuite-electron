@@ -5,7 +5,7 @@ import { toNumber, balanceDelta } from "@/modules/accountancy/lib/balance";
 import { setSpineLifecycle } from "@/modules/accountancy/lib/transactionEngine";
 import { recordStockMovement } from "@/modules/inventory/lib/stockMovement";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
-import { ensureRestorable, restoreFields, isPosted, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
+import { ensureRestorable, isPosted, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
 import * as Sentry from "@sentry/nextjs";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -77,9 +77,11 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                 await setSpineLifecycle(tx, voucher.universalVoucherId, { deletedAt: null, deletedById: null, deleteReason: null });
             }
 
+            // 5D-3: clear only the detail's deletedAt flag; full metadata cleared
+            // on the spine above.
             await tx.invVoucher.update({
                 where: { id: Number(id) },
-                data: restoreFields(),
+                data: { deletedAt: null },
             });
             void user;
         // Re-post stock + GL over the Supabase pooler can exceed the default
