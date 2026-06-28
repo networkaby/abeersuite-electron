@@ -67,7 +67,7 @@ async function seedCostPoolDemo(): Promise<void> {
     if (!spine) {
         spine = await prisma.universalVoucher.create({
             data: {
-                type: "PAYMENT", reference: PAYMENT_REF, friendlyRef: VOUCHER_REF, date: today,
+                type: "PAYMENT", reference: PAYMENT_REF, voucherNo: VOUCHER_REF, date: today,
                 description: "Courier payment to DTDC (dummy)", narration: "Courier payment to DTDC (dummy)",
                 status: "POSTED", postedAt: today, createdById: admin.id,
                 lines: {
@@ -88,7 +88,7 @@ async function seedCostPoolDemo(): Promise<void> {
     }
 
     // 4. Phase 5 5E: the spine IS the PAYMENT voucher (Voucher table dropped). The
-    //    user-facing number lives on the spine's `friendlyRef` (= VOUCHER_REF), set
+    //    user-facing number lives on the spine's `voucherNo` (= VOUCHER_REF), set
     //    in step 3 — no separate Voucher row to create.
 
     // 5. Draws against the ₹5,000 entry: ₹2,000 onto a product, ₹3,000 dismissed.

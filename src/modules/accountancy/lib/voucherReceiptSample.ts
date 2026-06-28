@@ -58,7 +58,7 @@ const partyAccountSelect = {
 async function buildInvSample(id: number): Promise<VoucherReceiptData> {
     const vRow = await prisma.invVoucher.findUnique({
         where: { id },
-        include: { universalVoucher: { select: { partyAccountId: true, description: true, friendlyRef: true } } },   // 5D-4 party + 5D-5 desc + 5D-6 ref
+        include: { universalVoucher: { select: { partyAccountId: true, description: true, voucherNo: true } } },   // 5D-4 party + 5D-5 desc + 5D-6 ref
     });
     if (!vRow) return notFoundData();
     // Phase 5 5C: goods lines hang off the spine.
@@ -112,7 +112,7 @@ async function buildInvSample(id: number): Promise<VoucherReceiptData> {
     }
 
     const sample: ThermalReceiptSample = {
-        reference:  v.universalVoucher?.friendlyRef ?? "",
+        reference:  v.universalVoucher?.voucherNo ?? "",
         date:       isoDate(v.date),
         partyName:  party.name ?? readPartyName(v.partyJson) ?? "Walk-in",
         partyPhone: party.phone,
@@ -125,7 +125,7 @@ async function buildInvSample(id: number): Promise<VoucherReceiptData> {
     };
 
     const kind = isVoucherTemplateKind(v.type) ? v.type : "SALE";
-    return { kind, sample, docTitle: `${v.type} ${v.universalVoucher?.friendlyRef ?? ""}` };
+    return { kind, sample, docTitle: `${v.type} ${v.universalVoucher?.voucherNo ?? ""}` };
 }
 
 // ── GL voucher (PAYMENT / RECEIPT / CONTRA / CREDIT_NOTE / DEBIT_NOTE / JOURNAL) ──

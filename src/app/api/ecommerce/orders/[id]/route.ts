@@ -55,7 +55,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
                     },
                 },
                 invVoucher: {
-                    select: { id: true, type: true, status: true, totalAmount: true, universalVoucher: { select: { friendlyRef: true } } },   // 5D-6
+                    select: { id: true, type: true, status: true, totalAmount: true, universalVoucher: { select: { voucherNo: true } } },   // 5D-6
                 },
             },
         });
@@ -63,7 +63,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
         // 5D-6: expose the inv voucher's user-facing number from its spine.
         return NextResponse.json({
             ...order,
-            invVoucher: order.invVoucher ? { ...order.invVoucher, reference: order.invVoucher.universalVoucher?.friendlyRef ?? "" } : null,
+            invVoucher: order.invVoucher ? { ...order.invVoucher, reference: order.invVoucher.universalVoucher?.voucherNo ?? "" } : null,
         });
     } catch (e) {
         return handleApiError(e, "Failed to load order");

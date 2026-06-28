@@ -132,7 +132,7 @@ export async function POST(req: Request) {
                 type:           "SALE_RETURN",
                 date:           today,
                 description:    voucherDescription,
-                friendlyRef:    vRef,
+                voucherNo:    vRef,
                 partyAccountId: customerAcct.id,
                 userId:         user!.id,
             });

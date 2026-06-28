@@ -108,7 +108,7 @@ export async function engineGlArm(
         // Phase 4 dual-write metadata (Stage C). Optional so the engine compiles
         // for any caller; threaded onto the universal-voucher spine mirror.
         type?:           string;
-        friendlyRef?:    string | null;
+        voucherNo?:    string | null;
         narration?:      string | null;
         partyAccountId?: number | null;
         // Phase 5 5.0 — when set, ATTACH the GL lines to this pre-created DRAFT
@@ -184,7 +184,7 @@ export async function engineGlArm(
                 sourceCreatedAt: postedAt,
                 description,
                 ...(args.type        != null ? { type:           args.type }        : {}),
-                ...(args.friendlyRef != null ? { friendlyRef:    args.friendlyRef } : {}),
+                ...(args.voucherNo != null ? { voucherNo:    args.voucherNo } : {}),
                 ...(args.narration   != null ? { narration:      args.narration }   : {}),
                 ...(args.partyAccountId != null ? { partyAccountId: args.partyAccountId } : {}),
             },
@@ -199,7 +199,7 @@ export async function engineGlArm(
         data: {
             type:                 args.type ?? "JOURNAL",
             reference:            jeRef,
-            friendlyRef:          args.friendlyRef ?? null,
+            voucherNo:          args.voucherNo ?? null,
             date,
             description,
             narration:            args.narration ?? null,
@@ -238,7 +238,7 @@ export async function engineCreateSpine(
         date:            Date;
         description:     string;
         narration?:      string | null;
-        friendlyRef?:    string | null;
+        voucherNo?:    string | null;
         partyAccountId?: number | null;
         userId:          number;
     },
@@ -249,7 +249,7 @@ export async function engineCreateSpine(
         data: {
             type:           args.type,
             reference:      ref,
-            friendlyRef:    args.friendlyRef ?? null,
+            voucherNo:    args.voucherNo ?? null,
             date:           args.date,
             description:    args.description,
             narration:      args.narration ?? null,
@@ -327,7 +327,7 @@ export async function enginePost(
             branchId,
             postedAt,
             type:        spec.type,
-            friendlyRef: spec.reference ?? null,
+            voucherNo: spec.reference ?? null,
             narration:   spec.narration ?? null,
             existingSpineId: opts.existingSpineId ?? null,   // Phase 5 5.0: attach to draft spine
         });
@@ -432,7 +432,7 @@ export async function engineCreateVoucher(
         date:           spec.date,
         description:    `${spec.type} ${reference}: ${spec.narration ?? ""}`.trim(),
         narration:      spec.narration ?? null,
-        friendlyRef:    reference,
+        voucherNo:    reference,
         partyAccountId: spec.partyAccountId ?? null,
         userId:         spec.userId,
     });

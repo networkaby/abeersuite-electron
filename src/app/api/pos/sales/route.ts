@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
             status: "POSTED" as const,
             ...(q ? {
                 OR: [
-                    { universalVoucher: { friendlyRef:  { contains: q, mode: "insensitive" as const } } },   // 5D-6
+                    { universalVoucher: { voucherNo:  { contains: q, mode: "insensitive" as const } } },   // 5D-6
                     { universalVoucher: { description:   { contains: q, mode: "insensitive" as const } } },   // 5D-5
                 ],
             } : {}),
@@ -58,7 +58,7 @@ export async function GET(req: NextRequest) {
                     date:           true,
                     totalAmount:    true,
                     branch:         { select: { id: true, name: true } },
-                    universalVoucher: { select: { createdById: true, partyAccountId: true, description: true, friendlyRef: true } },   // 5D-2/4/5/6
+                    universalVoucher: { select: { createdById: true, partyAccountId: true, description: true, voucherNo: true } },   // 5D-2/4/5/6
                     universalVoucherId: true,
                     settlementJson: true,
                 },
@@ -95,7 +95,7 @@ export async function GET(req: NextRequest) {
                 const paymentMode = methods.length > 1 ? "MIXED" : (methods[0] ?? null);
                 return {
                     id:             v.id,
-                    reference:      v.universalVoucher?.friendlyRef ?? "",
+                    reference:      v.universalVoucher?.voucherNo ?? "",
                     date:           v.date,
                     description:    v.universalVoucher?.description ?? "",
                     paymentMode,

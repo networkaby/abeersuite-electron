@@ -47,12 +47,12 @@ export async function GET(req: Request) {
                 sourceVoucherGlLine: {
                     select: {
                         accountId: true,
-                        universalVoucher: { select: { friendlyRef: true, type: true, status: true, deletedAt: true } },
+                        universalVoucher: { select: { voucherNo: true, type: true, status: true, deletedAt: true } },
                     },
                 },
                 // Phase 5 5B: the source document is the spine (not InvVoucher).
                 sourceUniversalVoucherId: true,
-                sourceUniversalVoucher: { select: { reference: true, friendlyRef: true, type: true, partyAccountId: true } },
+                sourceUniversalVoucher: { select: { reference: true, voucherNo: true, type: true, partyAccountId: true } },
                 createdBy: { select: { name: true } },
             },
         });
@@ -83,10 +83,10 @@ export async function GET(req: Request) {
             productSku: r.product?.sku ?? null,
             sourceGlLineId: r.sourceVoucherGlLineId,
             ledgerName: r.sourceVoucherGlLine?.accountId != null ? (acctNameById.get(r.sourceVoucherGlLine.accountId) ?? null) : null,
-            reference: r.sourceVoucherGlLine?.universalVoucher?.friendlyRef ?? null,
+            reference: r.sourceVoucherGlLine?.universalVoucher?.voucherNo ?? null,
             referenceType: r.sourceVoucherGlLine?.universalVoucher?.type ?? null,
             invVoucherId: r.sourceUniversalVoucherId,
-            invVoucherRef: r.sourceUniversalVoucher?.friendlyRef ?? r.sourceUniversalVoucher?.reference ?? null,
+            invVoucherRef: r.sourceUniversalVoucher?.voucherNo ?? r.sourceUniversalVoucher?.reference ?? null,
             invVoucherType: r.sourceUniversalVoucher?.type ?? null,
             invVoucherParty: r.sourceUniversalVoucher?.partyAccountId != null ? (acctNameById.get(r.sourceUniversalVoucher.partyAccountId) ?? null) : null,
             createdByName: r.createdBy?.name ?? null,

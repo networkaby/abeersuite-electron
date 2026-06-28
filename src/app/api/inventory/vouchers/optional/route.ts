@@ -62,7 +62,7 @@ export async function GET(req: Request) {
             where: { name: { contains: search, mode: "insensitive" } }, select: { id: true },
         })).map((a) => a.id);
         where.OR = [
-            { universalVoucher: { friendlyRef:  { contains: search, mode: "insensitive" } } },   // 5D-6: ref on spine
+            { universalVoucher: { voucherNo:  { contains: search, mode: "insensitive" } } },   // 5D-6: ref on spine
             { universalVoucher: { description: { contains: search, mode: "insensitive" } } },   // 5D-5: description on spine
             ...(partyAcctIds.length ? [{ universalVoucher: { partyAccountId: { in: partyAcctIds } } }] : []),
             { partyJson: { path: ["name"], string_contains: search } },
@@ -77,8 +77,8 @@ export async function GET(req: Request) {
             skip: (page - 1) * limit,
             take: limit,
             include: {
-                refVoucher: { select: { id: true, type: true, universalVoucher: { select: { friendlyRef: true } } } },
-                universalVoucher: { select: { description: true, friendlyRef: true } },   // 5D-5 desc + 5D-6 ref
+                refVoucher: { select: { id: true, type: true, universalVoucher: { select: { voucherNo: true } } } },
+                universalVoucher: { select: { description: true, voucherNo: true } },   // 5D-5 desc + 5D-6 ref
             },
         }),
     ]);
@@ -100,7 +100,7 @@ export async function GET(req: Request) {
         id:          v.id,
         date:        v.date,
         type:        v.type,
-        reference:   v.universalVoucher?.friendlyRef ?? "",
+        reference:   v.universalVoucher?.voucherNo ?? "",
         description: v.universalVoucher?.description ?? "",
         partyName:   readPartyName(v.partyJson),
         partyType:   v.partyType,
@@ -111,7 +111,7 @@ export async function GET(req: Request) {
         stockDir:    STOCK_IN_TYPES.has(v.type) ? "IN"
                    : STOCK_OUT_TYPES.has(v.type) ? "OUT"
                    : "NONE",
-        refVoucher: v.refVoucher ? { id: v.refVoucher.id, type: v.refVoucher.type, reference: v.refVoucher.universalVoucher?.friendlyRef ?? "" } : null,
+        refVoucher: v.refVoucher ? { id: v.refVoucher.id, type: v.refVoucher.type, reference: v.refVoucher.universalVoucher?.voucherNo ?? "" } : null,
         lineCount:  linesFor(v).length,
         lines: linesFor(v).map((l) => ({
             id:          l.id,

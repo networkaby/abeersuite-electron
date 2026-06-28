@@ -47,7 +47,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                 select: { id: true, gstStateCode: true },
             },
             // 5D-5 description + 5D-6 ref live on the spine — needed for saleToSpec / messages.
-            universalVoucher: { select: { description: true, friendlyRef: true } },
+            universalVoucher: { select: { description: true, voucherNo: true } },
         },
     });
     // Phase 5 5C: goods lines hang off the spine — load + attach as `voucher.lines`.
@@ -312,7 +312,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                 // bridge produced them (no branchId passed to the engine).
                 const spec = await saleToSpec(
                     tx,
-                    { ...voucher, reference: voucher.universalVoucher?.friendlyRef ?? "", description: voucher.universalVoucher?.description ?? voucher.type, tenders: settlement.tenders, charges: settlement.charges, sellerStateCode, buyerStateCode },
+                    { ...voucher, reference: voucher.universalVoucher?.voucherNo ?? "", description: voucher.universalVoucher?.description ?? voucher.type, tenders: settlement.tenders, charges: settlement.charges, sellerStateCode, buyerStateCode },
                     { branchId: voucher.branchId, lines: voucher.lines },
                 );
                 const out = await enginePost(tx, spec, userId, { existingSpineId: voucher.universalVoucherId });
@@ -324,7 +324,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                 // have a null JE, so fail loud only for the GL-posting kinds.
                 if (isTradingVoucher && journalEntryId === null) {
                     throw new GlPostFailedError(
-                        `Cannot post ${voucher.type} ${voucher.universalVoucher?.friendlyRef ?? ""}: engine produced no journal entry.`,
+                        `Cannot post ${voucher.type} ${voucher.universalVoucher?.voucherNo ?? ""}: engine produced no journal entry.`,
                         [],
                     );
                 }
@@ -354,7 +354,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                     const out = await enginePost(tx, {
                         type:        "MANUFACTURING_JOURNAL",
                         date:        voucher.date,
-                        description: `Manufacturing Charges for ${voucher.universalVoucher?.friendlyRef ?? ""}`,
+                        description: `Manufacturing Charges for ${voucher.universalVoucher?.voucherNo ?? ""}`,
                         glLines: [
                             ...settlement.charges.map((e) => ({
                                 accountId:   e.accountId,
@@ -366,7 +366,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                                 accountId:   paymentTender.accountId,
                                 type:        "CREDIT" as const,
                                 amount:      totalCharges,
-                                description: `Charges paid for ${voucher.universalVoucher?.friendlyRef ?? ""}`,
+                                description: `Charges paid for ${voucher.universalVoucher?.voucherNo ?? ""}`,
                             },
                         ],
                         stockMoves: [],

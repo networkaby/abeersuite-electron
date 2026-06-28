@@ -47,14 +47,14 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                 type:           source.type,
                 date:           today,
                 description:    source.universalVoucher?.description ?? source.type,
-                friendlyRef:    reference,
+                voucherNo:    reference,
                 partyAccountId: source.universalVoucher?.partyAccountId ?? null,
                 userId:         user!.id,
             });
             const voucher = await tx.invVoucher.create({
                 data: {
                     type:             source.type,
-                    // 5D-6: reference (friendlyRef) lives on the spine.
+                    // 5D-6: reference (voucherNo) lives on the spine.
                     branchId:         source.branchId,
                     universalVoucherId: spineId,
                     date:             today,
@@ -78,7 +78,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                     // a duplicate of a SALE is not a SALE_RETURN.
                     // 5D-2: creator lives on the spine.
                 },
-                select: { id: true, type: true, universalVoucher: { select: { friendlyRef: true } } },   // 5D-6
+                select: { id: true, type: true, universalVoucher: { select: { voucherNo: true } } },   // 5D-6
             });
             // Phase 5 5C: goods lines hang off the new spine.
             await tx.voucherInventoryLine.createMany({
@@ -96,7 +96,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                     amount:      l.amount,
                 })),
             });
-            return { id: voucher.id, type: voucher.type, reference: voucher.universalVoucher?.friendlyRef ?? "" };
+            return { id: voucher.id, type: voucher.type, reference: voucher.universalVoucher?.voucherNo ?? "" };
         });
 
         return NextResponse.json(created);

@@ -68,7 +68,7 @@ export async function POST(req: Request) {
         const original = await prisma.invVoucher.findUnique({
             where: { id: data.originalInvoiceId },
             include: {
-                universalVoucher: { select: { partyAccountId: true, friendlyRef: true } },   // 5D-4 party + 5D-6 ref
+                universalVoucher: { select: { partyAccountId: true, voucherNo: true } },   // 5D-4 party + 5D-6 ref
                 branch:  { select: { id: true, gstStateCode: true } },
             },
         });
@@ -166,12 +166,12 @@ export async function POST(req: Request) {
             const vRef = await invNextRef(tx, "SALE_RETURN");
             const stockLines = returnLines.filter((rl) => rl.voucherLine.productId !== null);
             // Phase 5 5.0/5C: spine FIRST; enginePost attaches GL via existingSpineId.
-            const voucherDescription = `Sale return of ${original.universalVoucher?.friendlyRef ?? ""}${data.notes ? ` — ${data.notes}` : ""}`;
+            const voucherDescription = `Sale return of ${original.universalVoucher?.voucherNo ?? ""}${data.notes ? ` — ${data.notes}` : ""}`;
             const spineId = await engineCreateSpine(tx, {
                 type:           "SALE_RETURN",
                 date:           today,
                 description:    voucherDescription,
-                friendlyRef:    vRef,
+                voucherNo:    vRef,
                 partyAccountId: partyAccountId,
                 userId:         user!.id,
             });
@@ -186,7 +186,7 @@ export async function POST(req: Request) {
                     partyJson:      buildPartyJson({ name: account?.name ?? readPartyName(original.partyJson) }) ?? Prisma.DbNull,
                     partyType,
                     partyId,
-                    refNumber:      original.universalVoucher?.friendlyRef ?? null,
+                    refNumber:      original.universalVoucher?.voucherNo ?? null,
                     refVoucherId:   original.id,
                     deliveryMode:   "COUNTER",
                     placeOfSupply:  sellerStateCode,

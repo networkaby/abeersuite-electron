@@ -42,7 +42,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ sou
             where: { id },
             select: {
                 id: true, type: true, branchId: true, orderStatusId: true,
-                universalVoucher: { select: { partyAccountId: true, friendlyRef: true } },   // 5D-4 party + 5D-6 ref
+                universalVoucher: { select: { partyAccountId: true, voucherNo: true } },   // 5D-4 party + 5D-6 ref
                 totalAmount: true,
                 partyJson: true, partyType: true, partyId: true,
                 discountAmt: true, discountPct: true, shippingAmt: true, roundOff: true,
@@ -99,7 +99,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ sou
             body: JSON.stringify({
                 type: "SALE",
                 date: today,
-                description: `Sale — fulfil ${order.universalVoucher?.friendlyRef ?? ""}`,
+                description: `Sale — fulfil ${order.universalVoucher?.voucherNo ?? ""}`,
                 branchId: order.branchId,
                 partyName: readPartyName(order.partyJson),
                 partyType: order.partyType,

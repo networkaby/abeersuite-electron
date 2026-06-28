@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
         const lines = await prisma.voucherGlLine.findMany({
             where:   { accountId: tid, universalVoucher: { ...ledgerStatusFilterUv(), date: { gte: from, lte: to } } },
             orderBy: [{ universalVoucher: { date: "asc" } }, { id: "asc" }],
-            include: { universalVoucher: { select: { id: true, date: true, reference: true, friendlyRef: true, description: true, type: true } } },
+            include: { universalVoucher: { select: { id: true, date: true, reference: true, voucherNo: true, description: true, type: true } } },
         });
 
         // Resolve reprint targets via the direct spine link (G5): InvVoucher (POS
@@ -78,7 +78,7 @@ export async function GET(req: NextRequest) {
                 id:          l.id,
                 date:        je.date,
                 // Prefer the user-facing voucher ref (POS-/RV-/PMT-/CV-) over the GL ref.
-                reference:   je.friendlyRef ?? je.reference,
+                reference:   je.voucherNo ?? je.reference,
                 particulars: je.description ?? l.description ?? "",
                 debit,
                 credit,

@@ -94,7 +94,7 @@ async function getPoolLedgers(groupId: number): Promise<{ id: number; name: stri
  *
  * Reads the universal-voucher spine (`VoucherGlLine`) — each POSTED DEBIT to a
  * pool ledger is one pool entry. The originating document number / type come
- * straight off the spine header (`friendlyRef` / `type`); the internal GL
+ * straight off the spine header (`voucherNo` / `type`); the internal GL
  * reference is never surfaced.
  */
 export async function getPoolSummary(asOf?: Date): Promise<PoolSummary> {
@@ -127,7 +127,7 @@ export async function getPoolSummary(asOf?: Date): Promise<PoolSummary> {
             id: true,
             amount: true,
             accountId: true,
-            universalVoucher: { select: { date: true, friendlyRef: true, type: true } },
+            universalVoucher: { select: { date: true, voucherNo: true, type: true } },
         },
         orderBy: { id: "desc" },
     });
@@ -165,7 +165,7 @@ export async function getPoolSummary(asOf?: Date): Promise<PoolSummary> {
                 date: l.universalVoucher.date.toISOString(),
                 ledgerId: l.accountId,
                 ledgerName: ledgerNameById.get(l.accountId) ?? "—",
-                reference: l.universalVoucher.friendlyRef ?? "—",
+                reference: l.universalVoucher.voucherNo ?? "—",
                 referenceType: l.universalVoucher.type ?? null,
                 amountPaise, allocatedPaise, dismissedPaise, remainingPaise,
             });

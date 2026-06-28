@@ -68,11 +68,15 @@ model UniversalVoucher {
   // Spans EVERY kind — VoucherType (CONTRA/PAYMENT/…), InvVoucherType (SALE/…),
   // and JOURNAL. String (not enum) so the spine isn't coupled to either enum.
   type                 String
-  // Canonical id (currently reuses the freshly-minted GL_POSTING ref → unique).
+  // Universal Voucher No (UVNo) — the ONE global sequence across every voucher
+  // (vocabulary.md). Currently reuses the GL_POSTING ref; the prefix moves GL-→UV-
+  // in a follow-up. `reference` (the field name) stays for now; rename to `uvNo`
+  // is the surgical follow-up (the word `reference` is reserved for a future
+  // cross-reference column, NOT this number).
   reference            String          @unique
-  // Human/legal ref carried from the source voucher (CV-2026-0001, SV-…). The
-  // future GST-invoice "friendlyRef"; not unique (drafts/series may collide).
-  friendlyRef          String?
+  // Voucher No — the per-kind user-facing document number (SV-/PMT-/POS-/CV-…)
+  // carried from the source voucher. Not unique (drafts/series may collide).
+  voucherNo            String?
   date                 DateTime        @db.Date
   description          String
   narration            String?

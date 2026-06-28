@@ -41,7 +41,7 @@ export async function listOrders(opts?: { statusId?: string }): Promise<Normaliz
             },
             select: {
                 id: true, type: true, partyJson: true,
-                universalVoucher: { select: { partyAccountId: true, friendlyRef: true } },   // 5D-4 party + 5D-6 ref
+                universalVoucher: { select: { partyAccountId: true, voucherNo: true } },   // 5D-4 party + 5D-6 ref
                 totalAmount: true, orderStatusId: true, branchId: true, dealId: true, createdAt: true,
             },
             orderBy: { createdAt: "desc" },
@@ -76,7 +76,7 @@ export async function listOrders(opts?: { statusId?: string }): Promise<Normaliz
         return {
             source: "inv",
             id: v.id,
-            ref: v.universalVoucher?.friendlyRef ?? "",
+            ref: v.universalVoucher?.voucherNo ?? "",
             kind: v.type as "POS_ORDER" | "SALES_ORDER",
             customerName: readPartyName(v.partyJson),
             total,

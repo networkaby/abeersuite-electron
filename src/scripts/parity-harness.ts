@@ -118,7 +118,7 @@ async function runE2E(): Promise<boolean> {
     const box: { cap: { jeLines: GlLine[]; spineOk: boolean; stock: { productId: number; inQty: number; outQty: number }[]; rolesOk: boolean } | null } = { cap: null };
     try {
         await prisma.$transaction(async (tx) => {
-            const spineId = await engineCreateSpine(tx, { type: "SALE", date: new Date(), description: "e2e parity sale", friendlyRef: `PARITY-E2E-${Date.now()}`, userId: user.id });
+            const spineId = await engineCreateSpine(tx, { type: "SALE", date: new Date(), description: "e2e parity sale", voucherNo: `PARITY-E2E-${Date.now()}`, userId: user.id });
             const v = await tx.invVoucher.create({
                 data: {
                     type: "SALE", branchId: branch.id,
@@ -343,7 +343,7 @@ async function runDraftSale(): Promise<boolean> {
     try {
         await prisma.$transaction(async (tx) => {
             // 1. DRAFT InvVoucher + draft spine at create (the route's create path).
-            const spineId = await engineCreateSpine(tx, { type: "SALE", date: new Date(), description: "parity draft-sale", friendlyRef: `PARITY-DRAFTSALE-${Date.now()}`, userId: user.id });
+            const spineId = await engineCreateSpine(tx, { type: "SALE", date: new Date(), description: "parity draft-sale", voucherNo: `PARITY-DRAFTSALE-${Date.now()}`, userId: user.id });
             const v = await tx.invVoucher.create({
                 data: {
                     type: "SALE", branchId: branch.id,
@@ -427,7 +427,7 @@ async function runStockRecompute(): Promise<boolean> {
     let ok = false;
     try {
         await prisma.$transaction(async (tx) => {
-            const spineId = await engineCreateSpine(tx, { type: "SALE", date: new Date(), description: "recompute check sale", friendlyRef: `PARITY-RECOMP-${Date.now()}`, userId: user.id });
+            const spineId = await engineCreateSpine(tx, { type: "SALE", date: new Date(), description: "recompute check sale", voucherNo: `PARITY-RECOMP-${Date.now()}`, userId: user.id });
             const v = await tx.invVoucher.create({
                 data: {
                     type: "SALE", branchId: branch.id,
@@ -504,7 +504,7 @@ async function runEditCycle(): Promise<boolean> {
     try {
         await prisma.$transaction(async (tx) => {
             // 1. Post a SALE qty 1.
-            const spineId = await engineCreateSpine(tx, { type: "SALE", date: new Date(), description: "edit-cycle sale", friendlyRef: `PARITY-EDIT-${Date.now()}`, userId: user.id });
+            const spineId = await engineCreateSpine(tx, { type: "SALE", date: new Date(), description: "edit-cycle sale", voucherNo: `PARITY-EDIT-${Date.now()}`, userId: user.id });
             const v = await tx.invVoucher.create({
                 data: {
                     type: "SALE", branchId: branch.id,
@@ -579,7 +579,7 @@ async function runAllocationDualTarget(): Promise<boolean> {
     let ok = false;
     try {
         await prisma.$transaction(async (tx) => {
-            const spineId = await engineCreateSpine(tx, { type: "SALE", date: new Date(), description: "G1 alloc sale", friendlyRef: `PARITY-G1-${Date.now()}`, userId: user.id });
+            const spineId = await engineCreateSpine(tx, { type: "SALE", date: new Date(), description: "G1 alloc sale", voucherNo: `PARITY-G1-${Date.now()}`, userId: user.id });
             const v = await tx.invVoucher.create({
                 data: {
                     type: "SALE", branchId: branch.id,
@@ -638,7 +638,7 @@ async function runShiftCashMath(): Promise<boolean> {
     try {
         await prisma.$transaction(async (tx) => {
             const openedAt = new Date(Date.now() - 60_000);
-            const spineId = await engineCreateSpine(tx, { type: "POS", date: new Date(), description: "parity POS shift", friendlyRef: `PARITY-SHIFT-${Date.now()}`, userId: user.id });
+            const spineId = await engineCreateSpine(tx, { type: "POS", date: new Date(), description: "parity POS shift", voucherNo: `PARITY-SHIFT-${Date.now()}`, userId: user.id });
             const v = await tx.invVoucher.create({
                 data: {
                     type: "POS", branchId: branch.id,

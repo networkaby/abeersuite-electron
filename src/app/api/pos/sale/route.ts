@@ -549,7 +549,7 @@ export async function POST(req: Request) {
                 type:           "POS",
                 date:           new Date(body.issueDate),
                 description:    voucherDescription,
-                friendlyRef:    voucherRef,
+                voucherNo:    voucherRef,
                 partyAccountId: customerAccount.id,
                 userId:         user!.id,
             });

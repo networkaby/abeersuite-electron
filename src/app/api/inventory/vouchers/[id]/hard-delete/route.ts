@@ -32,7 +32,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         where: { id: Number(id) },
         // settlementJson (tender/charge input) is a scalar — captured in the snapshot
         // automatically. 5D-2: creator lives on the spine (not needed for the snapshot).
-        include: { universalVoucher: { select: { createdById: true, friendlyRef: true } } },   // 5D-6
+        include: { universalVoucher: { select: { createdById: true, voucherNo: true } } },   // 5D-6
     });
     // Phase 5 5C: goods lines + stock ledger hang off the spine — load + attach.
     const voucher = voucherRow ? {
@@ -113,7 +113,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                     entityType: "INV_VOUCHER",
                     subtype: voucher.type,
                     originalId: voucher.id,
-                    originalRef: voucher.universalVoucher?.friendlyRef ?? "",
+                    originalRef: voucher.universalVoucher?.voucherNo ?? "",
                     reason: data.reason,
                     snapshot: { ...voucher, journalEntry: origJe },
                     actorId: user!.id,

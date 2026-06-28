@@ -24,7 +24,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const { data, error } = await validateRequest(req, schema);
     if (error) return error;
 
-    const voucherRow = await prisma.invVoucher.findUnique({ where: { id: Number(id) }, include: { universalVoucher: { select: { friendlyRef: true } } } });   // 5D-6
+    const voucherRow = await prisma.invVoucher.findUnique({ where: { id: Number(id) }, include: { universalVoucher: { select: { voucherNo: true } } } });   // 5D-6
     if (!voucherRow) return NextResponse.json({ error: "Not found" }, { status: 404 });
     // Phase 5 5C: goods lines hang off the spine.
     const goodsLines = await prisma.voucherInventoryLine.findMany({
@@ -120,7 +120,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                         }
                         await setSpineLifecycle(tx, voucher.universalVoucherId, {
                             deletedAt: new Date(), deletedById: user!.id,
-                            deleteReason: `Voucher ${voucher.universalVoucher?.friendlyRef ?? ""} deleted: ${data.reason}`,
+                            deleteReason: `Voucher ${voucher.universalVoucher?.voucherNo ?? ""} deleted: ${data.reason}`,
                         });
                     }
                 }
@@ -133,7 +133,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             if (!isPosted(voucher) && voucher.universalVoucherId) {
                 await setSpineLifecycle(tx, voucher.universalVoucherId, {
                     deletedAt: new Date(), deletedById: user!.id,
-                    deleteReason: `Voucher ${voucher.universalVoucher?.friendlyRef ?? ""} deleted: ${data.reason}`,
+                    deleteReason: `Voucher ${voucher.universalVoucher?.voucherNo ?? ""} deleted: ${data.reason}`,
                 });
             }
 
