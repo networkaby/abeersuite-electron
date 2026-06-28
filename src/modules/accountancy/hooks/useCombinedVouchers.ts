@@ -8,6 +8,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import axios from "axios";
+import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 
 export type CombinedSource = "inv" | "gl" | "je";
 
@@ -79,7 +80,7 @@ type RawInv = {
     branch?: { id: string; name: string } | null;
 };
 type RawGl = {
-    id: number; type: string; reference: string; date: string;
+    id: number; type: string; voucherNo: string | null; date: string;
     narration: string | null; status: "DRAFT" | "POSTED" | "CANCELLED";
     partyAccount?: { id: number; name: string; personId: number | null; companyId: number | null } | null;
     totalAmount: number | string;
@@ -91,7 +92,7 @@ type RawGl = {
     branch?: { id: string; name: string } | null;
 };
 type RawJe = {
-    id: number | string; reference: string; date: string;
+    id: number | string; voucherNo: string | null; date: string;
     description: string | null; status: "DRAFT" | "POSTED" | "CANCELLED";
     totalDebit?: number | string; totalAmount?: number | string;
     deletedAt?: string | null; cancelledAt?: string | null;
@@ -131,7 +132,8 @@ export function useCombinedVouchers(options: UseCombinedVouchersOptions = {}) {
                     rawId:       v.id,
                     source:      "inv",
                     kind:        v.type,
-                    reference:   v.reference,
+                    // Display reader: per-kind Voucher No, else the UVNo label (UV-<id>).
+                    reference:   v.reference || formatUvNo(v.id),
                     date:        v.date,
                     branchId:    v.branch?.id   ?? null,
                     branchName:  v.branch?.name ?? null,
@@ -152,7 +154,9 @@ export function useCombinedVouchers(options: UseCombinedVouchersOptions = {}) {
                     rawId:       v.id,
                     source:      "gl",
                     kind:        v.type,
-                    reference:   v.reference,
+                    // GL spine has no `reference` column — show voucherNo (PMT-/RCT-…)
+                    // or fall back to the UVNo label so the cell is never blank.
+                    reference:   v.voucherNo ?? formatUvNo(v.id),
                     date:        v.date,
                     branchId:    v.branch?.id   ?? null,
                     branchName:  v.branch?.name ?? null,
@@ -175,7 +179,7 @@ export function useCombinedVouchers(options: UseCombinedVouchersOptions = {}) {
                     rawId:       Number(e.id),
                     source:      "je",
                     kind:        "JOURNAL",
-                    reference:   e.reference,
+                    reference:   e.voucherNo ?? formatUvNo(Number(e.id)),
                     date:        e.date,
                     party:       null,
                     partyAccountId: null,

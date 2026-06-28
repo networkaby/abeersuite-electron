@@ -95,8 +95,8 @@ export async function GET(req: NextRequest) {
         },
         orderBy: [{ universalVoucher: { date: "desc" } }, { id: "desc" }],   // 5D-10: date on spine
         include: {
-            // 5D-2 creator + 5D-6 ref + 5D-10 date + 5D-12 branch live on the spine.
-            universalVoucher: { select: { createdById: true, voucherNo: true, date: true, type: true, branch: { select: { id: true, name: true } } } },   // +5D-11 type +5D-12 branch
+            // 5D-2 creator + 5D-6 ref + 5D-8 lifecycle + 5D-10 date + 5D-12 branch live on the spine.
+            universalVoucher: { select: { createdById: true, voucherNo: true, date: true, type: true, status: true, deletedAt: true, cancelledAt: true, createdAt: true, branch: { select: { id: true, name: true } } } },   // +5D-11 type +5D-12 branch
             // refReturns = vouchers that reference THIS one via refVoucherId. For a
             // POS_ORDER / POS_ESTIMATE it means a sale was raised against it →
             // "converted" (not pending). (For SALE etc. it's the returns count.)
@@ -141,8 +141,16 @@ export async function GET(req: NextRequest) {
         // Derived party display fields from the frozen snapshot so list/register
         // clients keep reading `partyName` / `partyPhone` unchanged.
         const partyDisplay = { partyName: readPartyName(v.partyJson), partyPhone: readPartyPhone(v.partyJson), partyAddress: readPartyAddress(v.partyJson) };
+        // 5D-8: lifecycle (status/deletedAt/cancelledAt) + createdAt live on the spine
+        // now — surface them so register/Day-Book clients keep reading the old shape.
+        const spineLifecycle = {
+            status:      v.universalVoucher?.status,
+            deletedAt:   v.universalVoucher?.deletedAt ?? null,
+            cancelledAt: v.universalVoucher?.cancelledAt ?? null,
+            createdAt:   v.universalVoucher?.createdAt,
+        };
         if (v.partyId == null) {
-            return { ...v, type: v.universalVoucher?.type, branch: v.universalVoucher?.branch ?? null, date: v.universalVoucher?.date, reference: v.universalVoucher?.voucherNo ?? "", ...partyDisplay, createdBy: creatorName(v), partyAccountId: null, partyPersonId: null, partyCompanyId: null };
+            return { ...v, type: v.universalVoucher?.type, branch: v.universalVoucher?.branch ?? null, date: v.universalVoucher?.date, reference: v.universalVoucher?.voucherNo ?? "", ...spineLifecycle, ...partyDisplay, createdBy: creatorName(v), partyAccountId: null, partyPersonId: null, partyCompanyId: null };
         }
         // Same partyId may resolve as either a Person or a Company id depending
         // on which lookup matches. Person wins when both are set (shouldn't
@@ -157,6 +165,7 @@ export async function GET(req: NextRequest) {
             branch:          v.universalVoucher?.branch ?? null,   // 5D-12: branch on spine
             date:            v.universalVoucher?.date,   // 5D-10: date on spine
             reference:       v.universalVoucher?.voucherNo ?? "",   // 5D-6
+            ...spineLifecycle,   // 5D-8: status/deletedAt/cancelledAt/createdAt on spine
             ...partyDisplay,
             createdBy:       creatorName(v),
             partyAccountId:  accFromPerson ?? accFromCompany ?? null,

@@ -13,6 +13,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { Plus, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import {
     VoucherRegisterTable,
     type VoucherRegisterRow,
@@ -100,7 +101,7 @@ export function InvVoucherList({
                     rawId:          v.id,
                     source:         "inv",
                     kind:           v.type ?? type,
-                    reference:      v.reference,
+                    reference:      v.reference || formatUvNo(v.id),
                     date:           v.date,
                     party:          v.partyName,
                     partyAccountId: v.partyAccountId ?? null,

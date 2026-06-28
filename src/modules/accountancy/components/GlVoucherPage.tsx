@@ -473,7 +473,22 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
             } else {
                 toast.success(`${copy.title} ${created.data.reference} saved as draft`);
             }
-            router.push(copy.listPath);
+            // Reset for the next voucher instead of navigating away — same as the
+            // Sale form: the user can punch in the next entry without leaving.
+            // Cancel / Close X are the explicit exits to the register.
+            setNarration("");
+            setTopLedgerId(null);
+            setTopParty(null);
+            partyPickerRef.current?.clear();
+            setRows([newRow()]);
+            setDate(toIsoDate(new Date()));
+            isDirtyRef.current = false;
+            // Refresh the voucher-number preview so the next entry shows the
+            // freshly-incremented reference (otherwise nextRef stays stale).
+            axios.get<{ reference: string }>(`/api/accountancy/vouchers/next-ref?type=${kind}`)
+                .then((r) => setNextRef(r.data.reference))
+                .catch(() => { /* keep last value */ });
+            router.refresh();
         } catch (err: unknown) {
             toast.error(extractApiError(err, "Save failed"));
         } finally {

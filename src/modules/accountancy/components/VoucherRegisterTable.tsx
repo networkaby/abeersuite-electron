@@ -188,7 +188,7 @@ export function VoucherRegisterTable({
                         <th className="px-3 py-3 text-left font-medium">Date</th>
                         {!hideKind   && <th className="px-3 py-3 text-left font-medium">Type</th>}
                         {showSource  && <th className="px-3 py-3 text-left font-medium">Source</th>}
-                        <th className="px-3 py-3 text-left font-medium">Reference</th>
+                        <th className="px-3 py-3 text-left font-medium">Voucher No</th>
                         {showBranch  && <th className="px-3 py-3 text-left font-medium">Branch</th>}
                         <th className="px-3 py-3 text-left font-medium">Party</th>
                         <th className="px-3 py-3 text-left font-medium">Narration</th>
@@ -251,7 +251,7 @@ export function VoucherRegisterTable({
                                                         {r.kind.replace(/_/g, " ")}
                                                     </span>
                                                 </span>
-                                                {statusInline && !isPosted && (
+                                                {statusInline && !isPosted && r.status && (
                                                     <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${JOURNAL_STATUS_COLORS[r.status] ?? "bg-muted text-muted-foreground"}`}>
                                                         {r.status.toLowerCase()}
                                                     </span>

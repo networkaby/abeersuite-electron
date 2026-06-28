@@ -10,6 +10,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import Link from "next/link";
 import { toast } from "sonner";
+import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { Plus, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,7 +28,7 @@ export type GlVoucherKind = "CONTRA" | "PAYMENT" | "RECEIPT" | "CREDIT_NOTE" | "
 type RawRow = {
     id:           number;
     type:         GlVoucherKind;
-    reference:    string;
+    voucherNo:    string | null;
     date:         string;
     narration:    string | null;
     totalAmount:  number | string;
@@ -68,7 +69,7 @@ export function GlVoucherList({
                     rawId:       v.id,
                     source:      "gl",
                     kind:        v.type,
-                    reference:   v.reference,
+                    reference:   v.voucherNo ?? formatUvNo(v.id),
                     date:        v.date,
                     party:       v.partyAccount?.name ?? null,
                     narration:   v.narration,

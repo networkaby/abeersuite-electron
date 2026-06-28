@@ -8,6 +8,7 @@ import axios from "axios";
 import Link from "next/link";
 import { toast } from "sonner";
 import { Plus, Loader2 } from "lucide-react";
+import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { Button } from "@/components/ui/button";
 import {
     VoucherRegisterTable,
@@ -21,7 +22,7 @@ import { RegisterFilterBar } from "@/modules/accountancy/components/RegisterFilt
 
 interface RawEntry {
     id:           number | string;
-    reference:    string;
+    voucherNo:    string | null;
     date:         string;
     description:  string | null;
     status:       "DRAFT" | "POSTED" | "CANCELLED";
@@ -55,7 +56,7 @@ export function JournalEntriesRegister() {
                     rawId:       Number(e.id),
                     source:      "je",
                     kind:        "JOURNAL",
-                    reference:   e.reference,
+                    reference:   e.voucherNo ?? formatUvNo(Number(e.id)),
                     date:        e.date,
                     party:       null,
                     narration:   e.description,

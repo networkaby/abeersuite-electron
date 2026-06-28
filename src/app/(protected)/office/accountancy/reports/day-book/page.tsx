@@ -30,13 +30,24 @@ function matchKind(kind: string, filter: string): boolean {
     }
 }
 
-// ── Optional / documentary voucher kinds ─────────────────────────────────
+// ── Non-regular voucher classification ───────────────────────────────────
+// Single source of truth for the two "Category" quick-filters AND the row
+// styling, so they can't drift apart (they previously did — POS estimate/order
+// were in neither, so "Optional only" wrongly hid them).
 
+// Documentary / "optional" — quotes & commitments that post no money or stock
+// on their own. A POS estimate / order is not a regular voucher, so it lives here.
 const OPTIONAL_KINDS = new Set([
-    "ESTIMATE", "SALES_ORDER", "PURCHASE_ORDER",
-    "GRN", "CHALLAN", "REJECTION_IN", "REJECTION_OUT",
+    "ESTIMATE", "POS_ESTIMATE", "POS_ORDER",
+    "SALES_ORDER", "PURCHASE_ORDER", "CHALLAN",
+]);
+// Inventory-ops — stock movement with no direct GL post.
+const INVENTORY_KINDS = new Set([
+    "GRN", "REJECTION_IN", "REJECTION_OUT",
     "MANUFACTURING_JOURNAL", "PHYSICAL_STOCK", "BRANCH_TRANSFER",
 ]);
+// Union — every non-regular row gets the muted/italic documentary styling.
+const NON_REGULAR_KINDS = new Set([...OPTIONAL_KINDS, ...INVENTORY_KINDS]);
 
 // ── Page ──────────────────────────────────────────────────────────────────
 
@@ -92,8 +103,6 @@ export default function DayBookPage() {
 
     const filtered = useMemo(() => {
         const q = filters.search.toLowerCase();
-        const OPT_SET = new Set(["ESTIMATE","SALES_ORDER","PURCHASE_ORDER","CHALLAN"]);
-        const INV_SET = new Set(["PHYSICAL_STOCK","MANUFACTURING_JOURNAL","BRANCH_TRANSFER","GRN","REJECTION_IN","REJECTION_OUT"]);
         return rows.filter((r) => {
             const d = r.date.slice(0, 10);
             if (filters.from && d < filters.from) return false;
@@ -101,8 +110,8 @@ export default function DayBookPage() {
             if (filters.statuses.size > 0 && !filters.statuses.has(r.status)) return false;
             if (!matchKind(r.kind, kind)) return false;
             if (optionalOnly || inventoryOnly) {
-                const isOpt = optionalOnly && OPT_SET.has(r.kind);
-                const isInv = inventoryOnly && INV_SET.has(r.kind);
+                const isOpt = optionalOnly && OPTIONAL_KINDS.has(r.kind);
+                const isInv = inventoryOnly && INVENTORY_KINDS.has(r.kind);
                 if (!isOpt && !isInv) return false;
             }
             // Filter any row that carries a branch (inv always; gl POS receipts/
@@ -226,7 +235,9 @@ export default function DayBookPage() {
                             <SelectGroup>
                                 <SelectLabel>Documents</SelectLabel>
                                 <SelectItem value="ESTIMATE">Estimate</SelectItem>
+                                <SelectItem value="POS_ESTIMATE">POS Estimate</SelectItem>
                                 <SelectItem value="SALES_ORDER">Sales Order</SelectItem>
+                                <SelectItem value="POS_ORDER">POS Order</SelectItem>
                                 <SelectItem value="PURCHASE_ORDER">Purchase Order</SelectItem>
                                 <SelectItem value="GRN">GRN</SelectItem>
                                 <SelectItem value="CHALLAN">Challan</SelectItem>
@@ -346,7 +357,7 @@ export default function DayBookPage() {
                             statusInline={true}
                             accentBySource={true}
                             showBranch={true}
-                            optionalKinds={OPTIONAL_KINDS}
+                            optionalKinds={NON_REGULAR_KINDS}
                         />
                     )}
                 </div>

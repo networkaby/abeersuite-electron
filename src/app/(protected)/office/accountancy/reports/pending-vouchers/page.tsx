@@ -276,7 +276,7 @@ function SettleDialog({
                                     <tr>
                                         <th className="px-3 py-2 text-left font-medium">Date</th>
                                         <th className="px-3 py-2 text-left font-medium">Type</th>
-                                        <th className="px-3 py-2 text-left font-medium">Reference</th>
+                                        <th className="px-3 py-2 text-left font-medium">Voucher No</th>
                                         <th className="px-3 py-2 text-left font-medium">Party</th>
                                         <th className="px-3 py-2 text-right font-medium">Amount</th>
                                         <th className="px-3 py-2" />
@@ -581,7 +581,7 @@ export default function PendingVouchersPage() {
                                             <tr>
                                                 <th className="px-3 py-2 text-left font-medium">Date</th>
                                                 <th className="px-3 py-2 text-left font-medium">Type</th>
-                                                <th className="px-3 py-2 text-left font-medium">Reference</th>
+                                                <th className="px-3 py-2 text-left font-medium">Voucher No</th>
                                                 <th className="px-3 py-2 text-left font-medium">Branch</th>
                                                 <th className="px-3 py-2 text-left font-medium">Party</th>
                                                 <th className="px-3 py-2 text-left font-medium">Narration</th>
