@@ -81,13 +81,15 @@ This file unifies what used to be two separate glossaries — the Transaction En
 | Term | Meaning | Series | Current code |
 | --- | --- | --- | --- |
 | **Voucher No** | the user-facing document number each *kind* gets from its **own** series — prefix + running sequence (+ optional suffix): `SV-2026-0001` (sale), `PMT-2026-0001` (payment), `POS-2026-0001` (counter sale), `CV-…` (contra)… What staff/customers see and print. | per voucher-kind | `UniversalVoucher.friendlyRef` → renaming to **`voucherNo`** |
-| **Universal Voucher No** | the **single global sequence across every voucher of every kind** — the spine's own canonical, unique id (`GL-2026-0042`). One continuous run; never resets per kind. | one global | `UniversalVoucher.reference` → renaming to **`universalVoucherNo`** |
+| **Universal Voucher No (UVNo)** | the **single global sequence across every voucher of every kind** — the spine's own canonical, unique id, prefix **`UV-`** (e.g. `UV-2026-0042`). One continuous run; never resets per kind. | one global | `UniversalVoucher.reference` → renaming to **`uvNo`** |
 
-**Rule:** every voucher (spine row) holds **both** — a sale is Voucher No `SV-2026-0001` *and* Universal Voucher No `GL-2026-0042`. Independent sequences; never conflate them.
+**Rule:** every voucher (spine row) holds **both** — a sale is Voucher No `SV-2026-0001` *and* Universal Voucher No `UV-2026-0042`. Independent sequences; never conflate them.
+
+**The UVNo prefix is `UV-`, not `GL-`.** The spine is the **universal voucher**, not a GL-only artifact — it spans inventory-only and every other kind, so a `GL-` (General Ledger) prefix is wrong. Today the spine reuses the `GL_POSTING` series (`GL-…`); the rename moves it to a `UV-` series.
 
 **"reference" is NOT a number.** The word *reference* is reserved for a future column holding actual cross-references (e.g. "this voucher refers to bill X / PO Y") — descriptive links, not a sequence. Do **not** name either number `reference`.
 
-**Status:** vocabulary **adopted (2026-06-28)**. The field rename (`friendlyRef`→`voucherNo`, `reference`→`universalVoucherNo`) is **pending** in schema + code — `reference` is overloaded today (the spine's number, plus `VoucherGlLine.reference` = a tender's UPI/cheque ref, which is unrelated and stays), so the spine rename is surgical, not a blind find-replace.
+**Status:** vocabulary **adopted (2026-06-28)**. **Pending** in schema + code: (1) `friendlyRef`→`voucherNo`; (2) `reference`→`uvNo` — surgical, since `reference` is overloaded (the spine's number, plus `VoucherGlLine.reference` = a tender's UPI/cheque ref, which is unrelated and stays); (3) the spine's number series moves off the `GL_POSTING`/`GL-` prefix onto a `UV-` series (seed + one-time migration, like PV→PMT).
 
 ---
 
@@ -415,4 +417,4 @@ This file unifies what used to be two separate glossaries — the Transaction En
 
 ---
 
-_Last updated: 2026-06-28 — Added "Voucher No · Universal Voucher No": every voucher holds two numbers — the per-kind **Voucher No** (`friendlyRef`→`voucherNo`, e.g. SV-/PMT-/POS-) and the one global **Universal Voucher No** (`reference`→`universalVoucherNo`, e.g. GL-). `reference` the word is reserved for a future cross-reference column, not a number; field rename pending. Prior: 2026-06-27 — added the "Voucher lines" term (`VoucherGlLine` + `VoucherInventoryLine`; tenders/charges are role-tagged GL rows). 2026-06-25 — merged the transaction- and work-inbox vocabularies into one doc._
+_Last updated: 2026-06-28 — Added "Voucher No · Universal Voucher No (UVNo)": every voucher holds two numbers — the per-kind **Voucher No** (`friendlyRef`→`voucherNo`, e.g. SV-/PMT-/POS-) and the one global **Universal Voucher No** (`reference`→`uvNo`, prefix `UV-` NOT `GL-` since the spine spans inventory too). `reference` the word is reserved for a future cross-reference column, not a number; field rename + UV- series migration pending. Prior: 2026-06-27 — added the "Voucher lines" term (`VoucherGlLine` + `VoucherInventoryLine`; tenders/charges are role-tagged GL rows). 2026-06-25 — merged the transaction- and work-inbox vocabularies into one doc._
