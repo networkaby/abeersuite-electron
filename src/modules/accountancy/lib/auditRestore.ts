@@ -44,7 +44,7 @@ function scalarsOf(row: Row, drop: string[]): Row {
  * now-deleted id and are @unique — re-inserting them risks a collision).
  */
 async function recreateJournalEntry(tx: Tx, je: JeSnapshot): Promise<number> {
-    const scalars = scalarsOf(je, ["lines", "actor", "createdBy", "cancelledBy", "deletedBy", "invVoucher", "voucher", "sourceJournalEntryId"]);
+    const scalars = scalarsOf(je, ["lines", "actor", "createdBy", "cancelledBy", "deletedBy", "voucherDetail", "voucher", "sourceJournalEntryId"]);
     const lines = (je.lines ?? []).map((l) =>
         scalarsOf(l, ["universalVoucherId", "universalVoucher", "account", "branch", "additionalCostAllocations", "sourceJournalLineId"]));
     const created = await tx.universalVoucher.create({

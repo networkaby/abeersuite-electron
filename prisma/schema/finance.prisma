@@ -110,7 +110,7 @@ model UniversalVoucher {
   // Phase 4 G4d: direct sidecar back-links (replace the indirect
   // sourceJournalEntryId↔journalEntryId hop, so the spine↔voucher relationship
   // survives the JournalEntry/Voucher drop in G5).
-  invVoucher                VoucherDetail?                @relation("InvVoucherSpine")
+  voucherDetail             VoucherDetail?             @relation("InvVoucherSpine")
   // Phase 5 5A: cross-module workflow links (loose, FK-free — see VoucherLink).
   links                     VoucherLink[]              @relation("VoucherLinks")
   // Phase 5 5C: inventory children re-homed onto the spine (dual-written; sole

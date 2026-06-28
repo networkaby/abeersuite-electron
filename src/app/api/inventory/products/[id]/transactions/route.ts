@@ -52,7 +52,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         const lastPurchasePaise = lastInward.get(product.id) ?? null;
 
         // Phase 5 5C: goods lines hang off the spine — the InvVoucher is reached
-        // via universalVoucher.invVoucher.
+        // via universalVoucher.voucherDetail.
         const linesRaw = await prisma.voucherInventoryLine.findMany({
             where: {
                 productId: id,
@@ -72,7 +72,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
                         voucherNo: true,   // 5D-6: ref on the spine
                         date: true,        // 5D-10: date on the spine
                         type: true,        // 5D-11: type on the spine
-                        invVoucher: {
+                        voucherDetail: {   // 5D-13: the 1:1 sidecar (renamed from invVoucher)
                             select: {
                                 id: true,
                                 partyJson: true,
@@ -87,8 +87,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
             orderBy: { universalVoucher: { date: "desc" } },
         });
         const lines = linesRaw
-            .filter((l) => l.universalVoucher.invVoucher != null)
-            .map((l) => ({ id: l.id, quantity: l.quantity, rate: l.rate, amount: l.amount, voucher: { ...l.universalVoucher.invVoucher!, type: l.universalVoucher.type, date: l.universalVoucher.date, reference: l.universalVoucher.voucherNo ?? "" } }));
+            .filter((l) => l.universalVoucher.voucherDetail != null)
+            .map((l) => ({ id: l.id, quantity: l.quantity, rate: l.rate, amount: l.amount, voucher: { ...l.universalVoucher.voucherDetail!, type: l.universalVoucher.type, date: l.universalVoucher.date, reference: l.universalVoucher.voucherNo ?? "" } }));
 
         type TxRow = {
             lineId:    number;

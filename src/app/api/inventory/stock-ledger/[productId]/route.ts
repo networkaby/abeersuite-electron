@@ -65,10 +65,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ prod
             },
             orderBy: [{ date: "asc" }, { id: "asc" }],
             include: {
-                // Phase 5 5C: the InvVoucher is reached via universalVoucher.invVoucher.
+                // Phase 5 5C: the InvVoucher is reached via universalVoucher.voucherDetail.
                 universalVoucher: {
-                    // 5D-5 description + 5D-6 voucherNo + 5D-11 type on the spine; invVoucher keeps partyJson.
-                    select: { description: true, voucherNo: true, type: true, invVoucher: { select: { id: true, partyJson: true } } },
+                    // 5D-5 description + 5D-6 voucherNo + 5D-11 type on the spine; voucherDetail keeps partyJson.
+                    select: { description: true, voucherNo: true, type: true, voucherDetail: { select: { id: true, partyJson: true } } },
                 },
             },
         });
@@ -79,7 +79,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ prod
             const inQ  = toNumber(e.inQty);
             const outQ = toNumber(e.outQty);
             runningQty += inQ - outQ;
-            const v = e.universalVoucher.invVoucher;
+            const v = e.universalVoucher.voucherDetail;
             return {
                 id:          e.id,
                 date:        e.date,
