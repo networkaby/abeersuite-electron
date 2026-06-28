@@ -47,79 +47,8 @@ import { computePriceLadder } from "@/modules/pos/lib/priceLadder";
 import type { VoucherTemplateDefaults } from "@/shared/lib/print/voucherTemplateDefaults";
 import { extractApiError } from "@/shared/lib/api";
 import { formatInr, parseDecimalInput, parseDigitsInput } from "@/shared/lib/format";
-
-// ── Types ────────────────────────────────────────────────────────────────────
-
-type Snapshot = {
-    party: { kind: "person" | "company"; id: number; name: string; phone: string | null; email: string | null; gstin: string | null; address: string | null };
-    account: { id: number; balance: number; openingBalance: number | null } | null;
-    turnover: { lifetime: number; last12Months: number; invoiceCount: number };
-    discountPct: number;
-    loyaltyPoints: number;
-    loyaltyRates: {
-        enabled: boolean;
-        earnEnabled: boolean;
-        redeemEnabled: boolean;
-        globalEarnRatePer: number;
-        redeemValue: number;
-        expiryEnabled: boolean;
-        expiryDays: number;
-        minEarnInvoiceValue: number | null;
-        minRedeemInvoiceValue: number | null;
-        minRedeemPoints: number | null;
-        maxRedeemPctOfBill: number | null;
-    } | null;
-    customerLevel: string; // admin-defined spend-tier name ("" when no tier reached)
-    creditLimit: number | null;    // deny-by-default: 0 = no credit, >0 = cap (server maps legacy NULL→0)
-    balanceDue: number;
-    balanceOverdue: number;
-    availableCredit: number | null; // = max(0, creditLimit − balanceDue)
-    rating: number | null;
-    favouriteCategory: string | null;
-    personalizedOffers: Array<{ id: string; label: string; tag: string }>;
-    lastVisitAt: string | null;
-    recentTickets: Array<{ id: number; createdAt: string; statusLabel: string; statusColor: string }>;
-    warrantiesEnding: Array<{ productName: string; endsAt: string }>;
-};
-
-type ProductOption = {
-    id: number; sku: string; name: string;
-    /// Materialized effective sale price (paise) — the value POS charges.
-    /// Read straight from the products/lookup response (column of the same name).
-    effectiveSalePricePaise?: number | null;
-    mrpPaise?: number | null;
-    /// Printed barcode TAG price (paise) — DERIVED server-side from the saved
-    /// sale price + MRP via the same band function the "Update & Print Labels"
-    /// page uses, so the shelf tag == the receipt tag. Snapshotted onto the cart
-    /// line as the public price for the customer "Counter discount" ladder
-    /// (tag → effective). Falls back to the charged amount when absent.
-    barcodePricePaise?: number | null;
-    /// Effective GST rate resolved by the cascade product → group → org-default.
-    /// Null = no rate found anywhere in the chain (line stays untaxed).
-    taxRate?: number | null;
-    hsnCode?: string | null;
-    /// Loyalty redeem-cap override (% of this item's value redeemable with points).
-    /// null = inherit the global cap. Snapshotted onto the cart line at add time.
-    redeemCapPct?: number | null;
-    unit?: { code: string };
-    warrantyTerm?: { name: string; durationDays: number | null } | null;
-};
-type CartLine = {
-    productId: number; sku: string; name: string;
-    qty: number; unitPrice: number; description: string;
-    /// Snapshotted at add-to-cart time so changing a product's GST later
-    /// doesn't retroactively shift prices in an active sale.
-    taxRate: number;
-    mrpPaise?: number | null;
-    /// Barcode / printed tag price (paise) snapshotted at add-to-cart time — feeds
-    /// the customer-facing price ladder (barcode line + "price benefit").
-    barcodePaise?: number | null;
-    warrantyLabel?: string | null;
-    /// Loyalty redeem-cap override (% redeemable with points; null = global cap).
-    /// Snapshotted so the redeem ceiling matches the server's at checkout.
-    redeemCapPct?: number | null;
-};
-
+import { usePosDraftStore } from "@/store/posDraftStore";
+import { newChargeRow, type Snapshot, type ProductOption } from "@/modules/pos/lib/posDraftTypes";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -134,14 +63,6 @@ function parseAmt(s: string): number {
     const n = Number(s);
     return Number.isFinite(n) ? n : 0;
 }
-
-type ChargeRow = { id: string; accountId: number | null; description: string; amount: string };
-const newChargeRow = (): ChargeRow => ({
-    id: Math.random().toString(36).slice(2, 10),
-    accountId: null,
-    description: "",
-    amount: "",
-});
 
 const since = (iso: string | null) => {
     if (!iso) return "never";
@@ -169,7 +90,10 @@ export default function PosScreen({ editId }: { editId?: number }) {
     const isEdit = editId != null;
     const editMeta = useRef<EditMeta | null>(null);
     // ── Customer search omnibox (delegated to shared component) ─────────────
-    const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
+    // snapshot + cart + bill adjustments live in the shared POS draft store so they
+    // survive a mode switch to Order / Estimate (see posDraftStore.ts).
+    const snapshot = usePosDraftStore((s) => s.snapshot);
+    const setSnapshot = usePosDraftStore((s) => s.setSnapshot);
     const [loadingSnapshot, setLoadingSnapshot] = useState(false);
     const [createDialogOpen, setCreateDialogOpen] = useState(false);
     const partySearchRef = useRef<PartySearchAndCreateHandle>(null);
@@ -179,7 +103,8 @@ export default function PosScreen({ editId }: { editId?: number }) {
     const [productQuery, setProductQuery] = useState("");
     const [productHighlight, setProductHighlight] = useState(0);
     const [allProducts, setAllProducts] = useState<ProductOption[]>([]);
-    const [cart, setCart] = useState<CartLine[]>([]);
+    const cart = usePosDraftStore((s) => s.cart);
+    const setCart = usePosDraftStore((s) => s.setCart);
 
     // ── Checkout / payment splits ───────────────────────────────────────────
     // Fixed three-row checkout: Cash (with a separate "return" sub-input),
@@ -199,7 +124,8 @@ export default function PosScreen({ editId }: { editId?: number }) {
     // Mirrors office SALE (TradingVoucherPage). Hidden behind a collapsible
     // panel above the Total row so the default cart screen stays clean.
     const [adjustmentsOpen, setAdjustmentsOpen] = useState(false);
-    const [shippingAmtStr, setShippingAmtStr] = useState("");
+    const shippingAmtStr = usePosDraftStore((s) => s.shippingAmtStr);
+    const setShippingAmtStr = usePosDraftStore((s) => s.setShippingAmtStr);
     // Loyalty points the cashier is redeeming on this bill (whole-number string).
     const [redeemPointsStr, setRedeemPointsStr] = useState("");
     const [redeemOn, setRedeemOn] = useState(false); // tick to apply loyalty redemption
@@ -215,12 +141,16 @@ export default function PosScreen({ editId }: { editId?: number }) {
     const [giftCardCodeStr, setGiftCardCodeStr] = useState("");
     const [giftCard, setGiftCard] = useState<{ id: number; code: string; balance: number } | null>(null);
     const [gcBusy, setGcBusy] = useState(false);
-    const [roundOffStr, setRoundOffStr] = useState("");
+    const roundOffStr = usePosDraftStore((s) => s.roundOffStr);
+    const setRoundOffStr = usePosDraftStore((s) => s.setRoundOffStr);
     // Vyapar-style auto round-off: POS auto-derives the round-off to land Total
     // on a whole rupee. Flips to true the moment the cashier types into the
     // round-off field directly, so a manual override sticks.
-    const [roundOffManuallyEdited, setRoundOffManuallyEdited] = useState(false);
-    const [charges, setCharges] = useState<ChargeRow[]>([]);
+    const roundOffManuallyEdited = usePosDraftStore((s) => s.roundOffManuallyEdited);
+    const setRoundOffManuallyEdited = usePosDraftStore((s) => s.setRoundOffManuallyEdited);
+    const charges = usePosDraftStore((s) => s.charges);
+    const setCharges = usePosDraftStore((s) => s.setCharges);
+    const resetDraft = usePosDraftStore((s) => s.reset);
     const [chargeAccounts, setChargeAccounts] = useState<GlAccount[]>([]);
 
     // ── Active POS shift ────────────────────────────────────────────────────
@@ -594,8 +524,12 @@ export default function PosScreen({ editId }: { editId?: number }) {
     };
 
     // ── Edit mode: hydrate a posted POS sale on mount ───────────────────────────
+    // Editing an existing voucher is NOT a carried draft: clear the shared draft on
+    // entry (so a half-built new sale doesn't leak in) and again on exit (so the
+    // edited voucher's lines don't leak into the next new sale).
     useEffect(() => {
         if (!isEdit) return;
+        resetDraft();
         let cancelled = false;
         (async () => {
             try {
@@ -641,7 +575,7 @@ export default function PosScreen({ editId }: { editId?: number }) {
                 router.push("/office/accountancy/vouchers-registers/sales");
             }
         })();
-        return () => { cancelled = true; };
+        return () => { cancelled = true; resetDraft(); };
         // One-shot hydration keyed on the voucher id; the helpers it calls are stable.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isEdit, editId]);

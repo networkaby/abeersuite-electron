@@ -1,0 +1,84 @@
+// Shared types for the POS draft (the customer + goods + bill-adjustment slice
+// carried across the Sale / Order / Estimate screens). Extracted verbatim from
+// PosScreen / PosQuoteScreen — both screens and the posDraftStore import from here
+// so the one draft shape has a single definition.
+
+export type Snapshot = {
+    party: { kind: "person" | "company"; id: number; name: string; phone: string | null; email: string | null; gstin: string | null; address: string | null };
+    account: { id: number; balance: number; openingBalance: number | null } | null;
+    turnover: { lifetime: number; last12Months: number; invoiceCount: number };
+    discountPct: number;
+    loyaltyPoints: number;
+    loyaltyRates: {
+        enabled: boolean;
+        earnEnabled: boolean;
+        redeemEnabled: boolean;
+        globalEarnRatePer: number;
+        redeemValue: number;
+        expiryEnabled: boolean;
+        expiryDays: number;
+        minEarnInvoiceValue: number | null;
+        minRedeemInvoiceValue: number | null;
+        minRedeemPoints: number | null;
+        maxRedeemPctOfBill: number | null;
+    } | null;
+    customerLevel: string; // admin-defined spend-tier name ("" when no tier reached)
+    creditLimit: number | null;    // deny-by-default: 0 = no credit, >0 = cap (server maps legacy NULL→0)
+    balanceDue: number;
+    balanceOverdue: number;
+    availableCredit: number | null; // = max(0, creditLimit − balanceDue)
+    rating: number | null;
+    favouriteCategory: string | null;
+    personalizedOffers: Array<{ id: string; label: string; tag: string }>;
+    lastVisitAt: string | null;
+    recentTickets: Array<{ id: number; createdAt: string; statusLabel: string; statusColor: string }>;
+    warrantiesEnding: Array<{ productName: string; endsAt: string }>;
+};
+
+export type ProductOption = {
+    id: number; sku: string; name: string;
+    /// Materialized effective sale price (paise) — the value POS charges.
+    /// Read straight from the products/lookup response (column of the same name).
+    effectiveSalePricePaise?: number | null;
+    mrpPaise?: number | null;
+    /// Printed barcode TAG price (paise) — DERIVED server-side from the saved
+    /// sale price + MRP via the same band function the "Update & Print Labels"
+    /// page uses, so the shelf tag == the receipt tag. Snapshotted onto the cart
+    /// line as the public price for the customer "Counter discount" ladder
+    /// (tag → effective). Falls back to the charged amount when absent.
+    barcodePricePaise?: number | null;
+    /// Effective GST rate resolved by the cascade product → group → org-default.
+    /// Null = no rate found anywhere in the chain (line stays untaxed).
+    taxRate?: number | null;
+    hsnCode?: string | null;
+    /// Loyalty redeem-cap override (% of this item's value redeemable with points).
+    /// null = inherit the global cap. Snapshotted onto the cart line at add time.
+    redeemCapPct?: number | null;
+    unit?: { code: string };
+    warrantyTerm?: { name: string; durationDays: number | null } | null;
+};
+
+export type CartLine = {
+    productId: number; sku: string; name: string;
+    qty: number; unitPrice: number; description: string;
+    /// Snapshotted at add-to-cart time so changing a product's GST later
+    /// doesn't retroactively shift prices in an active sale.
+    taxRate: number;
+    mrpPaise?: number | null;
+    /// Barcode / printed tag price (paise) snapshotted at add-to-cart time — feeds
+    /// the customer-facing price ladder (barcode line + "price benefit").
+    barcodePaise?: number | null;
+    warrantyLabel?: string | null;
+    /// Loyalty redeem-cap override (% redeemable with points; null = global cap).
+    /// Snapshotted so the redeem ceiling matches the server's at checkout.
+    redeemCapPct?: number | null;
+};
+
+export type ChargeRow = { id: string; accountId: number | null; description: string; amount: string };
+
+export const newChargeRow = (): ChargeRow => ({
+    id: Math.random().toString(36).slice(2, 10),
+    accountId: null,
+    description: "",
+    amount: "",
+});
