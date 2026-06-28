@@ -32,12 +32,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         where: { id: Number(id) },
         // settlementJson (tender/charge input) is a scalar — captured in the snapshot
         // automatically. 5D-2: creator lives on the spine (not needed for the snapshot).
-        include: { universalVoucher: { select: { createdById: true, voucherNo: true, status: true, deletedAt: true } } },   // 5D-6/5D-8
+        include: { universalVoucher: { select: { createdById: true, voucherNo: true, status: true, deletedAt: true, type: true } } },   // 5D-6/5D-8/5D-11
     });
     // Phase 5 5C: goods lines + stock ledger hang off the spine — load + attach.
-    // 5D-8: lifecycle status/deletedAt live on the spine — attach for the LifecycleVoucher helpers.
+    // 5D-8/5D-11: lifecycle status/deletedAt + type live on the spine — attach for the helpers + type guards.
     const voucher = voucherRow ? {
         ...voucherRow,
+        type:      voucherRow.universalVoucher?.type ?? "",
         status:    voucherRow.universalVoucher?.status ?? "DRAFT",
         deletedAt: voucherRow.universalVoucher?.deletedAt ?? null,
         lines: await prisma.voucherInventoryLine.findMany({

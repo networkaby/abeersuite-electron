@@ -33,8 +33,8 @@ export async function GET(req: NextRequest) {
         // 5D-8/5D-10: status + date live on the spine. (Typed so excess-property
         // drift is caught — the prior untyped literal silently kept status/date.)
         const where: Prisma.InvVoucherWhereInput = {
-            type: "POS",
             universalVoucher: {
+                type: "POS",   // 5D-11
                 status: "POSTED",
                 ...(from || to ? {
                     date: {

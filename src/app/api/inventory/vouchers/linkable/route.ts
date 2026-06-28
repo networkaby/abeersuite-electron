@@ -59,8 +59,8 @@ export async function GET(req: NextRequest) {
 
     const rows = await prisma.invVoucher.findMany({
         where: {
-            type:         { in: types },
-            universalVoucher: { status: VoucherStatus.POSTED, deletedAt: null },   // 5D-8: lifecycle on spine
+            // 5D-8 lifecycle + 5D-11 type on spine
+            universalVoucher: { status: VoucherStatus.POSTED, deletedAt: null, type: { in: types } },
             refVoucherId: null,   // not already linked to a source voucher
             ...branchFilter,
             ...partyFilter,
@@ -69,8 +69,7 @@ export async function GET(req: NextRequest) {
         take: 100,
         select: {
             id:          true,
-            universalVoucher: { select: { voucherNo: true, date: true } },   // 5D-6: ref + 5D-10 date on spine
-            type:        true,
+            universalVoucher: { select: { voucherNo: true, date: true, type: true } },   // 5D-6: ref + 5D-10 date + 5D-11 type on spine
             partyId:     true,
             partyJson:   true,
             totalAmount: true,
@@ -78,6 +77,6 @@ export async function GET(req: NextRequest) {
     });
 
     return NextResponse.json({
-        rows: rows.map(({ universalVoucher, ...r }) => ({ ...r, date: universalVoucher?.date, reference: universalVoucher?.voucherNo ?? "", partyName: readPartyName(r.partyJson), totalAmount: Number(r.totalAmount) })),
+        rows: rows.map(({ universalVoucher, ...r }) => ({ ...r, type: universalVoucher?.type, date: universalVoucher?.date, reference: universalVoucher?.voucherNo ?? "", partyName: readPartyName(r.partyJson), totalAmount: Number(r.totalAmount) })),
     });
 }

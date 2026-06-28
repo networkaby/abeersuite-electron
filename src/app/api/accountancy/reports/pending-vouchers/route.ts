@@ -32,12 +32,12 @@ const PENDING_TYPES = Object.keys(SETTLES_BY) as PendingType[];
 // Build a per-type "where" clause: type + unsettled.
 function unsettledClause(type: PendingType): Prisma.InvVoucherWhereInput {
     return {
-        type: InvVoucherType[type],
+        // 5D-11: type lives on the spine (both for this voucher and its returns).
+        universalVoucher: { type: InvVoucherType[type] },
         refReturns: {
             none: {
-                // 5D-8: settling voucher's status lives on its spine.
-                universalVoucher: { status: { not: VoucherStatus.CANCELLED } },
-                type:   { in: SETTLES_BY[type] },
+                // 5D-8 status + 5D-11 type of the settling voucher live on its spine.
+                universalVoucher: { status: { not: VoucherStatus.CANCELLED }, type: { in: SETTLES_BY[type] } },
             },
         },
     };
@@ -117,7 +117,7 @@ export async function GET(req: NextRequest) {
             take:    limit,
             include: {
                 branch: { select: { id: true, name: true } },
-                universalVoucher: { select: { description: true, voucherNo: true, date: true } },   // 5D-5 desc + 5D-6 ref + 5D-10 date
+                universalVoucher: { select: { description: true, voucherNo: true, date: true, type: true } },   // 5D-5 desc + 5D-6 ref + 5D-10 date + 5D-11 type
             },
         }),
     ]);
@@ -144,7 +144,7 @@ export async function GET(req: NextRequest) {
         return {
             id:          v.id,
             reference:   v.universalVoucher?.voucherNo ?? "",
-            type:        v.type,
+            type:        v.universalVoucher!.type,   // 5D-11
             date:        v.universalVoucher!.date,   // 5D-10
             partyId:     v.partyId,
             partyType:   v.partyType,

@@ -35,21 +35,21 @@ export async function seedVoucherSeries(prisma: PrismaClient) {
     const glPostingCount = await prisma.universalVoucher.count();
     // Inventory voucher counts — needed for new-install continuity so the next
     // SV / PV / EV reference picks up where the legacy invNextRef left off.
-    const saleCount     = await prisma.invVoucher.count({ where: { type: "SALE" } });
-    const posCount      = await prisma.invVoucher.count({ where: { type: "POS" } });
-    const purchaseCount = await prisma.invVoucher.count({ where: { type: "PURCHASE" } });
-    const estimateCount = await prisma.invVoucher.count({ where: { type: "ESTIMATE" } });
-    const saleReturnCount     = await prisma.invVoucher.count({ where: { type: "SALE_RETURN" } });
-    const purchaseReturnCount = await prisma.invVoucher.count({ where: { type: "PURCHASE_RETURN" } });
-    const salesOrderCount         = await prisma.invVoucher.count({ where: { type: "SALES_ORDER" } });
-    const purchaseOrderCount      = await prisma.invVoucher.count({ where: { type: "PURCHASE_ORDER" } });
-    const grnCount                = await prisma.invVoucher.count({ where: { type: "GRN" } });
-    const challanCount            = await prisma.invVoucher.count({ where: { type: "CHALLAN" } });
-    const manufacturingCount      = await prisma.invVoucher.count({ where: { type: "MANUFACTURING_JOURNAL" } });
-    const physicalStockCount      = await prisma.invVoucher.count({ where: { type: "PHYSICAL_STOCK" } });
-    const branchTransferCount     = await prisma.invVoucher.count({ where: { type: "BRANCH_TRANSFER" } });
-    const rejectionInCount        = await prisma.invVoucher.count({ where: { type: "REJECTION_IN" } });
-    const rejectionOutCount       = await prisma.invVoucher.count({ where: { type: "REJECTION_OUT" } });
+    const saleCount     = await prisma.universalVoucher.count({ where: { type: "SALE" } });
+    const posCount      = await prisma.universalVoucher.count({ where: { type: "POS" } });
+    const purchaseCount = await prisma.universalVoucher.count({ where: { type: "PURCHASE" } });
+    const estimateCount = await prisma.universalVoucher.count({ where: { type: "ESTIMATE" } });
+    const saleReturnCount     = await prisma.universalVoucher.count({ where: { type: "SALE_RETURN" } });
+    const purchaseReturnCount = await prisma.universalVoucher.count({ where: { type: "PURCHASE_RETURN" } });
+    const salesOrderCount         = await prisma.universalVoucher.count({ where: { type: "SALES_ORDER" } });
+    const purchaseOrderCount      = await prisma.universalVoucher.count({ where: { type: "PURCHASE_ORDER" } });
+    const grnCount                = await prisma.universalVoucher.count({ where: { type: "GRN" } });
+    const challanCount            = await prisma.universalVoucher.count({ where: { type: "CHALLAN" } });
+    const manufacturingCount      = await prisma.universalVoucher.count({ where: { type: "MANUFACTURING_JOURNAL" } });
+    const physicalStockCount      = await prisma.universalVoucher.count({ where: { type: "PHYSICAL_STOCK" } });
+    const branchTransferCount     = await prisma.universalVoucher.count({ where: { type: "BRANCH_TRANSFER" } });
+    const rejectionInCount        = await prisma.universalVoucher.count({ where: { type: "REJECTION_IN" } });
+    const rejectionOutCount       = await prisma.universalVoucher.count({ where: { type: "REJECTION_OUT" } });
 
     const rows = [
         ...KINDS.map(({ kind, label, typeValue }) => ({

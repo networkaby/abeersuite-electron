@@ -28,12 +28,11 @@ export async function GET(req: Request) {
     // ── InvVoucher bills (SALE / POS / PURCHASE) for the party ────────────
     const invVouchers = await prisma.invVoucher.findMany({
         where: {
-            // 5D-4 party + 5D-8 status/deletedAt all live on the spine.
-            universalVoucher: { partyAccountId: accountId, status: "POSTED", deletedAt: null },
-            type:      { in: ["SALE", "POS", "PURCHASE"] },
+            // 5D-4 party + 5D-8 status/deletedAt + 5D-11 type all live on the spine.
+            universalVoucher: { partyAccountId: accountId, status: "POSTED", deletedAt: null, type: { in: ["SALE", "POS", "PURCHASE"] } },
         },
         select: {
-            id: true, type: true,
+            id: true,
             totalAmount: true,
             universalVoucher: { select: { partyAccountId: true, voucherNo: true, date: true } },   // 5D-4 + 5D-6 + 5D-10 date
             universalVoucherId: true, creditPeriodDays: true,

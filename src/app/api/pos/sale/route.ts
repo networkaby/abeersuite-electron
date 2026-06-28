@@ -322,7 +322,7 @@ export async function POST(req: Request) {
         couponExpenseAccountId = couponConfig.couponExpenseAccountId;
         // First-time buyer = no prior POSTED SALE/POS voucher (identified only).
         const isNewCustomer = isIdentified
-            ? (await prisma.invVoucher.count({ where: { universalVoucher: { partyAccountId: customerAccount.id, status: "POSTED", deletedAt: null }, type: { in: ["SALE", "POS"] } } })) === 0
+            ? (await prisma.invVoucher.count({ where: { universalVoucher: { partyAccountId: customerAccount.id, status: "POSTED", deletedAt: null, type: { in: ["SALE", "POS"] } } } })) === 0
             : false;
         // Coupon eligibility needs each line's taxonomy (include/exclude rules).
         // Reuse the loyalty earn lines when present; else load just for the coupon.
@@ -555,7 +555,7 @@ export async function POST(req: Request) {
             });
             const voucher = await tx.invVoucher.create({
                 data: {
-                    type:           "POS",
+                    // 5D-11: type lives on the spine (engineCreateSpine set it to POS).
                     branchId:       activeBranchId,
                     universalVoucherId: spineId,
                     // 5D-5/5D-8/5D-10: description + postedAt + status + date + 5D-4 party live on the spine.
@@ -603,7 +603,7 @@ export async function POST(req: Request) {
             // directly — one Dr leg per tender. POS is counter-pickup → intra-state.
             const spec = await saleToSpec(tx, {
                 id:          voucher.id,
-                type:        voucher.type,
+                type:        "POS",   // 5D-11: type on the spine
                 reference:   voucherRef,
                 date:        new Date(body.issueDate),   // 5D-10: date on the spine (attach-mode ignores spec.date)
                 description: voucherDescription,
@@ -674,7 +674,7 @@ export async function POST(req: Request) {
                 // aggregated inside the tx so it includes the just-posted sale.
                 if (milestoneTiers.length > 0) {
                     const spendAgg = await tx.invVoucher.aggregate({
-                        where: { universalVoucher: { partyAccountId: customerAccount.id, status: "POSTED", deletedAt: null }, type: { in: ["SALE", "POS"] } },
+                        where: { universalVoucher: { partyAccountId: customerAccount.id, status: "POSTED", deletedAt: null, type: { in: ["SALE", "POS"] } } },
                         _sum: { totalAmount: true },
                     });
                     const lifetimeSpend = Number(spendAgg._sum.totalAmount ?? 0);

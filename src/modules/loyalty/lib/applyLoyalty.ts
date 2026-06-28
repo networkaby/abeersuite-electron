@@ -242,7 +242,7 @@ export async function reverseLoyaltyForReturn(
         // (InvVoucher id space), but their loyalty rows are keyed by the spine — so
         // select each prior return's universalVoucherId for the ledger aggregate.
         const priorReturns = await tx.invVoucher.findMany({
-            where: { refVoucherId: args.originalVoucherId, type: "SALE_RETURN", id: { not: args.returnVoucherId } },
+            where: { refVoucherId: args.originalVoucherId, universalVoucher: { type: "SALE_RETURN" }, id: { not: args.returnVoucherId } },   // 5D-11
             select: { universalVoucherId: true },
         });
         let alreadyRestored = 0;

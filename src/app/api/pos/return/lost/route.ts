@@ -138,7 +138,7 @@ export async function POST(req: Request) {
             });
             const voucher = await tx.invVoucher.create({
                 data: {
-                    type:           "SALE_RETURN",
+                    // 5D-11: type lives on the spine (engineCreateSpine set SALE_RETURN).
                     branchId,
                     universalVoucherId: spineId,
                     // 5D-5/5D-8/5D-10: description + postedAt + status + date + 5D-4 party live on the spine.
@@ -181,7 +181,7 @@ export async function POST(req: Request) {
 
             const spec = await saleToSpec(tx, {
                 id:          voucher.id,
-                type:        voucher.type,
+                type:        "SALE_RETURN",   // 5D-11: type on the spine
                 reference:   vRef,
                 date:        today,   // 5D-10: date on the spine (attach-mode ignores spec.date)
                 description: voucherDescription,

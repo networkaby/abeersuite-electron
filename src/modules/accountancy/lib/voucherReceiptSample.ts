@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
-import type { Prisma } from "@/generated/prisma/client";
+import type { Prisma, InvVoucherType } from "@/generated/prisma/client";
 import type {
     ThermalReceiptSample,
 } from "@/shared/components/print/ThermalReceiptPreview";
@@ -59,7 +59,7 @@ const partyAccountSelect = {
 async function buildInvSample(id: number): Promise<VoucherReceiptData> {
     const vRow = await prisma.invVoucher.findUnique({
         where: { id },
-        include: { universalVoucher: { select: { partyAccountId: true, description: true, voucherNo: true, date: true } } },   // 5D-4 party + 5D-5 desc + 5D-6 ref + 5D-10 date
+        include: { universalVoucher: { select: { partyAccountId: true, description: true, voucherNo: true, date: true, type: true } } },   // 5D-4 party + 5D-5 desc + 5D-6 ref + 5D-10 date + 5D-11 type
     });
     if (!vRow) return notFoundData();
     // Phase 5 5C: goods lines hang off the spine.
@@ -97,7 +97,7 @@ async function buildInvSample(id: number): Promise<VoucherReceiptData> {
     // real discounted price is revealed instead. POS_ORDER always prints the real
     // (discounted) price. (Per-line discount itemisation needs the rich POS ladder
     // — the generic slip only toggles tag-vs-net.)
-    if (v.type === "POS_ESTIMATE") {
+    if (v.universalVoucher?.type === "POS_ESTIMATE") {
         const vis = await loadEstimateDiscountVisibility();
         const revealDiscounts = vis.tier || vis.loyalty || vis.coupon || vis.manual;
         if (!revealDiscounts) {
@@ -125,8 +125,9 @@ async function buildInvSample(id: number): Promise<VoucherReceiptData> {
         notes:     v.universalVoucher?.description?.trim() || null,
     };
 
-    const kind = isVoucherTemplateKind(v.type) ? v.type : "SALE";
-    return { kind, sample, docTitle: `${v.type} ${v.universalVoucher?.voucherNo ?? ""}` };
+    const vType = (v.universalVoucher?.type ?? "") as InvVoucherType;   // 5D-11
+    const kind = isVoucherTemplateKind(vType) ? vType : "SALE";
+    return { kind, sample, docTitle: `${vType} ${v.universalVoucher?.voucherNo ?? ""}` };
 }
 
 // ── GL voucher (PAYMENT / RECEIPT / CONTRA / CREDIT_NOTE / DEBIT_NOTE / JOURNAL) ──

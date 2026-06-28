@@ -263,20 +263,21 @@ async function loadOpenBills(
     // PaidByJe allocation logic can net them out for cash-paid POS.
     const saleSideTypes = ["SALE", "POS"] as const;
     const purchaseSideTypes = ["PURCHASE"] as const;
+    const invTypeFilter = invType === "BOTH"
+        ? { in: [...saleSideTypes, ...purchaseSideTypes] }
+        : invType === "SALE"
+            ? { in: [...saleSideTypes] }
+            : { in: [...purchaseSideTypes] };
     const invVouchers = accountIds.length === 0 ? [] : await prisma.invVoucher.findMany({
         where: {
-            ...(invType === "BOTH"
-                ? { type: { in: [...saleSideTypes, ...purchaseSideTypes] } }
-                : invType === "SALE"
-                    ? { type: { in: [...saleSideTypes] } }
-                    : { type: { in: [...purchaseSideTypes] } }),
-            universalVoucher: { status: "POSTED", deletedAt: null, date: { lte: asOf } },   // 5D-8 lifecycle + 5D-10 date on spine
+            // 5D-8 lifecycle + 5D-10 date + 5D-11 type on spine
+            universalVoucher: { status: "POSTED", deletedAt: null, date: { lte: asOf }, type: invTypeFilter },
             OR: partyOr,
         },
         select: {
-            id: true, type: true,
+            id: true,
             totalAmount: true,
-            universalVoucher: { select: { partyAccountId: true, voucherNo: true, date: true } },   // 5D-4 party + 5D-6 ref + 5D-10 date
+            universalVoucher: { select: { partyAccountId: true, voucherNo: true, date: true, type: true } },   // 5D-4 party + 5D-6 ref + 5D-10 date + 5D-11 type
             partyType: true, partyId: true, universalVoucherId: true,
             creditPeriodDays: true,
         },
@@ -343,7 +344,7 @@ async function loadOpenBills(
             paidAtSale +
             (v.universalVoucherId !== null ? (paidBySpine[v.universalVoucherId] ?? 0) : 0);
         bills.push({
-            kind:        v.type === "SALE" || v.type === "POS" ? "sale" : "purchase",
+            kind:        v.universalVoucher!.type === "SALE" || v.universalVoucher!.type === "POS" ? "sale" : "purchase",
             id:          v.id,
             accountId,
             ref:         v.universalVoucher?.voucherNo ?? "",
@@ -386,12 +387,12 @@ export async function getOpenSaleBillsForFifo(
 
     const invVouchers = await tx.invVoucher.findMany({
         where: {
-            type:      { in: ["SALE", "POS"] },
-            universalVoucher: { status: "POSTED", deletedAt: null, date: { lte: asOf } },   // 5D-8 lifecycle + 5D-10 date on spine
+            // 5D-8 lifecycle + 5D-10 date + 5D-11 type on spine
+            universalVoucher: { status: "POSTED", deletedAt: null, date: { lte: asOf }, type: { in: ["SALE", "POS"] } },
             OR:        partyOr,
         },
         select: {
-            id: true, type: true,
+            id: true,
             totalAmount: true, universalVoucher: { select: { partyAccountId: true, voucherNo: true, date: true } },   // 5D-4 + 5D-6 + 5D-10 date
             partyType: true, partyId: true, universalVoucherId: true,
         },

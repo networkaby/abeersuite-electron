@@ -68,7 +68,7 @@ export async function POST(req: Request) {
         const original = await prisma.invVoucher.findUnique({
             where: { id: data.originalInvoiceId },
             include: {
-                universalVoucher: { select: { partyAccountId: true, voucherNo: true, status: true } },   // 5D-4 party + 5D-6 ref + 5D-8 status
+                universalVoucher: { select: { partyAccountId: true, voucherNo: true, status: true, type: true } },   // 5D-4 party + 5D-6 ref + 5D-8 status + 5D-11 type
                 branch:  { select: { id: true, gstStateCode: true } },
             },
         });
@@ -85,8 +85,8 @@ export async function POST(req: Request) {
         if (original.universalVoucher?.status !== "POSTED") {
             return NextResponse.json({ error: "Only POSTED vouchers can be returned" }, { status: 409 });
         }
-        if (original.type !== "POS" && original.type !== "SALE") {
-            return NextResponse.json({ error: `Cannot return a ${original.type} voucher — only POS/SALE` }, { status: 409 });
+        if (original.universalVoucher?.type !== "POS" && original.universalVoucher?.type !== "SALE") {
+            return NextResponse.json({ error: `Cannot return a ${original.universalVoucher?.type} voucher — only POS/SALE` }, { status: 409 });
         }
         if (!partyAccountId) {
             return NextResponse.json({ error: "Voucher has no customer account linked" }, { status: 400 });
@@ -177,7 +177,7 @@ export async function POST(req: Request) {
             });
             const voucher = await tx.invVoucher.create({
                 data: {
-                    type:           "SALE_RETURN",
+                    // 5D-11: type lives on the spine (engineCreateSpine set SALE_RETURN).
                     branchId,
                     universalVoucherId: spineId,
                     // 5D-5/5D-8/5D-10: description + postedAt + status + date + 5D-4 party live on the spine.
@@ -224,7 +224,7 @@ export async function POST(req: Request) {
             // Returns / Dr GST reversal) come from goods + tax.
             const spec = await saleToSpec(tx, {
                 id:          voucher.id,
-                type:        voucher.type,
+                type:        "SALE_RETURN",   // 5D-11: type on the spine
                 reference:   vRef,
                 date:        today,   // 5D-10: date on the spine (attach-mode ignores spec.date)
                 description: voucherDescription,

@@ -41,11 +41,10 @@ export async function GET(
                 },
                 select: {
                     id: true,
-                    type: true,
                     totalAmount: true,
                     universalVoucherId: true,
                     branch:    { select: { name: true } },
-                    universalVoucher: { select: { createdById: true, partyAccountId: true, voucherNo: true, status: true, date: true } },   // 5D-2 creator + 5D-4 party + 5D-6 ref + 5D-8 status + 5D-10 date
+                    universalVoucher: { select: { createdById: true, partyAccountId: true, voucherNo: true, status: true, date: true, type: true } },   // 5D-2 creator + 5D-4 party + 5D-6 ref + 5D-8 status + 5D-10 date + 5D-11 type
                 },
                 orderBy: { universalVoucher: { date: "desc" } },   // 5D-10
             })
@@ -79,7 +78,7 @@ export async function GET(
             return {
                 id:         v.id,
                 reference:  v.universalVoucher?.voucherNo ?? "",
-                type:       v.type,
+                type:       v.universalVoucher?.type,
                 status:     v.universalVoucher?.status ?? "DRAFT",
                 date:       v.universalVoucher?.date,   // 5D-10: date on spine
                 totalAmount: v.totalAmount,

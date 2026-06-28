@@ -35,10 +35,9 @@ export async function GET(
                 },
                 select: {
                     id: true,
-                    type: true,
                     totalAmount: true,
                     branch:    { select: { name: true } },
-                    universalVoucher: { select: { createdById: true, voucherNo: true, status: true, date: true } },   // 5D-2 creator + 5D-6 ref + 5D-8 status + 5D-10 date
+                    universalVoucher: { select: { createdById: true, voucherNo: true, status: true, date: true, type: true } },   // 5D-2 creator + 5D-6 ref + 5D-8 status + 5D-10 date + 5D-11 type
                 },
                 orderBy: { universalVoucher: { date: "desc" } },   // 5D-10
             })
@@ -52,6 +51,7 @@ export async function GET(
         );
         const invVouchers = rawVouchers.map(({ universalVoucher, ...v }) => ({
             ...v,
+            type:      universalVoucher?.type,   // 5D-11: type on spine
             date:      universalVoucher?.date,   // 5D-10: date on spine
             status:    universalVoucher?.status ?? "DRAFT",   // 5D-8: status on spine
             reference: universalVoucher?.voucherNo ?? "",   // 5D-6

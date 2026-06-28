@@ -37,12 +37,13 @@ function kindForVoucherType(type: InvVoucherType): SourceDoc["kind"] | null {
 export async function resolveSource(universalVoucherId: number): Promise<SourceDoc | null> {
     const v = await prisma.invVoucher.findFirst({
         where: { universalVoucherId },
-        select: { id: true, type: true, universalVoucher: { select: { voucherNo: true } } },   // 5D-6: ref on spine
+        select: { id: true, universalVoucher: { select: { voucherNo: true, type: true } } },   // 5D-6 ref + 5D-11 type on spine
     });
     if (!v) return null;
-    const kind = kindForVoucherType(v.type);
+    const t = (v.universalVoucher?.type ?? "") as InvVoucherType;   // 5D-11
+    const kind = kindForVoucherType(t);
     if (!kind) return null;
-    const url = referenceHref("inv", v.id, v.type);
+    const url = referenceHref("inv", v.id, t);
     if (!url) return null;
     return { kind, id: v.id, reference: v.universalVoucher?.voucherNo ?? "", url };
 }
@@ -55,13 +56,14 @@ export async function resolveSourceBatch(universalVoucherIds: number[]): Promise
 
     const vouchers = await prisma.invVoucher.findMany({
         where: { universalVoucherId: { in: universalVoucherIds } },
-        select: { id: true, type: true, universalVoucherId: true, universalVoucher: { select: { voucherNo: true } } },   // 5D-6
+        select: { id: true, universalVoucherId: true, universalVoucher: { select: { voucherNo: true, type: true } } },   // 5D-6 + 5D-11 type
     });
     for (const v of vouchers) {
         if (v.universalVoucherId === null) continue;
-        const kind = kindForVoucherType(v.type);
+        const t = (v.universalVoucher?.type ?? "") as InvVoucherType;   // 5D-11
+        const kind = kindForVoucherType(t);
         if (!kind) continue;
-        const url = referenceHref("inv", v.id, v.type);
+        const url = referenceHref("inv", v.id, t);
         if (!url) continue;
         out.set(v.universalVoucherId, { kind, id: v.id, reference: v.universalVoucher?.voucherNo ?? "", url });
     }

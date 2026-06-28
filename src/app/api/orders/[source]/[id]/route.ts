@@ -27,8 +27,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ source:
         const v = await prisma.invVoucher.findUnique({
             where: { id },
             select: {
-                id: true, type: true, orderStatusId: true, partyJson: true,
-                universalVoucher: { select: { partyAccountId: true, voucherNo: true } },   // 5D-4 party + 5D-6 ref
+                id: true, orderStatusId: true, partyJson: true,
+                universalVoucher: { select: { partyAccountId: true, voucherNo: true, type: true } },   // 5D-4 party + 5D-6 ref + 5D-11 type
                 subtotal: true, taxAmount: true, discountAmt: true, discountPct: true, totalAmount: true,
                 // sku/name let the POS screen rebuild cart rows when an order is reopened
                 // in edit mode (the line description alone embeds them but isn't reliable).
@@ -37,7 +37,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ source:
                 universalVoucherId: true,
             },
         });
-        if (!v || (v.type !== "POS_ORDER" && v.type !== "SALES_ORDER" && v.type !== "POS_ESTIMATE")) return NextResponse.json({ error: "Order not found" }, { status: 404 });
+        if (!v || (v.universalVoucher?.type !== "POS_ORDER" && v.universalVoucher?.type !== "SALES_ORDER" && v.universalVoucher?.type !== "POS_ESTIMATE")) return NextResponse.json({ error: "Order not found" }, { status: 404 });
         // Phase 5 5C: goods lines hang off the spine.
         const lines = await prisma.voucherInventoryLine.findMany({
             where:   { universalVoucherId: v.universalVoucherId ?? -1 },
@@ -60,7 +60,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ source:
             id: v.id, ref: v.universalVoucher?.voucherNo ?? "", customer: readPartyName(v.partyJson), statusId: v.orderStatusId, accountId: partyAccountId,
             address,
             // Estimates are GL-silent quotes → always editable; orders only at New / Under-Review.
-            editable: v.type === "POS_ESTIMATE" ? true : (v.orderStatusId != null && EDITABLE_STAGES.includes(v.orderStatusId)),
+            editable: v.universalVoucher?.type === "POS_ESTIMATE" ? true : (v.orderStatusId != null && EDITABLE_STAGES.includes(v.orderStatusId)),
             subtotal: toNumber(v.subtotal), taxAmount: toNumber(v.taxAmount), discountAmt: v.discountAmt != null ? toNumber(v.discountAmt) : 0, discountPct: v.discountPct != null ? toNumber(v.discountPct) : null, totalAmount: toNumber(v.totalAmount),
             lines: lines.map((l) => {
                 const qty = toNumber(l.quantity);
@@ -98,10 +98,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ source
             if (!l.productId || !(l.quantity > 0)) return NextResponse.json({ error: "Each line needs a product and quantity > 0." }, { status: 400 });
         }
 
-        const order = await prisma.invVoucher.findUnique({ where: { id }, select: { type: true, orderStatusId: true } });
-        if (!order || (order.type !== "POS_ORDER" && order.type !== "SALES_ORDER" && order.type !== "POS_ESTIMATE")) return NextResponse.json({ error: "Order not found" }, { status: 404 });
+        const order = await prisma.invVoucher.findUnique({ where: { id }, select: { orderStatusId: true, universalVoucher: { select: { type: true } } } });   // 5D-11
+        if (!order || (order.universalVoucher?.type !== "POS_ORDER" && order.universalVoucher?.type !== "SALES_ORDER" && order.universalVoucher?.type !== "POS_ESTIMATE")) return NextResponse.json({ error: "Order not found" }, { status: 404 });
         // Estimates are GL-silent quotes → always editable. Orders only at New / Under-Review.
-        if (order.type !== "POS_ESTIMATE" && (!order.orderStatusId || !EDITABLE_STAGES.includes(order.orderStatusId))) {
+        if (order.universalVoucher?.type !== "POS_ESTIMATE" && (!order.orderStatusId || !EDITABLE_STAGES.includes(order.orderStatusId))) {
             return NextResponse.json({ error: "Only orders at New / Under Review can be edited. Move it back to Review first.", code: "NOT_EDITABLE" }, { status: 409 });
         }
 

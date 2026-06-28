@@ -23,12 +23,12 @@ export async function GET(_req: Request, { params }: Params) {
     const voucherRow = await prisma.invVoucher.findUnique({
         where: { id: Number(id) },
         include: {
-            // 5D-2 creator + 5D-6 ref live on the spine.
-            universalVoucher: { select: { createdById: true, voucherNo: true } },
+            // 5D-2 creator + 5D-6 ref + 5D-11 type live on the spine.
+            universalVoucher: { select: { createdById: true, voucherNo: true, type: true } },
             branch:    { select: { id: true, name: true } },
             // refVoucher powers parent-link surfaces — "Replaces <old ref>"
             // for a SALE_RETURN against a SALE, or "Linked to PO-…" on a GRN.
-            refVoucher: { select: { id: true, type: true, universalVoucher: { select: { voucherNo: true } } } },
+            refVoucher: { select: { id: true, universalVoucher: { select: { voucherNo: true, type: true } } } },   // 5D-11 type on spine
         },
     });
     if (!voucherRow) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -65,9 +65,10 @@ export async function GET(_req: Request, { params }: Params) {
     // form edit-load keep reading partyName / partyPhone / partyAddress.
     return NextResponse.json({
         ...voucher,
-        // 5D-6: the user-facing number is the spine's voucherNo now.
+        // 5D-6/5D-11: the user-facing number + type come from the spine now.
+        type:         voucher.universalVoucher?.type,
         reference:    voucher.universalVoucher?.voucherNo ?? "",
-        refVoucher:   voucher.refVoucher ? { id: voucher.refVoucher.id, type: voucher.refVoucher.type, reference: voucher.refVoucher.universalVoucher?.voucherNo ?? "" } : null,
+        refVoucher:   voucher.refVoucher ? { id: voucher.refVoucher.id, type: voucher.refVoucher.universalVoucher?.type, reference: voucher.refVoucher.universalVoucher?.voucherNo ?? "" } : null,
         createdBy:    creator,
         tenders:      settlement.tenders.map(withAccount),
         charges:      settlement.charges.map(withAccount),
@@ -108,7 +109,7 @@ export async function PATCH(req: Request, { params }: Params) {
     const id = Number(idStr);
     if (!Number.isFinite(id)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
 
-    const existing = await prisma.invVoucher.findUnique({ where: { id }, include: { universalVoucher: { select: { voucherNo: true, status: true, deletedAt: true } } } });   // 5D-6/5D-8
+    const existing = await prisma.invVoucher.findUnique({ where: { id }, include: { universalVoucher: { select: { voucherNo: true, status: true, deletedAt: true, type: true } } } });   // 5D-6/5D-8/5D-11
     if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
     // Phase 5 5C: capture old line product ids (goods hang off the spine) for the
     // after-commit pricing recompute — the lines themselves are rewritten below.
@@ -195,9 +196,9 @@ export async function PATCH(req: Request, { params }: Params) {
         }[];
     };
 
-    const isPhysicalStock = existing.type === "PHYSICAL_STOCK";
-    const isManufacturingJournal = existing.type === "MANUFACTURING_JOURNAL";
-    const isBranchTransfer = existing.type === "BRANCH_TRANSFER";
+    const isPhysicalStock = existing.universalVoucher?.type === "PHYSICAL_STOCK";
+    const isManufacturingJournal = existing.universalVoucher?.type === "MANUFACTURING_JOURNAL";
+    const isBranchTransfer = existing.universalVoucher?.type === "BRANCH_TRANSFER";
 
     // Recompute totals if lines provided.
     let totals: { subtotal: number; taxAmount: number; totalAmount: number } | undefined;
@@ -276,7 +277,7 @@ export async function PATCH(req: Request, { params }: Params) {
                 await tx.auditLog.create({
                     data: auditSnapshot({
                         entityType:  "INV_VOUCHER",
-                        subtype:     existing.type,
+                        subtype:     existing.universalVoucher?.type ?? null,
                         originalId:  existing.id,
                         originalRef: existing.universalVoucher?.voucherNo ?? "",
                         reason:      `Edit (in-place) of ${existing.universalVoucher?.voucherNo ?? ""}`,

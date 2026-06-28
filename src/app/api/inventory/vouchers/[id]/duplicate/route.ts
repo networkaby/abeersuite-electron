@@ -1,5 +1,5 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { Prisma } from "@/generated/prisma/client";
+import { Prisma, type InvVoucherType } from "@/generated/prisma/client";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
@@ -29,7 +29,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     try {
         const source = await prisma.invVoucher.findUnique({
             where: { id },
-            include: { universalVoucher: { select: { partyAccountId: true, description: true } } },   // 5D-4 party + 5D-5 description on spine
+            include: { universalVoucher: { select: { partyAccountId: true, description: true, type: true } } },   // 5D-4 party + 5D-5 description + 5D-11 type on spine
         });
         if (!source) return NextResponse.json({ error: "Not found" }, { status: 404 });
         // Phase 5 5C: source goods lines hang off the source's spine.
@@ -38,22 +38,23 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
         });
 
         const created = await prisma.$transaction(async (tx) => {
-            const reference = await invNextRef(tx, source.type, user!.id);
+            const srcType = source.universalVoucher!.type as InvVoucherType;   // 5D-11: type on the spine
+            const reference = await invNextRef(tx, srcType, user!.id);
             const today = new Date();
 
             // Phase 5 5.0c/5C: spine FIRST (the document anchor) — the duplicate is
             // a fresh DRAFT; POST attaches its GL lines + flips it.
             const spineId = await engineCreateSpine(tx, {
-                type:           source.type,
+                type:           srcType,
                 date:           today,
-                description:    source.universalVoucher?.description ?? source.type,
+                description:    source.universalVoucher?.description ?? srcType,
                 voucherNo:    reference,
                 partyAccountId: source.universalVoucher?.partyAccountId ?? null,
                 userId:         user!.id,
             });
             const voucher = await tx.invVoucher.create({
                 data: {
-                    type:             source.type,
+                    // 5D-11: type lives on the spine (engineCreateSpine set it).
                     // 5D-6: reference (voucherNo) lives on the spine.
                     branchId:         source.branchId,
                     universalVoucherId: spineId,
@@ -76,7 +77,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                     // a duplicate of a SALE is not a SALE_RETURN.
                     // 5D-2: creator lives on the spine.
                 },
-                select: { id: true, type: true, universalVoucher: { select: { voucherNo: true } } },   // 5D-6
+                select: { id: true, universalVoucher: { select: { voucherNo: true, type: true } } },   // 5D-6 + 5D-11 type
             });
             // Phase 5 5C: goods lines hang off the new spine.
             await tx.voucherInventoryLine.createMany({
@@ -94,7 +95,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                     amount:      l.amount,
                 })),
             });
-            return { id: voucher.id, type: voucher.type, reference: voucher.universalVoucher?.voucherNo ?? "" };
+            return { id: voucher.id, type: voucher.universalVoucher?.type, reference: voucher.universalVoucher?.voucherNo ?? "" };
         });
 
         return NextResponse.json(created);

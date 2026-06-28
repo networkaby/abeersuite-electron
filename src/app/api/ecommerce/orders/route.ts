@@ -86,15 +86,15 @@ export async function GET(req: Request) {
                     },
                 },
                 orderStatus: { select: { id: true, label: true, color: true, isTerminal: true } },
-                invVoucher: { select: { id: true, type: true, universalVoucher: { select: { voucherNo: true, status: true } } } },   // 5D-6 ref + 5D-8 status
+                invVoucher: { select: { id: true, universalVoucher: { select: { voucherNo: true, status: true, type: true } } } },   // 5D-6 ref + 5D-8 status + 5D-11 type
                 lines: { include: { product: { select: { id: true, name: true, imageUrl: true } } } },
             },
         });
 
-        // 5D-6/5D-8: expose each inv voucher's user-facing number + status from its spine.
+        // 5D-6/5D-8/5D-11: expose each inv voucher's number + status + type from its spine.
         return NextResponse.json(orders.map((o) => ({
             ...o,
-            invVoucher: o.invVoucher ? { ...o.invVoucher, reference: o.invVoucher.universalVoucher?.voucherNo ?? "", status: o.invVoucher.universalVoucher?.status ?? "DRAFT" } : null,
+            invVoucher: o.invVoucher ? { ...o.invVoucher, reference: o.invVoucher.universalVoucher?.voucherNo ?? "", status: o.invVoucher.universalVoucher?.status ?? "DRAFT", type: o.invVoucher.universalVoucher?.type } : null,
         })));
     } catch (e) {
         return handleApiError(e, "Failed to list orders");

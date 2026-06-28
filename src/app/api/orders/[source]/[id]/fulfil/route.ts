@@ -41,15 +41,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ sou
         const order = await prisma.invVoucher.findUnique({
             where: { id },
             select: {
-                id: true, type: true, branchId: true, orderStatusId: true,
-                universalVoucher: { select: { partyAccountId: true, voucherNo: true } },   // 5D-4 party + 5D-6 ref
+                id: true, branchId: true, orderStatusId: true,
+                universalVoucher: { select: { partyAccountId: true, voucherNo: true, type: true } },   // 5D-4 party + 5D-6 ref + 5D-11 type
                 totalAmount: true,
                 partyJson: true, partyType: true, partyId: true,
                 discountAmt: true, discountPct: true, shippingAmt: true, roundOff: true,
                 universalVoucherId: true,
             },
         });
-        if (!order || (order.type !== "POS_ORDER" && order.type !== "SALES_ORDER")) {
+        if (!order || (order.universalVoucher?.type !== "POS_ORDER" && order.universalVoucher?.type !== "SALES_ORDER")) {
             return NextResponse.json({ error: "Order not found" }, { status: 404 });
         }
         // Phase 5 5C: goods lines hang off the spine.

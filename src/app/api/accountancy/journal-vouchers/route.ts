@@ -143,7 +143,11 @@ export async function POST(req: NextRequest) {
                 const jvSpineId = (voucher as { universalVoucherId: number | null }).universalVoucherId!;
                 const carrier = await tx.invVoucher.create({
                     data: {
-                        type:        "MANUFACTURING_JOURNAL",
+                        // 5D-11: type lives on the spine. NOTE: this carrier previously
+                        // tagged itself MANUFACTURING_JOURNAL while its (shared) spine
+                        // carried body.type (e.g. JOURNAL) — a pre-existing divergence.
+                        // It now reflects the spine's single type. (Behaviour to confirm:
+                        // stock-bearing journals are no longer typed MANUFACTURING_JOURNAL.)
                         branchId:    activeBranchId,
                         // 5D-5/5D-8/5D-10: description + postedAt + status + date live on the spine.
                         subtotal:    flatItems.reduce((s, i) => s + i.amount, 0),

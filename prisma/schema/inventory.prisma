@@ -388,7 +388,8 @@ model RedemptionHold {
 
 model InvVoucher {
   id                  Int                    @id @default(autoincrement())
-  type                InvVoucherType
+  // Phase 5 5D-11: `type` dropped — lives on the spine (UniversalVoucher.type, a
+  // String spanning every voucher kind). Readers reach it via `universalVoucher.type`.
   // Phase 5 5D-6: `reference` (the user-facing SV-/PV- number) dropped — it lives
   // on the spine as `voucherNo` (the Voucher No); the spine's own `reference` is
   // the Universal Voucher No (UVNo).
@@ -507,8 +508,7 @@ model InvVoucher {
   createdAt                 DateTime                   @default(now())
   updatedAt                 DateTime                   @updatedAt
 
-  @@index([type])
-  @@index([branchId, type])
+  @@index([branchId])
   @@index([ticketId])
   @@index([dealId])
   @@index([orderStatusId])

@@ -46,8 +46,8 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
             branch: {
                 select: { id: true, gstStateCode: true },
             },
-            // 5D-5 description + 5D-6 ref + 5D-8 status + 5D-10 date live on the spine — needed for saleToSpec / messages / the DRAFT gate / stock rows.
-            universalVoucher: { select: { description: true, voucherNo: true, status: true, date: true } },
+            // 5D-5 description + 5D-6 ref + 5D-8 status + 5D-10 date + 5D-11 type live on the spine — needed for saleToSpec / messages / the DRAFT gate / stock rows / direction.
+            universalVoucher: { select: { description: true, voucherNo: true, status: true, date: true, type: true } },
         },
     });
     // Phase 5 5C: goods lines hang off the spine — load + attach as `voucher.lines`.
@@ -57,8 +57,8 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
             include: { product: { select: { id: true, mrpPaise: true, stock: true } } },
         })
         : [];
-    // 5D-8: status lives on the spine — attach for the DRAFT gate below.
-    const voucher = voucherRow ? { ...voucherRow, lines: goodsLines, status: voucherRow.universalVoucher?.status ?? "DRAFT" } : null;
+    // 5D-8/5D-11: status + type live on the spine — attach for the DRAFT gate + direction guards.
+    const voucher = voucherRow ? { ...voucherRow, lines: goodsLines, type: voucherRow.universalVoucher?.type ?? "", status: voucherRow.universalVoucher?.status ?? "DRAFT" } : null;
 
     if (!voucher)                  return NextResponse.json({ error: "Not found" }, { status: 404 });
     if (voucher.status !== "DRAFT") return NextResponse.json({ error: `Voucher is already ${voucher.status}` }, { status: 409 });
@@ -209,11 +209,10 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                         //   same DRAFT is idempotent.
                         const priorSameDay = await tx.invVoucher.count({
                             where: {
-                                type:     "PHYSICAL_STOCK",
                                 branchId: voucher.branchId,
                                 id:       { not: voucher.id },
-                                // 5D-8 status + 5D-10 date on spine + Phase 5 5C: goods lines hang off the spine.
-                                universalVoucher: { status: "POSTED", date: voucher.universalVoucher!.date, inventoryLines: { some: { productId: line.productId } } },
+                                // 5D-8 status + 5D-10 date + 5D-11 type on spine + Phase 5 5C: goods lines hang off the spine.
+                                universalVoucher: { type: "PHYSICAL_STOCK", status: "POSTED", date: voucher.universalVoucher!.date, inventoryLines: { some: { productId: line.productId } } },
                             },
                         });
                         if (priorSameDay === 0) {

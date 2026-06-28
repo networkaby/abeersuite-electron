@@ -35,13 +35,12 @@ export async function listOrders(opts?: { statusId?: string }): Promise<Normaliz
     const [invs, shops] = await Promise.all([
         prisma.invVoucher.findMany({
             where: {
-                type: { in: ["POS_ORDER", "SALES_ORDER"] },
                 orderStatusId: statusWhere,
-                universalVoucher: { deletedAt: null },   // 5D-8: lifecycle on spine
+                universalVoucher: { deletedAt: null, type: { in: ["POS_ORDER", "SALES_ORDER"] } },   // 5D-8 lifecycle + 5D-11 type on spine
             },
             select: {
-                id: true, type: true, partyJson: true,
-                universalVoucher: { select: { partyAccountId: true, voucherNo: true } },   // 5D-4 party + 5D-6 ref
+                id: true, partyJson: true,
+                universalVoucher: { select: { partyAccountId: true, voucherNo: true, type: true } },   // 5D-4 party + 5D-6 ref + 5D-11 type
                 totalAmount: true, orderStatusId: true, branchId: true, dealId: true, createdAt: true,
             },
             orderBy: { createdAt: "desc" },
@@ -77,7 +76,7 @@ export async function listOrders(opts?: { statusId?: string }): Promise<Normaliz
             source: "inv",
             id: v.id,
             ref: v.universalVoucher?.voucherNo ?? "",
-            kind: v.type as "POS_ORDER" | "SALES_ORDER",
+            kind: v.universalVoucher?.type as "POS_ORDER" | "SALES_ORDER",
             customerName: readPartyName(v.partyJson),
             total,
             statusId: v.orderStatusId,

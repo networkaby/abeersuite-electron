@@ -40,22 +40,23 @@ export async function GET(req: Request) {
     const page   = Math.max(1, Number(searchParams.get("page")  ?? "1"));
     const limit  = Math.min(200, Math.max(1, Number(searchParams.get("limit") ?? "50")));
 
-    const where: Prisma.InvVoucherWhereInput = {
+    // 5D-10 date + 5D-11 type both live on the spine.
+    const spineWhere: Prisma.UniversalVoucherWhereInput = {
         type: type && (OPTIONAL_TYPES as string[]).includes(type)
             ? type
-            : { in: OPTIONAL_TYPES },
+            : { in: [...OPTIONAL_TYPES] },
+    };
+    if (from || to) {
+        spineWhere.date = {
+            ...(from ? { gte: new Date(from) } : {}),
+            ...(to   ? { lte: new Date(to)   } : {}),
+        };
+    }
+    const where: Prisma.InvVoucherWhereInput = {
+        universalVoucher: spineWhere,
         // Hide hard-deleted rows; cancelled / soft-deleted still surface
         // so users can audit the trail.
     };
-    if (from || to) {
-        // 5D-10: date lives on the spine.
-        where.universalVoucher = {
-            date: {
-                ...(from ? { gte: new Date(from) } : {}),
-                ...(to   ? { lte: new Date(to)   } : {}),
-            },
-        };
-    }
     if (search) {
         // 5D-4: live party-ledger name search resolves account ids first, then
         // matches the spine's partyAccountId (the spine has no account relation).
@@ -78,8 +79,8 @@ export async function GET(req: Request) {
             skip: (page - 1) * limit,
             take: limit,
             include: {
-                refVoucher: { select: { id: true, type: true, universalVoucher: { select: { voucherNo: true } } } },
-                universalVoucher: { select: { description: true, voucherNo: true, status: true, deletedAt: true, date: true } },   // 5D-5 desc + 5D-6 ref + 5D-8 lifecycle + 5D-10 date
+                refVoucher: { select: { id: true, universalVoucher: { select: { voucherNo: true, type: true } } } },   // 5D-11 type on spine
+                universalVoucher: { select: { description: true, voucherNo: true, status: true, deletedAt: true, date: true, type: true } },   // 5D-5 desc + 5D-6 ref + 5D-8 lifecycle + 5D-10 date + 5D-11 type
             },
         }),
     ]);
@@ -97,10 +98,12 @@ export async function GET(req: Request) {
     const linesFor = (v: { universalVoucherId: number | null }) =>
         v.universalVoucherId != null ? (linesByUv.get(v.universalVoucherId) ?? []) : [];
 
-    const shaped = rows.map((v) => ({
+    const shaped = rows.map((v) => {
+      const vType = (v.universalVoucher?.type ?? "") as InvVoucherType;   // 5D-11: type on spine
+      return {
         id:          v.id,
         date:        v.universalVoucher?.date,   // 5D-10: date on spine
-        type:        v.type,
+        type:        vType,
         reference:   v.universalVoucher?.voucherNo ?? "",
         description: v.universalVoucher?.description ?? "",
         partyName:   readPartyName(v.partyJson),
@@ -109,10 +112,10 @@ export async function GET(req: Request) {
         status:      v.universalVoucher?.status ?? "DRAFT",
         deletedAt:   v.universalVoucher?.deletedAt ?? null,
         totalAmount: Number(v.totalAmount),
-        stockDir:    STOCK_IN_TYPES.has(v.type) ? "IN"
-                   : STOCK_OUT_TYPES.has(v.type) ? "OUT"
+        stockDir:    STOCK_IN_TYPES.has(vType) ? "IN"
+                   : STOCK_OUT_TYPES.has(vType) ? "OUT"
                    : "NONE",
-        refVoucher: v.refVoucher ? { id: v.refVoucher.id, type: v.refVoucher.type, reference: v.refVoucher.universalVoucher?.voucherNo ?? "" } : null,
+        refVoucher: v.refVoucher ? { id: v.refVoucher.id, type: v.refVoucher.universalVoucher?.type, reference: v.refVoucher.universalVoucher?.voucherNo ?? "" } : null,
         lineCount:  linesFor(v).length,
         lines: linesFor(v).map((l) => ({
             id:          l.id,
@@ -124,7 +127,8 @@ export async function GET(req: Request) {
             rate:        Number(l.rate),
             amount:      Number(l.amount),
         })),
-    }));
+      };
+    });
 
     return NextResponse.json({
         from: from ?? null,

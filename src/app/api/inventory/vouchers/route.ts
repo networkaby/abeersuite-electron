@@ -470,7 +470,7 @@ export async function POST(req: NextRequest) {
             });
             const created = await tx.invVoucher.create({
                 data: {
-                    type,
+                    // 5D-11: type lives on the spine (engineCreateSpine set it).
                     // 5D-6: reference (voucherNo) lives on the spine.
                     branchId,
                     universalVoucherId: spineId,
