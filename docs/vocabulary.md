@@ -74,6 +74,23 @@ This file unifies what used to be two separate glossaries — the Transaction En
 
 ---
 
+## Voucher No · Universal Voucher No
+
+**Definition:** Every voucher carries **two distinct numbers** — keep them separate.
+
+| Term | Meaning | Series | Current code |
+| --- | --- | --- | --- |
+| **Voucher No** | the user-facing document number each *kind* gets from its **own** series — prefix + running sequence (+ optional suffix): `SV-2026-0001` (sale), `PMT-2026-0001` (payment), `POS-2026-0001` (counter sale), `CV-…` (contra)… What staff/customers see and print. | per voucher-kind | `UniversalVoucher.friendlyRef` → renaming to **`voucherNo`** |
+| **Universal Voucher No** | the **single global sequence across every voucher of every kind** — the spine's own canonical, unique id (`GL-2026-0042`). One continuous run; never resets per kind. | one global | `UniversalVoucher.reference` → renaming to **`universalVoucherNo`** |
+
+**Rule:** every voucher (spine row) holds **both** — a sale is Voucher No `SV-2026-0001` *and* Universal Voucher No `GL-2026-0042`. Independent sequences; never conflate them.
+
+**"reference" is NOT a number.** The word *reference* is reserved for a future column holding actual cross-references (e.g. "this voucher refers to bill X / PO Y") — descriptive links, not a sequence. Do **not** name either number `reference`.
+
+**Status:** vocabulary **adopted (2026-06-28)**. The field rename (`friendlyRef`→`voucherNo`, `reference`→`universalVoucherNo`) is **pending** in schema + code — `reference` is overloaded today (the spine's number, plus `VoucherGlLine.reference` = a tender's UPI/cheque ref, which is unrelated and stays), so the spine rename is surgical, not a blind find-replace.
+
+---
+
 > Words for the Work / Work Inbox / ticket-workflow layer.
 
 ## Technician
@@ -398,4 +415,4 @@ This file unifies what used to be two separate glossaries — the Transaction En
 
 ---
 
-_Last updated: 2026-06-27 — Added the "Voucher lines" term: a voucher has TWO line faces — `VoucherGlLine` (every Dr/Cr posting, incl. tenders + charges as role-tagged rows) and `VoucherInventoryLine` (goods). Tenders/charges are NOT separate line types (they're GL postings); InvStockLedger stays a derived ledger, not a voucher line. Renames land with the universal-voucher table build. Prior: 2026-06-25 — merged the former transaction- and work-inbox vocabularies into this single doc._
+_Last updated: 2026-06-28 — Added "Voucher No · Universal Voucher No": every voucher holds two numbers — the per-kind **Voucher No** (`friendlyRef`→`voucherNo`, e.g. SV-/PMT-/POS-) and the one global **Universal Voucher No** (`reference`→`universalVoucherNo`, e.g. GL-). `reference` the word is reserved for a future cross-reference column, not a number; field rename pending. Prior: 2026-06-27 — added the "Voucher lines" term (`VoucherGlLine` + `VoucherInventoryLine`; tenders/charges are role-tagged GL rows). 2026-06-25 — merged the transaction- and work-inbox vocabularies into one doc._
