@@ -344,7 +344,7 @@ export default function ButtonBar({ user }: { user?: UserType }) {
                                 if (resolvedHref && !action.disabled) {
                                     return (
                                         <Link
-                                            key={action.label}
+                                            key={`${action.label}|${action.action ?? action.href ?? ""}`}
                                             href={resolvedHref}
                                             className={rowClass}
                                             title={titleAttr}
@@ -363,7 +363,7 @@ export default function ButtonBar({ user }: { user?: UserType }) {
 
                                 return (
                                     <button
-                                        key={action.label}
+                                        key={`${action.label}|${action.action ?? action.href ?? ""}`}
                                         type="button"
                                         title={titleAttr}
                                         disabled={action.disabled}
