@@ -148,6 +148,10 @@ export function JournalVoucherPage({ voucherId }: { voucherId?: number } = {}) {
     const canCancel     = hasPermissionWithScope(permissions, "finance:voucher:cancel");
     const canDelete     = hasPermissionWithScope(permissions, "finance:voucher:delete");
     const canHardDelete = hasPermissionWithScope(permissions, "finance:voucher:hard-delete");
+    // Posting is a separate permission (per-kind OR generic). A create-but-not-post
+    // user keeps only Save Draft — the Save (finalise) button is hidden.
+    const canPost       = hasPermissionWithScope(permissions, "finance:voucher:post:journal")
+        || hasPermissionWithScope(permissions, "finance:voucher:post");
 
     // Close / Cancel / Back — go back if there's tab history, otherwise fall
     // Close / back behaviour:
@@ -667,6 +671,7 @@ export function JournalVoucherPage({ voucherId }: { voucherId?: number } = {}) {
                 saveDisabled={saving || !balanced || loading || (isEditing && (loadedJe?.status === "CANCELLED" || !!loadedJe?.deletedAt))}
                 onSaveDraft={() => submit(false)}
                 showSaveDraft={!isEditing}
+                showSave={isEditing || canPost}
                 saveDraftDisabled={saving || !balanced}
                 saving={saving}
                 leftContent={isEditing && loadedJe ? (

@@ -223,11 +223,16 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
     // action now (soft-delete retired) — both LifecycleActions delete props map to it.
     const vCancel = requiredVoucherPermission(kind, "cancel");
     const vDelete = requiredVoucherPermission(kind, "delete");
+    const vPost   = requiredVoucherPermission(kind, "post");
     const holds = (g: string, p: string | null) =>
         hasPermissionWithScope(permissions, g) || (p != null && hasPermissionWithScope(permissions, p));
     const canCancel     = holds(vCancel.generic, vCancel.perKind);
     const canDelete     = holds(vDelete.generic, vDelete.perKind);
     const canHardDelete = canDelete;
+    // Posting is a separate permission. A create-but-not-post user keeps only the
+    // Save Draft button — the Save (finalise) button is hidden so they can't try
+    // an action that would 403.
+    const canPost       = holds(vPost.generic, vPost.perKind);
 
     const copy = PER_KIND[kind];
     const isEditing = voucherId != null && Number.isFinite(voucherId);
@@ -704,6 +709,7 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
                 saveDisabled={saving || !balanced || loading || (isEditing && (loadedVoucher?.status === "CANCELLED" || !!loadedVoucher?.deletedAt))}
                 onSaveDraft={() => submit(false)}
                 showSaveDraft={!isEditing}
+                showSave={isEditing || canPost}
                 saveDraftDisabled={saving || !balanced}
                 saving={saving}
                 leftContent={isEditing && loadedVoucher ? (

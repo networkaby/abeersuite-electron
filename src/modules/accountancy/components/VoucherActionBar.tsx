@@ -14,6 +14,9 @@ interface VoucherActionBarProps {
     saveDraftDisabled?: boolean;
     /** Whether to render the Save Draft button at all. */
     showSaveDraft?: boolean;
+    /** Whether to render the Save (finalise/post) button. Hidden for users who
+     *  may create but not post — they keep only Save Draft. Defaults to true. */
+    showSave?: boolean;
     /** Left slot: LifecycleActions + posted-repost note, built by the caller. */
     leftContent?: React.ReactNode;
     /** Extra buttons inserted before Cancel (e.g. Link Payment, Show Profit, Save & Print). */
@@ -29,6 +32,7 @@ export function VoucherActionBar({
     onSaveDraft,
     saveDraftDisabled,
     showSaveDraft,
+    showSave = true,
     leftContent,
     extraButtons,
 }: VoucherActionBarProps) {
@@ -43,9 +47,11 @@ export function VoucherActionBar({
                         {saving && <Loader2 size={13} className="animate-spin mr-1" />} Save Draft
                     </Button>
                 )}
-                <Button onClick={onSave} disabled={saveDisabled ?? saving}>
-                    {saving && <Loader2 size={13} className="animate-spin mr-1" />} {saveLabel}
-                </Button>
+                {showSave && (
+                    <Button onClick={onSave} disabled={saveDisabled ?? saving}>
+                        {saving && <Loader2 size={13} className="animate-spin mr-1" />} {saveLabel}
+                    </Button>
+                )}
             </div>
         </div>
     );
