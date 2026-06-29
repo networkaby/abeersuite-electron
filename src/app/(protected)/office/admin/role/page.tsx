@@ -49,7 +49,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { PermissionMatrix as SharedPermissionMatrix, type MatrixColumnGroup, type MatrixRow, type ColumnTint } from "@/shared/components/PermissionMatrix";
-import { GL_VOUCHER_MATRIX, VOUCHER_ACTIONS, type VoucherAction } from "@/shared/lib/auth/voucherMatrix";
+import { VOUCHER_MATRIX, VOUCHER_GROUPS, VOUCHER_ACTIONS, ALL_VOUCHER_PERMISSION_IDS, type VoucherAction, type VoucherGroupKey } from "@/shared/lib/auth/voucherMatrix";
 
 // Column tint per voucher action for the GL voucher matrix.
 const VOUCHER_ACTION_TINT: Record<VoucherAction, ColumnTint> = {
@@ -58,10 +58,18 @@ const VOUCHER_ACTION_TINT: Record<VoucherAction, ColumnTint> = {
 const VOUCHER_COLUMN_GROUPS: MatrixColumnGroup[] = VOUCHER_ACTIONS.map((a) => ({
     key: a.key, label: a.label, tint: VOUCHER_ACTION_TINT[a.key], columns: [{ key: a.key, label: a.label }],
 }));
-const VOUCHER_MATRIX_ROWS: MatrixRow[] = GL_VOUCHER_MATRIX.map((r) => ({
-    key: r.type, label: r.label,
-    cells: Object.fromEntries(VOUCHER_ACTIONS.map((a) => [a.key, r.perms[a.key]])),
+// Voucher rows grouped by economic nature (GL / Trading / Inventory / Optional),
+// each rendered as its own matrix so the groups read as separate sections.
+const VOUCHER_ROWS_BY_GROUP: { key: VoucherGroupKey; label: string; rows: MatrixRow[] }[] = VOUCHER_GROUPS.map((g) => ({
+    key: g.key,
+    label: g.label,
+    rows: VOUCHER_MATRIX.filter((r) => r.group === g.key).map((r) => ({
+        key: r.type, label: r.label,
+        cells: Object.fromEntries(VOUCHER_ACTIONS.map((a) => [a.key, r.perms[a.key]])),
+    })),
 }));
+// Every per-kind voucher permission id — used to keep them out of the loose chips.
+const VOUCHER_PERM_SET = new Set<string>(ALL_VOUCHER_PERMISSION_IDS);
 
 interface Permission {
     id: string;
@@ -642,23 +650,28 @@ export default function RolePage() {
     const additionalPermissions = filtered.filter(
         (permission) => !MATRIX_PERMISSION_IDS.has(permission.id)
             && permission.id !== "admin:bypass"
-            // GL voucher perms (per-kind + generic fallbacks) render in their own
-            // matrix below, not as loose chips.
+            // Per-kind voucher perms (GL + inventory) render in the voucher matrices
+            // below, not as loose chips. Generic finance:voucher:* fallbacks too.
             && !permission.id.startsWith("finance:voucher:")
+            && !VOUCHER_PERM_SET.has(permission.id)
             // Work permissions get their own direct "Works" section (grouped, not
             // pool-filtered) — keep them out of the loose chips to avoid duplication.
             && !permission.id.startsWith("work:")
     );
 
-    // GL voucher matrix — show ONLY the voucher kinds the role's department offers
+    // Voucher matrices — show ONLY the voucher kinds the role's department offers
     // (a kind is pooled as a whole, so its row is either fully offered or hidden).
-    // All-access depts (poolIds null) show every kind.
+    // All-access depts (poolIds null) show every kind. One matrix per nature group.
     const voucherCellLocked = (permId: string) =>
         poolIds !== null && !poolIds.has(permId) && !selected.has(permId);
-    const visibleVoucherRows = VOUCHER_MATRIX_ROWS.filter((row) =>
-        Object.values(row.cells).some((permId) => permId != null && !voucherCellLocked(permId)),
-    );
-    const showVoucherMatrix = visibleVoucherRows.length > 0;
+    const visibleVoucherGroups = VOUCHER_ROWS_BY_GROUP
+        .map((g) => ({
+            ...g,
+            rows: g.rows.filter((row) =>
+                Object.values(row.cells).some((permId) => typeof permId === "string" && !voucherCellLocked(permId)),
+            ),
+        }))
+        .filter((g) => g.rows.length > 0);
 
     const selectedCount = selected.size;
     const totalCount = allPerms.length;
@@ -940,17 +953,18 @@ export default function RolePage() {
                                             original={original}
                                             onTogglePerm={togglePerm}
                                         />
-                                        {showVoucherMatrix && (
+                                        {visibleVoucherGroups.map((group) => (
                                             <SharedPermissionMatrix
-                                                title="GL voucher eligibility"
-                                                description="Per voucher kind: who can create / post / cancel (= edit) / delete / hard-delete. Locked cells aren't offered by this department's pool."
-                                                rows={visibleVoucherRows}
+                                                key={group.key}
+                                                title={`${group.label} — eligibility`}
+                                                description="Per voucher kind: who can create / post / cancel (= edit) / delete. Locked cells aren't offered by this department's pool."
+                                                rows={group.rows}
                                                 columnGroups={VOUCHER_COLUMN_GROUPS}
                                                 selected={selected}
                                                 onTogglePerm={togglePerm}
                                                 locked={voucherCellLocked}
                                             />
-                                        )}
+                                        ))}
                                         <AdditionalPermissions
                                             permissions={additionalPermissions}
                                             selected={selected}

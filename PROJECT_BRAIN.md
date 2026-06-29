@@ -27,6 +27,8 @@ Replace paper/spreadsheets across the whole business with one app:
 
 ## 🔄 In flight
 
+- **2026-06-29 — Per-kind voucher permissions (Phase A: model + UI)**. Every hand-created voucher kind is now independently grantable (grant *Sale* without *Purchase*). `voucherMatrix.ts` is the single source: all kinds, grouped by **economic nature** — `gl` (GL leg only), `trading` (GL + stock), `inventory` (stock only), `optional` (no real transaction) — each with `create/post/cancel/delete` ids. GL keeps `finance:voucher:*` (already enforced); inventory adds `inventory:voucher:<action>:<kind>` (~56 perms, seeded from the matrix, R1 auto-granted). UI: Departments pool shows one **Vouchers** section with the four groups as flex chips; Role page renders one eligibility matrix per group. **Phase B (pending):** flip inventory route guards to check the per-kind key (additive with the existing `inventory:edit/voucher:*` fallback, which is why behaviour is unchanged today).
+
 - **2026-05-29 — Backup & Restore → Dropbox, fire-and-forget** (on `dev`, PR pending). `pg_dump`/`pg_restore` run in GitHub Actions; the dump is stored in / read from **Dropbox** instead of Supabase Storage; the UI only triggers the run and no longer polls (close the page anytime). Backup lands in Dropbox; restore picks from a Dropbox list. New `src/shared/lib/backup/dropbox.ts` + `/api/settings/restore/list`; removed `/backup/status`, `/restore/upload-url`, `/restore/status`, `backupStorage.ts`. **Pending before prod:** one-time Dropbox scoped-app setup (`DROPBOX_APP_KEY/SECRET/REFRESH_TOKEN`) in GitHub secrets + Vercel env, then merge `dev → main`.
 
 ---

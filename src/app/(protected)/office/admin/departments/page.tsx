@@ -15,7 +15,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { GL_VOUCHER_MATRIX, voucherKindPermissionIds } from "@/shared/lib/auth/voucherMatrix";
+import { VOUCHER_MATRIX, VOUCHER_GROUPS, ALL_VOUCHER_PERMISSION_IDS, voucherKindPermissionIds } from "@/shared/lib/auth/voucherMatrix";
 
 interface Branch { id: string; name: string; }
 interface Permission {
@@ -403,14 +403,24 @@ function PoolEditor({
     const matches = (p: Permission) =>
         !q || [p.label, p.id, p.module, p.description ?? ""].some(v => v.toLowerCase().includes(q));
     const filtered = permissions.filter(matches);
-    // admin:bypass is a system-only sentinel; GL voucher perms get their own
-    // voucher-kind toggles below (the dept declares which voucher kinds it works
-    // with — the create/post/cancel/delete access level is decided per-role).
-    const poolable = filtered.filter(p => p.id !== "admin:bypass" && !p.id.startsWith("finance:voucher:"));
+    // admin:bypass is a system-only sentinel; every per-kind voucher permission
+    // gets its own toggle in the Vouchers section below (the dept declares which
+    // voucher KINDS it works with — the create/post/cancel/delete access level is
+    // decided per-role). Generic finance:voucher:* fallbacks stay hidden.
+    const voucherPermSet = new Set<string>(ALL_VOUCHER_PERMISSION_IDS);
+    const poolable = filtered.filter(p =>
+        p.id !== "admin:bypass"
+        && !p.id.startsWith("finance:voucher:")
+        && !voucherPermSet.has(p.id),
+    );
     const modules = [...new Set(poolable.map(p => p.module))].sort();
-    const voucherKinds = GL_VOUCHER_MATRIX.filter(
+    // Vouchers grouped by economic nature (GL / Trading / Inventory / Optional).
+    const voucherRows = VOUCHER_MATRIX.filter(
         k => !q || k.label.toLowerCase().includes(q) || "voucher".includes(q),
     );
+    const voucherGroups = VOUCHER_GROUPS
+        .map(g => ({ ...g, kinds: voucherRows.filter(r => r.group === g.key) }))
+        .filter(g => g.kinds.length > 0);
 
     return (
         <div className="space-y-3 px-4 py-3">
@@ -433,26 +443,31 @@ function PoolEditor({
             </div>
 
             <div className="max-h-[60vh] space-y-4 overflow-auto pr-1">
-                {voucherKinds.length > 0 && (
-                    <div>
-                        <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                            accountancy · vouchers <span className="font-normal normal-case">(which voucher kinds this dept works with)</span>
+                {voucherGroups.length > 0 && (
+                    <div className="space-y-2.5">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                            vouchers <span className="font-normal normal-case">(which voucher kinds this dept works with — access level is set per role)</span>
                         </p>
-                        <div className="flex flex-wrap gap-1.5">
-                            {voucherKinds.map(kind => {
-                                const ids = voucherKindPermissionIds(kind.type);
-                                const on = ids.every(id => selected.has(id));
-                                return (
-                                    <PermChip
-                                        key={kind.type}
-                                        label={kind.label}
-                                        title={kind.type}
-                                        on={on}
-                                        onClick={() => onToggleMany(ids, !on)}
-                                    />
-                                );
-                            })}
-                        </div>
+                        {voucherGroups.map(group => (
+                            <div key={group.key}>
+                                <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70">{group.label}</p>
+                                <div className="flex flex-wrap gap-1.5">
+                                    {group.kinds.map(kind => {
+                                        const ids = voucherKindPermissionIds(kind.type);
+                                        const on = ids.every(id => selected.has(id));
+                                        return (
+                                            <PermChip
+                                                key={kind.type}
+                                                label={kind.label}
+                                                title={kind.type}
+                                                on={on}
+                                                onClick={() => onToggleMany(ids, !on)}
+                                            />
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 )}
                 {modules.map(module => (
@@ -472,7 +487,7 @@ function PoolEditor({
                         </div>
                     </div>
                 ))}
-                {modules.length === 0 && voucherKinds.length === 0 && (
+                {modules.length === 0 && voucherGroups.length === 0 && (
                     <p className="py-6 text-center text-sm text-muted-foreground">No permissions match your search.</p>
                 )}
             </div>

@@ -12,7 +12,9 @@
 //
 // What this seeds (kept on hard-clean):
 //   • RBAC: 1 Role (R1 Admin — only isSystem role; R2+ via helper-roles.ts),
-//     80+ Permissions, R1's RolePermission grants
+//     130+ Permissions (incl. per-kind voucher gates — GL `finance:voucher:*`
+//     + inventory `inventory:voucher:*`, generated from voucherMatrix.ts),
+//     R1's RolePermission grants
 //   • Workflow: 9 Pipelines, 63 TicketStatuses, 8 Works (1 gated → work:*
 //     permissions), 43 Workers, status + worker transitions
 //   • Org structure: 2 Branches (HQ + Online Store), 7 Departments, Role ranks
@@ -52,6 +54,7 @@ import {
     buildVoucherTemplateDefaults,
 } from "../../src/shared/lib/print/voucherTemplateDefaults";
 import { COMPANY_DETAILS } from "../../src/utils/constants-company-details";
+import { voucherPermissionSeeds } from "../../src/shared/lib/auth/voucherMatrix";
 import { upsertPositionWithRoles } from "./lib/positionSeedSync";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
@@ -254,9 +257,16 @@ const PERMISSIONS = [
     { id: "inventory:edit:branch", label: "Edit inventory (own branch)",   module: "inventory", description: "Create and post vouchers within the user's assigned branches." },
     { id: "inventory:view:org",    label: "View inventory (all branches)", module: "inventory", description: "View inventory data across all branches." },
     { id: "inventory:edit:org",    label: "Edit inventory (all branches)", module: "inventory", description: "Create and post vouchers for any branch." },
-    { id: "inventory:voucher:cancel",      label: "Cancel inventory vouchers",      module: "inventory", description: "Reverse stock + GL impact and mark CANCELLED." },
-    { id: "inventory:voucher:delete",      label: "Delete inventory vouchers",      module: "inventory", description: "Soft-delete; reverses stock + GL impact. Recoverable via restore." },
+    { id: "inventory:voucher:cancel",      label: "Cancel inventory vouchers",      module: "inventory", description: "Reverse stock + GL impact and mark CANCELLED. Generic fallback for the per-kind cancel keys." },
+    { id: "inventory:voucher:delete",      label: "Delete inventory vouchers",      module: "inventory", description: "Soft-delete; reverses stock + GL impact. Recoverable via restore. Generic fallback for the per-kind delete keys." },
     { id: "inventory:voucher:hard-delete", label: "Hard-delete inventory vouchers", module: "inventory", description: "Physically remove with audit snapshot." },
+
+    // inventory — per-kind voucher gates (inventory:voucher:<action>:<kind>). Every
+    // voucher kind is independent (Sale ≠ Purchase). Generated from the matrix so
+    // the kind↔permission mapping never drifts. Single source: voucherMatrix.ts.
+    // (Enforcement is wired in a later phase; routes fall back to the generic keys
+    // above until then.)
+    ...voucherPermissionSeeds(),
 
     // pos — shift / till / handover lifecycle
     { id: "pos:shift:open",        label: "Open POS shift",                 module: "pos", description: "Open your own till session with an opening cash float." },

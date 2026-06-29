@@ -36,7 +36,7 @@ pnpm prisma db seed       # 2. runs bootstrap-seed.ts
 
 `bootstrap-seed.ts` is **idempotent** — safe to re-run. It seeds:
 
-- **RBAC** — **1 role** (`R1` Admin, the only `isSystem` role; homed in the all-access `DEP-ADMIN` department so its Role Matrix shows the full permission list), 80+ permissions, R1's RolePermission grants. The other starter roles (`R2`–`R7`) are trade-specific and live in `helper-roles.ts` (see below); admins build the rest from the Role Matrix.
+- **RBAC** — **1 role** (`R1` Admin, the only `isSystem` role; homed in the all-access `DEP-ADMIN` department so its Role Matrix shows the full permission list), 130+ permissions, R1's RolePermission grants. Permissions include a **per-kind voucher gate** for every hand-created voucher kind — GL kinds in the `finance:voucher:<action>:<kind>` namespace, inventory kinds in `inventory:voucher:<action>:<kind>` — generated from `src/shared/lib/auth/voucherMatrix.ts` so the mapping never drifts. The other starter roles (`R2`–`R7`) are trade-specific and live in `helper-roles.ts` (see below); admins build the rest from the Role Matrix.
 - **Workflow** — 6 pipelines, 49 ticket statuses, 7 worker groups, 38 workers, transitions
 - **Org structure** — 1 branch (HQ; admins add regional / online branches via the UI), 8 cross-branch departments (incl. `DEP-ADMIN`, the all-access dept — `Department.isAllAccess`, whose permission pool is "everything"), role ranks. Department rows are seeded in the RBAC section because `Role.departmentId` is a required FK that needs `DEP-ADMIN` to exist before roles.
 - **Chart of accounts** — 28 AccountGroups (Tally tree, 15 primary + 13 sub) + ~50 GL ledgers; per-branch Vault accounts + POS counter till accounts
