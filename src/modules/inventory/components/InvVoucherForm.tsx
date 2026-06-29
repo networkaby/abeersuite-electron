@@ -6,7 +6,10 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { toast } from "sonner";
+import { requiredVoucherPermission } from "@/shared/lib/auth/voucherMatrix";
+import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { extractApiError } from "@/shared/lib/api";
 import { Loader2, Trash2, Building2 } from "lucide-react";
 import { useActiveBranchStore } from "@/store/activeBranchStore";
@@ -74,6 +77,15 @@ export function InvVoucherForm({ type, redirectTo }: { type: InvVoucherKind; red
     const router = useRouter();
     const activeBranchId = useActiveBranchStore((s) => s.activeBranchId);
     const [saving, setSaving] = useState(false);
+
+    // Posting is a separate permission from creating. A create-but-not-post user
+    // keeps only Save Draft — the Save & Post button is hidden so they can't hit
+    // an action that would 403.
+    const { data: session } = useSession();
+    const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
+    const vPost = requiredVoucherPermission(type, "post");
+    const canPost = hasPermissionWithScope(permissions, vPost.generic)
+        || (vPost.perKind != null && hasPermissionWithScope(permissions, vPost.perKind));
 
     const [form, setForm] = useState({
         date:         toIsoDate(new Date()),
@@ -260,9 +272,11 @@ export function InvVoucherForm({ type, redirectTo }: { type: InvVoucherKind; red
                         <Button onClick={() => submit(false)} variant="outline" disabled={saving}>
                             {saving && <Loader2 size={14} className="animate-spin" />} Save Draft
                         </Button>
-                        <Button onClick={() => submit(true)} disabled={saving} className="bg-green-600 hover:bg-green-700 text-white border-green-600">
-                            {saving && <Loader2 size={14} className="animate-spin" />} Save & Post
-                        </Button>
+                        {canPost && (
+                            <Button onClick={() => submit(true)} disabled={saving} className="bg-green-600 hover:bg-green-700 text-white border-green-600">
+                                {saving && <Loader2 size={14} className="animate-spin" />} Save & Post
+                            </Button>
+                        )}
                     </div>
                 </div>
             </div>

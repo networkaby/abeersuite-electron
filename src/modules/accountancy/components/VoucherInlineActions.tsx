@@ -13,6 +13,9 @@ interface VoucherInlineActionsProps {
     onSaveDraft?: () => void;
     saveDraftDisabled?: boolean;
     showSaveDraft?: boolean;
+    /** Whether to render the Save & Post button. Hidden for users who may create
+     *  but not post — they keep only Save Draft. Defaults to true. */
+    showSave?: boolean;
     /** Left slot: LifecycleActions block, built by the caller. */
     leftContent?: React.ReactNode;
 }
@@ -26,6 +29,7 @@ export function VoucherInlineActions({
     onSaveDraft,
     saveDraftDisabled,
     showSaveDraft,
+    showSave = true,
     leftContent,
 }: VoucherInlineActionsProps) {
     return (
@@ -37,13 +41,15 @@ export function VoucherInlineActions({
                     {saving && <Loader2 size={14} className="animate-spin" />} Save Draft
                 </Button>
             )}
-            <Button
-                onClick={onSave}
-                disabled={saveDisabled ?? saving}
-                className="bg-green-600 hover:bg-green-700 text-white border-green-600"
-            >
-                {saving && <Loader2 size={14} className="animate-spin" />} {saveLabel}
-            </Button>
+            {showSave && (
+                <Button
+                    onClick={onSave}
+                    disabled={saveDisabled ?? saving}
+                    className="bg-green-600 hover:bg-green-700 text-white border-green-600"
+                >
+                    {saving && <Loader2 size={14} className="animate-spin" />} {saveLabel}
+                </Button>
+            )}
         </div>
     );
 }

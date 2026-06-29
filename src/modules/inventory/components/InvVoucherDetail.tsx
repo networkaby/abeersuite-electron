@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { fmt, JOURNAL_STATUS_COLORS } from "@/utils/constants";
 import { LifecycleActions } from "@/modules/accountancy/components/LifecycleActions";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
+import { requiredVoucherPermission } from "@/shared/lib/auth/voucherMatrix";
 import { editFormUrl } from "@/modules/inventory/components/VoucherActionsMenu";
 
 type Voucher = {
@@ -118,6 +119,12 @@ export function InvVoucherDetail({ basePath, label, formPath }: {
     if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-muted-foreground" size={28} /></div>;
     if (!voucher) return <div className="py-20 text-center text-muted-foreground">Voucher not found.</div>;
 
+    // Posting is a separate permission — hide Post on a draft for a create-but-not-
+    // post user (matches the route's per-kind post check).
+    const vPost = requiredVoucherPermission(voucher.type, "post");
+    const canPost = hasPermissionWithScope(permissions, vPost.generic)
+        || (vPost.perKind != null && hasPermissionWithScope(permissions, vPost.perKind));
+
     return (
         <div className="space-y-6 max-w-4xl">
             <div className="flex items-center gap-3 flex-wrap">
@@ -143,7 +150,7 @@ export function InvVoucherDetail({ basePath, label, formPath }: {
                             <Pencil size={14} /> Edit
                         </Button>
                     )}
-                    {voucher.status === "DRAFT" && (
+                    {voucher.status === "DRAFT" && canPost && (
                         <Button onClick={post} disabled={posting} className="bg-green-600 hover:bg-green-700 text-white">
                             {posting ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={14} />} Post
                         </Button>

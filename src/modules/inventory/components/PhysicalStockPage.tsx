@@ -44,6 +44,7 @@ import { VoucherTopBar } from "@/modules/accountancy/components/VoucherTopBar";
 import { VoucherInlineActions } from "@/modules/accountancy/components/VoucherInlineActions";
 import { useSession } from "next-auth/react";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
+import { requiredVoucherPermission } from "@/shared/lib/auth/voucherMatrix";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
 
@@ -93,6 +94,11 @@ export function PhysicalStockPage() {
     const canCancel     = hasPermissionWithScope(permissions, "inventory:voucher:cancel");
     const canDelete     = hasPermissionWithScope(permissions, "inventory:voucher:delete");
     const canHardDelete = hasPermissionWithScope(permissions, "inventory:voucher:hard-delete");
+    // Posting is a separate permission — a create-but-not-post user keeps only Save
+    // Draft. Matches the route's userCanVoucherKind(type, "post") check exactly.
+    const vPost = requiredVoucherPermission("PHYSICAL_STOCK", "post");
+    const canPost = hasPermissionWithScope(permissions, vPost.generic)
+        || (vPost.perKind != null && hasPermissionWithScope(permissions, vPost.perKind));
 
     // Close / Cancel — smart back-nav (matches TradingVoucherPage):
     //   • Same-tab open → router.back() returns to wherever the operator came from.
@@ -416,6 +422,7 @@ export function PhysicalStockPage() {
                     onSave={() => submit(true)}
                     onSaveDraft={() => submit(false)}
                     showSaveDraft
+                    showSave={editing || canPost}
                     saving={saving}
                     leftContent={editing && loadedVoucher ? (
                         <LifecycleActions

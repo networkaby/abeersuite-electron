@@ -200,10 +200,10 @@ export function voucherKindPermissionIds(type: VoucherType | InvVoucherType): st
  * if the user holds EITHER (additive — generic grants keep working).
  */
 export function requiredVoucherPermission(
-    type: VoucherType | InvVoucherType,
+    type: VoucherType | InvVoucherType | string,
     action: VoucherAction,
 ): { perKind: string | null; generic: string } {
-    const row = ROW_BY_TYPE.get(type);
+    const row = ROW_BY_TYPE.get(type as VoucherType);
     const generic = row?.module === "inventory"
         ? GENERIC_INVENTORY_PERMISSION[action]
         : GENERIC_VOUCHER_PERMISSION[action];

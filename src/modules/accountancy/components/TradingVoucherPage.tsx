@@ -75,6 +75,7 @@ import { VoucherTopBar } from "@/modules/accountancy/components/VoucherTopBar";
 import { VoucherActionBar } from "@/modules/accountancy/components/VoucherActionBar";
 import { useSession } from "next-auth/react";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
+import { requiredVoucherPermission } from "@/shared/lib/auth/voucherMatrix";
 
 // ── Per-line state ─────────────────────────────────────────────────────────
 
@@ -627,6 +628,11 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
     const canCancel     = hasPermissionWithScope(permissions, "inventory:voucher:cancel");
     const canDelete     = hasPermissionWithScope(permissions, "inventory:voucher:delete");
     const canHardDelete = hasPermissionWithScope(permissions, "inventory:voucher:hard-delete");
+    // Posting is a separate permission — a create-but-not-post user keeps only Save
+    // Draft. Matches the route's per-kind post check exactly.
+    const vPost = requiredVoucherPermission(kind, "post");
+    const canPost = hasPermissionWithScope(permissions, vPost.generic)
+        || (vPost.perKind != null && hasPermissionWithScope(permissions, vPost.perKind));
     // Voucher's saved paymentAccountId — paired with cashBankAccounts via a
     // dedicated effect so the picker resolves once both have loaded.
     const [pendingPaymentAccountId, setPendingPaymentAccountId] = useState<number | null>(null);
@@ -2577,6 +2583,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                 onSave={() => submit(true)}
                 onSaveDraft={() => submit(false)}
                 showSaveDraft
+                showSave={isEditing || canPost}
                 saving={saving}
                 leftContent={
                     <div className="mr-auto flex items-center gap-2">
