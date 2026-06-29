@@ -50,6 +50,9 @@ import {
 } from "@/components/ui/select";
 import { PermissionMatrix as SharedPermissionMatrix, type MatrixColumnGroup, type MatrixRow, type ColumnTint } from "@/shared/components/PermissionMatrix";
 import { VOUCHER_MATRIX, VOUCHER_GROUPS, VOUCHER_ACTIONS, ALL_VOUCHER_PERMISSION_IDS, type VoucherAction, type VoucherGroupKey } from "@/shared/lib/auth/voucherMatrix";
+import type { LucideIcon } from "lucide-react";
+import { BUTTON_BAR_ACTIONS } from "@/utils/constants";
+import { createActionPermission } from "@/utils/module-access";
 
 // Column tint per voucher action for the GL voucher matrix.
 const VOUCHER_ACTION_TINT: Record<VoucherAction, ColumnTint> = {
@@ -70,6 +73,21 @@ const VOUCHER_ROWS_BY_GROUP: { key: VoucherGroupKey; label: string; rows: Matrix
 }));
 // Every per-kind voucher permission id — used to keep them out of the loose chips.
 const VOUCHER_PERM_SET = new Set<string>(ALL_VOUCHER_PERMISSION_IDS);
+
+// Quick-action options for the role's button bar — every creatable thing (vouchers
+// + Repair + POS), de-duped by the create permission it maps to. Ticking a chip
+// grants that create key to the role, so it appears in the role's Quick Actions.
+const QUICK_ACTION_OPTIONS: { permission: string; label: string; icon: LucideIcon }[] = (() => {
+    const seen = new Set<string>();
+    const out: { permission: string; label: string; icon: LucideIcon }[] = [];
+    for (const a of BUTTON_BAR_ACTIONS) {
+        const permission = createActionPermission(a);
+        if (!permission || seen.has(permission)) continue;
+        seen.add(permission);
+        out.push({ permission, label: a.label.replace(/\s*\+$/, "").trim(), icon: a.icon });
+    }
+    return out;
+})();
 
 interface Permission {
     id: string;
@@ -976,6 +994,12 @@ export default function RolePage() {
                             </CardContent>
                         </Card>
 
+                        <QuickActionsSection
+                            selected={selected}
+                            original={original}
+                            onTogglePerm={togglePerm}
+                        />
+
                         <WorkAccessSection
                             works={works}
                             groups={workGroups}
@@ -1545,6 +1569,70 @@ function PermissionMatrix({
                 </table>
             </div>
         </div>
+    );
+}
+
+// The role's Quick Actions picker — flex list of everything creatable (vouchers +
+// Repair + POS). Ticking a chip grants that create permission, which makes the "+"
+// show in the role's button bar. Reads/writes the same `selected` set as the
+// matrix, so the two views stay in sync.
+function QuickActionsSection({
+    selected,
+    original,
+    onTogglePerm,
+}: {
+    selected: Set<string>;
+    original: Set<string>;
+    onTogglePerm: (id: string) => void;
+}) {
+    return (
+        <Card>
+            <CardContent className="space-y-3 pt-4">
+                <div>
+                    <h2 className="flex items-center gap-2 text-base font-bold tracking-tight">
+                        <Plus size={15} /> Quick Actions
+                    </h2>
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">
+                        Tick what this role can create — each shows as a &ldquo;+&rdquo; in the role&rsquo;s Quick Actions bar. Ticking grants that create permission.
+                    </p>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                    {QUICK_ACTION_OPTIONS.map((opt) => {
+                        const Icon = opt.icon;
+                        const isOn = selected.has(opt.permission);
+                        const changed = isOn !== original.has(opt.permission);
+                        return (
+                            <Button
+                                key={opt.permission}
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => onTogglePerm(opt.permission)}
+                                title={opt.permission}
+                                className={[
+                                    "h-auto items-center gap-1.5 rounded-md border px-2 py-1 text-left transition-colors",
+                                    isOn
+                                        ? "border-primary bg-primary/10 text-foreground hover:bg-primary/15"
+                                        : "border-border hover:border-primary/60 hover:bg-primary/5",
+                                    changed ? "ring-2 ring-primary/20" : "",
+                                ].join(" ")}
+                            >
+                                <span
+                                    className={[
+                                        "flex h-4 w-4 shrink-0 items-center justify-center rounded border",
+                                        isOn ? "border-primary bg-primary text-primary-foreground" : "border-border",
+                                    ].join(" ")}
+                                >
+                                    {isOn && <Check size={10} strokeWidth={3} />}
+                                </span>
+                                <Icon size={13} className="shrink-0 text-muted-foreground" />
+                                <span className="text-[11px] font-medium leading-tight">{opt.label}</span>
+                            </Button>
+                        );
+                    })}
+                </div>
+            </CardContent>
+        </Card>
     );
 }
 
