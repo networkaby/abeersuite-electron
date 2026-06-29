@@ -69,16 +69,9 @@ export function BranchSwitcher() {
 
     if (!user) return null;
 
-    // No accessible branches — position-less user. Show an explicit badge so
-    // they know why the operational UI is locked out.
-    if (branches.length === 0) {
-        return (
-            <div className="flex items-center gap-1.5 px-2 py-0.5 text-xs text-amber-700 dark:text-amber-400 border border-amber-300/60 dark:border-amber-700/60 rounded bg-amber-50/40 dark:bg-amber-950/20">
-                <Building2 size={12} className="shrink-0" />
-                <span className="truncate max-w-[160px]">No branch assigned</span>
-            </div>
-        );
-    }
+    // No accessible branches — an unappointed (position-less) user has no branch.
+    // Show no branch control at all.
+    if (branches.length === 0) return null;
 
     // Single-branch users see a static badge (no need to switch).
     if (branches.length === 1) {

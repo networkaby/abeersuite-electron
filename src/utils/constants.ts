@@ -136,6 +136,8 @@ export type ButtonBarAction = {
     /** Dialog-opening action discriminator. Mutually exclusive with `href`. */
     action?: "new-ticket";
     pipelineRef?: "default";
+    /** When set, the action is hidden unless the user holds this permission (admin:bypass also passes). */
+    permission?: string | null;
     disabled?: boolean;
 };
 
@@ -179,7 +181,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Repair +", subtitle: "Open repair intake", icon: Wrench, variant: "default", action: "new-ticket", pipelineRef: "default" },
         ],
         children: [
-            { label: "All Repair", icon: ClipboardList, href: "/office/repairing/tickets", pipelineRef: "default" },
+            { label: "All Repair", icon: ClipboardList, href: "/office/repairing/tickets", pipelineRef: "default", permission: "tickets:view:own" },
             { label: "Service Centers", icon: Building2, href: "/office/repairing/service-centers", permission: "service-centers:view" },
         ],
     },
@@ -544,11 +546,11 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         pathPrefixes: ["/office/pricing-strategy"],
         children: [
             // { label: "Overview", icon: ChartArea, href: "/office/pricing-strategy" },
-            { label: "Strategies", icon: Calculator, href: "/office/pricing-strategy/strategies" },
-            // { label: "Items", icon: Boxes, href: "/office/pricing-strategy/items" },
-            { label: "Costing", icon: Truck, href: "/office/pricing-strategy/costing" },
-            { label: "Needs attention", icon: AlertTriangle, href: "/office/pricing-strategy/needs-attention" },
-            { label: "Update & print labels", icon: Printer, href: "/office/pricing-strategy/update-print-labels" },
+            { label: "Strategies", icon: Calculator, href: "/office/pricing-strategy/strategies", permission: "inventory:manage" },
+            // { label: "Items", icon: Boxes, href: "/office/pricing-strategy/items", permission: "inventory:manage" },
+            { label: "Costing", icon: Truck, href: "/office/pricing-strategy/costing", permission: "inventory:manage" },
+            { label: "Needs attention", icon: AlertTriangle, href: "/office/pricing-strategy/needs-attention", permission: "inventory:manage" },
+            { label: "Update & print labels", icon: Printer, href: "/office/pricing-strategy/update-print-labels", permission: "inventory:manage" },
         ],
     },
     // Compliance
@@ -665,6 +667,7 @@ export const BUTTON_BAR_ACTIONS: ButtonBarAction[] = [
         variant: "default",
         action: "new-ticket",
         pipelineRef: "default",
+        permission: "tickets:create",
     },
     {
         label: "POS",
@@ -673,6 +676,7 @@ export const BUTTON_BAR_ACTIONS: ButtonBarAction[] = [
         variant: "outline",
         href: "/vouchers/pos",
         newTab: true,
+        permission: "pos:shift:open",
     },
     {
         label: "Dummy Create +",

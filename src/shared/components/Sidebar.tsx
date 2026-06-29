@@ -26,6 +26,7 @@ import {
     type ModuleChild,
     type NavItem,
 } from "@/utils/constants";
+import { canViewModule, canViewModuleChild } from "@/utils/module-access";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 
 type SidebarUser = {
@@ -174,8 +175,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
         return !hasMoreSpecificSiblingMatch;
     };
 
-    const canViewChild = (child: ModuleChild) =>
-        !child.permission || isAdmin || permissions.includes(child.permission);
+    const canViewChild = (child: ModuleChild) => canViewModuleChild(child, permissions, isAdmin);
 
     const hasActiveDescendant = (items: ModuleChild[]): boolean =>
         items.some((item) => {
@@ -578,7 +578,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                 </p>
                             )}
                             <div className="space-y-0.5">
-                                {MODULE_SECTIONS.filter((mod) => !mod.permission || isAdmin || permissions.includes(mod.permission)).map((mod) => {
+                                {MODULE_SECTIONS.filter((mod) => canViewModule(mod, permissions, isAdmin)).map((mod) => {
                                     const Icon = mod.icon;
                                     const isOpen = moduleOpen[mod.key] ?? false;
 

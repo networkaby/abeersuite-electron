@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { MODULE_SECTIONS, type ModuleCreateAction } from "@/utils/constants";
+import { canViewModule } from "@/utils/module-access";
 import { useQuickTicketStore } from "@/store/quickTicketStore";
 import { useCreateDialogStore } from "@/store/createDialogStore";
 // GL vouchers now use full-page routes opened in a new tab — no dialog stores needed.
@@ -87,8 +88,12 @@ export default function AllCreateActionsDialog({ open, onOpenChange, permissions
         }
     };
 
+    // Only surface actions from modules the user can actually view — otherwise
+    // ungated actions (Sale +, Purchase +, …) would leak to users locked out of
+    // the owning module.
     const modulesWithActions = MODULE_SECTIONS.filter(
-        (m) => m.createActions && m.createActions.some((a) => canDo(a.permission))
+        (m) => canViewModule(m, permissions, isAdmin)
+            && m.createActions && m.createActions.some((a) => canDo(a.permission))
     );
 
     return (
