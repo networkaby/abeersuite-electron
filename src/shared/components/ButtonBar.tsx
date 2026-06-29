@@ -10,7 +10,7 @@ import { PanelRightClose, PanelRightOpen, Grid2x2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { BUTTON_BAR_ACTIONS, MODULE_SECTIONS, type ModuleCreateAction } from "@/utils/constants";
 import { getActiveModule } from "@/utils/active-module";
-import { canViewModule } from "@/utils/module-access";
+import { canViewModule, canDoCreateAction } from "@/utils/module-access";
 import { useQuickTicketStore } from "@/store/quickTicketStore";
 import { useCreateDialogStore } from "@/store/createDialogStore";
 // GL vouchers now use full-page routes opened in a new tab — no dialog stores needed.
@@ -142,13 +142,14 @@ export default function ButtonBar({ user }: { user?: UserType }) {
 
     const permissions = user?.permissions ?? [];
     const isAdmin = permissions.includes(PERMISSIONS.ADMIN_BYPASS);
-    const canDo = (permission?: string | null) => !permission || isAdmin || permissions.includes(permission);
+    const canDo = (a: ModuleCreateAction | typeof BUTTON_BAR_ACTIONS[number]) => canDoCreateAction(a, permissions, isAdmin);
 
     const activeModule = getActiveModule(pathname);
     const createActions = activeModule?.createActions ?? null;
 
-    // Module create actions, gated by each action's own permission.
-    const visibleActions = (createActions ?? []).filter((a) => canDo(a.permission));
+    // Module create actions — gated by each action's effective permission (per-kind
+    // voucher CREATE key for vouchers, else the action's own permission).
+    const visibleActions = (createActions ?? []).filter(canDo);
 
     useEffect(() => {
         axios
@@ -180,7 +181,7 @@ export default function ButtonBar({ user }: { user?: UserType }) {
     // For universal (no active module) fall back to BUTTON_BAR_ACTIONS rendered as
     // ModuleCreateAction shape — gated by permission, same as module actions.
     const universalActions: ModuleCreateAction[] = BUTTON_BAR_ACTIONS
-        .filter((a) => canDo(a.permission))
+        .filter(canDo)
         .map((a) => ({
             label: a.label,
             subtitle: a.subtitle,
@@ -200,7 +201,7 @@ export default function ButtonBar({ user }: { user?: UserType }) {
     // modules the user can view. Hide it when that dialog would be empty, so a
     // zero-permission / unappointed user gets a truly empty action bar.
     const moreHasContent = MODULE_SECTIONS.some(
-        (m) => canViewModule(m, permissions, isAdmin) && (m.createActions ?? []).some((a) => canDo(a.permission)),
+        (m) => canViewModule(m, permissions, isAdmin) && (m.createActions ?? []).some(canDo),
     );
 
     return (

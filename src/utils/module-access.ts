@@ -1,8 +1,26 @@
-import type { ModuleChild, ModuleSection } from "./constants";
+import type { ModuleChild, ModuleSection, ModuleCreateAction, ButtonBarAction } from "./constants";
+import { VOUCHER_CREATE_PERMISSION_BY_ACTION } from "./constants";
 
 // Shared module/action visibility gate — used by the Sidebar (which modules to
 // list), the ButtonBar, and the All-Create-Actions dialog so all three agree on
 // what a user may see. A zero-permission user sees no modules and no actions.
+
+// The permission that decides whether a create "+" shows. For a voucher action,
+// it's the kind's per-kind CREATE key (so a position sees only the vouchers it may
+// create); otherwise the action's own `permission`. Drives the Quick Actions bar.
+export function createActionPermission(action: ModuleCreateAction | ButtonBarAction): string | null | undefined {
+    return (action.action && VOUCHER_CREATE_PERMISSION_BY_ACTION[action.action]) || action.permission;
+}
+
+// True if the user may perform this create action (no perm ⇒ open; admin passes).
+export function canDoCreateAction(
+    action: ModuleCreateAction | ButtonBarAction,
+    permissions: string[],
+    isAdmin: boolean,
+): boolean {
+    const perm = createActionPermission(action);
+    return !perm || isAdmin || permissions.includes(perm);
+}
 
 export function canViewModuleChild(child: ModuleChild, permissions: string[], isAdmin: boolean): boolean {
     return !child.permission || isAdmin || permissions.includes(child.permission);

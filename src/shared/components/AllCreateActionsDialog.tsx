@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { MODULE_SECTIONS, type ModuleCreateAction } from "@/utils/constants";
-import { canViewModule } from "@/utils/module-access";
+import { canViewModule, canDoCreateAction } from "@/utils/module-access";
 import { useQuickTicketStore } from "@/store/quickTicketStore";
 import { useCreateDialogStore } from "@/store/createDialogStore";
 // GL vouchers now use full-page routes opened in a new tab — no dialog stores needed.
@@ -30,10 +30,7 @@ export default function AllCreateActionsDialog({ open, onOpenChange, permissions
     const { setPersonOpen, setCompanyOpen } = useCreateDialogStore();
     // GL voucher stores removed — those kinds now navigate to full-page routes.
 
-    const canDo = (permission?: string | null) => {
-        if (!permission) return true;
-        return isAdmin || permissions.includes(permission);
-    };
+    const canDo = (a: ModuleCreateAction) => canDoCreateAction(a, permissions, isAdmin);
 
     const handleAction = (action: ModuleCreateAction) => {
         if (action.disabled) return;
@@ -93,7 +90,7 @@ export default function AllCreateActionsDialog({ open, onOpenChange, permissions
     // the owning module.
     const modulesWithActions = MODULE_SECTIONS.filter(
         (m) => canViewModule(m, permissions, isAdmin)
-            && m.createActions && m.createActions.some((a) => canDo(a.permission))
+            && m.createActions && m.createActions.some(canDo)
     );
 
     return (
@@ -112,7 +109,7 @@ export default function AllCreateActionsDialog({ open, onOpenChange, permissions
                 <ScrollArea className="flex-1 min-h-0">
                     <div className="space-y-5 px-5 py-4">
                         {modulesWithActions.map((mod, idx) => {
-                            const visibleActions = (mod.createActions ?? []).filter((a) => canDo(a.permission));
+                            const visibleActions = (mod.createActions ?? []).filter(canDo);
                             if (!visibleActions.length) return null;
 
                             const ModIcon = mod.icon;

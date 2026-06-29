@@ -1,4 +1,5 @@
 import type { LucideIcon } from "lucide-react";
+import { VOUCHER_MATRIX } from "@/shared/lib/auth/voucherMatrix";
 import {
     ClipboardList,
     Users,
@@ -133,8 +134,8 @@ export type ButtonBarAction = {
     href?: string;
     /** Open the href in a new browser tab. */
     newTab?: boolean;
-    /** Dialog-opening action discriminator. Mutually exclusive with `href`. */
-    action?: "new-ticket";
+    /** Create-action discriminator (voucher kind / ticket / contact). Mutually exclusive with `href`. */
+    action?: ModuleCreateAction["action"];
     pipelineRef?: "default";
     /** When set, the action is hidden unless the user holds this permission (admin:bypass also passes). */
     permission?: string | null;
@@ -659,6 +660,33 @@ export const WARRANTY_SCOPE_OPTIONS = [
 
 // ─── ButtonBar ────────────────────────────────────────────────────────────────
 
+// ─── Per-kind voucher create gating for the button bar / create menu ───────────
+// Each create action maps to a voucher kind; the kind's per-kind CREATE permission
+// (from voucherMatrix.ts — the single source) decides whether the "+" shows for a
+// position. This drives the Quick Actions bar so a position sees only the vouchers
+// it may create. Non-voucher actions (new-ticket / new-person / new-company) fall
+// back to the action's own `permission` field.
+const ACTION_TO_VOUCHER_TYPE: Record<string, string> = {
+    "new-payment": "PAYMENT", "new-receipt": "RECEIPT", "new-contra": "CONTRA",
+    "new-credit-note": "CREDIT_NOTE", "new-debit-note": "DEBIT_NOTE", "new-journal-voucher": "JOURNAL",
+    "new-sale": "SALE", "new-purchase": "PURCHASE",
+    "new-sale-return": "SALE_RETURN", "new-purchase-return": "PURCHASE_RETURN",
+    "new-grn": "GRN", "new-challan": "CHALLAN",
+    "new-physical-stock": "PHYSICAL_STOCK", "new-branch-transfer": "BRANCH_TRANSFER",
+    "new-manufacturing-journal": "MANUFACTURING_JOURNAL",
+    "new-rejection-in": "REJECTION_IN", "new-rejection-out": "REJECTION_OUT",
+    "new-estimate": "ESTIMATE", "new-sales-order": "SALES_ORDER", "new-purchase-order": "PURCHASE_ORDER",
+};
+
+const CREATE_PERM_BY_TYPE = new Map(VOUCHER_MATRIX.map((r) => [r.type as string, r.perms.create]));
+
+/** action discriminator → its per-kind voucher CREATE permission (undefined = not a voucher). */
+export const VOUCHER_CREATE_PERMISSION_BY_ACTION: Record<string, string> = Object.fromEntries(
+    Object.entries(ACTION_TO_VOUCHER_TYPE)
+        .map(([action, type]) => [action, CREATE_PERM_BY_TYPE.get(type)])
+        .filter((entry): entry is [string, string] => Boolean(entry[1])),
+);
+
 export const BUTTON_BAR_ACTIONS: ButtonBarAction[] = [
     {
         label: "Repair +",
@@ -678,12 +706,33 @@ export const BUTTON_BAR_ACTIONS: ButtonBarAction[] = [
         newTab: true,
         permission: "pos:shift:open",
     },
-    {
-        label: "Dummy Create +",
-        subtitle: "Coming soon",
-        icon: Plus,
-        variant: "outline",
-        action: "new-ticket",
-        disabled: true,
-    },
+
+
+
+    { label: "POS", subtitle: "Open POS register", icon: Monitor, variant: "default", href: "/vouchers/pos/new", newTab: true, permission: "pos:shift:open" },
+    { label: "Sale +", subtitle: "New Sale Invoice", icon: Receipt, variant: "default", action: "new-sale" },
+    { label: "Purchase +", subtitle: "New Purchase Invoice", icon: ShoppingCart, variant: "outline", action: "new-purchase" },
+    { label: "Sale Return +", subtitle: "Customer returns goods (Credit Note)", icon: Receipt, variant: "outline", action: "new-sale-return" },
+    { label: "Purchase Return +", subtitle: "Return goods to supplier (Debit Note)", icon: ShoppingCart, variant: "outline", action: "new-purchase-return" },
+    { label: "Estimate +", subtitle: "New estimate", icon: ScrollText, variant: "outline", action: "new-estimate" },
+    { label: "Payment +", subtitle: "New payment voucher", icon: Wallet, variant: "outline", action: "new-payment", permission: "finance:voucher:create" },
+    { label: "Receipt +", subtitle: "New receipt voucher", icon: Wallet, variant: "outline", action: "new-receipt", permission: "finance:voucher:create" },
+    { label: "Contra +", subtitle: "New contra voucher", icon: Wallet, variant: "outline", action: "new-contra", permission: "finance:voucher:create" },
+    { label: "Credit Note +", subtitle: "New credit note", icon: FileText, variant: "outline", action: "new-credit-note", permission: "finance:voucher:create" },
+    { label: "Debit Note +", subtitle: "New debit note", icon: FileText, variant: "outline", action: "new-debit-note", permission: "finance:voucher:create" },
+    { label: "Journal +", subtitle: "New journal voucher", icon: FileText, variant: "outline", action: "new-journal-voucher", permission: "finance:voucher:create" },
+    { label: "Sales Order +", subtitle: "New sales order", icon: ClipboardList, variant: "outline", action: "new-sales-order", permission: "inventory:manage" },
+    { label: "Purchase Order +", subtitle: "New purchase order", icon: ClipboardList, variant: "outline", action: "new-purchase-order", permission: "inventory:manage" },
+    { label: "GRN +", subtitle: "New goods receipt", icon: PackageCheck, variant: "outline", action: "new-grn", permission: "inventory:manage" },
+    { label: "Challan +", subtitle: "New challan", icon: Truck, variant: "outline", action: "new-challan", permission: "inventory:manage" },
+    { label: "Manufacturing Journal +", subtitle: "New manufacturing journal", icon: Factory, variant: "outline", action: "new-manufacturing-journal", permission: "inventory:manage" },
+    { label: "Physical Stock +", subtitle: "New physical stock", icon: ClipboardCheck, variant: "outline", action: "new-physical-stock", permission: "inventory:manage" },
+    { label: "Branch Transfer +", subtitle: "Move stock between locations", icon: ArrowLeftRight, variant: "outline", action: "new-branch-transfer", permission: "inventory:manage" },
+    { label: "Rejection In +", subtitle: "New rejection in", icon: PackageX, variant: "outline", action: "new-rejection-in", permission: "inventory:manage" },
+    { label: "Rejection Out +", subtitle: "New rejection out", icon: PackageX, variant: "outline", action: "new-rejection-out", permission: "inventory:manage" },
+
+
+
+
+
 ];
