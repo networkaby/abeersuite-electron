@@ -195,7 +195,8 @@ export async function buildInvVoucherGlLines(
     // POS shares the sale shape (counter Dr / body Cr) — same GST split,
     // same body/tax resolution, and (since Layer 7g) the same tender
     // shape — every Dr leg is an explicit tender row on the InvVoucher.
-    const isPositiveSale     = voucher.type === "SALE" || voucher.type === "POS";
+    // ONLINE_INVOICE is the online-channel fulfilment sale — identical sale shape.
+    const isPositiveSale     = voucher.type === "SALE" || voucher.type === "POS" || voucher.type === "ONLINE_INVOICE";
     const isPositivePurchase = voucher.type === "PURCHASE";
     const isSaleReturn       = voucher.type === "SALE_RETURN";
     const isPurchaseReturn   = voucher.type === "PURCHASE_RETURN";

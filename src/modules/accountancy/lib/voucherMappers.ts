@@ -23,7 +23,7 @@ type Tx = Prisma.TransactionClient;
 
 // Fixed-direction stock classification — matches the `/post` route exactly.
 const STOCK_IN_TYPES  = new Set(["PURCHASE", "GRN", "REJECTION_IN", "SALE_RETURN"]);
-const STOCK_OUT_TYPES = new Set(["SALE", "CHALLAN", "REJECTION_OUT", "PURCHASE_RETURN"]);
+const STOCK_OUT_TYPES = new Set(["SALE", "ONLINE_INVOICE", "CHALLAN", "REJECTION_OUT", "PURCHASE_RETURN"]);
 
 /** Minimal item-line shape the stock arm reads (subset of InvVoucherLine + product.stock). */
 export type TradingStockLine = {

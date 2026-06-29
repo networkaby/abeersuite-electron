@@ -93,13 +93,21 @@ function stockCheck(): boolean {
         type: "PURCHASE", branchId: "BR-HQ", date,
         lines: [{ productId: 7, quantity: 3, rate: 80, amount: 240, mrpPaise: 12000, product: { stock: 50 } }],
     });
+    // ONLINE_INVOICE shares the SALE direction (stock OUT) — explicit coverage so
+    // the new online-channel type can't silently drift off the sale path.
+    const online = buildTradingStockMoves({
+        type: "ONLINE_INVOICE", branchId: "BR-HQ", date,
+        lines: [{ productId: 7, quantity: 2, freeQty: 1, rate: 100, amount: 236, product: { stock: 50 } }],
+    });
     const saleOk  = sale.length === 1 && sale[0].outQty === 3 && sale[0].inQty === 0;             // 2 + 1 free
     const purchOk = purchase.length === 1 && purchase[0].inQty === 3 && purchase[0].outQty === 0
         && purchase[0].newMrpPaise === 12000;
+    const onlineOk = online.length === 1 && online[0].outQty === 3 && online[0].inQty === 0;      // same as SALE
     console.log("=== stock arm (buildTradingStockMoves) ===");
-    console.log("SALE     →", JSON.stringify(sale[0]),     saleOk  ? "✓" : "✗");
-    console.log("PURCHASE →", JSON.stringify(purchase[0]), purchOk ? "✓" : "✗");
-    return saleOk && purchOk;
+    console.log("SALE           →", JSON.stringify(sale[0]),     saleOk   ? "✓" : "✗");
+    console.log("PURCHASE       →", JSON.stringify(purchase[0]), purchOk  ? "✓" : "✗");
+    console.log("ONLINE_INVOICE →", JSON.stringify(online[0]),   onlineOk ? "✓" : "✗");
+    return saleOk && purchOk && onlineOk;
 }
 
 /** End-to-end: real DRAFT sale → saleToSpec → enginePost, capture JE + stock, roll back. */

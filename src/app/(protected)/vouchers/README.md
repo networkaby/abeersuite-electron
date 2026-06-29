@@ -47,6 +47,8 @@ Route group `(gl)` does **not** appear in the URL. Standalone full-page GL forms
 | Branch transfers | `/vouchers/branch-transfers/new`, `/vouchers/branch-transfers/[id]` |
 | Rejections in | `/vouchers/rejections-in/new`, `/vouchers/rejections-in/[id]` |
 | Rejections out | `/vouchers/rejections-out/new`, `/vouchers/rejections-out/[id]` |
+| Online orders | `/vouchers/online-orders/[id]` (detail only — storefront-produced; no office `new/` yet) |
+| Online invoices | `/vouchers/online-invoices/[id]` (detail only — fulfilment of an online order; no office `new/` yet) |
 
 POS has its own `pos/layout.tsx` and `pos/new/layout.tsx`.
 

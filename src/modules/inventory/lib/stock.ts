@@ -32,6 +32,8 @@ const PREFIX: Record<InvVoucherType, string> = {
     PURCHASE:         "PV",
     SALE:             "SV",
     POS:              "POS",
+    ONLINE_INVOICE:   "OI",
+    ONLINE_ORDER:     "OO",
     ESTIMATE:         "EV",
     POS_ESTIMATE:     "POSEV",
     POS_ORDER:        "POSOD",

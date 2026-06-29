@@ -17,6 +17,7 @@ import type { VoucherBinding } from "@/generated/prisma/client";
 export const OPTIONAL_VOUCHER_TYPES = new Set<string>([
     "POS_ESTIMATE",
     "POS_ORDER",
+    "ONLINE_ORDER",
     "ESTIMATE",
     "SALES_ORDER",
     "PURCHASE_ORDER",

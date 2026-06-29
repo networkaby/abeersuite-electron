@@ -23,7 +23,7 @@ import { TallyDateInput } from "@/shared/components/TallyDateInput";
 function matchKind(kind: string, filter: string): boolean {
     switch (filter) {
         case "__all__":      return true;
-        case "__sale_all__": return kind === "SALE" || kind === "POS" || kind === "SALE_RETURN";
+        case "__sale_all__": return kind === "SALE" || kind === "POS" || kind === "ONLINE_INVOICE" || kind === "SALE_RETURN";
         case "__buy_all__":  return kind === "PURCHASE" || kind === "PURCHASE_RETURN";
         case "__pay_all__":  return ["PAYMENT", "RECEIPT", "CONTRA", "CREDIT_NOTE", "DEBIT_NOTE"].includes(kind);
         default:             return kind === filter;
@@ -38,7 +38,7 @@ function matchKind(kind: string, filter: string): boolean {
 // Documentary / "optional" — quotes & commitments that post no money or stock
 // on their own. A POS estimate / order is not a regular voucher, so it lives here.
 const OPTIONAL_KINDS = new Set([
-    "ESTIMATE", "POS_ESTIMATE", "POS_ORDER",
+    "ESTIMATE", "POS_ESTIMATE", "POS_ORDER", "ONLINE_ORDER",
     "SALES_ORDER", "PURCHASE_ORDER", "CHALLAN",
 ]);
 // Inventory-ops — stock movement with no direct GL post.
@@ -224,6 +224,7 @@ export default function DayBookPage() {
                                 <SelectItem value="__sale_all__">All Sale</SelectItem>
                                 <SelectItem value="SALE">Sale</SelectItem>
                                 <SelectItem value="POS">POS</SelectItem>
+                                <SelectItem value="ONLINE_INVOICE">Online Invoice</SelectItem>
                                 <SelectItem value="SALE_RETURN">Sale Return</SelectItem>
                             </SelectGroup>
                             <SelectGroup>
@@ -238,6 +239,7 @@ export default function DayBookPage() {
                                 <SelectItem value="POS_ESTIMATE">POS Estimate</SelectItem>
                                 <SelectItem value="SALES_ORDER">Sales Order</SelectItem>
                                 <SelectItem value="POS_ORDER">POS Order</SelectItem>
+                                <SelectItem value="ONLINE_ORDER">Online Order</SelectItem>
                                 <SelectItem value="PURCHASE_ORDER">Purchase Order</SelectItem>
                                 <SelectItem value="GRN">GRN</SelectItem>
                                 <SelectItem value="CHALLAN">Challan</SelectItem>

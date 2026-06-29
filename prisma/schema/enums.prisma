@@ -162,9 +162,11 @@ enum InvVoucherType {
   PURCHASE
   SALE
   POS // POS sale — same stock OUT + GL impact as SALE, but created at the counter via /vouchers/pos and immediately POSTED. Distinguished so Day Book / registers can badge it separately.
+  ONLINE_INVOICE // Online fulfilment sale — same stock OUT + GL impact as SALE, but raised from the online channel (the ONLINE_ORDER fulfils into it). Distinguished so Day Book / registers can badge the channel.
   ESTIMATE
   POS_ESTIMATE // POS Estimate mode — counter quotation. NO GL, NO stock. Prints tag price (discounts hidden per setting). Captures a CRM Deal.
   POS_ORDER // POS Order mode — counter order (deliver-later / book-and-collect). NO GL, NO stock (reservation deferred). Captures a CRM Deal.
+  ONLINE_ORDER // Online order — storefront order/commitment. NO GL, NO stock here (OPTIONAL binding); reserves stock via the order pipeline (CONFIRMED), fulfils into ONLINE_INVOICE. Own type so the online channel can diverge from POS_ORDER.
   SALE_RETURN // stock IN — reverses a SALE (customer returns goods, "Credit Note" in accounting)
   PURCHASE_RETURN // stock OUT — reverses a PURCHASE (we return to supplier, "Debit Note" in accounting)
   MANUFACTURING_JOURNAL // consume raw materials to produce finished goods (optional BOM-driven, optional GL-posting "Charges")

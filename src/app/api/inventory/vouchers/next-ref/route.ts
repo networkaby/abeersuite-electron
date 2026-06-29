@@ -18,6 +18,8 @@ import { InvVoucherType } from "@/generated/prisma/client";
 const SERIES_KIND: Partial<Record<InvVoucherType, string>> = {
     SALE:                  "SALE",
     POS:                   "POS",
+    ONLINE_INVOICE:        "ONLINE_INVOICE",
+    ONLINE_ORDER:          "ONLINE_ORDER",
     PURCHASE:              "PURCHASE",
     ESTIMATE:              "ESTIMATE",
     SALE_RETURN:           "SALE_RETURN",

@@ -8,6 +8,7 @@ export const VOUCHER_TYPE_LABELS: Record<string, string> = {
     CREDIT_NOTE: "Credit Note", DEBIT_NOTE: "Debit Note", JOURNAL: "Journal",
     // Trading / inventory vouchers (InvVoucher.type)
     SALE: "Sale", PURCHASE: "Purchase", POS: "POS Sale",
+    ONLINE_INVOICE: "Online Invoice", ONLINE_ORDER: "Online Order",
     ESTIMATE: "Estimate", POS_ESTIMATE: "POS Estimate",
     POS_ORDER: "POS Order", SALES_ORDER: "Sales Order", PURCHASE_ORDER: "Purchase Order",
     SALE_RETURN: "Sale Return", PURCHASE_RETURN: "Purchase Return",

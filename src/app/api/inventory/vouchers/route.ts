@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
 
     // Normalise the type filter — accept either ?type=SALE or ?types=SALE,POS.
     const ALLOWED_TYPES = new Set<InvVoucherType>([
-        "PURCHASE", "SALE", "POS", "ESTIMATE", "POS_ESTIMATE", "POS_ORDER",
+        "PURCHASE", "SALE", "POS", "ONLINE_INVOICE", "ESTIMATE", "POS_ESTIMATE", "POS_ORDER", "ONLINE_ORDER",
         "SALE_RETURN", "PURCHASE_RETURN",
         "MANUFACTURING_JOURNAL", "PHYSICAL_STOCK", "BRANCH_TRANSFER",
         "GRN", "CHALLAN", "REJECTION_IN", "REJECTION_OUT",

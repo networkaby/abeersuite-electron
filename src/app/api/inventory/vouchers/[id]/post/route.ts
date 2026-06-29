@@ -68,12 +68,12 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     //   start-of-day reset: PHYSICAL_STOCK (line.quantity = counted opening qty)
     //   commitments:   SALES_ORDER, PURCHASE_ORDER — no stock movement at all on POST.
     const isPurchase = ["PURCHASE", "GRN", "REJECTION_IN", "SALE_RETURN"].includes(voucher.type);
-    const isSale     = ["SALE", "CHALLAN", "REJECTION_OUT", "PURCHASE_RETURN"].includes(voucher.type);
-    // POS_ESTIMATE / POS_ORDER are counter quotations/orders — like SALES_ORDER
-    // they NEVER move stock or post GL (defensive; they're created DRAFT via the
-    // POS endpoints and have no "post" UI).
+    const isSale     = ["SALE", "ONLINE_INVOICE", "CHALLAN", "REJECTION_OUT", "PURCHASE_RETURN"].includes(voucher.type);
+    // POS_ESTIMATE / POS_ORDER / ONLINE_ORDER are counter/online quotations & orders
+    // — like SALES_ORDER they NEVER move stock or post GL here (defensive; orders are
+    // created DRAFT via their own endpoints and fulfil into a sale invoice).
     const isCommitment = voucher.type === "SALES_ORDER" || voucher.type === "PURCHASE_ORDER"
-        || voucher.type === "POS_ESTIMATE" || voucher.type === "POS_ORDER";
+        || voucher.type === "POS_ESTIMATE" || voucher.type === "POS_ORDER" || voucher.type === "ONLINE_ORDER";
     const isPhysicalStock = voucher.type === "PHYSICAL_STOCK";
     const isManufacturingJournal = voucher.type === "MANUFACTURING_JOURNAL";
     const isBranchTransfer = voucher.type === "BRANCH_TRANSFER";
@@ -97,7 +97,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
         // it inside the interactive tx grabs a SECOND pooled connection (pgbouncer
         // contention) and adds round-trips to the tx's time budget, which is what
         // helped push posting past the 5s ceiling (P2028). Hoisting shrinks the tx.
-        const isTradingVoucher = ["SALE", "PURCHASE", "SALE_RETURN", "PURCHASE_RETURN"].includes(voucher.type);
+        const isTradingVoucher = ["SALE", "ONLINE_INVOICE", "PURCHASE", "SALE_RETURN", "PURCHASE_RETURN"].includes(voucher.type);
         let sellerStateCode = "";
         let buyerStateCode  = "";
         if (isTradingVoucher) {

@@ -35,6 +35,8 @@ export async function seedVoucherSeries(prisma: PrismaClient) {
     // SV / PV / EV reference picks up where the legacy invNextRef left off.
     const saleCount     = await prisma.universalVoucher.count({ where: { type: "SALE" } });
     const posCount      = await prisma.universalVoucher.count({ where: { type: "POS" } });
+    const onlineInvoiceCount = await prisma.universalVoucher.count({ where: { type: "ONLINE_INVOICE" } });
+    const onlineOrderCount   = await prisma.universalVoucher.count({ where: { type: "ONLINE_ORDER" } });
     const purchaseCount = await prisma.universalVoucher.count({ where: { type: "PURCHASE" } });
     const estimateCount = await prisma.universalVoucher.count({ where: { type: "ESTIMATE" } });
     const saleReturnCount     = await prisma.universalVoucher.count({ where: { type: "SALE_RETURN" } });
@@ -67,6 +69,8 @@ export async function seedVoucherSeries(prisma: PrismaClient) {
         // to read these rows on every save.
         { kind: "SALE",     label: "Sale Invoice",     typeValue: "SV",  nextSeq: saleCount },
         { kind: "POS",      label: "POS Sale",         typeValue: "POS", nextSeq: posCount },
+        { kind: "ONLINE_INVOICE", label: "Online Invoice", typeValue: "OI", nextSeq: onlineInvoiceCount },
+        { kind: "ONLINE_ORDER",   label: "Online Order",   typeValue: "OO", nextSeq: onlineOrderCount },
         { kind: "PURCHASE", label: "Purchase Invoice", typeValue: "PV",  nextSeq: purchaseCount },
         { kind: "ESTIMATE", label: "Estimate",         typeValue: "EV", nextSeq: estimateCount },
         { kind: "SALE_RETURN",     label: "Sale Return",     typeValue: "SR", nextSeq: saleReturnCount },

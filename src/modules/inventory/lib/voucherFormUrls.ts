@@ -17,6 +17,8 @@
 // asks for the legacy detail URL.
 export const VOUCHER_URLS: Record<string, string> = {
     POS:             "/vouchers/pos",
+    ONLINE_ORDER:    "/vouchers/online-orders",
+    ONLINE_INVOICE:  "/vouchers/online-invoices",
     ESTIMATE:        "/vouchers/estimates",
     POS_ESTIMATE:    "/vouchers/pos-estimates",
     POS_ORDER:       "/vouchers/pos-orders",
