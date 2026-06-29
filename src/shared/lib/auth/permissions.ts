@@ -79,6 +79,24 @@ export function userCanVoucherKind(user: ResolvedUser, type: VoucherType | strin
     return hasPermission(user, perKind) || hasPermission(user, generic);
 }
 
+/**
+ * True if the user may author (create) at least one voucher kind. Used to grant
+ * read access to the supporting data every voucher form needs — the GL account
+ * list and the next-reference preview — without demanding the broad
+ * `accountancy:view:org`. Otherwise a position granted only a per-kind create key
+ * could open the form but never load its accounts. admin:bypass passes.
+ */
+export function userCanAuthorVoucher(user: ResolvedUser): boolean {
+    if (isAdmin(user)) return true;
+    return user.permissions.some((p) =>
+        p === PERMISSIONS.FINANCE_VOUCHER_CREATE
+        || p === PERMISSIONS.INVENTORY_EDIT_BR
+        || p === PERMISSIONS.INVENTORY_EDIT_ORG
+        || p.startsWith("finance:voucher:create:")
+        || p.startsWith("inventory:voucher:create:"),
+    );
+}
+
 type GuardResult =
     | { user: ResolvedUser; response: null }
     | { user: null; response: NextResponse };

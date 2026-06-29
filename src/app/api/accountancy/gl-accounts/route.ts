@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAuth, requirePermission, hasPermission, userCanAuthorVoucher } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import {
     aggregateClosingAsOf, loadNormalBalanceMap,
@@ -31,8 +31,14 @@ const createSchema = z.object({
 // accounts) — used by Receipt / Payment voucher dialogs that need to credit /
 // debit a party balance directly.
 export async function GET(req: Request) {
-    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
+    // The account list is read by every voucher form. Allow accountancy viewers OR
+    // anyone who may author a voucher — so a position granted only a per-kind create
+    // key can still pick accounts in the form.
+    const { user, response } = await requireAuth();
     if (response) return response;
+    if (!hasPermission(user, PERMISSIONS.ACCOUNTANCY_VIEW_ORG) && !userCanAuthorVoucher(user)) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
     const { searchParams } = new URL(req.url);
     const type = searchParams.get("type");

@@ -1,8 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAuth, userCanVoucher } from "@/shared/lib/auth/permissions";
 import { assembleReference } from "@/modules/accountancy/lib/voucherRef";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 // GET /api/accountancy/vouchers/next-ref?type=JOURNAL
 // Preview the next voucher reference (e.g. JOURNAL/26-27/0042) WITHOUT
@@ -13,11 +12,17 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 // concurrently, the live reference may differ by ±1 from this preview.
 
 export async function GET(req: Request) {
-    const { user, response } = await requirePermission(PERMISSIONS.FINANCE_VOUCHER_CREATE);
+    const { user, response } = await requireAuth();
     if (response) return response;
 
     const { searchParams } = new URL(req.url);
     const kind = searchParams.get("type") ?? "JOURNAL";
+
+    // Gate by the requested kind's create key (per-kind OR generic) — whoever may
+    // create this voucher may preview its next reference.
+    if (!userCanVoucher(user, kind, "create")) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
     const series = await prisma.voucherSeries.findUnique({ where: { kind } });
     if (!series) {
