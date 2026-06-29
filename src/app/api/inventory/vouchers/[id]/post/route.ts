@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/shared/lib/auth/permissions";
+import { requireAuth, userCanVoucherKind } from "@/shared/lib/auth/permissions";
 import { toNumber } from "@/modules/accountancy/lib/balance";
 import { recordStockMovement } from "@/modules/inventory/lib/stockMovement";
 import { valueStockBatch } from "@/modules/inventory/lib/valuation";
@@ -58,6 +58,12 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
 
     if (!voucher)                  return NextResponse.json({ error: "Not found" }, { status: 404 });
     if (voucher.status !== "DRAFT") return NextResponse.json({ error: `Voucher is already ${voucher.status}` }, { status: 409 });
+
+    // Per-kind post gate — matrix kinds require their own post key (or the generic
+    // inventory:edit fallback / admin:bypass). POS / online variants pass through.
+    if (!userCanVoucherKind(user, voucher.type, "post")) {
+        return NextResponse.json({ error: "You do not have permission to post this voucher kind." }, { status: 403 });
+    }
 
     // Stock-direction classification per voucher type:
     //   incoming stock: PURCHASE, GRN, REJECTION_IN, SALE_RETURN

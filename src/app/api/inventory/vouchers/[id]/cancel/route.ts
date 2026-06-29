@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAuth, userCanVoucher } from "@/shared/lib/auth/permissions";
 import { toNumber, balanceDelta } from "@/modules/accountancy/lib/balance";
 import { setSpineLifecycle } from "@/modules/accountancy/lib/transactionEngine";
 import { recordStockMovement, reverseStockMovement } from "@/modules/inventory/lib/stockMovement";
@@ -8,12 +8,11 @@ import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recom
 import { ensureCancelable, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
 import * as Sentry from "@sentry/nextjs";
 import { handleApiError } from "@/shared/lib/api";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 // POST /api/inventory/vouchers/[id]/cancel
 // Reverses stock + GL impact via counter-entry; preserves voucher reference number.
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response, user } = await requirePermission(PERMISSIONS.INVENTORY_VOUCHER_CANCEL);
+    const { response, user } = await requireAuth();
     if (response) return response;
 
     const { id } = await params;
@@ -31,6 +30,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     });
     // 5D-8/5D-11/5D-12: status/deletedAt + type + branch live on the spine — attach for the helpers + guards + stock rows.
     const voucher = { ...voucherRow, lines: goodsLines, type: voucherRow.universalVoucher?.type ?? "", branchId: voucherRow.universalVoucher?.branchId ?? "", status: voucherRow.universalVoucher?.status ?? "DRAFT", deletedAt: voucherRow.universalVoucher?.deletedAt ?? null };
+
+    // Per-kind cancel gate (additive): the per-kind cancel key OR the generic
+    // `inventory:voucher:cancel` — which is what gated this route before — so no
+    // one who could cancel before loses access; per-kind holders gain it.
+    if (!userCanVoucher(user, voucher.type, "cancel")) {
+        return NextResponse.json({ error: "You do not have permission to cancel this voucher kind." }, { status: 403 });
+    }
 
     const isPurchase = voucher.type === "PURCHASE" || voucher.type === "GRN";
     // POS = counter sale: it moves stock OUT like SALE, so reversing it must put

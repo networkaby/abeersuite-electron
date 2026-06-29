@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAuth, userCanVoucher } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { toNumber, balanceDelta } from "@/modules/accountancy/lib/balance";
 import { setSpineLifecycle } from "@/modules/accountancy/lib/transactionEngine";
@@ -10,14 +10,13 @@ import { ensureDeletable, isPosted, lifecycleErrorResponse } from "@/modules/acc
 import * as Sentry from "@sentry/nextjs";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const schema = z.object({ reason: z.string().trim().min(1, "Delete reason is required") });
 
 // POST /api/inventory/vouchers/[id]/delete
 // Soft-delete: hides from views and reverses stock/GL impact for posted vouchers. Recoverable.
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response, user } = await requirePermission(PERMISSIONS.INVENTORY_VOUCHER_DELETE);
+    const { response, user } = await requireAuth();
     if (response) return response;
 
     const { id } = await params;
@@ -32,6 +31,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     });
     // 5D-8/5D-11/5D-12: status/deletedAt + type + branch live on the spine — attach for the helpers + guards + stock rows.
     const voucher = { ...voucherRow, lines: goodsLines, type: voucherRow.universalVoucher?.type ?? "", branchId: voucherRow.universalVoucher?.branchId ?? "", status: voucherRow.universalVoucher?.status ?? "DRAFT", deletedAt: voucherRow.universalVoucher?.deletedAt ?? null };
+
+    // Per-kind delete gate (additive): the per-kind delete key OR the generic
+    // `inventory:voucher:delete` that gated this route before — superset, so no
+    // one loses access; per-kind holders gain it.
+    if (!userCanVoucher(user, voucher.type, "delete")) {
+        return NextResponse.json({ error: "You do not have permission to delete this voucher kind." }, { status: 403 });
+    }
 
     const isPurchase = voucher.type === "PURCHASE" || voucher.type === "GRN";
     // POS = counter sale: moves stock OUT like SALE, so reversing must restore it.

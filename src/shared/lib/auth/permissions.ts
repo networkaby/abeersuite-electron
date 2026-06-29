@@ -65,6 +65,20 @@ export function userCanVoucher(user: ResolvedUser, type: VoucherType | string, a
     return (perKind != null && hasPermission(user, perKind)) || hasPermission(user, generic);
 }
 
+/**
+ * Like `userCanVoucher`, but a PASS-THROUGH (returns true) for voucher kinds that
+ * have NO per-kind permission in the matrix — the POS / online channel variants
+ * (POS, POS_ORDER, POS_ESTIMATE, ONLINE_ORDER, ONLINE_INVOICE). Use only in the
+ * create / post routes, which had no prior permission gate: this newly enforces
+ * the per-kind key (or its generic `inventory:edit` fallback) on the matrix kinds
+ * while leaving the channel vouchers gated exactly as before (by their own flow).
+ */
+export function userCanVoucherKind(user: ResolvedUser, type: VoucherType | string, action: VoucherAction): boolean {
+    const { perKind, generic } = requiredVoucherPermission(type as VoucherType, action);
+    if (perKind == null) return true;
+    return hasPermission(user, perKind) || hasPermission(user, generic);
+}
+
 type GuardResult =
     | { user: ResolvedUser; response: null }
     | { user: null; response: NextResponse };

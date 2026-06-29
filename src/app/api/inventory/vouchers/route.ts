@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse, type NextRequest } from "next/server";
-import { requireAuth } from "@/shared/lib/auth/permissions";
+import { requireAuth, userCanVoucherKind } from "@/shared/lib/auth/permissions";
 import { invNextRef, calcLineTotals, calcVoucherTotals } from "@/modules/inventory/lib/stock";
 import { InvVoucherType, Prisma, type InvVoucherDeliveryMode } from "@/generated/prisma/client";
 import { buildPartyJson, readPartyName, readPartyPhone, readPartyAddress } from "@/shared/lib/accountancy/partySnapshot";
@@ -287,6 +287,14 @@ export async function POST(req: NextRequest) {
 
     if (!type || !date || !description?.trim()) {
         return NextResponse.json({ error: "type, date, description required" }, { status: 400 });
+    }
+
+    // Per-kind create gate — a matrix voucher kind requires its own create key
+    // (`inventory:voucher:create:<kind>`) or the generic `inventory:edit` fallback
+    // (admin:bypass also passes). POS / online channel variants aren't in the
+    // matrix, so they pass through to their own flow's gating, unchanged.
+    if (!userCanVoucherKind(user, type, "create")) {
+        return NextResponse.json({ error: "You do not have permission to create this voucher kind." }, { status: 403 });
     }
 
     const isPhysicalStock = type === "PHYSICAL_STOCK";
