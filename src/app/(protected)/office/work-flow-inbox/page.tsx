@@ -57,21 +57,21 @@ export default async function AssignmentsPage() {
                 ticket: { select: { id: true, device: { select: { brand: true, model: true, account: { select: customerPhones } } } } },
             },
         }),
-        prisma.work.findMany({ orderBy: { order: "asc" }, select: { id: true, label: true, color: true, successLabel: true, failLabel: true, prompt: true, startLabel: true, successPopup: true, failPopup: true, args: true, groupId: true, group: { select: { id: true, label: true, color: true } } } }),
+        prisma.work.findMany({ orderBy: { order: "asc" }, select: { id: true, label: true, color: true, permissionId: true, successLabel: true, failLabel: true, prompt: true, startLabel: true, successPopup: true, failPopup: true, args: true, groupId: true, group: { select: { id: true, label: true, color: true } } } }),
         prisma.workGroup.findMany({ orderBy: { order: "asc" }, select: { id: true, label: true, color: true, permissionId: true } }),
     ]);
 
     const worksById = Object.fromEntries(works.map((w) => [w.id, w]));
 
-    // A *gated* group (permissionId set) is visible only to roles holding that
-    // permission (admin:bypass passes via hasPermission). Ungated groups are
-    // visible to everyone. Tickets in a hidden group are dropped entirely below —
-    // not just hidden from the filter chips — so a gated group's queue is fully
-    // private to whoever holds its permission.
-    const visibleGroupIds = new Set(
-        groups.filter((g) => !g.permissionId || hasPermission(resolvedUser, g.permissionId)).map((g) => g.id)
+    // Visibility is keyed on the WORK, not the group. A *gated* work (permissionId
+    // set) is visible only to roles holding that work's permission (admin:bypass
+    // passes via hasPermission); an ungated work is open to any staff. Work Groups
+    // are pure sorting buckets now — no access role. Tickets carrying a work the
+    // caller can't act on are dropped entirely (private to its holders), not just
+    // hidden from a filter chip.
+    const visibleWorkIds = new Set(
+        works.filter((w) => !w.permissionId || hasPermission(resolvedUser, w.permissionId)).map((w) => w.id)
     );
-    const visibleGroups = groups.filter((g) => visibleGroupIds.has(g.id));
 
     // System-generated log notes (entry/auto-advance/claim/transfer/completion stamps)
     // are noise as "why" context — only surface free-text notes a human actually wrote.
@@ -195,11 +195,16 @@ export default async function AssignmentsPage() {
         };
     });
 
-    // Drop items from gated groups the caller doesn't hold the permission for —
-    // private to whoever holds it, not just absent from that group's filter chip.
+    // Drop items whose work the caller can't act on (gated work, permission not
+    // held) — private to its holders, not just absent from a filter chip. Items
+    // with no work fall through as open.
     const visibleItems = [...openItems, ...finishedItems].filter(
-        (it) => !it.groupId || visibleGroupIds.has(it.groupId)
+        (it) => !it.workId || visibleWorkIds.has(it.workId)
     );
+
+    // Group chips are sorting only — show the buckets that actually hold a visible item.
+    const presentGroupIds = new Set(visibleItems.map((it) => it.groupId).filter((id): id is string => !!id));
+    const visibleGroups = groups.filter((g) => presentGroupIds.has(g.id));
 
     return <WorkInboxBoard items={visibleItems} groups={visibleGroups} currentUserId={userId} />;
 }

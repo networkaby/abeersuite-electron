@@ -438,15 +438,15 @@ function PoolEditor({
                         <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                             accountancy · vouchers <span className="font-normal normal-case">(which voucher kinds this dept works with)</span>
                         </p>
-                        <div className="space-y-1">
+                        <div className="flex flex-wrap gap-1.5">
                             {voucherKinds.map(kind => {
                                 const ids = voucherKindPermissionIds(kind.type);
                                 const on = ids.every(id => selected.has(id));
                                 return (
-                                    <PermRow
+                                    <PermChip
                                         key={kind.type}
                                         label={kind.label}
-                                        sub={kind.type}
+                                        title={kind.type}
                                         on={on}
                                         onClick={() => onToggleMany(ids, !on)}
                                     />
@@ -477,6 +477,41 @@ function PoolEditor({
                 )}
             </div>
         </div>
+    );
+}
+
+// Compact, flex-wrappable toggle — used for the voucher-kind list so the many
+// kinds wrap across rows instead of stacking full-width and eating space.
+function PermChip({
+    label, title, on, onClick,
+}: {
+    label: string;
+    title?: string;
+    on: boolean;
+    onClick: () => void;
+}) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            title={title}
+            className={[
+                "flex items-center gap-1.5 rounded-md border px-2 py-1 text-left transition-colors",
+                on
+                    ? "border-primary bg-primary/10"
+                    : "border-border bg-background hover:border-primary/50 hover:bg-muted/40",
+            ].join(" ")}
+        >
+            <span
+                className={[
+                    "flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border",
+                    on ? "border-primary bg-primary text-primary-foreground" : "border-border",
+                ].join(" ")}
+            >
+                {on && <Check size={10} strokeWidth={3} />}
+            </span>
+            <span className="whitespace-nowrap text-xs font-medium text-foreground">{label}</span>
+        </button>
     );
 }
 

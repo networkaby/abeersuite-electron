@@ -70,6 +70,27 @@ interface Permission {
     description?: string | null;
 }
 
+// A Work the role can be granted directly (independent of the department pool).
+// A *gated* work carries a `work:<id>` permission — ticking it grants that
+// permission. An ungated work has no permission and is open to all staff.
+interface WorkRow {
+    id: string;
+    label: string;
+    color: string;
+    groupId: string | null;
+    permissionId: string | null;
+    // "human" works are completed by a person on the Work Inbox; "auto" works are
+    // system-run Actions (never gated, never hand-assigned) — excluded from the list.
+    kind: string;
+}
+
+interface WorkGroupRow {
+    id: string;
+    label: string;
+    color: string;
+    order: number;
+}
+
 interface RoleDepartment {
     id: string;
     name: string;
@@ -507,6 +528,9 @@ export default function RolePage() {
     const [roles, setRoles] = useState<Role[]>([]);
     const [allPerms, setAllPerms] = useState<Permission[]>([]);
     const [departments, setDepartments] = useState<Department[]>([]);
+    // Works + their groups — assigned directly to a role (not via the pool lens).
+    const [works, setWorks] = useState<WorkRow[]>([]);
+    const [workGroups, setWorkGroups] = useState<WorkGroupRow[]>([]);
     // Active role's department pool — `null` means all-access (no filtering: every
     // permission is offered). A Set means only those permission ids are in the lens.
     const [poolIds, setPoolIds] = useState<Set<string> | null>(null);
@@ -526,10 +550,12 @@ export default function RolePage() {
 
     const loadData = useCallback(async (preferredRoleId?: string) => {
         try {
-            const [rolesRes, permsRes, deptsRes] = await Promise.all([
+            const [rolesRes, permsRes, deptsRes, worksRes, groupsRes] = await Promise.all([
                 axios.get<Role[]>("/api/roles"),
                 axios.get<Permission[]>("/api/permissions"),
                 axios.get<Department[]>("/api/departments"),
+                axios.get<WorkRow[]>("/api/works"),
+                axios.get<WorkGroupRow[]>("/api/work-groups"),
             ]);
             const fetchedRoles = rolesRes.data;
             const nextActive =
@@ -540,6 +566,8 @@ export default function RolePage() {
             setRoles(fetchedRoles);
             setAllPerms(permsRes.data);
             setDepartments(deptsRes.data);
+            setWorks(worksRes.data);
+            setWorkGroups(groupsRes.data);
             setActiveRoleId(nextActive);
         } catch {
             toast.error("Failed to load roles");
@@ -617,6 +645,9 @@ export default function RolePage() {
             // GL voucher perms (per-kind + generic fallbacks) render in their own
             // matrix below, not as loose chips.
             && !permission.id.startsWith("finance:voucher:")
+            // Work permissions get their own direct "Works" section (grouped, not
+            // pool-filtered) — keep them out of the loose chips to avoid duplication.
+            && !permission.id.startsWith("work:")
     );
 
     // GL voucher matrix — show ONLY the voucher kinds the role's department offers
@@ -930,6 +961,15 @@ export default function RolePage() {
                                 )}
                             </CardContent>
                         </Card>
+
+                        <WorkAccessSection
+                            works={works}
+                            groups={workGroups}
+                            selected={selected}
+                            original={original}
+                            search={search}
+                            onTogglePerm={togglePerm}
+                        />
                         </section>
                     </div>
                 </>
@@ -1491,6 +1531,117 @@ function PermissionMatrix({
                 </table>
             </div>
         </div>
+    );
+}
+
+// The role's direct Work assignment. Lists every work grouped by its Work Group
+// (friendly sorting only — groups carry no access). Ticking a *gated* work grants
+// its `work:<id>` permission; ungated works are open to all and shown read-only.
+// This list is NOT filtered by the department pool — works are assigned directly.
+function WorkAccessSection({
+    works,
+    groups,
+    selected,
+    original,
+    search,
+    onTogglePerm,
+}: {
+    works: WorkRow[];
+    groups: WorkGroupRow[];
+    selected: Set<string>;
+    original: Set<string>;
+    search: string;
+    onTogglePerm: (id: string) => void;
+}) {
+    // Only gated, human works are hand-assigned: auto works (Actions) run by
+    // themselves, and ungated works are open to all so there's nothing to grant.
+    const assignableWorks = works.filter((w) => w.kind !== "auto" && w.permissionId);
+    const term = search.trim().toLowerCase();
+    const matched = term
+        ? assignableWorks.filter((w) => `${w.label} ${w.permissionId ?? ""}`.toLowerCase().includes(term))
+        : assignableWorks;
+
+    if (assignableWorks.length === 0) return null;
+
+    // Ordered buckets: known groups by their order, then an "Ungrouped" catch-all.
+    const orderedGroups = [...groups].sort((a, b) => a.order - b.order);
+    const buckets: { id: string | null; label: string; color: string | null; works: WorkRow[] }[] = [
+        ...orderedGroups.map((g) => ({ id: g.id, label: g.label, color: g.color, works: matched.filter((w) => w.groupId === g.id) })),
+        { id: null, label: "Ungrouped", color: null, works: matched.filter((w) => !w.groupId || !groups.some((g) => g.id === w.groupId)) },
+    ].filter((b) => b.works.length > 0);
+
+    return (
+        <Card>
+            <CardContent className="space-y-3 pt-4">
+                <div>
+                    <h2 className="flex items-center gap-2 text-base font-bold tracking-tight">
+                        <ClipboardList size={15} /> Works
+                    </h2>
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">
+                        Assigned directly to the role — not filtered by the department pool. Tick a work to let this role act on it in the Work Inbox. Groups are sorting only.
+                    </p>
+                </div>
+
+                {buckets.length === 0 ? (
+                    <p className="py-6 text-center text-[11px] text-muted-foreground">No works match your search.</p>
+                ) : (
+                    <div className="overflow-hidden rounded-lg border border-border bg-card divide-y divide-border">
+                        {buckets.map((bucket) => (
+                            <div key={bucket.id ?? "__ungrouped__"} className="px-3 py-2.5">
+                                <div className="mb-1.5 flex items-center gap-2">
+                                    {bucket.color ? (
+                                        <Badge className={`${bucket.color} text-[10px]`}>{bucket.label}</Badge>
+                                    ) : (
+                                        <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{bucket.label}</span>
+                                    )}
+                                    <span className="text-[10px] text-muted-foreground">
+                                        {bucket.works.length} {bucket.works.length === 1 ? "work" : "works"}
+                                    </span>
+                                </div>
+                                <div className="flex flex-wrap gap-1.5">
+                                    {bucket.works.map((work) => {
+                                        const permId = work.permissionId;
+                                        if (!permId) return null; // filtered out above; guard narrows the type
+                                        const isOn = selected.has(permId);
+                                        const changed = isOn !== original.has(permId);
+                                        return (
+                                            <Button
+                                                key={work.id}
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => onTogglePerm(permId)}
+                                                title={`${work.label} (${permId})`}
+                                                className={[
+                                                    "h-auto items-start gap-1.5 rounded-md border px-2 py-1 text-left transition-colors",
+                                                    isOn
+                                                        ? "border-primary bg-primary/10 text-foreground hover:bg-primary/15"
+                                                        : "border-border hover:border-primary/60 hover:bg-primary/5",
+                                                    changed ? "ring-2 ring-primary/20" : "",
+                                                ].join(" ")}
+                                            >
+                                                <span
+                                                    className={[
+                                                        "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border",
+                                                        isOn ? "border-primary bg-primary text-primary-foreground" : "border-border",
+                                                    ].join(" ")}
+                                                >
+                                                    {isOn && <Check size={10} strokeWidth={3} />}
+                                                </span>
+                                                <span className="flex flex-col">
+                                                    <span className="text-[11px] font-medium leading-tight">{work.label}</span>
+                                                    <span className="text-[10px] leading-tight text-muted-foreground">{permId}</span>
+                                                </span>
+                                            </Button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </CardContent>
+        </Card>
     );
 }
 

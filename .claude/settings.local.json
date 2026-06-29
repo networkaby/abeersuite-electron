@@ -198,7 +198,9 @@
       "Bash(echo \"exit: $?\")",
       "Bash(Get-ChildItem -Path \"D:\\\\AbeerSuite\\\\service-mgmt-experiment\" -Recurse -Directory -Name)",
       "Bash(Select-Object -First 30)",
-      "Bash(PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION=yes pnpm prisma db push --force-reset)"
+      "Bash(PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION=yes pnpm prisma db push --force-reset)",
+      "Bash(git -C D:/AbeerSuite/service-mgmt-experiment status --short)",
+      "Bash(git -C D:/AbeerSuite/service-mgmt-experiment branch --show-current)"
     ]
   }
 }
