@@ -25,6 +25,8 @@ import { extractApiError } from "@/shared/lib/api";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { requiredVoucherPermission } from "@/shared/lib/auth/voucherMatrix";
 import { consumeDuplicate } from "@/modules/accountancy/lib/duplicate";
+import { voucherPrintPageHref } from "@/modules/accountancy/lib/voucherUrls";
+import { printAfterSaveDefault, thermalDefault } from "@/shared/lib/print/voucherTemplateDefaults";
 import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/components/GlAccountCombobox";
 import { BalanceHint } from "@/modules/accountancy/components/BalanceHint";
 import { LifecycleActions } from "@/modules/accountancy/components/LifecycleActions";
@@ -289,6 +291,10 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
     const originalSnapshotRef = useRef<Snapshot | null>(null);
     const [date, setDate] = useState(() => toIsoDate(new Date()));
     const [narration, setNarration] = useState("");
+    // "Print after save" + "Thermal" toggles — seeded from the central per-kind
+    // soft switches.
+    const [printAfterSave, setPrintAfterSave] = useState(() => printAfterSaveDefault(kind));
+    const [thermal, setThermal] = useState(() => thermalDefault(kind));
 
     // Top side — either a Cash/Bank ledger (Payment/Receipt/Contra) or a Party
     // ledger picked via the shared customer-supplier picker (CN/DN).
@@ -410,7 +416,12 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
     const addRow = () => setRows((rs) => [...rs, newRow()]);
     const removeRow = (id: number) => setRows((rs) => (rs.length <= 1 ? rs : rs.filter((r) => r.id !== id)));
 
-    const submit = async (postAfterSave: boolean) => {
+    // Open the saved voucher's print page in a new tab — thermal auto-fire (like
+    // POS) or the browser print page, per the Thermal toggle.
+    const openReceipt = (id: number) =>
+        window.open(voucherPrintPageHref("gl", id, { thermal }), "_blank", "noopener");
+
+    const submit = async (postAfterSave: boolean, print = false) => {
         if (!balanced) {
             toast.error("Pick the top account and at least one particulars row with an amount.");
             return;
@@ -451,6 +462,7 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
                     lines:     allLines,
                 });
                 toast.success(`${copy.title} ${loadedVoucher?.reference ?? ""} updated`);
+                if (print) openReceipt(voucherId);
                 closeForm();
             } catch (err: unknown) {
                 toast.error(extractApiError(err, "Save failed"));
@@ -478,6 +490,7 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
             } else {
                 toast.success(`${copy.title} ${created.data.reference} saved as draft`);
             }
+            if (print) openReceipt(created.data.id);
             // Reset for the next voucher instead of navigating away — same as the
             // Sale form: the user can punch in the next entry without leaving.
             // Cancel / Close X are the explicit exits to the register.
@@ -704,11 +717,17 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
             {/* Sticky action bar */}
             <VoucherActionBar
                 onCancel={closeForm}
-                onSave={() => submit(true)}
+                onSave={() => submit(true, printAfterSave)}
                 saveLabel={isEditing ? "Save Changes" : "Save"}
                 saveDisabled={saving || !balanced || loading || (isEditing && (loadedVoucher?.status === "CANCELLED" || !!loadedVoucher?.deletedAt))}
-                onSaveDraft={() => submit(false)}
+                onSaveDraft={() => submit(false, printAfterSave)}
                 showSaveDraft={!isEditing}
+                showPrintToggle
+                printAfterSave={printAfterSave}
+                onPrintAfterSaveChange={setPrintAfterSave}
+                showThermalToggle
+                thermal={thermal}
+                onThermalChange={setThermal}
                 showSave={isEditing || canPost}
                 saveDraftDisabled={saving || !balanced}
                 saving={saving}

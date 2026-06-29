@@ -13,8 +13,10 @@ import { Button } from "@/components/ui/button";
 const RELAY = "http://localhost:9191";
 
 type Props = {
-    /** Relay route for this voucher kind. */
-    endpoint: "/print/pos" | "/print/payment";
+    /** Relay route for this voucher kind. `/print/voucher` is the generic office
+     *  endpoint used by the template-driven voucher print page; if the bridge
+     *  doesn't implement it the POST fails and we fall back to browser print. */
+    endpoint: "/print/pos" | "/print/payment" | "/print/voucher";
     /** Ready-to-send relay payload (built server-side on the page). */
     payload: unknown;
     /** Auto-print on mount (default true — these pages exist to print). */

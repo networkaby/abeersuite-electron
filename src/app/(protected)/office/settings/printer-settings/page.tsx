@@ -10,6 +10,11 @@ import { toast } from "sonner";
 
 const RELAY = "http://localhost:9191";
 
+// Latest shipped bridge version is read from this static manifest in /public.
+// Bump combined-bridge.version.json (+ package.json) whenever you re-ship the
+// bridge so counters on an older build get the "update available" prompt.
+const VERSION_MANIFEST = "/combined-bridge.version.json";
+
 type ConnectionType = "network" | "com" | "windows";
 
 interface RelayConfig {
@@ -20,6 +25,9 @@ interface RelayConfig {
     windowsPrinterName: string;
     companyName:        string;
     relayPort:          number;
+    // Counter lock (set on first POS shift open; cleared via Forget below).
+    counterId?:         number | null;
+    counterName?:       string | null;
 }
 
 const DEFAULT: RelayConfig = {
@@ -30,6 +38,8 @@ const DEFAULT: RelayConfig = {
     windowsPrinterName: "",
     companyName:        "",
     relayPort:          9191,
+    counterId:          null,
+    counterName:        null,
 };
 
 const TYPE_LABELS: { type: ConnectionType; label: string; icon: React.ReactNode; desc: string }[] = [
@@ -40,6 +50,8 @@ const TYPE_LABELS: { type: ConnectionType; label: string; icon: React.ReactNode;
 
 export default function PrinterSettingsPage() {
     const [relayUp,      setRelayUp]      = useState<boolean | null>(null);
+    const [bridgeVersion, setBridgeVersion] = useState<string | null>(null);
+    const [latestVersion, setLatestVersion] = useState<string | null>(null);
     const [config,       setConfig]       = useState<RelayConfig>(DEFAULT);
     const [loading,      setLoading]      = useState(true);
     const [saving,       setSaving]       = useState(false);
@@ -55,6 +67,12 @@ export default function PrinterSettingsPage() {
             const data: RelayConfig = await r.json();
             setConfig({ ...DEFAULT, ...data });
             setRelayUp(true);
+            // Bridge version drives the "update available" prompt. Best-effort —
+            // an older bridge without /health.version just reports null.
+            try {
+                const hr = await fetch(`${RELAY}/health`, { signal: AbortSignal.timeout(3000) });
+                if (hr.ok) { const h = await hr.json() as { version?: string }; setBridgeVersion(h.version ?? null); }
+            } catch { /* version optional */ }
         } catch {
             setRelayUp(false);
         } finally {
@@ -63,6 +81,14 @@ export default function PrinterSettingsPage() {
     }, []);
 
     useEffect(() => { checkRelay(); }, [checkRelay]);
+
+    // Latest shipped bridge version (from the static manifest in /public).
+    useEffect(() => {
+        fetch(VERSION_MANIFEST, { cache: "no-store" })
+            .then((r) => r.ok ? r.json() : null)
+            .then((j: { version?: string } | null) => { if (j?.version) setLatestVersion(j.version); })
+            .catch(() => { /* manifest optional — no warning if unavailable */ });
+    }, []);
 
     const fetchWinPrinters = async () => {
         setPortsLoading(true);
@@ -111,6 +137,21 @@ export default function PrinterSettingsPage() {
         }
     };
 
+    const forgetCounter = async () => {
+        try {
+            const r = await fetch(`${RELAY}/config`, {
+                method:  "POST",
+                headers: { "Content-Type": "application/json" },
+                body:    JSON.stringify({ counterId: null, counterName: null }),
+            });
+            if (!r.ok) throw new Error();
+            toast.success("Counter lock cleared for this PC");
+            checkRelay();
+        } catch {
+            toast.error("Could not clear counter lock");
+        }
+    };
+
     const handleTest = async () => {
         setTesting(true);
         try {
@@ -150,14 +191,23 @@ export default function PrinterSettingsPage() {
                     <Printer size={20} />
                     <h1 className="text-xl font-bold">Thermal Printer</h1>
                 </div>
-                <a
-                    href="/combined-bridge.zip"
-                    download
-                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-                >
-                    <Download size={13} />
-                    Download bridge
-                </a>
+                <div className="flex items-center gap-3">
+                    <a
+                        href="/combined-bridge-setup.exe"
+                        download
+                        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                    >
+                        <Download size={13} />
+                        Installer (.exe)
+                    </a>
+                    <a
+                        href="/combined-bridge.zip"
+                        download
+                        className="flex items-center gap-1 text-xs text-muted-foreground/60 hover:text-foreground"
+                    >
+                        Zip
+                    </a>
+                </div>
             </div>
 
             {/* Relay status */}
@@ -179,23 +229,57 @@ export default function PrinterSettingsPage() {
                 </Button>
             </div>
 
+            {relayUp && bridgeVersion && latestVersion && bridgeVersion !== latestVersion && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 space-y-2">
+                    <p className="font-medium">Bridge update available</p>
+                    <p className="text-xs text-amber-700">
+                        This counter is running bridge <span className="font-mono">v{bridgeVersion}</span>; the latest is{" "}
+                        <span className="font-mono">v{latestVersion}</span>. Download and run the new installer to update.
+                    </p>
+                    <Button asChild size="sm" variant="outline" className="mt-1 border-amber-300 bg-white">
+                        <a href="/combined-bridge-setup.exe" download>
+                            <Download size={14} />
+                            Download installer (.exe)
+                        </a>
+                    </Button>
+                </div>
+            )}
+
+            {relayUp && config.counterId && (
+                <div className="rounded-lg border border-border bg-card p-4 flex items-center justify-between gap-3 text-sm">
+                    <div>
+                        <p className="font-medium">Counter lock</p>
+                        <p className="text-xs text-muted-foreground">
+                            This PC opens POS shifts as{" "}
+                            <span className="font-medium text-foreground">{config.counterName ?? `Counter #${config.counterId}`}</span>.
+                        </p>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={forgetCounter}>Forget</Button>
+                </div>
+            )}
+
             {!relayUp && !loading && (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 space-y-3">
                     <div className="space-y-1">
                         <p className="font-medium">Don&apos;t have the bridge installed yet?</p>
                         <p className="text-xs text-amber-700">
-                            Download the printer &amp; display bridge, unzip it on the shop PC, then run it.
+                            Download the installer and double-click it on the shop PC. It installs the
+                            bridge and starts it automatically on every logon — no setup needed.
                         </p>
                         <Button asChild size="sm" variant="outline" className="mt-1 border-amber-300 bg-white">
-                            <a href="/combined-bridge.zip" download>
+                            <a href="/combined-bridge-setup.exe" download>
                                 <Download size={14} />
-                                Download bridge
+                                Download installer (.exe)
                             </a>
                         </Button>
                     </div>
                     <div className="space-y-1 border-t border-amber-200 pt-3">
-                        <p className="font-medium">Already installed — start the relay on the shop PC:</p>
-                        <code className="block bg-amber-100 rounded px-2 py-1 font-mono text-xs">node relay.js</code>
+                        <p className="font-medium">Advanced (manual) — instead of the installer:</p>
+                        <p className="text-xs text-amber-700">
+                            Download the <a href="/combined-bridge.zip" download className="underline">zip</a>, unzip on the
+                            shop PC, then run <code className="bg-amber-100 rounded px-1 font-mono">npm install</code> and
+                            double-click <code className="bg-amber-100 rounded px-1 font-mono">setup-autostart.bat</code>.
+                        </p>
                         <p className="text-xs text-amber-700">Then refresh this page.</p>
                     </div>
                 </div>

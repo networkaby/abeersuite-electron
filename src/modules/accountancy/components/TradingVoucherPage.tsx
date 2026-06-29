@@ -73,6 +73,8 @@ import { fmt } from "@/utils/constants";
 import { LifecycleActions } from "@/modules/accountancy/components/LifecycleActions";
 import { VoucherTopBar } from "@/modules/accountancy/components/VoucherTopBar";
 import { VoucherActionBar } from "@/modules/accountancy/components/VoucherActionBar";
+import { printAfterSaveDefault, thermalDefault } from "@/shared/lib/print/voucherTemplateDefaults";
+import { voucherPrintPageHref } from "@/modules/accountancy/lib/voucherUrls";
 import { useSession } from "next-auth/react";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { requiredVoucherPermission } from "@/shared/lib/auth/voucherMatrix";
@@ -171,7 +173,6 @@ type KindConfig = {
     listPath:         string;
     nextRefType:      TradingKind;
     showProfit:       boolean;
-    showPrint:        boolean;
     cashLedgerLabel:  string;
     /// Plain narration to fall back on when user leaves it blank
     narrationFallback: (partyName: string | undefined) => string;
@@ -197,9 +198,6 @@ type KindConfig = {
     /// Hidden on non-GL kinds (orders, GRN, challan, rejections) where money
     /// settlement is irrelevant — the linked Sale / Purchase invoice posts GL.
     showPaymentBlock: boolean;
-    /// "Save & Print" voucher kinds — sale invoice, sale return, plus delivery
-    /// challan. Print template itself ships per kind elsewhere.
-    /// (Already covered by `showPrint` above; kept for backward compatibility.)
     /// Optional FK link to a source voucher (e.g. GRN → PURCHASE_ORDER). When
     /// set, the form renders a parent picker; on pick, lines auto-copy and
     /// refVoucherId / refNumber / refDate save with the voucher.
@@ -223,7 +221,7 @@ const PER_KIND: Record<TradingKind, KindConfig> = {
         refLabel: null, refDateLabel: "",
         listPath: "/office/accountancy/vouchers-registers/sales",
         nextRefType: "SALE",
-        showProfit: true, showPrint: true,
+        showProfit: true,
         cashLedgerLabel: "Received in",
         narrationFallback: (n) => n ? `Sale to ${n}` : "Cash sale",
         successPostedMsg: "Sale posted — stock & GL updated",
@@ -250,7 +248,7 @@ const PER_KIND: Record<TradingKind, KindConfig> = {
         refLabel: "Bill Number", refDateLabel: "Bill Date",
         listPath: "/office/accountancy/vouchers-registers/purchases",
         nextRefType: "PURCHASE",
-        showProfit: false, showPrint: false,
+        showProfit: false,
         cashLedgerLabel: "Paid from",
         narrationFallback: (n) => n ? `Purchase from ${n}` : "Cash purchase",
         successPostedMsg: "Purchase posted — stock & GL updated",
@@ -281,7 +279,7 @@ const PER_KIND: Record<TradingKind, KindConfig> = {
         refOptional: true,
         listPath: "/office/accountancy/vouchers-registers/sale-returns",
         nextRefType: "SALE_RETURN",
-        showProfit: false, showPrint: true,
+        showProfit: false,
         cashLedgerLabel: "Refunded from",
         narrationFallback: (n) => n ? `Sale return from ${n}` : "Sale return",
         successPostedMsg: "Sale Return posted — stock & GL updated",
@@ -306,7 +304,7 @@ const PER_KIND: Record<TradingKind, KindConfig> = {
         refOptional: true,
         listPath: "/office/accountancy/vouchers-registers/purchase-returns",
         nextRefType: "PURCHASE_RETURN",
-        showProfit: false, showPrint: false,
+        showProfit: false,
         cashLedgerLabel: "Recovered into",
         narrationFallback: (n) => n ? `Purchase return to ${n}` : "Purchase return",
         successPostedMsg: "Purchase Return posted — stock & GL updated",
@@ -333,7 +331,7 @@ const PER_KIND: Record<TradingKind, KindConfig> = {
         refLabel: "Customer PO Ref", refDateLabel: "Customer PO Date",
         listPath: "/office/accountancy/vouchers-registers/sales-orders",
         nextRefType: "SALES_ORDER",
-        showProfit: true, showPrint: false,
+        showProfit: true,
         cashLedgerLabel: "—",
         narrationFallback: (n) => n ? `Sales Order for ${n}` : "Sales Order",
         successPostedMsg: "Sales Order confirmed — no stock or GL impact until fulfilled",
@@ -357,7 +355,7 @@ const PER_KIND: Record<TradingKind, KindConfig> = {
         refLabel: "Supplier Quote Ref", refDateLabel: "Quote Date",
         listPath: "/office/accountancy/vouchers-registers/purchase-orders",
         nextRefType: "PURCHASE_ORDER",
-        showProfit: false, showPrint: false,
+        showProfit: false,
         cashLedgerLabel: "—",
         narrationFallback: (n) => n ? `Purchase Order to ${n}` : "Purchase Order",
         successPostedMsg: "Purchase Order confirmed — no stock or GL impact until receipt",
@@ -381,7 +379,7 @@ const PER_KIND: Record<TradingKind, KindConfig> = {
         refLabel: "Supplier Challan #", refDateLabel: "Supplier Challan Date",
         listPath: "/office/accountancy/vouchers-registers/grn",
         nextRefType: "GRN",
-        showProfit: false, showPrint: false,
+        showProfit: false,
         cashLedgerLabel: "—",
         narrationFallback: (n) => n ? `Goods received from ${n}` : "Goods Received Note",
         successPostedMsg: "GRN posted — stock incremented",
@@ -407,7 +405,7 @@ const PER_KIND: Record<TradingKind, KindConfig> = {
         refOptional: true,
         listPath: "/office/accountancy/vouchers-registers/challans",
         nextRefType: "CHALLAN",
-        showProfit: false, showPrint: false,
+        showProfit: false,
         cashLedgerLabel: "—",
         narrationFallback: (n) => n ? `Delivered to ${n}` : "Delivery Challan",
         successPostedMsg: "Challan posted — stock decremented",
@@ -432,7 +430,7 @@ const PER_KIND: Record<TradingKind, KindConfig> = {
         refLabel: "Original Ref", refDateLabel: "Original Ref Date",
         listPath: "/office/accountancy/vouchers-registers/rejections-in",
         nextRefType: "REJECTION_IN",
-        showProfit: false, showPrint: false,
+        showProfit: false,
         cashLedgerLabel: "—",
         narrationFallback: (n) => n ? `Goods rejected back from ${n}` : "Rejection In",
         successPostedMsg: "Rejection In posted — stock incremented",
@@ -457,7 +455,7 @@ const PER_KIND: Record<TradingKind, KindConfig> = {
         refLabel: "Original Ref", refDateLabel: "Original Ref Date",
         listPath: "/office/accountancy/vouchers-registers/rejections-out",
         nextRefType: "REJECTION_OUT",
-        showProfit: false, showPrint: false,
+        showProfit: false,
         cashLedgerLabel: "—",
         narrationFallback: (n) => n ? `Goods rejected to ${n}` : "Rejection Out",
         successPostedMsg: "Rejection Out posted — stock decremented",
@@ -486,7 +484,7 @@ const PER_KIND: Record<TradingKind, KindConfig> = {
         refLabel: null, refDateLabel: "",
         listPath: "/office/accountancy/vouchers-registers/estimates",
         nextRefType: "ESTIMATE",
-        showProfit: true, showPrint: true,
+        showProfit: true,
         cashLedgerLabel: "—",
         narrationFallback: (n) => n ? `Estimate for ${n}` : "Estimate",
         successPostedMsg: "Estimate saved",
@@ -1125,6 +1123,10 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
     }, [party]);
 
     const [showProfit, setShowProfit] = useState(false);
+    // "Print after save" + "Thermal" toggles — seeded from the central per-kind
+    // soft switches.
+    const [printAfterSave, setPrintAfterSave] = useState(() => printAfterSaveDefault(kind));
+    const [thermal, setThermal] = useState(() => thermalDefault(kind));
     const [showDescription, setShowDescription] = useState(false);
     // Round Off is optional (Vyapar pattern): unchecked → hidden + treated as 0.
     // When the checkbox is ticked, the value AUTO-computes to whatever brings
@@ -1619,11 +1621,10 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                 toast.success(copy.successDraftMsg);
             }
             if (andPrint) {
-                // Pass the voucher's own kind so the receipt uses the CORRECT
-                // template (Purchase / Sale Return / Estimate …) — without it the
-                // route defaults to SALE and mis-renders every non-sale voucher
-                // (wrong header, and the POS/SALE customer ladder fires wrongly).
-                window.open(`/receipt/invoice/${savedId}?kind=${kind}&autoprint=1`, "_blank", "noopener");
+                // Thermal auto-fire (like POS) or the browser print page, per the
+                // Thermal toggle. The generic /receipt/voucher route resolves the
+                // correct per-kind template from the saved voucher itself.
+                window.open(voucherPrintPageHref("inv", savedId, { thermal }), "_blank", "noopener");
             }
 
             if (isEditing) {
@@ -2580,10 +2581,16 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
             {/* ── Sticky action bar ────────────────────────────────────── */}
             <VoucherActionBar
                 onCancel={handleClose}
-                onSave={() => submit(true)}
-                onSaveDraft={() => submit(false)}
+                onSave={() => submit(true, printAfterSave)}
+                onSaveDraft={() => submit(false, printAfterSave)}
                 showSaveDraft
                 showSave={isEditing || canPost}
+                showPrintToggle
+                printAfterSave={printAfterSave}
+                onPrintAfterSaveChange={setPrintAfterSave}
+                showThermalToggle
+                thermal={thermal}
+                onThermalChange={setThermal}
                 saving={saving}
                 leftContent={
                     <div className="mr-auto flex items-center gap-2">
@@ -2620,18 +2627,11 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                         )}
                     </div>
                 }
-                extraButtons={<>
-                    {copy.showProfit && (
-                        <Button variant="outline" onClick={() => setShowProfit((s) => !s)} title="Show estimated profit (live)">
-                            {showProfit ? "Hide" : "Show"} Profit
-                        </Button>
-                    )}
-                    {copy.showPrint && (
-                        <Button variant="outline" onClick={() => submit(true, true)} disabled={saving}>
-                            Save &amp; Print
-                        </Button>
-                    )}
-                </>}
+                extraButtons={copy.showProfit ? (
+                    <Button variant="outline" onClick={() => setShowProfit((s) => !s)} title="Show estimated profit (live)">
+                        {showProfit ? "Hide" : "Show"} Profit
+                    </Button>
+                ) : undefined}
             />
             <Dialog open={closeDialogOpen} onOpenChange={setCloseDialogOpen}>
                 {/* Keyboard: Esc → Stay (handled natively by Radix Dialog).

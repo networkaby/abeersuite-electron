@@ -61,6 +61,26 @@ export function receiptHref(
     return `/receipt/voucher/${source}/${rawId}?paper=A4`;
 }
 
+/**
+ * Print page for any voucher, opened by the forms' "Print after save" toggle.
+ * Driven by the per-kind "Thermal" toggle:
+ *   • thermal → `?mode=thermal` — the page auto-fires to the thermal printer like
+ *     POS (tries the local relay, falls back to an auto browser print of the 80mm
+ *     slip).
+ *   • browser (default) → `?autoprint=0` — the traditional, format-selectable
+ *     browser print page; the customer's paper size (set per kind on the
+ *     voucher-templates page) applies and nothing fires until the user prints.
+ */
+export function voucherPrintPageHref(
+    source: VoucherSource,
+    rawId: number,
+    opts?: { thermal?: boolean },
+): string {
+    return opts?.thermal
+        ? `/receipt/voucher/${source}/${rawId}?mode=thermal`
+        : `/receipt/voucher/${source}/${rawId}?autoprint=0`;
+}
+
 /** Base path for the per-source `/api/.../[id]` route. */
 export function apiBase(source: VoucherSource, rawId: number): string {
     switch (source) {

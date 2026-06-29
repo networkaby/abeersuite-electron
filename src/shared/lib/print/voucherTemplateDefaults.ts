@@ -51,36 +51,36 @@ export type VoucherTemplateKind = (typeof VOUCHER_TEMPLATE_KINDS)[number];
 
 export const VOUCHER_TEMPLATE_KIND_GROUPS = {
     accounting: ACCOUNTING_VOUCHER_KINDS,
-    inventory:  INVENTORY_VOUCHER_KINDS,
+    inventory: INVENTORY_VOUCHER_KINDS,
 } as const;
 
 // Human-readable per-kind sub-titles that go into headerLine2 by default.
 // Kept verbose for clarity on a thermal slip — admin can shorten via the UI.
 const HEADER_LINE_2: Record<VoucherTemplateKind, string> = {
-    CONTRA:                "Contra Voucher",
-    PAYMENT:               "Payment Voucher",
-    RECEIPT:               "Receipt Voucher",
-    CREDIT_NOTE:           "Credit Note",
-    DEBIT_NOTE:            "Debit Note",
-    JOURNAL:               "Journal Voucher",
+    CONTRA: "Contra Voucher",
+    PAYMENT: "Payment Voucher",
+    RECEIPT: "Receipt Voucher",
+    CREDIT_NOTE: "Credit Note",
+    DEBIT_NOTE: "Debit Note",
+    JOURNAL: "Journal Voucher",
 
-    PURCHASE:              "Purchase Invoice",
-    SALE:                  "Tax Invoice",
-    POS:                   "POS sale receipt",
-    ESTIMATE:              "Estimate / Quotation",
-    POS_ESTIMATE:          "Estimate / Quotation",
-    POS_ORDER:             "Order Confirmation",
-    SALE_RETURN:           "Sale Return",
-    PURCHASE_RETURN:       "Purchase Return",
+    PURCHASE: "Purchase Invoice",
+    SALE: "Tax Invoice",
+    POS: "POS sale receipt",
+    ESTIMATE: "Estimate / Quotation",
+    POS_ESTIMATE: "Estimate / Quotation",
+    POS_ORDER: "Order Confirmation",
+    SALE_RETURN: "Sale Return",
+    PURCHASE_RETURN: "Purchase Return",
     MANUFACTURING_JOURNAL: "Manufacturing Journal",
-    PHYSICAL_STOCK:        "Physical Stock Voucher",
-    BRANCH_TRANSFER:       "Branch Transfer",
-    GRN:                   "Goods Receipt Note",
-    CHALLAN:               "Delivery Challan",
-    REJECTION_IN:          "Rejection In",
-    REJECTION_OUT:         "Rejection Out",
-    SALES_ORDER:           "Sales Order",
-    PURCHASE_ORDER:        "Purchase Order",
+    PHYSICAL_STOCK: "Physical Stock Voucher",
+    BRANCH_TRANSFER: "Branch Transfer",
+    GRN: "Goods Receipt Note",
+    CHALLAN: "Delivery Challan",
+    REJECTION_IN: "Rejection In",
+    REJECTION_OUT: "Rejection Out",
+    SALES_ORDER: "Sales Order",
+    PURCHASE_ORDER: "Purchase Order",
 };
 
 // Voucher kinds that don't have a monetary tax breakdown by their nature.
@@ -133,29 +133,103 @@ const DEFAULT_PAPER_BY_KIND: Record<VoucherTemplateKind, PaperFormat> = {
     PURCHASE_ORDER: "A4",
 };
 
+// Per-kind default for the voucher form's "Print after save" toggle
+// (true = print by default, false = off). This is the SINGLE place to set each
+// voucher's print default — every voucher form seeds its toggle from here via
+// printAfterSaveDefault(). The user can still flip the toggle per voucher on the
+// form. POS / online channels manage their own printing and ignore this map.
+export const PRINT_AFTER_SAVE_DEFAULT_BY_KIND: Record<VoucherTemplateKind, boolean> = {
+    CONTRA: false,
+    PAYMENT: false,
+    RECEIPT: true,
+    CREDIT_NOTE: false,
+    DEBIT_NOTE: false,
+    JOURNAL: false,
+    PURCHASE: false,
+    SALE: true,
+    POS: true,
+    ESTIMATE: true,
+    POS_ESTIMATE: true,
+    POS_ORDER: true,
+    // POS_RETURN: true,  // TODO: add this
+    //POS_Receipt: true,  // TODO: add this
+    SALE_RETURN: true,
+    PURCHASE_RETURN: false,
+    MANUFACTURING_JOURNAL: false,
+    PHYSICAL_STOCK: false,
+    BRANCH_TRANSFER: false,
+    GRN: false,
+    CHALLAN: false,
+    REJECTION_IN: false,
+    REJECTION_OUT: false,
+    SALES_ORDER: false,
+    PURCHASE_ORDER: false,
+};
+
+/** Initial "Print after save" toggle state for a voucher kind (false if unknown). */
+export function printAfterSaveDefault(kind: string): boolean {
+    return isVoucherTemplateKind(kind) ? PRINT_AFTER_SAVE_DEFAULT_BY_KIND[kind] : false;
+}
+
+// Per-kind default for the voucher form's "Thermal" toggle (true = auto-fire to
+// the thermal printer like POS, with browser fallback; false = traditional
+// browser print page where the customer's paper size — set per kind on the
+// voucher-templates page — applies). SINGLE place to set each voucher's mode;
+// the user can still flip it per voucher on the form. POS / online ignore this.
+export const THERMAL_DEFAULT_BY_KIND: Record<VoucherTemplateKind, boolean> = {
+    CONTRA:                false,
+    PAYMENT:               true,
+    RECEIPT:               true,
+    CREDIT_NOTE:           false,
+    DEBIT_NOTE:            false,
+    JOURNAL:               false,
+    PURCHASE:              false,
+    SALE:                  false,
+    POS:                   true,
+    ESTIMATE:              false,
+    POS_ESTIMATE:          true,
+    POS_ORDER:             true,
+    SALE_RETURN:           false,
+    PURCHASE_RETURN:       false,
+    MANUFACTURING_JOURNAL: false,
+    PHYSICAL_STOCK:        false,
+    BRANCH_TRANSFER:       false,
+    GRN:                   false,
+    CHALLAN:               false,
+    REJECTION_IN:          false,
+    REJECTION_OUT:         false,
+    SALES_ORDER:           false,
+    PURCHASE_ORDER:        false,
+};
+
+/** Initial "Thermal" toggle state for a voucher kind (false → browser print). */
+export function thermalDefault(kind: string): boolean {
+    return isVoucherTemplateKind(kind) ? THERMAL_DEFAULT_BY_KIND[kind] : false;
+}
+
 export interface VoucherTemplateDefaults {
-    kind:           VoucherTemplateKind;
-    headerLine1:    string;
-    headerLine2:    string;
-    addressBlock:   string;
-    gstinLine:      string;
-    phoneLine:      string;
-    logoUrl:        string;
-    showLogo:       boolean;
-    showAddress:    boolean;
-    showGstin:      boolean;
-    showPhone:      boolean;
+    kind: VoucherTemplateKind;
+    headerLine1: string;
+    headerLine2: string;
+    addressBlock: string;
+    gstinLine: string;
+    phoneLine: string;
+    logoUrl: string;
+    showLogo: boolean;
+    showAddress: boolean;
+    showGstin: boolean;
+    showPhone: boolean;
     showTaxSummary: boolean;
-    showMrp:        boolean;
-    showSignature:  boolean;
-    showQrCode:     boolean;
-    termsText:      string;
-    footerLine:     string;
+    showMrp: boolean;
+    showSignature: boolean;
+    showQrCode: boolean;
+    termsText: string;
+    footerLine: string;
     signatureLabel: string;
-    defaultPaper:   PaperFormat;
-    paperWidthMm:   number;
-    fontFamily:     string;
-    fontSizePx:     number;
+    defaultPaper: PaperFormat;
+    paperWidthMm: number;
+    fontFamily: string;
+    fontSizePx: number;
 }
 
 /**
@@ -169,27 +243,27 @@ export interface VoucherTemplateDefaults {
 export function buildVoucherTemplateDefaults(kind: VoucherTemplateKind): VoucherTemplateDefaults {
     return {
         kind,
-        headerLine1:    "",
-        headerLine2:    HEADER_LINE_2[kind],
-        addressBlock:   "",
-        gstinLine:      "",
-        phoneLine:      "",
-        logoUrl:        "",
-        showLogo:       false,
-        showAddress:    true,
-        showGstin:      true,
-        showPhone:      true,
+        headerLine1: "",
+        headerLine2: HEADER_LINE_2[kind],
+        addressBlock: "",
+        gstinLine: "",
+        phoneLine: "",
+        logoUrl: "",
+        showLogo: false,
+        showAddress: true,
+        showGstin: true,
+        showPhone: true,
         showTaxSummary: !NO_TAX_SUMMARY.has(kind),
-        showMrp:        true,
-        showSignature:  false,
-        showQrCode:     false,
-        termsText:      "",
-        footerLine:     "Thank you · Visit again",
+        showMrp: true,
+        showSignature: false,
+        showQrCode: false,
+        termsText: "",
+        footerLine: "Thank you · Visit again",
         signatureLabel: "Authorised Signatory",
-        defaultPaper:   DEFAULT_PAPER_BY_KIND[kind],
-        paperWidthMm:   80,
-        fontFamily:     "Courier New, monospace",
-        fontSizePx:     12,
+        defaultPaper: DEFAULT_PAPER_BY_KIND[kind],
+        paperWidthMm: 80,
+        fontFamily: "Courier New, monospace",
+        fontSizePx: 12,
     };
 }
 

@@ -42,6 +42,8 @@ import { ProductScanInput, type ScannedProduct } from "@/modules/inventory/compo
 import { LifecycleActions, type LifecycleVoucher } from "@/modules/accountancy/components/LifecycleActions";
 import { VoucherTopBar } from "@/modules/accountancy/components/VoucherTopBar";
 import { VoucherInlineActions } from "@/modules/accountancy/components/VoucherInlineActions";
+import { voucherPrintPageHref } from "@/modules/accountancy/lib/voucherUrls";
+import { printAfterSaveDefault, thermalDefault } from "@/shared/lib/print/voucherTemplateDefaults";
 import { useSession } from "next-auth/react";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { requiredVoucherPermission } from "@/shared/lib/auth/voucherMatrix";
@@ -84,6 +86,8 @@ export function PhysicalStockPage() {
     const activeBranchId = useActiveBranchStore((s) => s.activeBranchId);
 
     const [saving, setSaving] = useState(false);
+    const [printAfterSave, setPrintAfterSave] = useState(() => printAfterSaveDefault("PHYSICAL_STOCK"));
+    const [thermal, setThermal] = useState(() => thermalDefault("PHYSICAL_STOCK"));
     const [loading, setLoading] = useState(editing);
     const [voucherRef, setVoucherRef] = useState<string | null>(null);
     const [loadedVoucher, setLoadedVoucher] = useState<LifecycleVoucher | null>(null);
@@ -231,7 +235,7 @@ export function PhysicalStockPage() {
 
     // ── Submit ──────────────────────────────────────────────────────────────
 
-    const submit = async (postAfterSave: boolean) => {
+    const submit = async (postAfterSave: boolean, print = false) => {
         if (!form.description.trim()) { toast.error("Description required"); return; }
         const branchId = editing ? selectedBranchId : activeBranchId;
         if (!branchId) {
@@ -273,6 +277,7 @@ export function PhysicalStockPage() {
             } else {
                 toast.success("Physical Stock saved as draft");
             }
+            if (print) window.open(voucherPrintPageHref("inv", voucherId, { thermal }), "_blank", "noopener");
             if (editing) {
                 // Edit done — return to wherever the operator came from.
                 closeForm();
@@ -419,10 +424,16 @@ export function PhysicalStockPage() {
             <div className="border-t border-border bg-card px-6 py-3 shrink-0">
                 <VoucherInlineActions
                     onCancel={handleClose}
-                    onSave={() => submit(true)}
-                    onSaveDraft={() => submit(false)}
+                    onSave={() => submit(true, printAfterSave)}
+                    onSaveDraft={() => submit(false, printAfterSave)}
                     showSaveDraft
                     showSave={editing || canPost}
+                    showPrintToggle
+                    printAfterSave={printAfterSave}
+                    onPrintAfterSaveChange={setPrintAfterSave}
+                    showThermalToggle
+                    thermal={thermal}
+                    onThermalChange={setThermal}
                     saving={saving}
                     leftContent={editing && loadedVoucher ? (
                         <LifecycleActions

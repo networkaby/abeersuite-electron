@@ -35,6 +35,8 @@ import { BalanceHint } from "@/modules/accountancy/components/BalanceHint";
 import { LifecycleActions } from "@/modules/accountancy/components/LifecycleActions";
 import { VoucherTopBar } from "@/modules/accountancy/components/VoucherTopBar";
 import { VoucherActionBar } from "@/modules/accountancy/components/VoucherActionBar";
+import { voucherPrintPageHref } from "@/modules/accountancy/lib/voucherUrls";
+import { printAfterSaveDefault, thermalDefault } from "@/shared/lib/print/voucherTemplateDefaults";
 import { InvProductCombobox, type SelectedProduct } from "@/modules/inventory/components/InvProductCombobox";
 import { isStockEligibleAccount } from "@/modules/accountancy/lib/stockEligibleAccount";
 import { numberToIndianWords } from "@/shared/lib/format/numberWords";
@@ -201,6 +203,8 @@ export function JournalVoucherPage({ voucherId }: { voucherId?: number } = {}) {
 
     const [date, setDate]           = useState(() => toIsoDate(new Date()));
     const [narration, setNarration] = useState("");
+    const [printAfterSave, setPrintAfterSave] = useState(() => printAfterSaveDefault("JOURNAL"));
+    const [thermal, setThermal] = useState(() => thermalDefault("JOURNAL"));
     const [lines, setLines]         = useState<Line[]>([newLine("DEBIT"), newLine("CREDIT")]);
 
     useEffect(() => {
@@ -355,7 +359,10 @@ export function JournalVoucherPage({ voucherId }: { voucherId?: number } = {}) {
         });
     };
 
-    const submit = async (postAfterSave: boolean) => {
+    const openReceipt = (id: number) =>
+        window.open(voucherPrintPageHref("je", id, { thermal }), "_blank", "noopener");
+
+    const submit = async (postAfterSave: boolean, print = false) => {
         if (lines.some((l) => !l.accountId)) { toast.error("Each line needs an account"); return; }
         if (lines.some((l) => lineAmount(l) <= 0)) { toast.error("Each line needs a positive amount"); return; }
         if (!balanced) { toast.error("Debits must equal credits"); return; }
@@ -417,6 +424,7 @@ export function JournalVoucherPage({ voucherId }: { voucherId?: number } = {}) {
                     lines:       apiLines,
                 });
                 toast.success(`Journal voucher ${loadedJe?.reference ?? ""} updated`);
+                if (print) openReceipt(voucherId);
                 closeForm();
             } catch (err: unknown) {
                 toast.error(extractApiError(err, "Save failed"));
@@ -441,6 +449,7 @@ export function JournalVoucherPage({ voucherId }: { voucherId?: number } = {}) {
             );
             if (postAfterSave) toast.success(`Journal voucher ${res.data.reference} saved & posted`);
             else               toast.success(`Journal voucher ${res.data.reference} saved as draft`);
+            if (print) openReceipt(res.data.voucherId);
             router.push(listPath);
         } catch (err: unknown) {
             toast.error(extractApiError(err, "Save failed"));
@@ -666,11 +675,17 @@ export function JournalVoucherPage({ voucherId }: { voucherId?: number } = {}) {
             {/* Sticky action bar */}
             <VoucherActionBar
                 onCancel={closeForm}
-                onSave={() => submit(true)}
+                onSave={() => submit(true, printAfterSave)}
                 saveLabel={isEditing ? "Save Changes" : "Save"}
                 saveDisabled={saving || !balanced || loading || (isEditing && (loadedJe?.status === "CANCELLED" || !!loadedJe?.deletedAt))}
-                onSaveDraft={() => submit(false)}
+                onSaveDraft={() => submit(false, printAfterSave)}
                 showSaveDraft={!isEditing}
+                showPrintToggle
+                printAfterSave={printAfterSave}
+                onPrintAfterSaveChange={setPrintAfterSave}
+                showThermalToggle
+                thermal={thermal}
+                onThermalChange={setThermal}
                 showSave={isEditing || canPost}
                 saveDraftDisabled={saving || !balanced}
                 saving={saving}

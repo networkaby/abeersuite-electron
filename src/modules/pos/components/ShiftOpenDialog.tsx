@@ -25,6 +25,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { fmt } from "@/utils/constants";
 import { extractApiError } from "@/shared/lib/api";
 
+// The local bridge's config.json is the per-machine store that survives
+// incognito / cache-clear, so the counter lock lives there (set once on first
+// shift open, cleared via Printer Settings → Forget).
+const BRIDGE = "http://localhost:9191";
+
 type Counter = {
     id: number;
     name: string;
@@ -52,6 +57,9 @@ export function ShiftOpenDialog({
     const [counters, setCounters]         = useState<Counter[]>([]);
     const [loadingCounters, setLoadingCounters] = useState(false);
     const [selectedCounterId, setSelectedCounterId] = useState<number | null>(null);
+    // When this PC is locked to a counter (saved in the bridge config), the
+    // picker is forced to it and disabled.
+    const [lockedCounterId, setLockedCounterId] = useState<number | null>(null);
     const [vaultTopUp, setVaultTopUp]     = useState("0");            // rupees
     const [notes, setNotes]               = useState("");
     const [submitting, setSubmitting]     = useState(false);
@@ -69,6 +77,18 @@ export function ShiftOpenDialog({
             })
             .catch(() => toast.error("Failed to load counters"))
             .finally(() => setLoadingCounters(false));
+
+        // Counter lock: if this PC's bridge config names a counter, force it.
+        // Best-effort — no bridge / not set → normal free picker.
+        fetch(`${BRIDGE}/config`, { signal: AbortSignal.timeout(2000) })
+            .then((r) => r.ok ? r.json() : null)
+            .then((cfg: { counterId?: number | null } | null) => {
+                if (cfg?.counterId) {
+                    setLockedCounterId(cfg.counterId);
+                    setSelectedCounterId(cfg.counterId);
+                }
+            })
+            .catch(() => { /* bridge offline — leave picker free */ });
     }, [open]);
 
     const selectedCounter = counters.find((c) => c.id === selectedCounterId) ?? null;
@@ -90,6 +110,15 @@ export function ShiftOpenDialog({
                 toast.success(`Resumed shift — ${selectedCounter?.name} · continuing from where you left off`);
             } else {
                 toast.success(`Shift opened — ${selectedCounter?.name} · ₹${fmt(totalFloat)} in drawer`);
+            }
+            // Lock this PC to the chosen counter on first open (saved in the bridge
+            // config). Subsequent opens force it; clear via Printer Settings → Forget.
+            if (lockedCounterId == null) {
+                fetch(`${BRIDGE}/config`, {
+                    method:  "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body:    JSON.stringify({ counterId: selectedCounterId, counterName: selectedCounter?.name ?? null }),
+                }).catch(() => { /* bridge offline — lock just won't persist */ });
             }
             onOpened(data);
             onOpenChange(false);
@@ -123,6 +152,7 @@ export function ShiftOpenDialog({
                             <Select
                                 value={selectedCounterId?.toString() ?? ""}
                                 onValueChange={(v) => setSelectedCounterId(Number(v))}
+                                disabled={lockedCounterId != null}
                             >
                                 <SelectTrigger>
                                     <SelectValue placeholder="Select counter…" />
@@ -147,6 +177,11 @@ export function ShiftOpenDialog({
                                     ))}
                                 </SelectContent>
                             </Select>
+                            {lockedCounterId != null && (
+                                <p className="text-xs text-muted-foreground">
+                                    Locked to this PC. Change it in Settings → Printer Settings → Forget counter.
+                                </p>
+                            )}
                         </div>
 
                         {/* Carry-over + top-up */}

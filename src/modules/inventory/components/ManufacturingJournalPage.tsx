@@ -37,6 +37,8 @@ import { scaleBomLines } from "@/modules/inventory/lib/bom";
 import { LifecycleActions, type LifecycleVoucher } from "@/modules/accountancy/components/LifecycleActions";
 import { VoucherTopBar } from "@/modules/accountancy/components/VoucherTopBar";
 import { VoucherInlineActions } from "@/modules/accountancy/components/VoucherInlineActions";
+import { voucherPrintPageHref } from "@/modules/accountancy/lib/voucherUrls";
+import { printAfterSaveDefault, thermalDefault } from "@/shared/lib/print/voucherTemplateDefaults";
 import { useSession } from "next-auth/react";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { requiredVoucherPermission } from "@/shared/lib/auth/voucherMatrix";
@@ -94,6 +96,8 @@ export function ManufacturingJournalPage() {
     const activeBranchId = useActiveBranchStore((s) => s.activeBranchId);
 
     const [saving, setSaving] = useState(false);
+    const [printAfterSave, setPrintAfterSave] = useState(() => printAfterSaveDefault("MANUFACTURING_JOURNAL"));
+    const [thermal, setThermal] = useState(() => thermalDefault("MANUFACTURING_JOURNAL"));
     const [loading, setLoading] = useState(editing);
     const [voucherRef, setVoucherRef] = useState<string | null>(null);
     const [loadedVoucher, setLoadedVoucher] = useState<LifecycleVoucher | null>(null);
@@ -358,7 +362,7 @@ export function ManufacturingJournalPage() {
 
     // ── Submit ──────────────────────────────────────────────────────────────
 
-    const submit = async (postAfterSave: boolean) => {
+    const submit = async (postAfterSave: boolean, print = false) => {
         if (!form.description.trim()) { toast.error("Description required"); return; }
 
         const lines: { productId: number; quantity: number; rate: number; direction: "CONSUME" | "PRODUCE" }[] = [];
@@ -419,6 +423,7 @@ export function ManufacturingJournalPage() {
             } else {
                 toast.success("Manufacturing Journal saved as draft");
             }
+            if (print) window.open(voucherPrintPageHref("inv", voucherId, { thermal }), "_blank", "noopener");
             if (editing) {
                 closeForm();
             } else {
@@ -647,10 +652,16 @@ export function ManufacturingJournalPage() {
             <div className="border-t border-border bg-card px-6 py-3 shrink-0">
                 <VoucherInlineActions
                     onCancel={handleClose}
-                    onSave={() => submit(true)}
-                    onSaveDraft={() => submit(false)}
+                    onSave={() => submit(true, printAfterSave)}
+                    onSaveDraft={() => submit(false, printAfterSave)}
                     showSaveDraft
                     showSave={editing || canPost}
+                    showPrintToggle
+                    printAfterSave={printAfterSave}
+                    onPrintAfterSaveChange={setPrintAfterSave}
+                    showThermalToggle
+                    thermal={thermal}
+                    onThermalChange={setThermal}
                     saving={saving}
                     leftContent={editing && loadedVoucher ? (
                         <LifecycleActions
