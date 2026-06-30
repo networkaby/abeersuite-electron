@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
 import { Loader2, Wifi, Usb, Monitor, CheckCircle, XCircle, RefreshCw, Printer, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { BridgeNotRunningNotice } from "@/modules/settings/components/BridgeNotRunningNotice";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -191,33 +193,13 @@ export default function PrinterSettingsPage() {
                     <Printer size={20} />
                     <h1 className="text-xl font-bold">Thermal Printer</h1>
                 </div>
-                <div className="flex items-center gap-3">
-                    <a
-                        href="/combined-bridge-setup.exe"
-                        download
-                        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-                        title="Small installer — downloads Node + dependencies during install (needs internet)"
-                    >
-                        <Download size={13} />
-                        Installer
-                    </a>
-                    <a
-                        href="/combined-bridge-setup-offline.exe"
-                        download
-                        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-                        title="Larger installer — bundles Node + dependencies, installs with no internet"
-                    >
-                        <Download size={13} />
-                        Offline
-                    </a>
-                    <a
-                        href="/combined-bridge.zip"
-                        download
-                        className="flex items-center gap-1 text-xs text-muted-foreground/60 hover:text-foreground"
-                    >
-                        Zip
-                    </a>
-                </div>
+                <Link
+                    href="/office/settings/downloads"
+                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                >
+                    <Download size={13} />
+                    Downloads
+                </Link>
             </div>
 
             {/* Relay status */}
@@ -244,13 +226,14 @@ export default function PrinterSettingsPage() {
                     <p className="font-medium">Bridge update available</p>
                     <p className="text-xs text-amber-700">
                         This counter is running bridge <span className="font-mono">v{bridgeVersion}</span>; the latest is{" "}
-                        <span className="font-mono">v{latestVersion}</span>. Download and run the new installer to update.
+                        <span className="font-mono">v{latestVersion}</span>. Update from the Downloads page (or double-click
+                        <code className="bg-amber-100 rounded px-1 font-mono">update.bat</code> in the install folder).
                     </p>
                     <Button asChild size="sm" variant="outline" className="mt-1 border-amber-300 bg-white">
-                        <a href="/combined-bridge-setup.exe" download>
+                        <Link href="/office/settings/downloads">
                             <Download size={14} />
-                            Download installer (.exe)
-                        </a>
+                            Go to Downloads
+                        </Link>
                     </Button>
                 </div>
             )}
@@ -268,32 +251,7 @@ export default function PrinterSettingsPage() {
                 </div>
             )}
 
-            {!relayUp && !loading && (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 space-y-3">
-                    <div className="space-y-1">
-                        <p className="font-medium">Don&apos;t have the bridge installed yet?</p>
-                        <p className="text-xs text-amber-700">
-                            Download the installer and double-click it on the shop PC. It installs the
-                            bridge and starts it automatically on every logon — no setup needed.
-                        </p>
-                        <Button asChild size="sm" variant="outline" className="mt-1 border-amber-300 bg-white">
-                            <a href="/combined-bridge-setup.exe" download>
-                                <Download size={14} />
-                                Download installer (.exe)
-                            </a>
-                        </Button>
-                    </div>
-                    <div className="space-y-1 border-t border-amber-200 pt-3">
-                        <p className="font-medium">Advanced (manual) — instead of the installer:</p>
-                        <p className="text-xs text-amber-700">
-                            Download the <a href="/combined-bridge.zip" download className="underline">zip</a>, unzip on the
-                            shop PC, then run <code className="bg-amber-100 rounded px-1 font-mono">npm install</code> and
-                            double-click <code className="bg-amber-100 rounded px-1 font-mono">setup-autostart.bat</code>.
-                        </p>
-                        <p className="text-xs text-amber-700">Then refresh this page.</p>
-                    </div>
-                </div>
-            )}
+            {!relayUp && !loading && <BridgeNotRunningNotice device="printer" />}
 
             <fieldset disabled={!relayUp || loading} className="space-y-5 disabled:opacity-50">
                 {/* Company name */}

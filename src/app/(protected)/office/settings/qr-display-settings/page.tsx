@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { Loader2, CheckCircle, XCircle, RefreshCw, QrCode, Play, Smile, ScanLine, Eraser } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { BridgeNotRunningNotice } from "@/modules/settings/components/BridgeNotRunningNotice";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -177,15 +178,7 @@ export default function QrDisplaySettingsPage() {
                 </Button>
             </div>
 
-            {!relayUp && !loading && (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 space-y-1">
-                    <p className="font-medium">Start the relay on the shop PC first:</p>
-                    <code className="block bg-amber-100 rounded px-2 py-1 font-mono text-xs">
-                        cd tools/qr-display &amp;&amp; node relay.js
-                    </code>
-                    <p className="text-xs text-amber-700">Then refresh this page.</p>
-                </div>
-            )}
+            {!relayUp && !loading && <BridgeNotRunningNotice device="QR display" />}
 
             <fieldset disabled={!relayUp || loading} className="space-y-5 disabled:opacity-50">
                 {/* COM port */}
