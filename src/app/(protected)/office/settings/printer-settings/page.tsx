@@ -196,9 +196,19 @@ export default function PrinterSettingsPage() {
                         href="/combined-bridge-setup.exe"
                         download
                         className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                        title="Small installer — downloads Node + dependencies during install (needs internet)"
                     >
                         <Download size={13} />
-                        Installer (.exe)
+                        Installer
+                    </a>
+                    <a
+                        href="/combined-bridge-setup-offline.exe"
+                        download
+                        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                        title="Larger installer — bundles Node + dependencies, installs with no internet"
+                    >
+                        <Download size={13} />
+                        Offline
                     </a>
                     <a
                         href="/combined-bridge.zip"

@@ -7,6 +7,7 @@ function isPublicPath(pathname: string): boolean {
     // Printer/display bridge — downloadable on the shop PC before sign-in.
     if (pathname === "/combined-bridge.zip") return true;
     if (pathname === "/combined-bridge-setup.exe") return true;
+    if (pathname === "/combined-bridge-setup-offline.exe") return true;
     if (pathname === "/combined-bridge.version.json") return true;
     if (pathname.startsWith("/portal")) return true;
     if (pathname.startsWith("/shop")) return true;
