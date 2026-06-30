@@ -205,7 +205,9 @@ export function PosSalesRegister() {
         <div className="space-y-4">
             {/* ── Live shift bar ── the full status/money strip belongs here on
                 the overview page; the billing screen (/vouchers/pos/new) keeps it
-                folded into a ⋮ menu to save space. */}
+                folded into a ⋮ menu to save space. The ActiveShiftBar carries its
+                own Office link; the "no shift" cover below adds its own so a way
+                back home stays visible in both states. */}
             {activeShift ? (
                 <div className="overflow-hidden rounded-lg border border-border">
                     <ActiveShiftBar
@@ -224,6 +226,11 @@ export function PosSalesRegister() {
                     <span className="font-semibold text-amber-700 dark:text-amber-300">⚠ No shift open</span>
                     <span className="text-muted-foreground">Open a shift to start billing.</span>
                     <div className="ml-auto flex items-center gap-1.5">
+                        <Button asChild size="sm" variant="outline" className="h-7 text-xs">
+                            <a href="/office" target="_blank" rel="noopener noreferrer" title="Open the office in a new tab">
+                                <ExternalLink size={12} /> Office
+                            </a>
+                        </Button>
                         <Button asChild size="sm" variant="outline" className="h-7 text-xs">
                             <Link href="/vouchers/pos/new"><Plus size={14} /> New Sale</Link>
                         </Button>
