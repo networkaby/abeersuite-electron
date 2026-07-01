@@ -55,6 +55,7 @@ import {
 } from "../../src/shared/lib/print/voucherTemplateDefaults";
 import { COMPANY_DETAILS } from "../../src/utils/constants-company-details";
 import { voucherPermissionSeeds } from "../../src/shared/lib/auth/voucherMatrix";
+import { sidebarPermissionSeeds } from "../../src/shared/lib/auth/sidebarModules";
 import { upsertPositionWithRoles } from "./lib/positionSeedSync";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
@@ -267,6 +268,12 @@ const PERMISSIONS = [
     // (Enforcement is wired in a later phase; routes fall back to the generic keys
     // above until then.)
     ...voucherPermissionSeeds(),
+
+    // ui — sidebar link visibility (ui:sidebar:<module>:<child>). One row per nav
+    // link; the Department pool picks whole modules, the Role picker picks links.
+    // Generated from the sidebar so the link↔permission mapping never drifts.
+    // Single source: sidebarModules.ts.
+    ...sidebarPermissionSeeds(),
 
     // pos — shift / till / handover lifecycle
     { id: "pos:shift:open",        label: "Open POS shift",                 module: "pos", description: "Open your own till session with an opening cash float." },

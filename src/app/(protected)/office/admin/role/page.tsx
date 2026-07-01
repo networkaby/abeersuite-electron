@@ -13,6 +13,7 @@ import {
     Gift,
     HeartHandshake,
     Lock,
+    PanelLeft,
     Plus,
     RotateCcw,
     Save,
@@ -50,6 +51,7 @@ import {
 } from "@/components/ui/select";
 import { PermissionMatrix as SharedPermissionMatrix, type MatrixColumnGroup, type MatrixRow, type ColumnTint } from "@/shared/components/PermissionMatrix";
 import { VOUCHER_MATRIX, VOUCHER_GROUPS, VOUCHER_ACTIONS, ALL_VOUCHER_PERMISSION_IDS, type VoucherAction, type VoucherGroupKey } from "@/shared/lib/auth/voucherMatrix";
+import { SIDEBAR_MODULES } from "@/shared/lib/auth/sidebarModules";
 import type { LucideIcon } from "lucide-react";
 import { BUTTON_BAR_ACTIONS } from "@/utils/constants";
 import { createActionPermission } from "@/utils/module-access";
@@ -675,6 +677,8 @@ export default function RolePage() {
             // Work permissions get their own direct "Works" section (grouped, not
             // pool-filtered) — keep them out of the loose chips to avoid duplication.
             && !permission.id.startsWith("work:")
+            // Sidebar link visibility renders in its own "Sidebar links" section.
+            && !permission.id.startsWith("ui:sidebar:")
     );
 
     // Voucher matrices — show ONLY the voucher kinds the role's department offers
@@ -997,6 +1001,14 @@ export default function RolePage() {
                         <QuickActionsSection
                             selected={selected}
                             original={original}
+                            onTogglePerm={togglePerm}
+                        />
+
+                        <SidebarVisibilitySection
+                            selected={selected}
+                            original={original}
+                            search={search}
+                            inLens={inLens}
                             onTogglePerm={togglePerm}
                         />
 
@@ -1742,6 +1754,104 @@ function WorkAccessSection({
                         ))}
                     </div>
                 )}
+            </CardContent>
+        </Card>
+    );
+}
+
+// The role's sidebar link picker — "goes inside" each module the department pool
+// offers and lists its next-level nav labels. Ticking a link grants its
+// `ui:sidebar:<module>:<child>` permission, so the link shows in the role's
+// sidebar. Modules outside the department pool offer no links and are dropped, so
+// a role only sees links inside the modules its department allows.
+function SidebarVisibilitySection({
+    selected,
+    original,
+    search,
+    inLens,
+    onTogglePerm,
+}: {
+    selected: Set<string>;
+    original: Set<string>;
+    search: string;
+    inLens: (id: string) => boolean;
+    onTogglePerm: (id: string) => void;
+}) {
+    const term = search.trim().toLowerCase();
+    const modules = SIDEBAR_MODULES
+        .map((mod) => ({
+            ...mod,
+            children: mod.children.filter(
+                (child) =>
+                    // Offered only if the department pool carries the link (all-access
+                    // pools offer everything); a search term matches link or module name.
+                    inLens(child.permissionId) &&
+                    (!term ||
+                        child.label.toLowerCase().includes(term) ||
+                        mod.label.toLowerCase().includes(term))
+            ),
+        }))
+        .filter((mod) => mod.children.length > 0);
+
+    if (modules.length === 0) return null;
+
+    return (
+        <Card>
+            <CardContent className="space-y-3 pt-4">
+                <div>
+                    <h2 className="flex items-center gap-2 text-base font-bold tracking-tight">
+                        <PanelLeft size={15} /> Sidebar links
+                    </h2>
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">
+                        Pick which navigation links this role sees in the sidebar. Only modules offered by the role&rsquo;s department pool appear here.
+                    </p>
+                </div>
+
+                <div className="overflow-hidden rounded-lg border border-border bg-card divide-y divide-border">
+                    {modules.map((mod) => (
+                        <div key={mod.key} className="px-3 py-2.5">
+                            <div className="mb-1.5 flex items-center gap-2">
+                                <span className="text-[11px] font-bold uppercase tracking-wider text-foreground">{mod.label}</span>
+                                <span className="text-[10px] text-muted-foreground">
+                                    {mod.children.length} {mod.children.length === 1 ? "link" : "links"}
+                                </span>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                                {mod.children.map((child) => {
+                                    const isOn = selected.has(child.permissionId);
+                                    const changed = isOn !== original.has(child.permissionId);
+                                    return (
+                                        <Button
+                                            key={child.permissionId}
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => onTogglePerm(child.permissionId)}
+                                            title={child.permissionId}
+                                            className={[
+                                                "h-auto items-center gap-1.5 rounded-md border px-2 py-1 text-left transition-colors",
+                                                isOn
+                                                    ? "border-primary bg-primary/10 text-foreground hover:bg-primary/15"
+                                                    : "border-border hover:border-primary/60 hover:bg-primary/5",
+                                                changed ? "ring-2 ring-primary/20" : "",
+                                            ].join(" ")}
+                                        >
+                                            <span
+                                                className={[
+                                                    "flex h-4 w-4 shrink-0 items-center justify-center rounded border",
+                                                    isOn ? "border-primary bg-primary text-primary-foreground" : "border-border",
+                                                ].join(" ")}
+                                            >
+                                                {isOn && <Check size={10} strokeWidth={3} />}
+                                            </span>
+                                            <span className="text-[11px] font-medium leading-tight">{child.label}</span>
+                                        </Button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    ))}
+                </div>
             </CardContent>
         </Card>
     );

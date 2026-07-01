@@ -16,6 +16,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { VOUCHER_MATRIX, VOUCHER_GROUPS, ALL_VOUCHER_PERMISSION_IDS, voucherKindPermissionIds } from "@/shared/lib/auth/voucherMatrix";
+import { SIDEBAR_MODULES } from "@/shared/lib/auth/sidebarModules";
 
 interface Branch { id: string; name: string; }
 interface Permission {
@@ -411,9 +412,15 @@ function PoolEditor({
     const poolable = filtered.filter(p =>
         p.id !== "admin:bypass"
         && !p.id.startsWith("finance:voucher:")
+        && !p.id.startsWith("ui:sidebar:")
         && !voucherPermSet.has(p.id),
     );
     const modules = [...new Set(poolable.map(p => p.module))].sort();
+    // Sidebar top-level modules (Contacts, Inventory, CRM…) — the dept declares
+    // which modules it can see; child links are gated per role on the Role page.
+    const sidebarRows = SIDEBAR_MODULES.filter(
+        m => !q || m.label.toLowerCase().includes(q) || m.key.includes(q) || "sidebar module".includes(q),
+    );
     // Vouchers grouped by economic nature (GL / Trading / Inventory / Optional).
     const voucherRows = VOUCHER_MATRIX.filter(
         k => !q || k.label.toLowerCase().includes(q) || "voucher".includes(q),
@@ -443,6 +450,27 @@ function PoolEditor({
             </div>
 
             <div className="max-h-[60vh] space-y-4 overflow-auto pr-1">
+                {sidebarRows.length > 0 && (
+                    <div className="space-y-2.5">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                            sidebar modules <span className="font-normal normal-case">(which top-level sidebar modules this dept can see — links inside are set per role)</span>
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                            {sidebarRows.map(m => {
+                                const on = m.childPermissionIds.every(id => selected.has(id));
+                                return (
+                                    <PermChip
+                                        key={m.key}
+                                        label={m.label}
+                                        title={`${m.children.length} link${m.children.length !== 1 ? "s" : ""}`}
+                                        on={on}
+                                        onClick={() => onToggleMany(m.childPermissionIds, !on)}
+                                    />
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
                 {voucherGroups.length > 0 && (
                     <div className="space-y-2.5">
                         <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
@@ -487,7 +515,7 @@ function PoolEditor({
                         </div>
                     </div>
                 ))}
-                {modules.length === 0 && voucherGroups.length === 0 && (
+                {modules.length === 0 && voucherGroups.length === 0 && sidebarRows.length === 0 && (
                     <p className="py-6 text-center text-sm text-muted-foreground">No permissions match your search.</p>
                 )}
             </div>

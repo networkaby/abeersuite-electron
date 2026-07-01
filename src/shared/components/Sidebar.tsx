@@ -27,6 +27,7 @@ import {
     type NavItem,
 } from "@/utils/constants";
 import { canViewModule, canViewModuleChild } from "@/utils/module-access";
+import { sidebarLinkPermissionIdForLabel } from "@/shared/lib/auth/sidebarModules";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 
 type SidebarUser = {
@@ -342,12 +343,27 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                 );
             });
 
+    // Sidebar visibility: a nav link granted on the Role page's "Sidebar links"
+    // (ui:sidebar:*) shows even without the link's own capability permission.
+    // Additive — clearing a granted child's capability gate reveals it without
+    // hiding anything a role already sees. Unmodelled links resolve to null and
+    // keep their existing gate.
+    const hasSidebarLink = (moduleKey: string, label: string) => {
+        const linkId = sidebarLinkPermissionIdForLabel(moduleKey, label);
+        return !!linkId && (isAdmin || permissions.includes(linkId));
+    };
+    const applySidebarGrants = (moduleKey: string, items: ModuleChild[]): ModuleChild[] =>
+        items.map((child) => (hasSidebarLink(moduleKey, child.label) ? { ...child, permission: null } : child));
+    const visibleModules = MODULE_SECTIONS
+        .map((mod) => ({ ...mod, children: applySidebarGrants(mod.key, mod.children) }))
+        .filter((mod) => canViewModule(mod, permissions, isAdmin));
+
     const visibleAdmin = ADMIN_NAV.filter(
-        (item) => isAdmin || permissions.includes(item.permission)
+        (item) => isAdmin || permissions.includes(item.permission) || hasSidebarLink("admin", item.label)
     );
 
     const visibleSettings = SETTINGS_NAV.filter(
-        (item) => isAdmin || permissions.includes(item.permission)
+        (item) => isAdmin || permissions.includes(item.permission) || hasSidebarLink("settings", item.label)
     );
 
     const canViewNavItem = (item: NavItem) =>
@@ -578,7 +594,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                 </p>
                             )}
                             <div className="space-y-0.5">
-                                {MODULE_SECTIONS.filter((mod) => canViewModule(mod, permissions, isAdmin)).map((mod) => {
+                                {visibleModules.map((mod) => {
                                     const Icon = mod.icon;
                                     const isOpen = moduleOpen[mod.key] ?? false;
 
