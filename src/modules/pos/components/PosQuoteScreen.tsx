@@ -33,11 +33,11 @@ import { PaymentLinkDialog } from "@/modules/pos/components/PaymentLinkDialog";
 import { PosTopBar } from "@/modules/pos/components/PosTopBar";
 import { PosCustomerPanel } from "@/modules/pos/components/PosCustomerPanel";
 import { PosBillSummary } from "@/modules/pos/components/PosBillSummary";
+import { usePosCustomerDisplay } from "@/modules/pos/hooks/usePosCustomerDisplay";
 import { qrDisplay } from "@/modules/pos/lib/qrDisplay";
-import { computePriceLadder } from "@/modules/pos/lib/priceLadder";
 import type { VoucherTemplateDefaults } from "@/shared/lib/print/voucherTemplateDefaults";
 import { extractApiError } from "@/shared/lib/api";
-import { formatInr, parseDecimalInput, parseDigitsInput } from "@/shared/lib/format";
+import { formatInr, parseDigitsInput } from "@/shared/lib/format";
 import { usePosDraftStore } from "@/store/posDraftStore";
 import { type Snapshot, type ProductOption } from "@/modules/pos/lib/posDraftTypes";
 
@@ -788,94 +788,14 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
     // Confirm is blocked only on UNDER-payment (a credit sale → /sale). Exact pay
     // is a normal sale; over-payment is collected as surplus (Receipt voucher).
 
-    // ── QR display coordinator ──────────────────────────────────────────────
-    // Single source of truth for what the customer-facing DQ11 shows. Priority:
-    //   1. thank-you (held by displayHold after a successful sale)
-    //   2. UPI QR — checkout open and UPI amount entered
-    //   3. payment summary — checkout open with cash/extras entered
-    //   4. cart — items in cart
-    //   5. customer welcome — customer picked, cart empty
-    //   6. idle slideshow — nothing else
-    // Debounced — the DQ11 takes ~3s to transmit a frame at 921600 baud, so
-    // rapid keystrokes (typing/clearing UPI amount) would queue stale frames.
-    // Wait 250ms after the last state change before pushing.
-    // Fire-and-forget; relay-down never blocks POS.
-    useEffect(() => {
-        if (displayHold === "thankyou") return;
-
-        const timer = setTimeout(() => {
-            if (checkoutOpen && upiEntered > 0) {
-                void qrDisplay.upi({
-                    amount: upiEntered,
-                    caption: `Pay ₹${upiEntered.toFixed(2)} via UPI`,
-                });
-            } else if (checkoutOpen && (cashNet > 0 || splitsSum > 0)) {
-                void qrDisplay.payment({
-                    total: payableTotal,
-                    cashPaid: cashNet,
-                    balance: Math.max(0, payableTotal - collected),
-                });
-            } else if (cart.length > 0) {
-                // Customer-facing price ladder — same computed view as the receipt.
-                const lr = cart.map((l) => calcLineTotals({ quantity: l.qty, rate: l.unitPrice, discountPct: 0, discountAmt: 0, taxRate: l.taxRate }));
-                const lad = computePriceLadder({
-                    lines: cart.map((l, i) => ({
-                        description: l.name,
-                        qty:         l.qty,
-                        mrpPaise:    l.mrpPaise,
-                        barcodePaise: l.barcodePaise,
-                        taxRatePct:  l.taxRate,
-                        taxAmount:   lr[i].taxAmount,
-                        amount:      lr[i].amount,
-                    })),
-                    tierDiscount:    effDiscountAmount,
-                    loyaltyDiscount: effRedemptionRupees,
-                    couponDiscount:  couponRupees,
-                    extraCharges:    posExtraCharges,
-                    total,
-                }, { tier: posTierLabel });
-                void qrDisplay.cart({
-                    items: cart.map((l, i) => {
-                        // Per-unit tag from the ladder so the MRP-fallback hides the
-                        // real price on the display too. Relay multiplies by qty.
-                        const ll = lad.lines[i];
-                        return {
-                            name:    l.name,
-                            qty:     l.qty,
-                            price:   l.unitPrice,
-                            mrp:     ll?.mrp != null && l.qty ? ll.mrp / l.qty : undefined,
-                            barcode: ll?.barcode != null && l.qty ? ll.barcode / l.qty : undefined,
-                        };
-                    }),
-                    subtotal,
-                    discount: totalDiscount,
-                    total,
-                    discounts: lad.discounts.map((d) => ({ label: d.label, amount: d.amount })),
-                    charges:   lad.charges.map((c) => ({ label: c.label, amount: c.amount })),
-                    gst:       lad.taxTotal > 0 ? lad.taxTotal : undefined,
-                    savings:   lad.savingsTotal > 0 ? { amount: lad.savingsTotal, pct: lad.savingsPct } : undefined,
-                });
-            } else if (snapshot) {
-                void qrDisplay.customer({
-                    name: snapshot.party.name,
-                    level: snapshot.customerLevel,
-                    loyaltyPoints: snapshot.loyaltyPoints,
-                    lastVisitAt: snapshot.lastVisitAt,
-                    discountPct: snapshot.discountPct,
-                    balanceDue: snapshot.balanceDue,
-                });
-            } else {
-                void qrDisplay.idle();
-            }
-        }, 250);
-
-        return () => clearTimeout(timer);
-    }, [
-        displayHold, checkoutOpen, cart, snapshot,
-        cashNet, upiEntered, splitsSum, collected,
-        subtotal, discountAmount, total,
-        totalDiscount, effDiscountAmount, effRedemptionRupees, couponRupees,
-    ]);
+    // Customer-facing display coordinator (shared hook — the live QR/cart/customer
+    // frames while a bill is built). The post-save idle reset + printing stay in
+    // generateInvoice below; only this live coordinator is shared.
+    usePosCustomerDisplay({
+        displayHold, checkoutOpen, upiEntered, cashNet, splitsSum, payableTotal, collected,
+        cart, snapshot, subtotal, discountAmount, total, totalDiscount,
+        effDiscountAmount, effRedemptionRupees, couponRupees, posExtraCharges, posTierLabel,
+    });
 
     // Credit-limit guard — true when the on-credit portion of this sale would
     // push the customer's outstanding balance past their credit limit.
