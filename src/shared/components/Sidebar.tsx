@@ -353,7 +353,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
         return !!linkId && (isAdmin || permissions.includes(linkId));
     };
     const applySidebarGrants = (moduleKey: string, items: ModuleChild[]): ModuleChild[] =>
-        items.map((child) => (hasSidebarLink(moduleKey, child.label) ? { ...child, permission: null } : child));
+        items.map((child) => (hasSidebarLink(moduleKey, child.label) ? { ...child, permission: undefined } : child));
     const visibleModules = MODULE_SECTIONS
         .map((mod) => ({ ...mod, children: applySidebarGrants(mod.key, mod.children) }))
         .filter((mod) => canViewModule(mod, permissions, isAdmin));
