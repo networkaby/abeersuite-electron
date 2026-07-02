@@ -4,14 +4,12 @@ import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
-import Link from "next/link";
 import {
     Search, X, User, Phone, Mail, Award, TrendingUp, Clock,
-    ShoppingCart, Plus, Minus, Trash2, ArrowLeft, ExternalLink,
-    Banknote, Wallet, CreditCard, Building2, UserPlus,
+    ShoppingCart, Plus, Minus, Trash2,
+    Wallet, CreditCard, Building2,
     MapPin, Star, Sparkles, AlertCircle, TrendingDown, Tag,
-    ReceiptIndianRupee, RotateCcw, ChevronDown, ChevronRight, HelpCircle, HandCoins,
-    RefreshCw, Lock, ArrowRightLeft, Monitor, MoreVertical,
+    ReceiptIndianRupee, ChevronDown, ChevronRight,
 } from "lucide-react";
 import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/components/GlAccountCombobox";
 import { calcVoucherTotals, calcLineTotals } from "@/modules/inventory/lib/stock";
@@ -22,11 +20,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
-    DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
-    DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
-import {
-    PartySearchAndCreate,
     type PartySearchAndCreateHandle,
     type PickedParty,
 } from "@/shared/components/PartySearchAndCreate";
@@ -41,7 +34,7 @@ import { PosReceiptDialog } from "@/modules/pos/components/PosReceiptDialog";
 import { type TenderSplit } from "@/modules/pos/components/TenderSplitInput";
 import { CheckoutDialog } from "@/modules/pos/components/CheckoutDialog";
 import { PaymentLinkDialog } from "@/modules/pos/components/PaymentLinkDialog";
-import { PosModeSwitch } from "@/modules/pos/components/PosModeSwitch";
+import { PosTopBar } from "@/modules/pos/components/PosTopBar";
 import { qrDisplay } from "@/modules/pos/lib/qrDisplay";
 import { computePriceLadder } from "@/modules/pos/lib/priceLadder";
 import type { VoucherTemplateDefaults } from "@/shared/lib/print/voucherTemplateDefaults";
@@ -964,137 +957,28 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
                 />
             )}
 
-            {/* Top bar — customer search */}
-            <header className={`flex shrink-0 items-center gap-3 border-b-2 px-4 py-3 ${cfg.header}`}>
-                <Link href="/office" className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground" title="Back to office">
-                    <ArrowLeft size={16} />
-                </Link>
-                <PosModeSwitch active={mode} />
-                <div className="flex-1 max-w-2xl">
-                    <PartySearchAndCreate
-                        ref={partySearchRef}
-                        onPicked={onPartyPicked}
-                        locked={!!snapshot}
-                        onDialogOpenChange={setCreateDialogOpen}
-                        // POS is strictly customer-facing. The walk-in fall-back
-                        // ("Walk-in Cash Customer" ledger) handles the empty-party
-                        // case at checkout; here we only show / create debtors.
-                        partyGroup="Sundry Debtors"
-                    />
-                </div>
-                {snapshot && (
-                    <Button variant="ghost" size="sm" onClick={clearCustomer} className="text-muted-foreground">
-                        <X size={14} /> Clear
-                    </Button>
-                )}
-                <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => partySearchRef.current?.openNew()}
-                    title="Walk-in customer not in the system yet — create on the fly"
-                >
-                    <UserPlus size={14} /> New customer
-                </Button>
-                <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => window.open("/vouchers/pos", "_blank", "noopener")}
-                    title="Open another POS in a new tab — start a parallel bill while this one waits"
-                >
-                    <ExternalLink size={14} /> New tab
-                </Button>
-                <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setReturnDialogOpen(true)}
-                    title="Process a sale return — by invoice number, customer, or lost invoice"
-                >
-                    <RotateCcw size={14} /> Return
-                </Button>
-                {/* Exp — opens an expenditure voucher (payment-voucher variant) that
-                    only permits payment to the counter's configured account
-                    (office/admin/counters). UI only for now — handler is a placeholder. */}
-                <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => activeShift ? setExpenditureDialogOpen(true) : toast.error("Open a shift first to record an expenditure")}
-                    title="Record a counter expenditure (tea, sundry donation…) — posts a payment voucher from the counter's till"
-                >
-                    <Banknote size={14} /> Exp
-                </Button>
-                {/* Rcv — collect a cash payment from a party into the counter till */}
-                <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => activeShift ? setReceiptDialogOpen(true) : toast.error("Open a shift first to collect a payment")}
-                    title="Collect a payment from a customer into this counter's till — posts a receipt voucher"
-                >
-                    <HandCoins size={14} /> Rcv
-                </Button>
-                {/* Help — UI only for now. */}
-                <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => toast.info("POS help — coming soon")}
-                    title="POS help & keyboard shortcuts"
-                >
-                    <HelpCircle size={14} /> Help
-                </Button>
-
-                {/* Shift status + actions — folds the old full-width shift bar into
-                    the header. Also carries the nav link to the /vouchers/pos register
-                    where the live shift overview lives. */}
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            title="Shift status & actions"
-                            className={activeShift ? "border-emerald-300/70" : "border-amber-300/70"}
-                        >
-                            <span className={`h-2 w-2 rounded-full ${!shiftLoaded ? "bg-muted-foreground/40" : activeShift ? "bg-emerald-500" : "bg-amber-500"}`} />
-                            {!shiftLoaded ? "Shift…" : activeShift ? `Shift #${activeShift.id}` : "No shift"}
-                            <MoreVertical size={13} className="opacity-60" />
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="text-xs">
-                        {activeShift?.status === "OPEN" ? (
-                            <>
-                                <DropdownMenuLabel className="font-normal text-muted-foreground">
-                                    {activeShift.counter.name} · since {shiftOpenedAt}
-                                </DropdownMenuLabel>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={refreshActiveShift}>
-                                    <RefreshCw size={12} /> Refresh
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => setShiftDropOpen(true)}>
-                                    <Lock size={12} /> Drop to safe
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                    onClick={() => setShiftCloseOpen(true)}
-                                    className="text-amber-700 focus:text-amber-700 dark:text-amber-400"
-                                >
-                                    <ArrowRightLeft size={12} /> Close shift
-                                </DropdownMenuItem>
-                            </>
-                        ) : activeShift?.status === "AWAITING_HANDOVER" ? (
-                            <DropdownMenuLabel className="font-normal text-amber-700 dark:text-amber-400">
-                                Awaiting handover — see the bar above
-                            </DropdownMenuLabel>
-                        ) : (
-                            <DropdownMenuItem onClick={() => setShiftOpenDialogOpen(true)}>
-                                <Lock size={12} /> Open shift
-                            </DropdownMenuItem>
-                        )}
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem asChild>
-                            <Link href="/vouchers/pos">
-                                <Monitor size={12} /> POS sales register
-                            </Link>
-                        </DropdownMenuItem>
-                    </DropdownMenuContent>
-                </DropdownMenu>
-            </header>
+            {/* Top bar — customer search + actions (shared PosTopBar) */}
+            <PosTopBar
+                headerClass={cfg.header}
+                active={mode}
+                partySearchRef={partySearchRef}
+                onPartyPicked={onPartyPicked}
+                locked={!!snapshot}
+                onDialogOpenChange={setCreateDialogOpen}
+                showClear={!!snapshot}
+                onClear={clearCustomer}
+                onNewCustomer={() => partySearchRef.current?.openNew()}
+                onReturn={() => setReturnDialogOpen(true)}
+                onExp={() => activeShift ? setExpenditureDialogOpen(true) : toast.error("Open a shift first to record an expenditure")}
+                onRcv={() => activeShift ? setReceiptDialogOpen(true) : toast.error("Open a shift first to collect a payment")}
+                activeShift={activeShift}
+                shiftLoaded={shiftLoaded}
+                shiftOpenedAt={shiftOpenedAt}
+                onRefreshShift={refreshActiveShift}
+                onDropToSafe={() => setShiftDropOpen(true)}
+                onCloseShift={() => setShiftCloseOpen(true)}
+                onOpenShift={() => setShiftOpenDialogOpen(true)}
+            />
 
             {/* Sale Return dialog */}
             <PosReturnDialog
