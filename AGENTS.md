@@ -3,7 +3,7 @@
 ## 1. Before Coding
 
 - Read this file completely.
-- Read `docs/vocabulary.md`.
+<!-- - Read `docs/vocabulary.md`. -->
 - Use the project vocabulary and simple Indian English in all communication.
 - Before making changes:
   1. Explain your understanding.
