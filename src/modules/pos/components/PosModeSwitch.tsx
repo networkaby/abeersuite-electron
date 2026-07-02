@@ -43,7 +43,7 @@ export function PosModeSwitch({ active }: { active: "sale" | "order" | "estimate
                 className={`${base} ${active === "estimate" ? on.estimate : off}`}
                 title="Estimate — price-privacy quotation; captures a lead"
             >
-                <FileText size={14} /> Estimate
+                <FileText size={14} /> Est
             </Link>
         </div>
     );

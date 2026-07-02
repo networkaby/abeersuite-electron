@@ -1157,14 +1157,39 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
                                 but the math has already happened in the per-line inclusive price. */}
                             {/* Subtotal — the tax (incl.) SGST/CGST breakdown rides in the
                                 middle of this bar so it no longer needs its own row. */}
-                            <div className="flex items-center justify-between gap-3 text-sm">
+                            <div className="flex items-center gap-3 text-sm">
                                 <span>Subtotal</span>
-                                {tax > 0.005 && (
-                                    <span className="text-[11px] font-normal tabular-nums text-muted-foreground">
-                                        incl. GST · SGST {formatInr(tax / 2)} + CGST {formatInr(tax / 2)} = {formatInr(tax)}
-                                    </span>
-                                )}
-                                <span className="font-medium">{formatInr(subtotal + tax)}</span>
+                                {/* Adjustments toggle — inline on the Subtotal line so it
+                                    no longer eats its own row. The Shipping / Round-off /
+                                    Charges form drops in below when opened. */}
+                                {(() => {
+                                    const adjustmentsCount =
+                                        (shippingAmt > 0 ? 1 : 0) +
+                                        (Math.abs(roundOff) >= 0.005 ? 1 : 0) +
+                                        charges.filter((c) => c.accountId !== null && Math.abs(parseAmt(c.amount)) >= 0.005).length;
+                                    return (
+                                        <button
+                                            type="button"
+                                            onClick={() => setAdjustmentsOpen((o) => !o)}
+                                            className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+                                            title="Adjustments — Shipping · Round-off · Charges"
+                                        >
+                                            {adjustmentsOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                                            Adjustments
+                                            {adjustmentsCount > 0 && (
+                                                <Badge variant="secondary" className="ml-0.5 h-4 px-1.5 text-[10px]">{adjustmentsCount}</Badge>
+                                            )}
+                                        </button>
+                                    );
+                                })()}
+                                <div className="ml-auto flex items-center gap-3">
+                                    {tax > 0.005 && (
+                                        <span className="text-[11px] font-normal tabular-nums text-muted-foreground">
+                                            incl. GST · SGST {formatInr(tax / 2)} + CGST {formatInr(tax / 2)} = {formatInr(tax)}
+                                        </span>
+                                    )}
+                                    <span className="font-medium">{formatInr(subtotal + tax)}</span>
+                                </div>
                             </div>
                             {/* Discounts — each kind is its own chip, joined by a "+" since
                                 they add up. One flex-wrap row; extra discount types wrap to
@@ -1337,121 +1362,97 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
                                 </div>
                             )}
 
-                            {/* ── Collapsible Adjustments panel ────────────────
-                                Shipping + Round-off + Charges. Mirrors office
-                                SALE (TradingVoucherPage). Hidden by default —
-                                expanded only when the cashier needs them. */}
-                            {(() => {
-                                const adjustmentsCount =
-                                    (shippingAmt > 0 ? 1 : 0) +
-                                    (Math.abs(roundOff) >= 0.005 ? 1 : 0) +
-                                    charges.filter((c) => c.accountId !== null && Math.abs(parseAmt(c.amount)) >= 0.005).length;
-                                return (
-                                    <div className="rounded border border-border/60 bg-muted/30">
+                            {/* Adjustments form — Shipping + Round-off + Charges.
+                                Toggled from the inline "Adjustments" control on the
+                                Subtotal line above (kept off its own row to save space).
+                                Mirrors office SALE (TradingVoucherPage). */}
+                            {adjustmentsOpen && (
+                                <div className="space-y-2 rounded border border-border/60 bg-muted/30 px-2 py-2">
+                                    <div className="grid grid-cols-[1fr_auto] items-center gap-2">
+                                        <Label htmlFor="pos-shipping" className="text-xs text-muted-foreground">Shipping</Label>
+                                        <Input
+                                            id="pos-shipping"
+                                            type="text"
+                                            inputMode="decimal"
+                                            value={shippingAmtStr}
+                                            onChange={(e) => setShippingAmtStr(parseDecimalInput(e.target.value))}
+                                            placeholder="0.00"
+                                            className="h-7 w-28 text-right text-xs"
+                                        />
+                                    </div>
+                                    <div className="grid grid-cols-[1fr_auto] items-center gap-2">
+                                        <Label htmlFor="pos-roundoff" className="text-xs text-muted-foreground">
+                                            Round-off
+                                            {!roundOffManuallyEdited && Math.abs(autoRoundOff) >= 0.005 && (
+                                                <span className="ml-1 text-[10px] text-emerald-600">auto</span>
+                                            )}
+                                        </Label>
+                                        <Input
+                                            id="pos-roundoff"
+                                            type="text"
+                                            inputMode="decimal"
+                                            value={
+                                                roundOffManuallyEdited
+                                                    ? roundOffStr
+                                                    : (Math.abs(autoRoundOff) >= 0.005 ? autoRoundOff.toFixed(2) : "")
+                                            }
+                                            onChange={(e) => {
+                                                setRoundOffManuallyEdited(true);
+                                                setRoundOffStr(numSignedStr(e.target.value));
+                                            }}
+                                            placeholder="auto"
+                                            className="h-7 w-28 text-right text-xs"
+                                            title="Auto-rounded to whole rupee. Type a value to override; clear to restore auto."
+                                            onBlur={(e) => {
+                                                // Empty field → back to auto mode.
+                                                if (e.target.value.trim() === "") {
+                                                    setRoundOffManuallyEdited(false);
+                                                    setRoundOffStr("");
+                                                }
+                                            }}
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5 border-t border-border/60 pt-2">
+                                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Additional charges</p>
+                                        {charges.map((c, idx) => (
+                                            <div key={c.id} className="grid grid-cols-[1fr_auto_auto] items-center gap-1.5">
+                                                <GlAccountCombobox
+                                                    value={c.accountId}
+                                                    onChange={(acc) => setCharges((rows) => rows.map((r, i) => i === idx ? { ...r, accountId: acc?.id ?? null } : r))}
+                                                    accounts={chargeAccounts}
+                                                    placeholder="Ledger (e.g. Packing Income)"
+                                                    className="h-7 text-xs"
+                                                />
+                                                <Input
+                                                    type="text"
+                                                    inputMode="decimal"
+                                                    value={c.amount}
+                                                    onChange={(e) => setCharges((rows) => rows.map((r, i) => i === idx ? { ...r, amount: numSignedStr(e.target.value) } : r))}
+                                                    placeholder="0 (− for opposite)"
+                                                    className="h-7 w-24 text-right text-xs"
+                                                    title="Positive = Cr (Income); Negative = Dr (Expense / reduces bill)"
+                                                />
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="icon-sm"
+                                                    onClick={() => setCharges((rows) => rows.filter((_, i) => i !== idx))}
+                                                    title="Remove"
+                                                >
+                                                    <X size={12} />
+                                                </Button>
+                                            </div>
+                                        ))}
                                         <button
                                             type="button"
-                                            onClick={() => setAdjustmentsOpen((o) => !o)}
-                                            className="flex w-full items-center justify-between px-2 py-1.5 text-left text-xs font-medium text-muted-foreground hover:text-foreground"
+                                            onClick={() => setCharges((rows) => [...rows, newChargeRow()])}
+                                            className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
                                         >
-                                            <span className="inline-flex items-center gap-1">
-                                                {adjustmentsOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                                                Adjustments
-                                                {adjustmentsCount > 0 && (
-                                                    <Badge variant="secondary" className="ml-1 h-4 px-1.5 text-[10px]">{adjustmentsCount}</Badge>
-                                                )}
-                                            </span>
-                                            <span className="text-[10px] opacity-60">Shipping · Round-off · Charges</span>
+                                            + Add charge
                                         </button>
-                                        {adjustmentsOpen && (
-                                            <div className="space-y-2 border-t border-border/60 px-2 py-2">
-                                                <div className="grid grid-cols-[1fr_auto] items-center gap-2">
-                                                    <Label htmlFor="pos-shipping" className="text-xs text-muted-foreground">Shipping</Label>
-                                                    <Input
-                                                        id="pos-shipping"
-                                                        type="text"
-                                                        inputMode="decimal"
-                                                        value={shippingAmtStr}
-                                                        onChange={(e) => setShippingAmtStr(parseDecimalInput(e.target.value))}
-                                                        placeholder="0.00"
-                                                        className="h-7 w-28 text-right text-xs"
-                                                    />
-                                                </div>
-                                                <div className="grid grid-cols-[1fr_auto] items-center gap-2">
-                                                    <Label htmlFor="pos-roundoff" className="text-xs text-muted-foreground">
-                                                        Round-off
-                                                        {!roundOffManuallyEdited && Math.abs(autoRoundOff) >= 0.005 && (
-                                                            <span className="ml-1 text-[10px] text-emerald-600">auto</span>
-                                                        )}
-                                                    </Label>
-                                                    <Input
-                                                        id="pos-roundoff"
-                                                        type="text"
-                                                        inputMode="decimal"
-                                                        value={
-                                                            roundOffManuallyEdited
-                                                                ? roundOffStr
-                                                                : (Math.abs(autoRoundOff) >= 0.005 ? autoRoundOff.toFixed(2) : "")
-                                                        }
-                                                        onChange={(e) => {
-                                                            setRoundOffManuallyEdited(true);
-                                                            setRoundOffStr(numSignedStr(e.target.value));
-                                                        }}
-                                                        placeholder="auto"
-                                                        className="h-7 w-28 text-right text-xs"
-                                                        title="Auto-rounded to whole rupee. Type a value to override; clear to restore auto."
-                                                        onBlur={(e) => {
-                                                            // Empty field → back to auto mode.
-                                                            if (e.target.value.trim() === "") {
-                                                                setRoundOffManuallyEdited(false);
-                                                                setRoundOffStr("");
-                                                            }
-                                                        }}
-                                                    />
-                                                </div>
-                                                <div className="space-y-1.5 border-t border-border/60 pt-2">
-                                                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Additional charges</p>
-                                                    {charges.map((c, idx) => (
-                                                        <div key={c.id} className="grid grid-cols-[1fr_auto_auto] items-center gap-1.5">
-                                                            <GlAccountCombobox
-                                                                value={c.accountId}
-                                                                onChange={(acc) => setCharges((rows) => rows.map((r, i) => i === idx ? { ...r, accountId: acc?.id ?? null } : r))}
-                                                                accounts={chargeAccounts}
-                                                                placeholder="Ledger (e.g. Packing Income)"
-                                                                className="h-7 text-xs"
-                                                            />
-                                                            <Input
-                                                                type="text"
-                                                                inputMode="decimal"
-                                                                value={c.amount}
-                                                                onChange={(e) => setCharges((rows) => rows.map((r, i) => i === idx ? { ...r, amount: numSignedStr(e.target.value) } : r))}
-                                                                placeholder="0 (− for opposite)"
-                                                                className="h-7 w-24 text-right text-xs"
-                                                                title="Positive = Cr (Income); Negative = Dr (Expense / reduces bill)"
-                                                            />
-                                                            <Button
-                                                                type="button"
-                                                                variant="ghost"
-                                                                size="icon-sm"
-                                                                onClick={() => setCharges((rows) => rows.filter((_, i) => i !== idx))}
-                                                                title="Remove"
-                                                            >
-                                                                <X size={12} />
-                                                            </Button>
-                                                        </div>
-                                                    ))}
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setCharges((rows) => [...rows, newChargeRow()])}
-                                                        className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                                                    >
-                                                        + Add charge
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        )}
                                     </div>
-                                );
-                            })()}
+                                </div>
+                            )}
 
                             <div className="flex items-baseline justify-between border-t border-border pt-2.5">
                                 <div className="flex items-baseline gap-2">
