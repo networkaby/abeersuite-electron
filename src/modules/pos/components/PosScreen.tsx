@@ -842,17 +842,17 @@ export default function PosScreen({ editId }: { editId?: number }) {
                     const printLadder = computePriceLadder({
                         lines: cart.map((l, i) => ({
                             description: l.name,
-                            qty:         l.qty,
-                            mrpPaise:    l.mrpPaise,
+                            qty: l.qty,
+                            mrpPaise: l.mrpPaise,
                             barcodePaise: l.barcodePaise,
-                            taxRatePct:  l.taxRate,
-                            taxAmount:   lineRows[i]?.taxAmount ?? 0,
-                            amount:      lineRows[i]?.amount ?? l.qty * l.unitPrice,
+                            taxRatePct: l.taxRate,
+                            taxAmount: lineRows[i]?.taxAmount ?? 0,
+                            amount: lineRows[i]?.amount ?? l.qty * l.unitPrice,
                         })),
-                        tierDiscount:    effDiscountAmount,
+                        tierDiscount: effDiscountAmount,
                         loyaltyDiscount: effRedemptionRupees,
-                        couponDiscount:  couponRupees,
-                        extraCharges:    posExtraCharges,
+                        couponDiscount: couponRupees,
+                        extraCharges: posExtraCharges,
                         total,
                     }, { tier: posTierLabel });
                     fetch("http://localhost:9191/print/pos", {
@@ -877,7 +877,7 @@ export default function PosScreen({ editId }: { editId?: number }) {
                                     qty: l.qty,
                                     unitPrice: l.unitPrice,
                                     amount: l.qty * l.unitPrice,
-                                    mrp:     ll?.mrp != null && l.qty ? ll.mrp / l.qty : null,
+                                    mrp: ll?.mrp != null && l.qty ? ll.mrp / l.qty : null,
                                     barcode: ll?.barcode != null && l.qty ? ll.barcode / l.qty : null,
                                 };
                             }),
@@ -890,17 +890,17 @@ export default function PosScreen({ editId }: { editId?: number }) {
                             // voucher (RV-…), so the sale slip shows NO payment lines
                             // (the sale is settled to the customer account). Exact-pay
                             // sales keep the traditional cash/UPI breakdown.
-                            cashPaid:   overpaid > 0 ? 0 : cashNet,
-                            upiPaid:    overpaid > 0 ? 0 : upiEntered,
+                            cashPaid: overpaid > 0 ? 0 : cashNet,
+                            upiPaid: overpaid > 0 ? 0 : upiEntered,
                             extrasPaid: overpaid > 0 ? [] : splits
                                 .filter((s) => s.amount > 0 && payAccountById.get(s.paymentAccountId ?? -1)?.channel !== "UPI")
                                 .map((s) => ({ method: payAccountById.get(s.paymentAccountId ?? -1)?.label ?? "Other", amount: s.amount, reference: s.reference })),
                             // "Today's discount" ladder (additive).
-                            grossAtTag:  printLadder.barcodeTotal,
-                            discounts:   printLadder.discounts.map((d) => ({ label: d.label, amount: d.amount })),
-                            charges:     printLadder.charges.map((c) => ({ label: c.label, amount: c.amount })),
-                            savings:     printLadder.savingsTotal > 0 ? { amount: printLadder.savingsTotal, pct: printLadder.savingsPct } : null,
-                            hsnSummary:  printLadder.hsn,
+                            grossAtTag: printLadder.barcodeTotal,
+                            discounts: printLadder.discounts.map((d) => ({ label: d.label, amount: d.amount })),
+                            charges: printLadder.charges.map((c) => ({ label: c.label, amount: c.amount })),
+                            savings: printLadder.savingsTotal > 0 ? { amount: printLadder.savingsTotal, pct: printLadder.savingsPct } : null,
+                            hsnSummary: printLadder.hsn,
                         }),
                     }).catch(() => toast.error("Thermal print failed"));
                     // Overpayment booked a separate Receipt voucher (RV-…). On a
@@ -994,17 +994,17 @@ export default function PosScreen({ editId }: { editId?: number }) {
                 const lad = computePriceLadder({
                     lines: cart.map((l, i) => ({
                         description: l.name,
-                        qty:         l.qty,
-                        mrpPaise:    l.mrpPaise,
+                        qty: l.qty,
+                        mrpPaise: l.mrpPaise,
                         barcodePaise: l.barcodePaise,
-                        taxRatePct:  l.taxRate,
-                        taxAmount:   lr[i].taxAmount,
-                        amount:      lr[i].amount,
+                        taxRatePct: l.taxRate,
+                        taxAmount: lr[i].taxAmount,
+                        amount: lr[i].amount,
                     })),
-                    tierDiscount:    effDiscountAmount,
+                    tierDiscount: effDiscountAmount,
                     loyaltyDiscount: effRedemptionRupees,
-                    couponDiscount:  couponRupees,
-                    extraCharges:    posExtraCharges,
+                    couponDiscount: couponRupees,
+                    extraCharges: posExtraCharges,
                     total,
                 }, { tier: posTierLabel });
                 void qrDisplay.cart({
@@ -1013,10 +1013,10 @@ export default function PosScreen({ editId }: { editId?: number }) {
                         // real price on the display too. Relay multiplies by qty.
                         const ll = lad.lines[i];
                         return {
-                            name:    l.name,
-                            qty:     l.qty,
-                            price:   l.unitPrice,
-                            mrp:     ll?.mrp != null && l.qty ? ll.mrp / l.qty : undefined,
+                            name: l.name,
+                            qty: l.qty,
+                            price: l.unitPrice,
+                            mrp: ll?.mrp != null && l.qty ? ll.mrp / l.qty : undefined,
                             barcode: ll?.barcode != null && l.qty ? ll.barcode / l.qty : undefined,
                         };
                     }),
@@ -1024,9 +1024,9 @@ export default function PosScreen({ editId }: { editId?: number }) {
                     discount: totalDiscount,
                     total,
                     discounts: lad.discounts.map((d) => ({ label: d.label, amount: d.amount })),
-                    charges:   lad.charges.map((c) => ({ label: c.label, amount: c.amount })),
-                    gst:       lad.taxTotal > 0 ? lad.taxTotal : undefined,
-                    savings:   lad.savingsTotal > 0 ? { amount: lad.savingsTotal, pct: lad.savingsPct } : undefined,
+                    charges: lad.charges.map((c) => ({ label: c.label, amount: c.amount })),
+                    gst: lad.taxTotal > 0 ? lad.taxTotal : undefined,
+                    savings: lad.savingsTotal > 0 ? { amount: lad.savingsTotal, pct: lad.savingsPct } : undefined,
                 });
             } else if (snapshot) {
                 void qrDisplay.customer({
@@ -1142,7 +1142,8 @@ export default function PosScreen({ editId }: { editId?: number }) {
                     onClick={() => partySearchRef.current?.openNew()}
                     title="Walk-in customer not in the system yet — create on the fly"
                 >
-                    <UserPlus size={14} /> New customer
+                    <UserPlus size={14} />
+                    {/* <UserPlus size={14} /> New customer */}
                 </Button>
                 <Button
                     variant="outline"
@@ -1150,7 +1151,7 @@ export default function PosScreen({ editId }: { editId?: number }) {
                     onClick={() => window.open("/vouchers/pos", "_blank", "noopener")}
                     title="Open another POS in a new tab — start a parallel bill while this one waits"
                 >
-                    <ExternalLink size={14} /> New tab
+                    <ExternalLink size={14} /> New
                 </Button>
                 <Button
                     variant="outline"
@@ -1543,80 +1544,80 @@ export default function PosScreen({ editId }: { editId?: number }) {
 
                             {/* Coupon + Gift card share one row to save vertical space. */}
                             <div className="flex flex-wrap items-center gap-x-6 gap-y-1">
-                            {/* ── Coupon ────────────────────────────────────────
+                                {/* ── Coupon ────────────────────────────────────────
                                 Code entry; the server validates + owns the ₹ value.
                                 A non-stackable coupon replaces the tier discount and
                                 blocks loyalty (shown struck-through above). */}
-                            {snapshot && (
-                                <div className="flex items-center gap-2 text-xs">
-                                    <Tag size={12} className="shrink-0 text-muted-foreground" />
-                                    {appliedCoupon ? (
-                                        <div className="flex flex-wrap items-center gap-2">
-                                            <span className="rounded bg-rose-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-rose-700 dark:bg-rose-500/15 dark:text-rose-300">
-                                                {appliedCoupon.code ?? "AUTO"}
-                                            </span>
-                                            <span className="font-medium tabular-nums text-emerald-600 dark:text-emerald-400">− {formatInr(couponRupees)}</span>
-                                            {couponDroppedTier && <span className="text-[10px] text-amber-600 dark:text-amber-400">replaces tier</span>}
-                                            {couponBlockedLoyalty && <span className="text-[10px] text-amber-600 dark:text-amber-400">blocks loyalty</span>}
-                                            <Button size="icon" variant="ghost" className="h-5 w-5" onClick={() => { setAppliedCoupon(null); setCouponCodeStr(""); }}>
-                                                <X size={12} />
-                                            </Button>
-                                        </div>
-                                    ) : (
-                                        <div className="flex flex-wrap items-center gap-2">
-                                            {autoCoupon && (
-                                                <span className="inline-flex items-center gap-1 rounded bg-emerald-100 px-1.5 py-0.5 text-[11px] text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
-                                                    <Sparkles size={11} /> Auto offer{autoCoupon.code ? ` ${autoCoupon.code}` : ""} · − {formatInr(autoCoupon.rupees)}
+                                {snapshot && (
+                                    <div className="flex items-center gap-2 text-xs">
+                                        <Tag size={12} className="shrink-0 text-muted-foreground" />
+                                        {appliedCoupon ? (
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <span className="rounded bg-rose-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-rose-700 dark:bg-rose-500/15 dark:text-rose-300">
+                                                    {appliedCoupon.code ?? "AUTO"}
                                                 </span>
-                                            )}
-                                            <Input
-                                                value={couponCodeStr}
-                                                onChange={(e) => setCouponCodeStr(e.target.value.toUpperCase())}
-                                                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void applyCoupon(); } }}
-                                                placeholder="Coupon code"
-                                                className="h-7 w-36 font-mono text-xs"
-                                            />
-                                            <Button size="sm" variant="outline" className="h-7" disabled={couponBusy || !couponCodeStr.trim()} onClick={() => void applyCoupon()}>
-                                                Apply
-                                            </Button>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
+                                                <span className="font-medium tabular-nums text-emerald-600 dark:text-emerald-400">− {formatInr(couponRupees)}</span>
+                                                {couponDroppedTier && <span className="text-[10px] text-amber-600 dark:text-amber-400">replaces tier</span>}
+                                                {couponBlockedLoyalty && <span className="text-[10px] text-amber-600 dark:text-amber-400">blocks loyalty</span>}
+                                                <Button size="icon" variant="ghost" className="h-5 w-5" onClick={() => { setAppliedCoupon(null); setCouponCodeStr(""); }}>
+                                                    <X size={12} />
+                                                </Button>
+                                            </div>
+                                        ) : (
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                {autoCoupon && (
+                                                    <span className="inline-flex items-center gap-1 rounded bg-emerald-100 px-1.5 py-0.5 text-[11px] text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
+                                                        <Sparkles size={11} /> Auto offer{autoCoupon.code ? ` ${autoCoupon.code}` : ""} · − {formatInr(autoCoupon.rupees)}
+                                                    </span>
+                                                )}
+                                                <Input
+                                                    value={couponCodeStr}
+                                                    onChange={(e) => setCouponCodeStr(e.target.value.toUpperCase())}
+                                                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void applyCoupon(); } }}
+                                                    placeholder="Coupon code"
+                                                    className="h-7 w-36 font-mono text-xs"
+                                                />
+                                                <Button size="sm" variant="outline" className="h-7" disabled={couponBusy || !couponCodeStr.trim()} onClick={() => void applyCoupon()}>
+                                                    Apply
+                                                </Button>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
 
-                            {/* ── Gift card (payment tender) ─────────────────────
+                                {/* ── Gift card (payment tender) ─────────────────────
                                 Draws min(balance, bill) toward the total; the cashier
                                 collects the remaining "Pay" amount in cash/UPI. */}
-                            {snapshot && (
-                                <div className="flex items-center gap-2 text-xs">
-                                    <CreditCard size={12} className="shrink-0 text-muted-foreground" />
-                                    {giftCard ? (
-                                        <div className="flex flex-wrap items-center gap-2">
-                                            <span className="rounded bg-teal-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-teal-700 dark:bg-teal-500/15 dark:text-teal-300">
-                                                {giftCard.code}
-                                            </span>
-                                            <span className="font-medium tabular-nums text-emerald-600 dark:text-emerald-400">− {formatInr(giftCardApplied)}</span>
-                                            <span className="text-[10px] text-muted-foreground">bal {formatInr(Math.max(0, giftCard.balance - giftCardApplied))} after</span>
-                                            <Button size="icon" variant="ghost" className="h-5 w-5" onClick={() => { setGiftCard(null); setGiftCardCodeStr(""); }}>
-                                                <X size={12} />
-                                            </Button>
-                                        </div>
-                                    ) : (
-                                        <div className="flex items-center gap-1.5">
-                                            <Input
-                                                value={giftCardCodeStr}
-                                                onChange={(e) => setGiftCardCodeStr(e.target.value.toUpperCase())}
-                                                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void applyGiftCard(); } }}
-                                                placeholder="Gift card code"
-                                                className="h-7 w-36 font-mono text-xs"
-                                            />
-                                            <Button size="sm" variant="outline" className="h-7" disabled={gcBusy || !giftCardCodeStr.trim()} onClick={() => void applyGiftCard()}>
-                                                Redeem
-                                            </Button>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
+                                {snapshot && (
+                                    <div className="flex items-center gap-2 text-xs">
+                                        <CreditCard size={12} className="shrink-0 text-muted-foreground" />
+                                        {giftCard ? (
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <span className="rounded bg-teal-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-teal-700 dark:bg-teal-500/15 dark:text-teal-300">
+                                                    {giftCard.code}
+                                                </span>
+                                                <span className="font-medium tabular-nums text-emerald-600 dark:text-emerald-400">− {formatInr(giftCardApplied)}</span>
+                                                <span className="text-[10px] text-muted-foreground">bal {formatInr(Math.max(0, giftCard.balance - giftCardApplied))} after</span>
+                                                <Button size="icon" variant="ghost" className="h-5 w-5" onClick={() => { setGiftCard(null); setGiftCardCodeStr(""); }}>
+                                                    <X size={12} />
+                                                </Button>
+                                            </div>
+                                        ) : (
+                                            <div className="flex items-center gap-1.5">
+                                                <Input
+                                                    value={giftCardCodeStr}
+                                                    onChange={(e) => setGiftCardCodeStr(e.target.value.toUpperCase())}
+                                                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void applyGiftCard(); } }}
+                                                    placeholder="Gift card code"
+                                                    className="h-7 w-36 font-mono text-xs"
+                                                />
+                                                <Button size="sm" variant="outline" className="h-7" disabled={gcBusy || !giftCardCodeStr.trim()} onClick={() => void applyGiftCard()}>
+                                                    Redeem
+                                                </Button>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                             {giftCardApplied > 0.005 && (
                                 <div className="flex items-center justify-between text-xs font-medium">

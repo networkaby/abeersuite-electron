@@ -1,4 +1,4 @@
-import { MODULE_SECTIONS, ADMIN_NAV, SETTINGS_NAV } from "@/utils/constants";
+import { WORKSPACE_NAV, MODULE_SECTIONS, ADMIN_NAV, SETTINGS_NAV } from "@/utils/constants";
 
 /**
  * Sidebar visibility matrix — the single source of truth for who sees what in the
@@ -14,8 +14,9 @@ import { MODULE_SECTIONS, ADMIN_NAV, SETTINGS_NAV } from "@/utils/constants";
  * Kept separate from the "can do things here" keys (`customers:view`,
  * `accountancy:view:org`…) so visibility and capability stay independent.
  *
- * Derived from MODULE_SECTIONS + the two "Admin Only" groups (ADMIN_NAV /
- * SETTINGS_NAV) so the picker never drifts from the real sidebar.
+ * Derived from the Workspace group (WORKSPACE_NAV — Inbox, Work Flow, POS) +
+ * MODULE_SECTIONS + the two "Admin Only" groups (ADMIN_NAV / SETTINGS_NAV) so the
+ * picker never drifts from the real sidebar.
  */
 export const sidebarChildPermissionId = (moduleKey: string, childKey: string) =>
     `ui:sidebar:${moduleKey}:${childKey}`;
@@ -36,11 +37,18 @@ export interface SidebarModuleRow {
     children: SidebarChildRow[];
     /** Every child link id — what one Department module chip pools. */
     childPermissionIds: string[];
+    /**
+     * Whether a Department pools this module. `true` (default) → it's a Department
+     * chip and the Role picker only offers its links if the dept pooled them.
+     * `false` (Workspace) → always available (default-yes, no dept chip); the Role
+     * picker offers its links directly and enforcement is authoritative (untick = hide).
+     */
+    pooled: boolean;
 }
 
 // Only the immediate ("next level") nav labels are modelled — nested grandchildren
 // (e.g. Inventory → Masters → Brands) follow their parent for now.
-function makeModule(key: string, label: string, items: readonly { label: string }[]): SidebarModuleRow {
+function makeModule(key: string, label: string, items: readonly { label: string }[], pooled = true): SidebarModuleRow {
     const seen = new Set<string>();
     const children: SidebarChildRow[] = items.map((it) => {
         let childKey = slug(it.label);
@@ -48,11 +56,13 @@ function makeModule(key: string, label: string, items: readonly { label: string 
         seen.add(childKey);
         return { key: childKey, label: it.label, permissionId: sidebarChildPermissionId(key, childKey) };
     });
-    return { key, label, children, childPermissionIds: children.map((c) => c.permissionId) };
+    return { key, label, children, childPermissionIds: children.map((c) => c.permissionId), pooled };
 }
 
 /** Sidebar top-level modules, in sidebar order, each with its child links. */
 export const SIDEBAR_MODULES: SidebarModuleRow[] = [
+    // Workspace is default-yes (not department-pooled) — the Role picks its contents.
+    makeModule("workspace", "Workspace", WORKSPACE_NAV, false),
     ...MODULE_SECTIONS.map((m) => makeModule(m.key, m.label, m.children)),
     makeModule("admin", "Admin", ADMIN_NAV),
     makeModule("settings", "Settings", SETTINGS_NAV),

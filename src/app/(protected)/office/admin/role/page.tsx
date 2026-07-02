@@ -1783,9 +1783,11 @@ function SidebarVisibilitySection({
             ...mod,
             children: mod.children.filter(
                 (child) =>
-                    // Offered only if the department pool carries the link (all-access
-                    // pools offer everything); a search term matches link or module name.
-                    inLens(child.permissionId) &&
+                    // Pooled modules: offered only if the department pool carries the
+                    // link (all-access pools offer everything). Non-pooled modules
+                    // (Workspace) are default-yes — always offered. Search matches
+                    // link or module name.
+                    (!mod.pooled || inLens(child.permissionId)) &&
                     (!term ||
                         child.label.toLowerCase().includes(term) ||
                         mod.label.toLowerCase().includes(term))
@@ -1803,7 +1805,7 @@ function SidebarVisibilitySection({
                         <PanelLeft size={15} /> Sidebar links
                     </h2>
                     <p className="mt-0.5 text-[11px] text-muted-foreground">
-                        Pick which navigation links this role sees in the sidebar. Only modules offered by the role&rsquo;s department pool appear here.
+                        Pick which navigation links this role sees in the sidebar. Workspace is always available; other modules appear only if the role&rsquo;s department pool offers them.
                     </p>
                 </div>
 

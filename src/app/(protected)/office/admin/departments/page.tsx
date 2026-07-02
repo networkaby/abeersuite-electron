@@ -419,7 +419,7 @@ function PoolEditor({
     // Sidebar top-level modules (Contacts, Inventory, CRM…) — the dept declares
     // which modules it can see; child links are gated per role on the Role page.
     const sidebarRows = SIDEBAR_MODULES.filter(
-        m => !q || m.label.toLowerCase().includes(q) || m.key.includes(q) || "sidebar module".includes(q),
+        m => m.pooled && (!q || m.label.toLowerCase().includes(q) || m.key.includes(q) || "sidebar module".includes(q)),
     );
     // Vouchers grouped by economic nature (GL / Trading / Inventory / Optional).
     const voucherRows = VOUCHER_MATRIX.filter(

@@ -511,7 +511,9 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                 </p>
                             )}
                             <div className="space-y-0.5">
-                                {WORKSPACE_NAV.filter(canViewNavItem).map((item) => {
+                                {/* Workspace visibility is authoritative — the role picks each link
+                                    yes/no (ui:sidebar:workspace:*); untick hides it. Admin always sees all. */}
+                                {WORKSPACE_NAV.filter((item) => isAdmin || hasSidebarLink("workspace", item.label)).map((item) => {
                                     const Icon = item.icon;
                                     const hasChildren = !!item.children?.length;
                                     const visibleChildren = item.children?.filter(canViewNavItem) ?? [];

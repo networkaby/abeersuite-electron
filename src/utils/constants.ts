@@ -148,12 +148,30 @@ export type ButtonBarAction = {
 export const WORKSPACE_NAV: NavItem[] = [
     { label: "Inbox", href: "/office/message/inbox", icon: Inbox, permission: null },
     { label: "Work Flow", href: "/office/work-flow-inbox", icon: ClipboardList, permission: null },
+    { label: "POS", href: "/vouchers/pos", icon: Monitor, permission: "pos:shift:open" },
     // { label: "CallLog", href: "/office/core/call-log", icon: PhoneCall, permission: null },
     // { label: "Search SLno", href: "/office/core/search-slno", icon: Search, permission: null },
 
 ];
 
 export const MODULE_SECTIONS: ModuleSection[] = [
+
+    // POS
+    // {
+    // label: "POS",
+    // icon: Monitor,
+    // key: "pos",
+    // permission: "pos:shift:open",
+    // dashboardHref: "/vouchers/pos",
+    // pathPrefixes: ["/vouchers/pos", "/office/pos"],
+    //     children: [
+    // { label: "POS Register", href: "/vouchers/pos/new", icon: ShoppingCart, permission: "pos:shift:open", newTab: true },
+    // { label: "Sales List", href: "/vouchers/pos", icon: ClipboardList, permission: "pos:shift:open" },
+    // { label: "Shift Reports", href: "/office/pos/shifts", icon: Clock, permission: "pos:shift:view:branch" },
+    // ],
+    // },
+
+
     // Contacts (people + companies; CRM contact database)
     {
         label: "Contacts",
@@ -286,20 +304,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
 
         ],
     },
-    // POS
-    {
-        label: "POS",
-        icon: Monitor,
-        key: "pos",
-        permission: "pos:shift:open",
-        dashboardHref: "/vouchers/pos",
-        pathPrefixes: ["/vouchers/pos", "/office/pos"],
-        children: [
-            { label: "POS Register", href: "/vouchers/pos/new", icon: ShoppingCart, permission: "pos:shift:open", newTab: true },
-            { label: "Sales List", href: "/vouchers/pos", icon: ClipboardList, permission: "pos:shift:open" },
-            { label: "Shift Reports", href: "/office/pos/shifts", icon: Clock, permission: "pos:shift:view:branch" },
-        ],
-    },
+
     // Inventory
     {
         label: "Inventory",
@@ -691,27 +696,16 @@ export const VOUCHER_CREATE_PERMISSION_BY_ACTION: Record<string, string> = Objec
 
 export const BUTTON_BAR_ACTIONS: ButtonBarAction[] = [
     {
-        label: "Repair +",
-        subtitle: "Open repair intake",
-        icon: Wrench,
-        variant: "default",
+        label: "Repair +", subtitle: "Open repair intake", icon: Wrench, variant: "default",
         action: "new-ticket",
         pipelineRef: "default",
         permission: "tickets:create",
     },
-    {
-        label: "POS",
-        subtitle: "Open point-of-sale screen (new tab)",
-        icon: ShoppingCart,
-        variant: "outline",
-        href: "/vouchers/pos",
-        newTab: true,
-        permission: "pos:shift:open",
-    },
 
 
-
-    { label: "POS", subtitle: "Open POS register", icon: Monitor, variant: "default", href: "/vouchers/pos/new", newTab: true, permission: "pos:shift:open" },
+    // { label: "POS", subtitle: "Open POS register", icon: Monitor, variant: "default", href: "/vouchers/pos/new", newTab: true, permission: "pos:shift:open" },
+    //"/vouchers/pos/orders"
+    //"/vouchers/pos/estimates"
     { label: "Sale +", subtitle: "New Sale Invoice", icon: Receipt, variant: "default", action: "new-sale" },
     { label: "Purchase +", subtitle: "New Purchase Invoice", icon: ShoppingCart, variant: "outline", action: "new-purchase" },
     { label: "Sale Return +", subtitle: "Customer returns goods (Credit Note)", icon: Receipt, variant: "outline", action: "new-sale-return" },
