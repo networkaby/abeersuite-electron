@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
@@ -14,7 +14,7 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 // duplicate every transaction. Set `?includeEngine=1` to list all spine rows
 // for debugging / admin views.
 export async function GET(req: Request) {
-    const { user, response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
+    const { user, response } = await requireModuleAccess("accountancy", PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
     if (response) return response;
 
     const { searchParams } = new URL(req.url);
