@@ -50,7 +50,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { PermissionMatrix as SharedPermissionMatrix, type MatrixColumnGroup, type MatrixRow, type ColumnTint } from "@/shared/components/PermissionMatrix";
-import { VOUCHER_MATRIX, VOUCHER_GROUPS, VOUCHER_ACTIONS, ALL_VOUCHER_PERMISSION_IDS, type VoucherAction, type VoucherGroupKey } from "@/shared/lib/auth/voucherMatrix";
+import { VOUCHER_MATRIX, VOUCHER_GROUPS, VOUCHER_ACTIONS, ALL_VOUCHER_PERMISSION_IDS, type VoucherGroupKey } from "@/shared/lib/auth/voucherMatrix";
 import { SIDEBAR_MODULES, sidebarChildPermissionId, type SidebarChildRow } from "@/shared/lib/auth/sidebarModules";
 import { POS_VOUCHER_MATRIX, POS_ACTIONS } from "@/shared/lib/auth/posVoucherMatrix";
 import type { LucideIcon } from "lucide-react";
@@ -58,8 +58,8 @@ import { BUTTON_BAR_ACTIONS } from "@/utils/constants";
 import { createActionPermission } from "@/utils/module-access";
 
 // Column tint per voucher action for the GL voucher matrix.
-const VOUCHER_ACTION_TINT: Record<VoucherAction, ColumnTint> = {
-    create: "green", post: "blue", cancel: "amber", delete: "rose",
+const VOUCHER_ACTION_TINT: Record<string, ColumnTint> = {
+    view: "gray", open: "blue", create: "green", post: "blue", cancel: "amber", delete: "rose",
 };
 const VOUCHER_COLUMN_GROUPS: MatrixColumnGroup[] = VOUCHER_ACTIONS.map((a) => ({
     key: a.key, label: a.label, tint: VOUCHER_ACTION_TINT[a.key], columns: [{ key: a.key, label: a.label }],

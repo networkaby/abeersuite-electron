@@ -16,7 +16,11 @@ import type { VoucherType, InvVoucherType } from "@/generated/prisma/client";
  * later phase — until then the inventory routes fall back to the generic
  * `inventory:edit/voucher:*` keys (see requiredVoucherPermission).
  *
- * Four actions, matching what the code enforces:
+ * Six matrix actions. The first two are read-access, enforced in report/list
+ * views ("next depth" once the module nav is visible); the last four are the
+ * write lifecycle, enforced by the voucher route guards:
+ *   • view    — see this kind's rows in a report / list.
+ *   • open    — open a voucher of this kind to see its details.
  *   • create  — make a new voucher.
  *   • post    — DRAFT → POSTED (applies stock + GL).
  *   • cancel  — cancel + edit + (future) convert-to-draft. One eligibility.
@@ -28,9 +32,14 @@ import type { VoucherType, InvVoucherType } from "@/generated/prisma/client";
  * the online order flow), not hand-created from the voucher menu.
  */
 
+// The write actions enforced by the voucher route guards (unchanged).
 export type VoucherAction = "create" | "post" | "cancel" | "delete";
+// All matrix columns = read access (view/open) + the write actions.
+export type VoucherMatrixAction = "view" | "open" | VoucherAction;
 
-export const VOUCHER_ACTIONS: { key: VoucherAction; label: string }[] = [
+export const VOUCHER_ACTIONS: { key: VoucherMatrixAction; label: string }[] = [
+    { key: "view",   label: "View" },
+    { key: "open",   label: "Open" },
     { key: "create", label: "Create" },
     { key: "post",   label: "Post" },
     { key: "cancel", label: "Cancel / edit" },
@@ -70,7 +79,9 @@ const GENERIC_INVENTORY_PERMISSION: Record<VoucherAction, string> = {
     delete: PERMISSIONS.INVENTORY_VOUCHER_DELETE,
 };
 
-export interface VoucherMatrixRow {
+// Raw rows carry only the four write-action ids (matching the existing constants);
+// view/open ids are derived from the create id below (`<ns>:voucher:view:<slug>`).
+interface RawVoucherRow {
     type:   VoucherType | InvVoucherType;
     label:  string;
     group:  VoucherGroupKey;
@@ -78,10 +89,18 @@ export interface VoucherMatrixRow {
     perms:  Record<VoucherAction, string>;
 }
 
+export interface VoucherMatrixRow {
+    type:   VoucherType | InvVoucherType;
+    label:  string;
+    group:  VoucherGroupKey;
+    module: "finance" | "inventory";
+    perms:  Record<VoucherMatrixAction, string>;
+}
+
 // ── Accounting (GL) kinds — finance:voucher:<action>:<kind> ──────────────────
 // Ids match the PERMISSIONS constants exactly; kept explicit so the existing,
 // already-enforced GL keys are obvious at a glance.
-const GL_ROWS: VoucherMatrixRow[] = [
+const GL_ROWS: RawVoucherRow[] = [
     {
         type: "PAYMENT", label: "Payment voucher", group: "gl", module: "finance",
         perms: {
@@ -162,7 +181,7 @@ const INV_KINDS: { type: InvVoucherType; label: string; slug: string; group: Vou
 
 const invPermId = (action: VoucherAction, slug: string) => `inventory:voucher:${action}:${slug}`;
 
-const INV_ROWS: VoucherMatrixRow[] = INV_KINDS.map((k) => ({
+const INV_ROWS: RawVoucherRow[] = INV_KINDS.map((k) => ({
     type: k.type,
     label: k.label,
     group: k.group,
@@ -175,11 +194,24 @@ const INV_ROWS: VoucherMatrixRow[] = INV_KINDS.map((k) => ({
     },
 }));
 
+// Derive the read-access ids (view/open) from the create id, so every kind gets
+// `<ns>:voucher:view:<slug>` and `:open:<slug>` without restating them per row.
+function withReadActions(r: RawVoucherRow): VoucherMatrixRow {
+    return {
+        ...r,
+        perms: {
+            view: r.perms.create.replace(":create:", ":view:"),
+            open: r.perms.create.replace(":create:", ":open:"),
+            ...r.perms,
+        },
+    };
+}
+
 /** Every hand-created voucher kind (GL + inventory), in display order. */
-export const VOUCHER_MATRIX: VoucherMatrixRow[] = [...GL_ROWS, ...INV_ROWS];
+export const VOUCHER_MATRIX: VoucherMatrixRow[] = [...GL_ROWS, ...INV_ROWS].map(withReadActions);
 
 /** GL-only view — kept for callers that only deal with accountancy vouchers. */
-export const GL_VOUCHER_MATRIX: VoucherMatrixRow[] = GL_ROWS;
+export const GL_VOUCHER_MATRIX: VoucherMatrixRow[] = GL_ROWS.map(withReadActions);
 
 const ROW_BY_TYPE = new Map<VoucherType | InvVoucherType, VoucherMatrixRow>(
     VOUCHER_MATRIX.map((r) => [r.type, r]),
@@ -211,7 +243,9 @@ export function requiredVoucherPermission(
 }
 
 // ── Seed helper ──────────────────────────────────────────────────────────────
-const SEED_TEXT: Record<VoucherAction, (label: string) => { label: string; description: string }> = {
+const SEED_TEXT: Record<VoucherMatrixAction, (label: string) => { label: string; description: string }> = {
+    view:   (l) => ({ label: `View ${l} (lists)`,  description: `See ${l} vouchers in reports and lists.` }),
+    open:   (l) => ({ label: `Open ${l}`,          description: `Open a ${l} voucher to see its details.` }),
     create: (l) => ({ label: `Create ${l}`,        description: `Create a ${l} voucher.` }),
     post:   (l) => ({ label: `Post ${l}`,          description: `Post a ${l} voucher (applies stock + GL).` }),
     cancel: (l) => ({ label: `Cancel / edit ${l}`, description: `Cancel, edit, or revert a ${l} voucher.` }),
@@ -219,16 +253,20 @@ const SEED_TEXT: Record<VoucherAction, (label: string) => { label: string; descr
 };
 
 /**
- * Permission rows for the INVENTORY voucher kinds, for the bootstrap seed. The
- * GL voucher permissions are seeded explicitly in bootstrap-seed.ts (already
- * enforced); this fills in the inventory per-kind keys from the matrix so the
- * two never drift.
+ * Permission rows for the voucher matrix, for the bootstrap seed:
+ *   • the NEW read-access ids (view / open) for EVERY kind — GL and inventory,
+ *   • the inventory write ids (create/post/cancel/delete) from the matrix.
+ * The GL write ids are seeded explicitly in bootstrap-seed.ts (already enforced),
+ * so they are not repeated here. Generated from the matrix so nothing drifts.
  */
 export function voucherPermissionSeeds(): { id: string; label: string; module: string; description: string }[] {
-    return INV_ROWS.flatMap((r) =>
-        VOUCHER_ACTIONS.map((a) => {
-            const text = SEED_TEXT[a.key](r.label);
-            return { id: r.perms[a.key], label: text.label, module: "inventory", description: text.description };
-        }),
-    );
+    return VOUCHER_MATRIX.flatMap((r) => {
+        const actions: VoucherMatrixAction[] = r.module === "inventory"
+            ? ["view", "open", "create", "post", "cancel", "delete"]
+            : ["view", "open"];
+        return actions.map((a) => {
+            const text = SEED_TEXT[a](r.label);
+            return { id: r.perms[a], label: text.label, module: r.module, description: text.description };
+        });
+    });
 }
