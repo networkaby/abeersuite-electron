@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { parseRange } from "@/modules/accountancy/lib/period";
 import { ledgerStatusFilterUv } from "@/modules/accountancy/lib/aggregateLedger";
@@ -27,7 +27,9 @@ const KINDS: Kind[] = ["All", "Sale", "POS", "Purchase", "Estimate", "Sale Retur
 
 // GET /api/accountancy/reports/day-book?from=YYYY-MM-DD&to=YYYY-MM-DD&page=1&limit=50&search=...&kind=Sale
 export async function GET(req: Request) {
-    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
+    // New model: the Accountancy sidebar nav grant (or the capability) admits the
+    // read. Per-kind view/open filtering is a later, finer pass.
+    const { response } = await requireModuleAccess("accountancy", PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
     if (response) return response;
 
     const { searchParams } = new URL(req.url);

@@ -1,6 +1,6 @@
 import { auth } from "@/auth";
 import { NextResponse } from "next/server";
-import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
+import { hasPermissionWithScope, hasModuleNavAccess } from "@/shared/lib/auth/permissionScope";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { requiredVoucherPermission, type VoucherAction } from "@/shared/lib/auth/voucherMatrix";
 import type { VoucherType } from "@/generated/prisma/client";
@@ -158,6 +158,22 @@ export async function requireVoucherPermission(
         return { user: null, response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
     }
     return result;
+}
+
+/**
+ * New-model read gate for a module's data APIs: allow if the user was given the
+ * module's UI (any `ui:sidebar:<moduleKey>:*` grant) OR holds the capability
+ * permission (kept as fallback). Admin bypass passes via either check. Mirrors the
+ * module layout guard so "has the nav → may load its data". Finer per-kind limits
+ * (view/open) are applied inside the handler, later.
+ */
+export async function requireModuleAccess(moduleKey: string, capabilityPermissionId: string): Promise<GuardResult> {
+    const result = await requireAuth();
+    if (result.response) return result;
+    if (hasModuleNavAccess(result.user.permissions, moduleKey) || hasPermission(result.user, capabilityPermissionId)) {
+        return result;
+    }
+    return { user: null, response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
 }
 
 /** Build a `ResolvedUser` from a session object without enforcing any guard. */
