@@ -50,7 +50,14 @@ export async function GET(req: NextRequest) {
 
     try {
         const session = await auth();
-        const branchParam = new URL(req.url).searchParams.get("branchId");
+        const { searchParams } = new URL(req.url);
+        const branchParam = searchParams.get("branchId");
+        // active=active (default) | inactive | all — which counters to list.
+        const activeParam = searchParams.get("active");
+        const activeFilter =
+            activeParam === "all"      ? {} :
+            activeParam === "inactive" ? { isActive: false } :
+                                         { isActive: true };
 
         let branchFilter: { branchId?: string } = {};
         if (branchParam === "all") {
@@ -69,7 +76,7 @@ export async function GET(req: NextRequest) {
         }
 
         const counters = await prisma.posCounter.findMany({
-            where:   { ...branchFilter, isActive: true },
+            where:   { ...branchFilter, ...activeFilter },
             orderBy: [{ branchId: "asc" }, { name: "asc" }],
             include: {
                 branch:      { select: { id: true, name: true } },
@@ -130,6 +137,7 @@ export async function GET(req: NextRequest) {
             return {
                 counterId:        c.id,
                 counterName:      c.name,
+                isActive:         c.isActive,
                 branch:           c.branch,
                 tillAccountId:    c.tillAccount.id,
                 tillBalancePaise: tillBalancePaise.toString(),
