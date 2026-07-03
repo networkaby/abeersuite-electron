@@ -1949,7 +1949,11 @@ function SidebarVisibilitySection({
                 {parents.map((p) => (
                     <div key={p.permissionId} className="space-y-1">
                         <div className="flex flex-wrap gap-1.5">{chip(p)}</div>
-                        <div className="ml-3 border-l border-border pl-2.5">{renderLevel(p.children!)}</div>
+                        {/* Sub-links are offered only once the parent is ticked — a child
+                            shows in the sidebar only under a checked parent. */}
+                        {selected.has(p.permissionId) && (
+                            <div className="ml-3 border-l border-border pl-2.5">{renderLevel(p.children!)}</div>
+                        )}
                     </div>
                 ))}
             </div>

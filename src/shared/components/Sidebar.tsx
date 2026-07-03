@@ -24,10 +24,9 @@ import {
     ADMIN_NAV,
     SETTINGS_NAV,
     type ModuleChild,
-    type ModuleSection,
     type NavItem,
 } from "@/utils/constants";
-import { canViewModule, canViewModuleChild } from "@/utils/module-access";
+import { canViewModuleChild } from "@/utils/module-access";
 import { sidebarLinkPermissionIdForLabel } from "@/shared/lib/auth/sidebarModules";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 
@@ -344,41 +343,34 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                 );
             });
 
-    // Sidebar visibility: a nav link granted on the Role page's "Sidebar links"
-    // (ui:sidebar:*) shows even without the link's own capability permission.
-    // Additive — clearing a granted child's capability gate reveals it without
-    // hiding anything a role already sees. Unmodelled links resolve to null and
-    // keep their existing gate.
+    // Authoritative sidebar visibility: the Role page's "Sidebar links" checkboxes
+    // are the SINGLE source of truth for the nav. A link shows only if it is granted
+    // (`ui:sidebar:*`) — and, by recursion, only under a granted parent. Capability
+    // permissions gate the pages, not the nav. Admin (bypass) sees everything.
     const hasSidebarLink = (moduleKey: string, label: string) => {
         const linkId = sidebarLinkPermissionIdForLabel(moduleKey, label);
         return !!linkId && (isAdmin || permissions.includes(linkId));
     };
-    // A nav node is revealed if it — or any descendant — has a `ui:sidebar` grant,
-    // so ticking a nested link (e.g. Masters → Ledgers) reveals the whole path.
-    const hasGrantedDescendant = (moduleKey: string, item: ModuleChild): boolean =>
-        hasSidebarLink(moduleKey, item.label) || (item.children?.some((c) => hasGrantedDescendant(moduleKey, c)) ?? false);
+    // Keep only granted nodes at each depth; a child is reached only if its parent
+    // survived, so a sub-link shows only when its parent is also checked.
     const applySidebarGrants = (moduleKey: string, items: ModuleChild[]): ModuleChild[] =>
-        items.map((child) => ({
-            ...child,
-            permission: hasGrantedDescendant(moduleKey, child) ? undefined : child.permission,
-            children: child.children ? applySidebarGrants(moduleKey, child.children) : child.children,
-        }));
-    // A `ui:sidebar` grant on any descendant reveals the module — even one with its
-    // own module-level `permission` (Accountancy, CRM, Orders, …). The Role page's
-    // "Sidebar links" is the source of truth for nav visibility; the module gate is
-    // just an additional opener for capability users, never a veto over the checkbox.
-    const hasSidebarGrantedChild = (mod: ModuleSection) =>
-        mod.children.some((child) => hasGrantedDescendant(mod.key, child));
+        items
+            .filter((child) => hasSidebarLink(moduleKey, child.label))
+            .map((child) => ({
+                ...child,
+                permission: undefined,
+                children: child.children ? applySidebarGrants(moduleKey, child.children) : child.children,
+            }));
     const visibleModules = MODULE_SECTIONS
         .map((mod) => ({ ...mod, children: applySidebarGrants(mod.key, mod.children) }))
-        .filter((mod) => canViewModule(mod, permissions, isAdmin) || hasSidebarGrantedChild(mod));
+        .filter((mod) => mod.children.length > 0);
 
     const visibleAdmin = ADMIN_NAV.filter(
-        (item) => isAdmin || permissions.includes(item.permission) || hasSidebarLink("admin", item.label)
+        (item) => isAdmin || hasSidebarLink("admin", item.label)
     );
 
     const visibleSettings = SETTINGS_NAV.filter(
-        (item) => isAdmin || permissions.includes(item.permission) || hasSidebarLink("settings", item.label)
+        (item) => isAdmin || hasSidebarLink("settings", item.label)
     );
 
     const canViewNavItem = (item: NavItem) =>
