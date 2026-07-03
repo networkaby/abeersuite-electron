@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { getLedgerOutstanding } from "@/modules/accountancy/lib/outstandings";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -10,7 +10,7 @@ export async function GET(
     req: Request,
     { params }: { params: Promise<{ ledgerId: string }> },
 ) {
-    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
+    const { response } = await requireModuleAccess("accountancy", PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
     if (response) return response;
 
     const { ledgerId } = await params;

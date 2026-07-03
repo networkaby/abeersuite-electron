@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { parseRange } from "@/modules/accountancy/lib/period";
 import { handleApiError } from "@/shared/lib/api";
@@ -9,7 +9,7 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 // HSN-wise rollup of posted inventory voucher lines. Lines whose product has
 // no HSN code fall into a "(no HSN)" bucket so the user notices the gap.
 export async function GET(req: Request) {
-    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
+    const { response } = await requireModuleAccess("accountancy", PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
     if (response) return response;
 
     const { searchParams } = new URL(req.url);
