@@ -37,6 +37,18 @@ function hasEquivalentScopedPermission(permissions: Set<string>, permissionId: s
     return actions.some((action) => permissions.has(action) || hasAnyScopedPermission(permissions, action));
 }
 
+/**
+ * New-model page-view gate: a user may open a module's pages if they were given
+ * ANY of its sidebar nav links (`ui:sidebar:<moduleKey>:*`) — having the UI means
+ * they may use it. Admin bypass passes. Finer limits (per-tab, per-action inside
+ * the tool, e.g. "can't see Purchase in the daybook") are enforced deeper, not here.
+ */
+export function hasModuleNavAccess(permissionsInput: string[], moduleKey: string): boolean {
+    if (permissionsInput.includes("admin:bypass")) return true;
+    const prefix = `ui:sidebar:${moduleKey}:`;
+    return permissionsInput.some((p) => p.startsWith(prefix));
+}
+
 export function hasPermissionWithScope(
     permissionsInput: string[],
     permissionId: string,

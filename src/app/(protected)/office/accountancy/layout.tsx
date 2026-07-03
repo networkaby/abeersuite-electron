@@ -1,11 +1,14 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
+import { hasPermissionWithScope, hasModuleNavAccess } from "@/shared/lib/auth/permissionScope";
 
 export default async function AccountancyLayout({ children }: { children: React.ReactNode }) {
     const session = await auth();
     const perms = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
-    if (!hasPermissionWithScope(perms, "accountancy:view:org")) {
+    // New model: having any Accountancy sidebar nav grant lets the user open the
+    // module (they were given the UI). The capability check stays as an alternative
+    // for capability-only users. Finer limits live inside each tool, not here.
+    if (!hasModuleNavAccess(perms, "accountancy") && !hasPermissionWithScope(perms, "accountancy:view:org")) {
         redirect("/office");
     }
     return <>{children}</>;
