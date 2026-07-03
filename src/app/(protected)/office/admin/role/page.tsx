@@ -1880,14 +1880,18 @@ function SidebarVisibilitySection({
 }) {
     const term = search.trim().toLowerCase();
 
-    // Prune each module's nav tree by the department lens (pooled modules only) and
-    // the search term, keeping ancestors of any matching/kept descendant.
+    // Gate per MODULE, not per link: a module is offered if the department pool
+    // carries ANY of its links (all-access pools offer everything; Workspace is
+    // always offered). Once offered, EVERY current link from constants shows — so
+    // adding a nav item (or sub-nav) appears automatically, no re-pooling needed.
+    // Then prune only by the search term, keeping ancestors of a match.
     const modules = SIDEBAR_MODULES
         .map((mod) => {
+            const moduleOffered = !mod.pooled || mod.childPermissionIds.some((id) => inLens(id));
+            if (!moduleOffered) return { ...mod, children: [] as SidebarChildRow[] };
             const moduleMatch = !term || mod.label.toLowerCase().includes(term);
             const prune = (nodes: SidebarChildRow[]): SidebarChildRow[] =>
                 nodes.reduce<SidebarChildRow[]>((acc, node) => {
-                    if (mod.pooled && !inLens(node.permissionId)) return acc;
                     const kids = node.children ? prune(node.children) : undefined;
                     const keep = moduleMatch || node.label.toLowerCase().includes(term) || (!!kids && kids.length > 0);
                     if (keep) acc.push({ ...node, children: kids && kids.length ? kids : undefined });
