@@ -51,7 +51,7 @@ import {
 } from "@/components/ui/select";
 import { PermissionMatrix as SharedPermissionMatrix, type MatrixColumnGroup, type MatrixRow, type ColumnTint } from "@/shared/components/PermissionMatrix";
 import { VOUCHER_MATRIX, VOUCHER_GROUPS, VOUCHER_ACTIONS, ALL_VOUCHER_PERMISSION_IDS, type VoucherAction, type VoucherGroupKey } from "@/shared/lib/auth/voucherMatrix";
-import { SIDEBAR_MODULES, sidebarChildPermissionId } from "@/shared/lib/auth/sidebarModules";
+import { SIDEBAR_MODULES, sidebarChildPermissionId, type SidebarChildRow } from "@/shared/lib/auth/sidebarModules";
 import { POS_VOUCHER_MATRIX, POS_ACTIONS } from "@/shared/lib/auth/posVoucherMatrix";
 import type { LucideIcon } from "lucide-react";
 import { BUTTON_BAR_ACTIONS } from "@/utils/constants";
@@ -1879,24 +1879,78 @@ function SidebarVisibilitySection({
     onTogglePerm: (id: string) => void;
 }) {
     const term = search.trim().toLowerCase();
+
+    // Prune each module's nav tree by the department lens (pooled modules only) and
+    // the search term, keeping ancestors of any matching/kept descendant.
     const modules = SIDEBAR_MODULES
-        .map((mod) => ({
-            ...mod,
-            children: mod.children.filter(
-                (child) =>
-                    // Pooled modules: offered only if the department pool carries the
-                    // link (all-access pools offer everything). Non-pooled modules
-                    // (Workspace) are default-yes — always offered. Search matches
-                    // link or module name.
-                    (!mod.pooled || inLens(child.permissionId)) &&
-                    (!term ||
-                        child.label.toLowerCase().includes(term) ||
-                        mod.label.toLowerCase().includes(term))
-            ),
-        }))
+        .map((mod) => {
+            const moduleMatch = !term || mod.label.toLowerCase().includes(term);
+            const prune = (nodes: SidebarChildRow[]): SidebarChildRow[] =>
+                nodes.reduce<SidebarChildRow[]>((acc, node) => {
+                    if (mod.pooled && !inLens(node.permissionId)) return acc;
+                    const kids = node.children ? prune(node.children) : undefined;
+                    const keep = moduleMatch || node.label.toLowerCase().includes(term) || (!!kids && kids.length > 0);
+                    if (keep) acc.push({ ...node, children: kids && kids.length ? kids : undefined });
+                    return acc;
+                }, []);
+            return { ...mod, children: prune(mod.children) };
+        })
         .filter((mod) => mod.children.length > 0);
 
     if (modules.length === 0) return null;
+
+    const countLinks = (nodes: SidebarChildRow[]): number =>
+        nodes.reduce((n, c) => n + 1 + (c.children ? countLinks(c.children) : 0), 0);
+
+    const chip = (node: SidebarChildRow) => {
+        const isOn = selected.has(node.permissionId);
+        const changed = isOn !== original.has(node.permissionId);
+        return (
+            <Button
+                key={node.permissionId}
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => onTogglePerm(node.permissionId)}
+                title={node.permissionId}
+                className={[
+                    "h-auto items-center gap-1.5 rounded-md border px-2 py-1 text-left transition-colors",
+                    isOn
+                        ? "border-primary bg-primary/10 text-foreground hover:bg-primary/15"
+                        : "border-border hover:border-primary/60 hover:bg-primary/5",
+                    changed ? "ring-2 ring-primary/20" : "",
+                ].join(" ")}
+            >
+                <span
+                    className={[
+                        "flex h-4 w-4 shrink-0 items-center justify-center rounded border",
+                        isOn ? "border-primary bg-primary text-primary-foreground" : "border-border",
+                    ].join(" ")}
+                >
+                    {isOn && <Check size={10} strokeWidth={3} />}
+                </span>
+                <span className="text-[11px] font-medium leading-tight">{node.label}</span>
+            </Button>
+        );
+    };
+
+    // Leaves wrap in a row; parents render their own chip then an indented block of
+    // their children (recursive), so sub-nav shows nested with its own checkboxes.
+    const renderLevel = (nodes: SidebarChildRow[]) => {
+        const leaves = nodes.filter((n) => !n.children?.length);
+        const parents = nodes.filter((n) => n.children?.length);
+        return (
+            <div className="space-y-1.5">
+                {leaves.length > 0 && <div className="flex flex-wrap gap-1.5">{leaves.map(chip)}</div>}
+                {parents.map((p) => (
+                    <div key={p.permissionId} className="space-y-1">
+                        <div className="flex flex-wrap gap-1.5">{chip(p)}</div>
+                        <div className="ml-3 border-l border-border pl-2.5">{renderLevel(p.children!)}</div>
+                    </div>
+                ))}
+            </div>
+        );
+    };
 
     return (
         <Card>
@@ -1906,7 +1960,7 @@ function SidebarVisibilitySection({
                         <PanelLeft size={15} /> Sidebar links
                     </h2>
                     <p className="mt-0.5 text-[11px] text-muted-foreground">
-                        Pick which navigation links this role sees in the sidebar. Workspace is always available; other modules appear only if the role&rsquo;s department pool offers them.
+                        Pick which navigation links this role sees in the sidebar — including nested sub-nav. Workspace is always available; other modules appear only if the role&rsquo;s department pool offers them.
                     </p>
                 </div>
 
@@ -1916,42 +1970,10 @@ function SidebarVisibilitySection({
                             <div className="mb-1.5 flex items-center gap-2">
                                 <span className="text-[11px] font-bold uppercase tracking-wider text-foreground">{mod.label}</span>
                                 <span className="text-[10px] text-muted-foreground">
-                                    {mod.children.length} {mod.children.length === 1 ? "link" : "links"}
+                                    {countLinks(mod.children)} links
                                 </span>
                             </div>
-                            <div className="flex flex-wrap gap-1.5">
-                                {mod.children.map((child) => {
-                                    const isOn = selected.has(child.permissionId);
-                                    const changed = isOn !== original.has(child.permissionId);
-                                    return (
-                                        <Button
-                                            key={child.permissionId}
-                                            type="button"
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => onTogglePerm(child.permissionId)}
-                                            title={child.permissionId}
-                                            className={[
-                                                "h-auto items-center gap-1.5 rounded-md border px-2 py-1 text-left transition-colors",
-                                                isOn
-                                                    ? "border-primary bg-primary/10 text-foreground hover:bg-primary/15"
-                                                    : "border-border hover:border-primary/60 hover:bg-primary/5",
-                                                changed ? "ring-2 ring-primary/20" : "",
-                                            ].join(" ")}
-                                        >
-                                            <span
-                                                className={[
-                                                    "flex h-4 w-4 shrink-0 items-center justify-center rounded border",
-                                                    isOn ? "border-primary bg-primary text-primary-foreground" : "border-border",
-                                                ].join(" ")}
-                                            >
-                                                {isOn && <Check size={10} strokeWidth={3} />}
-                                            </span>
-                                            <span className="text-[11px] font-medium leading-tight">{child.label}</span>
-                                        </Button>
-                                    );
-                                })}
-                            </div>
+                            {renderLevel(mod.children)}
                         </div>
                     ))}
                 </div>
