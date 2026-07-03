@@ -712,18 +712,16 @@ export default function RolePage() {
     // Show the POS shift block when its perms are seeded (they are, from bootstrap).
     const posShiftChipsAvailable = POS_BLOCK_SHIFT_IDS.some((id) => permissionById.has(id));
 
-    // Voucher matrices — show ONLY the voucher kinds the role's department offers
-    // (a kind is pooled as a whole, so its row is either fully offered or hidden).
-    // All-access depts (poolIds null) show every kind. One matrix per nature group.
-    const voucherCellLocked = (permId: string) =>
-        poolIds !== null && !poolIds.has(permId) && !selected.has(permId);
+    // Voucher matrices — gate per KIND: a kind is offered if the department pool
+    // carries ANY of its ids (all-access offers every kind). Once offered, every
+    // action cell (View / Open / Create / Post / Cancel / Delete) is selectable
+    // independently — a role can have Create without View, etc. — and adding a new
+    // action column needs no re-pooling.
+    const kindOffered = (row: MatrixRow) =>
+        poolIds === null ||
+        Object.values(row.cells).some((permId) => typeof permId === "string" && (poolIds.has(permId) || selected.has(permId)));
     const visibleVoucherGroups = VOUCHER_ROWS_BY_GROUP
-        .map((g) => ({
-            ...g,
-            rows: g.rows.filter((row) =>
-                Object.values(row.cells).some((permId) => typeof permId === "string" && !voucherCellLocked(permId)),
-            ),
-        }))
+        .map((g) => ({ ...g, rows: g.rows.filter(kindOffered) }))
         .filter((g) => g.rows.length > 0);
 
     const selectedCount = selected.size;
@@ -1019,12 +1017,11 @@ export default function RolePage() {
                                                     <SharedPermissionMatrix
                                                         key={group.key}
                                                         title={`${group.label} — eligibility`}
-                                                        description="Per voucher kind: who can create / post / cancel (= edit) / delete. Locked cells aren't offered by this department's pool."
+                                                        description="Per voucher kind: view / open (read) and create / post / cancel (= edit) / delete (write). Each is independent — a role can have Create without View."
                                                         rows={group.rows}
                                                         columnGroups={VOUCHER_COLUMN_GROUPS}
                                                         selected={selected}
                                                         onTogglePerm={togglePerm}
-                                                        locked={voucherCellLocked}
                                                     />
                                                 ))}
                                                 {selected.has(POS_VISIBILITY_ID) && (
