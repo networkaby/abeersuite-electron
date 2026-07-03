@@ -25,7 +25,6 @@ type Person = { id: number; name: string };
 type CounterCard = {
     counterId:        number;
     counterName:      string;
-    isActive:         boolean;
     branch:           { id: string; name: string };
     tillAccountId:    number;
     tillBalancePaise: string;
@@ -65,13 +64,14 @@ export default function CountersStatusPage() {
     const [cards, setCards]   = useState<CounterCard[]>([]);
     const [loading, setLoading] = useState(true);
     const [branchScope, setBranchScope] = useState<"active" | "all">("active");
-    const [activeScope, setActiveScope] = useState<"active" | "inactive" | "all">("active");
+    // Live-state filter (client-side): open = a shift is running (incl. handover),
+    // closed = no open shift (free). Not the counter's isActive config.
+    const [stateFilter, setStateFilter] = useState<"open" | "closed" | "all">("all");
 
     const load = useCallback((opts?: { silent?: boolean }) => {
         if (!opts?.silent) setLoading(true);
         const q = new URLSearchParams();
         if (branchScope === "all") q.set("branchId", "all");
-        if (activeScope !== "active") q.set("active", activeScope);
         axios.get<CounterCard[]>(`/api/pos/counters/status?${q}`)
             .then((r) => setCards(r.data))
             .catch((e) => {
@@ -79,7 +79,7 @@ export default function CountersStatusPage() {
                 toast.error(msg ?? "Failed to load counters");
             })
             .finally(() => setLoading(false));
-    }, [branchScope, activeScope]);
+    }, [branchScope]);
 
     useEffect(() => {
         // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -101,6 +101,11 @@ export default function CountersStatusPage() {
         (s, c) => s + (c.open ? rupees(c.open.runningExpectedPaise) : rupees(c.tillBalancePaise)),
         0,
     );
+    const shown = cards.filter((c) =>
+        stateFilter === "all"  ? true :
+        stateFilter === "open" ? (c.status === "OPEN" || c.status === "AWAITING_HANDOVER") :
+                                 c.status === "FREE",
+    );
 
     return (
         <ScrollArea className="h-full" type="always">
@@ -111,12 +116,12 @@ export default function CountersStatusPage() {
                     <p className="text-sm text-muted-foreground mt-0.5">Live status per counter — who&apos;s on, day opening, and cash in drawer.</p>
                 </div>
                 <div className="flex items-center gap-2">
-                    <Select value={activeScope} onValueChange={(v) => setActiveScope(v as "active" | "inactive" | "all")}>
-                        <SelectTrigger className="h-8 w-36 text-xs"><SelectValue placeholder="Counters" /></SelectTrigger>
+                    <Select value={stateFilter} onValueChange={(v) => setStateFilter(v as "open" | "closed" | "all")}>
+                        <SelectTrigger className="h-8 w-36 text-xs"><SelectValue placeholder="State" /></SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="active">Active counters</SelectItem>
-                            <SelectItem value="inactive">Inactive counters</SelectItem>
                             <SelectItem value="all">All counters</SelectItem>
+                            <SelectItem value="open">Open</SelectItem>
+                            <SelectItem value="closed">Closed</SelectItem>
                         </SelectContent>
                     </Select>
                     <Select value={branchScope} onValueChange={(v) => setBranchScope(v as "active" | "all")}>
@@ -145,13 +150,15 @@ export default function CountersStatusPage() {
 
             {loading ? (
                 <div className="flex justify-center py-12"><Loader2 className="animate-spin text-muted-foreground" size={28} /></div>
-            ) : cards.length === 0 ? (
+            ) : shown.length === 0 ? (
                 <div className="rounded-lg border border-border bg-card text-center py-16 text-muted-foreground">
-                    No {activeScope === "all" ? "" : `${activeScope} `}counters in this branch.
+                    {cards.length === 0
+                        ? "No counters in this branch."
+                        : `No ${stateFilter === "open" ? "open" : "closed"} counters right now.`}
                 </div>
             ) : (
                 <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                    {cards.map((c) => <CounterCardView key={c.counterId} card={c} />)}
+                    {shown.map((c) => <CounterCardView key={c.counterId} card={c} />)}
                 </div>
             )}
         </div>
@@ -171,13 +178,10 @@ function Metric({ label, value, className, mono }: { label: string; value: strin
 function CounterCardView({ card }: { card: CounterCard }) {
     const linkedShiftId = card.open?.shiftId ?? card.lastClose?.shiftId ?? null;
     const body = (
-        <div className={`rounded-xl border border-border bg-card p-4 transition-colors hover:border-border/80 hover:bg-muted/20 ${card.isActive ? "" : "opacity-70"}`}>
+        <div className="rounded-xl border border-border bg-card p-4 transition-colors hover:border-border/80 hover:bg-muted/20">
             <div className="flex items-center justify-between gap-2">
                 <div className="truncate">
                     <span className="font-medium">{card.counterName}</span>
-                    {!card.isActive && (
-                        <span className="ml-1.5 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">Inactive</span>
-                    )}
                     <span className="ml-1.5 text-xs text-muted-foreground/70">· {card.branch.name}</span>
                 </div>
                 <StatusBadge status={card.status} />
