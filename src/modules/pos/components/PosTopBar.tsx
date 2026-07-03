@@ -51,6 +51,15 @@ export type PosTopBarProps = {
     onExp: () => void;
     onRcv: () => void;
 
+    // ── Access flags (POS voucher permissions; default true = show) ──────────
+    canSale?: boolean;
+    canOrder?: boolean;
+    canEstimate?: boolean;
+    canReturn?: boolean;
+    canExp?: boolean;
+    canRcv?: boolean;
+    canDrop?: boolean;
+
     // ── Shift ⋮ menu ────────────────────────────────────────────────────────
     activeShift: ActiveShift | null;
     shiftLoaded: boolean;
@@ -67,6 +76,8 @@ export function PosTopBar({
     partySearchRef, onPartyPicked, locked, onDialogOpenChange,
     showClear, onClear, onNewCustomer,
     onReturn, onExp, onRcv,
+    canSale = true, canOrder = true, canEstimate = true,
+    canReturn = true, canExp = true, canRcv = true, canDrop = true,
     activeShift, shiftLoaded, shiftOpenedAt,
     onRefreshShift, onDropToSafe, onCloseShift, onOpenShift,
 }: PosTopBarProps) {
@@ -75,7 +86,7 @@ export function PosTopBar({
             <Link href="/office" className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground" title="Back to office">
                 <ArrowLeft size={16} />
             </Link>
-            <PosModeSwitch active={active} />
+            <PosModeSwitch active={active} canSale={canSale} canOrder={canOrder} canEstimate={canEstimate} />
             <div className="flex-1 max-w-2xl">
                 <PartySearchAndCreate
                     ref={partySearchRef}
@@ -109,34 +120,40 @@ export function PosTopBar({
             >
                 <ExternalLink size={14} /> New
             </Button>
-            <Button
-                variant="outline"
-                size="sm"
-                onClick={onReturn}
-                title="Process a sale return — by invoice number, customer, or lost invoice"
-            >
-                <RotateCcw size={14} /> Return
-            </Button>
+            {canReturn && (
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onReturn}
+                    title="Process a sale return — by invoice number, customer, or lost invoice"
+                >
+                    <RotateCcw size={14} /> Return
+                </Button>
+            )}
             {/* Exp — opens an expenditure voucher (payment-voucher variant) that
                 only permits payment to the counter's configured account
                 (office/admin/counters). */}
-            <Button
-                variant="outline"
-                size="sm"
-                onClick={onExp}
-                title="Record a counter expenditure (tea, sundry donation…) — posts a payment voucher from the counter's till"
-            >
-                <Banknote size={14} /> Exp
-            </Button>
+            {canExp && (
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onExp}
+                    title="Record a counter expenditure (tea, sundry donation…) — posts a payment voucher from the counter's till"
+                >
+                    <Banknote size={14} /> Exp
+                </Button>
+            )}
             {/* Rcv — collect a cash payment from a party into the counter till */}
-            <Button
-                variant="outline"
-                size="sm"
-                onClick={onRcv}
-                title="Collect a payment from a customer into this counter's till — posts a receipt voucher"
-            >
-                <HandCoins size={14} /> Rcv
-            </Button>
+            {canRcv && (
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onRcv}
+                    title="Collect a payment from a customer into this counter's till — posts a receipt voucher"
+                >
+                    <HandCoins size={14} /> Rcv
+                </Button>
+            )}
             {/* Help — UI only for now. */}
             <Button
                 variant="outline"
@@ -173,9 +190,11 @@ export function PosTopBar({
                             <DropdownMenuItem onClick={onRefreshShift}>
                                 <RefreshCw size={12} /> Refresh
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={onDropToSafe}>
-                                <Lock size={12} /> Drop to safe
-                            </DropdownMenuItem>
+                            {canDrop && (
+                                <DropdownMenuItem onClick={onDropToSafe}>
+                                    <Lock size={12} /> Drop to safe
+                                </DropdownMenuItem>
+                            )}
                             <DropdownMenuItem
                                 onClick={onCloseShift}
                                 className="text-amber-700 focus:text-amber-700 dark:text-amber-400"

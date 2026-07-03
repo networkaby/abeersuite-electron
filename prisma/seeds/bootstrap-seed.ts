@@ -56,6 +56,7 @@ import {
 import { COMPANY_DETAILS } from "../../src/utils/constants-company-details";
 import { voucherPermissionSeeds } from "../../src/shared/lib/auth/voucherMatrix";
 import { sidebarPermissionSeeds } from "../../src/shared/lib/auth/sidebarModules";
+import { posVoucherPermissionSeeds } from "../../src/shared/lib/auth/posVoucherMatrix";
 import { upsertPositionWithRoles } from "./lib/positionSeedSync";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
@@ -274,6 +275,11 @@ const PERMISSIONS = [
     // Generated from the sidebar so the link↔permission mapping never drifts.
     // Single source: sidebarModules.ts.
     ...sidebarPermissionSeeds(),
+
+    // pos — per-kind voucher gates for the /vouchers/pos UI only
+    // (pos:voucher:<action>:<kind>). Office-equivalent voucher perms also grant
+    // these (office ⊇ POS). Generated from posVoucherMatrix.ts.
+    ...posVoucherPermissionSeeds(),
 
     // pos — shift / till / handover lifecycle
     { id: "pos:shift:open",        label: "Open POS shift",                 module: "pos", description: "Open your own till session with an opening cash float." },

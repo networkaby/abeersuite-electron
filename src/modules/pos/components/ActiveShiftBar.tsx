@@ -13,6 +13,7 @@ import { fmt } from "@/utils/constants";
 import { CashDropDialog } from "@/modules/pos/components/CashDropDialog";
 import { ShiftCloseDialog } from "@/modules/pos/components/ShiftCloseDialog";
 import { extractApiError } from "@/shared/lib/api";
+import { usePosAccess } from "@/modules/pos/hooks/usePosAccess";
 
 export type ActiveShift = {
     id: number;
@@ -63,6 +64,7 @@ export function ActiveShiftBar({
     // in the bar's empty space. Not shown in the awaiting-handover state.
     rightSlot?: ReactNode;
 }) {
+    const { canDrop } = usePosAccess();
     const [summary, setSummary]   = useState<Summary | null>(null);
     const [dropOpen, setDropOpen] = useState(false);
     const [closeOpen, setCloseOpen] = useState(false);
@@ -165,9 +167,11 @@ export function ActiveShiftBar({
                     <Button size="sm" variant="ghost" onClick={refresh} className="h-7 px-2 text-xs">
                         <RefreshCw size={11} />
                     </Button>
-                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setDropOpen(true)}>
-                        <Lock size={12} /> Drop to safe
-                    </Button>
+                    {canDrop && (
+                        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setDropOpen(true)}>
+                            <Lock size={12} /> Drop to safe
+                        </Button>
+                    )}
                     <Button size="sm" className="h-7 text-xs bg-amber-600 hover:bg-amber-700 text-white" onClick={() => setCloseOpen(true)}>
                         <ArrowRightLeft size={12} /> Close shift
                     </Button>

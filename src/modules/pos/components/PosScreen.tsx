@@ -31,6 +31,7 @@ import { PaymentLinkDialog } from "@/modules/pos/components/PaymentLinkDialog";
 import { type TenderSplit } from "@/modules/pos/components/TenderSplitInput";
 import { CheckoutDialog } from "@/modules/pos/components/CheckoutDialog";
 import { PosTopBar } from "@/modules/pos/components/PosTopBar";
+import { usePosAccess } from "@/modules/pos/hooks/usePosAccess";
 import { PosCustomerPanel } from "@/modules/pos/components/PosCustomerPanel";
 import { PosBillSummary } from "@/modules/pos/components/PosBillSummary";
 import { usePosCustomerDisplay } from "@/modules/pos/hooks/usePosCustomerDisplay";
@@ -57,6 +58,8 @@ function parseAmt(s: string): number {
 type EditMeta = { charges: { accountId: number; description?: string; amount: number }[]; discountAmt: number; discountPct: number | null; shippingAmt: number; roundOff: number };
 
 export default function PosScreen({ editId }: { editId?: number }) {
+    // POS UI access flags (hide controls the operator lacks). UI-gating only.
+    const posAccess = usePosAccess();
     const router = useRouter();
     // Edit mode: reopen a posted POS sale here (instead of the office form, which
     // drops the POS-specific charge rows → wrong Balance Sheet). We hydrate only the
@@ -1024,6 +1027,13 @@ export default function PosScreen({ editId }: { editId?: number }) {
                 onReturn={() => setReturnDialogOpen(true)}
                 onExp={() => activeShift ? setExpenditureDialogOpen(true) : toast.error("Open a shift first to record an expenditure")}
                 onRcv={() => activeShift ? setReceiptDialogOpen(true) : toast.error("Open a shift first to collect a payment")}
+                canSale={posAccess.canSale}
+                canOrder={posAccess.canOrder}
+                canEstimate={posAccess.canEstimate}
+                canReturn={posAccess.canReturn}
+                canExp={posAccess.canExp}
+                canRcv={posAccess.canRcv}
+                canDrop={posAccess.canDrop}
                 activeShift={activeShift}
                 shiftLoaded={shiftLoaded}
                 shiftOpenedAt={shiftOpenedAt}

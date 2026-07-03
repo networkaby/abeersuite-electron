@@ -31,6 +31,7 @@ import { type TenderSplit } from "@/modules/pos/components/TenderSplitInput";
 import { CheckoutDialog } from "@/modules/pos/components/CheckoutDialog";
 import { PaymentLinkDialog } from "@/modules/pos/components/PaymentLinkDialog";
 import { PosTopBar } from "@/modules/pos/components/PosTopBar";
+import { usePosAccess } from "@/modules/pos/hooks/usePosAccess";
 import { PosCustomerPanel } from "@/modules/pos/components/PosCustomerPanel";
 import { PosBillSummary } from "@/modules/pos/components/PosBillSummary";
 import { usePosCustomerDisplay } from "@/modules/pos/hooks/usePosCustomerDisplay";
@@ -75,6 +76,8 @@ const QUOTE_CFG = {
 
 export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; editId?: number }) {
     const cfg = QUOTE_CFG[mode];
+    // POS UI access flags (hide controls the operator lacks). UI-gating only.
+    const posAccess = usePosAccess();
     const router = useRouter();
     // Edit mode: reopen an existing order / estimate in this same screen, hydrate
     // its customer + lines, and PATCH on save instead of creating a new voucher.
@@ -874,6 +877,13 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
                 onReturn={() => setReturnDialogOpen(true)}
                 onExp={() => activeShift ? setExpenditureDialogOpen(true) : toast.error("Open a shift first to record an expenditure")}
                 onRcv={() => activeShift ? setReceiptDialogOpen(true) : toast.error("Open a shift first to collect a payment")}
+                canSale={posAccess.canSale}
+                canOrder={posAccess.canOrder}
+                canEstimate={posAccess.canEstimate}
+                canReturn={posAccess.canReturn}
+                canExp={posAccess.canExp}
+                canRcv={posAccess.canRcv}
+                canDrop={posAccess.canDrop}
                 activeShift={activeShift}
                 shiftLoaded={shiftLoaded}
                 shiftOpenedAt={shiftOpenedAt}

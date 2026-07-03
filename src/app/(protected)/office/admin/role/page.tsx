@@ -51,7 +51,8 @@ import {
 } from "@/components/ui/select";
 import { PermissionMatrix as SharedPermissionMatrix, type MatrixColumnGroup, type MatrixRow, type ColumnTint } from "@/shared/components/PermissionMatrix";
 import { VOUCHER_MATRIX, VOUCHER_GROUPS, VOUCHER_ACTIONS, ALL_VOUCHER_PERMISSION_IDS, type VoucherAction, type VoucherGroupKey } from "@/shared/lib/auth/voucherMatrix";
-import { SIDEBAR_MODULES } from "@/shared/lib/auth/sidebarModules";
+import { SIDEBAR_MODULES, sidebarChildPermissionId } from "@/shared/lib/auth/sidebarModules";
+import { POS_VOUCHER_MATRIX, POS_ACTIONS } from "@/shared/lib/auth/posVoucherMatrix";
 import type { LucideIcon } from "lucide-react";
 import { BUTTON_BAR_ACTIONS } from "@/utils/constants";
 import { createActionPermission } from "@/utils/module-access";
@@ -75,6 +76,25 @@ const VOUCHER_ROWS_BY_GROUP: { key: VoucherGroupKey; label: string; rows: Matrix
 }));
 // Every per-kind voucher permission id — used to keep them out of the loose chips.
 const VOUCHER_PERM_SET = new Set<string>(ALL_VOUCHER_PERMISSION_IDS);
+
+// POS voucher matrix (gates the /vouchers/pos UI only). Shown only when the role
+// can see POS (the workspace visibility toggle). Sparse cells render as N/A.
+const POS_VISIBILITY_ID = sidebarChildPermissionId("workspace", "pos");
+const POS_MATRIX_ROWS: MatrixRow[] = POS_VOUCHER_MATRIX.map((r) => ({ key: r.key, label: r.label, cells: { ...r.perms } }));
+// POS columns: Create / Cancel·edit / Delete (no Post — POS has no draft; visibility
+// is implied by Create, so there is no separate "available" column).
+const POS_ACTION_TINT: Record<string, ColumnTint> = { create: "green", cancel: "amber", delete: "rose" };
+const POS_COLUMN_GROUPS: MatrixColumnGroup[] = POS_ACTIONS
+    .map((a) => ({ key: a.key, label: a.label, tint: POS_ACTION_TINT[a.key] ?? "gray", columns: [{ key: a.key, label: a.label }] }));
+// Operator-scoped shift actions for the POS block: managing one's own till on one's
+// own counter — start/end the shift (open implies close) and drop cash to the safe.
+// Oversight (manage/force-close, view other branches) is a separate management
+// concern and falls through to Additional permissions.
+const POS_OPERATOR_SHIFT_CHIPS: { label: string; ids: string[] }[] = [
+    { label: "Start / End shift", ids: ["pos:shift:open", "pos:shift:close"] },
+    { label: "Cash drop", ids: ["pos:shift:drop"] },
+];
+const POS_BLOCK_SHIFT_IDS = POS_OPERATOR_SHIFT_CHIPS.flatMap((c) => c.ids);
 
 // Quick-action options for the role's button bar — every creatable thing (vouchers
 // + Repair + POS), de-duped by the create permission it maps to. Ticking a chip
@@ -329,208 +349,208 @@ const MATRIX_ROWS: {
     module: string;
     cells: Partial<Record<MatrixColumnKey, MatrixPermissionCell>>;
 }[] = [
-    {
-        key: "tickets",
-        label: "Tickets",
-        module: "tickets",
-        cells: {
-            viewOwn: "assignments:view-team",
-            viewBranch: "assignments:view-team",
-            viewOrg: "assignments:view-org",
-            create: "tickets:create",
-            editOwn: "tickets:status:set",
-            editBranch: "tickets:substatus:set",
-            editOrg: "tickets:manage-participants",
-            deleteOwn: "tickets:assign",
-            deleteBranch: "tickets:assign",
-            deleteOrg: "tickets:assign",
+        {
+            key: "tickets",
+            label: "Tickets",
+            module: "tickets",
+            cells: {
+                viewOwn: "assignments:view-team",
+                viewBranch: "assignments:view-team",
+                viewOrg: "assignments:view-org",
+                create: "tickets:create",
+                editOwn: "tickets:status:set",
+                editBranch: "tickets:substatus:set",
+                editOrg: "tickets:manage-participants",
+                deleteOwn: "tickets:assign",
+                deleteBranch: "tickets:assign",
+                deleteOrg: "tickets:assign",
+            },
         },
-    },
-    {
-        key: "ticketOwnership",
-        label: "Ticket Ownership",
-        module: "tickets",
-        cells: {
-            viewOwn: "assignments:view-team",
-            viewBranch: "assignments:view-team",
-            viewOrg: "assignments:view-org",
-            editOrg: "tickets:assign",
-            deleteOwn: "tickets:assign",
-            deleteBranch: "tickets:assign",
-            deleteOrg: "tickets:assign",
+        {
+            key: "ticketOwnership",
+            label: "Ticket Ownership",
+            module: "tickets",
+            cells: {
+                viewOwn: "assignments:view-team",
+                viewBranch: "assignments:view-team",
+                viewOrg: "assignments:view-org",
+                editOrg: "tickets:assign",
+                deleteOwn: "tickets:assign",
+                deleteBranch: "tickets:assign",
+                deleteOrg: "tickets:assign",
+            },
         },
-    },
-    {
-        key: "warranty",
-        label: "Warranty",
-        module: "tickets",
-        cells: {
-            viewOwn: "assignments:view-team",
-            viewBranch: "assignments:view-team",
-            viewOrg: "assignments:view-org",
-            editOrg: "warranty:convert",
+        {
+            key: "warranty",
+            label: "Warranty",
+            module: "tickets",
+            cells: {
+                viewOwn: "assignments:view-team",
+                viewBranch: "assignments:view-team",
+                viewOrg: "assignments:view-org",
+                editOrg: "warranty:convert",
+            },
         },
-    },
-    {
-        key: "buyers",
-        label: "Customers/Companies",
-        module: "customers",
-        cells: {
-            viewOwn: "customers:view",
-            viewBranch: "customers:view",
-            viewOrg: "customers:view",
-            create: ["customers:manage", "companies:manage"],
-            editOwn: ["customers:manage", "companies:manage"],
-            editBranch: ["customers:manage", "companies:manage"],
-            editOrg: ["customers:manage", "companies:manage"],
-            deleteOwn: ["customers:manage", "companies:manage"],
-            deleteBranch: ["customers:manage", "companies:manage"],
-            deleteOrg: ["customers:manage", "companies:manage"],
+        {
+            key: "buyers",
+            label: "Customers/Companies",
+            module: "customers",
+            cells: {
+                viewOwn: "customers:view",
+                viewBranch: "customers:view",
+                viewOrg: "customers:view",
+                create: ["customers:manage", "companies:manage"],
+                editOwn: ["customers:manage", "companies:manage"],
+                editBranch: ["customers:manage", "companies:manage"],
+                editOrg: ["customers:manage", "companies:manage"],
+                deleteOwn: ["customers:manage", "companies:manage"],
+                deleteBranch: ["customers:manage", "companies:manage"],
+                deleteOrg: ["customers:manage", "companies:manage"],
+            },
         },
-    },
-    {
-        key: "invoices",
-        label: "Invoices",
-        module: "customers",
-        cells: {
-            viewOwn: "customers:view",
-            viewBranch: "customers:view",
-            viewOrg: "customers:view",
+        {
+            key: "invoices",
+            label: "Invoices",
+            module: "customers",
+            cells: {
+                viewOwn: "customers:view",
+                viewBranch: "customers:view",
+                viewOrg: "customers:view",
+            },
         },
-    },
-    {
-        key: "assignments",
-        label: "Assignments",
-        module: "assignments",
-        cells: {
-            viewOwn: "assignments:view-team",
-            viewBranch: "assignments:view-team",
-            viewOrg: "assignments:view-org",
+        {
+            key: "assignments",
+            label: "Assignments",
+            module: "assignments",
+            cells: {
+                viewOwn: "assignments:view-team",
+                viewBranch: "assignments:view-team",
+                viewOrg: "assignments:view-org",
+            },
         },
-    },
-    {
-        key: "serviceCenters",
-        label: "Service Centers",
-        module: "service",
-        cells: {
-            viewOwn: "service-centers:view",
-            viewBranch: "service-centers:view",
-            viewOrg: "service-centers:view",
-            create: "service-centers:manage",
-            editOwn: "service-centers:manage",
-            editBranch: "service-centers:manage",
-            editOrg: "service-centers:manage",
-            deleteOwn: "service-centers:manage",
-            deleteBranch: "service-centers:manage",
-            deleteOrg: "service-centers:manage",
+        {
+            key: "serviceCenters",
+            label: "Service Centers",
+            module: "service",
+            cells: {
+                viewOwn: "service-centers:view",
+                viewBranch: "service-centers:view",
+                viewOrg: "service-centers:view",
+                create: "service-centers:manage",
+                editOwn: "service-centers:manage",
+                editBranch: "service-centers:manage",
+                editOrg: "service-centers:manage",
+                deleteOwn: "service-centers:manage",
+                deleteBranch: "service-centers:manage",
+                deleteOrg: "service-centers:manage",
+            },
         },
-    },
-    {
-        key: "users",
-        label: "Users",
-        module: "admin",
-        cells: {
-            viewOwn: "users:manage",
-            viewBranch: "users:manage",
-            viewOrg: "users:manage",
-            create: "users:manage",
-            editOwn: "users:manage",
-            editBranch: "users:manage",
-            editOrg: "users:manage",
-            deleteOwn: "users:manage",
-            deleteBranch: "users:manage",
-            deleteOrg: "users:manage",
+        {
+            key: "users",
+            label: "Users",
+            module: "admin",
+            cells: {
+                viewOwn: "users:manage",
+                viewBranch: "users:manage",
+                viewOrg: "users:manage",
+                create: "users:manage",
+                editOwn: "users:manage",
+                editBranch: "users:manage",
+                editOrg: "users:manage",
+                deleteOwn: "users:manage",
+                deleteBranch: "users:manage",
+                deleteOrg: "users:manage",
+            },
         },
-    },
-    {
-        key: "roles",
-        label: "Roles",
-        module: "admin",
-        cells: {
-            viewOwn: "roles:manage",
-            viewBranch: "roles:manage",
-            viewOrg: "roles:manage",
-            create: "roles:manage",
-            editOwn: "roles:manage",
-            editBranch: "roles:manage",
-            editOrg: "roles:manage",
-            deleteOwn: "roles:manage",
-            deleteBranch: "roles:manage",
-            deleteOrg: "roles:manage",
+        {
+            key: "roles",
+            label: "Roles",
+            module: "admin",
+            cells: {
+                viewOwn: "roles:manage",
+                viewBranch: "roles:manage",
+                viewOrg: "roles:manage",
+                create: "roles:manage",
+                editOwn: "roles:manage",
+                editBranch: "roles:manage",
+                editOrg: "roles:manage",
+                deleteOwn: "roles:manage",
+                deleteBranch: "roles:manage",
+                deleteOrg: "roles:manage",
+            },
         },
-    },
-    {
-        key: "orgSettings",
-        label: "Org Settings",
-        module: "admin",
-        cells: {
-            viewOwn: "settings:manage",
-            viewBranch: "settings:manage",
-            viewOrg: "settings:manage",
-            create: "settings:manage",
-            editOwn: "settings:manage",
-            editBranch: "settings:manage",
-            editOrg: "settings:manage",
-            deleteOwn: "settings:manage",
-            deleteBranch: "settings:manage",
-            deleteOrg: "settings:manage",
+        {
+            key: "orgSettings",
+            label: "Org Settings",
+            module: "admin",
+            cells: {
+                viewOwn: "settings:manage",
+                viewBranch: "settings:manage",
+                viewOrg: "settings:manage",
+                create: "settings:manage",
+                editOwn: "settings:manage",
+                editBranch: "settings:manage",
+                editOrg: "settings:manage",
+                deleteOwn: "settings:manage",
+                deleteBranch: "settings:manage",
+                deleteOrg: "settings:manage",
+            },
         },
-    },
-    {
-        key: "statuses",
-        label: "Statuses",
-        module: "admin",
-        cells: {
-            viewOwn: "settings:statuses",
-            viewBranch: "settings:statuses",
-            viewOrg: "settings:statuses",
-            create: "settings:statuses",
-            editOwn: "settings:statuses",
-            editBranch: "settings:statuses",
-            editOrg: "settings:statuses",
-            deleteOwn: "settings:statuses",
-            deleteBranch: "settings:statuses",
-            deleteOrg: "settings:statuses",
+        {
+            key: "statuses",
+            label: "Statuses",
+            module: "admin",
+            cells: {
+                viewOwn: "settings:statuses",
+                viewBranch: "settings:statuses",
+                viewOrg: "settings:statuses",
+                create: "settings:statuses",
+                editOwn: "settings:statuses",
+                editBranch: "settings:statuses",
+                editOrg: "settings:statuses",
+                deleteOwn: "settings:statuses",
+                deleteBranch: "settings:statuses",
+                deleteOrg: "settings:statuses",
+            },
         },
-    },
-    {
-        key: "pipelines",
-        label: "Pipelines",
-        module: "admin",
-        cells: {
-            viewOwn: "settings:pipelines",
-            viewBranch: "settings:pipelines",
-            viewOrg: "settings:pipelines",
-            create: "settings:pipelines",
-            editOwn: "settings:pipelines",
-            editBranch: "settings:pipelines",
-            editOrg: "settings:pipelines",
-            deleteOwn: "settings:pipelines",
-            deleteBranch: "settings:pipelines",
-            deleteOrg: "settings:pipelines",
+        {
+            key: "pipelines",
+            label: "Pipelines",
+            module: "admin",
+            cells: {
+                viewOwn: "settings:pipelines",
+                viewBranch: "settings:pipelines",
+                viewOrg: "settings:pipelines",
+                create: "settings:pipelines",
+                editOwn: "settings:pipelines",
+                editBranch: "settings:pipelines",
+                editOrg: "settings:pipelines",
+                deleteOwn: "settings:pipelines",
+                deleteBranch: "settings:pipelines",
+                deleteOrg: "settings:pipelines",
+            },
         },
-    },
-    {
-        key: "accountancy",
-        label: "Accountancy",
-        module: "accountancy",
-        cells: {
-            create: "accountancy:create:own",
-            viewOwn: "accountancy:view:own",
-            viewBranch: "accountancy:view:br",
-            viewOrg: "accountancy:view:org",
-            editOwn: "accountancy:edit:own",
-            editBranch: "accountancy:edit:br",
-            editOrg: "accountancy:edit:org",
-            deleteOwn: "accountancy:delete:own",
-            deleteBranch: "accountancy:delete:br",
-            deleteOrg: "accountancy:delete:org",
+        {
+            key: "accountancy",
+            label: "Accountancy",
+            module: "accountancy",
+            cells: {
+                create: "accountancy:create:own",
+                viewOwn: "accountancy:view:own",
+                viewBranch: "accountancy:view:br",
+                viewOrg: "accountancy:view:org",
+                editOwn: "accountancy:edit:own",
+                editBranch: "accountancy:edit:br",
+                editOrg: "accountancy:edit:org",
+                deleteOwn: "accountancy:delete:own",
+                deleteBranch: "accountancy:delete:br",
+                deleteOrg: "accountancy:delete:org",
+            },
         },
-    },
-    // admin:bypass is intentionally removed from the matrix — it is a code-only
-    // sentinel grantable only via the env super admin (.env). It must never appear
-    // in the UI where it could be ticked by mistake.
-];
+        // admin:bypass is intentionally removed from the matrix — it is a code-only
+        // sentinel grantable only via the env super admin (.env). It must never appear
+        // in the UI where it could be ticked by mistake.
+    ];
 
 const MATRIX_PERMISSION_IDS = new Set(
     MATRIX_ROWS.flatMap((row) =>
@@ -643,9 +663,9 @@ export default function RolePage() {
 
     const hasRoleChanges = activeRole
         ? roleForm.label.trim() !== activeRole.label ||
-            roleForm.color !== activeRole.color ||
-            roleForm.rank !== activeRole.rank ||
-            roleForm.departmentId !== (activeRole.department?.id ?? "")
+        roleForm.color !== activeRole.color ||
+        roleForm.rank !== activeRole.rank ||
+        roleForm.departmentId !== (activeRole.department?.id ?? "")
         : false;
 
     const permissionById = useMemo(() => new Map(allPerms.map((permission) => [permission.id, permission])), [allPerms]);
@@ -679,7 +699,18 @@ export default function RolePage() {
             && !permission.id.startsWith("work:")
             // Sidebar link visibility renders in its own "Sidebar links" section.
             && !permission.id.startsWith("ui:sidebar:")
+            // POS perms (voucher matrix, shift chips, report tabs) render in the POS
+            // section (revealed by the POS toggle) — keep them out of the loose chips.
+            && !permission.id.startsWith("pos:voucher:")
+            && !permission.id.startsWith("pos:report:")
+            // The operator-scoped shift perms (open/close/drop) render as chips in the
+            // POS block; the oversight ones (manage / view other branches) fall through
+            // to Additional permissions.
+            && !POS_BLOCK_SHIFT_IDS.includes(permission.id)
     );
+
+    // Show the POS shift block when its perms are seeded (they are, from bootstrap).
+    const posShiftChipsAvailable = POS_BLOCK_SHIFT_IDS.some((id) => permissionById.has(id));
 
     // Voucher matrices — show ONLY the voucher kinds the role's department offers
     // (a kind is pooled as a whole, so its row is either fully offered or hidden).
@@ -808,6 +839,15 @@ export default function RolePage() {
         });
     };
 
+    // Set a group of ids on/off together (POS chips that carry more than one id).
+    const setPerms = (ids: string[], on: boolean) => {
+        setSelected((prev) => {
+            const next = new Set(prev);
+            for (const id of ids) { if (on) next.add(id); else next.delete(id); }
+            return next;
+        });
+    };
+
     if (loading) {
         return (
             <div className="flex items-center justify-center py-20 text-sm text-muted-foreground">
@@ -819,229 +859,290 @@ export default function RolePage() {
     return (
         <ScrollArea className="h-full" type="always">
             <div className="space-y-3 px-6 pt-3 pb-8 text-xs">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                    <h1 className="text-xl font-bold tracking-tight text-foreground">
-                        Roles &amp; Permissions
-                    </h1>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                        Create roles, edit role details, and manage permissions from one page.
-                    </p>
-                </div>
-                <Button
-                    size="sm"
-                    onClick={() => {
-                        // Default to the first functional (non-all-access) department so new
-                        // roles get a narrow lens by default, not the full permission list.
-                        setNewRole({ ...EMPTY_ROLE, departmentId: departments.find((d) => !d.isAllAccess)?.id ?? departments[0]?.id ?? "" });
-                        setNewRoleOpen(true);
-                    }}
-                >
-                    <Plus /> New Role
-                </Button>
-            </div>
-
-            {roles.length === 0 ? (
-                <Card>
-                    <CardContent className="flex flex-col items-center justify-center gap-3 py-16 text-muted-foreground">
-                        <Shield size={36} className="opacity-20" />
-                        <p className="text-sm">No roles found. Create one to get started.</p>
-                    </CardContent>
-                </Card>
-            ) : activeRole && (
-                <>
-                    <RoleDetailsCard
-                        role={activeRole}
-                        form={roleForm}
-                        departments={departments}
-                        selectedCount={selectedCount}
-                        totalCount={totalCount}
-                        saving={savingRole}
-                        hasChanges={hasRoleChanges}
-                        onFormChange={setRoleForm}
-                        onSave={handleUpdateRole}
-                        onDiscard={() => setRoleForm(roleToForm(activeRole))}
-                        onDelete={() => handleDelete(activeRole)}
-                    />
-
-                    <div className="grid gap-3 xl:grid-cols-[240px_minmax(0,1fr)]">
-                        <aside className="xl:sticky xl:top-6 xl:self-start">
-                            <RoleList
-                                roles={roles}
-                                activeRoleId={activeRoleId}
-                                totalCount={totalCount}
-                                onSelect={handleTabChange}
-                            />
-                        </aside>
-
-                        <section className="min-w-0 space-y-3">
-                        <Card>
-                            <CardContent className="space-y-3 pt-4">
-                                <div className="flex flex-wrap items-start justify-between gap-3">
-                                    <div>
-                                        <h2 className="text-base font-bold tracking-tight">
-                                            Role: {activeRole.label} <Badge className={`${activeRole.color} ml-2`}>{activeRole.id}</Badge>
-                                        </h2>
-                                        <p className="mt-0.5 text-[11px] text-muted-foreground">
-                                            {activeRole._count.users} {activeRole._count.users === 1 ? "user" : "users"} · {selectedCount}/{totalCount} permissions selected. Changes apply on next login.
-                                        </p>
-                                    </div>
-                                    <div className="flex gap-1.5">
-                                        <Button
-                                            size="sm"
-                                            onClick={handleSavePermissions}
-                                            disabled={savingPerms || !hasPermissionChanges}
-                                        >
-                                            <Save size={14} />
-                                            {savingPerms ? "Saving..." : "Save permissions"}
-                                        </Button>
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={handleDiscardPermissions}
-                                            disabled={!hasPermissionChanges}
-                                        >
-                                            <RotateCcw size={14} />
-                                            Discard
-                                        </Button>
-                                    </div>
-                                </div>
-
-                                <div className="flex flex-wrap items-center gap-2 rounded-md border border-blue-200 bg-blue-50/60 px-3 py-2 text-[11px] dark:border-blue-900 dark:bg-blue-950/30">
-                                    <Boxes size={13} className="shrink-0 text-blue-600 dark:text-blue-400" />
-                                    {lensIsAllAccess ? (
-                                        <span className="text-foreground">
-                                            <span className="font-semibold">{activeRole.department?.name ?? "Administration"}</span>
-                                            {` is all-access — all ${totalCount} permissions are available.`}
-                                        </span>
-                                    ) : (
-                                        <span className="text-foreground">
-                                            {"Lens: "}
-                                            <span className="font-semibold">{activeRole.department?.name ?? "—"}</span>
-                                            {` department · showing ${lensSize} of ${totalCount} permissions in its pool. `}
-                                            <span className="text-muted-foreground">Edit the pool on the Departments page.</span>
-                                        </span>
-                                    )}
-                                </div>
-
-                                <div className="flex flex-wrap gap-1.5 rounded-md border border-border bg-muted/30 px-3 py-2">
-                                    <div className="relative min-w-64 flex-1">
-                                        <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                                        <Input
-                                            value={search}
-                                            onChange={(event) => setSearch(event.target.value)}
-                                            placeholder="Search permissions by name, module, or ID..."
-                                            className="h-7 pl-8 text-xs"
-                                        />
-                                    </div>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => setSelected(new Set(lensPermIds))}
-                                    >
-                                        Select all
-                                    </Button>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => setSelected(new Set())}
-                                    >
-                                        Clear all
-                                    </Button>
-                                </div>
-
-                                {hasBypass && (
-                                    <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2.5">
-                                        <AlertTriangle size={13} className="mt-0.5 shrink-0 text-destructive" />
-                                        <p className="text-[11px] leading-relaxed text-destructive">
-                                            <span className="font-semibold">admin:bypass active.</span>{" "}
-                                            This role skips every permission check in the system.
-                                        </p>
-                                    </div>
-                                )}
-
-                                {filtered.length === 0 ? (
-                                    <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
-                                        <Search size={32} className="mb-3 opacity-20" />
-                                        <p className="text-sm">No permissions match your search.</p>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-3">
-                                        <PermissionMatrix
-                                            permissions={matrixPermissions}
-                                            permissionById={permissionById}
-                                            search={search}
-                                            selected={selected}
-                                            original={original}
-                                            onTogglePerm={togglePerm}
-                                        />
-                                        {visibleVoucherGroups.map((group) => (
-                                            <SharedPermissionMatrix
-                                                key={group.key}
-                                                title={`${group.label} — eligibility`}
-                                                description="Per voucher kind: who can create / post / cancel (= edit) / delete. Locked cells aren't offered by this department's pool."
-                                                rows={group.rows}
-                                                columnGroups={VOUCHER_COLUMN_GROUPS}
-                                                selected={selected}
-                                                onTogglePerm={togglePerm}
-                                                locked={voucherCellLocked}
-                                            />
-                                        ))}
-                                        <AdditionalPermissions
-                                            permissions={additionalPermissions}
-                                            selected={selected}
-                                            original={original}
-                                            onTogglePerm={togglePerm}
-                                        />
-                                    </div>
-                                )}
-                            </CardContent>
-                        </Card>
-
-                        <QuickActionsSection
-                            selected={selected}
-                            original={original}
-                            onTogglePerm={togglePerm}
-                        />
-
-                        <SidebarVisibilitySection
-                            selected={selected}
-                            original={original}
-                            search={search}
-                            inLens={inLens}
-                            onTogglePerm={togglePerm}
-                        />
-
-                        <WorkAccessSection
-                            works={works}
-                            groups={workGroups}
-                            selected={selected}
-                            original={original}
-                            search={search}
-                            onTogglePerm={togglePerm}
-                        />
-                        </section>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                        <h1 className="text-xl font-bold tracking-tight text-foreground">
+                            Roles &amp; Permissions
+                        </h1>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                            Create roles, edit role details, and manage permissions from one page.
+                        </p>
                     </div>
-                </>
-            )}
+                    <Button
+                        size="sm"
+                        onClick={() => {
+                            // Default to the first functional (non-all-access) department so new
+                            // roles get a narrow lens by default, not the full permission list.
+                            setNewRole({ ...EMPTY_ROLE, departmentId: departments.find((d) => !d.isAllAccess)?.id ?? departments[0]?.id ?? "" });
+                            setNewRoleOpen(true);
+                        }}
+                    >
+                        <Plus /> New Role
+                    </Button>
+                </div>
 
-            <NewRoleDialog
-                open={newRoleOpen}
-                onOpenChange={setNewRoleOpen}
-                roles={roles}
-                departments={departments}
-                form={newRole}
-                copyFromRoleId={copyFromRoleId}
-                saving={savingRole}
-                onFormChange={setNewRole}
-                onCopyFromRoleChange={setCopyFromRoleId}
-                onCreate={handleCreate}
-                onCancel={() => {
-                    setNewRoleOpen(false);
-                    setNewRole(EMPTY_ROLE);
-                    setCopyFromRoleId(NO_COPY_ROLE);
-                }}
-            />
+                {roles.length === 0 ? (
+                    <Card>
+                        <CardContent className="flex flex-col items-center justify-center gap-3 py-16 text-muted-foreground">
+                            <Shield size={36} className="opacity-20" />
+                            <p className="text-sm">No roles found. Create one to get started.</p>
+                        </CardContent>
+                    </Card>
+                ) : activeRole && (
+                    <>
+                        <RoleDetailsCard
+                            role={activeRole}
+                            form={roleForm}
+                            departments={departments}
+                            selectedCount={selectedCount}
+                            totalCount={totalCount}
+                            saving={savingRole}
+                            hasChanges={hasRoleChanges}
+                            onFormChange={setRoleForm}
+                            onSave={handleUpdateRole}
+                            onDiscard={() => setRoleForm(roleToForm(activeRole))}
+                            onDelete={() => handleDelete(activeRole)}
+                        />
+
+                        <div className="grid gap-3 xl:grid-cols-[240px_minmax(0,1fr)]">
+                            <aside className="xl:sticky xl:top-6 xl:self-start">
+                                <RoleList
+                                    roles={roles}
+                                    activeRoleId={activeRoleId}
+                                    totalCount={totalCount}
+                                    onSelect={handleTabChange}
+                                />
+                            </aside>
+
+                            <section className="min-w-0 space-y-3">
+                                <Card>
+                                    <CardContent className="space-y-3 pt-4">
+                                        <div className="flex flex-wrap items-start justify-between gap-3">
+                                            <div>
+                                                <h2 className="text-base font-bold tracking-tight">
+                                                    Role: {activeRole.label} <Badge className={`${activeRole.color} ml-2`}>{activeRole.id}</Badge>
+                                                </h2>
+                                                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                                                    {activeRole._count.users} {activeRole._count.users === 1 ? "user" : "users"} · {selectedCount}/{totalCount} permissions selected. Changes apply on next login.
+                                                </p>
+                                            </div>
+                                            <div className="flex gap-1.5">
+                                                <Button
+                                                    size="sm"
+                                                    onClick={handleSavePermissions}
+                                                    disabled={savingPerms || !hasPermissionChanges}
+                                                >
+                                                    <Save size={14} />
+                                                    {savingPerms ? "Saving..." : "Save permissions"}
+                                                </Button>
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={handleDiscardPermissions}
+                                                    disabled={!hasPermissionChanges}
+                                                >
+                                                    <RotateCcw size={14} />
+                                                    Discard
+                                                </Button>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex flex-wrap items-center gap-2 rounded-md border border-blue-200 bg-blue-50/60 px-3 py-2 text-[11px] dark:border-blue-900 dark:bg-blue-950/30">
+                                            <Boxes size={13} className="shrink-0 text-blue-600 dark:text-blue-400" />
+                                            {lensIsAllAccess ? (
+                                                <span className="text-foreground">
+                                                    <span className="font-semibold">{activeRole.department?.name ?? "Administration"}</span>
+                                                    {` is all-access — all ${totalCount} permissions are available.`}
+                                                </span>
+                                            ) : (
+                                                <span className="text-foreground">
+                                                    {"Lens: "}
+                                                    <span className="font-semibold">{activeRole.department?.name ?? "—"}</span>
+                                                    {` department · showing ${lensSize} of ${totalCount} permissions in its pool. `}
+                                                    <span className="text-muted-foreground">Edit the pool on the Departments page.</span>
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        <div className="flex flex-wrap gap-1.5 rounded-md border border-border bg-muted/30 px-3 py-2">
+                                            <div className="relative min-w-64 flex-1">
+                                                <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                                                <Input
+                                                    value={search}
+                                                    onChange={(event) => setSearch(event.target.value)}
+                                                    placeholder="Search permissions by name, module, or ID..."
+                                                    className="h-7 pl-8 text-xs"
+                                                />
+                                            </div>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => setSelected(new Set(lensPermIds))}
+                                            >
+                                                Select all
+                                            </Button>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => setSelected(new Set())}
+                                            >
+                                                Clear all
+                                            </Button>
+                                        </div>
+
+                                        {hasBypass && (
+                                            <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2.5">
+                                                <AlertTriangle size={13} className="mt-0.5 shrink-0 text-destructive" />
+                                                <p className="text-[11px] leading-relaxed text-destructive">
+                                                    <span className="font-semibold">admin:bypass active.</span>{" "}
+                                                    This role skips every permission check in the system.
+                                                </p>
+                                            </div>
+                                        )}
+
+                                        {filtered.length === 0 ? (
+                                            <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
+                                                <Search size={32} className="mb-3 opacity-20" />
+                                                <p className="text-sm">No permissions match your search.</p>
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-3">
+                                                <PermissionMatrix
+                                                    permissions={matrixPermissions}
+                                                    permissionById={permissionById}
+                                                    search={search}
+                                                    selected={selected}
+                                                    original={original}
+                                                    onTogglePerm={togglePerm}
+                                                />
+                                                {visibleVoucherGroups.map((group) => (
+                                                    <SharedPermissionMatrix
+                                                        key={group.key}
+                                                        title={`${group.label} — eligibility`}
+                                                        description="Per voucher kind: who can create / post / cancel (= edit) / delete. Locked cells aren't offered by this department's pool."
+                                                        rows={group.rows}
+                                                        columnGroups={VOUCHER_COLUMN_GROUPS}
+                                                        selected={selected}
+                                                        onTogglePerm={togglePerm}
+                                                        locked={voucherCellLocked}
+                                                    />
+                                                ))}
+                                                {selected.has(POS_VISIBILITY_ID) && (
+                                                    <>
+                                                        <SharedPermissionMatrix
+                                                            title="POS vouchers — /vouchers/pos UI only"
+                                                            description="Per POS voucher kind: create / cancel (= edit) / delete (no post — POS has no draft; being able to create implies it's visible). Office-equivalent voucher permission also grants each (office ⊇ POS). Shown because this role can see POS."
+                                                            rows={POS_MATRIX_ROWS}
+                                                            columnGroups={POS_COLUMN_GROUPS}
+                                                            selected={selected}
+                                                            onTogglePerm={togglePerm}
+                                                        />
+                                                        {posShiftChipsAvailable && (
+                                                            <div className="overflow-hidden rounded-lg border border-border bg-card">
+                                                                <div className="border-b border-border bg-muted/40 px-3 py-2">
+                                                                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">POS Shift &amp; Till</p>
+                                                                    <p className="mt-0.5 text-[11px] text-muted-foreground">Operator actions on their own counter — start/end their shift (open implies close) and drop cash to the safe. Oversight (manage, view other branches) is a separate management concern.</p>
+                                                                </div>
+                                                                <div className="flex flex-wrap gap-1.5 px-3 py-2.5">
+                                                                    {POS_OPERATOR_SHIFT_CHIPS.map((chip) => {
+                                                                        // Each chip toggles its id(s) together (Start/End = open + close).
+                                                                        const on = chip.ids.every((id) => selected.has(id));
+                                                                        const changed = chip.ids.some((id) => selected.has(id) !== original.has(id));
+                                                                        return (
+                                                                            <Button
+                                                                                key={chip.label}
+                                                                                type="button"
+                                                                                variant="ghost"
+                                                                                size="sm"
+                                                                                onClick={() =>
+                                                                                    setSelected((prev) => {
+                                                                                        const next = new Set(prev);
+                                                                                        const all = chip.ids.every((id) => next.has(id));
+                                                                                        chip.ids.forEach((id) => (all ? next.delete(id) : next.add(id)));
+                                                                                        return next;
+                                                                                    })
+                                                                                }
+                                                                                title={`${chip.label} — grants ${chip.ids.join(" + ")}`}
+                                                                                className={[
+                                                                                    "h-auto items-center gap-1.5 rounded-md border px-2 py-1 text-left transition-colors",
+                                                                                    on
+                                                                                        ? "border-primary bg-primary/10 text-foreground hover:bg-primary/15"
+                                                                                        : "border-border hover:border-primary/60 hover:bg-primary/5",
+                                                                                    changed ? "ring-2 ring-primary/20" : "",
+                                                                                ].join(" ")}
+                                                                            >
+                                                                                <span
+                                                                                    className={[
+                                                                                        "flex h-4 w-4 shrink-0 items-center justify-center rounded border",
+                                                                                        on ? "border-primary bg-primary text-primary-foreground" : "border-border",
+                                                                                    ].join(" ")}
+                                                                                >
+                                                                                    {on && <Check size={10} strokeWidth={3} />}
+                                                                                </span>
+                                                                                <span className="text-[11px] font-medium leading-tight">{chip.label}</span>
+                                                                            </Button>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </>
+                                                )}
+                                                <AdditionalPermissions
+                                                    permissions={additionalPermissions}
+                                                    selected={selected}
+                                                    original={original}
+                                                    onTogglePerm={togglePerm}
+                                                />
+                                            </div>
+                                        )}
+                                    </CardContent>
+                                </Card>
+
+                                <QuickActionsSection
+                                    selected={selected}
+                                    original={original}
+                                    onTogglePerm={togglePerm}
+                                />
+
+                                <SidebarVisibilitySection
+                                    selected={selected}
+                                    original={original}
+                                    search={search}
+                                    inLens={inLens}
+                                    onTogglePerm={togglePerm}
+                                />
+
+                                <WorkAccessSection
+                                    works={works}
+                                    groups={workGroups}
+                                    selected={selected}
+                                    original={original}
+                                    search={search}
+                                    onTogglePerm={togglePerm}
+                                />
+                            </section>
+                        </div>
+                    </>
+                )}
+
+                <NewRoleDialog
+                    open={newRoleOpen}
+                    onOpenChange={setNewRoleOpen}
+                    roles={roles}
+                    departments={departments}
+                    form={newRole}
+                    copyFromRoleId={copyFromRoleId}
+                    saving={savingRole}
+                    onFormChange={setNewRole}
+                    onCopyFromRoleChange={setCopyFromRoleId}
+                    onCreate={handleCreate}
+                    onCancel={() => {
+                        setNewRoleOpen(false);
+                        setNewRole(EMPTY_ROLE);
+                        setCopyFromRoleId(NO_COPY_ROLE);
+                    }}
+                />
             </div>
         </ScrollArea>
     );
@@ -1059,81 +1160,81 @@ function RoleFields({
     const selectedDept = departments.find((d) => d.id === form.departmentId);
     return (
         <div className="space-y-2">
-        <div>
-            <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
-                Department <span className="font-normal">(authoring lens — which permissions this role can hold)</span>
-            </label>
-            <Select
-                value={form.departmentId || undefined}
-                onValueChange={(value) => onChange((prev) => ({ ...prev, departmentId: value }))}
-            >
-                <SelectTrigger className="h-7 w-full text-xs">
-                    <SelectValue placeholder="Select a department…" />
-                </SelectTrigger>
-                <SelectContent>
-                    {departments.map((dept) => (
-                        <SelectItem key={dept.id} value={dept.id}>
-                            {dept.name}{dept.isAllAccess ? " · all-access" : ""}
-                        </SelectItem>
-                    ))}
-                </SelectContent>
-            </Select>
-            {selectedDept && !selectedDept.isAllAccess && (
-                <p className="mt-1 text-[10px] text-muted-foreground">
-                    Only permissions in {selectedDept.name}&apos;s pool are offered. Moving a role to another department strips grants outside the new pool.
-                </p>
-            )}
-        </div>
-        <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_78px_minmax(160px,1fr)]">
             <div>
                 <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
-                    Role name
+                    Department <span className="font-normal">(authoring lens — which permissions this role can hold)</span>
                 </label>
-                <Input
-                    value={form.label}
-                    onChange={(event) => onChange((prev) => ({ ...prev, label: event.target.value }))}
-                    placeholder="e.g. Senior Technician"
-                    className="h-7 text-xs"
-                />
+                <Select
+                    value={form.departmentId || undefined}
+                    onValueChange={(value) => onChange((prev) => ({ ...prev, departmentId: value }))}
+                >
+                    <SelectTrigger className="h-7 w-full text-xs">
+                        <SelectValue placeholder="Select a department…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {departments.map((dept) => (
+                            <SelectItem key={dept.id} value={dept.id}>
+                                {dept.name}{dept.isAllAccess ? " · all-access" : ""}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+                {selectedDept && !selectedDept.isAllAccess && (
+                    <p className="mt-1 text-[10px] text-muted-foreground">
+                        Only permissions in {selectedDept.name}&apos;s pool are offered. Moving a role to another department strips grants outside the new pool.
+                    </p>
+                )}
             </div>
-            <div>
-                <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
-                    Rank
-                </label>
-                <Input
-                    type="text"
-                    inputMode="numeric"
-                    value={form.rank}
-                    onChange={(event) => onChange((prev) => ({ ...prev, rank: Number(event.target.value) }))}
-                    className="h-7 text-xs"
-                />
-            </div>
-            <div>
-                <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
-                    Colour
-                </label>
-                <div className="flex flex-wrap gap-1">
-                    {COLOR_OPTIONS.map((color) => (
-                        <Button
-                            key={color.value}
-                            type="button"
-                            variant="ghost"
-                            size="icon-sm"
-                            title={color.label}
-                            onClick={() => onChange((prev) => ({ ...prev, color: color.value }))}
-                            className={[
-                                "h-6 w-6 rounded-md border p-0 transition-all duration-150",
-                                color.dot,
-                                form.color === color.value
-                                    ? "scale-105 border-foreground ring-1 ring-border ring-offset-1"
-                                    : "border-transparent hover:scale-105 hover:border-border",
-                            ].join(" ")}
-                        />
-                    ))}
-                    {form.label && <Badge className={`${form.color} ml-2`}>{form.label}</Badge>}
+            <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_78px_minmax(160px,1fr)]">
+                <div>
+                    <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
+                        Role name
+                    </label>
+                    <Input
+                        value={form.label}
+                        onChange={(event) => onChange((prev) => ({ ...prev, label: event.target.value }))}
+                        placeholder="e.g. Senior Technician"
+                        className="h-7 text-xs"
+                    />
+                </div>
+                <div>
+                    <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
+                        Rank
+                    </label>
+                    <Input
+                        type="text"
+                        inputMode="numeric"
+                        value={form.rank}
+                        onChange={(event) => onChange((prev) => ({ ...prev, rank: Number(event.target.value) }))}
+                        className="h-7 text-xs"
+                    />
+                </div>
+                <div>
+                    <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
+                        Colour
+                    </label>
+                    <div className="flex flex-wrap gap-1">
+                        {COLOR_OPTIONS.map((color) => (
+                            <Button
+                                key={color.value}
+                                type="button"
+                                variant="ghost"
+                                size="icon-sm"
+                                title={color.label}
+                                onClick={() => onChange((prev) => ({ ...prev, color: color.value }))}
+                                className={[
+                                    "h-6 w-6 rounded-md border p-0 transition-all duration-150",
+                                    color.dot,
+                                    form.color === color.value
+                                        ? "scale-105 border-foreground ring-1 ring-border ring-offset-1"
+                                        : "border-transparent hover:scale-105 hover:border-border",
+                                ].join(" ")}
+                            />
+                        ))}
+                        {form.label && <Badge className={`${form.color} ml-2`}>{form.label}</Badge>}
+                    </div>
                 </div>
             </div>
-        </div>
         </div>
     );
 }
@@ -1448,7 +1549,7 @@ function PermissionMatrix({
 
     return (
         <div className="overflow-hidden rounded-lg border border-border bg-card">
-            <div className="border-b border-border bg-muted/40 px-3 py-2">
+            {/* <div className="border-b border-border bg-muted/40 px-3 py-2">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                     Enterprise Permission Matrix
                 </p>
@@ -1579,7 +1680,7 @@ function PermissionMatrix({
                         ))}
                     </tbody>
                 </table>
-            </div>
+            </div> */}
         </div>
     );
 }

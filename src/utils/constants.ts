@@ -156,20 +156,22 @@ export const WORKSPACE_NAV: NavItem[] = [
 
 export const MODULE_SECTIONS: ModuleSection[] = [
 
-    // POS
-    // {
-    // label: "POS",
-    // icon: Monitor,
-    // key: "pos",
-    // permission: "pos:shift:open",
-    // dashboardHref: "/vouchers/pos",
-    // pathPrefixes: ["/vouchers/pos", "/office/pos"],
-    //     children: [
-    // { label: "POS Register", href: "/vouchers/pos/new", icon: ShoppingCart, permission: "pos:shift:open", newTab: true },
-    // { label: "Sales List", href: "/vouchers/pos", icon: ClipboardList, permission: "pos:shift:open" },
-    // { label: "Shift Reports", href: "/office/pos/shifts", icon: Clock, permission: "pos:shift:view:branch" },
-    // ],
-    // },
+    // POS (manager oversight — shift reports etc.). The operator's register lives
+    // in Workspace → POS; this office module is for managers, so it is gated by the
+    // shift-report VIEW permission, NOT the operator's `pos:shift:open`. It points at
+    // the shift reports page, not the register.
+    {
+        label: "POS",
+        icon: Monitor,
+        key: "pos",
+        permission: "pos:shift:view:branch",
+        dashboardHref: "/office/pos/shifts",
+        pathPrefixes: ["/office/pos"],
+        children: [
+            { label: "Shift Reports", href: "/office/pos/shifts", icon: Clock, permission: "pos:shift:view:branch" },
+            { label: "Counters", href: "/office/pos/counters", icon: ClipboardList, permission: "pos:shift:view:branch" },
+        ],
+    },
 
 
     // Contacts (people + companies; CRM contact database)
