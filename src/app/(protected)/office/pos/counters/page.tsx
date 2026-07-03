@@ -8,16 +8,19 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import axios from "axios";
 import { toast } from "sonner";
 import {
     Loader2, RefreshCw, Clock, Users, Lock, Moon,
-    AlertTriangle, ArrowDownUp, ArrowRight,
+    AlertTriangle, ArrowDownUp, ArrowRight, LockOpen,
 } from "lucide-react";
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { ShiftCloseDialog } from "@/modules/pos/components/ShiftCloseDialog";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { fmt } from "@/utils/constants";
 
 type Person = { id: number; name: string };
@@ -61,12 +64,20 @@ const initials = (name: string) =>
     name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("") || "?";
 
 export default function CountersStatusPage() {
+    const { data: session } = useSession();
+    const perms = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
+    // Force-close another operator's shift (e.g. they fell ill / their PC died)
+    // needs manage rights; the close API enforces the same.
+    const canManage = perms.includes(PERMISSIONS.POS_SHIFT_MANAGE) || perms.includes(PERMISSIONS.ADMIN_BYPASS);
+
     const [cards, setCards]   = useState<CounterCard[]>([]);
     const [loading, setLoading] = useState(true);
     const [branchScope, setBranchScope] = useState<"active" | "all">("active");
     // Live-state filter (client-side): open = a shift is running (incl. handover),
     // closed = no open shift (free). Not the counter's isActive config.
     const [stateFilter, setStateFilter] = useState<"open" | "closed" | "all">("all");
+    // The shift the admin is force-closing (drives the reused ShiftCloseDialog).
+    const [closing, setClosing] = useState<{ shiftId: number; cashierName: string } | null>(null);
 
     const load = useCallback((opts?: { silent?: boolean }) => {
         if (!opts?.silent) setLoading(true);
@@ -158,8 +169,29 @@ export default function CountersStatusPage() {
                 </div>
             ) : (
                 <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                    {shown.map((c) => <CounterCardView key={c.counterId} card={c} />)}
+                    {shown.map((c) => (
+                        <CounterCardView
+                            key={c.counterId}
+                            card={c}
+                            canManage={canManage}
+                            onForceClose={(shiftId, cashierName) => setClosing({ shiftId, cashierName })}
+                        />
+                    ))}
                 </div>
+            )}
+
+            {/* Admin force-close — reuses the cashier's ShiftCloseDialog against the
+                target shift. The close API authorizes managers, so closedBy = the
+                admin while the variance stays on the operator's shift. */}
+            {closing && (
+                <ShiftCloseDialog
+                    open={true}
+                    onOpenChange={(v) => { if (!v) setClosing(null); }}
+                    shiftId={closing.shiftId}
+                    allowHandover={false}
+                    forCashierName={closing.cashierName}
+                    onClosed={() => load({ silent: true })}
+                />
             )}
         </div>
         </ScrollArea>
@@ -175,13 +207,24 @@ function Metric({ label, value, className, mono }: { label: string; value: strin
     );
 }
 
-function CounterCardView({ card }: { card: CounterCard }) {
+function CounterCardView({ card, canManage, onForceClose }: {
+    card: CounterCard;
+    canManage: boolean;
+    onForceClose: (shiftId: number, cashierName: string) => void;
+}) {
     const linkedShiftId = card.open?.shiftId ?? card.lastClose?.shiftId ?? null;
-    const body = (
-        <div className="rounded-xl border border-border bg-card p-4 transition-colors hover:border-border/80 hover:bg-muted/20">
+    // Force-close applies to a running (OPEN) shift only — the close API rejects
+    // AWAITING_HANDOVER (that must be cancelled first).
+    const showForceClose = canManage && card.status === "OPEN" && card.open != null;
+    return (
+        <div className="rounded-xl border border-border bg-card p-4 transition-colors hover:border-border/80">
             <div className="flex items-center justify-between gap-2">
                 <div className="truncate">
-                    <span className="font-medium">{card.counterName}</span>
+                    {linkedShiftId != null ? (
+                        <Link href={`/office/pos/shifts/${linkedShiftId}`} className="font-medium hover:underline">{card.counterName}</Link>
+                    ) : (
+                        <span className="font-medium">{card.counterName}</span>
+                    )}
                     <span className="ml-1.5 text-xs text-muted-foreground/70">· {card.branch.name}</span>
                 </div>
                 <StatusBadge status={card.status} />
@@ -192,11 +235,20 @@ function CounterCardView({ card }: { card: CounterCard }) {
             ) : (
                 <OpenBody card={card} />
             )}
+
+            {showForceClose && (
+                <div className="mt-3 border-t border-border pt-2.5">
+                    <button
+                        onClick={() => onForceClose(card.open!.shiftId, card.open!.user.name)}
+                        className="inline-flex w-full items-center justify-center gap-1.5 rounded-md border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-100 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300"
+                        title={`Count the drawer and close ${card.open!.user.name}'s shift`}
+                    >
+                        <LockOpen size={13} /> Force close &amp; count drawer
+                    </button>
+                </div>
+            )}
         </div>
     );
-    return linkedShiftId != null
-        ? <Link href={`/office/pos/shifts/${linkedShiftId}`} className="block">{body}</Link>
-        : body;
 }
 
 function OpenBody({ card }: { card: CounterCard }) {

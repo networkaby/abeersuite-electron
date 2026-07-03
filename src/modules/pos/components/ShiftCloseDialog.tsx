@@ -81,12 +81,17 @@ const DEFAULT_DENOMS = [2000, 500, 200, 100, 50, 20, 10, 5, 2, 1];
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function ShiftCloseDialog({
-    open, onOpenChange, shiftId, onClosed,
+    open, onOpenChange, shiftId, onClosed, allowHandover = true, forCashierName,
 }: {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     shiftId: number;
     onClosed: () => void;
+    // Admin force-close (from the counter board) hides the "hand to cashier"
+    // tab — the operator is absent, so there's no one to hand to — and labels
+    // the dialog as closing on that cashier's behalf.
+    allowHandover?: boolean;
+    forCashierName?: string;
 }) {
     const [detail, setDetail]     = useState<ShiftDetail | null>(null);
     const [loading, setLoading]   = useState(false);
@@ -278,10 +283,12 @@ export function ShiftCloseDialog({
                     <>
                         <DialogHeader>
                             <DialogTitle className="flex items-center gap-2">
-                                <ArrowRightLeft size={18} className="text-primary" /> Close shift
+                                <ArrowRightLeft size={18} className="text-primary" /> {allowHandover ? "Close shift" : "Force close shift"}
                             </DialogTitle>
                             <DialogDescription>
-                                Count the physical cash in the drawer and choose how to close.
+                                {forCashierName
+                                    ? `Count the physical cash and close ${forCashierName}'s shift on their behalf.`
+                                    : "Count the physical cash in the drawer and choose how to close."}
                             </DialogDescription>
                         </DialogHeader>
 
@@ -291,23 +298,25 @@ export function ShiftCloseDialog({
                             </div>
                         ) : (
                             <div className="flex-1 overflow-y-auto space-y-4 py-2 pr-1">
-                                {/* Mode tabs */}
-                                <div className="flex rounded-lg border border-border overflow-hidden text-sm">
-                                    <button
-                                        type="button"
-                                        onClick={() => setMode("vault")}
-                                        className={`flex-1 flex items-center justify-center gap-1.5 py-2 transition-colors ${mode === "vault" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
-                                    >
-                                        <Vault size={13} /> Close to vault
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setMode("handover")}
-                                        className={`flex-1 flex items-center justify-center gap-1.5 py-2 transition-colors border-l border-border ${mode === "handover" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
-                                    >
-                                        <Users size={13} /> Hand to cashier
-                                    </button>
-                                </div>
+                                {/* Mode tabs — hidden on admin force-close (no cashier to hand to). */}
+                                {allowHandover && (
+                                    <div className="flex rounded-lg border border-border overflow-hidden text-sm">
+                                        <button
+                                            type="button"
+                                            onClick={() => setMode("vault")}
+                                            className={`flex-1 flex items-center justify-center gap-1.5 py-2 transition-colors ${mode === "vault" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+                                        >
+                                            <Vault size={13} /> Close to vault
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setMode("handover")}
+                                            className={`flex-1 flex items-center justify-center gap-1.5 py-2 transition-colors border-l border-border ${mode === "handover" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+                                        >
+                                            <Users size={13} /> Hand to cashier
+                                        </button>
+                                    </div>
+                                )}
 
                                 <div className="grid gap-5 md:grid-cols-2">
                                 {/* ── Left: denomination counter ── */}
