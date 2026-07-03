@@ -5,7 +5,7 @@
 **Stack:** Next.js 16.2.3 (App Router, Turbopack), React 19, PostgreSQL (Supabase), Prisma 7.7.0 (split schema), NextAuth v5 beta (JWT), Tailwind v4, shadcn/ui, Zustand 5, Sonner, Axios, React Hook Form, Zod, Razorpay, Cloudinary, Sentry.
 **Repo:** `D:\our-own-website\service-mgmt-experiment` — branch `dev`.
 **Started:** 2026-04-17.
-**Last updated:** 2026-06-30.
+**Last updated:** 2026-07-03.
 
 This file is the **only doc that carries status**. Architecture lives in [ARCHITECTURE.md](ARCHITECTURE.md). Setup/runbook lives in [README.md](README.md). Contributor rules live in [AGENTS.md](AGENTS.md). For the authoritative history, read `git log`.
 
@@ -227,6 +227,25 @@ Typed fields are **mandatory where a downstream worker can't function without an
 **The money/workflow boundary (hard constraint).** The workflow is **disposable and fully data-configurable**; the **accounting core is ACID and protected**. Actions are the bridge — but a money action **stages or opens a flow prefilled; it never silently posts a GL entry.** So actions sit on a spectrum: fully-auto (email, spawn) → one-click (create deal) → **staged-with-human-confirm (sale/order/voucher)**. Integrations (dial/email/WhatsApp) start as safe stubs (`tel:`/`mailto:` + a logged activity) behind provider config, real providers wired later.
 
 **Status.** Shipped (2026-06-13): polymorphic child-entity spawn + `TicketWorker` rename. Pending: the `ACTION_REGISTRY` + `Work.actionType` (+ optional per-Worker config) — first slice = **Dial** on W1 Tele Calling (additive, no DB reset). Folds into the configurable-spawn work (Next-up item 6) and memory `workflow-access-work-layer-redesign`.
+
+## 🧭 Design: Permissions — three-axis model (agreed 2026-07-03)
+
+The RBAC rethink. Old model was one tangled grid — `module × action × scope` (e.g. `accountancy:edit:branch`) — which mixed three unrelated questions into a single permission row. The new model splits them into **three independent axes**, all **sourced from the position** (the appointment), never stapled to the person. A person = a bundle of positions; every effective value is a **union over their positions**.
+
+**Axis 1 — UI (which surfaces you get).** Give each position a customised UI; hide the irrelevant. Driven by `ui:sidebar:*` grants, generated from the constants file (WORKSPACE_NAV + MODULE_SECTIONS + ADMIN_NAV + SETTINGS_NAV). A nav grant = "you get this page, may open it, and may load its data." Coarse on/off per nav item, full depth. **Built** (sidebar authoritative + constants-driven; `hasModuleNavAccess`/`requireModuleAccess` admit reads).
+
+**Axis 2 — Action (what you can do inside).** The finer matrix, once you are on a surface. Two *sub-flavours* that default in **opposite directions**:
+- **Read / content-visibility** → default **OPEN**, restrict *down*. A nav grant implies you may read everything on the surface; a per-kind `view`/`open` un-tick *hides* a kind. (Answer to "has Day Book, can he see Payment?" → **yes by default**.) Stored additively (nav auto-implies view on all kinds; un-tick removes) so we never run two opposite mechanics.
+- **Write / act** → default **DENIED**, grant *up*. Seeing a tool never implies mutating with it. Per-kind voucher `create/post/cancel/delete`, and tool actions like a future `pricing:modify`. (Answer to "has pricing-strategy, can he modify price?" → **no by default** — a separate grant.) **Building** (per-kind voucher matrix exists; View/Open columns added; enforcement on the write side + report filtering pending).
+
+**Axis 3 — Radius (whose records, across which branches).** A property of the **position's posting**, not the person, and not a permission suffix:
+- **Own branch** — baseline, no grant needed; it's just the branch of your position.
+- **Multi-branch** — holding positions in several branches → the **union** of those branches (`branchIds`, resolved at login).
+- **All-branch (executive)** — one position carries an `access:all-branches` grant that lifts the branch fence entirely.
+
+Data queries filter by the resolved branch set (`where.branchId in branchIds`), skipped when the all-branch grant is present. This **replaces the `:own / :branch / :org` suffix** — the old grid's scope dimension collapses to just "my branches vs all branches", carried by postings + one grant, so the `scope` enum's finer gradations (`OWN/TEAM/DEPARTMENT/REGION`) are no longer needed as a radius system.
+
+**Migration stance.** The old `module × action × scope` permissions (the `accountancy:create:own` etc. grid) have **no distinct job left** — Axis 1 replaced `view`, the per-kind matrix replaced `create/edit/delete`, postings replaced the scope suffix. They survive **only as `newCheck OR oldCapability` fallbacks** so nothing breaks mid-migration. **Do not build new roles on them.** Retire them (seeds + `OR` fallbacks) in the cleanup pass once Axis-2 write enforcement + Axis-3 branch filtering are wired. See memories `sidebar-visibility-permissions`, `develop-new-then-cleanup`.
 
 ## 🧠 Key decisions
 

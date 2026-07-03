@@ -217,9 +217,9 @@ export default function DepartmentsPage() {
         setSaving(true);
         try {
             const payload = {
-                name:        form.name,
+                name: form.name,
                 description: form.description || null,
-                branchId:    form.branchId || null,
+                branchId: form.branchId || null,
             };
             if (addingNew) {
                 const res = await axios.post<Department>("/api/departments", { ...payload, id: form.id.toUpperCase() });
@@ -251,132 +251,132 @@ export default function DepartmentsPage() {
     return (
         <ScrollArea className="h-full" type="always">
             <div className="space-y-4 px-6 pt-3 pb-6">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-2xl font-bold flex items-center gap-2">
-                        <Layers size={24} /> Departments
-                    </h1>
-                    <p className="text-sm text-muted-foreground mt-1">Functional groupings — pick the permission names each department may use. Access levels are set per-role.</p>
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h1 className="text-2xl font-bold flex items-center gap-2">
+                            <Layers size={24} /> Departments
+                        </h1>
+                        <p className="text-sm text-muted-foreground mt-1">Functional groupings — pick the permission names each department may use. Access levels are set per-role.</p>
+                    </div>
+                    <Button onClick={startAdd} disabled={addingNew}>
+                        <Plus size={16} /> New Department
+                    </Button>
                 </div>
-                <Button onClick={startAdd} disabled={addingNew}>
-                    <Plus size={16} /> New Department
-                </Button>
-            </div>
 
-            {loading ? (
-                <p className="text-sm text-muted-foreground">Loading...</p>
-            ) : (
-                <div className="grid gap-4 xl:grid-cols-[260px_minmax(0,1fr)]">
-                    {/* LEFT — department names */}
-                    <aside className="space-y-1 xl:sticky xl:top-3 xl:self-start">
-                        {departments.length === 0 && !addingNew && (
-                            <p className="border-dashed text-sm text-muted-foreground py-8 text-center border border-border rounded-lg">No departments yet. Create one above.</p>
-                        )}
-                        {departments.map(d => {
-                            const isActive = d.id === selectedId && !addingNew && !editId;
-                            return (
-                                <button
-                                    key={d.id}
-                                    type="button"
-                                    onClick={() => selectDept(d.id)}
-                                    className={[
-                                        "w-full rounded-lg border border-l-4 px-3 py-2 text-left transition-colors",
-                                        isActive
-                                            ? "border-primary border-l-primary bg-primary/5"
-                                            : "border-border border-l-primary/40 bg-card hover:bg-muted/40",
-                                    ].join(" ")}
-                                >
-                                    <div className="flex items-center gap-2">
-                                        <Badge className="font-mono text-[10px] shrink-0">{d.id}</Badge>
-                                        <span className="font-semibold text-sm truncate">{d.name}</span>
-                                    </div>
-                                    <p className="mt-1 text-[11px] text-muted-foreground">
-                                        {d.isAllAccess
-                                            ? "All permissions"
-                                            : `${d._count.permissionPool} permission${d._count.permissionPool !== 1 ? "s" : ""}`}
-                                        {" · "}{d._count.roles} role{d._count.roles !== 1 ? "s" : ""}
-                                    </p>
-                                </button>
-                            );
-                        })}
-                    </aside>
-
-                    {/* RIGHT — form, or the selected department's permission pool */}
-                    <section className="min-w-0">
-                        {addingNew ? (
-                            <div className="space-y-3 rounded-lg border border-primary bg-muted/30 p-4">
-                                <p className="text-sm font-semibold">New Department</p>
-                                <DeptFormFields addingNew={true} form={form} branches={branches} onChange={setForm} />
-                                <div className="flex gap-2 pt-1">
-                                    <Button onClick={handleSave} disabled={saving} size="sm"><Check size={14} /> Save</Button>
-                                    <Button variant="outline" size="sm" onClick={cancel}><X size={14} /> Cancel</Button>
-                                </div>
-                            </div>
-                        ) : editId && selected ? (
-                            <div className="space-y-3 rounded-lg border border-primary bg-muted/30 p-4">
-                                <p className="text-sm font-semibold">Edit {selected.name}</p>
-                                <DeptFormFields addingNew={false} form={form} branches={branches} onChange={setForm} />
-                                <div className="flex gap-2">
-                                    <Button size="sm" onClick={handleSave} disabled={saving}><Check size={14} /> Save</Button>
-                                    <Button size="sm" variant="outline" onClick={cancel}><X size={14} /> Cancel</Button>
-                                </div>
-                            </div>
-                        ) : selected ? (
-                            <div className="rounded-lg border border-border bg-card">
-                                {/* header */}
-                                <div className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-3">
-                                    <div className="flex-1 min-w-0">
-                                        <p className="font-semibold text-base flex items-center gap-2">
-                                            {selected.name}
-                                            {selected.isAllAccess && (
-                                                <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-300">
-                                                    <ShieldCheck size={10} /> All-access
-                                                </span>
-                                            )}
+                {loading ? (
+                    <p className="text-sm text-muted-foreground">Loading...</p>
+                ) : (
+                    <div className="grid gap-4 xl:grid-cols-[260px_minmax(0,1fr)]">
+                        {/* LEFT — department names */}
+                        <aside className="space-y-1 xl:sticky xl:top-3 xl:self-start">
+                            {departments.length === 0 && !addingNew && (
+                                <p className="border-dashed text-sm text-muted-foreground py-8 text-center border border-border rounded-lg">No departments yet. Create one above.</p>
+                            )}
+                            {departments.map(d => {
+                                const isActive = d.id === selectedId && !addingNew && !editId;
+                                return (
+                                    <button
+                                        key={d.id}
+                                        type="button"
+                                        onClick={() => selectDept(d.id)}
+                                        className={[
+                                            "w-full rounded-lg border border-l-4 px-3 py-2 text-left transition-colors",
+                                            isActive
+                                                ? "border-primary border-l-primary bg-primary/5"
+                                                : "border-border border-l-primary/40 bg-card hover:bg-muted/40",
+                                        ].join(" ")}
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            <Badge className="font-mono text-[10px] shrink-0">{d.id}</Badge>
+                                            <span className="font-semibold text-sm truncate">{d.name}</span>
+                                        </div>
+                                        <p className="mt-1 text-[11px] text-muted-foreground">
+                                            {d.isAllAccess
+                                                ? "All permissions"
+                                                : `${d._count.permissionPool} permission${d._count.permissionPool !== 1 ? "s" : ""}`}
+                                            {" · "}{d._count.roles} role{d._count.roles !== 1 ? "s" : ""}
                                         </p>
-                                        {selected.description && <p className="text-xs text-muted-foreground mt-0.5">{selected.description}</p>}
-                                        <p className="mt-1 text-xs text-muted-foreground">
-                                            <Badge className="bg-muted text-muted-foreground text-[10px] mr-2">
-                                                {selected.branch
-                                                    ? selected.branch.name
-                                                    : selected._count.branches > 0
-                                                        ? `Org-wide · ${selected._count.branches} branch${selected._count.branches !== 1 ? "es" : ""}`
-                                                        : "Org-wide"}
-                                            </Badge>
-                                            {selected._count.roles} role{selected._count.roles !== 1 ? "s" : ""} · {selected._count.positions} position{selected._count.positions !== 1 ? "s" : ""} · {selected._count.users} user{selected._count.users !== 1 ? "s" : ""}
-                                        </p>
-                                    </div>
-                                    <div className="flex gap-1 shrink-0">
-                                        <Button variant="outline" size="icon-sm" onClick={() => startEdit(selected)} title="Edit department"><Pencil size={14} /></Button>
-                                        <Button variant="destructive" size="icon-sm" onClick={() => handleDelete(selected.id)} title="Delete department"><Trash2 size={14} /></Button>
+                                    </button>
+                                );
+                            })}
+                        </aside>
+
+                        {/* RIGHT — form, or the selected department's permission pool */}
+                        <section className="min-w-0">
+                            {addingNew ? (
+                                <div className="space-y-3 rounded-lg border border-primary bg-muted/30 p-4">
+                                    <p className="text-sm font-semibold">New Department</p>
+                                    <DeptFormFields addingNew={true} form={form} branches={branches} onChange={setForm} />
+                                    <div className="flex gap-2 pt-1">
+                                        <Button onClick={handleSave} disabled={saving} size="sm"><Check size={14} /> Save</Button>
+                                        <Button variant="outline" size="sm" onClick={cancel}><X size={14} /> Cancel</Button>
                                     </div>
                                 </div>
-
-                                {selected.isAllAccess ? (
-                                    <div className="flex items-center gap-2 px-4 py-6 text-sm text-muted-foreground">
-                                        <ShieldCheck size={16} className="text-amber-600" />
-                                        This is an all-access department — every permission is available automatically. Nothing to pick.
+                            ) : editId && selected ? (
+                                <div className="space-y-3 rounded-lg border border-primary bg-muted/30 p-4">
+                                    <p className="text-sm font-semibold">Edit {selected.name}</p>
+                                    <DeptFormFields addingNew={false} form={form} branches={branches} onChange={setForm} />
+                                    <div className="flex gap-2">
+                                        <Button size="sm" onClick={handleSave} disabled={saving}><Check size={14} /> Save</Button>
+                                        <Button size="sm" variant="outline" onClick={cancel}><X size={14} /> Cancel</Button>
                                     </div>
-                                ) : (
-                                    <PoolEditor
-                                        permissions={permissions}
-                                        selected={poolSelected}
-                                        saving={poolSaving}
-                                        dirty={poolDirty}
-                                        onToggle={togglePoolPerm}
-                                        onToggleMany={setPoolPerms}
-                                        onSave={savePool}
-                                    />
-                                )}
-                            </div>
-                        ) : (
-                            <p className="border-dashed text-sm text-muted-foreground py-16 text-center border border-border rounded-lg">
-                                Select a department on the left to manage its permissions.
-                            </p>
-                        )}
-                    </section>
-                </div>
-            )}
+                                </div>
+                            ) : selected ? (
+                                <div className="rounded-lg border border-border bg-card">
+                                    {/* header */}
+                                    <div className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-3">
+                                        <div className="flex-1 min-w-0">
+                                            <p className="font-semibold text-base flex items-center gap-2">
+                                                {selected.name}
+                                                {selected.isAllAccess && (
+                                                    <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                                                        <ShieldCheck size={10} /> All-access
+                                                    </span>
+                                                )}
+                                            </p>
+                                            {selected.description && <p className="text-xs text-muted-foreground mt-0.5">{selected.description}</p>}
+                                            <p className="mt-1 text-xs text-muted-foreground">
+                                                <Badge className="bg-muted text-muted-foreground text-[10px] mr-2">
+                                                    {selected.branch
+                                                        ? selected.branch.name
+                                                        : selected._count.branches > 0
+                                                            ? `Org-wide · ${selected._count.branches} branch${selected._count.branches !== 1 ? "es" : ""}`
+                                                            : "Org-wide"}
+                                                </Badge>
+                                                {selected._count.roles} role{selected._count.roles !== 1 ? "s" : ""} · {selected._count.positions} position{selected._count.positions !== 1 ? "s" : ""} · {selected._count.users} user{selected._count.users !== 1 ? "s" : ""}
+                                            </p>
+                                        </div>
+                                        <div className="flex gap-1 shrink-0">
+                                            <Button variant="outline" size="icon-sm" onClick={() => startEdit(selected)} title="Edit department"><Pencil size={14} /></Button>
+                                            <Button variant="destructive" size="icon-sm" onClick={() => handleDelete(selected.id)} title="Delete department"><Trash2 size={14} /></Button>
+                                        </div>
+                                    </div>
+
+                                    {selected.isAllAccess ? (
+                                        <div className="flex items-center gap-2 px-4 py-6 text-sm text-muted-foreground">
+                                            <ShieldCheck size={16} className="text-amber-600" />
+                                            This is an all-access department — every permission is available automatically. Nothing to pick.
+                                        </div>
+                                    ) : (
+                                        <PoolEditor
+                                            permissions={permissions}
+                                            selected={poolSelected}
+                                            saving={poolSaving}
+                                            dirty={poolDirty}
+                                            onToggle={togglePoolPerm}
+                                            onToggleMany={setPoolPerms}
+                                            onSave={savePool}
+                                        />
+                                    )}
+                                </div>
+                            ) : (
+                                <p className="border-dashed text-sm text-muted-foreground py-16 text-center border border-border rounded-lg">
+                                    Select a department on the left to manage its permissions.
+                                </p>
+                            )}
+                        </section>
+                    </div>
+                )}
             </div>
         </ScrollArea>
     );
@@ -498,7 +498,7 @@ function PoolEditor({
                         ))}
                     </div>
                 )}
-                {modules.map(module => (
+                {/* {modules.map(module => (
                     <div key={module}>
                         <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{module}</p>
                         <div className="space-y-1">
@@ -512,9 +512,10 @@ function PoolEditor({
                                     onClick={() => onToggle(p.id)}
                                 />
                             ))}
+                            
                         </div>
                     </div>
-                ))}
+                ))} */}
                 {modules.length === 0 && voucherGroups.length === 0 && sidebarRows.length === 0 && (
                     <p className="py-6 text-center text-sm text-muted-foreground">No permissions match your search.</p>
                 )}

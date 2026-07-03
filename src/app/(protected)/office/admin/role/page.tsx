@@ -2013,7 +2013,7 @@ function AdditionalPermissions({
 
     return (
         <div className="overflow-hidden rounded-lg border border-border bg-card">
-            <div className="border-b border-border bg-muted/40 px-3 py-2">
+            {/* <div className="border-b border-border bg-muted/40 px-3 py-2">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                     Additional permissions
                 </p>
@@ -2070,7 +2070,7 @@ function AdditionalPermissions({
                         </div>
                     </div>
                 ))}
-            </div>
+            </div> */}
         </div>
     );
 }
