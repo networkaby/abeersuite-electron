@@ -63,16 +63,9 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     R5: [
         "customers:view", "customers:view:org",
         "customers:create", "customers:edit:branch", "customers:edit:org", "customers:delete:branch",
-        "companies:manage", "companies:create", "companies:edit:org",
-        "tickets:create", "tickets:status:set", "tickets:substatus:set",
-        "tickets:assign", "tickets:manage-participants", "warranty:convert",
-        "tickets:view:org", "tickets:edit:org", "tickets:delete:branch",
-        "work:W1", "work:W2", "work:W3", "work:W4",
-        "assignments:view-org", "assignments:view:org",
+        "companies:manage",
         "service-centers:view", "service-centers:view:org",
         ...voucherPerms(["create", "post", "cancel", "delete"]),
-        "finance:invoice:cancel", "finance:invoice:delete",
-        "finance:payment:cancel", "finance:payment:delete",
         "finance:allocation:manage",
         "inventory:manage",
         "inventory:view:org", "inventory:edit:branch",
@@ -87,21 +80,14 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     // R2 — Service Engineer: repair & diagnostics workflow.
     R2: [
         "customers:view",
-        "tickets:create", "tickets:status:set", "tickets:substatus:set",
-        "tickets:assign", "tickets:manage-participants", "warranty:convert",
-        "tickets:view:own", "tickets:view:branch",
-        "work:W1", "work:W2", "work:W3", "work:W4",
-        "assignments:view-team", "assignments:view:own",
         "service-centers:view", "service-centers:view:branch",
     ],
 
     // R6 — Accountant: books, GST, vouchers, reconciliation. No admin/POS/tickets.
     R6: [
         "customers:view", "customers:view:org",
-        "companies:manage", "companies:create", "companies:edit:org",
+        "companies:manage",
         "finance:journal:cancel", "finance:journal:delete",
-        "finance:invoice:cancel", "finance:invoice:delete",
-        "finance:payment:cancel", "finance:payment:delete",
         ...voucherPerms(["create", "post", "cancel", "delete"]),
         "finance:allocation:manage",
         "finance:opening-balance:manage",
@@ -117,10 +103,7 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     R7: [
         "customers:view", "customers:view:org",
         "customers:create", "customers:edit:own", "customers:edit:branch", "customers:delete:own",
-        "companies:manage", "companies:create", "companies:edit:org",
-        "tickets:create", "tickets:status:set", "tickets:substatus:set", "tickets:assign",
-        "tickets:view:own", "tickets:view:branch",
-        "assignments:view-team", "assignments:view:own",
+        "companies:manage",
         "deals:view", "deals:manage",
         "ecommerce:manage",
         "inventory:view:branch",
@@ -130,9 +113,6 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     // R3 — Counter / Cashier: POS, customer intake, ticket triage, branch inventory.
     R3: [
         "customers:view", "customers:manage", "companies:manage",
-        "tickets:create", "tickets:status:set", "tickets:substatus:set", "tickets:assign",
-        "work:W1", "work:W2",
-        "assignments:view-team",
         "deals:view", "deals:manage",
         "inventory:view:branch", "inventory:edit:branch",
         "pos:shift:open", "pos:shift:close", "pos:shift:drop", "pos:shift:view:branch",
@@ -141,8 +121,6 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     // R4 — Stores & Despatch: stock vouchers, goods in/out, repair item handoff.
     R4: [
         "customers:view",
-        "tickets:substatus:set", "tickets:assign",
-        "assignments:view-team",
         "inventory:view:branch", "inventory:edit:branch",
         "pos:shift:open", "pos:shift:close", "pos:shift:drop",
     ],

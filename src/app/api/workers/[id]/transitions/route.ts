@@ -17,7 +17,7 @@ export async function PUT(
     req: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const { response } = await requirePermission(PERMISSIONS.SETTINGS_STATUSES);
+    const { response } = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
     if (response) return response;
     try {
         const { id } = await params;

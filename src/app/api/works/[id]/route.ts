@@ -45,7 +45,7 @@ async function mintWorkPermission(id: string, label: string): Promise<string> {
 
 // PATCH /api/works/[id]
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission(PERMISSIONS.SETTINGS_STATUSES);
+    const { response } = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
     if (response) return response;
     try {
         const { id } = await params;
@@ -101,7 +101,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
 // DELETE /api/works/[id]
 export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission(PERMISSIONS.SETTINGS_STATUSES);
+    const { response } = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
     if (response) return response;
     try {
         const { id } = await params;

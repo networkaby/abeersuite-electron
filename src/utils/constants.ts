@@ -203,7 +203,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Repair +", subtitle: "Open repair intake", icon: Wrench, variant: "default", action: "new-ticket", pipelineRef: "default" },
         ],
         children: [
-            { label: "All Repair", icon: ClipboardList, href: "/office/repairing/tickets", pipelineRef: "default", permission: "tickets:view:own" },
+            { label: "All Repair", icon: ClipboardList, href: "/office/repairing/tickets", pipelineRef: "default" },
             { label: "Service Centers", icon: Building2, href: "/office/repairing/service-centers", permission: "service-centers:view" },
         ],
     },
@@ -595,7 +595,7 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     { label: "Org Defaults", href: "/office/settings/org-defaults", icon: Settings, permission: "settings:manage" },
     { label: "E-Commerce", href: "/office/settings/ecommerce", icon: ShoppingCart, permission: "ecommerce:manage" },
     { label: "Payment Methods", href: "/office/settings/payment-methods", icon: CreditCard, permission: "settings:manage" },
-    { label: "Workflow", href: "/office/settings/workflow", icon: Workflow, permission: "settings:statuses" },
+    { label: "Workflow", href: "/office/settings/workflow", icon: Workflow, permission: "settings:manage" },
     { label: "Naming Convention", icon: ClipboardList, href: "/office/settings/naming-convention", permission: "inventory:manage" },
     { label: "Year Ending", href: "/office/settings/year-ending", icon: Calendar, permission: "settings:manage" },
     { label: "Thermal Printer", href: "/office/settings/printer-settings", icon: Printer, permission: "settings:manage" },
@@ -701,7 +701,6 @@ export const BUTTON_BAR_ACTIONS: ButtonBarAction[] = [
         label: "Repair +", subtitle: "Open repair intake", icon: Wrench, variant: "default",
         action: "new-ticket",
         pipelineRef: "default",
-        permission: "tickets:create",
     },
 
 

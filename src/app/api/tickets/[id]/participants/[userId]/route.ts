@@ -1,8 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireAuth, hasPermission } from "@/shared/lib/auth/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 export async function DELETE(
     _: Request,
@@ -15,11 +14,7 @@ export async function DELETE(
     const ticketId = Number(id);
     const targetUserId = Number(userId);
 
-    const isSelfRemoval = user.id === targetUserId;
-    if (!isSelfRemoval && !hasPermission(user, PERMISSIONS.TICKETS_MANAGE_PARTICIPANTS)) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
+    // Repair permission layer is being rebuilt (blank canvas) — ungated for now.
     try {
         const participant = await prisma.ticketParticipant.findFirst({
             where: { ticketId, userId: targetUserId, removedAt: null },

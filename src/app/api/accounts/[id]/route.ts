@@ -58,8 +58,8 @@ export async function GET(_: Request, { params }: Params) {
 }
 
 // PATCH /api/accounts/[id] — update the account's credit limit.
-// Gated by the edit permission for whichever party owns the account:
-// customers:edit:org for a person ledger, companies:edit:org for a company.
+// People and companies share the Contacts (customers:*) permission set, so both
+// person and company ledgers gate on customers:edit:org.
 export async function PATCH(req: Request, { params }: Params) {
     const { user, response } = await requireAuth();
     if (response) return response;
@@ -81,10 +81,7 @@ export async function PATCH(req: Request, { params }: Params) {
         );
     }
 
-    const requiredPerm = account.companyId
-        ? PERMISSIONS.COMPANIES_EDIT_ORG
-        : PERMISSIONS.CUSTOMERS_EDIT_ORG;
-    if (!hasPermission(user, requiredPerm)) {
+    if (!hasPermission(user, PERMISSIONS.CUSTOMERS_EDIT_ORG)) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

@@ -46,7 +46,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-    const { response } = await requirePermission(PERMISSIONS.SETTINGS_STATUSES);
+    const { response } = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
     if (response) return response;
     try {
         const { data, error } = await validateRequest(req, ticketStatusSchema);

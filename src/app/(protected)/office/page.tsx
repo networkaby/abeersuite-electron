@@ -23,7 +23,7 @@ import { auth } from "@/auth";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { resolvedUserFromSession } from "@/shared/lib/auth/permissions";
-import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
+import { hasPermissionWithScope, hasModuleNavAccess } from "@/shared/lib/auth/permissionScope";
 import UniversalCustomerPanel from "@/modules/home/UniversalCustomerPanel";
 import {
     RepairBriefing,
@@ -51,8 +51,10 @@ export default async function OfficePage() {
     const can = (permissionId: string) => hasPermissionWithScope(user.permissions, permissionId);
 
     const showAdmin    = isAdmin || can("users:manage") || can("settings:manage") || can("roles:manage");
-    const showRepair   = can("tickets:view:own");
-    const showShowroom = can("pos:shift:open") || can("pos:shift:view:branch") || can("tickets:create");
+    // Repair permission layer is being rebuilt — gate the card on repair sidebar-nav
+    // access (new visibility model) instead of the removed tickets:* permissions.
+    const showRepair   = hasModuleNavAccess(user.permissions, "repair");
+    const showShowroom = can("pos:shift:open") || can("pos:shift:view:branch");
     const showFinance  = can("accountancy:view:own") || can("finance:voucher:create");
     const showDespatch = can("inventory:view:branch");
     const showHr       = can("users:manage");

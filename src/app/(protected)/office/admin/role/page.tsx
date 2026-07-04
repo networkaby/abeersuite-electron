@@ -350,48 +350,8 @@ const MATRIX_ROWS: {
     module: string;
     cells: Partial<Record<MatrixColumnKey, MatrixPermissionCell>>;
 }[] = [
-        {
-            key: "tickets",
-            label: "Tickets",
-            module: "tickets",
-            cells: {
-                viewOwn: "assignments:view-team",
-                viewBranch: "assignments:view-team",
-                viewOrg: "assignments:view-org",
-                create: "tickets:create",
-                editOwn: "tickets:status:set",
-                editBranch: "tickets:substatus:set",
-                editOrg: "tickets:manage-participants",
-                deleteOwn: "tickets:assign",
-                deleteBranch: "tickets:assign",
-                deleteOrg: "tickets:assign",
-            },
-        },
-        {
-            key: "ticketOwnership",
-            label: "Ticket Ownership",
-            module: "tickets",
-            cells: {
-                viewOwn: "assignments:view-team",
-                viewBranch: "assignments:view-team",
-                viewOrg: "assignments:view-org",
-                editOrg: "tickets:assign",
-                deleteOwn: "tickets:assign",
-                deleteBranch: "tickets:assign",
-                deleteOrg: "tickets:assign",
-            },
-        },
-        {
-            key: "warranty",
-            label: "Warranty",
-            module: "tickets",
-            cells: {
-                viewOwn: "assignments:view-team",
-                viewBranch: "assignments:view-team",
-                viewOrg: "assignments:view-org",
-                editOrg: "warranty:convert",
-            },
-        },
+        // Repair (Tickets / Ticket Ownership / Warranty / Assignments) rows removed —
+        // the repair permission layer is being rebuilt the new sidebar-link + CRUD way.
         {
             key: "buyers",
             label: "Customers/Companies",
@@ -417,16 +377,6 @@ const MATRIX_ROWS: {
                 viewOwn: "customers:view",
                 viewBranch: "customers:view",
                 viewOrg: "customers:view",
-            },
-        },
-        {
-            key: "assignments",
-            label: "Assignments",
-            module: "assignments",
-            cells: {
-                viewOwn: "assignments:view-team",
-                viewBranch: "assignments:view-team",
-                viewOrg: "assignments:view-org",
             },
         },
         {
@@ -565,40 +515,8 @@ const MATRIX_ROWS: {
                 deleteOrg: "settings:manage",
             },
         },
-        {
-            key: "statuses",
-            label: "Statuses",
-            module: "admin",
-            cells: {
-                viewOwn: "settings:statuses",
-                viewBranch: "settings:statuses",
-                viewOrg: "settings:statuses",
-                create: "settings:statuses",
-                editOwn: "settings:statuses",
-                editBranch: "settings:statuses",
-                editOrg: "settings:statuses",
-                deleteOwn: "settings:statuses",
-                deleteBranch: "settings:statuses",
-                deleteOrg: "settings:statuses",
-            },
-        },
-        {
-            key: "pipelines",
-            label: "Pipelines",
-            module: "admin",
-            cells: {
-                viewOwn: "settings:pipelines",
-                viewBranch: "settings:pipelines",
-                viewOrg: "settings:pipelines",
-                create: "settings:pipelines",
-                editOwn: "settings:pipelines",
-                editBranch: "settings:pipelines",
-                editOrg: "settings:pipelines",
-                deleteOwn: "settings:pipelines",
-                deleteBranch: "settings:pipelines",
-                deleteOrg: "settings:pipelines",
-            },
-        },
+        // Statuses / Pipelines rows removed — workflow masters are part of Settings
+        // and ride settings:manage (the Org Settings row above).
         {
             key: "accountancy",
             label: "Accountancy",

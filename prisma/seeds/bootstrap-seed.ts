@@ -118,53 +118,16 @@ const PERMISSIONS = [
     { id: "customers:delete:department", label: "Delete department customers", module: "customers", description: "Delete customer records within user departments." },
     { id: "customers:delete:branch", label: "Delete branch customers", module: "customers", description: "Delete customer records within user branches." },
     { id: "customers:delete:org", label: "Delete organisation customers", module: "customers", description: "Delete customer records across the organisation." },
-    { id: "companies:create", label: "Create companies", module: "customers", description: "Create company records." },
-    { id: "companies:edit:org", label: "Edit companies", module: "customers", description: "Edit company records." },
-    { id: "companies:delete:org", label: "Delete companies", module: "customers", description: "Delete company records." },
     { id: "customers:hard-delete", label: "Hard-delete converted customers", module: "customers", description: "Permanently remove soft-deleted (converted) Person / Company tombstone rows from the Trash view at /office/settings/customer-tools." },
 
-    // tickets
-    { id: "tickets:create", label: "Create tickets", module: "tickets", description: "Open and submit new tickets." },
-    { id: "tickets:status:set", label: "Set ticket status", module: "tickets", description: "Move a ticket between pipeline statuses." },
-    { id: "tickets:substatus:set", label: "Set ticket worker", module: "tickets", description: "Set the worker on a ticket." },
-    { id: "tickets:assign", label: "Assign tickets", module: "tickets", description: "Claim, pass, or reject primary ownership of a ticket." },
-    { id: "tickets:manage-participants", label: "Manage ticket participants", module: "tickets", description: "Add or remove secondary owners on a ticket." },
-    { id: "warranty:convert", label: "Edit warranty status", module: "tickets", description: "Change the warranty field on a ticket (in-warranty / out-of-warranty)." },
-    { id: "tickets:view:own", label: "View own tickets", module: "tickets", description: "View tickets owned by the user." },
-    { id: "tickets:view:department", label: "View department tickets", module: "tickets", description: "View tickets within user departments." },
-    { id: "tickets:view:branch", label: "View branch tickets", module: "tickets", description: "View tickets within user branches." },
-    { id: "tickets:view:org", label: "View organisation tickets", module: "tickets", description: "View tickets across the organisation." },
-    { id: "tickets:edit:own", label: "Edit own tickets", module: "tickets", description: "Edit tickets owned by the user." },
-    { id: "tickets:edit:department", label: "Edit department tickets", module: "tickets", description: "Edit tickets in user departments." },
-    { id: "tickets:edit:branch", label: "Edit branch tickets", module: "tickets", description: "Edit tickets in user branches." },
-    { id: "tickets:edit:org", label: "Edit organisation tickets", module: "tickets", description: "Edit tickets across the organisation." },
-    { id: "tickets:delete:own", label: "Delete own tickets", module: "tickets", description: "Delete tickets owned by the user." },
-    { id: "tickets:delete:department", label: "Delete department tickets", module: "tickets", description: "Delete tickets in user departments." },
-    { id: "tickets:delete:branch", label: "Delete branch tickets", module: "tickets", description: "Delete tickets in user branches." },
-    { id: "tickets:delete:org", label: "Delete organisation tickets", module: "tickets", description: "Delete tickets across the organisation." },
-
-    // tickets — Work-type gates: hold to set a worker carrying this work.
-    { id: "work:W1", label: "Work: Call",  module: "tickets", description: "Set Call (customer communication) workers on a ticket." },
-    { id: "work:W2",      label: "Work: Quote", module: "tickets", description: "Set Quote / approval workers on a ticket." },
-    { id: "work:W3",         label: "Work: Parts", module: "tickets", description: "Set Parts workers on a ticket." },
-    { id: "work:W4",            label: "Work: QC",    module: "tickets", description: "Set QC workers on a ticket." },
-
-    // assignments
-    { id: "assignments:view-team", label: "View team assignments", module: "assignments", description: "See the My Team tab — all tickets routed to your role." },
-    { id: "assignments:view-org", label: "View organisation assignments", module: "assignments", description: "See the All Organisation tab — every active ticket across all roles." },
-    { id: "assignments:view:own", label: "View own assignments", module: "assignments", description: "View assignments directly owned by the user." },
-    { id: "assignments:view:department", label: "View department assignments", module: "assignments", description: "View assignments inside user departments." },
-    { id: "assignments:view:branch", label: "View branch assignments", module: "assignments", description: "View assignments inside user branches." },
-    { id: "assignments:view:org", label: "View organisation assignments", module: "assignments", description: "View assignments across the organisation." },
+    // Repair (tickets + assignments) permission layer removed — being rebuilt the
+    // new way (sidebar-link + CRUD matrix), like accountancy / inventory.
 
     // service
     { id: "service-centers:view", label: "View service centers", module: "service", description: "Access the Service Centers page in the sidebar." },
     { id: "service-centers:manage", label: "Manage service centers", module: "service", description: "Add, edit, and delete service center records." },
     { id: "service-centers:view:branch", label: "View branch service centers", module: "service", description: "View service centers in user branches." },
     { id: "service-centers:view:org", label: "View organisation service centers", module: "service", description: "View service centers across the organisation." },
-    { id: "service-centers:create", label: "Create service centers", module: "service", description: "Create service center records." },
-    { id: "service-centers:edit:org", label: "Edit service centers", module: "service", description: "Edit service center records." },
-    { id: "service-centers:delete:org", label: "Delete service centers", module: "service", description: "Delete service center records." },
 
     // admin
     { id: "users:manage", label: "Manage users", module: "admin", description: "Create, edit, and delete user accounts." },
@@ -186,21 +149,12 @@ const PERMISSIONS = [
     { id: "pos-counters:create", label: "Create POS counters", module: "admin", description: "Create POS counter records." },
     { id: "pos-counters:edit", label: "Edit POS counters", module: "admin", description: "Edit POS counter records." },
     { id: "pos-counters:delete", label: "Delete POS counters", module: "admin", description: "Delete POS counter records." },
-    { id: "settings:statuses", label: "Manage statuses & workers", module: "admin", description: "Create, edit, and delete ticket statuses and workers." },
-    { id: "settings:pipelines", label: "Manage pipelines", module: "admin", description: "Create, edit, and configure pipelines." },
     { id: "users:create", label: "Create users", module: "admin", description: "Create user accounts." },
     { id: "users:edit:org", label: "Edit users", module: "admin", description: "Edit user accounts." },
     { id: "users:delete:org", label: "Delete users", module: "admin", description: "Delete user accounts." },
     { id: "roles:create", label: "Create roles", module: "admin", description: "Create role definitions." },
     { id: "roles:edit:org", label: "Edit roles", module: "admin", description: "Edit role definitions and grants." },
     { id: "roles:delete:org", label: "Delete roles", module: "admin", description: "Delete custom role definitions." },
-    { id: "settings:edit", label: "Edit settings", module: "admin", description: "Edit organisation-wide settings." },
-    { id: "settings:statuses:create", label: "Create statuses", module: "admin", description: "Create ticket statuses and workers." },
-    { id: "settings:statuses:edit", label: "Edit statuses", module: "admin", description: "Edit ticket statuses and workers." },
-    { id: "settings:statuses:delete", label: "Delete statuses", module: "admin", description: "Delete ticket statuses and workers." },
-    { id: "settings:pipelines:create", label: "Create pipelines", module: "admin", description: "Create pipelines." },
-    { id: "settings:pipelines:edit", label: "Edit pipelines", module: "admin", description: "Edit pipelines." },
-    { id: "settings:pipelines:delete", label: "Delete pipelines", module: "admin", description: "Delete pipelines." },
     { id: "inventory:manage", label: "Manage inventory masters", module: "admin", description: "Maintain units, categories, brands, warranty terms, and inventory product masters. Also gates pricing-strategy CRUD." },
 
     // crm
@@ -213,14 +167,8 @@ const PERMISSIONS = [
     { id: "finance:journal:hard-delete", label: "Hard-delete journal entries", module: "finance", description: "Physically remove a journal entry. A snapshot is written to the audit log so the deletion itself is traceable. Use for cleanup only." },
 
     // finance — three-tier lifecycle on invoices
-    { id: "finance:invoice:cancel", label: "Cancel invoices", module: "finance", description: "Reverse posted invoice JE and mark VOID. Reference number preserved." },
-    { id: "finance:invoice:delete", label: "Delete invoices", module: "finance", description: "Soft-delete invoice; reverses GL impact if posted. Recoverable via restore." },
-    { id: "finance:invoice:hard-delete", label: "Hard-delete invoices", module: "finance", description: "Physically remove an invoice. A snapshot is written to the audit log." },
 
     // finance — three-tier lifecycle on payments
-    { id: "finance:payment:cancel", label: "Cancel payments", module: "finance", description: "Reverse a posted payment and mark CANCELLED." },
-    { id: "finance:payment:delete", label: "Delete payments", module: "finance", description: "Soft-delete a payment; reverses GL impact. Recoverable via restore." },
-    { id: "finance:payment:hard-delete", label: "Hard-delete payments", module: "finance", description: "Physically remove a payment. A snapshot is written to the audit log." },
 
     // finance — generic Tally accounting vouchers
     { id: "finance:voucher:create",      label: "Create vouchers",      module: "finance", description: "Create Contra / Payment / Receipt / Credit Note / Debit Note vouchers." },

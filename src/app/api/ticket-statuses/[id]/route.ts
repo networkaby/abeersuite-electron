@@ -24,7 +24,7 @@ const ticketStatusPatchSchema = z.object({
 });
 
 export async function PATCH(req: Request, { params }: Params) {
-    const { response } = await requirePermission(PERMISSIONS.SETTINGS_STATUSES);
+    const { response } = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
     if (response) return response;
     try {
         const { id } = await params;
@@ -70,7 +70,7 @@ export async function PATCH(req: Request, { params }: Params) {
 }
 
 export async function DELETE(_: Request, { params }: Params) {
-    const { response } = await requirePermission(PERMISSIONS.SETTINGS_STATUSES);
+    const { response } = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
     if (response) return response;
     try {
         const { id } = await params;

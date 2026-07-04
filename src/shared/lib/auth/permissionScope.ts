@@ -4,13 +4,8 @@ const SCOPE_ORDER: PermissionScope[] = ["own", "department", "branch", "org"];
 
 const LEGACY_TO_SCOPED_ACTIONS: Record<string, string[]> = {
     "customers:manage": ["customers:create", "customers:edit", "customers:delete"],
-    "companies:manage": ["companies:create", "companies:edit", "companies:delete"],
-    "service-centers:manage": ["service-centers:create", "service-centers:edit", "service-centers:delete"],
     "users:manage": ["users:create", "users:edit", "users:delete"],
     "roles:manage": ["roles:create", "roles:edit", "roles:delete"],
-    "settings:manage": ["settings:edit"],
-    "settings:statuses": ["settings:statuses:create", "settings:statuses:edit", "settings:statuses:delete"],
-    "settings:pipelines": ["settings:pipelines:create", "settings:pipelines:edit", "settings:pipelines:delete"],
 };
 
 function isScope(value: string): value is PermissionScope {
