@@ -151,6 +151,13 @@ export const PERMISSIONS = {
     ROLES_DELETE_ORG:                   "roles:delete:org",
     ROLES_MANAGE:                       "roles:manage",
 
+    // Branches / Departments / Positions / POS Counters — split out of the
+    // former shared settings:manage so each has its own grant + matrix row.
+    BRANCHES_MANAGE:                     "branches:manage",
+    DEPARTMENTS_MANAGE:                  "departments:manage",
+    POSITIONS_MANAGE:                    "positions:manage",
+    POS_COUNTERS_MANAGE:                 "pos-counters:manage",
+
     // Settings
     SETTINGS_EDIT:                      "settings:edit",
     SETTINGS_MANAGE:                    "settings:manage",

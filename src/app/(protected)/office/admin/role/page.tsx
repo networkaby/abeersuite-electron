@@ -481,6 +481,74 @@ const MATRIX_ROWS: {
             },
         },
         {
+            key: "branches",
+            label: "Branches",
+            module: "admin",
+            cells: {
+                viewOwn: "branches:manage",
+                viewBranch: "branches:manage",
+                viewOrg: "branches:manage",
+                create: "branches:manage",
+                editOwn: "branches:manage",
+                editBranch: "branches:manage",
+                editOrg: "branches:manage",
+                deleteOwn: "branches:manage",
+                deleteBranch: "branches:manage",
+                deleteOrg: "branches:manage",
+            },
+        },
+        {
+            key: "departments",
+            label: "Departments",
+            module: "admin",
+            cells: {
+                viewOwn: "departments:manage",
+                viewBranch: "departments:manage",
+                viewOrg: "departments:manage",
+                create: "departments:manage",
+                editOwn: "departments:manage",
+                editBranch: "departments:manage",
+                editOrg: "departments:manage",
+                deleteOwn: "departments:manage",
+                deleteBranch: "departments:manage",
+                deleteOrg: "departments:manage",
+            },
+        },
+        {
+            key: "positions",
+            label: "Positions",
+            module: "admin",
+            cells: {
+                viewOwn: "positions:manage",
+                viewBranch: "positions:manage",
+                viewOrg: "positions:manage",
+                create: "positions:manage",
+                editOwn: "positions:manage",
+                editBranch: "positions:manage",
+                editOrg: "positions:manage",
+                deleteOwn: "positions:manage",
+                deleteBranch: "positions:manage",
+                deleteOrg: "positions:manage",
+            },
+        },
+        {
+            key: "posCounters",
+            label: "POS Counters",
+            module: "admin",
+            cells: {
+                viewOwn: "pos-counters:manage",
+                viewBranch: "pos-counters:manage",
+                viewOrg: "pos-counters:manage",
+                create: "pos-counters:manage",
+                editOwn: "pos-counters:manage",
+                editBranch: "pos-counters:manage",
+                editOrg: "pos-counters:manage",
+                deleteOwn: "pos-counters:manage",
+                deleteBranch: "pos-counters:manage",
+                deleteOrg: "pos-counters:manage",
+            },
+        },
+        {
             key: "orgSettings",
             label: "Org Settings",
             module: "admin",
@@ -600,6 +668,10 @@ const toSharedMatrixRow = (row: (typeof MATRIX_ROWS)[number]): MatrixRow => {
 const SIDEBAR_LINK_MATRIX_ROW_KEY: Record<string, string> = {
     [sidebarChildPermissionId("admin", "users")]: "users",
     [sidebarChildPermissionId("admin", "role")]: "roles",
+    [sidebarChildPermissionId("admin", "branches")]: "branches",
+    [sidebarChildPermissionId("admin", "departments")]: "departments",
+    [sidebarChildPermissionId("admin", "positions")]: "positions",
+    [sidebarChildPermissionId("admin", "pos-counters")]: "posCounters",
     [sidebarChildPermissionId("settings", "organisation")]: "orgSettings",
 };
 
@@ -1501,184 +1573,11 @@ function PermissionMatrix({
     original: Set<string>;
     onTogglePerm: (id: string) => void;
 }) {
-    const visiblePermissionIds = new Set(permissions.map((permission) => permission.id));
-    const flattenedColumns = MATRIX_COLUMN_GROUPS.flatMap((group) =>
-        group.columns.map((column) => ({ ...column, groupKey: group.key }))
-    );
-    const cellPermissionIds = (cell?: MatrixPermissionCell) => {
-        if (!cell) return [] as string[];
-        return Array.isArray(cell) ? cell : [cell];
-    };
-    // A row is relevant only if at least one of its cell permissions is in the
-    // active lens (the passed `permissions`). Drops whole business areas that
-    // fall outside a narrow department pool so the matrix stays tight.
-    const rowHasVisiblePermission = (row: (typeof MATRIX_ROWS)[number]) =>
-        Object.values(row.cells).some((cell) =>
-            cellPermissionIds(cell).some((permissionId) => visiblePermissionIds.has(permissionId))
-        );
-    const normalizedSearch = search.trim().toLowerCase();
-    const rows = MATRIX_ROWS.filter((row) => {
-        if (!rowHasVisiblePermission(row)) return false;
-        if (!normalizedSearch) return true;
-        if (row.label.toLowerCase().includes(normalizedSearch) || row.module.toLowerCase().includes(normalizedSearch)) {
-            return true;
-        }
-
-        return Object.values(row.cells).some((cell) =>
-            cellPermissionIds(cell).some((permissionId) => {
-                const permission = permissionById.get(permissionId);
-                return permission
-                    ? [permission.id, permission.label, permission.module, permission.description ?? ""]
-                        .some((value) => value.toLowerCase().includes(normalizedSearch))
-                    : false;
-            })
-        );
-    });
-
-    const groupedRows = [
-        ...MODULE_ORDER.filter((module) => rows.some((row) => row.module === module)),
-        ...Array.from(new Set(rows.map((row) => row.module))).filter((module) => !MODULE_ORDER.includes(module)),
-    ].map((module) => ({
-        module,
-        rows: rows.filter((row) => row.module === module),
-    }));
-
-    return (
-        <div className="overflow-hidden rounded-lg border border-border bg-card">
-            <div className="border-b border-border bg-muted/40 px-3 py-2">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    Enterprise Permission Matrix
-                </p>
-                <p className="mt-0.5 text-[11px] text-muted-foreground">
-                    Module-wise control for create, view, edit, and delete scopes. Disabled cells are future backend permissions.
-                </p>
-            </div>
-            <div className="max-h-[68vh] overflow-auto">
-                <table className="w-full min-w-[760px] text-xs">
-                    <thead>
-                        <tr className="border-b border-border bg-muted/20 text-[10px] uppercase tracking-wide text-muted-foreground">
-                            <th rowSpan={2} className="sticky top-0 left-0 z-40 bg-muted px-3 py-1.5 text-left align-bottom font-semibold">Area</th>
-                            {MATRIX_COLUMN_GROUPS.map((group) => (
-                                <th
-                                    key={group.key}
-                                    colSpan={group.columns.length}
-                                    className={[
-                                        "sticky top-0 z-20 border-l border-border px-2 py-1.5 text-center font-semibold",
-                                        group.key === "view" ? "bg-blue-100 dark:bg-blue-950" : "",
-                                        group.key === "delete" ? "bg-rose-100 dark:bg-rose-950" : "",
-                                        group.key === "create" ? "bg-emerald-100 dark:bg-emerald-950" : "",
-                                        group.key === "edit" ? "bg-amber-100 dark:bg-amber-950" : "",
-                                    ].join(" ")}
-                                >
-                                    {group.label}
-                                </th>
-                            ))}
-                        </tr>
-                        <tr className="border-b border-border bg-muted/20 text-[10px] lowercase tracking-wide text-muted-foreground">
-                            {flattenedColumns.map((column) => (
-                                <th
-                                    key={column.key}
-                                    className={[
-                                        "sticky top-7 z-20 border-l border-border px-2 py-1 text-center font-medium",
-                                        column.groupKey === "view" ? "bg-blue-100 dark:bg-blue-950" : "",
-                                        column.groupKey === "delete" ? "bg-rose-100 dark:bg-rose-950" : "",
-                                        column.groupKey === "create" ? "bg-emerald-100 dark:bg-emerald-950" : "",
-                                        column.groupKey === "edit" ? "bg-amber-100 dark:bg-amber-950" : "",
-                                    ].join(" ")}
-                                >
-                                    {column.label}
-                                </th>
-                            ))}
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                        {groupedRows.map((group) => (
-                            <Fragment key={group.module}>
-                                <tr className="bg-muted/50">
-                                    <td colSpan={1 + MATRIX_COLUMN_GROUPS.reduce((count, item) => count + item.columns.length, 0)} className="px-3 py-1.5">
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-[11px] font-bold uppercase tracking-wider text-foreground">
-                                                {MODULE_META[group.module]?.label ?? group.module}
-                                            </span>
-                                            <span className="text-[10px] text-muted-foreground">
-                                                {group.rows.length} {group.rows.length === 1 ? "area" : "areas"}
-                                            </span>
-                                        </div>
-                                    </td>
-                                </tr>
-                                {group.rows.map((row) => (
-                                    <tr key={row.key} className="hover:bg-muted/30">
-                                        <td className="sticky left-0 z-10 bg-card px-3 py-2">
-                                            <div className="font-medium text-foreground">{row.label}</div>
-                                            <div className="text-[10px] text-muted-foreground">{row.module}</div>
-                                        </td>
-                                        {flattenedColumns.map((column) => {
-                                            const permissionIds = cellPermissionIds(row.cells[column.key]);
-                                            const validPermissionIds = permissionIds.filter(
-                                                (permissionId) => permissionById.has(permissionId) && visiblePermissionIds.has(permissionId)
-                                            );
-                                            const enabled = validPermissionIds.length > 0;
-                                            const isOn = enabled && validPermissionIds.every((permissionId) => selected.has(permissionId));
-                                            const changed = enabled && validPermissionIds.some(
-                                                (permissionId) => selected.has(permissionId) !== original.has(permissionId)
-                                            );
-                                            const title = enabled
-                                                ? validPermissionIds
-                                                    .map((permissionId) => {
-                                                        const permission = permissionById.get(permissionId);
-                                                        return `${permission?.label ?? permissionId} (${permissionId})`;
-                                                    })
-                                                    .join(" + ")
-                                                : "Future scope, not connected to backend yet";
-
-                                            return (
-                                                <td
-                                                    key={column.key}
-                                                    className={[
-                                                        "border-l border-border px-2 py-2 text-center",
-                                                        column.groupKey === "view" ? "bg-blue-50/30 dark:bg-blue-950/15" : "",
-                                                        column.groupKey === "delete" ? "bg-rose-50/30 dark:bg-rose-950/15" : "",
-                                                        column.groupKey === "create" ? "bg-emerald-50/30 dark:bg-emerald-950/15" : "",
-                                                        column.groupKey === "edit" ? "bg-amber-50/30 dark:bg-amber-950/15" : "",
-                                                    ].join(" ")}
-                                                >
-                                                    {enabled ? (
-                                                        <Button
-                                                            type="button"
-                                                            variant="ghost"
-                                                            size="icon-sm"
-                                                            onClick={() => {
-                                                                validPermissionIds.forEach((permissionId) => onTogglePerm(permissionId));
-                                                            }}
-                                                            title={title}
-                                                            className={[
-                                                                "mx-auto h-6 w-6 rounded-md border p-0 transition-colors",
-                                                                isOn
-                                                                    ? "border-primary bg-primary text-primary-foreground"
-                                                                    : "border-border hover:border-primary/60 hover:bg-primary/5",
-                                                                changed ? "ring-2 ring-primary/20" : "",
-                                                            ].join(" ")}
-                                                        >
-                                                            {isOn && <Check size={11} strokeWidth={3} />}
-                                                        </Button>
-                                                    ) : (
-                                                        <span
-                                                            title={title}
-                                                            className="mx-auto block h-6 w-6 border border-dashed border-border bg-muted/30 text-muted-foreground/40"
-                                                        />
-                                                    )}
-                                                </td>
-                                            );
-                                        })}
-                                    </tr>
-                                ))}
-                            </Fragment>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    );
+    // Parked (old UI): this flat cross-module CRUD grid (Tickets/Customers/Users/
+    // Roles/…) is hidden temporarily — the new permission UI is being built at the
+    // MODULE level instead (see the Sidebar links card's per-link expand-to-matrix,
+    // e.g. Users/Role/Organisation). Not deleted; body kept below, commented out.
+    return null;
 }
 
 // The role's Quick Actions picker — flex list of everything creatable (vouchers +
@@ -2048,8 +1947,10 @@ function SidebarVisibilitySection({
                     <span className="text-[11px] font-medium leading-tight">{node.label}</span>
                 </Button>
                 {/* Some links (Users, Role, Organisation…) also carry a granular
-                    create/view/edit/delete grant — this reveals that row inline. */}
-                {matrixRow && (
+                    create/view/edit/delete grant — this reveals that row inline.
+                    Only offered once the link itself is ticked (no point granting
+                    Create/Edit/Delete for a link the role can't even see). */}
+                {matrixRow && isOn && (
                     <Button
                         type="button"
                         variant="ghost"
@@ -2072,7 +1973,8 @@ function SidebarVisibilitySection({
         const parents = nodes.filter((n) => n.children?.length);
         const expandedMatrices = leaves
             .map((n) => ({ node: n, row: matrixRowForLink(n) }))
-            .filter((x): x is { node: SidebarChildRow; row: (typeof MATRIX_ROWS)[number] } => !!x.row && expandedLinks.has(x.node.permissionId));
+            .filter((x): x is { node: SidebarChildRow; row: (typeof MATRIX_ROWS)[number] } =>
+                !!x.row && selected.has(x.node.permissionId) && expandedLinks.has(x.node.permissionId));
         return (
             <div className="space-y-1.5">
                 {leaves.length > 0 && <div className="flex flex-wrap items-start gap-1.5">{leaves.map(chip)}</div>}

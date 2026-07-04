@@ -8,7 +8,7 @@ export async function DELETE(
     _req: Request,
     { params }: { params: Promise<{ id: string; userId: string }> },
 ) {
-    const { response } = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
+    const { response } = await requirePermission(PERMISSIONS.POSITIONS_MANAGE);
     if (response) return response;
     try {
         const { id: positionId, userId: userIdStr } = await params;

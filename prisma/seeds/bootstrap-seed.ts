@@ -169,7 +169,11 @@ const PERMISSIONS = [
     // admin
     { id: "users:manage", label: "Manage users", module: "admin", description: "Create, edit, and delete user accounts." },
     { id: "roles:manage", label: "Manage roles", module: "admin", description: "Create and edit roles and their permission sets." },
-    { id: "settings:manage", label: "Manage org settings", module: "admin", description: "Manage branches, departments, and positions." },
+    { id: "settings:manage", label: "Manage org settings", module: "admin", description: "Organisation-wide settings — org defaults, payment methods, printer/QR/voucher templates, backups, downloads, imports." },
+    { id: "branches:manage", label: "Manage branches", module: "admin", description: "Create, edit, and delete branches." },
+    { id: "departments:manage", label: "Manage departments", module: "admin", description: "Create, edit, and delete departments, and edit their permission pools." },
+    { id: "positions:manage", label: "Manage positions", module: "admin", description: "Create, edit, and delete positions and their holders." },
+    { id: "pos-counters:manage", label: "Manage POS counters", module: "admin", description: "Create, edit, and delete POS counters." },
     { id: "settings:statuses", label: "Manage statuses & workers", module: "admin", description: "Create, edit, and delete ticket statuses and workers." },
     { id: "settings:pipelines", label: "Manage pipelines", module: "admin", description: "Create, edit, and configure pipelines." },
     { id: "users:create", label: "Create users", module: "admin", description: "Create user accounts." },

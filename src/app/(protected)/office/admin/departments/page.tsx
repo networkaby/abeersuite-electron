@@ -503,7 +503,11 @@ function PoolEditor({
                         ))}
                     </div>
                 )}
-                {modules.map(module => (
+                {/* Parked (old UI): flat module → permission checkbox rows (accountancy
+                    own/branch/org, ticket scopes, Work items…). Hidden while we design the
+                    newer pool-picking UI for these — not deleted, `modules`/`poolable` above
+                    still compute it, just not rendered. Bring back or replace once decided. */}
+                {/* {modules.map(module => (
                     <div key={module}>
                         <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{module}</p>
                         <div className="space-y-1">
@@ -520,8 +524,8 @@ function PoolEditor({
 
                         </div>
                     </div>
-                ))}
-                {modules.length === 0 && voucherGroups.length === 0 && sidebarRows.length === 0 && (
+                ))} */}
+                {voucherGroups.length === 0 && sidebarRows.length === 0 && (
                     <p className="py-6 text-center text-sm text-muted-foreground">No permissions match your search.</p>
                 )}
             </div>

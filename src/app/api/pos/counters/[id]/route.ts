@@ -54,7 +54,7 @@ const counterInclude = {
 };
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
+    const { response } = await requirePermission(PERMISSIONS.POS_COUNTERS_MANAGE);
     if (response) return response;
 
     try {
@@ -195,7 +195,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 }
 
 export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
+    const { response } = await requirePermission(PERMISSIONS.POS_COUNTERS_MANAGE);
     if (response) return response;
 
     try {

@@ -24,9 +24,9 @@ export async function GET(req: NextRequest) {
         const session = await auth();
         const sessionPerms = (session?.user as { permissions?: string[] })?.permissions ?? [];
         // Seeded admins don't carry admin:bypass (env-super-admin only). The
-        // admin counter management page is gated by settings:manage, which
+        // admin counter management page is gated by pos-counters:manage, which
         // is the same gate the layout + PATCH/POST already use.
-        const canManageCounters = sessionPerms.includes(PERMISSIONS.SETTINGS_MANAGE) || sessionPerms.includes(PERMISSIONS.ADMIN_BYPASS);
+        const canManageCounters = sessionPerms.includes(PERMISSIONS.POS_COUNTERS_MANAGE) || sessionPerms.includes(PERMISSIONS.ADMIN_BYPASS);
 
         const { searchParams } = new URL(req.url);
         const scope = searchParams.get("scope");
@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
         // ── Admin: full list across all branches (for /office/admin/counters) ─
         if (scope === "all") {
             if (!canManageCounters) {
-                return NextResponse.json({ error: "settings:manage permission required" }, { status: 403 });
+                return NextResponse.json({ error: "pos-counters:manage permission required" }, { status: 403 });
             }
             const counters = await prisma.posCounter.findMany({
                 orderBy: [{ branchId: "asc" }, { name: "asc" }],
@@ -140,7 +140,7 @@ const createSchema = z.object({
 const CASH_IN_HAND_GROUP = "Cash-in-Hand";
 
 export async function POST(req: NextRequest) {
-    const { response } = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
+    const { response } = await requirePermission(PERMISSIONS.POS_COUNTERS_MANAGE);
     if (response) return response;
 
     try {

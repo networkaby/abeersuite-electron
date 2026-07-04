@@ -33,7 +33,7 @@ const putSchema = z.object({
 // changed so the action is never silent. All-access pools are auto-managed and
 // reject edits.
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
+    const { response } = await requirePermission(PERMISSIONS.DEPARTMENTS_MANAGE);
     if (response) return response;
     try {
         const { id } = await params;

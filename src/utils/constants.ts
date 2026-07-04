@@ -584,10 +584,10 @@ export const ADMIN_NAV: SettingsNavItem[] = [
     { label: "Users", href: "/office/admin/users", icon: UserCog, permission: "users:manage" },
     { label: "Org Chart", href: "/office/admin/org-chart", icon: Network, permission: "users:manage" },
     { label: "Role", href: "/office/admin/role", icon: ShieldCheck, permission: "roles:manage" },
-    { label: "Branches", href: "/office/admin/branches", icon: Building2, permission: "settings:manage" },
-    { label: "Departments", href: "/office/admin/departments", icon: Users, permission: "settings:manage" },
-    { label: "Positions", href: "/office/admin/positions", icon: Briefcase, permission: "settings:manage" },
-    { label: "POS Counters", href: "/office/admin/counters", icon: Monitor, permission: "settings:manage" },
+    { label: "Branches", href: "/office/admin/branches", icon: Building2, permission: "branches:manage" },
+    { label: "Departments", href: "/office/admin/departments", icon: Users, permission: "departments:manage" },
+    { label: "Positions", href: "/office/admin/positions", icon: Briefcase, permission: "positions:manage" },
+    { label: "POS Counters", href: "/office/admin/counters", icon: Monitor, permission: "pos-counters:manage" },
 ];
 
 export const SETTINGS_NAV: SettingsNavItem[] = [
