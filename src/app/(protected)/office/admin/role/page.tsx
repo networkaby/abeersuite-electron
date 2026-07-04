@@ -2009,33 +2009,19 @@ function SidebarVisibilitySection({
     onTogglePerm: (id: string) => void;
 }) {
     const term = search.trim().toLowerCase();
-    // Which sidebar links currently show their granular matrix row expanded —
-    // keyed by the link's own `ui:sidebar:*` permission id.
-    const [expandedLinks, setExpandedLinks] = useState<Set<string>>(new Set());
-    const toggleExpanded = (id: string) =>
-        setExpandedLinks((prev) => {
+    // Which granular matrices are expanded — keyed by the MATRIX ROW, not the link.
+    // Several links can map to the same row (e.g. Products + Item Ledger both use
+    // products:*); both show a chevron, but they open the SAME single table.
+    const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+    const toggleRow = (rowKey: string) =>
+        setExpandedRows((prev) => {
             const next = new Set(prev);
-            if (next.has(id)) next.delete(id); else next.add(id);
+            if (next.has(rowKey)) next.delete(rowKey); else next.add(rowKey);
             return next;
         });
     const matrixRowForLink = (node: SidebarChildRow) => {
         const rowKey = SIDEBAR_LINK_MATRIX_ROW_KEY[node.permissionId];
         return rowKey ? MATRIX_ROWS.find((row) => row.key === rowKey) : undefined;
-    };
-    // When several links map to the SAME matrix (e.g. Products + Item Ledger both
-    // use the products:* set), only ONE should show the table — otherwise the same
-    // permissions render twice, which reads like a bug. The owner is the first
-    // *ticked* link (in this fixed order) mapping to a row; the rest just point to it.
-    const matrixRowOwnerLink = useMemo(() => {
-        const owner = new Map<string, string>(); // rowKey → owning link permission id
-        for (const [linkId, rowKey] of Object.entries(SIDEBAR_LINK_MATRIX_ROW_KEY)) {
-            if (selected.has(linkId) && !owner.has(rowKey)) owner.set(rowKey, linkId);
-        }
-        return owner;
-    }, [selected]);
-    const ownsMatrix = (node: SidebarChildRow) => {
-        const rowKey = SIDEBAR_LINK_MATRIX_ROW_KEY[node.permissionId];
-        return !!rowKey && matrixRowOwnerLink.get(rowKey) === node.permissionId;
     };
 
     // Gate per MODULE, not per link: a module is offered if the department pool
@@ -2068,17 +2054,14 @@ function SidebarVisibilitySection({
         const isOn = selected.has(node.permissionId);
         const changed = isOn !== original.has(node.permissionId);
         const matrixRow = matrixRowForLink(node);
-        // The matrix (chevron + table) shows only on the link that OWNS the row; a
-        // second link sharing the same row (e.g. Item Ledger ↔ Products) shows a
-        // one-line pointer instead of a duplicate table.
-        const showMatrix = !!matrixRow && ownsMatrix(node);
-        const sharesMatrix = !!matrixRow && !ownsMatrix(node);
-        const expanded = showMatrix ? expandedLinks.has(node.permissionId) : false;
+        // Every link mapping to a matrix row gets a chevron; links that share a row
+        // open the SAME table (state is keyed by the row, so only one table opens).
+        const expanded = matrixRow ? expandedRows.has(matrixRow.key) : false;
         const extraToggle = SIDEBAR_LINK_EXTRA_TOGGLE[node.permissionId];
-        // When a ticked link carries its own controls (its own create/edit/delete
-        // matrix and/or a guard toggle), wrap the whole group in a subtle cluster so
-        // those controls read as belonging to THIS link — not the next chip beside it.
-        const hasControls = isOn && (showMatrix || !!extraToggle);
+        // When a ticked link carries its own controls (a create/edit/delete matrix
+        // and/or a guard toggle), wrap the whole group in a subtle cluster so those
+        // controls read as belonging to THIS link — not the next chip beside it.
+        const hasControls = isOn && (!!matrixRow || !!extraToggle);
         return (
             <div
                 key={node.permissionId}
@@ -2115,24 +2098,17 @@ function SidebarVisibilitySection({
                     create/view/edit/delete grant — this reveals that row inline.
                     Only offered once the link itself is ticked (no point granting
                     Create/Edit/Delete for a link the role can't even see). */}
-                {showMatrix && isOn && (
+                {matrixRow && isOn && (
                     <Button
                         type="button"
                         variant="ghost"
                         size="icon-sm"
-                        onClick={() => toggleExpanded(node.permissionId)}
+                        onClick={() => toggleRow(matrixRow.key)}
                         title={`${expanded ? "Hide" : "Show"} granular permissions for ${node.label}`}
                         className="h-auto w-6 shrink-0 rounded-md border border-border text-muted-foreground hover:border-primary/60 hover:bg-primary/5"
                     >
                         <ChevronDown size={12} className={["transition-transform", expanded ? "rotate-180" : ""].join(" ")} />
                     </Button>
-                )}
-                {/* Shares another link's matrix (same permission set) — point to it
-                    instead of opening a duplicate table. */}
-                {sharesMatrix && isOn && (
-                    <span className="self-center whitespace-nowrap px-1 text-[10px] italic text-muted-foreground">
-                        ↳ uses {matrixRow!.label} permissions
-                    </span>
                 )}
                 {/* Single extra yes/no capability on top of "can see this page" (e.g.
                     Tax Classification's edit grant) — only offered once the link
@@ -2176,17 +2152,24 @@ function SidebarVisibilitySection({
     const renderLevel = (nodes: SidebarChildRow[]) => {
         const leaves = nodes.filter((n) => !n.children?.length);
         const parents = nodes.filter((n) => n.children?.length);
-        const expandedMatrices = leaves
-            .map((n) => ({ node: n, row: matrixRowForLink(n) }))
-            .filter((x): x is { node: SidebarChildRow; row: (typeof MATRIX_ROWS)[number] } =>
-                !!x.row && ownsMatrix(x.node) && selected.has(x.node.permissionId) && expandedLinks.has(x.node.permissionId));
+        // One table per EXPANDED row, even if several leaves at this level map to it
+        // (dedupe by row key) — so Products + Item Ledger open a single Products table.
+        const expandedRowsAtLevel: (typeof MATRIX_ROWS)[number][] = [];
+        const seenRowKeys = new Set<string>();
+        for (const n of leaves) {
+            const row = matrixRowForLink(n);
+            if (row && selected.has(n.permissionId) && expandedRows.has(row.key) && !seenRowKeys.has(row.key)) {
+                seenRowKeys.add(row.key);
+                expandedRowsAtLevel.push(row);
+            }
+        }
         return (
             <div className="space-y-1.5">
                 {leaves.length > 0 && <div className="flex flex-wrap items-start gap-1.5">{leaves.map(chip)}</div>}
-                {expandedMatrices.map(({ node, row }) => (
+                {expandedRowsAtLevel.map((row) => (
                     <SharedPermissionMatrix
-                        key={node.permissionId}
-                        title={`${node.label} — granular permissions`}
+                        key={row.key}
+                        title={`${row.label} — granular permissions`}
                         rows={[toSharedMatrixRow(row)]}
                         columnGroups={CORE_MATRIX_COLUMN_GROUPS}
                         selected={selected}
@@ -2197,13 +2180,13 @@ function SidebarVisibilitySection({
                     // A parent link can also carry a matrix (e.g. Inventory → Masters,
                     // one create/edit/delete for all the setup tables under it).
                     const pRow = matrixRowForLink(p);
-                    const pExpanded = !!pRow && ownsMatrix(p) && selected.has(p.permissionId) && expandedLinks.has(p.permissionId);
+                    const pExpanded = !!pRow && selected.has(p.permissionId) && expandedRows.has(pRow.key);
                     return (
                         <div key={p.permissionId} className="space-y-1">
                             <div className="flex flex-wrap items-start gap-1.5">{chip(p)}</div>
                             {pExpanded && pRow && (
                                 <SharedPermissionMatrix
-                                    title={`${p.label} — granular permissions`}
+                                    title={`${pRow.label} — granular permissions`}
                                     rows={[toSharedMatrixRow(pRow)]}
                                     columnGroups={CORE_MATRIX_COLUMN_GROUPS}
                                     selected={selected}
