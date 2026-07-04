@@ -749,7 +749,10 @@ const SIDEBAR_LINK_MATRIX_ROW_KEY: Record<string, string> = {
     [sidebarChildPermissionId("retention", "loyalty")]: "loyalty",
     [sidebarChildPermissionId("retention", "spend-tiers")]: "spendTiers",
     // Inventory — Products (leaf) + Masters (parent; all 8 setup tables together).
+    // Item Ledger reuses the SAME products matrix — it also has Add/Edit Product,
+    // so a role granted only Item Ledger can still get products:create/edit there.
     [sidebarChildPermissionId("inventory", "products")]: "products",
+    [sidebarChildPermissionId("inventory", "item-ledger")]: "products",
     [sidebarChildPermissionId("inventory", "masters")]: "inventoryMasters",
 };
 
