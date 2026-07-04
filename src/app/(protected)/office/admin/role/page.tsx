@@ -686,6 +686,20 @@ const MATRIX_ROWS: {
                 deleteOwn: "inventory:masters:delete", deleteBranch: "inventory:masters:delete", deleteOrg: "inventory:masters:delete",
             },
         },
+        // Accountancy Masters — the chart of accounts (Account Groups, Ledgers,
+        // Chart of Accounts) gated together. View rides accountancy:view:org;
+        // create/edit/delete are their own keys. Opening Balance is separate.
+        {
+            key: "accountancyMasters",
+            label: "Masters",
+            module: "accountancy",
+            cells: {
+                viewOwn: "accountancy:view:org", viewBranch: "accountancy:view:org", viewOrg: "accountancy:view:org",
+                create: "accountancy:masters:create",
+                editOwn: "accountancy:masters:edit", editBranch: "accountancy:masters:edit", editOrg: "accountancy:masters:edit",
+                deleteOwn: "accountancy:masters:delete", deleteBranch: "accountancy:masters:delete", deleteOrg: "accountancy:masters:delete",
+            },
+        },
         // admin:bypass is intentionally removed from the matrix — it is a code-only
         // sentinel grantable only via the env super admin (.env). It must never appear
         // in the UI where it could be ticked by mistake.
@@ -754,6 +768,8 @@ const SIDEBAR_LINK_MATRIX_ROW_KEY: Record<string, string> = {
     [sidebarChildPermissionId("inventory", "products")]: "products",
     [sidebarChildPermissionId("inventory", "item-ledger")]: "products",
     [sidebarChildPermissionId("inventory", "masters")]: "inventoryMasters",
+    // Accountancy — Masters parent (Account Groups / Ledgers / Chart of Accounts).
+    [sidebarChildPermissionId("accountancy", "masters")]: "accountancyMasters",
 };
 
 // A sidebar link with ONE extra yes/no permission beyond "can see this page" —

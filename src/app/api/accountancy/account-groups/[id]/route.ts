@@ -33,7 +33,7 @@ async function isCircular(id: number, newParentId: number): Promise<boolean> {
 
 // PATCH /api/accountancy/account-groups/[id]
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
+    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_MASTERS_EDIT);
     if (response) return response;
 
     const { id, error: idError } = await parseIdParam(params);
@@ -84,7 +84,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
 // DELETE /api/accountancy/account-groups/[id]
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
+    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_MASTERS_DELETE);
     if (response) return response;
 
     const { id, error } = await parseIdParam(params);

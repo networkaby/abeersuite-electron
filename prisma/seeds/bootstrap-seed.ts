@@ -332,6 +332,9 @@ const PERMISSIONS = [
     { id: "accountancy:delete:br",   label: "Delete accountancy (branch)",        module: "accountancy", description: "Delete branch-scoped accountancy entries." },
     { id: "accountancy:delete:org",  label: "Delete accountancy (organisation)",  module: "accountancy", description: "Delete any accountancy entry organisation-wide." },
     { id: "compliance:tax:edit", label: "Change tax classification", module: "accountancy", description: "Edit GST rate, HSN code, and taxability on inventory items and product groups from the Tax Classification page." },
+    { id: "accountancy:masters:create", label: "Create accounting masters", module: "accountancy", description: "Create account groups and GL ledgers (chart of accounts)." },
+    { id: "accountancy:masters:edit", label: "Edit accounting masters", module: "accountancy", description: "Edit account groups and GL ledgers." },
+    { id: "accountancy:masters:delete", label: "Delete accounting masters", module: "accountancy", description: "Delete account groups." },
 
     // loyalty — earn/redeem config, earn rules, and milestones (manual point
     // adjustments live on the customer record, not here). manage = umbrella.

@@ -23,6 +23,12 @@ export const PERMISSIONS = {
     ACCOUNTANCY_DELETE_OWN:             "accountancy:delete:own",
     ACCOUNTANCY_DELETE_BR:              "accountancy:delete:br",
     ACCOUNTANCY_DELETE_ORG:             "accountancy:delete:org",
+    // Accountancy Masters — the chart of accounts (Account Groups, Ledgers, Chart
+    // of Accounts), gated together. Separate from viewing (was gated by view:org)
+    // and from voucher creation. Opening Balance keeps finance:opening-balance:manage.
+    ACCOUNTANCY_MASTERS_CREATE:         "accountancy:masters:create",
+    ACCOUNTANCY_MASTERS_EDIT:           "accountancy:masters:edit",
+    ACCOUNTANCY_MASTERS_DELETE:         "accountancy:masters:delete",
 
     // Assignments
     ASSIGNMENTS_VIEW_OWN:               "assignments:view:own",

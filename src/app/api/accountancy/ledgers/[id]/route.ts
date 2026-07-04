@@ -18,7 +18,7 @@ const updateSchema = z.object({
 
 // PATCH /api/accountancy/ledgers/[id]
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
+    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_MASTERS_EDIT);
     if (response) return response;
 
     const { id, error: idError } = await parseIdParam(params);
