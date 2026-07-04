@@ -768,8 +768,12 @@ const SIDEBAR_LINK_MATRIX_ROW_KEY: Record<string, string> = {
     [sidebarChildPermissionId("inventory", "products")]: "products",
     [sidebarChildPermissionId("inventory", "item-ledger")]: "products",
     [sidebarChildPermissionId("inventory", "masters")]: "inventoryMasters",
-    // Accountancy — Masters parent (Account Groups / Ledgers / Chart of Accounts).
-    [sidebarChildPermissionId("accountancy", "masters")]: "accountancyMasters",
+    // Accountancy — the three chart-of-accounts pages share one matrix (like
+    // Products + Item Ledger). Each shows a chevron opening the SAME table; Opening
+    // Balance has its own access, so it's deliberately NOT here (no chevron).
+    [sidebarChildPermissionId("accountancy", "account-groups")]: "accountancyMasters",
+    [sidebarChildPermissionId("accountancy", "ledgers")]: "accountancyMasters",
+    [sidebarChildPermissionId("accountancy", "chart-of-accounts")]: "accountancyMasters",
 };
 
 // A sidebar link with ONE extra yes/no permission beyond "can see this page" —
