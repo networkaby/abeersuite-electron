@@ -685,7 +685,27 @@ const SIDEBAR_LINK_EXTRA_TOGGLE: Record<string, { id: string; label: string }> =
         id: "compliance:tax:edit",
         label: "Can change tax",
     },
+    // Pricing Strategy — one edit toggle per page. "Needs attention" isn't here:
+    // it edits the product, so its edit rides inventory:manage, not a pricing key.
+    [sidebarChildPermissionId("pricing-strategy", "strategies")]: {
+        id: "pricing:strategy:set",
+        label: "Can set strategy",
+    },
+    [sidebarChildPermissionId("pricing-strategy", "costing")]: {
+        id: "pricing:costing:manage",
+        label: "Can manage costing",
+    },
+    [sidebarChildPermissionId("pricing-strategy", "update-print-labels")]: {
+        id: "pricing:labels:apply",
+        label: "Can apply & print",
+    },
 };
+
+// Every permission surfaced as an inline "extra toggle" beside its sidebar link —
+// kept out of the loose "Additional permissions" chips so it isn't shown twice.
+const SIDEBAR_LINK_EXTRA_TOGGLE_IDS = new Set(
+    Object.values(SIDEBAR_LINK_EXTRA_TOGGLE).map((t) => t.id),
+);
 
 function roleToForm(role: Role): RoleForm {
     return {
@@ -835,6 +855,9 @@ export default function RolePage() {
             // POS block; the oversight ones (manage / view other branches) fall through
             // to Additional permissions.
             && !POS_BLOCK_SHIFT_IDS.includes(permission.id)
+            // Perms rendered as an inline toggle beside their sidebar link (e.g.
+            // compliance:tax:edit, pricing:*) — shown there, not as a loose chip.
+            && !SIDEBAR_LINK_EXTRA_TOGGLE_IDS.has(permission.id)
     );
 
     // Show the POS shift block when its perms are seeded (they are, from bootstrap).

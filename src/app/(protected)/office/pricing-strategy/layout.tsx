@@ -1,6 +1,9 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ChartArea, Calculator, Boxes, AlertTriangle, Printer, Truck } from "lucide-react";
 import { PathBreadcrumb } from "@/shared/components/PathBreadcrumb";
+import { auth } from "@/auth";
+import { hasModuleNavAccess, hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 
 const NAV = [
     { label: "Overview", icon: ChartArea, href: "/office/pricing-strategy" },
@@ -11,7 +14,15 @@ const NAV = [
     { label: "Update & print labels", icon: Printer, href: "/office/pricing-strategy/update-print-labels" },
 ];
 
-export default function PricingStrategyLayout({ children }: { children: React.ReactNode }) {
+export default async function PricingStrategyLayout({ children }: { children: React.ReactNode }) {
+    const session = await auth();
+    const perms = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
+    // View is granted by any Pricing Strategy sidebar nav grant; inventory:manage
+    // (the module's historical umbrella) also passes. Per-page edit rights are
+    // enforced inside each tool, not here.
+    if (!hasModuleNavAccess(perms, "pricing-strategy") && !hasPermissionWithScope(perms, "inventory:manage")) {
+        redirect("/office");
+    }
     return (
         <div className="flex h-full w-full flex-col">
             <PathBreadcrumb

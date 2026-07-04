@@ -137,6 +137,14 @@ export const PERMISSIONS = {
     INVENTORY_VOUCHER_DELETE:           "inventory:voucher:delete",
     INVENTORY_VOUCHER_HARD_DELETE:      "inventory:voucher:hard-delete",
 
+    // Pricing Strategy — one edit gate per page. Viewing rides the sidebar link
+    // grant; the "Needs attention" page edits the product itself, so its edits
+    // stay on inventory:manage (not listed here). Each key OR inventory:manage
+    // passes the matching route (inventory:manage is the umbrella).
+    PRICING_STRATEGY_SET:               "pricing:strategy:set",
+    PRICING_COSTING_MANAGE:             "pricing:costing:manage",
+    PRICING_LABELS_APPLY:               "pricing:labels:apply",
+
     // POS — shift / till / handover lifecycle
     POS_SHIFT_OPEN:                     "pos:shift:open",
     POS_SHIFT_CLOSE:                    "pos:shift:close",

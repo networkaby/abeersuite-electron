@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAnyPermission } from "@/shared/lib/auth/permissions";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { costPoolAllocateBatchSchema } from "@/shared/lib/schemas/costPoolSchemas";
@@ -11,7 +11,7 @@ import { getEntryRemainingPaise } from "@/modules/pricing-strategy/lib/costPool"
 // Creates one ALLOCATION CostPoolDraw per line; the SUM is capped against the
 // entry's remaining. NEVER posts to the GL.
 export async function POST(req: Request) {
-    const { user, response } = await requirePermission(PERMISSIONS.INVENTORY_MANAGE);
+    const { user, response } = await requireAnyPermission(PERMISSIONS.PRICING_COSTING_MANAGE, PERMISSIONS.INVENTORY_MANAGE);
     if (response) return response;
     try {
         const { data, error } = await validateRequest(req, costPoolAllocateBatchSchema);

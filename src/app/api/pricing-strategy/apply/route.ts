@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAnyPermission } from "@/shared/lib/auth/permissions";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { pricingApplySchema } from "@/shared/lib/schemas/pricingSchemas";
@@ -18,7 +18,7 @@ interface ApplyResult {
 // STRATEGY source) + the per-item COMPUTED margin. SAVED + priceOverridden rows
 // are left untouched (unless forceOverridden + explicit ids).
 export async function POST(req: Request) {
-    const { response } = await requirePermission(PERMISSIONS.INVENTORY_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.PRICING_STRATEGY_SET, PERMISSIONS.INVENTORY_MANAGE);
     if (response) return response;
     try {
         const { data, error } = await validateRequest(req, pricingApplySchema);

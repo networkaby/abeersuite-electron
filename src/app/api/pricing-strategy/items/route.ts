@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAnyPermission } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { resolveCostBatch } from "@/modules/pricing-strategy/lib/resolveCost";
@@ -77,7 +77,13 @@ export interface PricingItem {
 }
 
 export async function GET(req: Request) {
-    const { response } = await requirePermission(PERMISSIONS.INVENTORY_MANAGE);
+    // Item list feeds Needs attention + Update & print labels — readable by any
+    // pricing role (or the inventory:manage umbrella). Editing an item stays on
+    // inventory:manage (see items/[id] PATCH).
+    const { response } = await requireAnyPermission(
+        PERMISSIONS.PRICING_STRATEGY_SET, PERMISSIONS.PRICING_COSTING_MANAGE,
+        PERMISSIONS.PRICING_LABELS_APPLY, PERMISSIONS.INVENTORY_MANAGE,
+    );
     if (response) return response;
     try {
         const { searchParams } = new URL(req.url);

@@ -279,6 +279,12 @@ const PERMISSIONS = [
     { id: "inventory:voucher:delete",      label: "Delete inventory vouchers",      module: "inventory", description: "Soft-delete; reverses stock + GL impact. Recoverable via restore. Generic fallback for the per-kind delete keys." },
     { id: "inventory:voucher:hard-delete", label: "Hard-delete inventory vouchers", module: "inventory", description: "Physically remove with audit snapshot." },
 
+    // pricing strategy — one edit gate per page (view rides the sidebar link grant).
+    // "Needs attention" edits the product itself, so it stays on inventory:manage.
+    { id: "pricing:strategy:set", label: "Set pricing strategy", module: "inventory", description: "Edit the markup / strategy-point rules on the Pricing Strategy → Strategies page." },
+    { id: "pricing:costing:manage", label: "Manage costing", module: "inventory", description: "Add, edit, and remove cost draws on the Pricing Strategy → Costing page." },
+    { id: "pricing:labels:apply", label: "Apply prices & print labels", module: "inventory", description: "Bulk-apply sale prices and print labels on the Pricing Strategy → Update & print labels page." },
+
     // inventory — per-kind voucher gates (inventory:voucher:<action>:<kind>). Every
     // voucher kind is independent (Sale ≠ Purchase). Generated from the matrix so
     // the kind↔permission mapping never drifts. Single source: voucherMatrix.ts.

@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAnyPermission } from "@/shared/lib/auth/permissions";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { strategyPointsSaveSchema, type StrategyPoints } from "@/shared/lib/schemas/pricingSchemas";
@@ -8,14 +8,14 @@ import { strategyPointsSaveSchema, type StrategyPoints } from "@/shared/lib/sche
 // The single org-wide additive-margin points configuration.
 //   GET  → the grouped points shape (base + per-master + per-band maps).
 //   PUT  → replaces the whole set (zero-point entries are dropped).
-// Gated by inventory:manage, like the rest of the pricing module.
+// Gated by pricing:strategy:set (or the inventory:manage umbrella).
 
 const emptyPoints = (): StrategyPoints => ({
     base: 0, brand: {}, category: {}, group: {}, product: {}, stockBand: {}, ageBand: {}, moveBand: {},
 });
 
 export async function GET() {
-    const { response } = await requirePermission(PERMISSIONS.INVENTORY_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.PRICING_STRATEGY_SET, PERMISSIONS.INVENTORY_MANAGE);
     if (response) return response;
     try {
         const rows = await prisma.strategyPoint.findMany();
@@ -40,7 +40,7 @@ export async function GET() {
 }
 
 export async function PUT(req: Request) {
-    const { response } = await requirePermission(PERMISSIONS.INVENTORY_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.PRICING_STRATEGY_SET, PERMISSIONS.INVENTORY_MANAGE);
     if (response) return response;
     try {
         const { data, error } = await validateRequest(req, strategyPointsSaveSchema);
