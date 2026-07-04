@@ -133,6 +133,11 @@ export default function InventoryDetailsPage() {
     const { data: session } = useSession();
     const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
     const canViewOrg = hasPermissionWithScope(permissions, "inventory:view:org");
+    // Adding / editing a product from the Item Ledger uses the same product
+    // permissions as the Products page (inventory:manage is the umbrella). Hide the
+    // affordances when the role lacks them so the buttons never 403 on save.
+    const canCreateProduct = hasPermissionWithScope(permissions, "products:create") || hasPermissionWithScope(permissions, "inventory:manage");
+    const canEditProduct = hasPermissionWithScope(permissions, "products:edit") || hasPermissionWithScope(permissions, "inventory:manage");
 
     const loadProducts = useCallback(() => {
         axios
@@ -236,7 +241,7 @@ export default function InventoryDetailsPage() {
                 search={search}
                 onSearchChange={setSearch}
                 searchPlaceholder="Search name or SKU…"
-                onAdd={() => setCreateOpen(true)}
+                onAdd={canCreateProduct ? () => setCreateOpen(true) : undefined}
                 addLabel="Add Product"
                 isEmpty={filtered.length === 0}
                 emptyMessage={search ? "No matches" : "No products"}
@@ -325,10 +330,12 @@ export default function InventoryDetailsPage() {
                                             <ChevronDown size={11} className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                                         </div>
                                     )}
-                                    <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>
-                                        <Pencil size={13} className="mr-1.5" />
-                                        Edit Product
-                                    </Button>
+                                    {canEditProduct && (
+                                        <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>
+                                            <Pencil size={13} className="mr-1.5" />
+                                            Edit Product
+                                        </Button>
+                                    )}
                                 </div>
                             </div>
 
