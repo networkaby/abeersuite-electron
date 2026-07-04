@@ -57,6 +57,12 @@ Before adding a shared helper, hook, component, formatter, schema, or utility:
    - Place it in the appropriate shared folder.
    - Export it from that folder's `index.ts`.
 
+Accepted legacy locations (leave in place; do not migrate imports):
+
+- `src/utils/` — old constants/helpers that pre-date `src/shared`.
+- `src/store/` — Zustand stores.
+- `src/components/ui/` — shadcn-generated primitives.
+
 Module-specific code belongs in:
 
 ```text
