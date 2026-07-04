@@ -50,22 +50,11 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
     const isAdmin = permissions.includes(PERMISSIONS.ADMIN_BYPASS);
     const { setOpen: openQuickTicket, setInitialPipelineId } = useQuickTicketStore();
 
+    // usePanelStore's own `persist` middleware is the single source of truth for
+    // sidebar mode (localStorage key "panel-store") — no separate bridge needed.
     const { sidebarMode, setSidebarMode } = usePanelStore();
     const collapsed = sidebarMode === "collapsed";
     const isHidden = sidebarMode === "hidden";
-
-    // Persist mode to localStorage
-    useEffect(() => {
-        try { localStorage.setItem("app:sidebar-mode", sidebarMode); } catch { /* ignore */ }
-    }, [sidebarMode]);
-    useEffect(() => {
-        try {
-            const stored = localStorage.getItem("app:sidebar-mode");
-            if (stored === "expanded" || stored === "collapsed" || stored === "hidden")
-                setSidebarMode(stored);
-        } catch { /* ignore */ }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
 
     const {
         width: sidebarWidth, isDragging: sidebarDragging,

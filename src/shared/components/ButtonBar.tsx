@@ -104,23 +104,12 @@ export default function ButtonBar({ user }: { user?: UserType }) {
     const pathname = usePathname();
     const [defaultPipeline, setDefaultPipeline] = useState<Pipeline | null>(null);
     const [ctxMenu, setCtxMenu] = useState<BtnBarMenuState | null>(null);
+    // usePanelStore's own `persist` middleware is the single source of truth for
+    // bar mode (localStorage key "panel-store") — no separate bridge needed.
     const { barMode, setBarMode } = usePanelStore();
     const collapsed = barMode === "collapsed";
     const isHidden = barMode === "hidden";
     const [moreOpen, setMoreOpen] = useState(false);
-
-    // Persist mode to localStorage
-    useEffect(() => {
-        try { localStorage.setItem("app:buttonbar-mode", barMode); } catch { /* ignore */ }
-    }, [barMode]);
-    useEffect(() => {
-        try {
-            const stored = localStorage.getItem("app:buttonbar-mode");
-            if (stored === "expanded" || stored === "collapsed" || stored === "hidden")
-                setBarMode(stored);
-        } catch { /* ignore */ }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
 
     const {
         width: barWidth, isDragging: barDragging,
