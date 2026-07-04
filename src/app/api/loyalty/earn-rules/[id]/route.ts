@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAnyPermission } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError, parseIdParam } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { loyaltyEarnRuleUpdateSchema } from "@/shared/lib/schemas/loyaltySchemas";
 
 // PATCH /api/loyalty/earn-rules/[id] — edit multiplier / enabled flag.
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission(PERMISSIONS.LOYALTY_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.LOYALTY_EDIT, PERMISSIONS.LOYALTY_MANAGE);
     if (response) return response;
 
     const { id, error: idError } = await parseIdParam(params);
@@ -26,7 +26,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
 // DELETE /api/loyalty/earn-rules/[id]
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission(PERMISSIONS.LOYALTY_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.LOYALTY_DELETE, PERMISSIONS.LOYALTY_MANAGE);
     if (response) return response;
 
     const { id, error } = await parseIdParam(params);

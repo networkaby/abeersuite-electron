@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAuth, requireAnyPermission } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { couponConfigUpdateSchema } from "@/shared/lib/schemas/couponConfigSchemas";
@@ -19,7 +19,7 @@ export async function GET() {
 
 // PATCH /api/coupons/config — edit the global guard / ledger wiring.
 export async function PATCH(req: Request) {
-    const { response } = await requirePermission(PERMISSIONS.COUPONS_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.COUPONS_EDIT, PERMISSIONS.COUPONS_MANAGE);
     if (response) return response;
     const { data, error } = await validateRequest(req, couponConfigUpdateSchema);
     if (error) return error;

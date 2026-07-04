@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAuth, requireAnyPermission } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { couponSchema } from "@/shared/lib/schemas/couponSchemas";
@@ -23,7 +23,7 @@ export async function GET() {
 
 // POST /api/coupons — create a coupon (+ its include/exclude rules).
 export async function POST(req: Request) {
-    const { user, response } = await requirePermission(PERMISSIONS.COUPONS_MANAGE);
+    const { user, response } = await requireAnyPermission(PERMISSIONS.COUPONS_CREATE, PERMISSIONS.COUPONS_MANAGE);
     if (response) return response;
     const { data, error } = await validateRequest(req, couponSchema);
     if (error) return error;

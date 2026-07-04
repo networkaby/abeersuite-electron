@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAuth, requireAnyPermission } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { loyaltyEarnRuleSchema } from "@/shared/lib/schemas/loyaltySchemas";
@@ -12,8 +12,10 @@ const ruleInclude = {
 } as const;
 
 // GET /api/loyalty/earn-rules — all earn-rule overrides (with target names).
+// Read is open to any authed staff (view rides the sidebar link); writes below
+// still require loyalty:manage.
 export async function GET() {
-    const { response } = await requirePermission(PERMISSIONS.LOYALTY_MANAGE);
+    const { response } = await requireAuth();
     if (response) return response;
 
     try {
@@ -29,7 +31,7 @@ export async function GET() {
 
 // POST /api/loyalty/earn-rules — create a multiplier override.
 export async function POST(req: Request) {
-    const { response } = await requirePermission(PERMISSIONS.LOYALTY_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.LOYALTY_CREATE, PERMISSIONS.LOYALTY_MANAGE);
     if (response) return response;
 
     const { data, error } = await validateRequest(req, loyaltyEarnRuleSchema);

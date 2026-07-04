@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAnyPermission } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { enginePost } from "@/modules/accountancy/lib/transactionEngine";
@@ -11,7 +11,8 @@ import { enginePost } from "@/modules/accountancy/lib/transactionEngine";
 // an EXPIRE txn, zero the balance, set status EXPIRED. Admin-triggered (a button
 // on the Gift Cards page); also safe to call from a scheduled job (GitHub Action).
 export async function POST() {
-    const { user, response } = await requirePermission(PERMISSIONS.COUPONS_MANAGE);
+    // Writing off unused balance is a value-changing (money) action.
+    const { user, response } = await requireAnyPermission(PERMISSIONS.GIFT_CARDS_VALUE_EDIT, PERMISSIONS.GIFT_CARDS_MANAGE);
     if (response) return response;
 
     try {

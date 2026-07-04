@@ -324,11 +324,30 @@ const PERMISSIONS = [
     { id: "accountancy:delete:org",  label: "Delete accountancy (organisation)",  module: "accountancy", description: "Delete any accountancy entry organisation-wide." },
     { id: "compliance:tax:edit", label: "Change tax classification", module: "accountancy", description: "Edit GST rate, HSN code, and taxability on inventory items and product groups from the Tax Classification page." },
 
-    // loyalty — earn/redeem wallet config + manual adjustments
-    { id: "loyalty:manage", label: "Manage loyalty", module: "loyalty", description: "Edit loyalty earn/redeem rates and earn rules, and post manual point adjustments." },
+    // loyalty — earn/redeem config, earn rules, and milestones (manual point
+    // adjustments live on the customer record, not here). manage = umbrella.
+    { id: "loyalty:manage", label: "Manage loyalty", module: "loyalty", description: "Umbrella — edit loyalty config, earn rules, and milestones." },
+    { id: "loyalty:create", label: "Create loyalty rules", module: "loyalty", description: "Create loyalty earn rules and milestones." },
+    { id: "loyalty:edit", label: "Edit loyalty", module: "loyalty", description: "Edit loyalty config, earn rules, and milestones." },
+    { id: "loyalty:delete", label: "Delete loyalty rules", module: "loyalty", description: "Delete loyalty earn rules and milestones." },
 
-    // coupons — promotions + gift-card management
-    { id: "coupons:manage", label: "Manage coupons", module: "coupons", description: "Create and manage coupons, promotions, and gift cards." },
+    // retention — coupons / gift cards / spend tiers (loyalty is above). View rides
+    // the sidebar link; each page has create/edit/delete + a money-sensitive guard
+    // where one exists. manage = umbrella (grants all actions on the page).
+    { id: "coupons:manage", label: "Manage coupons", module: "coupons", description: "Umbrella — create, edit, and delete discount coupons (incl. the discount value)." },
+    { id: "coupons:create", label: "Create coupons", module: "coupons", description: "Create discount coupons." },
+    { id: "coupons:edit", label: "Edit coupons", module: "coupons", description: "Edit coupon fields other than the discount value (name, dates, conditions, limits)." },
+    { id: "coupons:delete", label: "Delete coupons", module: "coupons", description: "Delete or disable coupons." },
+    { id: "coupons:discount:edit", label: "Change coupon discount", module: "coupons", description: "Guard: change a coupon's discount value (% off or flat amount)." },
+    { id: "gift-cards:manage", label: "Manage gift cards", module: "coupons", description: "Umbrella — create, edit, and delete gift cards (incl. loading/writing off balance)." },
+    { id: "gift-cards:create", label: "Create gift cards", module: "coupons", description: "Create gift cards." },
+    { id: "gift-cards:edit", label: "Edit gift cards", module: "coupons", description: "Edit gift card fields other than the loaded balance." },
+    { id: "gift-cards:delete", label: "Delete gift cards", module: "coupons", description: "Delete gift cards." },
+    { id: "gift-cards:value:edit", label: "Change gift card value", module: "coupons", description: "Guard: load a gift card's balance (issue) or write off unused balance (breakage)." },
+    { id: "tiers:manage", label: "Manage spend tiers", module: "crm", description: "Umbrella — create, edit, and delete customer spending tiers." },
+    { id: "tiers:create", label: "Create spend tiers", module: "crm", description: "Create customer spending tiers." },
+    { id: "tiers:edit", label: "Edit spend tiers", module: "crm", description: "Edit customer spending tiers." },
+    { id: "tiers:delete", label: "Delete spend tiers", module: "crm", description: "Delete customer spending tiers." },
 
     // ecommerce — online storefront catalog & orders
     { id: "ecommerce:manage", label: "Manage ecommerce catalog & orders", module: "ecommerce", description: "Create shop products and view customer orders." },

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAnyPermission } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError, parseIdParam } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { giftCardIssueSchema } from "@/shared/lib/schemas/giftCardSchemas";
@@ -10,7 +10,8 @@ import { enginePost } from "@/modules/accountancy/lib/transactionEngine";
 // Dr <payment ledger> / Cr "Gift Card Liability" for the card's value, writes an
 // ISSUE txn, and flips the card DRAFT → ACTIVE. This is the moment money is taken.
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { user, response } = await requirePermission(PERMISSIONS.COUPONS_MANAGE);
+    // Issuing takes money and posts the liability — the value-loading action.
+    const { user, response } = await requireAnyPermission(PERMISSIONS.GIFT_CARDS_VALUE_EDIT, PERMISSIONS.GIFT_CARDS_MANAGE);
     if (response) return response;
 
     const { id, error: idError } = await parseIdParam(params);

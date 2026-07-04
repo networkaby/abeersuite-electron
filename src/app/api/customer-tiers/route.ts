@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAuth, requireAnyPermission } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { customerTierSchema } from "@/shared/lib/schemas/customerTierSchemas";
@@ -20,7 +20,7 @@ export async function GET() {
 
 // POST /api/customer-tiers — add a tier.
 export async function POST(req: Request) {
-    const { response } = await requirePermission(PERMISSIONS.CUSTOMERS_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.TIERS_CREATE, PERMISSIONS.TIERS_MANAGE);
     if (response) return response;
     const { data, error } = await validateRequest(req, customerTierSchema);
     if (error) return error;

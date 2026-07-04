@@ -121,11 +121,27 @@ export const PERMISSIONS = {
     FINANCE_ALLOCATION_MANAGE:          "finance:allocation:manage",
     FINANCE_OPENING_BALANCE_MANAGE:     "finance:opening-balance:manage",
 
-    // Loyalty — earn/redeem wallet config + manual adjustments
+    // Retention — view rides the sidebar link grant; each page has an independent
+    // create / edit / delete, plus a money-sensitive guard where one exists.
+    // `<page>:manage` stays as the umbrella (grants all actions on that page).
     LOYALTY_MANAGE:                     "loyalty:manage",
-
-    // Coupons — promotions + gift-card management
+    LOYALTY_CREATE:                     "loyalty:create",
+    LOYALTY_EDIT:                       "loyalty:edit",
+    LOYALTY_DELETE:                     "loyalty:delete",
     COUPONS_MANAGE:                     "coupons:manage",
+    COUPONS_CREATE:                     "coupons:create",
+    COUPONS_EDIT:                       "coupons:edit",
+    COUPONS_DELETE:                     "coupons:delete",
+    COUPONS_DISCOUNT_EDIT:             "coupons:discount:edit",   // guard: change % / flat amount
+    GIFT_CARDS_MANAGE:                  "gift-cards:manage",       // split from coupons
+    GIFT_CARDS_CREATE:                  "gift-cards:create",
+    GIFT_CARDS_EDIT:                    "gift-cards:edit",
+    GIFT_CARDS_DELETE:                  "gift-cards:delete",
+    GIFT_CARDS_VALUE_EDIT:             "gift-cards:value:edit",   // guard: load / write off balance
+    TIERS_MANAGE:                       "tiers:manage",            // was borrowed customers:manage
+    TIERS_CREATE:                       "tiers:create",
+    TIERS_EDIT:                         "tiers:edit",
+    TIERS_DELETE:                       "tiers:delete",
 
     // Inventory
     INVENTORY_MANAGE:                   "inventory:manage",

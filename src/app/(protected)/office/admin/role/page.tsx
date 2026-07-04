@@ -616,6 +616,53 @@ const MATRIX_ROWS: {
                 deleteOrg: "accountancy:delete:org",
             },
         },
+        // Retention — create/edit/delete per page (view rides the sidebar link).
+        // The money-sensitive guards (coupons:discount:edit, gift-cards:value:edit)
+        // render as extra toggles beside the link, not as matrix columns.
+        {
+            key: "coupons",
+            label: "Coupons",
+            module: "coupons",
+            cells: {
+                viewOwn: "coupons:manage", viewBranch: "coupons:manage", viewOrg: "coupons:manage",
+                create: "coupons:create",
+                editOwn: "coupons:edit", editBranch: "coupons:edit", editOrg: "coupons:edit",
+                deleteOwn: "coupons:delete", deleteBranch: "coupons:delete", deleteOrg: "coupons:delete",
+            },
+        },
+        {
+            key: "giftCards",
+            label: "Gift Cards",
+            module: "coupons",
+            cells: {
+                viewOwn: "gift-cards:manage", viewBranch: "gift-cards:manage", viewOrg: "gift-cards:manage",
+                create: "gift-cards:create",
+                editOwn: "gift-cards:edit", editBranch: "gift-cards:edit", editOrg: "gift-cards:edit",
+                deleteOwn: "gift-cards:delete", deleteBranch: "gift-cards:delete", deleteOrg: "gift-cards:delete",
+            },
+        },
+        {
+            key: "loyalty",
+            label: "Loyalty",
+            module: "loyalty",
+            cells: {
+                viewOwn: "loyalty:manage", viewBranch: "loyalty:manage", viewOrg: "loyalty:manage",
+                create: "loyalty:create",
+                editOwn: "loyalty:edit", editBranch: "loyalty:edit", editOrg: "loyalty:edit",
+                deleteOwn: "loyalty:delete", deleteBranch: "loyalty:delete", deleteOrg: "loyalty:delete",
+            },
+        },
+        {
+            key: "spendTiers",
+            label: "Spend Tiers",
+            module: "crm",
+            cells: {
+                viewOwn: "tiers:manage", viewBranch: "tiers:manage", viewOrg: "tiers:manage",
+                create: "tiers:create",
+                editOwn: "tiers:edit", editBranch: "tiers:edit", editOrg: "tiers:edit",
+                deleteOwn: "tiers:delete", deleteBranch: "tiers:delete", deleteOrg: "tiers:delete",
+            },
+        },
         // admin:bypass is intentionally removed from the matrix — it is a code-only
         // sentinel grantable only via the env super admin (.env). It must never appear
         // in the UI where it could be ticked by mistake.
@@ -673,6 +720,11 @@ const SIDEBAR_LINK_MATRIX_ROW_KEY: Record<string, string> = {
     [sidebarChildPermissionId("admin", "positions")]: "positions",
     [sidebarChildPermissionId("admin", "pos-counters")]: "posCounters",
     [sidebarChildPermissionId("settings", "organisation")]: "orgSettings",
+    // Retention — create/edit/delete matrix per link (plus money guards below).
+    [sidebarChildPermissionId("retention", "coupons")]: "coupons",
+    [sidebarChildPermissionId("retention", "gift-cards")]: "giftCards",
+    [sidebarChildPermissionId("retention", "loyalty")]: "loyalty",
+    [sidebarChildPermissionId("retention", "spend-tiers")]: "spendTiers",
 };
 
 // A sidebar link with ONE extra yes/no permission beyond "can see this page" —
@@ -698,6 +750,16 @@ const SIDEBAR_LINK_EXTRA_TOGGLE: Record<string, { id: string; label: string }> =
     [sidebarChildPermissionId("pricing-strategy", "update-print-labels")]: {
         id: "pricing:labels:apply",
         label: "Can apply & print",
+    },
+    // Retention — money-sensitive guards shown beside the link's create/edit/delete
+    // matrix. Loyalty & Spend Tiers have no money guard (matrix only).
+    [sidebarChildPermissionId("retention", "coupons")]: {
+        id: "coupons:discount:edit",
+        label: "Can change discount",
+    },
+    [sidebarChildPermissionId("retention", "gift-cards")]: {
+        id: "gift-cards:value:edit",
+        label: "Can change value",
     },
 };
 

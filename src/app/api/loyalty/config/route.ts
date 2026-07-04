@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAuth, requireAnyPermission } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { loyaltyConfigUpdateSchema } from "@/shared/lib/schemas/loyaltySchemas";
@@ -16,7 +16,7 @@ export async function GET() {
 
 // PATCH /api/loyalty/config — edit earn/redeem rates + expiry window.
 export async function PATCH(req: Request) {
-    const { response } = await requirePermission(PERMISSIONS.LOYALTY_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.LOYALTY_EDIT, PERMISSIONS.LOYALTY_MANAGE);
     if (response) return response;
 
     const { data, error } = await validateRequest(req, loyaltyConfigUpdateSchema);
