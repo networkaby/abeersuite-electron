@@ -152,11 +152,25 @@ export const PERMISSIONS = {
     ROLES_MANAGE:                       "roles:manage",
 
     // Branches / Departments / Positions / POS Counters — split out of the
-    // former shared settings:manage so each has its own grant + matrix row.
+    // former shared settings:manage. `:manage` is the umbrella (grants all + gates
+    // the admin tab); create/edit/delete are the independent action grants the
+    // Role matrix ticks. Mutating routes accept the action key OR `:manage`.
     BRANCHES_MANAGE:                     "branches:manage",
+    BRANCHES_CREATE:                     "branches:create",
+    BRANCHES_EDIT:                       "branches:edit",
+    BRANCHES_DELETE:                     "branches:delete",
     DEPARTMENTS_MANAGE:                  "departments:manage",
+    DEPARTMENTS_CREATE:                  "departments:create",
+    DEPARTMENTS_EDIT:                    "departments:edit",
+    DEPARTMENTS_DELETE:                  "departments:delete",
     POSITIONS_MANAGE:                    "positions:manage",
+    POSITIONS_CREATE:                    "positions:create",
+    POSITIONS_EDIT:                      "positions:edit",
+    POSITIONS_DELETE:                    "positions:delete",
     POS_COUNTERS_MANAGE:                 "pos-counters:manage",
+    POS_COUNTERS_CREATE:                 "pos-counters:create",
+    POS_COUNTERS_EDIT:                   "pos-counters:edit",
+    POS_COUNTERS_DELETE:                 "pos-counters:delete",
 
     // Settings
     SETTINGS_EDIT:                      "settings:edit",

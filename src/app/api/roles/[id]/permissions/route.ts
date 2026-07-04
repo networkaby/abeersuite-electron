@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAnyPermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
@@ -15,7 +15,7 @@ export async function PUT(
     req: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const { response } = await requirePermission(PERMISSIONS.ROLES_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.ROLES_EDIT_ORG, PERMISSIONS.ROLES_MANAGE);
     if (response) return response;
     try {
         const { id: roleId } = await params;

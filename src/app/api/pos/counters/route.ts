@@ -9,7 +9,7 @@
 
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse, type NextRequest } from "next/server";
-import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAuth, requireAnyPermission } from "@/shared/lib/auth/permissions";
 import { resolveActiveBranchId, BranchAccessError } from "@/shared/lib/auth/activeBranch";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { auth } from "@/auth";
@@ -23,10 +23,15 @@ export async function GET(req: NextRequest) {
     try {
         const session = await auth();
         const sessionPerms = (session?.user as { permissions?: string[] })?.permissions ?? [];
-        // Seeded admins don't carry admin:bypass (env-super-admin only). The
-        // admin counter management page is gated by pos-counters:manage, which
-        // is the same gate the layout + PATCH/POST already use.
-        const canManageCounters = sessionPerms.includes(PERMISSIONS.POS_COUNTERS_MANAGE) || sessionPerms.includes(PERMISSIONS.ADMIN_BYPASS);
+        // Seeded admins don't carry admin:bypass (env-super-admin only). Viewing the
+        // admin counter list is allowed for anyone who can act on counters — the
+        // umbrella `pos-counters:manage` or any of create/edit/delete.
+        const canManageCounters =
+            sessionPerms.includes(PERMISSIONS.POS_COUNTERS_MANAGE) ||
+            sessionPerms.includes(PERMISSIONS.POS_COUNTERS_CREATE) ||
+            sessionPerms.includes(PERMISSIONS.POS_COUNTERS_EDIT) ||
+            sessionPerms.includes(PERMISSIONS.POS_COUNTERS_DELETE) ||
+            sessionPerms.includes(PERMISSIONS.ADMIN_BYPASS);
 
         const { searchParams } = new URL(req.url);
         const scope = searchParams.get("scope");
@@ -140,7 +145,7 @@ const createSchema = z.object({
 const CASH_IN_HAND_GROUP = "Cash-in-Hand";
 
 export async function POST(req: NextRequest) {
-    const { response } = await requirePermission(PERMISSIONS.POS_COUNTERS_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.POS_COUNTERS_CREATE, PERMISSIONS.POS_COUNTERS_MANAGE);
     if (response) return response;
 
     try {

@@ -146,7 +146,10 @@ export async function PUT(
     if (Number.isNaN(userId)) return NextResponse.json({ error: "Invalid user id" }, { status: 400 });
 
     const isSelf  = caller.id === userId;
-    const isAdmin = caller.permissions.includes(PERMISSIONS.USERS_MANAGE) || caller.permissions.includes(PERMISSIONS.ADMIN_BYPASS);
+    // Editing another user needs users:edit:org (or the users:manage umbrella / bypass).
+    const isAdmin = caller.permissions.includes(PERMISSIONS.USERS_EDIT_ORG)
+        || caller.permissions.includes(PERMISSIONS.USERS_MANAGE)
+        || caller.permissions.includes(PERMISSIONS.ADMIN_BYPASS);
 
     if (!isSelf && !isAdmin) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -218,7 +221,10 @@ export async function DELETE(
 ) {
     const { user: caller, response } = await requireAuth();
     if (response) return response;
-    if (!caller.permissions.includes(PERMISSIONS.USERS_MANAGE) && !caller.permissions.includes(PERMISSIONS.ADMIN_BYPASS)) {
+    // Deleting a user needs users:delete:org (or the users:manage umbrella / bypass).
+    if (!caller.permissions.includes(PERMISSIONS.USERS_DELETE_ORG)
+        && !caller.permissions.includes(PERMISSIONS.USERS_MANAGE)
+        && !caller.permissions.includes(PERMISSIONS.ADMIN_BYPASS)) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     try {

@@ -33,12 +33,22 @@ export function AdminNav({ permissions }: Props) {
         ADMIN_NAV.map(item => [item.href.split("/").pop()!, item])
     );
 
+    // A tab shows if the user holds its exact permission OR any action permission
+    // for the same resource. Admin resources split `<res>:manage` into
+    // `<res>:create|edit|delete`, so a role granted only one action still needs to
+    // reach the page — match on the resource prefix (`branches:` → any `branches:*`).
+    const canSee = (permission: string): boolean => {
+        if (permissions.includes(permission)) return true;
+        const prefix = `${permission.split(":")[0]}:`;
+        return permissions.some(p => p.startsWith(prefix));
+    };
+
     // Resolve groups, filtering out items the user has no permission for
     const groups = GROUP_SLUGS
         .map(slugs =>
             slugs
                 .map(slug => navMap[slug])
-                .filter(item => item && (hasBypass || permissions.includes(item.permission)))
+                .filter(item => item && (hasBypass || canSee(item.permission)))
         )
         .filter(group => group.length > 0);
 

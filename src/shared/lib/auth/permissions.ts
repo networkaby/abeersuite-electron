@@ -139,6 +139,18 @@ export async function requirePermission(permissionId: string): Promise<GuardResu
 }
 
 /**
+ * Gate by ANY of the given permission ids (OR). Used where an action key and its
+ * umbrella both grant access — e.g. `branches:create` OR `branches:manage`. Passes
+ * if the user holds at least one (admin:bypass passes via hasPermission).
+ */
+export async function requireAnyPermission(...permissionIds: string[]): Promise<GuardResult> {
+    const result = await requireAuth();
+    if (result.response) return result;
+    if (permissionIds.some((id) => hasPermission(result.user, id))) return result;
+    return { user: null, response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
+}
+
+/**
  * Gate a GL voucher action by the per-kind permission, falling back to the
  * generic key (additive — legacy roles holding `finance:voucher:*` keep working).
  * The voucher kind usually comes from the request body (create) or the loaded

@@ -1,3 +1,8 @@
 import { makePermissionLayout } from "@/shared/lib/auth/makePermissionLayout";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
-export default makePermissionLayout(PERMISSIONS.SETTINGS_MANAGE);
+export default makePermissionLayout([
+    PERMISSIONS.BRANCHES_MANAGE,
+    PERMISSIONS.BRANCHES_CREATE,
+    PERMISSIONS.BRANCHES_EDIT,
+    PERMISSIONS.BRANCHES_DELETE,
+]);

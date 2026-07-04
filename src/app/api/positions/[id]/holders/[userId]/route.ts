@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAnyPermission } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
@@ -8,7 +8,7 @@ export async function DELETE(
     _req: Request,
     { params }: { params: Promise<{ id: string; userId: string }> },
 ) {
-    const { response } = await requirePermission(PERMISSIONS.POSITIONS_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.POSITIONS_EDIT, PERMISSIONS.POSITIONS_MANAGE);
     if (response) return response;
     try {
         const { id: positionId, userId: userIdStr } = await params;

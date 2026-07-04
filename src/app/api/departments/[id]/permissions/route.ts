@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requirePermission, requireAnyPermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
@@ -33,7 +33,7 @@ const putSchema = z.object({
 // changed so the action is never silent. All-access pools are auto-managed and
 // reject edits.
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission(PERMISSIONS.DEPARTMENTS_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.DEPARTMENTS_EDIT, PERMISSIONS.DEPARTMENTS_MANAGE);
     if (response) return response;
     try {
         const { id } = await params;

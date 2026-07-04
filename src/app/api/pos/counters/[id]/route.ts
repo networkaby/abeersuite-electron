@@ -3,7 +3,7 @@
 
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAnyPermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest, handleApiError, pickDefined } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -54,7 +54,7 @@ const counterInclude = {
 };
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission(PERMISSIONS.POS_COUNTERS_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.POS_COUNTERS_EDIT, PERMISSIONS.POS_COUNTERS_MANAGE);
     if (response) return response;
 
     try {
@@ -195,7 +195,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 }
 
 export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission(PERMISSIONS.POS_COUNTERS_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.POS_COUNTERS_DELETE, PERMISSIONS.POS_COUNTERS_MANAGE);
     if (response) return response;
 
     try {

@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAuth, requireAnyPermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
@@ -72,7 +72,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-    const { response } = await requirePermission(PERMISSIONS.BRANCHES_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.BRANCHES_CREATE, PERMISSIONS.BRANCHES_MANAGE);
     if (response) return response;
     try {
         const { data, error } = await validateRequest(req, createSchema);

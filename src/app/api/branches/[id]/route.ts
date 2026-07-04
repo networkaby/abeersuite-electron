@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAnyPermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
@@ -27,7 +27,7 @@ const updateSchema = z.object({
 });
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission(PERMISSIONS.BRANCHES_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.BRANCHES_EDIT, PERMISSIONS.BRANCHES_MANAGE);
     if (response) return response;
     try {
         const { id } = await params;
@@ -64,7 +64,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 }
 
 export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission(PERMISSIONS.BRANCHES_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.BRANCHES_DELETE, PERMISSIONS.BRANCHES_MANAGE);
     if (response) return response;
     try {
         const { id } = await params;
