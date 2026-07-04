@@ -40,6 +40,7 @@ import { printAfterSaveDefault, thermalDefault } from "@/shared/lib/print/vouche
 import { InvProductCombobox, type SelectedProduct } from "@/modules/inventory/components/InvProductCombobox";
 import { isStockEligibleAccount } from "@/modules/accountancy/lib/stockEligibleAccount";
 import { numberToIndianWords } from "@/shared/lib/format/numberWords";
+import { round2 } from "@/shared/lib/format/moneyInr";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
 
@@ -72,7 +73,7 @@ function normalizeLines(lines: { accountId: number; type: "DEBIT" | "CREDIT"; am
         .map((l) => ({
             accountId:   l.accountId,
             type:        l.type,
-            amount:      Math.round(l.amount * 100) / 100,
+            amount:      round2(l.amount),
             description: (l.description ?? "").trim(),
         }))
         .sort((a, b) =>

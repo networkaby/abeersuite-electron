@@ -15,6 +15,8 @@
  * printed invoice.
  */
 
+import { round2 } from "@/shared/lib/format";
+
 export type GstSplit =
     | {
           kind:        "INTRA";
@@ -50,8 +52,6 @@ export function gstinDerivedStateCode(gstin: string | null | undefined): string 
     const trimmed = gstin.trim();
     return trimmed.length >= 2 ? trimmed.slice(0, 2) : "";
 }
-
-const round2 = (n: number) => Math.round(n * 100) / 100;
 
 export function computeGstSplit(args: {
     taxAmount:       number;

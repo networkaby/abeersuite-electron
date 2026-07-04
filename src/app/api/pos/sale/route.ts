@@ -18,6 +18,7 @@ import * as Sentry from "@sentry/nextjs";
 import { validateRequest } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { checkCreditLimit, CreditLimitError } from "@/shared/lib/accountancy/checkCreditLimit";
+import { round2 } from "@/shared/lib/format";
 import {
     ratesFromConfig,
     buildRulesIndex,
@@ -425,7 +426,6 @@ export async function POST(req: Request) {
     //   • over  (surplus > 0)    → allowed ONLY with collectSurplus: the extra
     //     settles the customer's oldest open bills (FIFO) + leftover advance, via
     //     a separate Receipt voucher (so the bank/UPI statement matches 1:1).
-    const round2 = (n: number) => Math.round(n * 100) / 100;
     const paymentTotal = body.payments.reduce((s, p) => s + p.amount, 0) + giftCardRedeem;
     const surplus = round2(paymentTotal - totalAmount);
     const collectingSurplus = surplus > 0.01;
@@ -491,7 +491,7 @@ export async function POST(req: Request) {
     // `additionalDebit > 0` test — wrongly rejecting a fully-paid sale to a
     // zero-credit-limit customer with NO_CREDIT_ALLOWED. Matches the >0.005
     // epsilon the AR-tender branch below already uses.
-    const onCredit = Math.max(0, Math.round((totalAmount - paymentTotal) * 100) / 100);
+    const onCredit = Math.max(0, round2(totalAmount - paymentTotal));
 
     // POS is always counter-pickup → place of supply = branch state regardless
     // of customer's address (CGST Act §10(1)(c)). Resolve once, outside tx.

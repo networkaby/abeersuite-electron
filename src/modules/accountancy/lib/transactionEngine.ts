@@ -21,6 +21,7 @@
 
 import type { Prisma, VoucherType, VoucherGlRole, PaymentMethod } from "@/generated/prisma/client";
 import { balanceDelta, nextRefFromSeries, toNumber } from "./balance";
+import { round2 } from "@/shared/lib/format";
 import { defaultNormalBalanceForGroupType, type GroupTypeStr } from "./groupNature";
 import { recordStockMovementsBatch, type RecordStockMovementArgs } from "@/modules/inventory/lib/stockMovement";
 import { bindingForType } from "@/shared/lib/accountancy/voucherBinding";
@@ -148,10 +149,14 @@ export async function engineGlArm(
             );
         }
     }
+    // Money boundary: callers may hand us float sums (GST splits, discounts).
+    // Round once to 2dp here so the stored line and the balance delta are the
+    // SAME number — the Decimal(14,2) column would round on write anyway, and an
+    // unrounded delta would drift the cached Account.balance away from its lines.
     for (const l of lines) {
         const side = natureById.get(l.accountId) ?? null;
         if (!side) continue;
-        const delta = balanceDelta(side, l.type, toNumber(l.amount));
+        const delta = balanceDelta(side, l.type, round2(toNumber(l.amount)));
         await tx.account.update({
             where: { id: l.accountId },
             data:  { balance: { increment: delta } },
@@ -163,7 +168,7 @@ export async function engineGlArm(
     const glLineBase = lines.map((l, idx) => ({
         accountId:   l.accountId,
         type:        l.type,
-        amount:      l.amount,
+        amount:      round2(toNumber(l.amount)),
         description: l.description ?? null,
         branchId,
         role:        l.role ?? null,        // form-section tag
@@ -424,9 +429,9 @@ export async function engineCreateVoucher(
     tx: Prisma.TransactionClient,
     spec: CreateGlVoucherSpec,
 ): Promise<CreatedVoucher> {
-    const totalAmount = spec.lines
+    const totalAmount = round2(spec.lines
         .filter((l) => l.type === "DEBIT")
-        .reduce((s, l) => s + l.amount, 0);
+        .reduce((s, l) => s + l.amount, 0));
 
     const reference = await nextRefFromSeries(tx, spec.referenceSeries ?? spec.type, spec.userId);
 
@@ -445,7 +450,7 @@ export async function engineCreateVoucher(
             universalVoucherId: spineId,
             accountId:   l.accountId,
             type:        l.type,
-            amount:      l.amount,
+            amount:      round2(l.amount),
             description: l.description ?? null,
             seq:         idx,
         })),

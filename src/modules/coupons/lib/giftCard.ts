@@ -3,6 +3,7 @@
 // shared by the POS sale (redeem) and return (refund) routes.
 
 import type { Prisma, PrismaClient } from "@/generated/prisma/client";
+import { moneyNumber, round2 } from "@/shared/lib/format/moneyInr";
 
 type Tx = Prisma.TransactionClient | PrismaClient;
 
@@ -20,7 +21,7 @@ export interface GiftCardLite {
 export async function lookupActiveGiftCard(tx: Tx, code: string, now: Date): Promise<GiftCardLite | null> {
     const gc = await tx.giftCard.findFirst({ where: { code: { equals: code.trim(), mode: "insensitive" } } });
     if (!gc) return null;
-    const lite: GiftCardLite = { id: gc.id, code: gc.code, balance: Number(gc.balance), status: gc.status, enabled: gc.enabled, expiresAt: gc.expiresAt };
+    const lite: GiftCardLite = { id: gc.id, code: gc.code, balance: moneyNumber(gc.balance), status: gc.status, enabled: gc.enabled, expiresAt: gc.expiresAt };
     if (gc.status !== "ACTIVE") return lite;            // surfaced to the caller with status
     if (gc.expiresAt && gc.expiresAt < now) return { ...lite, status: "EXPIRED" };
     return lite;
@@ -31,7 +32,7 @@ export async function redeemGiftCard(
     tx: Tx, args: { giftCardId: number; amount: number; universalVoucherId: number; createdById: number },
 ): Promise<number> {
     const gc = await tx.giftCard.findUniqueOrThrow({ where: { id: args.giftCardId }, select: { balance: true, status: true } });
-    const newBal = Math.round((Number(gc.balance) - args.amount) * 100) / 100;
+    const newBal = round2(moneyNumber(gc.balance) - args.amount);
     await tx.giftCard.update({
         where: { id: args.giftCardId },
         data: { balance: newBal, status: newBal <= 0.005 ? "REDEEMED" : gc.status },
@@ -47,7 +48,7 @@ export async function refundGiftCard(
     tx: Tx, args: { giftCardId: number; amount: number; universalVoucherId: number; createdById: number },
 ): Promise<number> {
     const gc = await tx.giftCard.findUniqueOrThrow({ where: { id: args.giftCardId }, select: { balance: true, status: true } });
-    const newBal = Math.round((Number(gc.balance) + args.amount) * 100) / 100;
+    const newBal = round2(moneyNumber(gc.balance) + args.amount);
     await tx.giftCard.update({
         where: { id: args.giftCardId },
         data: { balance: newBal, status: gc.status === "REDEEMED" ? "ACTIVE" : gc.status },

@@ -18,6 +18,8 @@
 //    (by line value) so each line's NET taxable + NET tax is computed at its own
 //    rate. The HSN/rate summary therefore reconciles: Σ taxable + Σ tax = paid.
 
+import { round2 as r2 } from "@/shared/lib/format/moneyInr";
+
 export type LadderLineInput = {
     description: string;
     qty:         number;
@@ -104,7 +106,6 @@ export type PriceLadder = {
     taxTotal:     number;
 };
 
-const r2 = (n: number) => Math.round(n * 100) / 100;
 const EPS = 0.005;
 
 const LABELS: Record<LadderDiscountKey, string> = {

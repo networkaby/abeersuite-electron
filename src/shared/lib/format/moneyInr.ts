@@ -1,3 +1,28 @@
+/**
+ * Round to 2 decimal places (money precision). Use this — not a bare
+ * `Number(...)` or `* 100 / 100` — whenever a Prisma `Decimal(14,2)` value or a
+ * float result crosses into JS number math, so float drift (0.1 + 0.2 …) can
+ * never reach the GL or a displayed amount.
+ */
+export function round2(n: number): number {
+    return Math.round((n + Number.EPSILON) * 100) / 100;
+}
+
+/** Prisma Decimal / string / number → JS number rounded to 2dp money precision. */
+export function moneyNumber(value: number | string | { toString(): string }): number {
+    return round2(Number(value));
+}
+
+/** Integer paise → rupees at 2dp (e.g. 19900 → 199.00). */
+export function paiseToRupees(paise: number): number {
+    return round2(paise / 100);
+}
+
+/** Rupees (float or 2dp) → integer paise, rounded (e.g. 199.005 → 19901). */
+export function rupeesToPaise(rupees: number): number {
+    return Math.round(rupees * 100);
+}
+
 /** Format integer paise as ₹ string with two decimals (e.g. 19900 → ₹199.00). */
 export function formatRupeesFromPaise(paise: number): string {
     const rupees = paise / 100;

@@ -3,6 +3,8 @@
 // computation pure lets the POS and the server run the IDENTICAL calculation so
 // the displayed total always matches the posted total.
 
+import { round2 as r2 } from "@/shared/lib/format/moneyInr";
+
 export type CouponType = "PERCENT" | "FLAT" | "FREE_ITEM" | "BOGO";
 export type CouponChannel = "POS" | "SHOP" | "BOTH";
 export type CouponApplyMode = "CODE" | "AUTO";
@@ -72,7 +74,6 @@ export type EvalOk = { ok: true; discountRupees: number };
 export type EvalFail = { ok: false; reason: string };
 export type EvalResult = EvalOk | EvalFail;
 
-const r2 = (n: number): number => Math.round((n + Number.EPSILON) * 100) / 100;
 const lineGoods = (l: CartLineLite): number => l.qty * l.unitPrice;
 
 /// Does a cart line match an include/exclude rule? Direct product or category

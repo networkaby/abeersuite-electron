@@ -4,6 +4,7 @@ import { requireAnyPermission } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { enginePost } from "@/modules/accountancy/lib/transactionEngine";
+import { moneyNumber, round2 } from "@/shared/lib/format";
 
 // POST /api/gift-cards/expire-breakage — recognise breakage on every ACTIVE card
 // that is past its expiry with a leftover balance. For each: Dr "Gift Card
@@ -36,7 +37,7 @@ export async function POST() {
         let total = 0;
         await prisma.$transaction(async (tx) => {
             for (const gc of due) {
-                const amt = Number(gc.balance);
+                const amt = moneyNumber(gc.balance);
                 // Dr Gift Card Liability / Cr Breakage Income — through the engine
                 // (JE + balances + spine in one place). Posts as a JOURNAL voucher.
                 await enginePost(tx, {
@@ -57,7 +58,7 @@ export async function POST() {
             }
         });
 
-        return NextResponse.json({ ok: true, expired: due.length, total: Math.round(total * 100) / 100 });
+        return NextResponse.json({ ok: true, expired: due.length, total: round2(total) });
     } catch (e) {
         return handleApiError(e, "Failed to recognise gift-card breakage");
     }

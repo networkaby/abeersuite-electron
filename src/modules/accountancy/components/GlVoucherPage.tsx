@@ -38,6 +38,7 @@ import {
     type PickedParty,
 } from "@/shared/components/PartySearchAndCreate";
 import { numberToIndianWords } from "@/shared/lib/format/numberWords";
+import { round2 } from "@/shared/lib/format/moneyInr";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
 
@@ -72,7 +73,7 @@ function normalizeLines(lines: { accountId: number; type: "DEBIT" | "CREDIT"; am
         .map((l) => ({
             accountId:   l.accountId,
             type:        l.type,
-            amount:      Math.round(l.amount * 100) / 100,
+            amount:      round2(l.amount),
             description: (l.description ?? "").trim(),
         }))
         .sort((a, b) =>
