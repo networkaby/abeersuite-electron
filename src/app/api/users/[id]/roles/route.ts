@@ -5,6 +5,7 @@ import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { revokeUserSessions } from "@/shared/lib/auth/revokeSessions";
 
 const userRoleSchema = z.object({
     roleId: z.string().trim().min(1, "Role is required"),
@@ -52,6 +53,7 @@ export async function PUT(
         const { roleId } = data;
 
         await prisma.user.update({ where: { id: userId }, data: { role: roleId } });
+        await revokeUserSessions(userId);
 
         return NextResponse.json({ success: true });
     } catch (e) {

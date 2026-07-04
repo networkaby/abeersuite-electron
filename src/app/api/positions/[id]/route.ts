@@ -7,6 +7,7 @@ import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { flattenPositionRoles, POSITION_INCLUDE } from "@/shared/lib/org/positionIncludes";
 import { syncPositionRoles } from "@/shared/lib/org/positionRoles";
+import { revokePositionSessions } from "@/shared/lib/auth/revokeSessions";
 
 const updateSchema = z.object({
     title:            z.string().trim().min(1, "Title is required").optional(),
@@ -52,6 +53,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         });
 
         if (!position) return NextResponse.json({ error: "Position not found" }, { status: 404 });
+        // Role templates / branch / parent changed — holders' JWTs carry stale
+        // grants and branch access; revoke so they re-log with the new shape.
+        await revokePositionSessions(id);
         return NextResponse.json(flattenPositionRoles(position));
     } catch (e) {
         return handleApiError(e, "Failed to update position");

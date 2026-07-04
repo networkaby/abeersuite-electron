@@ -6,6 +6,7 @@ import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { getDepartmentPool } from "@/shared/lib/auth/departmentPool";
+import { revokeRoleSessions } from "@/shared/lib/auth/revokeSessions";
 
 const rolePermissionsSchema = z.object({
     permissionIds: z.array(z.string().trim()),
@@ -43,6 +44,9 @@ export async function PUT(
                 skipDuplicates: true,
             });
         }
+        // The role's grants changed — every holder's JWT is now stale; revoke so
+        // they pick up the new set on next login.
+        await revokeRoleSessions(roleId);
         return NextResponse.json({ success: true });
     } catch (e) {
         return handleApiError(e, "Failed to update role permissions");

@@ -5,6 +5,7 @@ import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { revokeUserSessions } from "@/shared/lib/auth/revokeSessions";
 
 const overrideSchema = z.object({
     permissionId: z.string().trim().min(1),
@@ -84,6 +85,7 @@ export async function POST(
             update: { type, reason: reason ?? null, expiresAt: expiresAt ? new Date(expiresAt) : null },
             create: { userId, permissionId, type, reason: reason ?? null, expiresAt: expiresAt ? new Date(expiresAt) : null },
         });
+        await revokeUserSessions(userId);
 
         return NextResponse.json(override, { status: 201 });
     } catch (e) {

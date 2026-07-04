@@ -7,6 +7,7 @@ import { handleApiError } from "@/shared/lib/api";
 import { pickDefined } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { getDepartmentPool } from "@/shared/lib/auth/departmentPool";
+import { revokeRoleSessions } from "@/shared/lib/auth/revokeSessions";
 
 export async function GET(
     _: Request,
@@ -88,6 +89,11 @@ export async function PATCH(
             }),
             include: { department: { select: { id: true, name: true, isAllAccess: true } } },
         });
+        // Rank / department (and possibly stripped grants) ride the JWT — revoke
+        // holders' sessions so the change is live on their next request.
+        if (body.rank !== undefined || body.departmentId !== undefined) {
+            await revokeRoleSessions(id);
+        }
         return NextResponse.json(role);
     } catch (e) {
         return handleApiError(e, "Failed to update role");

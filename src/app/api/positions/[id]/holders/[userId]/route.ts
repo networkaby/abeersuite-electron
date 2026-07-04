@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAnyPermission } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { revokeUserSessions } from "@/shared/lib/auth/revokeSessions";
 
 export async function DELETE(
     _req: Request,
@@ -15,6 +16,7 @@ export async function DELETE(
         const userId = Number(userIdStr);
         if (isNaN(userId)) return NextResponse.json({ error: "Invalid user ID" }, { status: 400 });
         await prisma.userPosition.delete({ where: { userId_positionId: { userId, positionId } } });
+        await revokeUserSessions(userId);
         return NextResponse.json({ success: true });
     } catch (e) {
         return handleApiError(e, "Failed to remove holder");
