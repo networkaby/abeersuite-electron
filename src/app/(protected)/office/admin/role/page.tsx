@@ -774,6 +774,11 @@ const SIDEBAR_LINK_MATRIX_ROW_KEY: Record<string, string> = {
     [sidebarChildPermissionId("accountancy", "account-groups")]: "accountancyMasters",
     [sidebarChildPermissionId("accountancy", "ledgers")]: "accountancyMasters",
     [sidebarChildPermissionId("accountancy", "chart-of-accounts")]: "accountancyMasters",
+    // The ledger "books" (Cash/Bank/Loans) render the same explorer with an
+    // in-page "Create ledger" — so they reuse the SAME accountancyMasters table.
+    [sidebarChildPermissionId("accountancy", "cash-book")]: "accountancyMasters",
+    [sidebarChildPermissionId("accountancy", "bank-book")]: "accountancyMasters",
+    [sidebarChildPermissionId("accountancy", "loans-book")]: "accountancyMasters",
 };
 
 // A sidebar link with ONE extra yes/no permission beyond "can see this page" —
@@ -2013,14 +2018,18 @@ function SidebarVisibilitySection({
     onTogglePerm: (id: string) => void;
 }) {
     const term = search.trim().toLowerCase();
-    // Which granular matrices are expanded — keyed by the MATRIX ROW, not the link.
-    // Several links can map to the same row (e.g. Products + Item Ledger both use
-    // products:*); both show a chevron, but they open the SAME single table.
+    // Which granular matrices are expanded — keyed by LEVEL + matrix row, so the
+    // table opens *in the place you clicked*. Links sharing a row at the SAME level
+    // (e.g. Products + Item Ledger) sync to one table; the same row reached from a
+    // DIFFERENT level (e.g. the ledger books up top vs. the Masters children) opens
+    // its own table there, and only there.
     const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
-    const toggleRow = (rowKey: string) =>
+    const rowStateKey = (scopeKey: string, rowKey: string) => `${scopeKey}::${rowKey}`;
+    const toggleRow = (scopeKey: string, rowKey: string) =>
         setExpandedRows((prev) => {
             const next = new Set(prev);
-            if (next.has(rowKey)) next.delete(rowKey); else next.add(rowKey);
+            const k = rowStateKey(scopeKey, rowKey);
+            if (next.has(k)) next.delete(k); else next.add(k);
             return next;
         });
     const matrixRowForLink = (node: SidebarChildRow) => {
@@ -2054,13 +2063,14 @@ function SidebarVisibilitySection({
     const countLinks = (nodes: SidebarChildRow[]): number =>
         nodes.reduce((n, c) => n + 1 + (c.children ? countLinks(c.children) : 0), 0);
 
-    const chip = (node: SidebarChildRow) => {
+    const chip = (node: SidebarChildRow, scopeKey: string) => {
         const isOn = selected.has(node.permissionId);
         const changed = isOn !== original.has(node.permissionId);
         const matrixRow = matrixRowForLink(node);
-        // Every link mapping to a matrix row gets a chevron; links that share a row
-        // open the SAME table (state is keyed by the row, so only one table opens).
-        const expanded = matrixRow ? expandedRows.has(matrixRow.key) : false;
+        // Every link mapping to a matrix row gets a chevron. State is keyed by
+        // level + row, so links sharing a row at THIS level open one table here;
+        // the same row at another level opens its own table there.
+        const expanded = matrixRow ? expandedRows.has(rowStateKey(scopeKey, matrixRow.key)) : false;
         const extraToggle = SIDEBAR_LINK_EXTRA_TOGGLE[node.permissionId];
         // When a ticked link carries its own controls (a create/edit/delete matrix
         // and/or a guard toggle), wrap the whole group in a subtle cluster so those
@@ -2107,7 +2117,7 @@ function SidebarVisibilitySection({
                         type="button"
                         variant="ghost"
                         size="icon-sm"
-                        onClick={() => toggleRow(matrixRow.key)}
+                        onClick={() => toggleRow(scopeKey, matrixRow.key)}
                         title={`${expanded ? "Hide" : "Show"} granular permissions for ${node.label}`}
                         className="h-auto w-6 shrink-0 rounded-md border border-border text-muted-foreground hover:border-primary/60 hover:bg-primary/5"
                     >
@@ -2153,23 +2163,23 @@ function SidebarVisibilitySection({
 
     // Leaves wrap in a row; parents render their own chip then an indented block of
     // their children (recursive), so sub-nav shows nested with its own checkboxes.
-    const renderLevel = (nodes: SidebarChildRow[]) => {
+    const renderLevel = (nodes: SidebarChildRow[], scopeKey: string) => {
         const leaves = nodes.filter((n) => !n.children?.length);
         const parents = nodes.filter((n) => n.children?.length);
-        // One table per EXPANDED row, even if several leaves at this level map to it
-        // (dedupe by row key) — so Products + Item Ledger open a single Products table.
+        // One table per EXPANDED row at THIS level, even if several leaves here map
+        // to it (dedupe by row key) — so Products + Item Ledger open a single table.
         const expandedRowsAtLevel: (typeof MATRIX_ROWS)[number][] = [];
         const seenRowKeys = new Set<string>();
         for (const n of leaves) {
             const row = matrixRowForLink(n);
-            if (row && selected.has(n.permissionId) && expandedRows.has(row.key) && !seenRowKeys.has(row.key)) {
+            if (row && selected.has(n.permissionId) && expandedRows.has(rowStateKey(scopeKey, row.key)) && !seenRowKeys.has(row.key)) {
                 seenRowKeys.add(row.key);
                 expandedRowsAtLevel.push(row);
             }
         }
         return (
             <div className="space-y-1.5">
-                {leaves.length > 0 && <div className="flex flex-wrap items-start gap-1.5">{leaves.map(chip)}</div>}
+                {leaves.length > 0 && <div className="flex flex-wrap items-start gap-1.5">{leaves.map((n) => chip(n, scopeKey))}</div>}
                 {expandedRowsAtLevel.map((row) => (
                     <SharedPermissionMatrix
                         key={row.key}
@@ -2184,10 +2194,10 @@ function SidebarVisibilitySection({
                     // A parent link can also carry a matrix (e.g. Inventory → Masters,
                     // one create/edit/delete for all the setup tables under it).
                     const pRow = matrixRowForLink(p);
-                    const pExpanded = !!pRow && selected.has(p.permissionId) && expandedRows.has(pRow.key);
+                    const pExpanded = !!pRow && selected.has(p.permissionId) && expandedRows.has(rowStateKey(scopeKey, pRow.key));
                     return (
                         <div key={p.permissionId} className="space-y-1">
-                            <div className="flex flex-wrap items-start gap-1.5">{chip(p)}</div>
+                            <div className="flex flex-wrap items-start gap-1.5">{chip(p, scopeKey)}</div>
                             {pExpanded && pRow && (
                                 <SharedPermissionMatrix
                                     title={`${pRow.label} — granular permissions`}
@@ -2200,7 +2210,7 @@ function SidebarVisibilitySection({
                             {/* Sub-links are offered only once the parent is ticked — a child
                                 shows in the sidebar only under a checked parent. */}
                             {selected.has(p.permissionId) && (
-                                <div className="ml-3 border-l border-border pl-2.5">{renderLevel(p.children!)}</div>
+                                <div className="ml-3 border-l border-border pl-2.5">{renderLevel(p.children!, p.permissionId)}</div>
                             )}
                         </div>
                     );
@@ -2230,7 +2240,7 @@ function SidebarVisibilitySection({
                                     {countLinks(mod.children)} links
                                 </span>
                             </div>
-                            {renderLevel(mod.children)}
+                            {renderLevel(mod.children, mod.key)}
                         </div>
                     ))}
                 </div>
