@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAuth, requireAnyPermission } from "@/shared/lib/auth/permissions";
 import { invProductGroupCreateSchema } from "@/shared/lib/schemas/inventorySchemas";
 import { prismaUniqueError } from "@/shared/lib/api";
 import { validateRequest } from "@/shared/lib/api";
@@ -13,7 +13,7 @@ const groupInclude = {
 } as const;
 
 export async function GET() {
-    const { response } = await requirePermission(PERMISSIONS.INVENTORY_MANAGE);
+    const { response } = await requireAuth();
     if (response) return response;
     try {
         const rows = await prisma.invProductGroup.findMany({
@@ -27,7 +27,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-    const { response } = await requirePermission(PERMISSIONS.INVENTORY_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.INVENTORY_MASTERS_CREATE, PERMISSIONS.INVENTORY_MANAGE);
     if (response) return response;
     try {
         const { data, error } = await validateRequest(req, invProductGroupCreateSchema);

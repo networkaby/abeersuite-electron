@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAnyPermission, requireAuth } from "@/shared/lib/auth/permissions";
 import { invBomCreateSchema } from "@/shared/lib/schemas/bomSchemas";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -10,7 +10,7 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 //   + line items hydrated. Used by the master page (full list) and by the
 //   Manufacturing Journal form's BomPicker (passes ?active=1 to filter).
 export async function GET(req: NextRequest) {
-    const { response } = await requirePermission(PERMISSIONS.INVENTORY_MANAGE);
+    const { response } = await requireAuth();
     if (response) return response;
     try {
         const onlyActive = new URL(req.url).searchParams.get("active") === "1";
@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
 
 // POST /api/inventory/boms
 export async function POST(req: Request) {
-    const { response } = await requirePermission(PERMISSIONS.INVENTORY_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.INVENTORY_MASTERS_CREATE, PERMISSIONS.INVENTORY_MANAGE);
     if (response) return response;
     try {
         const { data, error } = await validateRequest(req, invBomCreateSchema);

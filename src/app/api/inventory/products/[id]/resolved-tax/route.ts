@@ -1,15 +1,15 @@
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError, parseIdParam } from "@/shared/lib/api";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { resolveProductTax } from "@/modules/inventory/lib/gstResolver";
 
 // GET /api/inventory/products/[id]/resolved-tax
 // Returns the effective GST rate, HSN code, and taxability for a product
 // by walking: product → group → parent group → … → OrgDefaults.
-// Consumed by voucher/invoice/POS line-entry forms to prefill taxRate.
+// Consumed by voucher/invoice/POS line-entry forms to prefill taxRate — so any
+// authed staff (anyone who can raise a voucher) may read it.
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission(PERMISSIONS.INVENTORY_MANAGE);
+    const { response } = await requireAuth();
     if (response) return response;
     try {
         const { id, error } = await parseIdParam(params);

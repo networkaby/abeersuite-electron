@@ -49,11 +49,19 @@ export function filterInventoryMastersNav(
     permissions: string[],
 ): InventoryMastersNavGroup[] {
     const isAdmin = permissions.includes(PERMISSIONS.ADMIN_BYPASS);
+    // Masters split into inventory:masters:create/edit/delete; anyone holding one
+    // (or the inventory:manage umbrella) sees the whole masters nav.
+    const canMasters =
+        isAdmin ||
+        permissions.includes(PERMISSIONS.INVENTORY_MANAGE) ||
+        permissions.includes(PERMISSIONS.INVENTORY_MASTERS_CREATE) ||
+        permissions.includes(PERMISSIONS.INVENTORY_MASTERS_EDIT) ||
+        permissions.includes(PERMISSIONS.INVENTORY_MASTERS_DELETE);
     return groups
         .map((group) => ({
             ...group,
             links: group.links.filter(
-                (link) => isAdmin || !link.permission || permissions.includes(link.permission),
+                (link) => canMasters || !link.permission || permissions.includes(link.permission),
             ),
         }))
         .filter((group) => group.links.length > 0);

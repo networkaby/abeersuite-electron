@@ -662,6 +662,30 @@ const MATRIX_ROWS: {
                 deleteOwn: "tiers:delete", deleteBranch: "tiers:delete", deleteOrg: "tiers:delete",
             },
         },
+        // Inventory — Products (catalog) and Masters (all 8 setup tables, gated
+        // together). inventory:manage is the umbrella (shown in the view cells).
+        {
+            key: "products",
+            label: "Products",
+            module: "inventory",
+            cells: {
+                viewOwn: "inventory:manage", viewBranch: "inventory:manage", viewOrg: "inventory:manage",
+                create: "products:create",
+                editOwn: "products:edit", editBranch: "products:edit", editOrg: "products:edit",
+                deleteOwn: "products:delete", deleteBranch: "products:delete", deleteOrg: "products:delete",
+            },
+        },
+        {
+            key: "inventoryMasters",
+            label: "Masters",
+            module: "inventory",
+            cells: {
+                viewOwn: "inventory:manage", viewBranch: "inventory:manage", viewOrg: "inventory:manage",
+                create: "inventory:masters:create",
+                editOwn: "inventory:masters:edit", editBranch: "inventory:masters:edit", editOrg: "inventory:masters:edit",
+                deleteOwn: "inventory:masters:delete", deleteBranch: "inventory:masters:delete", deleteOrg: "inventory:masters:delete",
+            },
+        },
         // admin:bypass is intentionally removed from the matrix — it is a code-only
         // sentinel grantable only via the env super admin (.env). It must never appear
         // in the UI where it could be ticked by mistake.
@@ -719,11 +743,14 @@ const SIDEBAR_LINK_MATRIX_ROW_KEY: Record<string, string> = {
     [sidebarChildPermissionId("admin", "positions")]: "positions",
     [sidebarChildPermissionId("admin", "pos-counters")]: "posCounters",
     [sidebarChildPermissionId("settings", "organisation")]: "orgSettings",
-    // Retention — create/edit/delete matrix per link (plus money guards below).
+    // Retention — create/edit/delete matrix per link.
     [sidebarChildPermissionId("retention", "coupons")]: "coupons",
     [sidebarChildPermissionId("retention", "gift-cards")]: "giftCards",
     [sidebarChildPermissionId("retention", "loyalty")]: "loyalty",
     [sidebarChildPermissionId("retention", "spend-tiers")]: "spendTiers",
+    // Inventory — Products (leaf) + Masters (parent; all 8 setup tables together).
+    [sidebarChildPermissionId("inventory", "products")]: "products",
+    [sidebarChildPermissionId("inventory", "masters")]: "inventoryMasters",
 };
 
 // A sidebar link with ONE extra yes/no permission beyond "can see this page" —
@@ -2120,16 +2147,31 @@ function SidebarVisibilitySection({
                         onTogglePerm={onTogglePerm}
                     />
                 ))}
-                {parents.map((p) => (
-                    <div key={p.permissionId} className="space-y-1">
-                        <div className="flex flex-wrap items-start gap-1.5">{chip(p)}</div>
-                        {/* Sub-links are offered only once the parent is ticked — a child
-                            shows in the sidebar only under a checked parent. */}
-                        {selected.has(p.permissionId) && (
-                            <div className="ml-3 border-l border-border pl-2.5">{renderLevel(p.children!)}</div>
-                        )}
-                    </div>
-                ))}
+                {parents.map((p) => {
+                    // A parent link can also carry a matrix (e.g. Inventory → Masters,
+                    // one create/edit/delete for all the setup tables under it).
+                    const pRow = matrixRowForLink(p);
+                    const pExpanded = !!pRow && selected.has(p.permissionId) && expandedLinks.has(p.permissionId);
+                    return (
+                        <div key={p.permissionId} className="space-y-1">
+                            <div className="flex flex-wrap items-start gap-1.5">{chip(p)}</div>
+                            {pExpanded && pRow && (
+                                <SharedPermissionMatrix
+                                    title={`${p.label} — granular permissions`}
+                                    rows={[toSharedMatrixRow(pRow)]}
+                                    columnGroups={CORE_MATRIX_COLUMN_GROUPS}
+                                    selected={selected}
+                                    onTogglePerm={onTogglePerm}
+                                />
+                            )}
+                            {/* Sub-links are offered only once the parent is ticked — a child
+                                shows in the sidebar only under a checked parent. */}
+                            {selected.has(p.permissionId) && (
+                                <div className="ml-3 border-l border-border pl-2.5">{renderLevel(p.children!)}</div>
+                            )}
+                        </div>
+                    );
+                })}
             </div>
         );
     };

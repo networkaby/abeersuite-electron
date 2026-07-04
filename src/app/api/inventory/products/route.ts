@@ -1,7 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { Prisma } from "@/generated/prisma/client";
 import { NextResponse, type NextRequest } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAnyPermission } from "@/shared/lib/auth/permissions";
 import { invProductCreateSchema } from "@/shared/lib/schemas/inventorySchemas";
 import { normalizeProductCodes, primaryBarcode } from "@/shared/lib/inventory";
 import { findSkuCodeCollision, skuCodeCollisionMessage } from "@/shared/lib/inventory/codeCollision";
@@ -59,7 +59,9 @@ async function assertProductFks(data: {
 }
 
 export async function GET(req: NextRequest) {
-    const { response } = await requirePermission(PERMISSIONS.INVENTORY_MANAGE);
+    const { response } = await requireAnyPermission(
+        PERMISSIONS.PRODUCTS_CREATE, PERMISSIONS.PRODUCTS_EDIT, PERMISSIONS.PRODUCTS_DELETE, PERMISSIONS.INVENTORY_MANAGE,
+    );
     if (response) return response;
     try {
         const session = await auth();
@@ -105,7 +107,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: Request) {
-    const { response } = await requirePermission(PERMISSIONS.INVENTORY_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.PRODUCTS_CREATE, PERMISSIONS.INVENTORY_MANAGE);
     if (response) return response;
     try {
         const { data, error } = await validateRequest(req, invProductCreateSchema);

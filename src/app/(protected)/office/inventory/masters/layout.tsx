@@ -8,10 +8,14 @@ export default async function InventoryMastersLayout({ children }: { children: R
     const session = await auth();
     const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
 
-    if (
-        !permissions.includes(PERMISSIONS.ADMIN_BYPASS) &&
-        !permissions.includes(PERMISSIONS.INVENTORY_MANAGE)
-    ) {
+    // View rides any inventory-masters capability or the inventory:manage umbrella.
+    const canOpenMasters =
+        permissions.includes(PERMISSIONS.ADMIN_BYPASS) ||
+        permissions.includes(PERMISSIONS.INVENTORY_MANAGE) ||
+        permissions.includes(PERMISSIONS.INVENTORY_MASTERS_CREATE) ||
+        permissions.includes(PERMISSIONS.INVENTORY_MASTERS_EDIT) ||
+        permissions.includes(PERMISSIONS.INVENTORY_MASTERS_DELETE);
+    if (!canOpenMasters) {
         redirect("/office/work-flow-inbox");
     }
 

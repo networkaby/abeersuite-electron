@@ -150,6 +150,16 @@ export const PERMISSIONS = {
     INVENTORY_VOUCHER_CANCEL:           "inventory:voucher:cancel",
     INVENTORY_VOUCHER_DELETE:           "inventory:voucher:delete",
     INVENTORY_VOUCHER_HARD_DELETE:      "inventory:voucher:hard-delete",
+    // Inventory module pages — Products (the catalog) and Masters (the 8 setup
+    // tables, gated together). View rides the sidebar link; inventory:manage stays
+    // the umbrella (each key OR inventory:manage passes the route). Product tax
+    // fields are still carved out separately as compliance:tax:edit.
+    PRODUCTS_CREATE:                    "products:create",
+    PRODUCTS_EDIT:                      "products:edit",
+    PRODUCTS_DELETE:                    "products:delete",
+    INVENTORY_MASTERS_CREATE:           "inventory:masters:create",
+    INVENTORY_MASTERS_EDIT:             "inventory:masters:edit",
+    INVENTORY_MASTERS_DELETE:           "inventory:masters:delete",
 
     // Pricing Strategy — one edit gate per page. Viewing rides the sidebar link
     // grant; the "Needs attention" page edits the product itself, so its edits

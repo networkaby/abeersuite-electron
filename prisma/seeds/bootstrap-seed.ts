@@ -279,6 +279,15 @@ const PERMISSIONS = [
     { id: "inventory:voucher:delete",      label: "Delete inventory vouchers",      module: "inventory", description: "Soft-delete; reverses stock + GL impact. Recoverable via restore. Generic fallback for the per-kind delete keys." },
     { id: "inventory:voucher:hard-delete", label: "Hard-delete inventory vouchers", module: "inventory", description: "Physically remove with audit snapshot." },
 
+    // inventory module pages — Products catalog + Masters (8 setup tables, gated
+    // together). View rides the sidebar link; inventory:manage is the umbrella.
+    { id: "products:create", label: "Create products", module: "inventory", description: "Add items to the product catalog." },
+    { id: "products:edit", label: "Edit products", module: "inventory", description: "Edit product catalog items (non-tax fields; tax uses compliance:tax:edit)." },
+    { id: "products:delete", label: "Delete products", module: "inventory", description: "Delete product catalog items." },
+    { id: "inventory:masters:create", label: "Create inventory masters", module: "inventory", description: "Add brands, units, categories, groups, warranty terms, attributes, GST rates, and BOMs." },
+    { id: "inventory:masters:edit", label: "Edit inventory masters", module: "inventory", description: "Edit the inventory setup/master tables." },
+    { id: "inventory:masters:delete", label: "Delete inventory masters", module: "inventory", description: "Delete inventory setup/master records." },
+
     // pricing strategy — one edit gate per page (view rides the sidebar link grant).
     // "Needs attention" edits the product itself, so it stays on inventory:manage.
     { id: "pricing:strategy:set", label: "Set pricing strategy", module: "inventory", description: "Edit the markup / strategy-point rules on the Pricing Strategy → Strategies page." },
