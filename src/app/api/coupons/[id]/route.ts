@@ -5,28 +5,11 @@ import { validateRequest, handleApiError, parseIdParam } from "@/shared/lib/api"
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { couponUpdateSchema } from "@/shared/lib/schemas/couponSchemas";
 
-// A coupon's discount value (money-sensitive) is guarded separately: changing any
-// of these needs coupons:discount:edit; other fields need coupons:edit.
-const COUPON_DISCOUNT_FIELDS: readonly string[] = ["type", "percentOff", "flatAmt"];
-
-// PATCH /api/coupons/[id] — edit fields and/or replace the include/exclude rules.
+// PATCH /api/coupons/[id] — edit fields (incl. the discount value) and/or replace
+// the include/exclude rules.
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    // Peek the body so we can demand the discount guard only when the discount
-    // value is actually being changed (mirrors compliance:tax:edit).
-    let peeked: Record<string, unknown> = {};
-    try { peeked = await req.clone().json(); } catch { /* validateRequest reports below */ }
-    const keys = Object.keys(peeked);
-    const touchesDiscount = keys.some((k) => COUPON_DISCOUNT_FIELDS.includes(k));
-    const touchesOther = keys.some((k) => !COUPON_DISCOUNT_FIELDS.includes(k));
-
-    if (touchesOther) {
-        const { response } = await requireAnyPermission(PERMISSIONS.COUPONS_EDIT, PERMISSIONS.COUPONS_MANAGE);
-        if (response) return response;
-    }
-    if (touchesDiscount) {
-        const { response } = await requireAnyPermission(PERMISSIONS.COUPONS_DISCOUNT_EDIT, PERMISSIONS.COUPONS_MANAGE);
-        if (response) return response;
-    }
+    const { response } = await requireAnyPermission(PERMISSIONS.COUPONS_EDIT, PERMISSIONS.COUPONS_MANAGE);
+    if (response) return response;
 
     const { id, error: idError } = await parseIdParam(params);
     if (idError) return idError;

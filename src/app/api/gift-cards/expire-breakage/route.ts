@@ -11,8 +11,8 @@ import { enginePost } from "@/modules/accountancy/lib/transactionEngine";
 // an EXPIRE txn, zero the balance, set status EXPIRED. Admin-triggered (a button
 // on the Gift Cards page); also safe to call from a scheduled job (GitHub Action).
 export async function POST() {
-    // Writing off unused balance is a value-changing (money) action.
-    const { user, response } = await requireAnyPermission(PERMISSIONS.GIFT_CARDS_VALUE_EDIT, PERMISSIONS.GIFT_CARDS_MANAGE);
+    // Writing off unused balance is part of managing gift cards (edit).
+    const { user, response } = await requireAnyPermission(PERMISSIONS.GIFT_CARDS_EDIT, PERMISSIONS.GIFT_CARDS_MANAGE);
     if (response) return response;
 
     try {

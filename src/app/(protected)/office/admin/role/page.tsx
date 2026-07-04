@@ -616,9 +616,8 @@ const MATRIX_ROWS: {
                 deleteOrg: "accountancy:delete:org",
             },
         },
-        // Retention — create/edit/delete per page (view rides the sidebar link).
-        // The money-sensitive guards (coupons:discount:edit, gift-cards:value:edit)
-        // render as extra toggles beside the link, not as matrix columns.
+        // Retention — plain create/edit/delete per page (view rides the sidebar
+        // link). Changing the discount / balance is part of Edit, not a separate gate.
         {
             key: "coupons",
             label: "Coupons",
@@ -751,16 +750,8 @@ const SIDEBAR_LINK_EXTRA_TOGGLE: Record<string, { id: string; label: string }> =
         id: "pricing:labels:apply",
         label: "Can apply & print",
     },
-    // Retention — money-sensitive guards shown beside the link's create/edit/delete
-    // matrix. Loyalty & Spend Tiers have no money guard (matrix only).
-    [sidebarChildPermissionId("retention", "coupons")]: {
-        id: "coupons:discount:edit",
-        label: "Can change discount",
-    },
-    [sidebarChildPermissionId("retention", "gift-cards")]: {
-        id: "gift-cards:value:edit",
-        label: "Can change value",
-    },
+    // Retention pages are plain create/edit/delete matrices (no extra toggle) —
+    // changing the discount / balance is part of "Edit", not a separate control.
 };
 
 // Every permission surfaced as an inline "extra toggle" beside its sidebar link —
@@ -2018,8 +2009,18 @@ function SidebarVisibilitySection({
         const matrixRow = matrixRowForLink(node);
         const expanded = matrixRow ? expandedLinks.has(node.permissionId) : false;
         const extraToggle = SIDEBAR_LINK_EXTRA_TOGGLE[node.permissionId];
+        // When a ticked link carries its own controls (a create/edit/delete matrix
+        // and/or a guard toggle), wrap the whole group in a subtle cluster so those
+        // controls read as belonging to THIS link — not the next chip beside it.
+        const hasControls = isOn && (!!matrixRow || !!extraToggle);
         return (
-            <div key={node.permissionId} className="inline-flex items-stretch gap-1">
+            <div
+                key={node.permissionId}
+                className={[
+                    "inline-flex items-stretch gap-1",
+                    hasControls ? "rounded-lg border border-border bg-muted/40 p-1" : "",
+                ].join(" ")}
+            >
                 <Button
                     type="button"
                     variant="ghost"

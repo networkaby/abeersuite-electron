@@ -132,12 +132,10 @@ export const PERMISSIONS = {
     COUPONS_CREATE:                     "coupons:create",
     COUPONS_EDIT:                       "coupons:edit",
     COUPONS_DELETE:                     "coupons:delete",
-    COUPONS_DISCOUNT_EDIT:             "coupons:discount:edit",   // guard: change % / flat amount
     GIFT_CARDS_MANAGE:                  "gift-cards:manage",       // split from coupons
     GIFT_CARDS_CREATE:                  "gift-cards:create",
     GIFT_CARDS_EDIT:                    "gift-cards:edit",
     GIFT_CARDS_DELETE:                  "gift-cards:delete",
-    GIFT_CARDS_VALUE_EDIT:             "gift-cards:value:edit",   // guard: load / write off balance
     TIERS_MANAGE:                       "tiers:manage",            // was borrowed customers:manage
     TIERS_CREATE:                       "tiers:create",
     TIERS_EDIT:                         "tiers:edit",

@@ -10,8 +10,8 @@ import { enginePost } from "@/modules/accountancy/lib/transactionEngine";
 // Dr <payment ledger> / Cr "Gift Card Liability" for the card's value, writes an
 // ISSUE txn, and flips the card DRAFT → ACTIVE. This is the moment money is taken.
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    // Issuing takes money and posts the liability — the value-loading action.
-    const { user, response } = await requireAnyPermission(PERMISSIONS.GIFT_CARDS_VALUE_EDIT, PERMISSIONS.GIFT_CARDS_MANAGE);
+    // Issuing (selling) a card is part of editing it — activates + loads balance.
+    const { user, response } = await requireAnyPermission(PERMISSIONS.GIFT_CARDS_EDIT, PERMISSIONS.GIFT_CARDS_MANAGE);
     if (response) return response;
 
     const { id, error: idError } = await parseIdParam(params);
