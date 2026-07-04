@@ -1,6 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/shared/lib/auth/permissions";
+import { requireAuth, requireAnyPermission } from "@/shared/lib/auth/permissions";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
@@ -88,7 +89,10 @@ export async function PUT(
     req: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const { response } = await requireAuth();
+    const { response } = await requireAnyPermission(
+        PERMISSIONS.CUSTOMERS_EDIT_OWN, PERMISSIONS.CUSTOMERS_EDIT_BRANCH,
+        PERMISSIONS.CUSTOMERS_EDIT_DEPARTMENT, PERMISSIONS.CUSTOMERS_EDIT_ORG,
+    );
     if (response) return response;
 
     const { id } = await params;
@@ -148,7 +152,10 @@ export async function DELETE(
     _: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const { response } = await requireAuth();
+    const { response } = await requireAnyPermission(
+        PERMISSIONS.CUSTOMERS_DELETE_OWN, PERMISSIONS.CUSTOMERS_DELETE_BRANCH,
+        PERMISSIONS.CUSTOMERS_DELETE_DEPARTMENT, PERMISSIONS.CUSTOMERS_DELETE_ORG,
+    );
     if (response) return response;
 
     const { id } = await params;

@@ -1,6 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/shared/lib/auth/permissions";
+import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { z } from "zod";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
@@ -64,7 +65,7 @@ export async function GET(req: Request) {
 
 // POST /api/companies — create company + auto-create ledger account + contact rows
 export async function POST(req: Request) {
-    const { response } = await requireAuth();
+    const { response } = await requirePermission(PERMISSIONS.CUSTOMERS_CREATE);
     if (response) return response;
 
     const { data, error } = await validateRequest(req, createSchema);

@@ -700,6 +700,22 @@ const MATRIX_ROWS: {
                 deleteOwn: "accountancy:masters:delete", deleteBranch: "accountancy:masters:delete", deleteOrg: "accountancy:masters:delete",
             },
         },
+        // Contacts module (key "customers") — Person (people) AND Companies share
+        // ONE create/edit/delete set (customers:*), so both links open the same
+        // table. View rides the sidebar link (customers:view). People carry a legacy
+        // own/branch/dept/org edit split; the matrix grants the org (broadest) key
+        // and the routes accept any edit/delete scope.
+        {
+            key: "contacts",
+            label: "Contacts",
+            module: "customers",
+            cells: {
+                viewOwn: "customers:view", viewBranch: "customers:view", viewOrg: "customers:view",
+                create: "customers:create",
+                editOwn: "customers:edit:org", editBranch: "customers:edit:org", editOrg: "customers:edit:org",
+                deleteOwn: "customers:delete:org", deleteBranch: "customers:delete:org", deleteOrg: "customers:delete:org",
+            },
+        },
         // admin:bypass is intentionally removed from the matrix — it is a code-only
         // sentinel grantable only via the env super admin (.env). It must never appear
         // in the UI where it could be ticked by mistake.
@@ -774,11 +790,20 @@ const SIDEBAR_LINK_MATRIX_ROW_KEY: Record<string, string> = {
     [sidebarChildPermissionId("accountancy", "account-groups")]: "accountancyMasters",
     [sidebarChildPermissionId("accountancy", "ledgers")]: "accountancyMasters",
     [sidebarChildPermissionId("accountancy", "chart-of-accounts")]: "accountancyMasters",
-    // The ledger "books" (Cash/Bank/Loans) render the same explorer with an
-    // in-page "Create ledger" — so they reuse the SAME accountancyMasters table.
+    // The ledger "books" (Account Ledger + Cash/Bank/Loans) render the same
+    // explorer with an in-page "Create ledger" — so they reuse the SAME
+    // accountancyMasters table.
+    [sidebarChildPermissionId("accountancy", "account-ledger")]: "accountancyMasters",
     [sidebarChildPermissionId("accountancy", "cash-book")]: "accountancyMasters",
     [sidebarChildPermissionId("accountancy", "bank-book")]: "accountancyMasters",
     [sidebarChildPermissionId("accountancy", "loans-book")]: "accountancyMasters",
+    // Stock Summary has an inline "Edit product master" pencil (InvProductDialog),
+    // so it reuses the SAME products table (Products / Item Ledger).
+    [sidebarChildPermissionId("accountancy", "stock-summary")]: "products",
+    // Contacts module — Person (people) and Companies share ONE create/edit/delete
+    // matrix (customers:*); both chevrons open the same table.
+    [sidebarChildPermissionId("customers", "person")]: "contacts",
+    [sidebarChildPermissionId("customers", "companies")]: "contacts",
 };
 
 // A sidebar link with ONE extra yes/no permission beyond "can see this page" —
