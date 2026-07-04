@@ -730,7 +730,4 @@ export const BUTTON_BAR_ACTIONS: ButtonBarAction[] = [
     { label: "Rejection Out +", subtitle: "New rejection out", icon: PackageX, variant: "outline", action: "new-rejection-out", permission: "inventory:manage" },
 
 
-
-
-
 ];

@@ -1,6 +1,7 @@
 "use client";
 
-import { Check, Lock } from "lucide-react";
+import { useState } from "react";
+import { Check, ChevronDown, Lock } from "lucide-react";
 
 // Generic permission matrix — rows × column-groups of single-permission cells.
 // Each cell maps to one permission id (or null = N/A for that row). A cell can be
@@ -39,6 +40,8 @@ export function PermissionMatrix({
     selected,
     onTogglePerm,
     locked,
+    collapsible,
+    defaultOpen = true,
 }: {
     title?: string;
     description?: string;
@@ -48,18 +51,47 @@ export function PermissionMatrix({
     onTogglePerm: (permId: string) => void;
     /** Returns true when a permission is NOT offered by the active pool (locked). */
     locked?: (permId: string) => boolean;
+    /** Renders the header as a toggle that collapses the table to save space. */
+    collapsible?: boolean;
+    /** Initial open state when `collapsible` is set. Defaults to expanded. */
+    defaultOpen?: boolean;
 }) {
     const flatColumns = columnGroups.flatMap((g) => g.columns.map((c) => ({ ...c, groupKey: g.key, tint: g.tint })));
+    const [open, setOpen] = useState(defaultOpen);
+    // Count of granted permissions among this matrix's own cells — shown in the
+    // collapsed header so the state is visible without expanding.
+    const grantedCount = rows.reduce(
+        (count, row) => count + Object.values(row.cells).filter((permId): permId is string => permId != null && selected.has(permId)).length,
+        0,
+    );
 
     return (
         <div className="overflow-hidden rounded-lg border border-border bg-card">
             {(title || description) && (
-                <div className="border-b border-border bg-muted/40 px-3 py-2">
-                    {title && <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{title}</p>}
-                    {description && <p className="mt-0.5 text-[11px] text-muted-foreground">{description}</p>}
-                </div>
+                collapsible ? (
+                    <button
+                        type="button"
+                        onClick={() => setOpen((prev) => !prev)}
+                        className="flex w-full items-start justify-between gap-2 border-b border-border bg-muted/40 px-3 py-2 text-left hover:bg-muted/60"
+                    >
+                        <div>
+                            {title && <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{title}</p>}
+                            {description && <p className="mt-0.5 text-[11px] text-muted-foreground">{description}</p>}
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2 pt-0.5">
+                            <span className="text-[10px] font-medium text-muted-foreground">{grantedCount} granted</span>
+                            <ChevronDown size={14} className={["text-muted-foreground transition-transform", open ? "rotate-180" : ""].join(" ")} />
+                        </div>
+                    </button>
+                ) : (
+                    <div className="border-b border-border bg-muted/40 px-3 py-2">
+                        {title && <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{title}</p>}
+                        {description && <p className="mt-0.5 text-[11px] text-muted-foreground">{description}</p>}
+                    </div>
+                )
             )}
-            <div className="max-h-[68vh] overflow-auto">
+            {(!collapsible || open) && (
+                <div className="max-h-[68vh] overflow-auto">
                 <table className="w-full text-xs">
                     <thead>
                         <tr className="border-b border-border bg-muted/20 text-[10px] uppercase tracking-wide text-muted-foreground">
@@ -122,6 +154,7 @@ export function PermissionMatrix({
                     </tbody>
                 </table>
             </div>
+            )}
         </div>
     );
 }

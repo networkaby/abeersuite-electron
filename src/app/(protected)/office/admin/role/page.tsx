@@ -9,6 +9,7 @@ import {
     Boxes,
     Calculator,
     Check,
+    ChevronDown,
     ClipboardList,
     Gift,
     HeartHandshake,
@@ -559,6 +560,49 @@ const MATRIX_PERMISSION_IDS = new Set(
         .filter((permissionId): permissionId is string => Boolean(permissionId))
 );
 
+// Simplified Create / Edit / Delete columns for a single-resource matrix row —
+// no View, no own/branch/org split, since a sidebar link like Users only needs
+// "can create, can edit, can delete" at a glance (same tint language as vouchers).
+const CORE_MATRIX_COLUMN_GROUPS: MatrixColumnGroup[] = [
+    { key: "create", label: "CREATE", tint: "green", columns: [{ key: "create", label: "Create" }] },
+    { key: "edit", label: "EDIT", tint: "amber", columns: [{ key: "edit", label: "Edit" }] },
+    { key: "delete", label: "DELETE", tint: "rose", columns: [{ key: "delete", label: "Delete" }] },
+];
+
+// Converts a MATRIX_ROWS row into the shared matrix component's simplified
+// create/edit/delete row shape. Edit and delete collapse own/branch/org into one
+// column — for Users/Role/Organisation those scoped cells are all the same
+// underlying permission id anyway, so the first non-null one is representative.
+const toSharedMatrixRow = (row: (typeof MATRIX_ROWS)[number]): MatrixRow => {
+    const firstOf = (...keys: MatrixColumnKey[]): string | null => {
+        for (const key of keys) {
+            const cell = row.cells[key];
+            if (typeof cell === "string") return cell;
+        }
+        return null;
+    };
+    return {
+        key: row.key,
+        label: row.label,
+        cells: {
+            create: firstOf("create"),
+            edit: firstOf("editOwn", "editBranch", "editOrg"),
+            delete: firstOf("deleteOwn", "deleteBranch", "deleteOrg"),
+        },
+    };
+};
+
+// Sidebar links whose resource also carries a granular CRUD row in MATRIX_ROWS
+// (Users, Role, Organisation…) — keyed by the link's `ui:sidebar:*` permission id
+// → the matching MATRIX_ROWS key. The Sidebar links card expands that row inline
+// (same look as the voucher matrices) so a role's "Users" link and its actual
+// create/view/edit/delete grant sit in one place.
+const SIDEBAR_LINK_MATRIX_ROW_KEY: Record<string, string> = {
+    [sidebarChildPermissionId("admin", "users")]: "users",
+    [sidebarChildPermissionId("admin", "role")]: "roles",
+    [sidebarChildPermissionId("settings", "organisation")]: "orgSettings",
+};
+
 function roleToForm(role: Role): RoleForm {
     return {
         label: role.label,
@@ -997,7 +1041,11 @@ export default function RolePage() {
                                                 </p>
                                             </div>
                                         )}
+                                    </CardContent>
+                                </Card>
 
+                                <Card>
+                                    <CardContent className="space-y-3 pt-4">
                                         {filtered.length === 0 ? (
                                             <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
                                                 <Search size={32} className="mb-3 opacity-20" />
@@ -1022,69 +1070,10 @@ export default function RolePage() {
                                                         columnGroups={VOUCHER_COLUMN_GROUPS}
                                                         selected={selected}
                                                         onTogglePerm={togglePerm}
+                                                        collapsible
+                                                        defaultOpen={false}
                                                     />
                                                 ))}
-                                                {selected.has(POS_VISIBILITY_ID) && (
-                                                    <>
-                                                        <SharedPermissionMatrix
-                                                            title="POS vouchers — /vouchers/pos UI only"
-                                                            description="Per POS voucher kind: create / cancel (= edit) / delete (no post — POS has no draft; being able to create implies it's visible). Office-equivalent voucher permission also grants each (office ⊇ POS). Shown because this role can see POS."
-                                                            rows={POS_MATRIX_ROWS}
-                                                            columnGroups={POS_COLUMN_GROUPS}
-                                                            selected={selected}
-                                                            onTogglePerm={togglePerm}
-                                                        />
-                                                        {posShiftChipsAvailable && (
-                                                            <div className="overflow-hidden rounded-lg border border-border bg-card">
-                                                                <div className="border-b border-border bg-muted/40 px-3 py-2">
-                                                                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">POS Shift &amp; Till</p>
-                                                                    <p className="mt-0.5 text-[11px] text-muted-foreground">Operator actions on their own counter — start/end their shift (open implies close) and drop cash to the safe. Oversight (manage, view other branches) is a separate management concern.</p>
-                                                                </div>
-                                                                <div className="flex flex-wrap gap-1.5 px-3 py-2.5">
-                                                                    {POS_OPERATOR_SHIFT_CHIPS.map((chip) => {
-                                                                        // Each chip toggles its id(s) together (Start/End = open + close).
-                                                                        const on = chip.ids.every((id) => selected.has(id));
-                                                                        const changed = chip.ids.some((id) => selected.has(id) !== original.has(id));
-                                                                        return (
-                                                                            <Button
-                                                                                key={chip.label}
-                                                                                type="button"
-                                                                                variant="ghost"
-                                                                                size="sm"
-                                                                                onClick={() =>
-                                                                                    setSelected((prev) => {
-                                                                                        const next = new Set(prev);
-                                                                                        const all = chip.ids.every((id) => next.has(id));
-                                                                                        chip.ids.forEach((id) => (all ? next.delete(id) : next.add(id)));
-                                                                                        return next;
-                                                                                    })
-                                                                                }
-                                                                                title={`${chip.label} — grants ${chip.ids.join(" + ")}`}
-                                                                                className={[
-                                                                                    "h-auto items-center gap-1.5 rounded-md border px-2 py-1 text-left transition-colors",
-                                                                                    on
-                                                                                        ? "border-primary bg-primary/10 text-foreground hover:bg-primary/15"
-                                                                                        : "border-border hover:border-primary/60 hover:bg-primary/5",
-                                                                                    changed ? "ring-2 ring-primary/20" : "",
-                                                                                ].join(" ")}
-                                                                            >
-                                                                                <span
-                                                                                    className={[
-                                                                                        "flex h-4 w-4 shrink-0 items-center justify-center rounded border",
-                                                                                        on ? "border-primary bg-primary text-primary-foreground" : "border-border",
-                                                                                    ].join(" ")}
-                                                                                >
-                                                                                    {on && <Check size={10} strokeWidth={3} />}
-                                                                                </span>
-                                                                                <span className="text-[11px] font-medium leading-tight">{chip.label}</span>
-                                                                            </Button>
-                                                                        );
-                                                                    })}
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                    </>
-                                                )}
                                                 <AdditionalPermissions
                                                     permissions={additionalPermissions}
                                                     selected={selected}
@@ -1094,13 +1083,23 @@ export default function RolePage() {
                                             </div>
                                         )}
                                     </CardContent>
+
+                                    <QuickActionsSection
+                                        selected={selected}
+                                        original={original}
+                                        onTogglePerm={togglePerm}
+                                        inLens={inLens}
+                                    />
                                 </Card>
 
-                                <QuickActionsSection
+                                <PosVoucherSection
                                     selected={selected}
                                     original={original}
+                                    setSelected={setSelected}
                                     onTogglePerm={togglePerm}
+                                    posShiftChipsAvailable={posShiftChipsAvailable}
                                 />
+
 
                                 <SidebarVisibilitySection
                                     selected={selected}
@@ -1546,7 +1545,7 @@ function PermissionMatrix({
 
     return (
         <div className="overflow-hidden rounded-lg border border-border bg-card">
-            {/* <div className="border-b border-border bg-muted/40 px-3 py-2">
+            <div className="border-b border-border bg-muted/40 px-3 py-2">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                     Enterprise Permission Matrix
                 </p>
@@ -1677,12 +1676,105 @@ function PermissionMatrix({
                         ))}
                     </tbody>
                 </table>
-            </div> */}
+            </div>
         </div>
     );
 }
 
 // The role's Quick Actions picker — flex list of everything creatable (vouchers +
+// POS is a separate UI (/vouchers/pos) with its own voucher lifecycle and
+// operator shift/till controls — kept in its own card, not mixed into the
+// office voucher matrices above, so the two surfaces read as distinct.
+function PosVoucherSection({
+    selected,
+    original,
+    setSelected,
+    onTogglePerm,
+    posShiftChipsAvailable,
+}: {
+    selected: Set<string>;
+    original: Set<string>;
+    setSelected: React.Dispatch<React.SetStateAction<Set<string>>>;
+    onTogglePerm: (id: string) => void;
+    posShiftChipsAvailable: boolean;
+}) {
+    // Only relevant once the role can see POS at all (the workspace visibility toggle).
+    if (!selected.has(POS_VISIBILITY_ID)) return null;
+    return (
+        <Card className="border-green-200 dark:border-green-900">
+            <CardContent className="space-y-3 pt-4">
+                <div>
+                    <h2 className="flex items-center gap-2 text-base font-bold tracking-tight">
+                        <ShoppingCart size={15} className="text-green-700 dark:text-green-400" /> Point of Sale
+                    </h2>
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">
+                        Separate from office vouchers — gates the /vouchers/pos UI and the operator&rsquo;s own shift &amp; till.
+                    </p>
+                </div>
+                <SharedPermissionMatrix
+                    title="POS vouchers — /vouchers/pos UI only"
+                    description="Per POS voucher kind: create / cancel (= edit) / delete (no post — POS has no draft; being able to create implies it's visible). Office-equivalent voucher permission also grants each (office ⊇ POS)."
+                    rows={POS_MATRIX_ROWS}
+                    columnGroups={POS_COLUMN_GROUPS}
+                    selected={selected}
+                    onTogglePerm={onTogglePerm}
+                    collapsible
+                    defaultOpen={false}
+                />
+                {posShiftChipsAvailable && (
+                    <div className="overflow-hidden rounded-lg border border-border bg-card">
+                        <div className="border-b border-border bg-muted/40 px-3 py-2">
+                            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">POS Shift &amp; Till</p>
+                            <p className="mt-0.5 text-[11px] text-muted-foreground">Operator actions on their own counter — start/end their shift (open implies close) and drop cash to the safe. Oversight (manage, view other branches) is a separate management concern.</p>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5 px-3 py-2.5">
+                            {POS_OPERATOR_SHIFT_CHIPS.map((chip) => {
+                                // Each chip toggles its id(s) together (Start/End = open + close).
+                                const on = chip.ids.every((id) => selected.has(id));
+                                const changed = chip.ids.some((id) => selected.has(id) !== original.has(id));
+                                return (
+                                    <Button
+                                        key={chip.label}
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() =>
+                                            setSelected((prev) => {
+                                                const next = new Set(prev);
+                                                const all = chip.ids.every((id) => next.has(id));
+                                                chip.ids.forEach((id) => (all ? next.delete(id) : next.add(id)));
+                                                return next;
+                                            })
+                                        }
+                                        title={`${chip.label} — grants ${chip.ids.join(" + ")}`}
+                                        className={[
+                                            "h-auto items-center gap-1.5 rounded-md border px-2 py-1 text-left transition-colors",
+                                            on
+                                                ? "border-primary bg-primary/10 text-foreground hover:bg-primary/15"
+                                                : "border-border hover:border-primary/60 hover:bg-primary/5",
+                                            changed ? "ring-2 ring-primary/20" : "",
+                                        ].join(" ")}
+                                    >
+                                        <span
+                                            className={[
+                                                "flex h-4 w-4 shrink-0 items-center justify-center rounded border",
+                                                on ? "border-primary bg-primary text-primary-foreground" : "border-border",
+                                            ].join(" ")}
+                                        >
+                                            {on && <Check size={10} strokeWidth={3} />}
+                                        </span>
+                                        <span className="text-[11px] font-medium leading-tight">{chip.label}</span>
+                                    </Button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
+            </CardContent>
+        </Card>
+    );
+}
+
 // Repair + POS). Ticking a chip grants that create permission, which makes the "+"
 // show in the role's button bar. Reads/writes the same `selected` set as the
 // matrix, so the two views stay in sync.
@@ -1690,11 +1782,19 @@ function QuickActionsSection({
     selected,
     original,
     onTogglePerm,
+    inLens,
 }: {
     selected: Set<string>;
     original: Set<string>;
     onTogglePerm: (id: string) => void;
+    // Department-pool lens: a chip is offered only if its create permission is in
+    // the pool (or already granted, so nothing granted is ever hidden). Keeps this
+    // bar in step with the voucher matrix, which is pool-gated per kind.
+    inLens: (id: string) => boolean;
 }) {
+    const options = QUICK_ACTION_OPTIONS.filter((opt) => inLens(opt.permission));
+    // Nothing creatable in this department's pool → drop the whole card (no empty header).
+    if (options.length === 0) return null;
     return (
         <Card>
             <CardContent className="space-y-3 pt-4">
@@ -1707,7 +1807,7 @@ function QuickActionsSection({
                     </p>
                 </div>
                 <div className="flex flex-wrap gap-1.5">
-                    {QUICK_ACTION_OPTIONS.map((opt) => {
+                    {options.map((opt) => {
                         const Icon = opt.icon;
                         const isOn = selected.has(opt.permission);
                         const changed = isOn !== original.has(opt.permission);
@@ -1876,6 +1976,19 @@ function SidebarVisibilitySection({
     onTogglePerm: (id: string) => void;
 }) {
     const term = search.trim().toLowerCase();
+    // Which sidebar links currently show their granular matrix row expanded —
+    // keyed by the link's own `ui:sidebar:*` permission id.
+    const [expandedLinks, setExpandedLinks] = useState<Set<string>>(new Set());
+    const toggleExpanded = (id: string) =>
+        setExpandedLinks((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id); else next.add(id);
+            return next;
+        });
+    const matrixRowForLink = (node: SidebarChildRow) => {
+        const rowKey = SIDEBAR_LINK_MATRIX_ROW_KEY[node.permissionId];
+        return rowKey ? MATRIX_ROWS.find((row) => row.key === rowKey) : undefined;
+    };
 
     // Gate per MODULE, not per link: a module is offered if the department pool
     // carries ANY of its links (all-access pools offer everything; Workspace is
@@ -1906,32 +2019,49 @@ function SidebarVisibilitySection({
     const chip = (node: SidebarChildRow) => {
         const isOn = selected.has(node.permissionId);
         const changed = isOn !== original.has(node.permissionId);
+        const matrixRow = matrixRowForLink(node);
+        const expanded = matrixRow ? expandedLinks.has(node.permissionId) : false;
         return (
-            <Button
-                key={node.permissionId}
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => onTogglePerm(node.permissionId)}
-                title={node.permissionId}
-                className={[
-                    "h-auto items-center gap-1.5 rounded-md border px-2 py-1 text-left transition-colors",
-                    isOn
-                        ? "border-primary bg-primary/10 text-foreground hover:bg-primary/15"
-                        : "border-border hover:border-primary/60 hover:bg-primary/5",
-                    changed ? "ring-2 ring-primary/20" : "",
-                ].join(" ")}
-            >
-                <span
+            <div key={node.permissionId} className="inline-flex items-stretch gap-1">
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onTogglePerm(node.permissionId)}
+                    title={node.permissionId}
                     className={[
-                        "flex h-4 w-4 shrink-0 items-center justify-center rounded border",
-                        isOn ? "border-primary bg-primary text-primary-foreground" : "border-border",
+                        "h-auto items-center gap-1.5 rounded-md border px-2 py-1 text-left transition-colors",
+                        isOn
+                            ? "border-primary bg-primary/10 text-foreground hover:bg-primary/15"
+                            : "border-border hover:border-primary/60 hover:bg-primary/5",
+                        changed ? "ring-2 ring-primary/20" : "",
                     ].join(" ")}
                 >
-                    {isOn && <Check size={10} strokeWidth={3} />}
-                </span>
-                <span className="text-[11px] font-medium leading-tight">{node.label}</span>
-            </Button>
+                    <span
+                        className={[
+                            "flex h-4 w-4 shrink-0 items-center justify-center rounded border",
+                            isOn ? "border-primary bg-primary text-primary-foreground" : "border-border",
+                        ].join(" ")}
+                    >
+                        {isOn && <Check size={10} strokeWidth={3} />}
+                    </span>
+                    <span className="text-[11px] font-medium leading-tight">{node.label}</span>
+                </Button>
+                {/* Some links (Users, Role, Organisation…) also carry a granular
+                    create/view/edit/delete grant — this reveals that row inline. */}
+                {matrixRow && (
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => toggleExpanded(node.permissionId)}
+                        title={`${expanded ? "Hide" : "Show"} granular permissions for ${node.label}`}
+                        className="h-auto w-6 shrink-0 rounded-md border border-border text-muted-foreground hover:border-primary/60 hover:bg-primary/5"
+                    >
+                        <ChevronDown size={12} className={["transition-transform", expanded ? "rotate-180" : ""].join(" ")} />
+                    </Button>
+                )}
+            </div>
         );
     };
 
@@ -1940,12 +2070,25 @@ function SidebarVisibilitySection({
     const renderLevel = (nodes: SidebarChildRow[]) => {
         const leaves = nodes.filter((n) => !n.children?.length);
         const parents = nodes.filter((n) => n.children?.length);
+        const expandedMatrices = leaves
+            .map((n) => ({ node: n, row: matrixRowForLink(n) }))
+            .filter((x): x is { node: SidebarChildRow; row: (typeof MATRIX_ROWS)[number] } => !!x.row && expandedLinks.has(x.node.permissionId));
         return (
             <div className="space-y-1.5">
-                {leaves.length > 0 && <div className="flex flex-wrap gap-1.5">{leaves.map(chip)}</div>}
+                {leaves.length > 0 && <div className="flex flex-wrap items-start gap-1.5">{leaves.map(chip)}</div>}
+                {expandedMatrices.map(({ node, row }) => (
+                    <SharedPermissionMatrix
+                        key={node.permissionId}
+                        title={`${node.label} — granular permissions`}
+                        rows={[toSharedMatrixRow(row)]}
+                        columnGroups={CORE_MATRIX_COLUMN_GROUPS}
+                        selected={selected}
+                        onTogglePerm={onTogglePerm}
+                    />
+                ))}
                 {parents.map((p) => (
                     <div key={p.permissionId} className="space-y-1">
-                        <div className="flex flex-wrap gap-1.5">{chip(p)}</div>
+                        <div className="flex flex-wrap items-start gap-1.5">{chip(p)}</div>
                         {/* Sub-links are offered only once the parent is ticked — a child
                             shows in the sidebar only under a checked parent. */}
                         {selected.has(p.permissionId) && (
@@ -1969,9 +2112,9 @@ function SidebarVisibilitySection({
                     </p>
                 </div>
 
-                <div className="overflow-hidden rounded-lg border border-border bg-card divide-y divide-border">
+                <div className="space-y-2">
                     {modules.map((mod) => (
-                        <div key={mod.key} className="px-3 py-2.5">
+                        <div key={mod.key} className="overflow-hidden rounded-lg border border-border bg-card px-3 py-2.5">
                             <div className="mb-1.5 flex items-center gap-2">
                                 <span className="text-[11px] font-bold uppercase tracking-wider text-foreground">{mod.label}</span>
                                 <span className="text-[10px] text-muted-foreground">

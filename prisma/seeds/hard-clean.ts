@@ -55,7 +55,7 @@ const TRANSACTION_TABLES = [
     // bootstrap. Child before parent; cascade also covers the child when the
     // spine is truncated.
     "VoucherGlLine", "UniversalVoucher",
-    "VoucherAllocation", "VoucherLine", "Voucher",
+    "VoucherAllocation",
     // AuditLog — unified recycle-bin for hard-deleted vouchers/JEs (2026-06-09,
     // replaced the 3 *Audit tables). Transactional snapshot data, wiped here.
     "AuditLog",

@@ -105,6 +105,15 @@ Validation is Zod-driven on write endpoints. Auth uses guard helpers from `src/s
 - Session carries role, permissions, rank, scope, branch, department.
 - API uses `requirePermission` for fine-grained authorization. Direction is permission-driven, not role-name checks.
 
+#### Department permission pool (authoring lens)
+
+- Each department carries a **permission pool** (`DepartmentPermission`, or `Department.isAllAccess` = every permission). It is an **authoring-time lens only** — it never participates in runtime permission checks (those resolve position → role → grants). See `src/shared/lib/auth/departmentPool.ts`.
+- Invariant: **a role never grants a permission outside its department's pool.** The pool is the single ceiling, enforced at all three write paths:
+  - **Save pool** (`PUT /api/departments/[id]/permissions`) — cascade-strips removed permissions from every role homed in the department.
+  - **Move role** (`PATCH /api/roles/[id]` with `departmentId`) — strips grants outside the new pool.
+  - **Save role permissions** (`PUT /api/roles/[id]/permissions`) — filters the incoming set to the pool before persisting.
+- The Role editor (`office/admin/role`) offers only pooled ids: the voucher matrix gates per kind (`kindOffered`) and the Quick Actions bar filters by the same `inLens` predicate. Already-granted permissions are always shown so nothing granted is silently hidden; all-access departments offer everything.
+
 ### Portal (customer)
 
 - Separate credential table: `CustomerPortalCredential` (linked to `Customer`).

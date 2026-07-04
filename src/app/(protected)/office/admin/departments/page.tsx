@@ -482,7 +482,12 @@ function PoolEditor({
                                 <div className="flex flex-wrap gap-1.5">
                                     {group.kinds.map(kind => {
                                         const ids = voucherKindPermissionIds(kind.type);
-                                        const on = ids.every(id => selected.has(id));
+                                        // A kind is "in the pool" if ANY of its action ids are pooled — the
+                                        // seed pools only the 4 write actions (create/post/cancel/delete),
+                                        // never view/open, so `every` would wrongly read every seeded kind as
+                                        // off. `some` matches the Role page's kindOffered gate. Toggling flips
+                                        // the whole set, so on/off stays all-or-nothing.
+                                        const on = ids.some(id => selected.has(id));
                                         return (
                                             <PermChip
                                                 key={kind.type}
@@ -498,7 +503,7 @@ function PoolEditor({
                         ))}
                     </div>
                 )}
-                {/* {modules.map(module => (
+                {modules.map(module => (
                     <div key={module}>
                         <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{module}</p>
                         <div className="space-y-1">
@@ -512,10 +517,10 @@ function PoolEditor({
                                     onClick={() => onToggle(p.id)}
                                 />
                             ))}
-                            
+
                         </div>
                     </div>
-                ))} */}
+                ))}
                 {modules.length === 0 && voucherGroups.length === 0 && sidebarRows.length === 0 && (
                     <p className="py-6 text-center text-sm text-muted-foreground">No permissions match your search.</p>
                 )}
