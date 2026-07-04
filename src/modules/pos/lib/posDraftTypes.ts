@@ -74,6 +74,17 @@ export type CartLine = {
     redeemCapPct?: number | null;
 };
 
+/// A validated coupon as the coupon-validate route returns it — the server owns
+/// the ₹ value; the client mirrors droppedTier / blockedLoyalty in the bill.
+export type CouponHit = {
+    couponId: number;
+    code: string | null;
+    name: string;
+    rupees: number;
+    droppedTier: boolean;
+    blockedLoyalty: boolean;
+};
+
 export type ChargeRow = { id: string; accountId: number | null; description: string; amount: string };
 
 export const newChargeRow = (): ChargeRow => ({

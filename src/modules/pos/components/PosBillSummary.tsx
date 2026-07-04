@@ -20,10 +20,8 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/components/GlAccountCombobox";
 import { formatInr, parseDecimalInput, parseDigitsInput } from "@/shared/lib/format";
-import { newChargeRow, type Snapshot, type CartLine, type ChargeRow } from "@/modules/pos/lib/posDraftTypes";
+import { newChargeRow, type Snapshot, type CartLine, type ChargeRow, type CouponHit } from "@/modules/pos/lib/posDraftTypes";
 
-// Same server-validated coupon shape both screens use.
-type CouponHit = { couponId: number; code: string | null; name: string; rupees: number; droppedTier: boolean; blockedLoyalty: boolean };
 type GiftCardState = { id: number; code: string; balance: number };
 
 // Local text-input sanitisers — identical to the ones in the screens (small, pure).
