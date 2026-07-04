@@ -2,6 +2,7 @@ import type { PrismaClient } from "@/generated/prisma/client";
 import bcrypt from "bcryptjs";
 import { timingSafeEqual } from "crypto";
 import { isStaffEmailDomainAllowed } from "@/shared/lib/auth/staffEmailAllowlist";
+import { isLoginBlocked, recordLoginFailure, clearLoginFailures } from "@/shared/lib/auth/loginRateLimit";
 
 export type StaffAuthUser = {
     id: string;
@@ -64,9 +65,16 @@ export async function authorizeStaffCredentials(
     email: string,
     password: string
 ): Promise<StaffAuthUser | null> {
+    // Brute-force throttle — checked before any credential work so a blocked
+    // identifier costs nothing (no bcrypt, no DB).
+    if (isLoginBlocked(email)) return null;
+
     // Env super-admin takes priority — no DB needed.
     const superAdmin = checkSuperAdminEnv(email, password);
-    if (superAdmin) return superAdmin;
+    if (superAdmin) {
+        clearLoginFailures(email);
+        return superAdmin;
+    }
 
     if (!isStaffEmailDomainAllowed(email)) return null;
 
@@ -98,10 +106,17 @@ export async function authorizeStaffCredentials(
         },
     });
 
-    if (!user) return null;
+    if (!user) {
+        recordLoginFailure(email);
+        return null;
+    }
 
     const isValid = await bcrypt.compare(password, user.password);
-    if (!isValid) return null;
+    if (!isValid) {
+        recordLoginFailure(email);
+        return null;
+    }
+    clearLoginFailures(email);
 
     // Roles flow from Position appointments. `User.role` is a manual override /
     // cache (e.g. promoted admins); it's included in the union when present.

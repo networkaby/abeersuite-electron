@@ -6,6 +6,7 @@ import {
     normalizePortalEmail,
     normalizePortalPhone,
 } from "@/shared/lib/auth/portalIdentifier";
+import { isLoginBlocked, recordLoginFailure, clearLoginFailures } from "@/shared/lib/auth/loginRateLimit";
 
 export type PortalAuthUser = {
     id: string;
@@ -29,6 +30,9 @@ export async function authorizePortalCredentials(
 ): Promise<PortalAuthUser | null> {
     const raw = identifier.trim();
     if (!raw || !password) return null;
+
+    // Brute-force throttle — checked before any credential work.
+    if (isLoginBlocked(raw)) return null;
 
     let cred = null;
     if (isLikelyEmail(raw)) {
@@ -58,10 +62,17 @@ export async function authorizePortalCredentials(
         });
     }
 
-    if (!cred) return null;
+    if (!cred) {
+        recordLoginFailure(raw);
+        return null;
+    }
 
     const ok = await bcrypt.compare(password, cred.passwordHash);
-    if (!ok) return null;
+    if (!ok) {
+        recordLoginFailure(raw);
+        return null;
+    }
+    clearLoginFailures(raw);
 
     const p = cred.person;
     const personalAccount = await prisma.account.findUnique({
