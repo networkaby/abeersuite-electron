@@ -8,13 +8,16 @@ export const metadata = { title: "Tax Classification" };
 
 // SSR shell — accountancy layout already gates `accountancy:view:org`, so we
 // only resolve the user once to find out whether the edit affordances should
-// be rendered (gated by `inventory:manage`). Everything else is the client
-// component's responsibility (filters, tabs, inline edits, dialog).
+// be rendered. Gated by the dedicated `compliance:tax:edit` (or the broader
+// `inventory:manage`, which already covers every inventory-master field
+// including tax — kept as a fallback so existing inventory-manager roles
+// don't lose access).
 export default async function TaxClassificationPage() {
     const session = await auth();
     const perms =
         (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
     const canEdit =
+        hasPermissionWithScope(perms, PERMISSIONS.COMPLIANCE_TAX_EDIT) ||
         hasPermissionWithScope(perms, PERMISSIONS.INVENTORY_MANAGE) ||
         hasPermissionWithScope(perms, PERMISSIONS.ADMIN_BYPASS);
 

@@ -46,6 +46,12 @@ export const invCategoryUpdateSchema = invCategoryCreateSchema.partial();
 
 const TAXABILITY = ["TAXABLE", "EXEMPT", "NIL_RATED", "NON_GST"] as const;
 
+// Product / product-group fields the Tax Classification page's inline edits
+// PATCH. A request touching ONLY these keys is a "tax-only" edit — gated by
+// the narrower `compliance:tax:edit` permission instead of the full
+// `inventory:manage` (see the two PATCH routes' isTaxOnlyPatch check).
+export const TAX_CLASSIFICATION_FIELDS = ["gstRateId", "hsnCode", "taxability"] as const;
+
 export const invProductGroupCreateSchema = nameIsActiveSchema.extend({
     parentId:   z.number().int().positive().nullish(),
     gstRateId:  z.number().int().positive().nullish(),

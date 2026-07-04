@@ -316,6 +316,7 @@ const PERMISSIONS = [
     { id: "accountancy:delete:own",  label: "Delete accountancy (own)",           module: "accountancy", description: "Delete own accountancy entries (subject to per-operation guards)." },
     { id: "accountancy:delete:br",   label: "Delete accountancy (branch)",        module: "accountancy", description: "Delete branch-scoped accountancy entries." },
     { id: "accountancy:delete:org",  label: "Delete accountancy (organisation)",  module: "accountancy", description: "Delete any accountancy entry organisation-wide." },
+    { id: "compliance:tax:edit", label: "Change tax classification", module: "accountancy", description: "Edit GST rate, HSN code, and taxability on inventory items and product groups from the Tax Classification page." },
 
     // loyalty — earn/redeem wallet config + manual adjustments
     { id: "loyalty:manage", label: "Manage loyalty", module: "loyalty", description: "Edit loyalty earn/redeem rates and earn rules, and post manual point adjustments." },

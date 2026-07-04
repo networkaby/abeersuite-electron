@@ -675,6 +675,18 @@ const SIDEBAR_LINK_MATRIX_ROW_KEY: Record<string, string> = {
     [sidebarChildPermissionId("settings", "organisation")]: "orgSettings",
 };
 
+// A sidebar link with ONE extra yes/no permission beyond "can see this page" —
+// simpler than a full matrix row, for links where only a single additional
+// capability makes sense. Shown as a small toggle next to the link's chip,
+// only once the link itself is ticked (can't grant an edit on a page the role
+// can't open). Keyed by the link's `ui:sidebar:*` permission id.
+const SIDEBAR_LINK_EXTRA_TOGGLE: Record<string, { id: string; label: string }> = {
+    [sidebarChildPermissionId("compliance", "tax-classification")]: {
+        id: "compliance:tax:edit",
+        label: "Can change tax",
+    },
+};
+
 function roleToForm(role: Role): RoleForm {
     return {
         label: role.label,
@@ -1920,6 +1932,7 @@ function SidebarVisibilitySection({
         const changed = isOn !== original.has(node.permissionId);
         const matrixRow = matrixRowForLink(node);
         const expanded = matrixRow ? expandedLinks.has(node.permissionId) : false;
+        const extraToggle = SIDEBAR_LINK_EXTRA_TOGGLE[node.permissionId];
         return (
             <div key={node.permissionId} className="inline-flex items-stretch gap-1">
                 <Button
@@ -1962,6 +1975,39 @@ function SidebarVisibilitySection({
                         <ChevronDown size={12} className={["transition-transform", expanded ? "rotate-180" : ""].join(" ")} />
                     </Button>
                 )}
+                {/* Single extra yes/no capability on top of "can see this page" (e.g.
+                    Tax Classification's edit grant) — only offered once the link
+                    itself is ticked. */}
+                {extraToggle && isOn && (() => {
+                    const extraOn = selected.has(extraToggle.id);
+                    const extraChanged = extraOn !== original.has(extraToggle.id);
+                    return (
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => onTogglePerm(extraToggle.id)}
+                            title={extraToggle.id}
+                            className={[
+                                "h-auto items-center gap-1.5 rounded-md border px-2 py-1 text-left transition-colors",
+                                extraOn
+                                    ? "border-primary bg-primary/10 text-foreground hover:bg-primary/15"
+                                    : "border-border hover:border-primary/60 hover:bg-primary/5",
+                                extraChanged ? "ring-2 ring-primary/20" : "",
+                            ].join(" ")}
+                        >
+                            <span
+                                className={[
+                                    "flex h-4 w-4 shrink-0 items-center justify-center rounded border",
+                                    extraOn ? "border-primary bg-primary text-primary-foreground" : "border-border",
+                                ].join(" ")}
+                            >
+                                {extraOn && <Check size={10} strokeWidth={3} />}
+                            </span>
+                            <span className="text-[11px] font-medium leading-tight">{extraToggle.label}</span>
+                        </Button>
+                    );
+                })()}
             </div>
         );
     };

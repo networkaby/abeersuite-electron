@@ -203,6 +203,12 @@ export const PERMISSIONS = {
     TICKETS_SUBSTATUS_SET:              "tickets:substatus:set",
     TICKETS_MANAGE_PARTICIPANTS:        "tickets:manage-participants",
 
+    // Compliance (GST reports) — read access rides the general accountancy:view:*
+    // permissions; this is the one extra gate for the Tax Classification page's
+    // inline edits (rate / HSN / taxability), replacing the borrowed
+    // inventory:manage so it isn't tangled up with unrelated inventory-master CRUD.
+    COMPLIANCE_TAX_EDIT:                 "compliance:tax:edit",
+
     // Users
     USERS_CREATE:                       "users:create",
     USERS_EDIT_ORG:                     "users:edit:org",

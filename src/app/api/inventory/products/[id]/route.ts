@@ -1,8 +1,8 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { Prisma } from "@/generated/prisma/client";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
-import { invProductUpdateSchema } from "@/shared/lib/schemas/inventorySchemas";
+import { requirePermission, requireAnyPermission } from "@/shared/lib/auth/permissions";
+import { invProductUpdateSchema, TAX_CLASSIFICATION_FIELDS } from "@/shared/lib/schemas/inventorySchemas";
 import { normalizeProductCodes } from "@/shared/lib/inventory";
 import { findSkuCodeCollision, skuCodeCollisionMessage } from "@/shared/lib/inventory/codeCollision";
 import { validateRequest } from "@/shared/lib/api";
@@ -48,7 +48,18 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
 }
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission(PERMISSIONS.INVENTORY_MANAGE);
+    // A body touching ONLY GST fields (the Tax Classification page's inline
+    // edits) is allowed by the narrower compliance:tax:edit; anything that also
+    // touches other product fields needs the full inventory:manage.
+    let peekedBody: Record<string, unknown> = {};
+    try { peekedBody = await req.clone().json(); } catch { /* invalid JSON — validateRequest reports it below */ }
+    const bodyKeys = Object.keys(peekedBody);
+    const taxFieldSet: readonly string[] = TAX_CLASSIFICATION_FIELDS;
+    const isTaxOnly = bodyKeys.length > 0 && bodyKeys.every((k) => taxFieldSet.includes(k));
+
+    const { response } = isTaxOnly
+        ? await requireAnyPermission(PERMISSIONS.COMPLIANCE_TAX_EDIT, PERMISSIONS.INVENTORY_MANAGE)
+        : await requirePermission(PERMISSIONS.INVENTORY_MANAGE);
     if (response) return response;
     try {
         const { id, error: idError } = await parseIdParam(params);
