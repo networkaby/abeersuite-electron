@@ -124,14 +124,14 @@ function classifyLog(note?: string): LogKind {
 }
 
 const KIND_META: Record<LogKind, { icon: LucideIcon; dot: string; lead?: string }> = {
-    success:  { icon: Check,          dot: "bg-green-100 text-green-600 dark:bg-green-950 dark:text-green-400", lead: "Success" },
-    fail:     { icon: X,              dot: "bg-red-100 text-red-600 dark:bg-red-950 dark:text-red-400", lead: "Unsuccess" },
-    note:     { icon: MessageSquare,  dot: "bg-blue-100 text-blue-600 dark:bg-blue-950 dark:text-blue-400" },
-    entered:  { icon: ArrowRight,     dot: "bg-muted text-muted-foreground" },
+    success: { icon: Check, dot: "bg-green-100 text-green-600 dark:bg-green-950 dark:text-green-400", lead: "Success" },
+    fail: { icon: X, dot: "bg-red-100 text-red-600 dark:bg-red-950 dark:text-red-400", lead: "Unsuccess" },
+    note: { icon: MessageSquare, dot: "bg-blue-100 text-blue-600 dark:bg-blue-950 dark:text-blue-400" },
+    entered: { icon: ArrowRight, dot: "bg-muted text-muted-foreground" },
     advanced: { icon: ArrowRightLeft, dot: "bg-amber-100 text-amber-600 dark:bg-amber-950 dark:text-amber-400", lead: "Auto-advanced" },
-    retry:    { icon: RefreshCw,      dot: "bg-amber-100 text-amber-600 dark:bg-amber-950 dark:text-amber-400", lead: "Retry limit reached" },
-    revert:   { icon: CornerUpLeft,   dot: "bg-muted text-muted-foreground", lead: "Reverted" },
-    system:   { icon: Flag,           dot: "bg-muted text-muted-foreground" },
+    retry: { icon: RefreshCw, dot: "bg-amber-100 text-amber-600 dark:bg-amber-950 dark:text-amber-400", lead: "Retry limit reached" },
+    revert: { icon: CornerUpLeft, dot: "bg-muted text-muted-foreground", lead: "Reverted" },
+    system: { icon: Flag, dot: "bg-muted text-muted-foreground" },
 };
 
 // Strip the machine prefix so the row reads cleanly beside its icon.
@@ -228,7 +228,7 @@ export default function TicketDetailPage() {
             if (log.status === curStatus && logSub === null) continue;          // bare-arrival artifact
             const subLabel = log.ticketWorker?.label;
             return {
-                statusId:    log.status,
+                statusId: log.status,
                 workerId: logSub,
                 label: subLabel
                     ? `${log.ticketStatus.label} › ${subLabel}`
@@ -477,7 +477,7 @@ export default function TicketDetailPage() {
                                         {Object.entries(ticket.context).map(([k, v]) => (
                                             <div key={k} className="flex gap-2 text-xs">
                                                 <span className="shrink-0 font-mono text-amber-800/80 dark:text-amber-200/80">{k}</span>
-                                                <span className="min-w-0 flex-1 break-words text-right font-mono text-foreground">
+                                                <span className="min-w-0 flex-1 wrap-break-word text-right font-mono text-foreground">
                                                     {v === null || v === undefined ? "—" : typeof v === "object" ? JSON.stringify(v) : String(v)}
                                                 </span>
                                             </div>
