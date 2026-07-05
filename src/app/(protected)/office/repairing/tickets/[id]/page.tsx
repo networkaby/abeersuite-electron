@@ -39,7 +39,7 @@ interface Ticket {
     workerId?: string;
     pipelineId?: string | null;
     pipeline?: { id: string; label: string; color: string } | null;
-    ticketWorker?: { id: string; label: string; color: string; actionLabel?: string | null; work?: { label: string; color: string; successLabel?: string | null; failLabel?: string | null; args?: WorkArg[] | null } | null; successWorker?: { id: string; label: string } | null; failWorker?: { id: string; label: string } | null } | null;
+    ticketWorker?: { id: string; label: string; color: string; actionLabel?: string | null; work?: { label: string; color: string; successLabel?: string | null; failLabel?: string | null; startLabel?: string | null; prompt?: string | null; successPopup?: boolean; failPopup?: boolean; args?: WorkArg[] | null } | null; successWorker?: { id: string; label: string } | null; failWorker?: { id: string; label: string } | null } | null;
     priority: string;
     notes?: string;
     accessInfo?: string;
@@ -198,10 +198,10 @@ export default function TicketDetailPage() {
     if (loading) return <p className="text-muted-foreground">Loading...</p>;
     if (!ticket) return <p className="text-muted-foreground">Ticket not found.</p>;
 
-    // Toggle for the hidden "Current work" card (duplicates the Work Inbox). Typed as
-    // `boolean` (not the literal `false`) so the JSX block below stays reachable and keeps
-    // the non-null `ticket` narrowing from the guard above — flip to re-enable.
-    const SHOW_CURRENT_WORK: boolean = false;
+    // The "Current work" card lets the technician advance the ticket's Work (Accept /
+    // Reject → next worker/status) right on the ticket page, mirroring the Work Inbox
+    // card. Kept as a named flag so it's easy to hide again if the duplication bites.
+    const SHOW_CURRENT_WORK: boolean = true;
 
     const actionBtnBase = "w-full border border-border py-2 text-sm flex items-center justify-center gap-2 transition-colors hover:bg-muted rounded-md";
 
@@ -536,6 +536,10 @@ export default function TicketDetailPage() {
                                         workLabel={ticket.ticketWorker.work.label}
                                         successLabel={ticket.ticketWorker.work.successLabel}
                                         failLabel={ticket.ticketWorker.work.failLabel}
+                                        startLabel={ticket.ticketWorker.work.startLabel}
+                                        prompt={ticket.ticketWorker.work.prompt}
+                                        successPopup={ticket.ticketWorker.work.successPopup}
+                                        failPopup={ticket.ticketWorker.work.failPopup}
                                         args={ticket.ticketWorker.work.args ?? []}
                                         successTarget={ticket.ticketWorker.successWorker ?? null}
                                         failTarget={ticket.ticketWorker.failWorker ?? null}
