@@ -37,6 +37,8 @@ const updateSchema = z.object({
         .max(50)
         .transform((arr) => [...new Set(arr)])
         .optional(),
+    // Release the device lock — the next PC to open a shift here rebinds it.
+    releaseLock: z.boolean().optional(),
 });
 
 const counterInclude = {
@@ -170,6 +172,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                     name: data.name,
                     isActive: data.isActive,
                     allowedExpenseAccountIds: data.allowedExpenseAccountIds,
+                    // Release clears all three lock fields; next open rebinds.
+                    ...(data.releaseLock ? { boundDeviceId: null, boundDeviceLabel: null, boundAt: null } : {}),
                 }),
                 include: counterInclude,
             });
@@ -188,6 +192,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             },
             paymentAccounts: updated.paymentAccounts,
             allowedExpenseAccountIds: updated.allowedExpenseAccountIds,
+            boundDeviceId:    updated.boundDeviceId,
+            boundDeviceLabel: updated.boundDeviceLabel,
+            boundAt:          updated.boundAt,
         });
     } catch (e) {
         return handleApiError(e, "Failed to update counter");

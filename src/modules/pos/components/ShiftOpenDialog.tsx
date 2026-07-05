@@ -35,6 +35,8 @@ type Counter = {
     name: string;
     tillAccount: { id: number; name: string; balance: string };
     activeShift: { id: number; status: string; user: { name: string } } | null;
+    // Device lock — the PC (bridge deviceId) this counter is bound to. Null = free.
+    boundDeviceId: string | null;
 };
 
 export type OpenedShift = {
@@ -57,9 +59,10 @@ export function ShiftOpenDialog({
     const [counters, setCounters]         = useState<Counter[]>([]);
     const [loadingCounters, setLoadingCounters] = useState(false);
     const [selectedCounterId, setSelectedCounterId] = useState<number | null>(null);
-    // When this PC is locked to a counter (saved in the bridge config), the
-    // picker is forced to it and disabled.
-    const [lockedCounterId, setLockedCounterId] = useState<number | null>(null);
+    // Stable per-PC id from the local bridge (minted once, persisted there). The
+    // counter this device is bound to server-side forces + disables the picker.
+    const [deviceId, setDeviceId]         = useState<string | null>(null);
+    const [deviceLabel, setDeviceLabel]   = useState<string | null>(null);
     const [vaultTopUp, setVaultTopUp]     = useState("0");            // rupees
     const [notes, setNotes]               = useState("");
     const [submitting, setSubmitting]     = useState(false);
@@ -78,18 +81,33 @@ export function ShiftOpenDialog({
             .catch(() => toast.error("Failed to load counters"))
             .finally(() => setLoadingCounters(false));
 
-        // Counter lock: if this PC's bridge config names a counter, force it.
-        // Best-effort — no bridge / not set → normal free picker.
+        // Device id from the local bridge (stable per PC). The server binds the
+        // counter to this id on first open; a later open elsewhere is refused.
+        // Best-effort — no bridge → no device lock this session (free picker).
         fetch(`${BRIDGE}/config`, { signal: AbortSignal.timeout(2000) })
             .then((r) => r.ok ? r.json() : null)
-            .then((cfg: { counterId?: number | null } | null) => {
-                if (cfg?.counterId) {
-                    setLockedCounterId(cfg.counterId);
-                    setSelectedCounterId(cfg.counterId);
-                }
+            .then((cfg: { deviceId?: string | null; companyName?: string | null } | null) => {
+                if (!cfg) return;
+                setDeviceLabel(cfg.companyName ?? null);
+                if (cfg.deviceId) { setDeviceId(cfg.deviceId); return; }
+                // First time on this PC — mint an id and persist it in the bridge.
+                const id = crypto.randomUUID();
+                setDeviceId(id);
+                fetch(`${BRIDGE}/config`, {
+                    method:  "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body:    JSON.stringify({ deviceId: id }),
+                }).catch(() => { /* offline — id just won't persist */ });
             })
             .catch(() => { /* bridge offline — leave picker free */ });
     }, [open]);
+
+    // The counter this PC is bound to (server-side). When set, the picker is
+    // forced to it and locked. Derived from the loaded counters + this deviceId.
+    const lockedCounter = deviceId ? counters.find((c) => c.boundDeviceId === deviceId) ?? null : null;
+    useEffect(() => {
+        if (lockedCounter) setSelectedCounterId(lockedCounter.id);
+    }, [lockedCounter]);
 
     const selectedCounter = counters.find((c) => c.id === selectedCounterId) ?? null;
     const carryOverRupees = selectedCounter ? Number(selectedCounter.tillAccount.balance) : 0;
@@ -105,20 +123,14 @@ export function ShiftOpenDialog({
                 counterId:       selectedCounterId,
                 vaultTopUpPaise: Math.round(topUpRupees * 100),
                 notes:           notes.trim() || undefined,
+                // The server binds this counter to the PC on first open (device lock).
+                deviceId:        deviceId ?? undefined,
+                deviceLabel:     deviceLabel ?? undefined,
             });
             if (data.resumed) {
                 toast.success(`Resumed shift — ${selectedCounter?.name} · continuing from where you left off`);
             } else {
                 toast.success(`Shift opened — ${selectedCounter?.name} · ₹${fmt(totalFloat)} in drawer`);
-            }
-            // Lock this PC to the chosen counter on first open (saved in the bridge
-            // config). Subsequent opens force it; clear via Printer Settings → Forget.
-            if (lockedCounterId == null) {
-                fetch(`${BRIDGE}/config`, {
-                    method:  "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body:    JSON.stringify({ counterId: selectedCounterId, counterName: selectedCounter?.name ?? null }),
-                }).catch(() => { /* bridge offline — lock just won't persist */ });
             }
             onOpened(data);
             onOpenChange(false);
@@ -152,34 +164,42 @@ export function ShiftOpenDialog({
                             <Select
                                 value={selectedCounterId?.toString() ?? ""}
                                 onValueChange={(v) => setSelectedCounterId(Number(v))}
-                                disabled={lockedCounterId != null}
+                                disabled={lockedCounter != null}
                             >
                                 <SelectTrigger>
                                     <SelectValue placeholder="Select counter…" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {counters.map((c) => (
-                                        <SelectItem
-                                            key={c.id}
-                                            value={c.id.toString()}
-                                            disabled={!!c.activeShift}
-                                        >
-                                            <span className="flex items-center gap-2">
-                                                <Monitor size={13} />
-                                                {c.name}
-                                                {c.activeShift && (
-                                                    <span className="text-muted-foreground text-xs">
-                                                        ({c.activeShift.status === "AWAITING_HANDOVER" ? "awaiting handover" : `in use — ${c.activeShift.user.name}`})
-                                                    </span>
-                                                )}
-                                            </span>
-                                        </SelectItem>
-                                    ))}
+                                    {counters.map((c) => {
+                                        // A counter bound to a *different* PC can't be opened here.
+                                        // Only enforced when this PC has a deviceId (bridge running);
+                                        // with no bridge the server can't check either, so leave it free.
+                                        const boundElsewhere = !!deviceId && !!c.boundDeviceId && c.boundDeviceId !== deviceId;
+                                        return (
+                                            <SelectItem
+                                                key={c.id}
+                                                value={c.id.toString()}
+                                                disabled={!!c.activeShift || boundElsewhere}
+                                            >
+                                                <span className="flex items-center gap-2">
+                                                    <Monitor size={13} />
+                                                    {c.name}
+                                                    {c.activeShift ? (
+                                                        <span className="text-muted-foreground text-xs">
+                                                            ({c.activeShift.status === "AWAITING_HANDOVER" ? "awaiting handover" : `in use — ${c.activeShift.user.name}`})
+                                                        </span>
+                                                    ) : boundElsewhere && (
+                                                        <span className="text-muted-foreground text-xs">(locked to another computer)</span>
+                                                    )}
+                                                </span>
+                                            </SelectItem>
+                                        );
+                                    })}
                                 </SelectContent>
                             </Select>
-                            {lockedCounterId != null && (
+                            {lockedCounter != null && (
                                 <p className="text-xs text-muted-foreground">
-                                    Locked to this PC. Change it in Settings → Printer Settings → Forget counter.
+                                    Locked to this PC. Release it from Settings → Thermal Printer → Forget, or Admin → POS Counters.
                                 </p>
                             )}
                         </div>

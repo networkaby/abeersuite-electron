@@ -22,6 +22,11 @@ const openSchema = z.object({
     counterId:       z.number().int().positive(),
     vaultTopUpPaise: z.number().int().min(0).default(0), // fresh cash drawn from vault
     notes:           z.string().trim().max(500).optional(),
+    // Stable per-PC id from the local bridge. On first open the counter is bound
+    // to it; a later open from a different PC is refused (device lock). Absent
+    // when no bridge is running — then the lock can't be enforced (open is free).
+    deviceId:        z.string().trim().min(1).max(100).optional(),
+    deviceLabel:     z.string().trim().max(100).optional(), // friendly name for the admin list
 });
 
 // ── GET /api/pos/shifts ──────────────────────────────────────────────────────
@@ -132,6 +137,17 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Counter is inactive" }, { status: 400 });
     }
 
+    // Device lock — a counter remembers the first PC that opened it. Opening from
+    // a different PC is refused until an admin (Admin → POS Counters) or that PC
+    // (Settings → Thermal Printer → Forget) releases the lock. When the caller
+    // sends no deviceId (no bridge running) the lock can't be checked — open free.
+    if (counter.boundDeviceId && body.deviceId && counter.boundDeviceId !== body.deviceId) {
+        return NextResponse.json(
+            { error: "This counter is locked to another computer. Ask an admin to release it (Admin → POS Counters)." },
+            { status: 409 },
+        );
+    }
+
     // Resolve the branch vault (needed only if vaultTopUpPaise > 0).
     const branch = await prisma.branch.findUnique({
         where:  { id: branchId },
@@ -211,6 +227,15 @@ export async function POST(req: NextRequest) {
                     ],
                 });
                 openingContraId = contra.voucherId;
+            }
+
+            // Bind the counter to this PC on first open (device lock). Later opens
+            // from the same PC pass the boundDeviceId check above unchanged.
+            if (!counter.boundDeviceId && body.deviceId) {
+                await tx.posCounter.update({
+                    where: { id: counter.id },
+                    data:  { boundDeviceId: body.deviceId, boundDeviceLabel: body.deviceLabel ?? null, boundAt: new Date() },
+                });
             }
 
             return tx.posShift.create({

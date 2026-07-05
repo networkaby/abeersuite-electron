@@ -10,7 +10,7 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import {
-    Plus, Pencil, Trash2, X, Check, Monitor, Building2, ToggleLeft, ToggleRight,
+    Plus, Pencil, Trash2, X, Check, Monitor, Building2, ToggleLeft, ToggleRight, Lock, Unlock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,6 +57,10 @@ type Counter = {
     allowedExpenseAccountIds: number[];
     totalShifts: number;
     activeShift: { id: number; status: string; user: { name: string } } | null;
+    // Device lock — which PC is bound to this counter (null = free). Released here.
+    boundDeviceId: string | null;
+    boundDeviceLabel: string | null;
+    boundAt: string | null;
 };
 
 const EMPTY_FORM = { branchId: "", name: "" };
@@ -242,6 +246,18 @@ export default function CountersAdminPage() {
             void load();
         } catch (e: unknown) {
             toast.error(axios.isAxiosError(e) ? (e.response?.data as { error?: string })?.error ?? "Failed to toggle" : "Failed to toggle");
+        }
+    };
+
+    // Release the device lock so any PC can claim this counter on the next open.
+    const handleRelease = async (c: Counter) => {
+        if (!confirm(`Release the counter lock on "${c.name}" (${c.branch.name})? The next computer to open a shift here will become the bound PC.`)) return;
+        try {
+            await axios.patch(`/api/pos/counters/${c.id}`, { releaseLock: true });
+            toast.success("Counter lock released");
+            void load();
+        } catch (e: unknown) {
+            toast.error(axios.isAxiosError(e) ? (e.response?.data as { error?: string })?.error ?? "Failed to release lock" : "Failed to release lock");
         }
     };
 
@@ -499,6 +515,11 @@ export default function CountersAdminPage() {
                                                                 · {c.activeShift.status === "AWAITING_HANDOVER" ? "awaiting handover" : `in use — ${c.activeShift.user.name}`}
                                                             </span>
                                                         )}
+                                                        {c.boundDeviceId && (
+                                                            <span className="flex items-center gap-1 text-foreground" title={`Locked to ${c.boundDeviceLabel ?? "a computer"}${c.boundAt ? ` since ${new Date(c.boundAt).toLocaleDateString()}` : ""}`}>
+                                                                <Lock size={11} /> Locked to {c.boundDeviceLabel ?? "a computer"}
+                                                            </span>
+                                                        )}
                                                     </div>
                                                     {/* Compact summary so the operator can see what's wired
                                                         without opening the edit form. CASH is always there. */}
@@ -516,6 +537,11 @@ export default function CountersAdminPage() {
                                                         {c.isActive ? "Active" : "Inactive"}
                                                     </Badge>
                                                     <div className="flex gap-1">
+                                                        {c.boundDeviceId && (
+                                                            <Button variant="outline" size="icon-sm" title="Release device lock" onClick={() => handleRelease(c)}>
+                                                                <Unlock size={14} />
+                                                            </Button>
+                                                        )}
                                                         <Button variant="outline" size="icon-sm" title={c.isActive ? "Deactivate" : "Activate"} onClick={() => handleToggle(c)}>
                                                             {c.isActive ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}
                                                         </Button>

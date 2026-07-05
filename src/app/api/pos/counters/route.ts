@@ -78,6 +78,10 @@ export async function GET(req: NextRequest) {
                 allowedExpenseAccountIds: c.allowedExpenseAccountIds,
                 totalShifts: c._count.shifts,
                 activeShift: c.shifts[0] ?? null,
+                // Device lock — which PC is bound to this counter (null = free).
+                boundDeviceId:    c.boundDeviceId,
+                boundDeviceLabel: c.boundDeviceLabel,
+                boundAt:          c.boundAt,
             })));
         }
 
@@ -129,6 +133,8 @@ export async function GET(req: NextRequest) {
                 balance: c.tillAccount.balance.toString(),
             },
             activeShift: c.shifts[0] ?? null,
+            // Device lock — ShiftOpenDialog compares this to the PC's bridge deviceId.
+            boundDeviceId: c.boundDeviceId,
         })));
     } catch (e) {
         return handleApiError(e, "Failed to fetch POS counters");

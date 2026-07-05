@@ -27,9 +27,9 @@ interface RelayConfig {
     windowsPrinterName: string;
     companyName:        string;
     relayPort:          number;
-    // Counter lock (set on first POS shift open; cleared via Forget below).
-    counterId?:         number | null;
-    counterName?:       string | null;
+    // Stable per-PC id minted on first POS shift open. The counter lock itself now
+    // lives server-side keyed by this id; Forget below releases it.
+    deviceId?:          string | null;
 }
 
 const DEFAULT: RelayConfig = {
@@ -40,8 +40,7 @@ const DEFAULT: RelayConfig = {
     windowsPrinterName: "",
     companyName:        "",
     relayPort:          9191,
-    counterId:          null,
-    counterName:        null,
+    deviceId:           null,
 };
 
 const TYPE_LABELS: { type: ConnectionType; label: string; icon: React.ReactNode; desc: string }[] = [
@@ -55,6 +54,8 @@ export default function PrinterSettingsPage() {
     const [bridgeVersion, setBridgeVersion] = useState<string | null>(null);
     const [latestVersion, setLatestVersion] = useState<string | null>(null);
     const [config,       setConfig]       = useState<RelayConfig>(DEFAULT);
+    // The counter this PC is bound to (server-side, keyed by config.deviceId).
+    const [boundCounter, setBoundCounter] = useState<{ id: number; name: string } | null>(null);
     const [loading,      setLoading]      = useState(true);
     const [saving,       setSaving]       = useState(false);
     const [testing,      setTesting]      = useState(false);
@@ -91,6 +92,22 @@ export default function PrinterSettingsPage() {
             .then((j: { version?: string } | null) => { if (j?.version) setLatestVersion(j.version); })
             .catch(() => { /* manifest optional — no warning if unavailable */ });
     }, []);
+
+    // Which counter is this PC bound to? Match the bridge deviceId against the
+    // server's counter locks so the Forget card knows what it's releasing.
+    useEffect(() => {
+        if (!config.deviceId) { setBoundCounter(null); return; }
+        let cancelled = false;
+        fetch(`/api/pos/counters`)
+            .then((r) => r.ok ? r.json() : [])
+            .then((list: { id: number; name: string; boundDeviceId: string | null }[]) => {
+                if (cancelled) return;
+                const mine = Array.isArray(list) ? list.find((c) => c.boundDeviceId === config.deviceId) : null;
+                setBoundCounter(mine ? { id: mine.id, name: mine.name } : null);
+            })
+            .catch(() => { /* ignore — card just won't show */ });
+        return () => { cancelled = true; };
+    }, [config.deviceId]);
 
     const fetchWinPrinters = async () => {
         setPortsLoading(true);
@@ -140,15 +157,16 @@ export default function PrinterSettingsPage() {
     };
 
     const forgetCounter = async () => {
+        if (!config.deviceId) return;
         try {
-            const r = await fetch(`${RELAY}/config`, {
+            const r = await fetch(`/api/pos/counters/release-mine`, {
                 method:  "POST",
                 headers: { "Content-Type": "application/json" },
-                body:    JSON.stringify({ counterId: null, counterName: null }),
+                body:    JSON.stringify({ deviceId: config.deviceId }),
             });
             if (!r.ok) throw new Error();
             toast.success("Counter lock cleared for this PC");
-            checkRelay();
+            setBoundCounter(null);
         } catch {
             toast.error("Could not clear counter lock");
         }
@@ -238,13 +256,13 @@ export default function PrinterSettingsPage() {
                 </div>
             )}
 
-            {relayUp && config.counterId && (
+            {relayUp && boundCounter && (
                 <div className="rounded-lg border border-border bg-card p-4 flex items-center justify-between gap-3 text-sm">
                     <div>
                         <p className="font-medium">Counter lock</p>
                         <p className="text-xs text-muted-foreground">
                             This PC opens POS shifts as{" "}
-                            <span className="font-medium text-foreground">{config.counterName ?? `Counter #${config.counterId}`}</span>.
+                            <span className="font-medium text-foreground">{boundCounter.name}</span>.
                         </p>
                     </div>
                     <Button variant="outline" size="sm" onClick={forgetCounter}>Forget</Button>
