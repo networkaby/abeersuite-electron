@@ -98,7 +98,8 @@ interface Ticket {
         note?: string;
         visibility: string;
         createdAt: string;
-        changedBy: { name: string };
+        // Actor is a frozen JSON snapshot now (no User FK) — see ActorSnapshot.
+        author?: { userName?: string } | null;
         ticketStatus: { label: string; color: string };
         ticketWorker?: { label: string; color: string } | null;
     }[];
@@ -435,7 +436,7 @@ export default function TicketDetailPage() {
                                                             {log.visibility === "public"
                                                                 ? <Eye size={11} className="text-primary" aria-label="Public" />
                                                                 : <Lock size={11} aria-label="Internal" />}
-                                                            <span>{log.changedBy.name}</span>
+                                                            <span>{log.author?.userName ?? "—"}</span>
                                                             <span title={formatDateTime(log.createdAt)}>· {timeAgo(log.createdAt)}</span>
                                                         </span>
                                                     </div>
