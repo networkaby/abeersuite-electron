@@ -23,7 +23,10 @@ import { PosReturnDialog } from "@/modules/pos/components/PosReturnDialog";
 import { PosExpenditureDialog } from "@/modules/pos/components/PosExpenditureDialog";
 import { PosReceiptDialog } from "@/modules/pos/components/PosReceiptDialog";
 import { PosTopBar } from "@/modules/pos/components/PosTopBar";
+import { PosActionRail } from "@/modules/pos/components/PosActionRail";
 import { PosCustomerPanel } from "@/modules/pos/components/PosCustomerPanel";
+import QuickTicketButton from "@/shared/components/QuickTicketButton";
+import { useQuickTicketStore } from "@/store/quickTicketStore";
 import { PosBillSummary } from "@/modules/pos/components/PosBillSummary";
 import { formatInr } from "@/shared/lib/format";
 import type { PosBilling } from "@/modules/pos/hooks/usePosBilling";
@@ -52,7 +55,9 @@ export function PosScreenShell({
     children?: React.ReactNode;
 }) {
     return (
-        <div className="flex h-full w-full flex-col">
+        <div className="flex h-full w-full flex-row">
+          {/* Main column — everything except the far-right action rail. */}
+          <div className="flex min-w-0 flex-1 flex-col">
             {/* Awaiting-handover keeps the dedicated bar — its billing-disabled
                 messaging is safety-critical and must stay loud. A normal OPEN
                 shift no longer shows a full-width strip; its status + actions
@@ -109,14 +114,10 @@ export function PosScreenShell({
                 onClear={b.clearCustomer}
                 onNewCustomer={() => partySearchRef.current?.openNew()}
                 onReturn={() => b.setReturnDialogOpen(true)}
-                onExp={() => b.activeShift ? b.setExpenditureDialogOpen(true) : toast.error("Open a shift first to record an expenditure")}
-                onRcv={() => b.activeShift ? b.setReceiptDialogOpen(true) : toast.error("Open a shift first to collect a payment")}
                 canSale={b.posAccess.canSale}
                 canOrder={b.posAccess.canOrder}
                 canEstimate={b.posAccess.canEstimate}
                 canReturn={b.posAccess.canReturn}
-                canExp={b.posAccess.canExp}
-                canRcv={b.posAccess.canRcv}
                 canDrop={b.posAccess.canDrop}
                 activeShift={b.activeShift}
                 shiftLoaded={b.shiftLoaded}
@@ -370,6 +371,20 @@ export function PosScreenShell({
 
             {/* Mode-specific dialogs (checkout / payment link) */}
             {children}
+          </div>
+
+          {/* Far-right action rail (full height) — Rcv + Exp + placeholders. */}
+          <PosActionRail
+            onExp={() => b.activeShift ? b.setExpenditureDialogOpen(true) : toast.error("Open a shift first to record an expenditure")}
+            onRcv={() => b.activeShift ? b.setReceiptDialogOpen(true) : toast.error("Open a shift first to collect a payment")}
+            onHelp={() => toast.info("POS help — coming soon")}
+            onTicket={() => { useQuickTicketStore.getState().reset(); useQuickTicketStore.getState().setOpen(true); }}
+            canExp={b.posAccess.canExp}
+            canRcv={b.posAccess.canRcv}
+          />
+
+          {/* Quick-ticket dialog (opened from the rail's Ticket button). */}
+          <QuickTicketButton />
         </div>
     );
 }
