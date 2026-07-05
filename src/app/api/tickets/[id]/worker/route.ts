@@ -13,7 +13,11 @@ import { handleApiError } from "@/shared/lib/api";
 import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 
 const workerUpdateSchema = z.object({
-    workerId: z.string().trim().min(1, "Worker is required"),
+    // The outcome target is EITHER a worker (route within/around the stage) OR a
+    // statusId (jump straight to another stage, applying its entry worker). Exactly
+    // one is required — the refine below enforces it.
+    workerId: z.string().trim().min(1).optional(),
+    statusId: z.string().trim().min(1).optional(),
     note: z.string().optional(),
     visibility: z.enum(["INTERNAL", "PUBLIC"]).optional(),
     // Set by Success / Unsuccess on the Work Inbox — stamps the outgoing work as
@@ -21,6 +25,8 @@ const workerUpdateSchema = z.object({
     outcome: z.enum(["success", "unsuccess"]).optional(),
     // User-given Work arguments collected at completion → merged into Ticket.context.
     args: z.record(z.string(), z.string()).optional(),
+}).refine((d) => !!d.workerId !== !!d.statusId, {
+    message: "Provide exactly one of workerId or statusId",
 });
 
 // ── Hybrid retry schedule helpers ──────────────────────────────────────────────
@@ -80,10 +86,115 @@ export async function PATCH(
         const ticketId = Number(id);
         const { data, error } = await validateRequest(req, workerUpdateSchema);
         if (error) return error;
-        const { workerId, note, visibility, outcome, args } = data;
+        const { workerId, statusId, note, visibility, outcome, args } = data;
+
+        const ticket = await prisma.ticket.findUnique({
+            where: { id: ticketId },
+            include: { repair: { select: { deviceId: true } } },
+        });
+        if (!ticket) {
+            return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
+        }
+
+        // Capture previous worker before update (needed for auto-revert + completion stamp)
+        const prevWorkerId = ticket.workerId;
+
+        // ── Outcome → STAGE jump ────────────────────────────────────────────────
+        // The completed worker routes this outcome straight to another status (not a
+        // same-stage worker). Advance to that status + its entry worker, stamp the
+        // outgoing work done, and run the same post-move powers (spawn / actions /
+        // auto-advance). Self-contained so the worker-landing + retry logic below is
+        // left completely untouched.
+        if (statusId) {
+            const targetStatus = await prisma.ticketStatus.findUnique({
+                where: { id: statusId },
+                select: { id: true, label: true, work: { select: { permissionId: true } } },
+            });
+            if (!targetStatus) {
+                return NextResponse.json({ error: "Status not found" }, { status: 404 });
+            }
+            if (!passesWorkGate(user, targetStatus.work)) {
+                return NextResponse.json({ error: "You don't have permission for this work" }, { status: 403 });
+            }
+
+            const entrySub = await findEntryWorker(statusId);
+            const newWorkerId = entrySub?.id ?? null;
+            const prevSub = prevWorkerId
+                ? await prisma.ticketWorker.findUnique({ where: { id: prevWorkerId }, select: { label: true, autoRevertOnClear: true, actions: true } })
+                : null;
+
+            await prisma.$transaction(async (tx) => {
+                const mergedContext = args && Object.keys(args).length
+                    ? { ...((ticket.context as Record<string, unknown> | null) ?? {}), ...args }
+                    : undefined;
+                await tx.ticket.update({
+                    where: { id: ticketId },
+                    data: {
+                        workerId: newWorkerId,
+                        status: statusId,
+                        ...(mergedContext && { context: mergedContext as Prisma.InputJsonValue }),
+                        wakeAt: null, retryCount: 0, retryKeyId: null,
+                        updatedAt: new Date(),
+                    },
+                });
+
+                // Completion stamp for the OUTGOING work (feeds the Finished list); or a
+                // plain note when there's no recorded outcome.
+                if (outcome && prevWorkerId) {
+                    await tx.ticketLog.create({
+                        data: {
+                            ticketId, status: ticket.status, workerId: prevWorkerId,
+                            note: `Work done · ${outcome === "success" ? "Success" : "Unsuccess"}${note ? " — " + note : ""}`,
+                            author,
+                        },
+                    });
+                } else if (note) {
+                    await tx.ticketLog.create({
+                        data: { ticketId, status: ticket.status, workerId: prevWorkerId ?? undefined, note, visibility: visibility === "PUBLIC" ? "PUBLIC" : "INTERNAL", author },
+                    });
+                }
+
+                // Auto-revert participants the outgoing worker added.
+                if (prevWorkerId && prevSub?.autoRevertOnClear) {
+                    const toRevert = await tx.ticketParticipant.findMany({
+                        where: { ticketId, addedByWorkerId: prevWorkerId, removedAt: null },
+                        select: { id: true, user: { select: { name: true } } },
+                    });
+                    for (const p of toRevert) {
+                        await tx.ticketParticipant.update({ where: { id: p.id }, data: { removedAt: new Date(), removedByWorkerId: newWorkerId } });
+                        await tx.ticketLog.create({ data: { ticketId, status: statusId, note: `Secondary owner auto-removed: ${p.user.name} (worker changed)`, author } });
+                    }
+                }
+
+                // Stage-advance logs (+ the entry worker landed in, + its transition note).
+                await tx.ticketLog.create({ data: { ticketId, status: statusId, note: `Auto-advanced by: ${prevSub?.label ?? "work"}`, author } });
+                if (entrySub) {
+                    await tx.ticketLog.create({ data: { ticketId, status: statusId, workerId: entrySub.id, note: `Entered: ${entrySub.label}`, author } });
+                    const landed = await tx.ticketWorker.findUnique({ where: { id: entrySub.id }, select: { transitionNote: true } });
+                    const tn = landed?.transitionNote?.trim();
+                    if (tn) await tx.ticketLog.create({ data: { ticketId, status: statusId, workerId: entrySub.id, note: tn, visibility: "PUBLIC", author } });
+                }
+            });
+
+            // 5th power — entry worker may spawn a child pipeline (best-effort).
+            if (newWorkerId) {
+                const landing = await prisma.ticketWorker.findUnique({ where: { id: newWorkerId }, select: { spawnPipelineId: true } });
+                if (landing?.spawnPipelineId) {
+                    await spawnChild({ parentId: ticketId, parentStatus: statusId, parentWorkerId: newWorkerId, spawnPipelineId: landing.spawnPipelineId, deviceId: ticket.repair?.deviceId ?? null, userId }).catch(() => { /* never blocks the move */ });
+                }
+            }
+            await reconcileParentFromChild(ticketId, userId).catch(() => { /* best-effort */ });
+            // 6th power — the completed worker's action chain, filtered by outcome.
+            if (outcome && prevWorkerId) {
+                await runWorkerActions({ ticketId, status: statusId, workerId: prevWorkerId, deviceId: ticket.repair?.deviceId ?? null, userId, outcome, author }, prevSub?.actions).catch(() => { /* best-effort */ });
+            }
+            // If the entry worker is itself an Action (auto Work), run it + continue.
+            const auto = await autoAdvance(ticketId, userId).catch(() => ({ openTabs: [] as string[], navigateTo: null }));
+            return NextResponse.json({ ok: true, openTabs: auto.openTabs, navigateTo: auto.navigateTo });
+        }
 
         const worker = await prisma.ticketWorker.findUnique({
-            where: { id: workerId },
+            where: { id: workerId! },
             include: { work: { select: { permissionId: true } } },
         });
         if (!worker) {
@@ -94,17 +205,6 @@ export async function PATCH(
         if (!passesWorkGate(user, worker.work)) {
             return NextResponse.json({ error: "You don't have permission for this work" }, { status: 403 });
         }
-
-        const ticket = await prisma.ticket.findUnique({
-            where: { id: ticketId },
-            include: { repair: { select: { deviceId: true } } },
-        });
-        if (!ticket) {
-            return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
-        }
-
-        // Capture previous worker before update (needed for auto-revert)
-        const prevWorkerId = ticket.workerId;
 
         const triggerMapOf = (s: { triggerMap?: unknown } | null) =>
             (s?.triggerMap ?? {}) as Record<string, string>;
@@ -129,7 +229,8 @@ export async function PATCH(
                 }))
             : null;
         const currentPhases = parseSchedule(currentSub?.retrySchedule);
-        let landingWorkerId: string = workerId;
+        // Past the statusId early-return, workerId is guaranteed (schema refine: exactly one).
+        let landingWorkerId: string = worker.id;
         let wakeAt: Date | null = null;
         let retryCount = 0;
         let retryKeyId: string | null = null;

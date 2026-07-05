@@ -17,6 +17,9 @@ export interface WorkInboxItem {
     ticketId: number;
     successTarget: { id: string; label: string } | null;
     failTarget: { id: string; label: string } | null;
+    /** Outcome jumps straight to a stage (status) instead of a same-stage worker. */
+    successStatusTarget: { id: string; label: string } | null;
+    failStatusTarget: { id: string; label: string } | null;
     /** Current worker owns a retry schedule — Unsuccess re-arms it (snooze loop). */
     retryScheduled: boolean;
     workId: string;
@@ -224,6 +227,8 @@ export default function WorkInboxBoard({
                                             args={it.args}
                                             successTarget={it.successTarget}
                                             failTarget={it.failTarget}
+                                            successStatusTarget={it.successStatusTarget}
+                                            failStatusTarget={it.failStatusTarget}
                                             retryScheduled={it.retryScheduled}
                                             isOwned={it.status !== "todo"}
                                             isOwnerMe={mine}

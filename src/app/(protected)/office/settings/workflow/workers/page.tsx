@@ -22,7 +22,9 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import {
     Select,
     SelectContent,
+    SelectGroup,
     SelectItem,
+    SelectLabel,
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
@@ -75,6 +77,8 @@ interface Worker {
     warrantyScope?: string;
     successWorkerId?: string | null;
     failWorkerId?: string | null;
+    successStatusId?: string | null;
+    failStatusId?: string | null;
     autoRevertOnClear: boolean;
     transitionNote?: string | null;
     skipNoteOnEntry?: boolean;
@@ -112,6 +116,8 @@ type FormValues = {
     warrantyScope: string;
     successWorkerId: string;
     failWorkerId: string;
+    successStatusId: string;
+    failStatusId: string;
     autoRevertOnClear: boolean;
     transitionNote: string;
     skipNoteOnEntry: boolean;
@@ -135,6 +141,8 @@ const BLANK_FORM: FormValues = {
     warrantyScope: "any",
     successWorkerId: "",
     failWorkerId: "",
+    successStatusId: "",
+    failStatusId: "",
     autoRevertOnClear: true,
     transitionNote: "",
     skipNoteOnEntry: false,
@@ -215,11 +223,26 @@ function WorkerFormModal({
     const selectedWork = works.find((w) => w.id === form.workId);
     const autoAdvanceTarget = form.statusId ? (form.triggerMap[form.statusId] ?? "") : "";
 
-    // Outcome routing stays WITHIN the stage: a worker's success / unsuccess
-    // target is another worker of the SAME parent status. Jumping to another
-    // stage is done via "Auto-advance status to", never by a cross-status target
-    // (which would leave the ticket's status and worker inconsistent).
+    // Outcome routing targets EITHER a worker in this same stage (hand within the
+    // stage) OR a jump straight to another stage (applies that stage's entry worker,
+    // keeping status+worker consistent). One Select offers both, encoding the choice
+    // as a "w:"/"s:" prefix; on save it routes to successWorkerId/failWorkerId or
+    // successStatusId/failStatusId. (The old rule — outcomes stay in-stage, stage jumps
+    // go through "Auto-advance status to" — is now just one of the two options.)
     const sameStatusSubs = form.statusId ? workers.filter((s) => s.statusId === form.statusId) : [];
+    const otherStatuses = statuses.filter((s) => s.id !== form.statusId);
+    const outcomeValue = (kind: "success" | "fail") => {
+        const statusId = kind === "success" ? form.successStatusId : form.failStatusId;
+        const workerId = kind === "success" ? form.successWorkerId : form.failWorkerId;
+        return statusId ? `s:${statusId}` : workerId ? `w:${workerId}` : "__none__";
+    };
+    const setOutcome = (kind: "success" | "fail", raw: string) => {
+        const wKey = kind === "success" ? "successWorkerId" : "failWorkerId";
+        const sKey = kind === "success" ? "successStatusId" : "failStatusId";
+        if (raw === "__none__") { setForm({ ...form, [wKey]: "", [sKey]: "" }); return; }
+        const kindTag = raw.slice(0, 1), id = raw.slice(2);
+        setForm({ ...form, [wKey]: kindTag === "w" ? id : "", [sKey]: kindTag === "s" ? id : "" });
+    };
 
     // Update a single channel-row field (digits only, per the no-number-input rule).
     const setRetry = (unit: RetryUnit, field: keyof RetryRow, value: string) =>
@@ -315,27 +338,49 @@ function WorkerFormModal({
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label>On success → move to</Label>
-                            <Select value={form.successWorkerId || "__none__"} onValueChange={(value) => setForm({ ...form, successWorkerId: value === "__none__" ? "" : value })}>
+                            <Select value={outcomeValue("success")} onValueChange={(value) => setOutcome("success", value)}>
                                 <SelectTrigger className="w-full"><SelectValue placeholder="— none —" /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="__none__">— none —</SelectItem>
-                                    {sameStatusSubs.map((s) => (<SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>))}
+                                    {sameStatusSubs.length > 0 && (
+                                        <SelectGroup>
+                                            <SelectLabel>Worker · this stage</SelectLabel>
+                                            {sameStatusSubs.map((s) => (<SelectItem key={s.id} value={`w:${s.id}`}>{s.label}</SelectItem>))}
+                                        </SelectGroup>
+                                    )}
+                                    {otherStatuses.length > 0 && (
+                                        <SelectGroup>
+                                            <SelectLabel>Jump to stage</SelectLabel>
+                                            {otherStatuses.map((s) => (<SelectItem key={s.id} value={`s:${s.id}`}>→ {s.label}</SelectItem>))}
+                                        </SelectGroup>
+                                    )}
                                 </SelectContent>
                             </Select>
                         </div>
                         <div className="space-y-2">
                             <Label>On unsuccess → move to</Label>
-                            <Select value={form.failWorkerId || "__none__"} onValueChange={(value) => setForm({ ...form, failWorkerId: value === "__none__" ? "" : value })}>
+                            <Select value={outcomeValue("fail")} onValueChange={(value) => setOutcome("fail", value)}>
                                 <SelectTrigger className="w-full"><SelectValue placeholder="— none —" /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="__none__">— none —</SelectItem>
-                                    {sameStatusSubs.map((s) => (<SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>))}
+                                    {sameStatusSubs.length > 0 && (
+                                        <SelectGroup>
+                                            <SelectLabel>Worker · this stage</SelectLabel>
+                                            {sameStatusSubs.map((s) => (<SelectItem key={s.id} value={`w:${s.id}`}>{s.label}</SelectItem>))}
+                                        </SelectGroup>
+                                    )}
+                                    {otherStatuses.length > 0 && (
+                                        <SelectGroup>
+                                            <SelectLabel>Jump to stage</SelectLabel>
+                                            {otherStatuses.map((s) => (<SelectItem key={s.id} value={`s:${s.id}`}>→ {s.label}</SelectItem>))}
+                                        </SelectGroup>
+                                    )}
                                 </SelectContent>
                             </Select>
                         </div>
                     </div>
                     <p className="-mt-3 text-xs text-muted-foreground">
-                        On completing this work the caller picks Success or Unsuccess; the ticket moves to the chosen worker <span className="font-medium">within this stage</span> (green / red on the Work Inbox). If this worker has a retry schedule (Attempts tab), Unsuccess <span className="font-medium">retries first</span> and only moves to the “unsuccess” target once the schedule runs out (give-up). To jump to another stage, use “Auto-advance status to” below.
+                        On completing this work the caller picks Success or Unsuccess; the ticket then moves to the chosen target — a <span className="font-medium">worker in this stage</span> (green / red on the Work Inbox) or a <span className="font-medium">jump straight to another stage</span> (which applies that stage’s entry worker). If this worker has a retry schedule (Attempts tab), Unsuccess <span className="font-medium">retries first</span> and only moves to the “unsuccess” target once the schedule runs out (give-up).
                     </p>
 
                     <div className="space-y-2">
@@ -731,6 +776,8 @@ export default function WorkersPage() {
         warrantyScope: form.warrantyScope,
         successWorkerId: form.successWorkerId || null,
         failWorkerId: form.failWorkerId || null,
+        successStatusId: form.successStatusId || null,
+        failStatusId: form.failStatusId || null,
         autoRevertOnClear: form.autoRevertOnClear,
         transitionNote: form.transitionNote.trim() || null,
         skipNoteOnEntry: form.skipNoteOnEntry,
@@ -772,6 +819,8 @@ export default function WorkersPage() {
             warrantyScope: worker.warrantyScope ?? "any",
             successWorkerId: worker.successWorkerId ?? "",
             failWorkerId: worker.failWorkerId ?? "",
+            successStatusId: worker.successStatusId ?? "",
+            failStatusId: worker.failStatusId ?? "",
             autoRevertOnClear: worker.autoRevertOnClear ?? true,
             transitionNote: worker.transitionNote ?? "",
             skipNoteOnEntry: worker.skipNoteOnEntry ?? false,
@@ -800,6 +849,8 @@ export default function WorkersPage() {
             warrantyScope: s.warrantyScope ?? "any",
             successWorkerId: s.successWorkerId ?? "",
             failWorkerId: s.failWorkerId ?? "",
+            successStatusId: s.successStatusId ?? "",
+            failStatusId: s.failStatusId ?? "",
             autoRevertOnClear: s.autoRevertOnClear ?? true,
             transitionNote: s.transitionNote ?? "",
             skipNoteOnEntry: s.skipNoteOnEntry ?? false,
@@ -1031,23 +1082,32 @@ export default function WorkersPage() {
                                                 )}
                                             </div>
 
-                                            {/* Work-result movement — what Success / Unsuccess do, visible without opening Edit. */}
-                                            {(worker.successWorkerId || worker.failWorkerId || !!worker.retrySchedule?.length) && (
+                                            {/* Work-result movement — what Success / Unsuccess do, visible without opening Edit.
+                                                A target is a same-stage worker (subLabelMap) OR a jump to a stage (→ statusLabelMap). */}
+                                            {(worker.successWorkerId || worker.failWorkerId || worker.successStatusId || worker.failStatusId || !!worker.retrySchedule?.length) && (
                                                 <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
-                                                    {worker.successWorkerId && (
+                                                    {(worker.successWorkerId || worker.successStatusId) && (
                                                         <span className="inline-flex items-center gap-1 text-green-700 dark:text-green-400">
-                                                            <Check size={12} className="shrink-0" /> Success → {subLabelMap[worker.successWorkerId] ?? worker.successWorkerId}
+                                                            <Check size={12} className="shrink-0" /> Success → {worker.successStatusId
+                                                                ? `stage ${statusLabelMap[worker.successStatusId] ?? worker.successStatusId}`
+                                                                : subLabelMap[worker.successWorkerId!] ?? worker.successWorkerId}
                                                         </span>
                                                     )}
-                                                    {worker.retrySchedule?.length ? (
-                                                        <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-400">
-                                                            <X size={12} className="shrink-0" /> Unsuccess → <RefreshCw size={11} className="shrink-0" /> retries{worker.failWorkerId ? `, give up → ${subLabelMap[worker.failWorkerId] ?? worker.failWorkerId}` : ""}
-                                                        </span>
-                                                    ) : worker.failWorkerId ? (
-                                                        <span className="inline-flex items-center gap-1 text-red-700 dark:text-red-400">
-                                                            <X size={12} className="shrink-0" /> Unsuccess → {subLabelMap[worker.failWorkerId] ?? worker.failWorkerId}
-                                                        </span>
-                                                    ) : null}
+                                                    {(() => {
+                                                        const giveUp = worker.failStatusId
+                                                            ? `stage ${statusLabelMap[worker.failStatusId] ?? worker.failStatusId}`
+                                                            : worker.failWorkerId ? (subLabelMap[worker.failWorkerId] ?? worker.failWorkerId) : null;
+                                                        if (worker.retrySchedule?.length) return (
+                                                            <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-400">
+                                                                <X size={12} className="shrink-0" /> Unsuccess → <RefreshCw size={11} className="shrink-0" /> retries{giveUp ? `, give up → ${giveUp}` : ""}
+                                                            </span>
+                                                        );
+                                                        return giveUp ? (
+                                                            <span className="inline-flex items-center gap-1 text-red-700 dark:text-red-400">
+                                                                <X size={12} className="shrink-0" /> Unsuccess → {giveUp}
+                                                            </span>
+                                                        ) : null;
+                                                    })()}
                                                 </div>
                                             )}
 

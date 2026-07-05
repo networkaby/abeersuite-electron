@@ -52,6 +52,9 @@ model TicketStatus {
   pipeline        Pipeline?          @relation(fields: [pipelineId], references: [id])
   fromTransitions StatusTransition[] @relation("FromStatus")
   toTransitions   StatusTransition[] @relation("ToStatus")
+  // Workers that jump straight to THIS status on their success / unsuccess outcome.
+  successStatusOf TicketWorker[]     @relation("WorkerSuccessStatus")
+  failStatusOf    TicketWorker[]     @relation("WorkerFailStatus")
   tickets         Ticket[]
   logs            TicketLog[]
 }
@@ -92,6 +95,15 @@ model TicketWorker {
   failWorker         TicketWorker?       @relation("WorkerFail", fields: [failWorkerId], references: [id], onDelete: SetNull)
   successRoutedFrom  TicketWorker[]      @relation("WorkerSuccess")
   failRoutedFrom     TicketWorker[]      @relation("WorkerFail")
+  // Direct outcome → STAGE jump. When set, completing this worker with that outcome
+  // advances the ticket straight to this status (applying the status' entry worker),
+  // instead of routing to a same-stage worker. The modern replacement for the old
+  // "shim worker + triggerMap" bridge. Exactly one of successWorker/successStatus is
+  // meaningful per outcome (the UI picks one). FK SetNull so deleting a status clears it.
+  successStatusId    String?
+  successStatus      TicketStatus?       @relation("WorkerSuccessStatus", fields: [successStatusId], references: [id], onDelete: SetNull)
+  failStatusId       String?
+  failStatus         TicketStatus?       @relation("WorkerFailStatus", fields: [failStatusId], references: [id], onDelete: SetNull)
   // ── Hybrid retry schedule ("attempt channels") ─────────────────────────────
   // A "waiting" sub-status (Unreachable, Awaiting-parts) re-arms its work on a
   // front-loaded schedule. The FIRST attempt is immediate — landing here from

@@ -77,7 +77,7 @@ export async function GET(
                         },
                     },
                 },
-                ticketWorker: { select: { id: true, label: true, color: true, actionLabel: true, work: { select: { label: true, color: true, successLabel: true, failLabel: true, startLabel: true, prompt: true, successPopup: true, failPopup: true, args: true } }, successWorker: { select: { id: true, label: true } }, failWorker: { select: { id: true, label: true } } } },
+                ticketWorker: { select: { id: true, label: true, color: true, actionLabel: true, work: { select: { label: true, color: true, successLabel: true, failLabel: true, startLabel: true, prompt: true, successPopup: true, failPopup: true, args: true } }, successWorker: { select: { id: true, label: true } }, failWorker: { select: { id: true, label: true } }, successStatus: { select: { id: true, label: true } }, failStatus: { select: { id: true, label: true } } } },
                 pipeline:        { select: { id: true, label: true, color: true } },
                 // Spawned child sub-pipelines (5th power) are gathered across ALL entity
                 // tables below via listAllChildren — not just the Ticket self-relation.

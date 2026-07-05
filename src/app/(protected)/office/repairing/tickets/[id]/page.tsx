@@ -39,7 +39,7 @@ interface Ticket {
     workerId?: string;
     pipelineId?: string | null;
     pipeline?: { id: string; label: string; color: string } | null;
-    ticketWorker?: { id: string; label: string; color: string; actionLabel?: string | null; work?: { label: string; color: string; successLabel?: string | null; failLabel?: string | null; startLabel?: string | null; prompt?: string | null; successPopup?: boolean; failPopup?: boolean; args?: WorkArg[] | null } | null; successWorker?: { id: string; label: string } | null; failWorker?: { id: string; label: string } | null } | null;
+    ticketWorker?: { id: string; label: string; color: string; actionLabel?: string | null; work?: { label: string; color: string; successLabel?: string | null; failLabel?: string | null; startLabel?: string | null; prompt?: string | null; successPopup?: boolean; failPopup?: boolean; args?: WorkArg[] | null } | null; successWorker?: { id: string; label: string } | null; failWorker?: { id: string; label: string } | null; successStatus?: { id: string; label: string } | null; failStatus?: { id: string; label: string } | null } | null;
     priority: string;
     notes?: string;
     accessInfo?: string;
@@ -543,6 +543,8 @@ export default function TicketDetailPage() {
                                         args={ticket.ticketWorker.work.args ?? []}
                                         successTarget={ticket.ticketWorker.successWorker ?? null}
                                         failTarget={ticket.ticketWorker.failWorker ?? null}
+                                        successStatusTarget={ticket.ticketWorker.successStatus ?? null}
+                                        failStatusTarget={ticket.ticketWorker.failStatus ?? null}
                                         isOwned={!!ticket.primaryOwner}
                                         isOwnerMe={ticket.primaryOwner?.id === currentUserId}
                                         onChanged={fetchTicket}

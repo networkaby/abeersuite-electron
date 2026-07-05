@@ -12,7 +12,8 @@ import { type WorkArg, isUserArg, argKey, argMatchesOutcome } from "@/modules/re
 import { navigateInApp } from "@/modules/repairing/lib/clientNav";
 
 interface RouteTarget { id: string; label: string }
-interface Pending { target: RouteTarget | null; kind: string; done: string }
+// isStatus → the target is a STAGE jump (statusId), not a same-stage worker.
+interface Pending { target: RouteTarget | null; kind: string; done: string; isStatus?: boolean }
 
 interface Props {
     ticketId: number;
@@ -37,6 +38,11 @@ interface Props {
     successTarget?: RouteTarget | null;
     /** Where it routes on an unsuccessful outcome. */
     failTarget?: RouteTarget | null;
+    /** Success / unsuccess can instead JUMP to a stage. When set (and no worker
+     *  target for that outcome), completing advances the ticket to this STATUS
+     *  (applying its entry worker) rather than routing to a same-stage worker. */
+    successStatusTarget?: RouteTarget | null;
+    failStatusTarget?: RouteTarget | null;
     /** Current worker owns a retry schedule — Unsuccess re-arms it (waits, then retries). */
     retryScheduled?: boolean;
     /** Whether the ticket is already claimed (started) by anyone. */
@@ -60,7 +66,7 @@ interface Props {
  */
 export default function WorkActions({
     ticketId, workLabel, successLabel, failLabel, startLabel, prompt, successPopup = false, failPopup = false,
-    args = [], successTarget, failTarget, retryScheduled = false,
+    args = [], successTarget, failTarget, successStatusTarget, failStatusTarget, retryScheduled = false,
     isOwned, isOwnerMe, onChanged, size = "sm", showComplete = true,
 }: Props) {
     const router = useRouter();
@@ -91,9 +97,9 @@ export default function WorkActions({
     // target=null → clear the worker (no-routing "done"). outcome tags it for the
     // Work Inbox "Finished" list; collected outcome args ride along when present.
     // Notes are NOT collected here — they belong to the technician's log popup (StatusNav).
-    const post = async ({ target, kind, done, collected }: {
+    const post = async ({ target, kind, done, collected, isStatus }: {
         target: RouteTarget | null; kind: string; done: string;
-        collected?: Record<string, string>;
+        collected?: Record<string, string>; isStatus?: boolean;
     }) => {
         setBusy(true);
         try {
@@ -102,7 +108,8 @@ export default function WorkActions({
             let navigateTo: string | null = null;
             if (target) {
                 const res = await axios.patch(`/api/tickets/${ticketId}/worker`, {
-                    workerId: target.id,
+                    // A stage jump sends statusId; a same-stage hand-off sends workerId.
+                    ...(isStatus ? { statusId: target.id } : { workerId: target.id }),
                     visibility: "INTERNAL",
                     outcome,
                     args: collected && Object.keys(collected).length ? collected : undefined,
@@ -131,7 +138,7 @@ export default function WorkActions({
         const collected = Object.fromEntries(
             pendingArgs.map((a) => [argKey(a), (argValues[argKey(a)] ?? "").trim()]).filter(([, v]) => v),
         );
-        return post({ target: pending.target, kind: pending.kind, done: pending.done, collected });
+        return post({ target: pending.target, kind: pending.kind, done: pending.done, collected, isStatus: pending.isStatus });
     };
 
     // Does this outcome open the popup? Yes when the work checked "popup" for it, OR it
@@ -140,12 +147,16 @@ export default function WorkActions({
         const flag = kind === "Unsuccess" ? failPopup : successPopup;  // Success & Done use successPopup
         return flag || userArgs.some((a) => argMatchesOutcome(a, kind));
     };
-    const onOutcome = (target: RouteTarget | null, kind: string, done: string) => {
-        if (popupFor(kind)) setPending({ target, kind, done });
-        else post({ target, kind, done });
+    const onOutcome = (target: RouteTarget | null, kind: string, done: string, isStatus?: boolean) => {
+        if (popupFor(kind)) setPending({ target, kind, done, isStatus });
+        else post({ target, kind, done, isStatus });
     };
 
-    const hasRouting = !!(successTarget || failTarget);
+    // The effective route for each outcome: a same-stage worker takes precedence, else
+    // a stage jump (status). One of the two is what the worker editor saved.
+    const successRoute = successTarget ? { target: successTarget, isStatus: false } : successStatusTarget ? { target: successStatusTarget, isStatus: true } : null;
+    const failRoute = failTarget ? { target: failTarget, isStatus: false } : failStatusTarget ? { target: failStatusTarget, isStatus: true } : null;
+    const hasRouting = !!(successRoute || failRoute);
     const twoStep = !!(startLabel && startLabel.trim());
     const requireUnsuccess = !!(failLabel && failLabel.trim());
     // Two-step works reveal outcomes only after claiming; one-step works show them directly.
@@ -160,20 +171,20 @@ export default function WorkActions({
             )}
             {canComplete && (hasRouting ? (
                 <>
-                    {successTarget && (
+                    {successRoute && (
                         <Button
-                            onClick={() => onOutcome(successTarget, "Success", `${successLabel || "Success"} → ${successTarget.label}`)}
-                            disabled={busy} size={size} variant="outline" title={`${successLabel || "Success"} → ${successTarget.label}`}
+                            onClick={() => onOutcome(successRoute.target, "Success", `${successLabel || "Success"} → ${successRoute.target.label}`, successRoute.isStatus)}
+                            disabled={busy} size={size} variant="outline" title={`${successLabel || "Success"} → ${successRoute.target.label}`}
                             className="border-green-300 bg-green-50 text-green-700 hover:bg-green-100 dark:border-green-800 dark:bg-green-950 dark:text-green-300"
                         >
                             <Check size={20} className="text-green-500" />
                             {successLabel && <span>{successLabel}</span>}
                         </Button>
                     )}
-                    {requireUnsuccess && failTarget && (
+                    {requireUnsuccess && failRoute && (
                         <Button
-                            onClick={() => onOutcome(failTarget, "Unsuccess", retryScheduled ? "Next attempt scheduled" : `${failLabel || "Unsuccess"} → ${failTarget.label}`)}
-                            disabled={busy} size={size} variant="outline" title={retryScheduled ? "Couldn't — schedule next attempt" : `${failLabel || "Unsuccess"} → ${failTarget.label}`}
+                            onClick={() => onOutcome(failRoute.target, "Unsuccess", retryScheduled && !failRoute.isStatus ? "Next attempt scheduled" : `${failLabel || "Unsuccess"} → ${failRoute.target.label}`, failRoute.isStatus)}
+                            disabled={busy} size={size} variant="outline" title={retryScheduled && !failRoute.isStatus ? "Couldn't — schedule next attempt" : `${failLabel || "Unsuccess"} → ${failRoute.target.label}`}
                             className="border-red-300 bg-red-50 text-red-700 hover:bg-red-100 dark:border-red-800 dark:bg-red-950 dark:text-red-300"
                         >
                             <X size={50} className="text-red-500" />
@@ -202,7 +213,7 @@ export default function WorkActions({
                                 </div>
                             )}
                             {pending.target && (
-                                retryScheduled && pending.kind === "Unsuccess" ? (
+                                retryScheduled && !pending.isStatus && pending.kind === "Unsuccess" ? (
                                     <p className="text-sm text-muted-foreground">
                                         This attempt is recorded as unsuccessful. The <span className="font-medium text-foreground">next attempt is scheduled automatically</span> — the ticket moves to <span className="font-medium text-foreground">Waiting</span> until it&apos;s due.
                                     </p>
@@ -238,7 +249,7 @@ export default function WorkActions({
                         <DialogFooter className="mt-2 border-t border-border pt-4">
                             <Button onClick={close} variant="outline" className="flex-1">Cancel</Button>
                             <Button onClick={submit} disabled={busy || missingRequired} className="flex-1">
-                                {busy ? "Saving…" : retryScheduled && pending.kind === "Unsuccess" ? "Schedule retry" : pending.target ? `Move → ${pending.target.label}` : "Mark done"}
+                                {busy ? "Saving…" : retryScheduled && !pending.isStatus && pending.kind === "Unsuccess" ? "Schedule retry" : pending.target ? `Move → ${pending.target.label}` : "Mark done"}
                             </Button>
                         </DialogFooter>
                     </DialogContent>
