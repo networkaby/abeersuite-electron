@@ -47,8 +47,10 @@ async function resolveAdvance(ref: OrderRef): Promise<{ amountPaise: number; sou
  * is posted when staff mark the refund Refunded (TODO(refund-apply)).
  */
 export async function spawnRefund(ref: OrderRef): Promise<void> {
-    const existing = await prisma.refund.findFirst({
-        where: { orderSource: ref.source, orderId: ref.id },
+    // A refund is a Ticket (flavour "refund") + TicketRefund detail; the core Ticket
+    // carries the pipeline stage, the detail the amount + polymorphic order ref.
+    const existing = await prisma.ticket.findFirst({
+        where: { refund: { orderSource: ref.source, orderId: ref.id } },
         select: { id: true },
     });
     if (existing) return;
@@ -57,15 +59,19 @@ export async function spawnRefund(ref: OrderRef): Promise<void> {
     const pipeline = await getRefundPipeline();
     const entry = pipeline?.statuses.find((s) => s.isEntryPoint) ?? pipeline?.statuses[0];
     if (!pipeline || !entry) return;
-    await prisma.refund.create({
+    await prisma.ticket.create({
         data: {
-            orderSource: ref.source,
-            orderId: ref.id,
             pipelineId: pipeline.id,
-            statusId: entry.id,
-            amountPaise,
-            sourceVoucherId,
-            reason: "Order rejected / cancelled",
+            status: entry.id,
+            refund: {
+                create: {
+                    orderSource: ref.source,
+                    orderId: ref.id,
+                    amountPaise,
+                    sourceVoucherId,
+                    reason: "Order rejected / cancelled",
+                },
+            },
         },
     });
 }
@@ -84,8 +90,8 @@ export async function getRefundForPayout(refundId: number): Promise<{
     cashBankAccountId: number | null;
     orderRef: string | null;
 } | null> {
-    const refund = await prisma.refund.findUnique({
-        where: { id: refundId },
+    const refund = await prisma.ticketRefund.findUnique({
+        where: { ticketId: refundId },
         select: { payoutVoucherId: true, sourceVoucherId: true, amountPaise: true, orderSource: true, orderId: true },
     });
     if (!refund) return null;
@@ -121,7 +127,7 @@ export async function getRefundForPayout(refundId: number): Promise<{
 
 /** Link the posted Payment voucher onto the refund (idempotency + audit). */
 export async function markRefundPaid(refundId: number, payoutVoucherId: number): Promise<void> {
-    await prisma.refund.update({ where: { id: refundId }, data: { payoutVoucherId } });
+    await prisma.ticketRefund.update({ where: { ticketId: refundId }, data: { payoutVoucherId } });
 }
 
 /** Validate that a statusId belongs to the refund pipeline. */

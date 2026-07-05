@@ -5,55 +5,34 @@ import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { updateTaskSchema } from "@/shared/lib/schemas/taskSchema";
 import { buildTaskActor } from "@/modules/administration/lib/taskActor";
+import { TASK_TICKET_SELECT, flattenTask } from "../route";
 
-const ASSIGNED_POSITION_SELECT = {
-    select: {
-        id: true,
-        title: true,
-        branch: { select: { name: true } },
-        department: { select: { name: true } },
-        holders: { select: { user: { select: { id: true, name: true, avatarUrl: true, role: true } } } },
+// Task + its comment timeline. Comments are TicketLog rows now (body ← note).
+const TASK_DETAIL_SELECT = {
+    ...TASK_TICKET_SELECT,
+    logs: {
+        orderBy: { createdAt: "asc" as const },
+        select: { id: true, note: true, kind: true, createdAt: true, author: true },
     },
 } as const;
 
-const TASK_SELECT = {
-    id: true,
-    title: true,
-    description: true,
-    category: true,
-    priority: true,
-    pipelineId: true,
-    status: true,
-    assignedPositionId: true,
-    createdBy: true, // JSON actor snapshot
-    dueDate: true,
-    completedAt: true,
-    order: true,
-    createdAt: true,
-    updatedAt: true,
-    ticketStatus: { select: { id: true, label: true, color: true, order: true, isTerminal: true } },
-    assignedPosition: ASSIGNED_POSITION_SELECT,
-    comments: {
-        orderBy: { createdAt: "asc" },
-        select: {
-            id: true,
-            body: true,
-            kind: true,
-            createdAt: true,
-            author: true, // JSON actor snapshot
-        },
-    },
-    _count: { select: { comments: true } },
-} as const;
+type LogRow = { id: number; note: string | null; kind: string; createdAt: Date; author: unknown };
+
+function flattenTaskDetail(t: { logs: LogRow[] } & Parameters<typeof flattenTask>[0]) {
+    return {
+        ...flattenTask(t),
+        comments: t.logs.map((l) => ({ id: l.id, body: l.note, kind: l.kind, createdAt: l.createdAt, author: l.author })),
+    };
+}
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { response } = await requirePermission(PERMISSIONS.ADMINISTRATION_TASKS_VIEW);
     if (response) return response;
     const { id } = await params;
     try {
-        const task = await prisma.task.findUnique({ where: { id }, select: TASK_SELECT });
+        const task = await prisma.ticket.findUnique({ where: { id: Number(id) }, select: TASK_DETAIL_SELECT });
         if (!task) return NextResponse.json({ error: "Task not found" }, { status: 404 });
-        return NextResponse.json(task);
+        return NextResponse.json(flattenTaskDetail(task));
     } catch (e) {
         return handleApiError(e, "Failed to fetch task");
     }
@@ -63,12 +42,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const { user, response } = await requirePermission(PERMISSIONS.ADMINISTRATION_TASKS_MANAGE);
     if (response) return response;
     const { id } = await params;
+    const taskId = Number(id);
     try {
         const { data, error } = await validateRequest(req, updateTaskSchema);
         if (error) return error;
 
-        const existing = await prisma.task.findUnique({
-            where: { id },
+        const existing = await prisma.ticket.findUnique({
+            where: { id: taskId },
             select: { id: true, pipelineId: true, status: true, assignedPositionId: true },
         });
         if (!existing) return NextResponse.json({ error: "Task not found" }, { status: 404 });
@@ -109,22 +89,22 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             newPositionTitle = pos.title;
         }
 
-        const task = await prisma.task.update({
-            where: { id },
+        const task = await prisma.ticket.update({
+            where: { id: taskId },
             data: {
                 ...(data.title !== undefined ? { title: data.title } : {}),
-                ...(data.description !== undefined ? { description: data.description ?? null } : {}),
+                ...(data.description !== undefined ? { notes: data.description ?? null } : {}),
                 ...(data.category !== undefined ? { category: data.category ?? null } : {}),
                 ...(data.priority !== undefined ? { priority: data.priority } : {}),
                 ...(data.assignedPositionId !== undefined ? { assignedPositionId: data.assignedPositionId ?? null } : {}),
-                ...(data.dueDate !== undefined ? { dueDate: data.dueDate ? new Date(data.dueDate) : null } : {}),
+                ...(data.dueDate !== undefined ? { dueAt: data.dueDate ? new Date(data.dueDate) : null } : {}),
                 ...(data.status !== undefined ? { status: data.status } : {}),
-                ...(completedAt !== undefined ? { completedAt } : {}),
+                ...(completedAt !== undefined ? { closedAt: completedAt } : {}),
             },
-            select: TASK_SELECT,
+            select: TASK_TICKET_SELECT,
         });
 
-        // Log status / assignment changes as SYSTEM activity entries.
+        // Log status / assignment changes as SYSTEM activity entries (TicketLog).
         const systemNotes: string[] = [];
         if (statusChangeNote) systemNotes.push(statusChangeNote);
         if (positionChanging) {
@@ -136,12 +116,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         }
         if (systemNotes.length > 0) {
             const author = await buildTaskActor(user.id);
-            await prisma.taskComment.createMany({
-                data: systemNotes.map((body) => ({ taskId: id, author, body, kind: "SYSTEM" as const })),
+            await prisma.ticketLog.createMany({
+                data: systemNotes.map((body) => ({ ticketId: taskId, author, note: body, kind: "SYSTEM" as const })),
             });
         }
 
-        return NextResponse.json(task);
+        return NextResponse.json(flattenTask(task));
     } catch (e) {
         return handleApiError(e, "Failed to update task");
     }
@@ -152,9 +132,9 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     if (response) return response;
     const { id } = await params;
     try {
-        const existing = await prisma.task.findUnique({ where: { id }, select: { id: true } });
+        const existing = await prisma.ticket.findUnique({ where: { id: Number(id) }, select: { id: true } });
         if (!existing) return NextResponse.json({ error: "Task not found" }, { status: 404 });
-        await prisma.task.delete({ where: { id } });
+        await prisma.ticket.delete({ where: { id: Number(id) } });
         return NextResponse.json({ ok: true });
     } catch (e) {
         return handleApiError(e, "Failed to delete task");

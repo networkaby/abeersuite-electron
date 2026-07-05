@@ -18,7 +18,7 @@ export async function GET() {
     try {
         const serviceCenters = await prisma.serviceCenter.findMany({
             orderBy: { createdAt: "desc" },
-            include: { _count: { select: { tickets: true } } },
+            include: { _count: { select: { repairs: true } } },
         });
         return NextResponse.json(serviceCenters);
     } catch (e) {

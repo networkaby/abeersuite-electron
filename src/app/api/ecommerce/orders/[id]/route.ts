@@ -14,15 +14,12 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
         return NextResponse.json({ error: "Invalid id" }, { status: 400 });
     }
     try {
-        const order = await prisma.shopOrder.findUnique({
+        // An order is a Ticket (flavour "order") + TicketOrder detail; account is the
+        // sanctioned Account bridge. Repair tickets spawned from it link back via
+        // TicketRepair.sourceOrderTicketId (id-only) — fetched separately below.
+        const t = await prisma.ticket.findUnique({
             where: { id: oid },
             include: {
-                person: {
-                    include: {
-                        phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }] },
-                        emails: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }] },
-                    },
-                },
                 account: {
                     include: {
                         company: {
@@ -32,34 +29,39 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
                             },
                         },
                         person: {
-                            select: {
-                                id: true,
-                                name: true,
-                                phones: selectPrimaryPhone,
-                            },
+                            select: { id: true, name: true, phones: selectPrimaryPhone },
                         },
                     },
                 },
-                lines: { include: { product: true } },
-                tickets: { select: { id: true, status: true, notes: true, createdAt: true } },
-                orderStatus: {
+                ticketStatus: {
                     include: {
-                        // Next stages = OUTGOING transitions (this status is the source).
-                        // `fromTransitions[].to` is the destination — same convention the
-                        // repair-ticket + deals boards use. (`toTransitions` would be the
-                        // incoming edges, which are empty for the entry stage.)
                         fromTransitions: {
                             include: { to: true },
                             orderBy: { to: { order: "asc" } },
                         },
                     },
                 },
-                // 5D-17: order↔voucher link disconnected — rebuilt via SHOP_ORDER VoucherLink.
+                order: {
+                    include: {
+                        person: {
+                            include: {
+                                phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }] },
+                                emails: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }] },
+                            },
+                        },
+                        lines: { include: { product: true } },
+                    },
+                },
             },
         });
-        if (!order) return NextResponse.json({ error: "Not found" }, { status: 404 });
-        // 5D-17: the linked-voucher (invVoucher) field is disconnected (ecommerce rebuild).
-        return NextResponse.json(order);
+        if (!t?.order) return NextResponse.json({ error: "Not found" }, { status: 404 });
+        const relatedTickets = await prisma.ticket.findMany({
+            where: { repair: { sourceOrderTicketId: oid } },
+            select: { id: true, status: true, notes: true, createdAt: true },
+        });
+        const { order, ticketStatus, ...core } = t;
+        const flat = { ...core, ...order, statusId: core.status, status: order.legacyStatus, orderStatus: ticketStatus, tickets: relatedTickets };
+        return NextResponse.json(flat);
     } catch (e) {
         return handleApiError(e, "Failed to load order");
     }

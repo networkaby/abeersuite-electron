@@ -11,14 +11,14 @@ const paramsSchema = z.object({ id: z.coerce.number().int().positive() });
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
     try {
         const { id } = paramsSchema.parse(await params);
-        const order = await prisma.shopOrder.findUnique({
-            where: { id },
-            select: { id: true, totalPaise: true, status: true, razorpayOrderId: true },
+        const order = await prisma.ticketOrder.findUnique({
+            where: { ticketId: id },
+            select: { ticketId: true, totalPaise: true, legacyStatus: true, razorpayOrderId: true },
         });
         if (!order) {
             return NextResponse.json({ error: "Order not found" }, { status: 404 });
         }
-        if (order.status !== "PENDING_PAYMENT") {
+        if (order.legacyStatus !== "PENDING_PAYMENT") {
             return NextResponse.json({ error: "Order is not payable" }, { status: 400 });
         }
 
@@ -29,7 +29,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
             return NextResponse.json({
                 mock: true,
                 message: "Set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET to create live Razorpay orders.",
-                orderId: order.id,
+                orderId: order.ticketId,
                 amountPaise: order.totalPaise,
             });
         }
@@ -45,7 +45,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
             body: JSON.stringify({
                 amount,
                 currency: "INR",
-                receipt: `shop_${order.id}`,
+                receipt: `shop_${order.ticketId}`,
                 payment_capture: 1,
             }),
         });
@@ -54,8 +54,8 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
             return NextResponse.json({ error: "Razorpay error", detail: text }, { status: 502 });
         }
         const data = (await rp.json()) as { id: string };
-        await prisma.shopOrder.update({
-            where: { id: order.id },
+        await prisma.ticketOrder.update({
+            where: { ticketId: order.ticketId },
             data: { razorpayOrderId: data.id },
         });
 
@@ -64,7 +64,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
             orderId: data.id,
             amount,
             currency: "INR",
-            shopOrderId: order.id,
+            shopOrderId: order.ticketId,
         });
     } catch (e) {
         return handleApiError(e, "Failed to start payment");

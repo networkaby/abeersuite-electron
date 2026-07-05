@@ -5,8 +5,9 @@
 //
 // Run: pnpm seed:dummy-deals
 //
-// Requires bootstrap-seed.ts (P6 pipeline + stages S35–S41, admin user, positions).
-// `pnpm seed:hard-clean` wipes Deal / DealActivity rows (transactional).
+// A deal is a Ticket (entityType "deal") + a TicketDeal detail row; activities are
+// TicketLog rows. Requires bootstrap-seed.ts (P6 pipeline + stages S35–S41, admin
+// user, positions). `pnpm seed:hard-clean` wipes Ticket rows (transactional).
 
 import { PrismaClient } from "../../src/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
@@ -68,32 +69,36 @@ async function main() {
     for (const l of DEMO_DEALS) {
         const assignedPositionId = positions.length ? positions[i % positions.length].id : null;
         const isTerminal = l.status === "S40" || l.status === "S41";
-        const lead = await prisma.deal.create({
+        const lead = await prisma.ticket.create({
             data: {
                 pipelineId: PIPELINE_ID,
                 status: l.status,
                 title: l.title,
-                contactName: l.contactName,
-                phone: l.phone,
-                companyName: l.companyName,
-                valuePaise: l.valuePaise,
-                source: l.source,
                 priority: l.priority,
-                nextFollowUpAt: l.followInDays != null ? new Date(now + l.followInDays * DAY) : null,
+                dueAt: l.followInDays != null ? new Date(now + l.followInDays * DAY) : null,
                 closedAt: isTerminal ? new Date() : null,
-                lostReason: "lostReason" in l ? l.lostReason : null,
                 assignedPositionId,
                 createdBy,
+                deal: {
+                    create: {
+                        contactName: l.contactName,
+                        phone: l.phone,
+                        companyName: l.companyName,
+                        valuePaise: l.valuePaise,
+                        source: l.source,
+                        lostReason: "lostReason" in l ? l.lostReason : null,
+                    },
+                },
             },
             select: { id: true },
         });
 
         // A couple of activities on the active deals.
         if (l.status === "S37" || l.status === "S39") {
-            await prisma.dealActivity.createMany({
+            await prisma.ticketLog.createMany({
                 data: [
-                    { dealId: lead.id, author: createdBy, kind: "CALL", body: "Spoke with the contact; sending a quote." },
-                    { dealId: lead.id, author: createdBy, kind: "TASK", body: "Follow up on the quote", dueAt: new Date(now + 2 * DAY) },
+                    { ticketId: lead.id, author: createdBy, kind: "CALL", note: "Spoke with the contact; sending a quote." },
+                    { ticketId: lead.id, author: createdBy, kind: "TASK", note: "Follow up on the quote", dueAt: new Date(now + 2 * DAY) },
                 ],
             });
         }

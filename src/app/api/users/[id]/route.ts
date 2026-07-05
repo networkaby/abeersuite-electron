@@ -232,14 +232,16 @@ export async function DELETE(
         const userId = Number(id);
         if (Number.isNaN(userId)) return NextResponse.json({ error: "Invalid user id" }, { status: 400 });
 
+        // Tickets + logs no longer hold a User FK (ownership is a createdBy snapshot,
+        // log author is JSON). The surviving User FKs are the ticket participant links.
         const userWithRelations = await prisma.user.findUnique({
             where: { id: userId },
-            select: { id: true, _count: { select: { ownedTickets: true, ticketLogs: true } } },
+            select: { id: true, _count: { select: { participantAdded: true, participantEntries: true } } },
         });
         if (!userWithRelations) return NextResponse.json({ error: "User not found" }, { status: 404 });
-        if (userWithRelations._count.ownedTickets > 0 || userWithRelations._count.ticketLogs > 0) {
+        if (userWithRelations._count.participantAdded > 0 || userWithRelations._count.participantEntries > 0) {
             return NextResponse.json(
-                { error: "Cannot delete user because linked tickets or ticket logs exist. Reassign records first." },
+                { error: "Cannot delete user because they're linked as a ticket participant. Reassign records first." },
                 { status: 400 }
             );
         }

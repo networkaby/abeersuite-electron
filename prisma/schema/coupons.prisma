@@ -144,20 +144,20 @@ model CouponProductRule {
 /// Immutable log of every coupon redemption — powers usage-limit enforcement and
 /// return reversal. A reversed row (reversedAt set) frees the usage slot.
 model CouponRedemption {
-  id         Int           @id @default(autoincrement())
-  couponId   Int
-  coupon     Coupon        @relation(fields: [couponId], references: [id])
-  accountId  Int?
-  account    Account?      @relation("AccountCouponRedemptions", fields: [accountId], references: [id])
+  id                 Int               @id @default(autoincrement())
+  couponId           Int
+  coupon             Coupon            @relation(fields: [couponId], references: [id])
+  accountId          Int?
+  account            Account?          @relation("AccountCouponRedemptions", fields: [accountId], references: [id])
   /// Phase 5 5B: points at the UniversalVoucher spine (the document), not InvVoucher.
   universalVoucherId Int?
   universalVoucher   UniversalVoucher? @relation("SpineCouponRedemptions", fields: [universalVoucherId], references: [id])
   /// ₹ discount actually applied at this redemption.
-  amount     Decimal       @db.Decimal(14, 2)
-  channel    CouponChannel
+  amount             Decimal           @db.Decimal(14, 2)
+  channel            CouponChannel
   /// Set when reversed on a full return — frees the usage slot for re-use.
-  reversedAt DateTime?
-  redeemedAt DateTime      @default(now())
+  reversedAt         DateTime?
+  redeemedAt         DateTime          @default(now())
 
   @@index([couponId])
   @@index([accountId])
@@ -195,20 +195,20 @@ model GiftCard {
 }
 
 model GiftCardTxn {
-  id           Int             @id @default(autoincrement())
-  giftCardId   Int
-  giftCard     GiftCard        @relation(fields: [giftCardId], references: [id], onDelete: Cascade)
-  type         GiftCardTxnType
+  id                 Int               @id @default(autoincrement())
+  giftCardId         Int
+  giftCard           GiftCard          @relation(fields: [giftCardId], references: [id], onDelete: Cascade)
+  type               GiftCardTxnType
   /// Signed against balance: +ISSUE/+REFUND, −REDEEM.
-  amount       Decimal         @db.Decimal(14, 2)
+  amount             Decimal           @db.Decimal(14, 2)
   /// The POS sale that redeemed (or the return that refunded), for audit.
   /// Phase 5 5B: points at the UniversalVoucher spine (the document), not InvVoucher.
   universalVoucherId Int?
   universalVoucher   UniversalVoucher? @relation("SpineGiftCardTxns", fields: [universalVoucherId], references: [id])
-  balanceAfter Decimal         @db.Decimal(14, 2)
-  createdById  Int
-  createdBy    User            @relation("GiftCardTxnCreatedBy", fields: [createdById], references: [id])
-  createdAt    DateTime        @default(now())
+  balanceAfter       Decimal           @db.Decimal(14, 2)
+  createdById        Int
+  createdBy          User              @relation("GiftCardTxnCreatedBy", fields: [createdById], references: [id])
+  createdAt          DateTime          @default(now())
 
   @@index([giftCardId])
   @@index([universalVoucherId])

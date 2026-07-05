@@ -28,24 +28,27 @@ export default async function RepairingDashboardPage() {
         }),
         prisma.ticket.count({ where: base }),
         prisma.ticket.count({ where: { ...base, ticketStatus: { isTerminal: false } } }),
-        prisma.ticket.count({ where: { ...base, primaryOwnerId: null, ticketStatus: { isTerminal: false } } }),
-        prisma.ticket.count({ where: { ...base, escalated: true, ticketStatus: { isTerminal: false } } }),
+        prisma.ticket.count({ where: { ...base, assignedPositionId: null, ticketStatus: { isTerminal: false } } }),
+        prisma.ticket.count({ where: { ...base, repair: { escalated: true }, ticketStatus: { isTerminal: false } } }),
         prisma.ticket.findMany({
             where: { ...base, ticketStatus: { isTerminal: false } },
             orderBy: { updatedAt: "desc" },
             take: 50,
             include: {
-                device: {
+                repair: {
                     include: {
-                        account: {
+                        device: {
                             include: {
-                                person: { select: { name: true, phones: selectPrimaryPhone } },
-                                company: { select: { name: true, phones: selectPrimaryPhone } },
+                                account: {
+                                    include: {
+                                        person: { select: { name: true, phones: selectPrimaryPhone } },
+                                        company: { select: { name: true, phones: selectPrimaryPhone } },
+                                    },
+                                },
                             },
                         },
                     },
                 },
-                primaryOwner: { select: { name: true } },
                 ticketStatus: { select: { label: true, color: true } },
                 ticketWorker: { select: { label: true, color: true } },
             },
@@ -117,7 +120,8 @@ export default async function RepairingDashboardPage() {
                 ) : (
                     <div className="divide-y divide-border">
                         {activeTickets.map((t) => {
-                            const party = t.device.account?.person ?? t.device.account?.company ?? null;
+                            const device = t.repair?.device ?? null;
+                            const party = device?.account?.person ?? device?.account?.company ?? null;
                             return (
                                 <Link
                                     key={t.id}
@@ -140,11 +144,11 @@ export default async function RepairingDashboardPage() {
                                         <p className="text-sm font-medium text-foreground mt-1">
                                             {party?.name ?? "—"}
                                             <span className="text-muted-foreground font-normal text-xs ml-2">
-                                                · {t.device.brand} {t.device.model}
+                                                · {device?.brand} {device?.model}
                                             </span>
                                         </p>
                                         <p className="text-xs text-muted-foreground mt-0.5">
-                                            {t.primaryOwner ? `Tech: ${t.primaryOwner.name}` : "Unassigned"}
+                                            {t.assignedPositionId ? "Assigned" : "Unassigned"}
                                         </p>
                                     </div>
                                 </Link>

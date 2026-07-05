@@ -89,8 +89,8 @@ export async function previewConvert(
                 phones: { select: { id: true } },
                 emails: { select: { id: true } },
                 companies: { select: { id: true } },
-                deals: { select: { id: true } },
-                shopOrders: { select: { id: true, status: true } },
+                dealTickets: { select: { ticketId: true } },
+                orderTickets: { select: { ticketId: true, legacyStatus: true } },
                 portalCredential: { select: { id: true } },
             },
         });
@@ -103,8 +103,8 @@ export async function previewConvert(
             blockers.push({ kind: "alreadyConverted", targetId: p.convertedToCompanyId });
         }
         if (!p.account) blockers.push({ kind: "noAccount" });
-        const openOrders = p.shopOrders.filter(
-            o => !(TERMINAL_SHOP_STATUSES as readonly string[]).includes(o.status),
+        const openOrders = p.orderTickets.filter(
+            o => !(TERMINAL_SHOP_STATUSES as readonly string[]).includes(o.legacyStatus),
         );
         if (openOrders.length > 0) {
             blockers.push({ kind: "openShopOrders", count: openOrders.length });
@@ -119,9 +119,9 @@ export async function previewConvert(
             counts: {
                 phones: p.phones.length,
                 emails: p.emails.length,
-                deals: p.deals.length,
+                deals: p.dealTickets.length,
                 personCompanyLinks: p.companies.length,
-                shopOrders: p.shopOrders.length,
+                shopOrders: p.orderTickets.length,
                 portalCredential: p.portalCredential != null,
             },
             blockers,
@@ -136,7 +136,7 @@ export async function previewConvert(
             phones: { select: { id: true } },
             emails: { select: { id: true } },
             persons: { select: { id: true } },
-            deals: { select: { id: true } },
+            dealTickets: { select: { ticketId: true } },
         },
     });
     if (!c) {
@@ -158,7 +158,7 @@ export async function previewConvert(
         counts: {
             phones: c.phones.length,
             emails: c.emails.length,
-            deals: c.deals.length,
+            deals: c.dealTickets.length,
             personCompanyLinks: c.persons.length,
             shopOrders: 0,
             portalCredential: false,
@@ -259,16 +259,16 @@ async function personToCompany(
             where: { personId: sourceId },
         });
 
-        // Deal already carries both personId and companyId nullable — flip.
-        const leadsMoved = await tx.deal.updateMany({
+        // TicketDeal carries both personId and companyId nullable — flip.
+        const leadsMoved = await tx.ticketDeal.updateMany({
             where: { personId: sourceId },
             data: { personId: null, companyId: newCompany.id },
         });
 
-        // ShopOrder: only terminal orders survive a Person→Company conversion
+        // Order tickets: only terminal orders survive a Person→Company conversion
         // (the preview enforces this). For those, drop the personId pointer;
         // accountId already points at the moved Account, which carries the AR.
-        const ordersDetached = await tx.shopOrder.updateMany({
+        const ordersDetached = await tx.ticketOrder.updateMany({
             where: { personId: sourceId },
             data: { personId: null },
         });
@@ -350,7 +350,7 @@ async function companyToPerson(sourceId: number): Promise<ConvertResult> {
             where: { companyId: sourceId },
         });
 
-        const leadsMoved = await tx.deal.updateMany({
+        const leadsMoved = await tx.ticketDeal.updateMany({
             where: { companyId: sourceId },
             data: { companyId: null, personId: newPerson.id },
         });
@@ -429,8 +429,8 @@ async function collectPersonRefs(personId: number) {
         prisma.phone.count({ where: { personId } }),
         prisma.email.count({ where: { personId } }),
         prisma.personCompany.count({ where: { personId } }),
-        prisma.deal.count({ where: { personId } }),
-        prisma.shopOrder.count({ where: { personId } }),
+        prisma.ticketDeal.count({ where: { personId } }),
+        prisma.ticketOrder.count({ where: { personId } }),
         prisma.personPortalCredential.count({ where: { personId } }),
     ]);
     return [
@@ -439,7 +439,7 @@ async function collectPersonRefs(personId: number) {
         { table: "Email", count: emails },
         { table: "PersonCompany", count: links },
         { table: "Deal", count: leads },
-        { table: "ShopOrder", count: orders },
+        { table: "Order", count: orders },
         { table: "PersonPortalCredential", count: cred },
     ].filter(r => r.count > 0);
 }
@@ -450,7 +450,7 @@ async function collectCompanyRefs(companyId: number) {
         prisma.phone.count({ where: { companyId } }),
         prisma.email.count({ where: { companyId } }),
         prisma.personCompany.count({ where: { companyId } }),
-        prisma.deal.count({ where: { companyId } }),
+        prisma.ticketDeal.count({ where: { companyId } }),
     ]);
     return [
         { table: "Account", count: account },
@@ -711,10 +711,10 @@ export async function previewMerge(
         prisma.phone.count({ where: partyWhere }),
         prisma.email.count({ where: partyWhere }),
         prisma.personCompany.count({ where: linkWhere }),
-        prisma.deal.count({ where: leadWhere }),
+        prisma.ticketDeal.count({ where: leadWhere }),
     ]);
     const shopOrdersPerson = kind === "person"
-        ? await prisma.shopOrder.count({ where: { personId: loserId } })
+        ? await prisma.ticketOrder.count({ where: { personId: loserId } })
         : 0;
     const portalCred = kind === "person"
         ? (await prisma.personPortalCredential.count({ where: { personId: loserId } })) > 0
@@ -741,9 +741,11 @@ async function countAccountRefs(accountId: number) {
         Promise.resolve(0),   // legacy VoucherLine refs are now the spine GL lines (counted as `jl`)
         // Phase 5 5D-4: InvVoucher party is on the spine — count via the relation.
         prisma.voucherDetail.count({ where: { universalVoucher: { partyAccountId: accountId } } }),
-        prisma.ticket.count({ where: { billingAccountId: accountId } }),
+        // Every flavour (repair + order + …) shares Ticket.accountId now, so this one
+        // count covers what used to be Ticket.billingAccountId + ShopOrder.accountId.
+        prisma.ticket.count({ where: { accountId } }),
         prisma.device.count({ where: { accountId } }),
-        prisma.shopOrder.count({ where: { accountId } }),
+        Promise.resolve(0),
         // G4b: tender/charge input lives in settlementJson now — scan for refs.
         prisma.voucherDetail.findMany({ where: { settlementJson: { not: Prisma.DbNull } }, select: { settlementJson: true } }),
     ]);
@@ -783,9 +785,11 @@ export async function mergeParty(
             // G4b: re-point the spine GL lines (covers role=TENDER/CHARGE + body legs
             // pointing at the loser ledger — the InvVoucherTender/Charge tables retired).
             tx.voucherGlLine.updateMany({ where: { accountId: loserAccountId }, data: { accountId: winnerAccountId } }),
-            tx.ticket.updateMany({ where: { billingAccountId: loserAccountId }, data: { billingAccountId: winnerAccountId } }),
+            // One re-point covers every flavour on the shared Ticket.accountId (was
+            // Ticket.billingAccountId + ShopOrder.accountId).
+            tx.ticket.updateMany({ where: { accountId: loserAccountId }, data: { accountId: winnerAccountId } }),
             tx.device.updateMany({ where: { accountId: loserAccountId }, data: { accountId: winnerAccountId } }),
-            tx.shopOrder.updateMany({ where: { accountId: loserAccountId }, data: { accountId: winnerAccountId } }),
+            Promise.resolve({ count: 0 }),
         ]);
 
         // G4b: re-point tender/charge input inside settlementJson (drafts + posted echo).
@@ -875,15 +879,15 @@ export async function mergeParty(
         });
         await dedupePersonCompanyLinks(tx);
 
-        // 5. Deal: re-point.
-        const leads = await tx.deal.updateMany({
+        // 5. TicketDeal: re-point.
+        const leads = await tx.ticketDeal.updateMany({
             where: { [partyKey]: loserId },
             data: { [partyKey]: winnerId },
         });
 
-        // 6. ShopOrder.personId (Person merges only).
+        // 6. TicketOrder.personId (Person merges only).
         if (kind === "person") {
-            await tx.shopOrder.updateMany({
+            await tx.ticketOrder.updateMany({
                 where: { personId: loserId },
                 data: { personId: winnerId },
             });

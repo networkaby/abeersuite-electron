@@ -9,23 +9,18 @@ model Pipeline {
   isDefault   Boolean  @default(false)
   isActive    Boolean  @default(true)
   order       Int      @default(0)
-  // Which entity table RIDES this pipeline — the dispatch key for spawn-child.
-  // "ticket" | "task" | "deal" | "delivery" | "refund" | "voucher" | "none".
-  // A sub-status' spawnPipelineId resolves the target pipeline, then this decides
-  // which table the child row is created in (see lib/childEntities.ts registry).
-  entityType  String   @default("ticket")
+  // The FLAVOUR of Ticket this pipeline carries — selects the optional 1:1 detail
+  // table + the UI. "repair" | "deal" | "order" | "delivery" | "refund" | "task"
+  // (task = a bare core row, no detail) | "none". A sub-status' spawnPipelineId
+  // resolves the target pipeline, then this decides which detail row the spawned
+  // child gets (see lib/childEntities.ts registry).
+  entityType  String   @default("repair")
   createdAt   DateTime @default(now())
 
-  statuses      TicketStatus[]
-  workers       TicketWorker[]
-  tickets       Ticket[]
-  deals         Deal[]
-  shopOrders    ShopOrder[]
-  tasks         Task[]
-  // Deliveries riding this pipeline (O2C P8).
-  deliveries    Delivery[]     @relation("DeliveryPipeline")
-  // Refunds riding this pipeline (O2C P9).
-  refunds       Refund[]       @relation("RefundPipeline")
+  statuses TicketStatus[]
+  workers  TicketWorker[]
+  // Every flavour (repair / deal / order / delivery / refund / task) is a Ticket.
+  tickets  Ticket[]
 }
 
 model TicketStatus {
@@ -59,28 +54,23 @@ model TicketStatus {
   toTransitions   StatusTransition[] @relation("ToStatus")
   tickets         Ticket[]
   logs            TicketLog[]
-  deals           Deal[]
-  shopOrders      ShopOrder[]
-  tasks           Task[]
-  deliveries      Delivery[]         @relation("DeliveryStatus")
-  refunds         Refund[]           @relation("RefundStatus")
 }
 
 model TicketWorker {
-  id                String              @id
-  label             String
+  id                 String              @id
+  label              String
   // Customer-facing label shown on the portal ("My Repairs"). The internal `label`
   // and staff `actionLabel` stay private. Null = fall back to the parent status name.
-  publicLabel       String?
-  color             String              @default("bg-gray-100 text-gray-600")
-  order             Int
+  publicLabel        String?
+  color              String              @default("bg-gray-100 text-gray-600")
+  order              Int
   // Each sub-status belongs to exactly ONE parent status (no sharing). SetNull so
   // deleting a status leaves its sub-statuses as "unassigned" rather than deleting them.
-  statusId          String?
-  status            TicketStatus?       @relation("StatusWorkers", fields: [statusId], references: [id], onDelete: SetNull)
-  triggerMap        Json                @default("{}")
-  actionLabel       String?
-  autoRevertOnClear Boolean             @default(true)
+  statusId           String?
+  status             TicketStatus?       @relation("StatusWorkers", fields: [statusId], references: [id], onDelete: SetNull)
+  triggerMap         Json                @default("{}")
+  actionLabel        String?
+  autoRevertOnClear  Boolean             @default(true)
   // ── Entry-time popup (on worker change / hand-off INTO this worker) ──────────
   // transitionNote: a fixed note auto-posted to the timeline (PUBLIC, customer-
   //   visible) when a ticket ENTERS this worker — no popup. Blank = none.
@@ -88,20 +78,20 @@ model TicketWorker {
   //   operator can write something; true → friction-free (transition note still posts).
   // entryQuestion: guidance shown at the top of that popup; the answer goes in the note.
   // entryArgs: dormant (structured ask-on-entry, kept to match the existing column).
-  transitionNote    String?
-  skipNoteOnEntry   Boolean             @default(false)
+  transitionNote     String?
+  skipNoteOnEntry    Boolean             @default(false)
   // When the note popup shows (skipNoteOnEntry false), require a non-empty note —
   // the Move is blocked until the operator writes one (forces fresh, relevant context).
-  requireNoteOnEntry Boolean            @default(false)
-  entryQuestion     String?
-  entryArgs         Json                @default("[]")
-  warrantyScope     String              @default("any")
-  successWorkerId   String?
-  successWorker     TicketWorker?       @relation("WorkerSuccess", fields: [successWorkerId], references: [id], onDelete: SetNull)
-  failWorkerId      String?
-  failWorker        TicketWorker?       @relation("WorkerFail", fields: [failWorkerId], references: [id], onDelete: SetNull)
-  successRoutedFrom TicketWorker[]      @relation("WorkerSuccess")
-  failRoutedFrom    TicketWorker[]      @relation("WorkerFail")
+  requireNoteOnEntry Boolean             @default(false)
+  entryQuestion      String?
+  entryArgs          Json                @default("[]")
+  warrantyScope      String              @default("any")
+  successWorkerId    String?
+  successWorker      TicketWorker?       @relation("WorkerSuccess", fields: [successWorkerId], references: [id], onDelete: SetNull)
+  failWorkerId       String?
+  failWorker         TicketWorker?       @relation("WorkerFail", fields: [failWorkerId], references: [id], onDelete: SetNull)
+  successRoutedFrom  TicketWorker[]      @relation("WorkerSuccess")
+  failRoutedFrom     TicketWorker[]      @relation("WorkerFail")
   // ── Hybrid retry schedule ("attempt channels") ─────────────────────────────
   // A "waiting" sub-status (Unreachable, Awaiting-parts) re-arms its work on a
   // front-loaded schedule. The FIRST attempt is immediate — landing here from
@@ -112,33 +102,33 @@ model TicketWorker {
   // unit ∈ "minute"|"hour"|"day"|"week"|"month"|"year". Total attempts = 1 + Σtimes;
   // [] = no retry. After the last phase's last attempt, route to failWorker
   // (the "On unsuccess → move to" target doubles as the give-up destination).
-  retrySchedule     Json                @default("[]")
+  retrySchedule      Json                @default("[]")
   // 5th power: entering this sub-status spawns a CHILD ticket on this pipeline
   // (e.g. inbound parts courier). The parent mirrors the child and advances via
   // success/fail when the child terminates. Plain id (no FK) — keep it simple.
-  spawnPipelineId   String?
+  spawnPipelineId    String?
   // Child-side report-back: when a CHILD ticket reaches this sub-status it signals
   // its parent — "success" fires the parent spawning sub-status' Success route,
   // "fail" fires Unsuccess. Parent-agnostic so the child pipeline is reusable.
   // null = no signal. (Future: "checkpoint:<label>" for mid-journey nudges.)
-  parentSignal      String?
+  parentSignal       String?
   // 6th power: an ordered, chainable list of ACTIONS that fire when this worker is
   // COMPLETED, filtered by outcome. Shape: [{ type, on, config }] where `type` is a
   // read-only code HOOK (spawn|move_status|email|retry|… — see actionTypes.ts),
   // `on` ∈ "success"|"fail"|"always", and `config` is that hook's arguments (e.g.
   // move_status → { statusId }). Dispatched in src/modules/repairing/lib/actions.ts.
   // [] = no actions.
-  actions           Json                @default("[]")
-  workId            String?
-  work              Work?               @relation(fields: [workId], references: [id], onDelete: SetNull)
-  pipelineId        String?
-  pipeline          Pipeline?           @relation(fields: [pipelineId], references: [id])
-  fromTransitions   WorkerTransition[]  @relation("FromWorker")
-  toTransitions     WorkerTransition[]  @relation("ToWorker")
-  startOfStatuses   TicketStatus[]      @relation("StatusStartSub")
-  tickets           Ticket[]
-  logs              TicketLog[]
-  participants      TicketParticipant[] @relation("ParticipantWorker")
+  actions            Json                @default("[]")
+  workId             String?
+  work               Work?               @relation(fields: [workId], references: [id], onDelete: SetNull)
+  pipelineId         String?
+  pipeline           Pipeline?           @relation(fields: [pipelineId], references: [id])
+  fromTransitions    WorkerTransition[]  @relation("FromWorker")
+  toTransitions      WorkerTransition[]  @relation("ToWorker")
+  startOfStatuses    TicketStatus[]      @relation("StatusStartSub")
+  tickets            Ticket[]
+  logs               TicketLog[]
+  participants       TicketParticipant[] @relation("ParticipantWorker")
 }
 
 // A unit of work a status/sub-status represents (calling, parts, qc…). Each

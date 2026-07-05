@@ -14,21 +14,27 @@ export async function getDeliveryPipeline() {
 
 /** Spawn a Delivery for a confirmed order (idempotent — one delivery per order). */
 export async function spawnDelivery(ref: OrderRef): Promise<void> {
-    const existing = await prisma.delivery.findFirst({
-        where: { orderSource: ref.source, orderId: ref.id },
+    // A delivery is a Ticket (flavour "delivery") + TicketDelivery detail; the core
+    // Ticket carries the pipeline stage, the detail the carrier + polymorphic order ref.
+    const existing = await prisma.ticket.findFirst({
+        where: { delivery: { orderSource: ref.source, orderId: ref.id } },
         select: { id: true },
     });
     if (existing) return;
     const pipeline = await getDeliveryPipeline();
     const entry = pipeline?.statuses.find((s) => s.isEntryPoint) ?? pipeline?.statuses[0];
     if (!pipeline || !entry) return;
-    await prisma.delivery.create({
+    await prisma.ticket.create({
         data: {
-            orderSource: ref.source,
-            orderId: ref.id,
             pipelineId: pipeline.id,
-            statusId: entry.id,
-            carrier: "OWN_BOY", // default to the in-house delivery boy; carrier/rate-shop is Phase 4b
+            status: entry.id,
+            delivery: {
+                create: {
+                    orderSource: ref.source,
+                    orderId: ref.id,
+                    carrier: "OWN_BOY", // default in-house delivery boy; rate-shop is Phase 4b
+                },
+            },
         },
     });
 }

@@ -120,12 +120,12 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
                 select: { totalAmount: true, universalVoucher: { select: { voucherNo: true, date: true } } },
             }),
             prisma.ticket.findFirst({
-                where: { billingAccountId: accountId },
+                where: { accountId },
                 orderBy: { createdAt: "desc" },
                 select: { id: true, createdAt: true },
             }),
             prisma.ticket.findMany({
-                where: { billingAccountId: accountId },
+                where: { accountId },
                 orderBy: { createdAt: "desc" },
                 take: 3,
                 select: {

@@ -3,10 +3,12 @@ import { toNumber } from "@/modules/accountancy/lib/balance";
 import { readPartyName } from "@/shared/lib/accountancy/partySnapshot";
 import { syncVoucherLink } from "@/modules/accountancy/lib/voucherLinks";
 
-// The unified Order is polymorphic (lightweight model — no new table): an "order"
-// is either an order-type InvVoucher (POS_ORDER / SALES_ORDER) or a ShopOrder,
-// both riding pipeline P7. This adapter normalises them so the board / status-move
-// / fulfil / delivery all operate on one shape keyed by an OrderRef {source,id}.
+// The unified Order is polymorphic: an "order" is either an order-type InvVoucher
+// (POS_ORDER / SALES_ORDER) or an order-flavour Ticket (the former ShopOrder, now a
+// Ticket + TicketOrder detail), both riding pipeline P7. This adapter normalises them
+// so the board / status-move / fulfil / delivery operate on one shape keyed by an
+// OrderRef {source,id}. NOTE: the online channel is moving to ONLINE_ORDER vouchers —
+// pipeline integration for that is a follow-up; this "shop" path is transitional.
 
 export type OrderSource = "inv" | "shop";
 export interface OrderRef { source: OrderSource; id: number }
@@ -30,8 +32,6 @@ export interface NormalizedOrder {
 
 /** All orders across channels, optionally filtered to one P7 stage. */
 export async function listOrders(opts?: { statusId?: string }): Promise<NormalizedOrder[]> {
-    const statusWhere = opts?.statusId ? opts.statusId : { not: null };
-
     const [invs, shops] = await Promise.all([
         prisma.voucherDetail.findMany({
             where: {
@@ -50,9 +50,9 @@ export async function listOrders(opts?: { statusId?: string }): Promise<Normaliz
             },
             orderBy: { createdAt: "desc" },
         }),
-        prisma.shopOrder.findMany({
-            where: { statusId: statusWhere },
-            select: { id: true, statusId: true, totalPaise: true, shippingName: true, guestEmail: true, createdAt: true },
+        prisma.ticket.findMany({
+            where: { order: { isNot: null }, ...(opts?.statusId ? { status: opts.statusId } : {}) },
+            select: { id: true, status: true, createdAt: true, order: { select: { totalPaise: true, shippingName: true, guestEmail: true } } },
             orderBy: { createdAt: "desc" },
         }),
     ]);
@@ -99,9 +99,9 @@ export async function listOrders(opts?: { statusId?: string }): Promise<Normaliz
         id: o.id,
         ref: `WEB-${o.id}`,
         kind: "SHOP",
-        customerName: o.shippingName ?? o.guestEmail ?? null,
-        total: o.totalPaise / 100,
-        statusId: o.statusId,
+        customerName: o.order?.shippingName ?? o.order?.guestEmail ?? null,
+        total: (o.order?.totalPaise ?? 0) / 100,
+        statusId: o.status,
         branchId: null,
         dealId: null,
         createdAt: o.createdAt.toISOString(),
@@ -121,8 +121,8 @@ export async function resolveOrderStatus(ref: OrderRef): Promise<{ statusId: str
         if (!v || v.universalVoucher?.deletedAt) return null;
         return { statusId: v.universalVoucher?.links[0]?.targetId ?? null };
     }
-    const o = await prisma.shopOrder.findUnique({ where: { id: ref.id }, select: { statusId: true } });
-    return o ? { statusId: o.statusId } : null;
+    const o = await prisma.ticket.findUnique({ where: { id: ref.id }, select: { status: true } });
+    return o ? { statusId: o.status } : null;
 }
 
 /** Write a new P7 stage onto the backing object (the only differing line per source). */
@@ -131,6 +131,6 @@ export async function writeOrderStatus(ref: OrderRef, statusId: string): Promise
         const v = await prisma.voucherDetail.findUnique({ where: { id: ref.id }, select: { universalVoucherId: true } });
         await prisma.$transaction((tx) => syncVoucherLink(tx, v?.universalVoucherId, "ORDER_STATUS", statusId));
     } else {
-        await prisma.shopOrder.update({ where: { id: ref.id }, data: { statusId } });
+        await prisma.ticket.update({ where: { id: ref.id }, data: { status: statusId } });
     }
 }

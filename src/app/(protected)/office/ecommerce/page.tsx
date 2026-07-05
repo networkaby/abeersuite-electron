@@ -7,23 +7,24 @@ export default async function EcommerceDashboardPage() {
     const d30 = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
     const [paid7, paid30, pendingPaymentCount, fulfilmentQueueCount, productsTracked] = await Promise.all([
-        prisma.shopOrder.findMany({
+        // Orders are order-flavour Tickets; payment/total live on the TicketOrder detail.
+        prisma.ticketOrder.findMany({
             where: {
                 paidAt: { gte: d7 },
-                status: { notIn: ["REFUNDED", "CANCELLED"] },
+                legacyStatus: { notIn: ["REFUNDED", "CANCELLED"] },
             },
             select: { totalPaise: true },
         }),
-        prisma.shopOrder.findMany({
+        prisma.ticketOrder.findMany({
             where: {
                 paidAt: { gte: d30 },
-                status: { notIn: ["REFUNDED", "CANCELLED"] },
+                legacyStatus: { notIn: ["REFUNDED", "CANCELLED"] },
             },
             select: { totalPaise: true },
         }),
-        prisma.shopOrder.count({ where: { status: "PENDING_PAYMENT" } }),
-        prisma.shopOrder.count({
-            where: { status: { in: ["PAID", "PACKED", "SHIPPED"] } },
+        prisma.ticketOrder.count({ where: { legacyStatus: "PENDING_PAYMENT" } }),
+        prisma.ticketOrder.count({
+            where: { legacyStatus: { in: ["PAID", "PACKED", "SHIPPED"] } },
         }),
         prisma.invProduct.findMany({
             where: { isActive: true, stock: { not: null } },

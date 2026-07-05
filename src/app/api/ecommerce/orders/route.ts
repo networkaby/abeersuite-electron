@@ -43,11 +43,18 @@ export async function GET(req: Request) {
                 ? (statusParam as ShopOrderStatus)
                 : undefined;
 
-        const orders = await prisma.shopOrder.findMany({
+        // An order is a Ticket (flavour "order") + TicketOrder detail. Filter on both,
+        // then flatten to the old flat ShopOrder shape (statusId ← core status,
+        // status ← detail legacyStatus) for the ecommerce UI.
+        const orderTickets = await prisma.ticket.findMany({
             where: {
-                ...(legacyStatusFilter ? { status: legacyStatusFilter } : {}),
-                ...(pipelineStatusId ? { statusId: pipelineStatusId } : {}),
-                ...(orderSource ? { orderSource } : {}),
+                order: {
+                    is: {
+                        ...(legacyStatusFilter ? { legacyStatus: legacyStatusFilter } : {}),
+                        ...(orderSource ? { orderSource } : {}),
+                    },
+                },
+                ...(pipelineStatusId ? { status: pipelineStatusId } : {}),
                 ...(from || to
                     ? {
                           createdAt: {
@@ -63,8 +70,7 @@ export async function GET(req: Request) {
                               { account: { person: { phones: { some: { phone: { contains: q } } } } } },
                               { account: { person: { emails: { some: { email: { contains: q, mode: "insensitive" as const } } } } } },
                               { account: { company: { name: { contains: q, mode: "insensitive" as const } } } },
-                              // Legacy compat — orders still using personId
-                              { person: { name: { contains: q, mode: "insensitive" as const } } },
+                              { order: { person: { name: { contains: q, mode: "insensitive" as const } } } },
                               ...(Number.isFinite(Number(q)) && String(Number(q)) === q.trim()
                                   ? [{ id: Number(q) }]
                                   : []),
@@ -77,22 +83,20 @@ export async function GET(req: Request) {
             skip: (page - 1) * take,
             include: {
                 account: { select: ACCOUNT_SELECT },
-                person: {
-                    select: {
-                        id: true,
-                        name: true,
-                        phones: selectPrimaryPhone,
-                        emails: selectPrimaryEmail,
+                ticketStatus: { select: { id: true, label: true, color: true, isTerminal: true } },
+                order: {
+                    include: {
+                        person: { select: { id: true, name: true, phones: selectPrimaryPhone, emails: selectPrimaryEmail } },
+                        lines: { include: { product: { select: { id: true, name: true, imageUrl: true } } } },
                     },
                 },
-                orderStatus: { select: { id: true, label: true, color: true, isTerminal: true } },
-                // 5D-17: order↔voucher link disconnected — rebuilt via SHOP_ORDER VoucherLink in the ecommerce module.
-                lines: { include: { product: { select: { id: true, name: true, imageUrl: true } } } },
             },
         });
 
-        // 5D-17: the linked-voucher (invVoucher) field is disconnected — the
-        // ecommerce module will resurface it via the SHOP_ORDER VoucherLink.
+        const orders = orderTickets.map((t) => {
+            const { order, ticketStatus, ...core } = t;
+            return { ...core, ...order, status: order?.legacyStatus, statusId: core.status, orderStatus: ticketStatus };
+        });
         return NextResponse.json(orders);
     } catch (e) {
         return handleApiError(e, "Failed to list orders");
@@ -136,31 +140,37 @@ export async function POST(req: Request) {
     }
 
     try {
-        const order = await prisma.shopOrder.create({
+        const t = await prisma.ticket.create({
             data: {
                 accountId: body.accountId,
-                orderSource: body.orderSource,
                 pipelineId: pipeline.id,
-                statusId: entryStatus.id,
-                shippingName: body.shippingName ?? null,
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                shippingAddress: (body.shippingAddress as any) ?? undefined,
-                totalPaise: body.totalPaise,
-                lines: {
-                    create: body.lines.map((l) => ({
-                        productId: l.productId,
-                        quantity: l.quantity,
-                        unitPricePaise: l.unitPricePaise,
-                    })),
+                status: entryStatus.id,
+                order: {
+                    create: {
+                        orderSource: body.orderSource,
+                        shippingName: body.shippingName ?? null,
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        shippingAddress: (body.shippingAddress as any) ?? undefined,
+                        totalPaise: body.totalPaise,
+                        lines: {
+                            create: body.lines.map((l) => ({
+                                productId: l.productId,
+                                quantity: l.quantity,
+                                unitPricePaise: l.unitPricePaise,
+                            })),
+                        },
+                    },
                 },
             },
             include: {
                 account: { select: ACCOUNT_SELECT },
-                orderStatus: { select: { id: true, label: true, color: true } },
-                lines: { include: { product: { select: { id: true, name: true } } } },
+                ticketStatus: { select: { id: true, label: true, color: true } },
+                order: { include: { lines: { include: { product: { select: { id: true, name: true } } } } } },
             },
         });
-        return NextResponse.json(order, { status: 201 });
+        const { order, ticketStatus, ...core } = t;
+        const flat = { ...core, ...order, status: order?.legacyStatus, statusId: core.status, orderStatus: ticketStatus };
+        return NextResponse.json(flat, { status: 201 });
     } catch (e) {
         return handleApiError(e, "Failed to create order");
     }

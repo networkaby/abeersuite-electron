@@ -27,7 +27,7 @@ const CONTACT_SELECT = {
     account: { select: { id: true } },
     phones: { select: { phone: true, isPrimary: true } },
     emails: { select: { email: true, isPrimary: true } },
-    _count: { select: { deals: true } },
+    _count: { select: { dealTickets: true } },
 } as const;
 
 const LIFECYCLES = ["LEAD", "PROSPECT", "CUSTOMER", "INACTIVE"] as const;
@@ -58,7 +58,7 @@ export async function GET(req: Request) {
                     ? { ownerPositionId }
                     : {}),
             ...(tag ? { tags: { has: tag } } : {}),
-            ...(hasDeal === "1" ? { deals: { some: {} } } : hasDeal === "0" ? { deals: { none: {} } } : {}),
+            ...(hasDeal === "1" ? { dealTickets: { some: {} } } : hasDeal === "0" ? { dealTickets: { none: {} } } : {}),
             ...(q
                 ? {
                       OR: [
@@ -78,7 +78,9 @@ export async function GET(req: Request) {
             prisma.person.count({ where }),
         ]);
 
-        return NextResponse.json({ items, total, page, pageSize: take });
+        // Keep the old `_count.deals` shape for the contacts list badge.
+        const shaped = items.map((i) => ({ ...i, _count: { deals: i._count.dealTickets } }));
+        return NextResponse.json({ items: shaped, total, page, pageSize: take });
     } catch (e) {
         return handleApiError(e, "Failed to fetch contacts");
     }

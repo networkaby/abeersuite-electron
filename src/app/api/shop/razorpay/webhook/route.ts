@@ -29,16 +29,16 @@ export async function POST(req: Request) {
             return NextResponse.json({ ok: true, ignored: true });
         }
 
-        const row = await prisma.shopOrder.findFirst({
+        const row = await prisma.ticketOrder.findFirst({
             where: { razorpayOrderId: rzOrderId },
-            select: { id: true },
+            select: { ticketId: true },
         });
         if (!row) {
             return NextResponse.json({ ok: true, ignored: true });
         }
 
-        await prisma.shopOrder.update({
-            where: { id: row.id },
+        await prisma.ticketOrder.update({
+            where: { ticketId: row.ticketId },
             data: { razorpayPaymentId: paymentId ?? null },
         });
 

@@ -85,9 +85,9 @@ export async function RepairBriefing({ userId, isAdmin }: { userId: number; isAd
     try {
         [open, escalated, readyToCollect, myOpen, newToday] = await Promise.all([
             prisma.ticket.count({ where: { ticketStatus: { isTerminal: false } } }),
-            prisma.ticket.count({ where: { escalated: true, ticketStatus: { isTerminal: false } } }),
+            prisma.ticket.count({ where: { repair: { escalated: true }, ticketStatus: { isTerminal: false } } }),
             prisma.ticket.count({ where: { status: "S6" } }),
-            prisma.ticket.count({ where: { primaryOwnerId: userId, ticketStatus: { isTerminal: false } } }),
+            prisma.ticket.count({ where: { createdBy: { path: ["userId"], equals: userId }, ticketStatus: { isTerminal: false } } }),
             prisma.ticket.count({ where: { createdAt: { gte: today } } }),
         ]);
     } catch {
@@ -205,8 +205,8 @@ export async function AdminBriefing() {
     try {
         [openRepair, openSupport, openInternal] = await Promise.all([
             prisma.ticket.count({ where: { pipelineId: "P1", ticketStatus: { isTerminal: false } } }),
-            prisma.deal.count({ where: { pipelineId: "P2" } }),
-            prisma.deal.count({ where: { pipelineId: "P4" } }),
+            prisma.ticket.count({ where: { pipelineId: "P2" } }),
+            prisma.ticket.count({ where: { pipelineId: "P4" } }),
         ]);
     } catch {
         // DB unavailable — show "—" so the page still loads without misleading zeros
@@ -244,7 +244,7 @@ export async function DespatchBriefing() {
             prisma.ticket.count({
                 where: { workerId: "SS22", ticketStatus: { isTerminal: false } },
             }),
-            prisma.ticket.count({ where: { escalated: true, status: "S4" } }),
+            prisma.ticket.count({ where: { repair: { escalated: true }, status: "S4" } }),
         ]);
     } catch {
         // DB unavailable — show "—" so the page still loads without misleading zeros

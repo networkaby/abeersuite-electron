@@ -4,6 +4,7 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -30,11 +31,12 @@ export async function POST(req: Request, { params }: Params) {
 
         const ticket = await prisma.ticket.findUnique({
             where: { id: ticketId },
-            select: { isWarranty: true, warrantyStatus: true, workerId: true, ticketWorker: { select: { warrantyScope: true } } },
+            select: { repair: { select: { isWarranty: true, warrantyStatus: true } }, workerId: true, ticketWorker: { select: { warrantyScope: true } } },
         });
         if (!ticket) return NextResponse.json({ error: "Not found" }, { status: 404 });
+        if (!ticket.repair) return NextResponse.json({ error: "Not a repair ticket" }, { status: 400 });
 
-        const toWarranty: boolean = body.isWarranty ?? !ticket.isWarranty;
+        const toWarranty: boolean = body.isWarranty ?? !ticket.repair.isWarranty;
         const toStatus = body.warrantyStatus ?? (toWarranty ? "CLAIMED" : "NONE");
         const voidReason: string | null = body.voidReason ?? null;
 
@@ -57,12 +59,16 @@ export async function POST(req: Request, { params }: Params) {
         const updated = await prisma.ticket.update({
             where: { id: ticketId },
             data: {
-                isWarranty: toWarranty,
-                warrantyStatus: toStatus,
-                voidReason: voidReason,
-                warrantyRef: body.warrantyRef ?? undefined,
-                purchaseDate: body.purchaseDate ? new Date(body.purchaseDate) : undefined,
                 ...(clearWorker || bridgeWorkerId ? { workerId: bridgeWorkerId } : {}),
+                repair: {
+                    update: {
+                        isWarranty: toWarranty,
+                        warrantyStatus: toStatus,
+                        voidReason: voidReason,
+                        warrantyRef: body.warrantyRef ?? undefined,
+                        purchaseDate: body.purchaseDate ? new Date(body.purchaseDate) : undefined,
+                    },
+                },
             },
         });
 
@@ -78,7 +84,7 @@ export async function POST(req: Request, { params }: Params) {
                 ticketId,
                 status:     updated.status,
                 note:       logNote,
-                userId:     user.id,
+                author:     await buildActorSnapshot(user.id),
                 visibility: "INTERNAL",
             },
         });

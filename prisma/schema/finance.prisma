@@ -180,12 +180,12 @@ model VoucherGlLine {
 // A voucher's links to DISPOSABLE workflow entities (a repair ticket it was
 // raised for, a CRM deal it captured, an ecommerce order, an Orders-board
 // pipeline stage). Deliberately a LOOSE link, NOT a foreign key: `targetId` is a
-// plain String so the protected accounting spine holds NO FK into Ticket / Deal /
-// ShopOrder / Pipeline — a workflow schema change can never touch the ledger, and
-// the voucher's record of "raised for ticket 123" survives that ticket's deletion
+// plain String so the protected accounting spine holds NO FK into Ticket /
+// Pipeline — a workflow schema change can never touch the ledger, and the
+// voucher's record of "raised for ticket 123" survives that ticket's deletion
 // (workflow is disposable; the accounting fact is not). Reverse lookup
 // ("which vouchers point at ticket X") via the @@index([kind, targetId]).
-// String targetId spans Int ids (ticket/deal/order) AND cuid pipeline ids.
+// String targetId spans Int Ticket ids AND cuid pipeline ids.
 enum VoucherLinkKind {
   TICKET
   DEAL

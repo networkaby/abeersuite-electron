@@ -6,6 +6,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
+import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 
 const CALL_LOG_NOTE_PREFIX = "CALL_LOG::";
 
@@ -78,8 +79,8 @@ export async function GET(req: Request) {
         if (search) {
             const searchOrFilters: Prisma.TicketLogWhereInput[] = [
                 { note: { contains: search } },
-                { ticket: { device: { brand: { contains: search, mode: "insensitive" } } } },
-                { ticket: { device: { model: { contains: search, mode: "insensitive" } } } },
+                { ticket: { repair: { device: { brand: { contains: search, mode: "insensitive" } } } } },
+                { ticket: { repair: { device: { model: { contains: search, mode: "insensitive" } } } } },
             ];
             andFilters.push({ OR: searchOrFilters });
         }
@@ -97,23 +98,17 @@ export async function GET(req: Request) {
                     ticket: {
                         select: {
                             id: true,
-                            device: {
+                            repair: {
                                 select: {
-                                    brand: true,
-                                    model: true,
-                                    account: {
+                                    device: {
                                         select: {
-                                            name: true,
-                                            person: {
+                                            brand: true,
+                                            model: true,
+                                            account: {
                                                 select: {
                                                     name: true,
-                                                    phones: selectPrimaryPhone,
-                                                },
-                                            },
-                                            company: {
-                                                select: {
-                                                    name: true,
-                                                    phones: selectPrimaryPhone,
+                                                    person: { select: { name: true, phones: selectPrimaryPhone } },
+                                                    company: { select: { name: true, phones: selectPrimaryPhone } },
                                                 },
                                             },
                                         },
@@ -135,14 +130,14 @@ export async function GET(req: Request) {
                     ticketId: log.ticketId,
                     customerName:
                         parsed.customerName ||
-                        log.ticket.device.account?.person?.name ||
-                        log.ticket.device.account?.company?.name ||
-                        log.ticket.device.account?.name ||
+                        log.ticket.repair?.device?.account?.person?.name ||
+                        log.ticket.repair?.device?.account?.company?.name ||
+                        log.ticket.repair?.device?.account?.name ||
                         "Unknown",
                     phone:
                         parsed.phone ||
-                        log.ticket.device.account?.person?.phones?.[0]?.phone ||
-                        log.ticket.device.account?.company?.phones?.[0]?.phone ||
+                        log.ticket.repair?.device?.account?.person?.phones?.[0]?.phone ||
+                        log.ticket.repair?.device?.account?.company?.phones?.[0]?.phone ||
                         "",
                     direction: parsed.direction,
                     status: parsed.status,
@@ -197,7 +192,7 @@ export async function POST(req: Request) {
                     note: data.note,
                 }),
                 visibility: "INTERNAL",
-                userId: user.id,
+                author: await buildActorSnapshot(user.id),
             },
         });
 

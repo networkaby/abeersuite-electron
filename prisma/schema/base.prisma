@@ -45,8 +45,8 @@ model Person {
   account          Account? // enforced at app level; FK lives on Account.personId
   companies        PersonCompany[]
   portalCredential PersonPortalCredential?
-  shopOrders       ShopOrder[]
-  deals            Deal[]
+  dealTickets      TicketDeal[] // deals (Ticket flavour "deal") linked to this person
+  orderTickets     TicketOrder[] // orders (Ticket flavour "order") linked to this person
   owner            Position?               @relation("PersonOwnerPosition", fields: [ownerPositionId], references: [id])
   phones           Phone[]
   emails           Email[]
@@ -97,12 +97,12 @@ model Company {
   financialYearFrom  DateTime? @db.Date
   booksBeginningFrom DateTime? @db.Date
 
-  account Account? // enforced at app level; FK lives on Account.companyId
-  persons PersonCompany[]
-  deals   Deal[]
-  owner   Position?       @relation("CompanyOwnerPosition", fields: [ownerPositionId], references: [id])
-  phones  Phone[]
-  emails  Email[]
+  account     Account? // enforced at app level; FK lives on Account.companyId
+  persons     PersonCompany[]
+  dealTickets TicketDeal[] // deals (Ticket flavour "deal") linked to this company
+  owner       Position?       @relation("CompanyOwnerPosition", fields: [ownerPositionId], references: [id])
+  phones      Phone[]
+  emails      Email[]
 
   // Mirror of Person.convertedToCompanyId — see comment there.
   convertedToPersonId Int?

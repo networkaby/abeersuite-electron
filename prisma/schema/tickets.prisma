@@ -1,4 +1,13 @@
-// ── Device / Ticket ───────────────────────────────────────────────────────────
+// ── Unified pipeline item ("Ticket") ──────────────────────────────────────────
+// ONE core table rides every pipeline (repair, deal, order, delivery, refund,
+// task). `Pipeline.entityType` selects which optional 1:1 DETAIL table carries the
+// domain-specific fields, and which UI renders. Cross-pipeline transfer is just an
+// `update { pipelineId, status }` on the core row — the detail row stays attached
+// as history, so nothing is lost when e.g. a repair becomes a deal.
+//
+// Ownership is a single frozen actor snapshot (`createdBy`, "who created") — no User
+// FK. Assignment (who is on it now) is a Position seat (`assignedPositionId`), an
+// axis distinct from ownership, used by the deal / task boards.
 
 enum Priority {
   LOW
@@ -7,89 +16,267 @@ enum Priority {
   URGENT
 }
 
-model Device {
-  id        Int      @id @default(autoincrement())
-  type      String
-  brand     String
-  model     String
-  problem   String
-  accountId Int?
-  account   Account? @relation(fields: [accountId], references: [id])
-  tickets   Ticket[]
-
-  @@index([accountId])
-}
-
 model Ticket {
-  id                Int             @id @default(autoincrement())
-  /// Optional link when ticket was spawned from an ecommerce return / RMA.
-  sourceShopOrderId Int?
-  pipelineId        String?
-  status            String          @default("S1")
-  priority          Priority        @default(MEDIUM)
-  notes             String?
-  accessInfo        String?
-  estimatedCost     Float?
-  deviceId          Int
-  escalated         Boolean         @default(false)
-  escalatedAt       DateTime?
-  escalationType    EscalationType?
-  expectedReturn    DateTime?
-  receivedBackAt    DateTime?
-  externalRef       String?
-  serviceCenterId   Int?
-  workerId          String?
-  isWarranty        Boolean         @default(false)
-  warrantyStatus    WarrantyStatus  @default(NONE)
-  warrantyRef       String?
-  purchaseDate      DateTime?
-  voidReason        String?
-  primaryOwnerId    Int?
-  billingAccountId  Int?
-  // Retry-after-interval (snooze) runtime state. wakeAt = when the deferred work
-  // in the current "waiting" sub-status is due again; while wakeAt > now the
-  // ticket sits in the Work Inbox "Waiting" tab. retryCount/retryKeyId track how
-  // many times this particular waiting sub-status (retryKeyId) has been entered,
-  // so distinct loops (calling vs parts) count independently and bound correctly.
-  wakeAt            DateTime?
-  retryCount        Int             @default(0)
-  retryKeyId        String?
-  // ── Spawned child sub-pipeline ("5th power") ───────────────────────────────
-  // A sub-status with spawnPipelineId creates a CHILD ticket on another pipeline
-  // (e.g. inbound parts courier). The child carries parentTicketId back; the
-  // parent's sub-status mirrors the child's status and advances when the child
-  // hits a terminal. parentWorkerId = which sub-status of the parent is waiting
-  // on this child (where to fire success/fail when it resolves). context = soft,
-  // unstructured data (device snapshot, participants, ownership, parts) — kept in
-  // JSON for now, rewire to columns later if needed.
-  parentTicketId    Int?
-  parentWorkerId    String?
-  context           Json?
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
+  id         Int      @id @default(autoincrement())
+  // ── Pipeline spine ──────────────────────────────────────────────────────────
+  pipelineId String?
+  status     String   @default("S1")
+  workerId   String?
+  priority   Priority @default(MEDIUM)
 
-  shopOrder      ShopOrder?          @relation(fields: [sourceShopOrderId], references: [id])
-  pipeline       Pipeline?           @relation(fields: [pipelineId], references: [id])
-  device         Device              @relation(fields: [deviceId], references: [id])
-  primaryOwner   User?               @relation(fields: [primaryOwnerId], references: [id])
-  billingAccount Account?            @relation("TicketBillingAccount", fields: [billingAccountId], references: [id])
-  serviceCenter  ServiceCenter?      @relation(fields: [serviceCenterId], references: [id])
-  ticketStatus   TicketStatus        @relation(fields: [status], references: [id])
-  ticketWorker   TicketWorker?       @relation(fields: [workerId], references: [id])
-  parent         Ticket?             @relation("TicketChildren", fields: [parentTicketId], references: [id])
-  children       Ticket[]            @relation("TicketChildren")
-  logs           TicketLog[]
-  participants   TicketParticipant[]
+  // ── Generic item fields (shared by every flavour) ───────────────────────────
+  title    String?
+  notes    String?
+  category String? // light tag (task "HR"/"Finance", deal source bucket, …)
+
+  // ── Ownership + assignment ──────────────────────────────────────────────────
+  // createdBy = frozen ActorSnapshot (the sole "who created"; no User FK).
+  // assignedPositionId = the seat currently responsible (resolved live to its holder).
+  createdBy          Json      @default("{}")
+  assignedPositionId String?
+  assignedPosition   Position? @relation("TicketAssignedPosition", fields: [assignedPositionId], references: [id])
+  // The GL bridge — Account is the sanctioned (and only) link into the accountancy
+  // core. A relation is fine: the decoupling forbids GL/voucher FKs INTO workflow,
+  // not this workflow→Account bridge.
+  accountId          Int?
+  account            Account?  @relation("TicketAccount", fields: [accountId], references: [id])
+
+  // ── Generic scheduling ──────────────────────────────────────────────────────
+  dueAt     DateTime? // task due-date / deal next-follow-up
+  closedAt  DateTime? // set on a terminal stage (Won / Lost / Delivered / …)
+  sortOrder Int       @default(0) // ordering within a kanban column
+
+  // ── Retry-after-interval (snooze) runtime state (repair "waiting" sub-status) ─
+  // While wakeAt > now the item sits in the Work Inbox "Waiting" tab.
+  // retryCount / retryKeyId bound distinct waiting loops (calling vs parts).
+  wakeAt     DateTime?
+  retryCount Int       @default(0)
+  retryKeyId String?
+
+  // ── Spawned child sub-pipeline ("5th power") ────────────────────────────────
+  // A sub-status with spawnPipelineId creates a CHILD ticket on another pipeline;
+  // the child carries parentTicketId back and the parent mirrors it. context = soft
+  // unstructured payload (device snapshot, participants, parts, spawnedFrom link).
+  parentTicketId Int?
+  parentWorkerId String?
+  context        Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // ── Spine relations (local, cheap) ──────────────────────────────────────────
+  pipeline     Pipeline?     @relation(fields: [pipelineId], references: [id])
+  ticketStatus TicketStatus  @relation(fields: [status], references: [id])
+  ticketWorker TicketWorker? @relation(fields: [workerId], references: [id])
+  parent       Ticket?       @relation("TicketChildren", fields: [parentTicketId], references: [id])
+  children     Ticket[]      @relation("TicketChildren")
+
+  logs         TicketLog[]
+  participants TicketParticipant[]
+
+  // ── Optional 1:1 detail (exactly one per row, keyed by Pipeline.entityType) ──
+  repair   TicketRepair?
+  deal     TicketDeal?
+  order    TicketOrder?
+  delivery TicketDelivery?
+  refund   TicketRefund?
 
   @@index([parentTicketId])
   @@index([status])
   @@index([pipelineId, status])
-  @@index([primaryOwnerId])
-  @@index([deviceId])
-  @@index([warrantyStatus])
+  @@index([assignedPositionId])
+  @@index([accountId])
   @@index([createdAt])
-  @@index([sourceShopOrderId])
   @@index([wakeAt])
+}
+
+// ── Detail: Repair (device-based service ticket) ──────────────────────────────
+model TicketRepair {
+  ticketId Int    @id
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  deviceId        Int
+  device          Device         @relation(fields: [deviceId], references: [id])
+  serviceCenterId Int?
+  serviceCenter   ServiceCenter? @relation(fields: [serviceCenterId], references: [id])
+
+  estimatedCost  Float?
+  accessInfo     String?
+  expectedReturn DateTime?
+  receivedBackAt DateTime?
+  externalRef    String?
+  voidReason     String?
+
+  // Escalation
+  escalated      Boolean         @default(false)
+  escalatedAt    DateTime?
+  escalationType EscalationType?
+
+  // Warranty
+  isWarranty     Boolean        @default(false)
+  warrantyStatus WarrantyStatus @default(NONE)
+  warrantyRef    String?
+  purchaseDate   DateTime?
+
+  // Optional link when the repair was spawned from an ecommerce return / RMA —
+  // points at the order's core Ticket id (id-only, no relation).
+  sourceOrderTicketId Int?
+
+  @@index([deviceId])
+  @@index([serviceCenterId])
+  @@index([warrantyStatus])
+  @@index([sourceOrderTicketId])
+}
+
+// ── Detail: Deal (sales opportunity; contact links id-only) ───────────────────
+model TicketDeal {
+  ticketId Int    @id
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  // Contact + association (link to an existing customer ledger, HubSpot-style).
+  contactName String?
+  phone       String?
+  email       String?
+  companyName String?
+  personId    Int?
+  companyId   Int?
+  person      Person?  @relation(fields: [personId], references: [id])
+  company     Company? @relation(fields: [companyId], references: [id])
+
+  valuePaise Int?
+  source     String?
+  lostReason String?
+
+  @@index([personId])
+  @@index([companyId])
+}
+
+// ── Detail: Order (ecommerce / storefront order) ──────────────────────────────
+model TicketOrder {
+  ticketId Int    @id
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  // Legacy enum status — kept for Razorpay webhook compat; the core `status`
+  // (pipeline stage) is the source of truth.
+  legacyStatus  ShopOrderStatus   @default(DRAFT)
+  orderSource   OrderSource       @default(ONLINE)
+  paymentMethod ShopPaymentMethod @default(COD)
+
+  // Identity — Person link (prefer the core Ticket.accountId for the GL link).
+  personId        Int?
+  person          Person? @relation(fields: [personId], references: [id])
+  guestEmail      String?
+  guestPhone      String?
+  shippingName    String?
+  shippingAddress Json?
+
+  totalPaise        Int     @default(0)
+  razorpayOrderId   String? @unique
+  razorpayPaymentId String?
+  courier           String?
+  trackingNumber    String?
+
+  paidAt      DateTime?
+  packedAt    DateTime?
+  shippedAt   DateTime?
+  deliveredAt DateTime?
+  refundedAt  DateTime?
+
+  lines TicketOrderLine[]
+
+  @@index([personId])
+}
+
+model TicketOrderLine {
+  id             Int @id @default(autoincrement())
+  orderTicketId  Int
+  productId      Int
+  quantity       Int @default(1)
+  unitPricePaise Int
+
+  order   TicketOrder @relation(fields: [orderTicketId], references: [ticketId], onDelete: Cascade)
+  product InvProduct  @relation(fields: [productId], references: [id])
+
+  @@index([orderTicketId])
+  @@index([productId])
+}
+
+// ── Detail: Delivery (O2C dispatch sub-pipeline) ──────────────────────────────
+// Polymorphic order ref: orderSource = "inv" (order-type InvVoucher) | "shop"
+// (an order Ticket). GL-silent — carrier cost is decision-support only.
+model TicketDelivery {
+  ticketId Int    @id
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  orderSource String // "inv" | "shop"
+  orderId     Int
+
+  carrier               String? // SHIPROCKET | DTDC | MARUTI | OWN_BOY | PICKUP
+  awb                   String?
+  trackingUrl           String?
+  addressJson           Json?
+  chargeToCustomerPaise Int     @default(0)
+  costToCarrierPaise    Int     @default(0)
+
+  @@index([orderSource, orderId])
+}
+
+// ── Detail: Refund (O2C refund sub-pipeline) ──────────────────────────────────
+// GL-silent here; the pay-back Payment voucher is posted by staff on "Refunded".
+model TicketRefund {
+  ticketId Int    @id
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  orderSource String // "inv" | "shop"
+  orderId     Int
+
+  amountPaise     Int     @default(0)
+  reason          String?
+  sourceVoucherId Int? // the advance Receipt voucher being paid back
+  payoutVoucherId Int? // the Payment voucher posted on Refunded (idempotency guard)
+
+  @@index([orderSource, orderId])
+}
+
+// ── Timeline: one log for every flavour (repair status changes, deal activities,
+// task comments) — actor is a frozen ActorSnapshot, no User FK. ────────────────
+model TicketLog {
+  id       Int @id @default(autoincrement())
+  ticketId Int
+
+  author     Json          @default("{}") // ActorSnapshot
+  kind       TicketLogKind @default(NOTE)
+  note       String?
+  status     String? // TicketStatus at the time (repair); null for plain notes
+  workerId   String? // sub-status (repair)
+  visibility LogVisibility @default(INTERNAL)
+
+  // Deal follow-up tasks (kind = TASK): due / done timestamps.
+  dueAt  DateTime?
+  doneAt DateTime?
+
+  // Structured work-completion record (dormant — columns kept for a future rebuild).
+  outcome String?
+  data    Json?
+
+  createdAt DateTime @default(now())
+
+  ticket       Ticket        @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  ticketStatus TicketStatus? @relation(fields: [status], references: [id])
+  ticketWorker TicketWorker? @relation(fields: [workerId], references: [id])
+
+  @@index([ticketId])
+}
+
+// Kind of a TicketLog entry — merges the former TaskCommentKind + DealActivityKind
+// with the repair note vocabulary.
+enum TicketLogKind {
+  NOTE
+  COMMENT
+  CALL
+  MEETING
+  TASK
+  SYSTEM
 }
 
 model TicketParticipant {
@@ -112,34 +299,25 @@ model TicketParticipant {
   @@index([userId])
 }
 
-model TicketLog {
-  id           Int           @id @default(autoincrement())
-  ticketId     Int
-  status       String
-  note         String?
-  userId       Int
-  workerId     String?
-  visibility   LogVisibility @default(INTERNAL)
-  // Structured work-completion record (currently dormant — feature reverted; columns
-  // kept so existing data survives and a future rebuild has them ready).
-  outcome      String?
-  data         Json?
-  createdAt    DateTime      @default(now())
-  ticketStatus TicketStatus  @relation(fields: [status], references: [id])
-  ticketWorker TicketWorker? @relation(fields: [workerId], references: [id])
-  ticket       Ticket        @relation(fields: [ticketId], references: [id])
-  changedBy    User          @relation(fields: [userId], references: [id])
+model Device {
+  id        Int            @id @default(autoincrement())
+  type      String
+  brand     String
+  model     String
+  problem   String
+  accountId Int?
+  account   Account?       @relation(fields: [accountId], references: [id])
+  repairs   TicketRepair[]
 
-  @@index([ticketId])
-  @@index([userId])
+  @@index([accountId])
 }
 
 model ServiceCenter {
-  id        Int      @id @default(autoincrement())
+  id        Int            @id @default(autoincrement())
   name      String
   phone     String
   email     String?
   address   String?
-  createdAt DateTime @default(now())
-  tickets   Ticket[]
+  createdAt DateTime       @default(now())
+  repairs   TicketRepair[]
 }

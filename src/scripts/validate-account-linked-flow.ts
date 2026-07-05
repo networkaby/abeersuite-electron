@@ -2,13 +2,14 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 
 async function main() {
     const [missingAccountLink, missingPersonForAccountLinked, missingPersonalAccounts] = await Promise.all([
-        prisma.shopOrder.count({
-            where: { accountId: null },
+        // Orders are order-flavour Tickets now: accountId on the core, personId on the detail.
+        prisma.ticket.count({
+            where: { order: { isNot: null }, accountId: null },
         }),
-        prisma.shopOrder.count({
+        prisma.ticket.count({
             where: {
                 accountId: { not: null },
-                personId: null,
+                order: { personId: null },
             },
         }),
         prisma.person.count({

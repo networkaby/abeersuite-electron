@@ -35,7 +35,7 @@ model Branch {
   // Phase 5 5D-12: the primary voucher branch is on the spine now (UvBranch);
   // InvVoucher keeps only destinationBranch (branch-transfer detail).
   universalVouchers UniversalVoucher[] @relation("UvBranch")
-  invVouchersAsDest VoucherDetail[]       @relation("InvVoucherDestBranch")
+  invVouchersAsDest VoucherDetail[]    @relation("InvVoucherDestBranch")
   invStockLedger    InvStockLedger[]   @relation("InvStockLedgerBranch")
   invProductStock   InvProductBranch[]
 
@@ -47,19 +47,19 @@ model Branch {
 }
 
 model Department {
-  id          String     @id
-  name        String
-  description String?
-  branchId    String?
+  id             String                 @id
+  name           String
+  description    String?
+  branchId       String?
   // All-access flag — when true, this department's permission pool is "every
   // permission" (computed live, no DepartmentPermission rows). Home for
   // cross-cutting roles (R1 Admin). Exactly one department should set this.
-  isAllAccess Boolean    @default(false)
-  createdAt   DateTime   @default(now())
-  branch      Branch?    @relation(fields: [branchId], references: [id])
-  positions   Position[]
+  isAllAccess    Boolean                @default(false)
+  createdAt      DateTime               @default(now())
+  branch         Branch?                @relation(fields: [branchId], references: [id])
+  positions      Position[]
   // Roles homed in this department (their authoring lens = this dept's pool).
-  roles       Role[]
+  roles          Role[]
   // The curated permission pool surfaced when authoring those roles.
   permissionPool DepartmentPermission[]
 }
@@ -77,19 +77,17 @@ model Position {
   parentPositionId String?
   createdAt        DateTime @default(now())
 
-  branch         Branch?        @relation(fields: [branchId], references: [id])
-  department     Department?    @relation(fields: [departmentId], references: [id])
-  parent         Position?      @relation("PositionHierarchy", fields: [parentPositionId], references: [id])
-  children       Position[]     @relation("PositionHierarchy")
-  roleTemplates  PositionRole[]
-  holders        UserPosition[]
-  // Work-board tasks owned by this seat (Administration board, etc.)
-  tasks          Task[]         @relation("TaskAssignedPosition")
-  // Deals owned by this seat
-  deals          Deal[]         @relation("DealPosition")
+  branch          Branch?        @relation(fields: [branchId], references: [id])
+  department      Department?    @relation(fields: [departmentId], references: [id])
+  parent          Position?      @relation("PositionHierarchy", fields: [parentPositionId], references: [id])
+  children        Position[]     @relation("PositionHierarchy")
+  roleTemplates   PositionRole[]
+  holders         UserPosition[]
+  // Tickets (tasks / deals / …) assigned to this seat, resolved live to the holder.
+  assignedTickets Ticket[]       @relation("TicketAssignedPosition")
   // Contacts (CRM) owned by this seat
-  ownedPersons   Person[]       @relation("PersonOwnerPosition")
-  ownedCompanies Company[]      @relation("CompanyOwnerPosition")
+  ownedPersons    Person[]       @relation("PersonOwnerPosition")
+  ownedCompanies  Company[]      @relation("CompanyOwnerPosition")
 }
 
 model UserPosition {

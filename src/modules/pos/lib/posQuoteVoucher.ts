@@ -183,29 +183,33 @@ export async function createPosQuoteVoucher(opts: {
             if (open) {
                 dealId = open.id;
             } else {
-                const deal = await tx.deal.create({
+                const deal = await tx.ticket.create({
                     data: {
                         pipelineId: pipeline!.id,
                         status: entry.id,
                         title: `${LABEL[type]} — ${body.partyName || "Customer"}${firstName ? ` (${firstName})` : ""}`,
-                        contactName: body.partyName || null,
-                        phone: body.partyPhone || null,
-                        personId,
-                        companyId,
-                        valuePaise: Math.round(totalAmount * 100),
-                        source: LABEL[type],
                         createdBy: actor as Prisma.InputJsonValue,
+                        deal: {
+                            create: {
+                                contactName: body.partyName || null,
+                                phone: body.partyPhone || null,
+                                personId,
+                                companyId,
+                                valuePaise: Math.round(totalAmount * 100),
+                                source: LABEL[type],
+                            },
+                        },
                     },
                     select: { id: true },
                 });
                 dealId = deal.id;
             }
-            await tx.dealActivity.create({
+            await tx.ticketLog.create({
                 data: {
-                    dealId,
+                    ticketId: dealId,
                     author: actor as Prisma.InputJsonValue,
                     kind: "SYSTEM",
-                    body: `${LABEL[type]} ${reference} created (₹${totalAmount.toFixed(2)})${body.notes ? ` — ${body.notes}` : ""}`,
+                    note: `${LABEL[type]} ${reference} created (₹${totalAmount.toFixed(2)})${body.notes ? ` — ${body.notes}` : ""}`,
                 },
             });
             await syncVoucherLink(tx, spineId, "DEAL", dealId);

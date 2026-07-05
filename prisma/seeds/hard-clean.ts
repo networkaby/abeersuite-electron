@@ -66,7 +66,7 @@ const TRANSACTION_TABLES = [
     // not bootstrap config. FKs to VoucherGlLine + InvProduct (both wiped here /
     // phase 5), so truncate it in phase 1. Bootstrap seeds nothing into it.
     "additional_cost_allocations",
-    "ShopOrderLine", "ShopOrder",
+    "TicketOrderLine", "TicketOrder",
     // Loyalty wallet movement tables (the LoyaltyConfig + LoyaltyEarnRule +
     // LoyaltyMilestone config and the "Loyalty Points Redeemed" GL ledger are NOT
     // listed — they survive a hard-clean like other bootstrap/admin config).
@@ -82,12 +82,13 @@ const TRANSACTION_TABLES = [
     // which cascade-truncates via its InvProduct FK) — it must be listed explicitly.
     // Bootstrap seeds nothing into it.
     "redemption_holds",
-    // O2C delivery + refund sub-pipeline rows (P8 / P9). Transactional — spawned per
-    // order; the pipelines themselves survive (bootstrap config).
-    "deliveries", "refunds",
+    // Every pipeline flavour is now a Ticket + optional 1:1 detail. O2C delivery +
+    // refund sub-pipeline rows (P8 / P9) are TicketDelivery / TicketRefund details;
+    // the pipelines themselves survive (bootstrap config). CASCADE clears the detail
+    // rows off Ticket, but they're listed for clarity.
+    "TicketDelivery", "TicketRefund", "TicketDeal", "TicketRepair",
     "TicketLog", "TicketParticipant", "Ticket", "Device",
-    "TaskComment", "Task",
-    "DealActivity", "Deal", "WallPost",
+    "WallPost",
     "ChatMessage", "ChatRoomMember", "ChatRoom",
     "PersonPortalCredential",
 ];

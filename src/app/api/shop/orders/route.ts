@@ -85,27 +85,34 @@ export async function POST(req: Request) {
         // it becomes a ticket on the staff orders board.
         const entryStatus = ordersPipeline?.statuses.find((s) => s.isEntryPoint);
 
-        const order = await prisma.shopOrder.create({
+        // An order is a Ticket (flavour "order") + TicketOrder detail on the orders
+        // pipeline (P7). Core status = the pipeline entry stage; legacy enum on detail.
+        const t = await prisma.ticket.create({
             data: {
-                status: "PENDING_PAYMENT",
-                paymentMethod: "COD",
-                totalPaise,
-                personId: customerId,
                 accountId: context.active.accountId,
-                guestEmail: null,
-                guestPhone: null,
                 pipelineId: ordersPipeline?.id ?? null,
-                statusId: entryStatus?.id ?? null,
-                lines: {
-                    create: resolvedLines.map((r) => ({
-                        productId: r.productId,
-                        quantity: r.quantity,
-                        unitPricePaise: r.unitPricePaise,
-                    })),
+                status: entryStatus?.id ?? "S1",
+                order: {
+                    create: {
+                        legacyStatus: "PENDING_PAYMENT",
+                        paymentMethod: "COD",
+                        totalPaise,
+                        personId: customerId,
+                        guestEmail: null,
+                        guestPhone: null,
+                        lines: {
+                            create: resolvedLines.map((r) => ({
+                                productId: r.productId,
+                                quantity: r.quantity,
+                                unitPricePaise: r.unitPricePaise,
+                            })),
+                        },
+                    },
                 },
             },
-            select: { id: true, totalPaise: true, status: true },
+            select: { id: true, status: true, order: { select: { totalPaise: true, legacyStatus: true } } },
         });
+        const order = { id: t.id, totalPaise: t.order?.totalPaise ?? 0, status: t.order?.legacyStatus };
 
         await createSystemInboxNotifications({
             roleIds: ["R1", "R2"],

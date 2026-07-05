@@ -18,7 +18,8 @@ function highestScopeFromPermissions(permissions: string[]): ScopeLevel | null {
 function ownVisibility(userId: number): Prisma.TicketWhereInput {
     return {
         OR: [
-            { primaryOwnerId: userId },
+            // "who created" — the actor snapshot's userId (there's no owner FK anymore).
+            { createdBy: { path: ["userId"], equals: userId } },
             { participants: { some: { userId, removedAt: null } } },
         ],
     };
@@ -38,12 +39,12 @@ export function buildTicketReadScopeWhere(user: ResolvedUser): Prisma.TicketWher
 
     if (scope === "department") {
         if (user.departmentIds.length === 0) return own;
-        // Match users who hold a Position scoped to one of the caller's departments.
+        // Match tickets whose participants hold a Position scoped to one of the
+        // caller's departments (owner-based scoping retired with primaryOwner).
         const inDept = { userPositions: { some: { position: { departmentId: { in: user.departmentIds } } } } };
         return {
             OR: [
                 own,
-                { primaryOwner: inDept },
                 { participants: { some: { removedAt: null, user: inDept } } },
             ],
         };
@@ -51,12 +52,11 @@ export function buildTicketReadScopeWhere(user: ResolvedUser): Prisma.TicketWher
 
     // scope === "branch"
     if (user.branchIds.length === 0) return own;
-    // Match users who hold a Position scoped to one of the caller's branches.
+    // Match tickets whose participants hold a Position scoped to one of the caller's branches.
     const inBranch = { userPositions: { some: { position: { branchId: { in: user.branchIds } } } } };
     return {
         OR: [
             own,
-            { primaryOwner: inBranch },
             { participants: { some: { removedAt: null, user: inBranch } } },
         ],
     };

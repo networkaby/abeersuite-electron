@@ -1,11 +1,12 @@
 // DUMMY DATA — demo internal-management tasks on the Administration work board.
-// Seeds a handful of Task rows across the P4 (internal-management) pipeline stages
-// so the board at /office/administration shows realistic content in dev.
+// A task is a bare Ticket (entityType "task" — no detail table) on the P4
+// (internal-management) pipeline, so the board at /office/administration shows
+// realistic content in dev.
 //
 // Run: pnpm seed:dummy-tasks  (npx tsx prisma/seeds/dummy-tasks.ts)
 //
 // Requires bootstrap-seed.ts (P4 pipeline + stages S24–S28, admin user) to have run.
-// `pnpm seed:hard-clean` wipes Task / TaskComment rows (they're transactional).
+// `pnpm seed:hard-clean` wipes Ticket rows (they're transactional).
 
 import { PrismaClient } from "../../src/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
@@ -67,17 +68,17 @@ async function main() {
     let i = 0;
     for (const t of DEMO_TASKS) {
         const assignedPositionId = positions.length ? positions[i % positions.length].id : null;
-        await prisma.task.create({
+        await prisma.ticket.create({
             data: {
                 title: t.title,
-                description: t.description,
+                notes: t.description,
                 category: t.category,
                 priority: t.priority,
                 pipelineId: PIPELINE_ID,
                 status: t.status,
                 assignedPositionId,
                 createdBy,
-                completedAt: t.status === "S28" ? new Date() : null,
+                closedAt: t.status === "S28" ? new Date() : null,
             },
         });
         console.log(`  + [${t.status}] ${t.title}`);

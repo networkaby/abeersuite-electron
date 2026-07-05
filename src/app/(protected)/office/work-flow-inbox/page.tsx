@@ -28,8 +28,7 @@ export default async function AssignmentsPage() {
             },
             orderBy: { updatedAt: "asc" },
             include: {
-                device: { include: { account: { include: customerPhones } } },
-                primaryOwner: { select: { id: true, name: true } },
+                repair: { include: { device: { include: { account: { include: customerPhones } } } } },
                 ticketWorker: {
                     select: {
                         id: true, label: true, actionLabel: true, workId: true, retrySchedule: true,
@@ -41,7 +40,7 @@ export default async function AssignmentsPage() {
                     where: { note: { not: null } },
                     orderBy: { createdAt: "desc" },
                     take: 12,
-                    select: { note: true, changedBy: { select: { name: true } } },
+                    select: { note: true, author: true },
                 },
             },
         }),
@@ -52,9 +51,9 @@ export default async function AssignmentsPage() {
             take: 60,
             select: {
                 id: true, note: true, createdAt: true,
-                changedBy: { select: { name: true } },
+                author: true,
                 ticketWorker: { select: { label: true, work: { select: { id: true, label: true, color: true, groupId: true } } } },
-                ticket: { select: { id: true, device: { select: { brand: true, model: true, account: { select: customerPhones } } } } },
+                ticket: { select: { id: true, repair: { select: { device: { select: { brand: true, model: true, account: { select: customerPhones } } } } } } },
             },
         }),
         prisma.work.findMany({ orderBy: { order: "asc" }, select: { id: true, label: true, color: true, permissionId: true, successLabel: true, failLabel: true, prompt: true, startLabel: true, successPopup: true, failPopup: true, args: true, groupId: true, group: { select: { id: true, label: true, color: true } } } }),
@@ -84,7 +83,8 @@ export default async function AssignmentsPage() {
     const now = Date.now();
     const openItems: WorkInboxItem[] = tickets.map((t) => {
         const work = t.ticketWorker?.workId ? worksById[t.ticketWorker.workId] : undefined;
-        const acct = t.device.account;
+        const device = t.repair?.device ?? null;
+        const acct = device?.account ?? null;
         const noteLog = t.logs.find((l) => l.note && !SYSTEM_NOTE.test(l.note));
         // Snoozed = this waiting work is deferred until wakeAt; it drops out of the
         // active queues into the "Waiting" tab and re-surfaces as due when wakeAt passes.
@@ -98,7 +98,7 @@ export default async function AssignmentsPage() {
         // outcome variables earlier workers produced (context.<key>) and the two "Previous
         // step" meta sources resolved from the logs (prev outcome + last note). Shown prominently.
         const ctxBag = (t.context as Record<string, unknown> | null) ?? {};
-        const ticketLike: TicketLike = { id: t.id, context: t.context as Record<string, unknown> | null, device: t.device };
+        const ticketLike: TicketLike = { id: t.id, context: t.context as Record<string, unknown> | null, device };
         const doneLog = t.logs.find((l) => l.note?.startsWith("Work done · "));
         const prevOutcome = doneLog ? doneLog.note!.replace(/^Work done · /, "") : null;
         const lastNoteVal = noteLog?.note ?? null;
@@ -138,17 +138,17 @@ export default async function AssignmentsPage() {
             failPopup: work?.failPopup ?? false,
             // The work's args — WorkActions collects the user-given (outcome) ones in the popup.
             args: work ? parseArgs(work.args) : [],
-            status: t.primaryOwner ? "progress" : "todo",
+            status: t.assignedPositionId ? "progress" : "todo",
             coverLabel: t.ticketWorker?.label ?? "",
             ask: t.ticketWorker?.actionLabel ?? null,
             context,
-            problem: t.device.problem?.trim() || null,
+            problem: device?.problem?.trim() || null,
             lastNote: noteLog?.note ?? null,
-            lastNoteBy: noteLog?.changedBy?.name ?? null,
+            lastNoteBy: (noteLog?.author as { userName?: string })?.userName ?? null,
             customer: acct?.person?.name ?? acct?.company?.name ?? "—",
             phone: acct?.person?.phones?.[0]?.phone ?? acct?.company?.phones?.[0]?.phone ?? null,
-            device: `${t.device.brand} ${t.device.model}`.trim(),
-            assignee: t.primaryOwner ?? null,
+            device: `${device?.brand ?? ""} ${device?.model ?? ""}`.trim(),
+            assignee: null,
             answer: null,
             answeredBy: null,
             snoozed,
@@ -160,7 +160,7 @@ export default async function AssignmentsPage() {
     // Finished works, read from the completion stamps (most recent first).
     const finishedItems: WorkInboxItem[] = doneLogs.map((l) => {
         const work = l.ticketWorker?.work;
-        const acct = l.ticket.device.account;
+        const acct = l.ticket.repair?.device?.account ?? null;
         const unsuccess = !!l.note?.includes("· Unsuccess");
         const userNote = l.note?.split(" — ").slice(1).join(" — ").trim() || null;
         return {
@@ -184,11 +184,11 @@ export default async function AssignmentsPage() {
             lastNoteBy: null,
             customer: acct?.person?.name ?? acct?.company?.name ?? "—",
             phone: acct?.person?.phones?.[0]?.phone ?? acct?.company?.phones?.[0]?.phone ?? null,
-            device: `${l.ticket.device.brand} ${l.ticket.device.model}`.trim(),
+            device: `${l.ticket.repair?.device?.brand ?? ""} ${l.ticket.repair?.device?.model ?? ""}`.trim(),
             assignee: null,
             outcome: unsuccess ? "unsuccess" : "success",
             answer: userNote,
-            answeredBy: l.changedBy?.name ?? null,
+            answeredBy: (l.author as { userName?: string })?.userName ?? null,
             snoozed: false,
             wakeLabel: null,
             ageLabel: timeAgo(l.createdAt),

@@ -4,6 +4,7 @@ import { requireAuth, hasPermission } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 import { z } from "zod";
 
 // Dev-only manual override — a raw escape hatch for a stuck ticket. Unlike the
@@ -65,16 +66,15 @@ export async function PATCH(
             workerLabel = w.label;
         }
 
+        const author = await buildActorSnapshot(user.id);
         await prisma.$transaction(async (tx) => {
-            // Raw set + clear the work-runtime: ownership lock, snooze, retry counters.
-            // Clearing primaryOwner unsticks a ticket frozen "in progress" and shows the
-            // landed worker as a fresh To-do item in the inbox.
+            // Raw set + clear the work-runtime: snooze + retry counters. Unsticks a
+            // ticket frozen "in progress" and shows the landed worker as a fresh To-do.
             await tx.ticket.update({
                 where: { id: ticketId },
                 data: {
                     status: newStatusId,
                     workerId: newWorkerId,
-                    primaryOwnerId: null,
                     wakeAt: null,
                     retryCount: 0,
                     retryKeyId: null,
@@ -87,7 +87,7 @@ export async function PATCH(
                     status: newStatusId,
                     workerId: newWorkerId,
                     note: `⚙ Manual override (dev) — ${targetStatus.label}${workerLabel ? ` › ${workerLabel}` : " (no worker)"}`,
-                    userId: user.id,
+                    author,
                 },
             });
         });

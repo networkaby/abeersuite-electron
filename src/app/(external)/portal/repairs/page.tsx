@@ -33,11 +33,11 @@ export default async function PortalRepairsPage() {
 
     // Phase 2 contract: enrich with repair timeline DTO + SLA details.
     const tickets = await prisma.ticket.findMany({
-        where: { device: { accountId: context.active.accountId } },
+        where: { repair: { device: { accountId: context.active.accountId } } },
         orderBy: { createdAt: "desc" },
         take: 20,
         include: {
-            device: { select: { type: true, brand: true, model: true } },
+            repair: { select: { device: { select: { type: true, brand: true, model: true } } } },
             ticketStatus: { select: { label: true } },
             // Customer-facing worker label takes precedence over the status name.
             ticketWorker: { select: { publicLabel: true } },
@@ -72,7 +72,7 @@ export default async function PortalRepairsPage() {
                                     <div className="flex flex-wrap items-center justify-between gap-3">
                                         <div>
                                             <p className="font-medium">Ticket #{ticket.id}</p>
-                                            <p className="text-xs text-muted-foreground">{ticket.device.brand} {ticket.device.model} · {ticket.device.type}</p>
+                                            <p className="text-xs text-muted-foreground">{ticket.repair?.device.brand} {ticket.repair?.device.model} · {ticket.repair?.device.type}</p>
                                         </div>
                                         <Badge variant="secondary">{ticket.ticketWorker?.publicLabel || ticket.ticketStatus.label}</Badge>
                                     </div>

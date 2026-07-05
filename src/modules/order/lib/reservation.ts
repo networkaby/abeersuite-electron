@@ -16,11 +16,11 @@ async function orderLines(ref: OrderRef): Promise<{ productId: number; quantity:
             : [];
         return lines.map((l) => ({ productId: l.productId, quantity: Math.round(Number(l.quantity)) }));
     }
-    const o = await prisma.shopOrder.findUnique({
+    const o = await prisma.ticket.findUnique({
         where: { id: ref.id },
-        select: { lines: { select: { productId: true, quantity: true } } },
+        select: { order: { select: { lines: { select: { productId: true, quantity: true } } } } },
     });
-    return (o?.lines ?? []).map((l) => ({ productId: l.productId, quantity: l.quantity }));
+    return (o?.order?.lines ?? []).map((l) => ({ productId: l.productId, quantity: l.quantity }));
 }
 
 /** Hold stock for an order's lines (no-op if already held, or for untracked products). */

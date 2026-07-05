@@ -27,24 +27,29 @@ export type TransitionOrderPipelineInput = {
 export async function transitionOrderPipelineStatus(input: TransitionOrderPipelineInput) {
     const { orderId, toStatusId, toStatusLabel, courier, trackingNumber, actorUserId } = input;
 
-    const existing = await prisma.shopOrder.findUnique({
+    const existing = await prisma.ticket.findUnique({
         where: { id: orderId },
-        select: { id: true },
+        select: { id: true, order: { select: { ticketId: true } } },
     });
-    if (!existing) throw new Error("Order not found");
+    if (!existing?.order) throw new Error("Order not found");
 
-    const order = await prisma.shopOrder.update({
+    // An order is a Ticket (flavour "order") + TicketOrder detail. Status is the core
+    // pipeline stage; courier/tracking live on the detail.
+    const t = await prisma.ticket.update({
         where: { id: orderId },
         data: {
-            statusId: toStatusId,
-            ...(courier !== undefined ? { courier: courier ?? null } : {}),
-            ...(trackingNumber !== undefined ? { trackingNumber: trackingNumber ?? null } : {}),
+            status: toStatusId,
+            order: {
+                update: {
+                    ...(courier !== undefined ? { courier: courier ?? null } : {}),
+                    ...(trackingNumber !== undefined ? { trackingNumber: trackingNumber ?? null } : {}),
+                },
+            },
         },
-        include: {
-            lines: { include: { product: true } },
-            account: true,
-        },
+        include: { order: { include: { lines: { include: { product: true } } } } },
     });
+    // Flatten to the old ShopOrder shape (statusId ← core status) for the caller.
+    const order = { ...t, ...t.order, statusId: t.status };
 
     const link = `/office/ecommerce/orders/${orderId}`;
     if (toStatusLabel === CONFIRMED_STATUS_LABEL) {

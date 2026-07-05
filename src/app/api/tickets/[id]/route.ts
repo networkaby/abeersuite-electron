@@ -12,6 +12,7 @@ import { listAllChildren } from "@/modules/repairing/lib/childEntities";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
+import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 
 const ticketUpdateSchema = z.object({
     status: z.string().trim().optional(),
@@ -22,7 +23,6 @@ const ticketUpdateSchema = z.object({
         (value) => value === "" ? null : value,
         z.union([z.coerce.number().nonnegative(), z.null()]).optional()
     ),
-    primaryOwnerId: z.union([z.coerce.number().int().positive(), z.literal(""), z.null()]).optional(),
     escalated: z.boolean().optional(),
     escalatedAt: z.string().optional().nullable(),
     expectedReturn: z.string().optional().nullable(),
@@ -53,27 +53,22 @@ export async function GET(
                 id: Number(id),
             },
             include: {
-                device: {
+                repair: {
                     include: {
-                        account: {
-                            select: {
-                                id: true, name: true,
-                                person: {
+                        device: {
+                            include: {
+                                account: {
                                     select: {
-                                        phones: selectPrimaryPhone,
-                                    },
-                                },
-                                company: {
-                                    select: {
-                                        phones: selectPrimaryPhone,
+                                        id: true, name: true,
+                                        person: { select: { phones: selectPrimaryPhone } },
+                                        company: { select: { phones: selectPrimaryPhone } },
                                     },
                                 },
                             },
                         },
+                        serviceCenter: true,
                     },
                 },
-                primaryOwner: true,
-                serviceCenter: true,
                 ticketStatus: {
                     include: {
                         fromTransitions: {
@@ -93,8 +88,8 @@ export async function GET(
                     orderBy: { createdAt: "asc" },
                 },
                 logs: {
+                    // author is a JSON ActorSnapshot on the log row itself (no User FK).
                     include: {
-                        changedBy: true,
                         ticketStatus:    { select: { label: true, color: true } },
                         ticketWorker: { select: { label: true, color: true } },
                     },
@@ -105,22 +100,23 @@ export async function GET(
 
         if (!ticket) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-        // Spawned children across every entity table (ticket/task/deal/delivery/refund).
+        // Spawned children across every flavour (single Ticket query).
         const children = await listAllChildren(ticket.id);
+
+        // Flatten the repair detail back to top level so the repair UI keeps its old
+        // flat shape (ticket.device / ticket.warrantyStatus / ticket.serviceCenter / …).
+        const repair = ticket.repair;
+        const acct = repair?.device?.account ?? null;
+        const device = repair?.device
+            ? { ...repair.device, account: acct ? { ...acct, phone: acct.person?.phones?.[0]?.phone ?? acct.company?.phones?.[0]?.phone ?? null } : null }
+            : null;
 
         return NextResponse.json({
             ...ticket,
+            ...(repair ?? {}),
+            device,
+            serviceCenter: repair?.serviceCenter ?? null,
             children,
-            device: {
-                ...ticket.device,
-                account: ticket.device.account ? {
-                    ...ticket.device.account,
-                    phone:
-                        ticket.device.account.person?.phones?.[0]?.phone
-                        ?? ticket.device.account.company?.phones?.[0]?.phone
-                        ?? null,
-                } : null,
-            },
         });
     } catch (e) {
         return handleApiError(e, "Failed to fetch ticket");
@@ -164,24 +160,30 @@ export async function PUT(
             if (found) targetStatus = { label: found.label, announceOnEntry: found.announceOnEntry, etaText: found.etaText };
         }
 
+        const author = await buildActorSnapshot(userId);
+
+        // Repair-detail fields live on TicketRepair now; core fields on Ticket.
+        const repairData = {
+            ...(body.accessInfo !== undefined   && { accessInfo: body.accessInfo }),
+            ...(body.estimatedCost !== undefined && { estimatedCost: body.estimatedCost ? Number(body.estimatedCost) : null }),
+            ...(body.escalated !== undefined    && { escalated: body.escalated }),
+            ...(body.escalatedAt !== undefined  && { escalatedAt: body.escalatedAt ? new Date(body.escalatedAt) : null }),
+            ...(body.expectedReturn !== undefined && { expectedReturn: body.expectedReturn ? new Date(body.expectedReturn) : null }),
+            ...(body.receivedBackAt !== undefined && { receivedBackAt: body.receivedBackAt ? new Date(body.receivedBackAt) : null }),
+            ...(body.externalRef !== undefined  && { externalRef: body.externalRef || null }),
+            ...(body.serviceCenterId !== undefined && { serviceCenterId: body.serviceCenterId ? Number(body.serviceCenterId) : null }),
+            ...(body.isWarranty !== undefined   && { isWarranty: Boolean(body.isWarranty) }),
+            ...(body.warrantyRef !== undefined  && { warrantyRef: body.warrantyRef || null }),
+            ...(body.purchaseDate !== undefined && { purchaseDate: body.purchaseDate ? new Date(body.purchaseDate) : null }),
+        };
+
         const ticket = await prisma.ticket.update({
             where: { id: Number(id) },
             data: {
-                ...(body.status !== undefined       && { status: body.status }),
-                ...(body.priority !== undefined     && { priority: body.priority }),
-                ...(body.notes !== undefined        && { notes: body.notes }),
-                ...(body.accessInfo !== undefined   && { accessInfo: body.accessInfo }),
-                ...(body.estimatedCost !== undefined && { estimatedCost: body.estimatedCost ? Number(body.estimatedCost) : null }),
-                ...(body.primaryOwnerId !== undefined && { primaryOwnerId: body.primaryOwnerId ? Number(body.primaryOwnerId) : null }),
-                ...(body.escalated !== undefined    && { escalated: body.escalated }),
-                ...(body.escalatedAt !== undefined  && { escalatedAt: body.escalatedAt ? new Date(body.escalatedAt) : null }),
-                ...(body.expectedReturn !== undefined && { expectedReturn: body.expectedReturn ? new Date(body.expectedReturn) : null }),
-                ...(body.receivedBackAt !== undefined && { receivedBackAt: body.receivedBackAt ? new Date(body.receivedBackAt) : null }),
-                ...(body.externalRef !== undefined  && { externalRef: body.externalRef || null }),
-                ...(body.serviceCenterId !== undefined && { serviceCenterId: body.serviceCenterId ? Number(body.serviceCenterId) : null }),
-                ...(body.isWarranty !== undefined   && { isWarranty: Boolean(body.isWarranty) }),
-                ...(body.warrantyRef !== undefined  && { warrantyRef: body.warrantyRef || null }),
-                ...(body.purchaseDate !== undefined && { purchaseDate: body.purchaseDate ? new Date(body.purchaseDate) : null }),
+                ...(body.status !== undefined   && { status: body.status }),
+                ...(body.priority !== undefined && { priority: body.priority }),
+                ...(body.notes !== undefined    && { notes: body.notes }),
+                ...(Object.keys(repairData).length ? { repair: { update: repairData } } : {}),
             },
         });
 
@@ -191,7 +193,7 @@ export async function PUT(
                 // Skip auto-entry-worker — we're going to a specific known state.
                 await prisma.ticket.update({
                     where: { id: ticket.id },
-                    data: { workerId: body.restoreWorkerId ?? null, primaryOwnerId: null, wakeAt: null, retryCount: 0, retryKeyId: null },
+                    data: { workerId: body.restoreWorkerId ?? null, wakeAt: null, retryCount: 0, retryKeyId: null },
                 });
                 await prisma.ticketLog.create({
                     data: {
@@ -200,7 +202,7 @@ export async function PUT(
                         workerId: body.restoreWorkerId ?? null,
                         note:       body.logNote || null,
                         visibility: body.visibility === "PUBLIC" ? "PUBLIC" : "INTERNAL",
-                        userId,
+                        author,
                     },
                 });
             } else {
@@ -211,24 +213,23 @@ export async function PUT(
                         status:     body.status,
                         note:       body.logNote || null,
                         visibility: body.visibility === "PUBLIC" ? "PUBLIC" : "INTERNAL",
-                        userId,
+                        author,
                     },
                 });
 
                 // Auto-apply entry worker for the new status (same logic as ticket creation).
-                // Clears primaryOwner so the work item appears as "To do" in the inbox.
                 const entrySub = await findEntryWorker(body.status);
                 if (entrySub) {
                     await prisma.ticket.update({
                         where: { id: ticket.id },
-                        data: { workerId: entrySub.id, primaryOwnerId: null, wakeAt: null, retryCount: 0, retryKeyId: null },
+                        data: { workerId: entrySub.id, wakeAt: null, retryCount: 0, retryKeyId: null },
                     });
                     await prisma.ticketLog.create({
-                        data: { ticketId: ticket.id, status: body.status, workerId: entrySub.id, note: `Entered: ${entrySub.label}`, userId },
+                        data: { ticketId: ticket.id, status: body.status, workerId: entrySub.id, note: `Entered: ${entrySub.label}`, author },
                     });
                 } else {
                     // No entry worker configured — clear current worker so stale work doesn't linger.
-                    await prisma.ticket.update({ where: { id: ticket.id }, data: { workerId: null, primaryOwnerId: null, wakeAt: null, retryCount: 0, retryKeyId: null } });
+                    await prisma.ticket.update({ where: { id: ticket.id }, data: { workerId: null, wakeAt: null, retryCount: 0, retryKeyId: null } });
                 }
                 // If the entry worker is an Action (auto Work), run it + chain (best-effort).
                 if (entrySub) await autoAdvance(ticket.id, userId).catch(() => { /* never blocks the status change */ });
@@ -244,7 +245,7 @@ export async function PUT(
                         status:     body.status,
                         note:       `${targetStatus.label} is started${eta ? ` and will take ${eta}` : ""}`,
                         visibility: "PUBLIC",
-                        userId,
+                        author,
                     },
                 });
             }

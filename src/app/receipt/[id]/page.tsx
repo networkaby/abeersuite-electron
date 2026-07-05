@@ -14,33 +14,26 @@ export default async function ReceiptPage({
     const ticket = await prisma.ticket.findUnique({
         where: { id: Number(id) },
         include: {
-            device: {
+            repair: {
                 include: {
-                    account: {
+                    device: {
                         include: {
-                            person: {
+                            account: {
                                 include: {
-                                    phones: selectPrimaryPhone,
-                                    emails: selectPrimaryEmail,
-                                },
-                            },
-                            company: {
-                                include: {
-                                    phones: selectPrimaryPhone,
-                                    emails: selectPrimaryEmail,
+                                    person: { include: { phones: selectPrimaryPhone, emails: selectPrimaryEmail } },
+                                    company: { include: { phones: selectPrimaryPhone, emails: selectPrimaryEmail } },
                                 },
                             },
                         },
                     },
                 },
             },
-            primaryOwner: true,
         },
     });
 
-    if (!ticket) notFound();
+    if (!ticket?.repair) notFound();
 
-    const { device } = ticket;
+    const { device } = ticket.repair;
     const owner = device.account?.person ?? device.account?.company;
     const account = owner
         ? {
@@ -179,12 +172,12 @@ export default async function ReceiptPage({
                     {device.problem}
                 </div>
 
-                {ticket.estimatedCost && (
+                {ticket.repair.estimatedCost && (
                     <>
                         <div className="divider" />
                         <div className="row">
                             <span className="section-title">Estimated Cost</span>
-                            <span className="bold large">₹ {ticket.estimatedCost}</span>
+                            <span className="bold large">₹ {ticket.repair.estimatedCost}</span>
                         </div>
                     </>
                 )}
@@ -195,10 +188,10 @@ export default async function ReceiptPage({
                     <span className="label">Priority:</span>
                     <span className="bold">{ticket.priority}</span>
                 </div>
-                {ticket.primaryOwner && (
+                {(ticket.createdBy as { userName?: string })?.userName && (
                     <div className="row">
-                        <span className="label">Technician:</span>
-                        <span>{ticket.primaryOwner.name}</span>
+                        <span className="label">Created by:</span>
+                        <span>{(ticket.createdBy as { userName?: string }).userName}</span>
                     </div>
                 )}
 

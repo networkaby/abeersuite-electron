@@ -127,14 +127,14 @@ Prisma split schema (`prisma.config.ts` → `prisma/schema/`):
 
 - `base.prisma` — `Customer`, `Company`, `CustomerCompany` with GST fields (`gstin`, `gstStateCode`, `gstRegType`, `financialYearFrom`, `booksBeginningFrom`).
 - `users.prisma`, `rbac.prisma`, `org.prisma` — users, roles/permissions, branches/departments/posts, org chart.
-- `pipeline.prisma`, `tickets.prisma`, `accounts.prisma` — ticket workflow + legacy `Account` bridge.
+- `pipeline.prisma`, `tickets.prisma`, `accounts.prisma` — the unified pipeline workflow + `Account` bridge. Every flavour (repair / deal / order / delivery / refund / task) is ONE `Ticket` core row riding a `Pipeline`, plus an optional 1:1 detail table (`TicketRepair`, `TicketDeal`, `TicketOrder`+`TicketOrderLine`, `TicketDelivery`, `TicketRefund`; a task is a bare core row). `Pipeline.entityType` (`repair|deal|order|delivery|refund|task|none`) selects the detail + UI. `TicketLog` is the single timeline (repair notes, deal activities, task comments); its actor is a frozen `createdBy`/`author` JSON snapshot, not a User FK. Cross-pipeline transfer = update `pipelineId` + `status`.
 - `finance.prisma` — `AccountType`, `AccountGroup`, `Ledger`, `JournalEntry` (with `VOID` / `SOFT_DELETED` status), `Invoice` (with `returnOfId` self-FK), `InvoiceLine` (with `productId` FK), voucher records, opening balances.
 - `inventory.prisma` — `InvUnit`, `InvCategory`, `InvProductGroup`, `InvBrand`, `InvWarrantyTerm`, `InvProduct` (with `hsnCode`, `gstRate`, `taxability`, `attrsJson`, `namingConfig` — single source of truth for shop + warehouse), `InvProductBranch` (per-branch stock), `InvVoucher`, `InvVoucherLine`, `InvStockLedger` (with `branchId`), `InvAttribute`, `InvAttributeValue`, `InvBom`, `InvBomLine`, `InvGstRate`.
 - `pos.prisma` — `PosCounter`, `PosShift` (OPEN → AWAITING_HANDOVER → CLOSED), `PosCashDrop`, `PosHandover`.
 - `crm.prisma` — `CrmLead`.
 - `inbox.prisma` — `ChatRoom`, `ChatMessage`.
 - `social.prisma` — `WallPost`.
-- `shop.prisma` — `ShopOrder`, `ShopOrderLine` (prices in integer paise). No `ShopProduct` — merged into `InvProduct`.
+- `shop.prisma` — ecommerce enums only (`ShopOrderStatus`, `ShopPaymentMethod`, `ShopOutOfStockPolicy`). An order is now a `Ticket` (flavour "order") + `TicketOrder` detail (prices in integer paise); the online channel is moving to `ONLINE_ORDER` vouchers. No `ShopProduct` — merged into `InvProduct`.
 - `portal.prisma` — `CustomerPortalCredential`.
 - `enums.prisma` — shared enums (`GstRegType`, `Taxability`, `VoucherStatus`, `EntryType`, `NormalBalance`, …).
 
@@ -143,8 +143,9 @@ Prisma split schema (`prisma.config.ts` → `prisma/schema/`):
 ## 7) Design rules
 
 - Ticket workflow = primary status + worker handoffs.
-- Ownership = primary owner + participant helpers.
-- Pipeline model supports multiple workflows (repair, sales, etc.).
+- One `Ticket` table rides every pipeline; domain fields live in optional 1:1 detail tables. Fewer models, and cross-pipeline transfer is a plain status/pipeline update.
+- Ownership = `createdBy` actor snapshot (who created); assignment = `assignedPositionId` seat; participants add helpers. No per-ticket owner User FK.
+- Pipeline model supports multiple workflows (repair, deal, order, delivery, refund, task).
 - Customer and Company are separated; `Account` is a legacy bridge.
 - Finance follows `AccountType → AccountGroup → Ledger`; normalised, not Tally-name-driven.
 - GST identity (GSTIN, state code, reg type) lives on `Customer` / `Company`, not a separate `Party` model.

@@ -20,15 +20,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         const { statusId } = (await req.json()) as { statusId?: string };
         if (!statusId) return NextResponse.json({ error: "statusId required" }, { status: 400 });
 
-        const refund = await prisma.refund.findUnique({ where: { id }, select: { statusId: true } });
-        if (!refund) return NextResponse.json({ error: "Refund not found" }, { status: 404 });
+        const refund = await prisma.ticket.findUnique({ where: { id }, select: { status: true, refund: { select: { ticketId: true } } } });
+        if (!refund?.refund) return NextResponse.json({ error: "Refund not found" }, { status: 404 });
 
         const check = await assertRefundStatus(statusId);
         if (!check.ok) return NextResponse.json({ error: check.message }, { status: 422 });
 
-        if (refund.statusId && refund.statusId !== statusId) {
+        if (refund.status && refund.status !== statusId) {
             const allowed = await prisma.statusTransition.findFirst({
-                where: { fromStatusId: refund.statusId, toStatusId: statusId },
+                where: { fromStatusId: refund.status, toStatusId: statusId },
                 select: { id: true },
             });
             if (!allowed) {
@@ -85,7 +85,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             }
         }
 
-        await prisma.refund.update({ where: { id }, data: { statusId } });
+        await prisma.ticket.update({ where: { id }, data: { status: statusId } });
         return NextResponse.json({ id, statusId, payoutRef });
     } catch (e) {
         return handleApiError(e, "Failed to move refund");

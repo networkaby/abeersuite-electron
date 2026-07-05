@@ -20,11 +20,11 @@ export default async function CompanyProfileView({ companyId, backHref = "/offic
                 include: {
                     devices: {
                         include: {
-                            tickets: {
-                                orderBy: { createdAt: "desc" },
-                                take: 5,
+                            repairs: {
                                 include: {
-                                    ticketStatus: { select: { label: true, color: true } },
+                                    ticket: {
+                                        include: { ticketStatus: { select: { label: true, color: true } } },
+                                    },
                                 },
                             },
                         },
@@ -209,7 +209,7 @@ export default async function CompanyProfileView({ companyId, backHref = "/offic
                                     <p className="font-medium text-sm">{d.brand} {d.model}</p>
                                     <p className="text-xs text-muted-foreground">{d.type}</p>
                                     <div className="mt-2 space-y-1">
-                                        {d.tickets.map(t => (
+                                        {d.repairs.map(({ ticket: t }) => (
                                             <div key={t.id} className="flex items-center justify-between text-xs">
                                                 <Link href={`/office/repairing/tickets/${t.id}`} className="text-primary hover:underline">
                                                     #{t.id}
@@ -222,7 +222,7 @@ export default async function CompanyProfileView({ companyId, backHref = "/offic
                                                 </Link>
                                             </div>
                                         ))}
-                                        {d.tickets.length === 0 && <p className="text-muted-foreground text-xs">No tickets</p>}
+                                        {d.repairs.length === 0 && <p className="text-muted-foreground text-xs">No tickets</p>}
                                     </div>
                                 </div>
                             ))}

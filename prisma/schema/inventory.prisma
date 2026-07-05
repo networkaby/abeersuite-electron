@@ -276,7 +276,7 @@ model InvProduct {
   warrantyTerm InvWarrantyTerm? @relation(fields: [warrantyTermId], references: [id], onDelete: SetNull)
 
   codes                     InvProductCode[]
-  orderLines                ShopOrderLine[]
+  orderLines                TicketOrderLine[]
   voucherLines              VoucherInventoryLine[]
   stockEntries              InvStockLedger[]
   branchStocks              InvProductBranch[]
@@ -337,7 +337,7 @@ model InvProductBranch {
 /// O2C stock reservation (Phase 2). One row per order line whose stock is HELD
 /// against a confirmed-but-not-yet-fulfilled order. Org-wide for now (branch-level
 /// reservation is a refinement). The order is polymorphic, so it's keyed by
-/// (orderSource, orderId) — "inv" = order-type InvVoucher, "shop" = ShopOrder.
+/// (orderSource, orderId) — "inv" = order-type InvVoucher, "shop" = order Ticket.
 /// HELD = blocking available; EXECUTED = converted to a real stock-out at Fulfil;
 /// RELEASED = order cancelled/returned. InvProduct.reserved = Σ HELD qty.
 model StockReservation {
@@ -423,8 +423,8 @@ model VoucherDetail {
   /// lets a SALE_RETURN link to the original SALE (and PURCHASE_RETURN to
   /// the original PURCHASE) so the detail page can show the relationship.
   refVoucherId        Int?
-  refVoucher          VoucherDetail?            @relation("InvVoucherRef", fields: [refVoucherId], references: [id])
-  refReturns          VoucherDetail[]           @relation("InvVoucherRef")
+  refVoucher          VoucherDetail?         @relation("InvVoucherRef", fields: [refVoucherId], references: [id])
+  refReturns          VoucherDetail[]        @relation("InvVoucherRef")
   /// Number of days from voucher date until payment is due. Only for CREDIT mode.
   creditPeriodDays    Int?
   /// State code where the supply happens — drives intra/inter-state GST split.
@@ -484,11 +484,11 @@ model VoucherDetail {
   // Shape: { tenders: [{accountId, amount, method?, reference?}],
   //          charges: [{accountId, amount, description?}] }. Replaced the
   // InvVoucherTender / InvVoucherCharge tables (folded into the spine on POST).
-  settlementJson            Json?
+  settlementJson Json?
   // Phase 5 5B: loyalty / coupon / gift-card / cost-pool back-relations moved to
   // the UniversalVoucher spine (the document) — InvVoucher no longer anchors them.
-  createdAt                 DateTime                   @default(now())
-  updatedAt                 DateTime                   @updatedAt
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   // Phase 5 5D-18: physical table renamed InvVoucher → VoucherDetail to match the
   // model (the @@map bandage removed). Dev-only ALTER TABLE RENAME, data preserved.
@@ -497,23 +497,23 @@ model VoucherDetail {
 // Phase 4 G4c: renamed InvVoucherLine → VoucherInventoryLine (vocabulary.md — the
 // "goods" line face). Table kept via @@map so the rename is code-only, no migration.
 model VoucherInventoryLine {
-  id                  Int        @id @default(autoincrement())
+  id                  Int              @id @default(autoincrement())
   // Phase 5 5C: goods lines hang off the spine (UniversalVoucher) — voucherId
   // (→ InvVoucher) dropped. The inventory voucher reaches them via its spine.
   universalVoucherId  Int
   universalVoucher    UniversalVoucher @relation("SpineInventoryLines", fields: [universalVoucherId], references: [id], onDelete: Cascade)
   productId           Int
-  product             InvProduct @relation(fields: [productId], references: [id])
+  product             InvProduct       @relation(fields: [productId], references: [id])
   description         String?
   /// "CONSUME" | "PRODUCE" for MANUFACTURING_JOURNAL lines; null for every
   /// other voucher type. Drives the stock IN/OUT direction on post.
   direction           String?
-  quantity            Decimal    @db.Decimal(10, 3)
+  quantity            Decimal          @db.Decimal(10, 3)
   /// Free / complimentary quantity — flows out of stock alongside `quantity`
   /// but contributes ₹ 0 to revenue (line.amount). Used for "buy 2 get 1 free"
   /// style schemes. Optional; defaults to 0 at the application layer.
-  freeQty             Decimal?   @db.Decimal(10, 3)
-  rate                Decimal    @db.Decimal(14, 2)
+  freeQty             Decimal?         @db.Decimal(10, 3)
+  rate                Decimal          @db.Decimal(14, 2)
   /// MRP (Maximum Retail Price) at the time of the transaction — paise.
   /// Populated on PURCHASE voucher lines by the form; used to update
   /// InvProduct.mrpPaise on POST so the product catalog stays current.
@@ -527,37 +527,37 @@ model VoucherInventoryLine {
   /// bill shows the barcode line + the "Counter discount" (barcode − effective)
   /// without re-reading the product or re-deriving the tag (prices/bands drift).
   savedSalePricePaise Int?
-  discountPct         Decimal    @default(0) @db.Decimal(5, 2)
-  discountAmt         Decimal    @default(0) @db.Decimal(14, 2)
-  taxRate             Decimal    @default(0) @db.Decimal(5, 2)
-  taxAmount           Decimal    @default(0) @db.Decimal(14, 2)
+  discountPct         Decimal          @default(0) @db.Decimal(5, 2)
+  discountAmt         Decimal          @default(0) @db.Decimal(14, 2)
+  taxRate             Decimal          @default(0) @db.Decimal(5, 2)
+  taxAmount           Decimal          @default(0) @db.Decimal(14, 2)
   /// (qty × rate) − discountAmt + taxAmount
-  amount              Decimal    @db.Decimal(14, 2)
+  amount              Decimal          @db.Decimal(14, 2)
+  // Phase 5 5D-18: physical table renamed InvVoucherLine → VoucherInventoryLine to
+  // match the model (the @@map bandage removed). Dev-only rename, data preserved.
 
   @@index([universalVoucherId])
   @@index([productId])
-  // Phase 5 5D-18: physical table renamed InvVoucherLine → VoucherInventoryLine to
-  // match the model (the @@map bandage removed). Dev-only rename, data preserved.
 }
 
 /// Immutable audit trail — one row per product per voucher line posted.
 /// inQty > 0 for PURCHASE/GRN; outQty > 0 for SALE/CHALLAN.
 model InvStockLedger {
-  id        Int        @id @default(autoincrement())
-  productId Int
-  product   InvProduct @relation(fields: [productId], references: [id])
+  id                 Int              @id @default(autoincrement())
+  productId          Int
+  product            InvProduct       @relation(fields: [productId], references: [id])
   // Phase 5 5C: stock rows hang off the spine — voucherId (→ InvVoucher) dropped.
   universalVoucherId Int
   universalVoucher   UniversalVoucher @relation("SpineStockLedger", fields: [universalVoucherId], references: [id], onDelete: Cascade)
   /// Branch where this stock movement happened — stamped at post time from
   /// the parent voucher's branchId. Required for per-branch ledger queries.
-  branchId  String
-  branch    Branch     @relation("InvStockLedgerBranch", fields: [branchId], references: [id])
-  date      DateTime   @db.Date
-  inQty     Decimal    @default(0) @db.Decimal(10, 3)
-  outQty    Decimal    @default(0) @db.Decimal(10, 3)
-  rate      Decimal    @db.Decimal(14, 2)
-  amount    Decimal    @db.Decimal(14, 2)
+  branchId           String
+  branch             Branch           @relation("InvStockLedgerBranch", fields: [branchId], references: [id])
+  date               DateTime         @db.Date
+  inQty              Decimal          @default(0) @db.Decimal(10, 3)
+  outQty             Decimal          @default(0) @db.Decimal(10, 3)
+  rate               Decimal          @db.Decimal(14, 2)
+  amount             Decimal          @db.Decimal(14, 2)
 
   @@index([productId, date])
   @@index([universalVoucherId])
@@ -573,18 +573,18 @@ model InvStockLedger {
 // drove it via InvVoucher.bomId for audit / reporting.
 
 model InvBom {
-  id              Int          @id @default(autoincrement())
+  id              Int             @id @default(autoincrement())
   name            String
   outputProductId Int
-  outputProduct   InvProduct   @relation("BomOutput", fields: [outputProductId], references: [id])
+  outputProduct   InvProduct      @relation("BomOutput", fields: [outputProductId], references: [id])
   /// Reference output qty for the recipe (e.g. "5 kg flour produces 10 loaves" → outputQty = 10).
-  outputQty       Decimal      @db.Decimal(10, 3)
+  outputQty       Decimal         @db.Decimal(10, 3)
   description     String?
-  isActive        Boolean      @default(true)
+  isActive        Boolean         @default(true)
   lines           InvBomLine[]
   vouchers        VoucherDetail[]
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
 
   @@index([outputProductId])
   @@index([isActive])
@@ -647,30 +647,30 @@ model StrategyPoint {
 // amountPaise / perUnitPaise are integer paise (GST-EXCLUSIVE), matching the
 // effectiveSalePricePaise / mrpPaise convention.
 model AdditionalCostAllocation {
-  id                  Int                          @id @default(autoincrement())
-  kind                AdditionalCostAllocationKind
+  id                       Int                          @id @default(autoincrement())
+  kind                     AdditionalCostAllocationKind
   // Phase 4 G2: the specific POSTED debit this row consumes — now the spine
   // `VoucherGlLine` (re-homed off the legacy `JournalLine`). Cascades if the line
   // is ever hard-deleted; soft-cancelled entries are filtered out at read time.
-  sourceVoucherGlLineId Int?
-  sourceVoucherGlLine   VoucherGlLine?             @relation(fields: [sourceVoucherGlLineId], references: [id], onDelete: Cascade)
-  amountPaise         Int
+  sourceVoucherGlLineId    Int?
+  sourceVoucherGlLine      VoucherGlLine?               @relation(fields: [sourceVoucherGlLineId], references: [id], onDelete: Cascade)
+  amountPaise              Int
   // ALLOCATION-only fields (null on DISMISSAL):
-  productId           Int?
-  product             InvProduct?                  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  perUnitPaise        Int?
-  quantity            Decimal?                     @db.Decimal(14, 3)
+  productId                Int?
+  product                  InvProduct?                  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  perUnitPaise             Int?
+  quantity                 Decimal?                     @db.Decimal(14, 3)
   // The PURCHASE/GRN voucher this allocation was spread from (the "source
   // document"). Lets the history list group rows into a voucher-like document.
   // Null for dismissals / ad-hoc rows. Phase 5 5B: points at the UniversalVoucher
   // spine (the document), not InvVoucher.
   sourceUniversalVoucherId Int?
-  sourceUniversalVoucher   UniversalVoucher?       @relation("SpineAdditionalCostAllocations", fields: [sourceUniversalVoucherId], references: [id], onDelete: SetNull)
-  note                String?
-  date                DateTime                     @db.Date
-  createdById         Int
-  createdBy           User                         @relation("AdditionalCostAllocationCreatedBy", fields: [createdById], references: [id])
-  createdAt           DateTime                     @default(now())
+  sourceUniversalVoucher   UniversalVoucher?            @relation("SpineAdditionalCostAllocations", fields: [sourceUniversalVoucherId], references: [id], onDelete: SetNull)
+  note                     String?
+  date                     DateTime                     @db.Date
+  createdById              Int
+  createdBy                User                         @relation("AdditionalCostAllocationCreatedBy", fields: [createdById], references: [id])
+  createdAt                DateTime                     @default(now())
 
   @@index([sourceVoucherGlLineId])
   @@index([productId, createdAt])

@@ -1,4 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import type { Prisma } from "@/generated/prisma/client";
+import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 import { spawnChild } from "./spawnChild";
 import { isKnownActionType } from "./actionTypes";
 
@@ -17,9 +19,11 @@ export type ActionRunContext = {
     ticketId: number;
     status: string;          // the ticket's status at completion (for logs / spawn link)
     workerId: string;        // the worker being completed (the chain owner)
-    deviceId: number;        // for a spawn child that inherits the device
+    deviceId: number | null; // for a spawn child that inherits the device (null = device-free)
     userId: number;
     outcome: "success" | "unsuccess" | null;  // what the human/action reported
+    // Actor snapshot for logs — resolved once by runWorkerActions (no User FK).
+    author?: Prisma.InputJsonValue;
 };
 
 const str = (c: Record<string, unknown> | undefined, k: string): string | null => {
@@ -59,7 +63,7 @@ const RUN_HANDLERS: Record<string, RunHandler> = {
         if (!target) return;
         await prisma.ticket.update({ where: { id: ctx.ticketId }, data: { status: statusId, updatedAt: new Date() } });
         await prisma.ticketLog.create({
-            data: { ticketId: ctx.ticketId, status: statusId, note: `Action: moved to ${target.label}`, userId: ctx.userId },
+            data: { ticketId: ctx.ticketId, status: statusId, note: `Action: moved to ${target.label}`, author: ctx.author },
         });
     },
 
@@ -68,11 +72,12 @@ const RUN_HANDLERS: Record<string, RunHandler> = {
         const subject = str(config, "subject") ?? "(no subject)";
         const ticket = await prisma.ticket.findUnique({
             where: { id: ctx.ticketId },
-            select: { device: { select: { account: { select: { person: { select: { name: true } }, company: { select: { name: true } } } } } } },
+            select: { repair: { select: { device: { select: { account: { select: { person: { select: { name: true } }, company: { select: { name: true } } } } } } } } },
         });
-        const to = ticket?.device?.account?.person?.name ?? ticket?.device?.account?.company?.name ?? "customer";
+        const acc = ticket?.repair?.device?.account;
+        const to = acc?.person?.name ?? acc?.company?.name ?? "customer";
         await prisma.ticketLog.create({
-            data: { ticketId: ctx.ticketId, status: ctx.status, note: `📧 Email to ${to} — "${subject}" (stub)`, userId: ctx.userId },
+            data: { ticketId: ctx.ticketId, status: ctx.status, note: `📧 Email to ${to} — "${subject}" (stub)`, author: ctx.author },
         });
     },
 
@@ -87,7 +92,7 @@ const RUN_HANDLERS: Record<string, RunHandler> = {
             data: { wakeAt, retryKeyId: ctx.workerId, updatedAt: new Date() },
         });
         await prisma.ticketLog.create({
-            data: { ticketId: ctx.ticketId, status: ctx.status, note: `Action: snoozed — re-surfaces ${str(config, "after")}`, userId: ctx.userId },
+            data: { ticketId: ctx.ticketId, status: ctx.status, note: `Action: snoozed — re-surfaces ${str(config, "after")}`, author: ctx.author },
         });
     },
 };
@@ -110,6 +115,8 @@ function parseChain(raw: unknown): ChainEntry[] {
 export async function runWorkerActions(ctx: ActionRunContext, rawActions: unknown): Promise<void> {
     const chain = parseChain(rawActions);
     if (!chain.length) return;
+    // Resolve the actor snapshot ONCE for every log this chain writes (no User FK).
+    if (ctx.author === undefined) ctx.author = await buildActorSnapshot(ctx.userId);
     const matches = (on: ActionOn) =>
         on === "always"
         || (on === "success" && ctx.outcome === "success")
@@ -120,7 +127,7 @@ export async function runWorkerActions(ctx: ActionRunContext, rawActions: unknow
             await RUN_HANDLERS[a.type](ctx, a.config);
         } catch {
             await prisma.ticketLog.create({
-                data: { ticketId: ctx.ticketId, status: ctx.status, note: `⚠️ Action "${a.type}" failed`, userId: ctx.userId },
+                data: { ticketId: ctx.ticketId, status: ctx.status, note: `⚠️ Action "${a.type}" failed`, author: ctx.author },
             }).catch(() => { /* swallow */ });
         }
     }

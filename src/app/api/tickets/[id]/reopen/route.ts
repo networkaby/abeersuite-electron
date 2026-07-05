@@ -5,6 +5,7 @@ import { z } from "zod";
 import { Priority } from "@/generated/prisma/enums";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 
 const reopenSchema = z.object({
     priority: z.nativeEnum(Priority).optional(),
@@ -31,22 +32,31 @@ export async function POST(
 
         const original = await prisma.ticket.findUnique({
             where: { id: Number(id) },
-            include: { device: true },
+            include: { repair: true },
         });
 
         if (!original) {
             return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
         }
+        if (!original.repair) {
+            return NextResponse.json({ error: "Only repair tickets can be reopened" }, { status: 400 });
+        }
 
-        // Create new ticket for same device
+        // Create a fresh repair ticket for the same device.
         const newTicket = await prisma.ticket.create({
             data: {
-                deviceId: original.deviceId,
-                priority: body.priority || original.priority,
-                notes: body.notes || null,
-                accessInfo: original.accessInfo,
-                estimatedCost: body.estimatedCost ? Number(body.estimatedCost) : null,
-                primaryOwnerId: original.primaryOwnerId || null,
+                priority:   body.priority || original.priority,
+                notes:      body.notes || null,
+                pipelineId: original.pipelineId,
+                accountId:  original.accountId,
+                createdBy:  await buildActorSnapshot(user.id),
+                repair: {
+                    create: {
+                        deviceId:      original.repair.deviceId,
+                        accessInfo:    original.repair.accessInfo,
+                        estimatedCost: body.estimatedCost ? Number(body.estimatedCost) : null,
+                    },
+                },
             },
         });
 
@@ -56,7 +66,7 @@ export async function POST(
                 ticketId: newTicket.id,
                 status: "S1",
                 note: `Reopened from Ticket #${original.id} — ${body.reason || "Problem not resolved"}`,
-                userId: user.id,
+                author: await buildActorSnapshot(user.id),
             },
         });
 

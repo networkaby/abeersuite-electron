@@ -15,20 +15,22 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         const { data, error } = await validateRequest(req, createTaskCommentSchema);
         if (error) return error;
 
-        const task = await prisma.task.findUnique({ where: { id }, select: { id: true } });
+        const taskId = Number(id);
+        const task = await prisma.ticket.findUnique({ where: { id: taskId }, select: { id: true } });
         if (!task) return NextResponse.json({ error: "Task not found" }, { status: 404 });
 
-        const comment = await prisma.taskComment.create({
-            data: { taskId: id, author: await buildTaskActor(user.id), body: data.body, kind: "COMMENT" },
+        // A task comment is a TicketLog (body → note).
+        const comment = await prisma.ticketLog.create({
+            data: { ticketId: taskId, author: await buildTaskActor(user.id), note: data.body, kind: "COMMENT" },
             select: {
                 id: true,
-                body: true,
+                note: true,
                 kind: true,
                 createdAt: true,
                 author: true, // JSON actor snapshot
             },
         });
-        return NextResponse.json(comment, { status: 201 });
+        return NextResponse.json({ ...comment, body: comment.note, note: undefined }, { status: 201 });
     } catch (e) {
         return handleApiError(e, "Failed to add comment");
     }

@@ -29,8 +29,6 @@ model User {
   twitter                          String?
   instagram                        String?
   facebook                         String?
-  ownedTickets                     Ticket[]
-  ticketLogs                       TicketLog[]
   participantAdded                 TicketParticipant[]        @relation("ParticipantAddedBy")
   participantEntries               TicketParticipant[]        @relation("ParticipantUser")
   manager                          User?                      @relation("UserHierarchy", fields: [managerId], references: [id])

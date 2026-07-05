@@ -1,5 +1,5 @@
 // ── Ecommerce (₹ prices stored as integer paise) ────────────────────────────
-// Products live in InvProduct (inventory.prisma) — ShopOrderLine references them directly.
+// Products live in InvProduct (inventory.prisma) — TicketOrderLine references them directly.
 
 enum ShopOrderStatus {
   DRAFT
@@ -34,64 +34,7 @@ enum ShopOutOfStockPolicy {
 
 // (Removed legacy `ShopCoupon` model — superseded by the unified `Coupon`
 //  model in coupons.prisma, managed under Customer Retention.)
-
-model ShopOrder {
-  id                Int               @id @default(autoincrement())
-  // Legacy enum status — kept for Razorpay webhook compat; pipeline statusId is source of truth
-  status            ShopOrderStatus   @default(DRAFT)
-  orderSource       OrderSource       @default(ONLINE)
-  // Payment method. COD = collect on delivery (the only live method); ONLINE parked.
-  paymentMethod     ShopPaymentMethod @default(COD)
-  // Pipeline-based workflow (same pattern as CrmLead)
-  pipelineId        String?
-  statusId          String?
-  // accountId is the primary GL link — all financial activity goes through Account
-  accountId         Int?
-  // Legacy identity fields — kept for backward compat; prefer accountId
-  personId          Int?
-  guestEmail        String?
-  guestPhone        String?
-  shippingName      String?
-  shippingAddress   Json?
-  totalPaise        Int               @default(0)
-  razorpayOrderId   String?           @unique
-  razorpayPaymentId String?
-  courier           String?
-  trackingNumber    String?
-  paidAt            DateTime?
-  packedAt          DateTime?
-  shippedAt         DateTime?
-  deliveredAt       DateTime?
-  refundedAt        DateTime?
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
-
-  account     Account?        @relation(fields: [accountId], references: [id])
-  person      Person?         @relation(fields: [personId], references: [id])
-  pipeline    Pipeline?       @relation(fields: [pipelineId], references: [id])
-  orderStatus TicketStatus?   @relation(fields: [statusId], references: [id])
-  // Phase 5 5D-17: the order↔voucher back-relation is disconnected — rebuilt via
-  // the SHOP_ORDER VoucherLink in the ecommerce module.
-  lines       ShopOrderLine[]
-  tickets     Ticket[]
-
-  @@index([accountId])
-  @@index([personId])
-  @@index([status])
-  @@index([pipelineId])
-  @@index([statusId])
-}
-
-model ShopOrderLine {
-  id             Int @id @default(autoincrement())
-  orderId        Int
-  productId      Int
-  quantity       Int @default(1)
-  unitPricePaise Int
-
-  order   ShopOrder  @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product InvProduct @relation(fields: [productId], references: [id])
-
-  @@index([orderId])
-  @@index([productId])
-}
+//
+// An ecommerce order is now a Ticket on the "order" pipeline — see `TicketOrder` /
+// `TicketOrderLine` (tickets.prisma). The `ShopOrderStatus` / `ShopPaymentMethod`
+// enums below survive because `TicketOrder` still uses them (Razorpay webhook compat).

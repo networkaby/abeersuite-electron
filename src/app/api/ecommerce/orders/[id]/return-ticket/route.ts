@@ -6,6 +6,7 @@ import { validateRequest } from "@/shared/lib/api";
 import { z } from "zod";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 
 const bodySchema = z.object({
     deviceType: z.string().trim().min(1).default("Shop return"),
@@ -30,41 +31,46 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     const body = data;
 
     try {
-        const order = await prisma.shopOrder.findUnique({
+        const order = await prisma.ticket.findUnique({
             where: { id: oid },
-            include: { person: true },
+            select: { accountId: true, order: { select: { person: { select: { id: true, name: true } } } } },
         });
-        if (!order) {
+        if (!order?.order) {
             return NextResponse.json({ error: "Order not found" }, { status: 404 });
         }
 
         const billingAccountId = order.accountId ?? undefined;
+        const orderPerson = order.order.person;
+        const author = await buildActorSnapshot(user!.id);
 
-        const device = await prisma.device.create({
-            data: {
-                type: body.deviceType,
-                brand: body.brand,
-                model: body.model,
-                problem: body.problem,
-                ...(billingAccountId ? { accountId: billingAccountId } : {}),
-            },
-        });
-
+        // A return/RMA is a repair Ticket + TicketRepair detail carrying the device and
+        // a back-link to the order ticket (sourceOrderTicketId).
         const ticket = await prisma.ticket.create({
             data: {
-                deviceId: device.id,
-                sourceShopOrderId: oid,
                 priority: Priority.MEDIUM,
                 notes:
                     `Return / RMA — shop order #${oid}. ` +
-                    (order.person ? `Customer: ${order.person.name} (#${order.person.id}). ` : "") +
+                    (orderPerson ? `Customer: ${orderPerson.name} (#${orderPerson.id}). ` : "") +
                     (billingAccountId ? `Account #${billingAccountId}.` : ""),
                 pipelineId: body.pipelineId ?? "P1",
-                billingAccountId: billingAccountId ?? null,
+                accountId: billingAccountId ?? null,
+                createdBy: author,
+                repair: {
+                    create: {
+                        sourceOrderTicketId: oid,
+                        device: {
+                            create: {
+                                type: body.deviceType,
+                                brand: body.brand,
+                                model: body.model,
+                                problem: body.problem,
+                                ...(billingAccountId ? { accountId: billingAccountId } : {}),
+                            },
+                        },
+                    },
+                },
             },
-            include: {
-                device: true,
-            },
+            include: { repair: { include: { device: true } } },
         });
 
         await prisma.ticketLog.create({
@@ -72,11 +78,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
                 ticketId: ticket.id,
                 status: "S1",
                 note: "Ticket created from ecommerce return",
-                userId: user!.id,
+                author,
             },
         });
 
-        return NextResponse.json(ticket, { status: 201 });
+        return NextResponse.json({ ...ticket, ...ticket.repair, device: ticket.repair?.device }, { status: 201 });
     } catch (e) {
         return handleApiError(e, "Failed to create return ticket");
     }

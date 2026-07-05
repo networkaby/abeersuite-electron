@@ -21,9 +21,13 @@ export default async function ShopOrderConfirmationPage({
         );
     }
 
-    const order = await prisma.shopOrder.findUnique({
-        where: { id: orderId },
-        include: {
+    // An order is a Ticket (flavour "order") + TicketOrder detail (keyed by ticketId).
+    const order = await prisma.ticketOrder.findUnique({
+        where: { ticketId: orderId },
+        select: {
+            ticketId: true,
+            legacyStatus: true,
+            totalPaise: true,
             lines: { include: { product: { select: { name: true } } } },
         },
     });
@@ -38,8 +42,8 @@ export default async function ShopOrderConfirmationPage({
 
     return (
         <main className="mx-auto max-w-lg px-4 py-8 space-y-4">
-            <h1 className="text-2xl font-semibold">Order #{order.id}</h1>
-            <p className="text-muted-foreground">Status: {order.status}</p>
+            <h1 className="text-2xl font-semibold">Order #{order.ticketId}</h1>
+            <p className="text-muted-foreground">Status: {order.legacyStatus}</p>
             {sp.mock === "1" ? (
                 <p className="text-sm text-amber-700 dark:text-amber-400">
                     Razorpay keys are not configured — this was a mock checkout. Configure{" "}

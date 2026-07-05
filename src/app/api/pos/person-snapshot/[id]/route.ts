@@ -76,14 +76,14 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
                 : Promise.resolve(null),
             accountId
                 ? prisma.ticket.findFirst({
-                    where: { billingAccountId: accountId },
+                    where: { accountId },
                     orderBy: { createdAt: "desc" },
                     select: { id: true, createdAt: true },
                 })
                 : Promise.resolve(null),
             accountId
                 ? prisma.ticket.findMany({
-                    where: { billingAccountId: accountId },
+                    where: { accountId },
                     orderBy: { createdAt: "desc" },
                     take: 3,
                     select: {

@@ -19,34 +19,50 @@ import { handleApiError } from "@/shared/lib/api";
 const ticketSelect = {
     id: true,
     status: true,
-    expectedReturn: true,
     ticketStatus: { select: { label: true, color: true } },
-    primaryOwner: { select: { name: true } },
-    device: {
+    repair: {
         select: {
-            brand: true,
-            model: true,
-            account: {
+            expectedReturn: true,
+            device: {
                 select: {
-                    person: { select: { name: true } },
-                    company: { select: { name: true } },
+                    brand: true,
+                    model: true,
+                    account: {
+                        select: {
+                            person: { select: { name: true } },
+                            company: { select: { name: true } },
+                        },
+                    },
                 },
             },
         },
     },
 } as const;
 
-function customerName(t: {
-    device: {
-        account: {
-            person: { name: string } | null;
-            company: { name: string } | null;
-        } | null;
+type LookupRow = {
+    id: number;
+    status: string;
+    ticketStatus: { label: string; color: string };
+    repair: {
+        expectedReturn: Date | null;
+        device: {
+            brand: string; model: string;
+            account: { person: { name: string } | null; company: { name: string } | null } | null;
+        };
+    } | null;
+};
+
+// Flatten the repair detail to the old lookup shape (device + expectedReturn top-level).
+function toResult(t: LookupRow) {
+    const acct = t.repair?.device.account ?? null;
+    return {
+        id: t.id,
+        status: t.status,
+        ticketStatus: t.ticketStatus,
+        device: t.repair?.device ?? null,
+        customerName: acct?.person?.name ?? acct?.company?.name ?? "Unknown",
+        expectedReturn: t.repair?.expectedReturn?.toISOString() ?? null,
     };
-}): string {
-    return t.device.account?.person?.name
-        ?? t.device.account?.company?.name
-        ?? "Unknown";
 }
 
 export async function GET(req: Request) {
@@ -67,25 +83,23 @@ export async function GET(req: Request) {
                 select: ticketSelect,
             });
             if (!ticket) return NextResponse.json([]);
-            return NextResponse.json([{
-                ...ticket,
-                customerName: customerName(ticket),
-                expectedReturn: ticket.expectedReturn?.toISOString() ?? null,
-            }]);
+            return NextResponse.json([toResult(ticket)]);
         }
 
         // Text search — active tickets only, matched by customer name or phone
         const tickets = await prisma.ticket.findMany({
             where: {
                 ticketStatus: { isTerminal: false },
-                device: {
-                    account: {
-                        OR: [
-                            { person: { name: { contains: q, mode: "insensitive" } } },
-                            { person: { phones: { some: { phone: { contains: q } } } } },
-                            { company: { name: { contains: q, mode: "insensitive" } } },
-                            { company: { phones: { some: { phone: { contains: q } } } } },
-                        ],
+                repair: {
+                    device: {
+                        account: {
+                            OR: [
+                                { person: { name: { contains: q, mode: "insensitive" } } },
+                                { person: { phones: { some: { phone: { contains: q } } } } },
+                                { company: { name: { contains: q, mode: "insensitive" } } },
+                                { company: { phones: { some: { phone: { contains: q } } } } },
+                            ],
+                        },
                     },
                 },
             },
@@ -94,13 +108,7 @@ export async function GET(req: Request) {
             take: 6,
         });
 
-        return NextResponse.json(
-            tickets.map((t) => ({
-                ...t,
-                customerName: customerName(t),
-                expectedReturn: t.expectedReturn?.toISOString() ?? null,
-            }))
-        );
+        return NextResponse.json(tickets.map(toResult));
     } catch (e) {
         return handleApiError(e);
     }

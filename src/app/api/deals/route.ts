@@ -4,7 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { createDealSchema } from "@/shared/lib/schemas/dealSchema";
-import { getDealsPipeline, assertDealStatus } from "@/modules/deals/lib/dealsPipeline";
+import { getDealsPipeline } from "@/modules/deals/lib/dealsPipeline";
 import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 
 /** Position the lead is assigned to + its current live holders. */
@@ -18,34 +18,65 @@ const ASSIGNED_POSITION_SELECT = {
     },
 } as const;
 
-export const DEAL_SELECT = {
+// A deal is a Ticket (flavour "deal") + a TicketDeal detail. We query the Ticket and
+// flatten the detail back to the old flat Deal shape at the boundary (below), so the
+// deals UI keeps its existing contract.
+export const DEAL_TICKET_SELECT = {
     id: true,
     pipelineId: true,
     status: true,
     title: true,
-    contactName: true,
-    phone: true,
-    email: true,
-    companyName: true,
-    personId: true,
-    companyId: true,
-    valuePaise: true,
-    source: true,
     priority: true,
-    nextFollowUpAt: true,
     closedAt: true,
-    lostReason: true,
-    order: true,
+    dueAt: true,       // → nextFollowUpAt
+    sortOrder: true,   // → order
     assignedPositionId: true,
-    createdBy: true, // JSON actor snapshot
+    createdBy: true,   // JSON actor snapshot
     createdAt: true,
     updatedAt: true,
     ticketStatus: { select: { id: true, label: true, color: true, order: true, isTerminal: true } },
     assignedPosition: ASSIGNED_POSITION_SELECT,
-    person: { select: { id: true, name: true } },
-    company: { select: { id: true, name: true } },
-    _count: { select: { activities: true } },
+    deal: {
+        select: {
+            contactName: true, phone: true, email: true, companyName: true,
+            personId: true, companyId: true, valuePaise: true, source: true, lostReason: true,
+            person: { select: { id: true, name: true } },
+            company: { select: { id: true, name: true } },
+        },
+    },
+    _count: { select: { logs: true } },
 } as const;
+
+type DealTicketRow = {
+    id: number; pipelineId: string | null; status: string; title: string | null;
+    priority: string; closedAt: Date | null; dueAt: Date | null; sortOrder: number;
+    assignedPositionId: string | null; assignedPosition: unknown; createdBy: unknown;
+    createdAt: Date; updatedAt: Date; ticketStatus: unknown;
+    deal: {
+        contactName: string | null; phone: string | null; email: string | null; companyName: string | null;
+        personId: number | null; companyId: number | null; valuePaise: number | null; source: string | null;
+        lostReason: string | null; person: unknown; company: unknown;
+    } | null;
+    _count: { logs: number };
+};
+
+// Flatten a deal Ticket to the flat Deal shape the deals UI expects.
+export function flattenDeal(t: DealTicketRow) {
+    const d = t.deal;
+    return {
+        id: t.id, pipelineId: t.pipelineId, status: t.status, title: t.title,
+        priority: t.priority, closedAt: t.closedAt,
+        nextFollowUpAt: t.dueAt, order: t.sortOrder,
+        assignedPositionId: t.assignedPositionId, assignedPosition: t.assignedPosition,
+        createdBy: t.createdBy, createdAt: t.createdAt, updatedAt: t.updatedAt,
+        ticketStatus: t.ticketStatus,
+        contactName: d?.contactName ?? null, phone: d?.phone ?? null, email: d?.email ?? null,
+        companyName: d?.companyName ?? null, personId: d?.personId ?? null, companyId: d?.companyId ?? null,
+        valuePaise: d?.valuePaise ?? null, source: d?.source ?? null, lostReason: d?.lostReason ?? null,
+        person: d?.person ?? null, company: d?.company ?? null,
+        _count: { activities: t._count.logs },
+    };
+}
 
 export async function GET(req: Request) {
     const { response } = await requirePermission(PERMISSIONS.DEALS_VIEW);
@@ -58,27 +89,29 @@ export async function GET(req: Request) {
         const q = sp.get("q")?.trim();
         const personId = sp.get("personId");
         const companyId = sp.get("companyId");
-        const leads = await prisma.deal.findMany({
+        const dealFilter: { personId?: number; companyId?: number } = {};
+        if (personId && /^\d+$/.test(personId)) dealFilter.personId = Number(personId);
+        if (companyId && /^\d+$/.test(companyId)) dealFilter.companyId = Number(companyId);
+        const leads = await prisma.ticket.findMany({
             where: {
                 pipelineId: pipeline.id,
-                ...(personId && /^\d+$/.test(personId) ? { personId: Number(personId) } : {}),
-                ...(companyId && /^\d+$/.test(companyId) ? { companyId: Number(companyId) } : {}),
+                ...(Object.keys(dealFilter).length ? { deal: dealFilter } : {}),
                 ...(q
                     ? {
                           OR: [
                               { title: { contains: q, mode: "insensitive" as const } },
-                              { contactName: { contains: q, mode: "insensitive" as const } },
-                              { companyName: { contains: q, mode: "insensitive" as const } },
-                              { email: { contains: q, mode: "insensitive" as const } },
-                              { phone: { contains: q } },
+                              { deal: { contactName: { contains: q, mode: "insensitive" as const } } },
+                              { deal: { companyName: { contains: q, mode: "insensitive" as const } } },
+                              { deal: { email: { contains: q, mode: "insensitive" as const } } },
+                              { deal: { phone: { contains: q } } },
                           ],
                       }
                     : {}),
             },
-            orderBy: [{ order: "asc" }, { createdAt: "desc" }],
-            select: DEAL_SELECT,
+            orderBy: [{ sortOrder: "asc" }, { createdAt: "desc" }],
+            select: DEAL_TICKET_SELECT,
         });
-        return NextResponse.json(leads);
+        return NextResponse.json(leads.map(flattenDeal));
     } catch (e) {
         return handleApiError(e, "Failed to fetch leads");
     }
@@ -107,28 +140,32 @@ export async function POST(req: Request) {
             if (!c) return NextResponse.json({ error: "Linked company not found" }, { status: 400 });
         }
 
-        const lead = await prisma.deal.create({
+        const lead = await prisma.ticket.create({
             data: {
                 pipelineId: pipeline.id,
                 status: entry.id,
                 title: data.title,
-                contactName: data.contactName ?? null,
-                phone: data.phone ?? null,
-                email: data.email ?? null,
-                companyName: data.companyName ?? null,
-                personId: data.personId ?? null,
-                companyId: data.companyId ?? null,
-                valuePaise: data.valuePaise ?? null,
-                source: data.source ?? null,
                 priority: data.priority ?? "MEDIUM",
-                nextFollowUpAt: data.nextFollowUpAt ? new Date(data.nextFollowUpAt) : null,
+                dueAt: data.nextFollowUpAt ? new Date(data.nextFollowUpAt) : null,
                 assignedPositionId: data.assignedPositionId ?? null,
                 notes: data.notes ?? null,
                 createdBy: await buildActorSnapshot(user.id),
+                deal: {
+                    create: {
+                        contactName: data.contactName ?? null,
+                        phone: data.phone ?? null,
+                        email: data.email ?? null,
+                        companyName: data.companyName ?? null,
+                        personId: data.personId ?? null,
+                        companyId: data.companyId ?? null,
+                        valuePaise: data.valuePaise ?? null,
+                        source: data.source ?? null,
+                    },
+                },
             },
-            select: DEAL_SELECT,
+            select: DEAL_TICKET_SELECT,
         });
-        return NextResponse.json(lead, { status: 201 });
+        return NextResponse.json(flattenDeal(lead), { status: 201 });
     } catch (e) {
         return handleApiError(e, "Failed to create lead");
     }

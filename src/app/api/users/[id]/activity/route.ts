@@ -63,7 +63,8 @@ export async function GET(
                 select: { id: true, name: true, createdAt: true },
             }),
             prisma.ticketLog.findMany({
-                where: { userId, createdAt: { gte: range.gte, lte: range.lte } },
+                // author is a JSON ActorSnapshot now — match on its embedded userId.
+                where: { author: { path: ["userId"], equals: userId }, createdAt: { gte: range.gte, lte: range.lte } },
                 include: {
                     ticketStatus: { select: { label: true } },
                     ticket: { select: { id: true } },
@@ -93,7 +94,7 @@ export async function GET(
                 title: isCreated ? "Created ticket" : "Updated ticket",
                 description: isCreated
                     ? `Ticket #${log.ticket.id} created`
-                    : `Ticket #${log.ticket.id} moved to ${log.ticketStatus.label}${log.note ? ` - ${log.note}` : ""}`,
+                    : `Ticket #${log.ticket.id} moved to ${log.ticketStatus?.label ?? log.status ?? ""}${log.note ? ` - ${log.note}` : ""}`,
                 createdAt: log.createdAt.toISOString(),
                 meta: { ticketId: log.ticket.id },
             };

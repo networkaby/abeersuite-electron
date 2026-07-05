@@ -23,38 +23,34 @@ export async function GET(
         const tickets = await prisma.ticket.findMany({
             where: {
                 AND: [
-                    { deviceId: id },
+                    { repair: { deviceId: id } },
                     ...(scopeWhere ? [scopeWhere] : []),
                 ],
             },
             orderBy: { createdAt: "desc" },
             select: {
                 id: true,
-                externalRef: true,
-                warrantyRef: true,
                 createdAt: true,
                 updatedAt: true,
                 ticketStatus: { select: { label: true, color: true } },
                 ticketWorker: { select: { label: true, color: true } },
-                device: {
+                repair: {
                     select: {
-                        id: true,
-                        type: true,
-                        brand: true,
-                        model: true,
-                        problem: true,
-                        account: {
+                        externalRef: true,
+                        warrantyRef: true,
+                        device: {
                             select: {
                                 id: true,
-                                name: true,
-                                person: {
+                                type: true,
+                                brand: true,
+                                model: true,
+                                problem: true,
+                                account: {
                                     select: {
-                                        phones: selectPrimaryPhone,
-                                    },
-                                },
-                                company: {
-                                    select: {
-                                        phones: selectPrimaryPhone,
+                                        id: true,
+                                        name: true,
+                                        person: { select: { phones: selectPrimaryPhone } },
+                                        company: { select: { phones: selectPrimaryPhone } },
                                     },
                                 },
                             },
@@ -68,7 +64,7 @@ export async function GET(
             return NextResponse.json({ error: "Device tickets not found" }, { status: 404 });
         }
 
-        const device = tickets[0].device;
+        const device = tickets[0].repair!.device;
         return NextResponse.json({
             device: {
                 id: device.id,
@@ -81,13 +77,13 @@ export async function GET(
                     device.account?.person?.phones?.[0]?.phone
                     ?? device.account?.company?.phones?.[0]?.phone
                     ?? null,
-                slNo: tickets[0].externalRef ?? tickets[0].warrantyRef ?? "",
+                slNo: tickets[0].repair?.externalRef ?? tickets[0].repair?.warrantyRef ?? "",
                 updatedAt: tickets[0].updatedAt.toISOString(),
             },
             tickets: tickets.map((t) => ({
                 id: t.id,
-                externalRef: t.externalRef,
-                warrantyRef: t.warrantyRef,
+                externalRef: t.repair?.externalRef ?? null,
+                warrantyRef: t.repair?.warrantyRef ?? null,
                 createdAt: t.createdAt.toISOString(),
                 updatedAt: t.updatedAt.toISOString(),
                 status: t.ticketStatus,

@@ -58,9 +58,8 @@ model Account {
   group                    AccountGroup?              @relation(fields: [groupId], references: [id])
   person                   Person?                    @relation(fields: [personId], references: [id])
   company                  Company?                   @relation(fields: [companyId], references: [id])
-  billedTickets            Ticket[]                   @relation("TicketBillingAccount")
   devices                  Device[]
-  shopOrders               ShopOrder[]
+  tickets                  Ticket[]                   @relation("TicketAccount")
   // Phase 5 5D-4: InvVoucher.accountId dropped — the party lives on the spine
   // (UniversalVoucher.partyAccountId), so no InvVoucher back-relation here.
   // POS reverse rels

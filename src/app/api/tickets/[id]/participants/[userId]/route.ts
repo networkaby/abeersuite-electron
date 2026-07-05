@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
+import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 
 export async function DELETE(
     _: Request,
@@ -33,7 +34,7 @@ export async function DELETE(
                 ticketId,
                 status: currentStatus!.status,
                 note: `Secondary owner removed: ${participant.user.name}`,
-                userId: user.id,
+                author: await buildActorSnapshot(user.id),
             },
         });
 

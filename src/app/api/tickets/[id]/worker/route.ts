@@ -10,6 +10,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 
 const workerUpdateSchema = z.object({
     workerId: z.string().trim().min(1, "Worker is required"),
@@ -73,6 +74,7 @@ export async function PATCH(
         const { user, response } = await requireAuth();
         if (response) return response;
         const userId = user.id;
+        const author = await buildActorSnapshot(userId);
 
         const { id } = await params;
         const ticketId = Number(id);
@@ -95,7 +97,7 @@ export async function PATCH(
 
         const ticket = await prisma.ticket.findUnique({
             where: { id: ticketId },
-            include: { device: { include: { account: { include: { person: true, company: true } } } } },
+            include: { repair: { select: { deviceId: true } } },
         });
         if (!ticket) {
             return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
@@ -208,7 +210,7 @@ export async function PATCH(
                         status: newMainStatus,
                         workerId: newWorkerId,
                         note: `Retry limit reached on "${exhaustedFrom}" — routed onward`,
-                        userId,
+                        author,
                     },
                 });
             }
@@ -236,7 +238,7 @@ export async function PATCH(
                                 ticketId,
                                 status: newMainStatus,
                                 note: `Secondary owner auto-removed: ${p.user.name} (worker changed)`,
-                                userId,
+                                author,
                             },
                         });
                     }
@@ -252,7 +254,7 @@ export async function PATCH(
                     workerId: newWorkerId,
                     note: outcome ? null : (note || null),
                     visibility: visibility === "PUBLIC" ? "PUBLIC" : "INTERNAL",
-                    userId,
+                    author,
                 },
             });
 
@@ -267,7 +269,7 @@ export async function PATCH(
                 const tn = landed?.transitionNote?.trim();
                 if (tn) {
                     await tx.ticketLog.create({
-                        data: { ticketId, status: newMainStatus, workerId: newWorkerId, note: tn, visibility: "PUBLIC", userId },
+                        data: { ticketId, status: newMainStatus, workerId: newWorkerId, note: tn, visibility: "PUBLIC", author },
                     });
                 }
             }
@@ -282,7 +284,7 @@ export async function PATCH(
                         status: ticket.status,
                         workerId: prevWorkerId,
                         note: `Work done · ${outcome === "success" ? "Success" : "Unsuccess"}${note ? " — " + note : ""}`,
-                        userId,
+                        author,
                     },
                 });
             }
@@ -294,7 +296,7 @@ export async function PATCH(
                         ticketId,
                         status: triggerStatusId,
                         note: `Auto-advanced by: ${landingSub?.label ?? worker.label}`,
-                        userId,
+                        author,
                     },
                 });
                 if (entrySub) {
@@ -304,7 +306,7 @@ export async function PATCH(
                             status: triggerStatusId,
                             workerId: entrySub.id,
                             note: `Entered: ${entrySub.label}`,
-                            userId,
+                            author,
                         },
                     });
                 }
@@ -325,7 +327,7 @@ export async function PATCH(
                     parentStatus: newMainStatus,
                     parentWorkerId: newWorkerId,
                     spawnPipelineId: landing.spawnPipelineId,
-                    deviceId: ticket.deviceId,
+                    deviceId: ticket.repair?.deviceId ?? null,
                     userId,
                 }).catch(() => { /* spawn failure must not fail the move */ });
             }
@@ -344,7 +346,7 @@ export async function PATCH(
                 select: { actions: true },
             });
             await runWorkerActions(
-                { ticketId, status: newMainStatus, workerId: prevWorkerId, deviceId: ticket.deviceId, userId, outcome },
+                { ticketId, status: newMainStatus, workerId: prevWorkerId, deviceId: ticket.repair?.deviceId ?? null, userId, outcome, author },
                 completed?.actions,
             ).catch(() => { /* best-effort */ });
         }
@@ -397,7 +399,7 @@ export async function DELETE(
                     ticketId,
                     status: ticket.status,
                     note: `✓ ${label} closed — information acknowledged`,
-                    userId: user.id,
+                    author: await buildActorSnapshot(user.id),
                 },
             });
         });

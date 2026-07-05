@@ -19,18 +19,18 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         const { data, error } = await validateRequest(req, updateActivitySchema);
         if (error) return error;
 
-        const existing = await prisma.dealActivity.findFirst({
-            where: { id: activityId, dealId },
+        const existing = await prisma.ticketLog.findFirst({
+            where: { id: activityId, ticketId: dealId },
             select: { id: true },
         });
         if (!existing) return NextResponse.json({ error: "Activity not found" }, { status: 404 });
 
-        const activity = await prisma.dealActivity.update({
+        const log = await prisma.ticketLog.update({
             where: { id: activityId },
             data: { doneAt: data.done ? new Date() : null },
-            select: { id: true, kind: true, body: true, dueAt: true, doneAt: true, createdAt: true, author: true },
+            select: { id: true, kind: true, note: true, dueAt: true, doneAt: true, createdAt: true, author: true },
         });
-        return NextResponse.json(activity);
+        return NextResponse.json({ ...log, body: log.note, note: undefined });
     } catch (e) {
         return handleApiError(e, "Failed to update activity");
     }

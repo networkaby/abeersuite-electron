@@ -11,13 +11,16 @@ export async function GET() {
     const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
     if (response) return response;
     try {
-        const [pipeline, refunds] = await Promise.all([
+        const [pipeline, refundTickets] = await Promise.all([
             getRefundPipeline(),
-            prisma.refund.findMany({
-                select: { id: true, orderSource: true, orderId: true, statusId: true, amountPaise: true, reason: true, createdAt: true },
+            prisma.ticket.findMany({
+                where: { refund: { isNot: null } },
+                select: { id: true, status: true, createdAt: true, refund: { select: { orderSource: true, orderId: true, amountPaise: true, reason: true } } },
                 orderBy: { createdAt: "desc" },
             }),
         ]);
+        // Flatten each refund Ticket to the old flat Refund shape.
+        const refunds = refundTickets.map((t) => ({ id: t.id, statusId: t.status, createdAt: t.createdAt, ...t.refund! }));
 
         // Resolve the order reference/customer for each refund (inv vouchers in one batch).
         const invIds = refunds.filter((r) => r.orderSource === "inv").map((r) => r.orderId);

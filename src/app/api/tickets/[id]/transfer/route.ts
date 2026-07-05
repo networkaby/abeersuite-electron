@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 
 const transferSchema = z.object({
     targetPipelineId: z.string().trim().min(1),
@@ -77,6 +78,7 @@ export async function POST(
         const transferNote = note
             ? `Transferred from ${sourcePipelineLabel} to ${targetPipeline.label}. ${note}`
             : `Transferred from ${sourcePipelineLabel} to ${targetPipeline.label}`;
+        const author = await buildActorSnapshot(userId);
 
         await prisma.$transaction([
             prisma.ticket.update({
@@ -93,7 +95,7 @@ export async function POST(
                     status: landingStatusId,
                     note: transferNote,
                     visibility: "INTERNAL",
-                    userId,
+                    author,
                 },
             }),
         ]);

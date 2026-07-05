@@ -18,15 +18,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         const { statusId } = (await req.json()) as { statusId?: string };
         if (!statusId) return NextResponse.json({ error: "statusId required" }, { status: 400 });
 
-        const delivery = await prisma.delivery.findUnique({ where: { id }, select: { statusId: true } });
-        if (!delivery) return NextResponse.json({ error: "Delivery not found" }, { status: 404 });
+        const delivery = await prisma.ticket.findUnique({ where: { id }, select: { status: true, delivery: { select: { ticketId: true } } } });
+        if (!delivery?.delivery) return NextResponse.json({ error: "Delivery not found" }, { status: 404 });
 
         const check = await assertDeliveryStatus(statusId);
         if (!check.ok) return NextResponse.json({ error: check.message }, { status: 422 });
 
-        if (delivery.statusId && delivery.statusId !== statusId) {
+        if (delivery.status && delivery.status !== statusId) {
             const allowed = await prisma.statusTransition.findFirst({
-                where: { fromStatusId: delivery.statusId, toStatusId: statusId },
+                where: { fromStatusId: delivery.status, toStatusId: statusId },
                 select: { id: true },
             });
             if (!allowed) {
@@ -34,7 +34,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             }
         }
 
-        await prisma.delivery.update({ where: { id }, data: { statusId } });
+        await prisma.ticket.update({ where: { id }, data: { status: statusId } });
         return NextResponse.json({ id, statusId });
     } catch (e) {
         return handleApiError(e, "Failed to move delivery");

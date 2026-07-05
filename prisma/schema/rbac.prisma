@@ -1,22 +1,22 @@
 // ── RBAC ──────────────────────────────────────────────────────────────────────
 
 model Role {
-  id                 String           @id
-  label              String
-  color              String
-  rank               Int              @default(0)
-  isSystem           Boolean          @default(false)
+  id            String           @id
+  label         String
+  color         String
+  rank          Int              @default(0)
+  isSystem      Boolean          @default(false)
   // Home department — every role belongs to exactly one department. This is an
   // AUTHORING lens: the Role Matrix UI only offers the permissions in this
   // department's pool (see DepartmentPermission). It does NOT scope data access
   // (that comes from the holder's Position + User.scope). Cross-cutting roles
   // (e.g. R1 Admin) live in the all-access department (Department.isAllAccess).
-  departmentId       String
-  department         Department       @relation(fields: [departmentId], references: [id])
-  users              User[]
-  positionRoles      PositionRole[]
-  permissions        RolePermission[]
-  chatRooms          ChatRoom[]
+  departmentId  String
+  department    Department       @relation(fields: [departmentId], references: [id])
+  users         User[]
+  positionRoles PositionRole[]
+  permissions   RolePermission[]
+  chatRooms     ChatRoom[]
 }
 
 model Permission {

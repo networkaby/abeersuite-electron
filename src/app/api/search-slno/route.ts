@@ -14,21 +14,25 @@ export async function GET(req: Request) {
         const q = searchParams.get("q")?.trim() ?? "";
         const scopeWhere = buildTicketReadScopeWhere(user);
 
+        // SLno/device search only applies to repair tickets (device + slno live on the
+        // TicketRepair detail).
         const where = {
             AND: [
                 ...(scopeWhere ? [scopeWhere] : []),
-                ...(q
-                    ? [{
-                        OR: [
-                            { externalRef: { contains: q, mode: "insensitive" as const } },
-                            { warrantyRef: { contains: q, mode: "insensitive" as const } },
-                            { device: { brand: { contains: q, mode: "insensitive" as const } } },
-                            { device: { model: { contains: q, mode: "insensitive" as const } } },
-                            { device: { type: { contains: q, mode: "insensitive" as const } } },
-                            { device: { problem: { contains: q, mode: "insensitive" as const } } },
-                        ],
-                    }]
-                    : []),
+                q
+                    ? {
+                        repair: {
+                            OR: [
+                                { externalRef: { contains: q, mode: "insensitive" as const } },
+                                { warrantyRef: { contains: q, mode: "insensitive" as const } },
+                                { device: { brand: { contains: q, mode: "insensitive" as const } } },
+                                { device: { model: { contains: q, mode: "insensitive" as const } } },
+                                { device: { type: { contains: q, mode: "insensitive" as const } } },
+                                { device: { problem: { contains: q, mode: "insensitive" as const } } },
+                            ],
+                        },
+                    }
+                    : { repair: { isNot: null } },
             ],
         };
 
@@ -38,18 +42,22 @@ export async function GET(req: Request) {
             take: 500,
             select: {
                 id: true,
-                externalRef: true,
-                warrantyRef: true,
                 updatedAt: true,
                 ticketStatus: { select: { label: true, color: true } },
-                device: {
+                repair: {
                     select: {
-                        id: true,
-                        brand: true,
-                        model: true,
-                        type: true,
-                        problem: true,
-                        account: { select: { id: true, name: true } },
+                        externalRef: true,
+                        warrantyRef: true,
+                        device: {
+                            select: {
+                                id: true,
+                                brand: true,
+                                model: true,
+                                type: true,
+                                problem: true,
+                                account: { select: { id: true, name: true } },
+                            },
+                        },
                     },
                 },
             },
@@ -66,14 +74,16 @@ export async function GET(req: Request) {
         }>();
 
         for (const t of rows) {
-            if (!byDevice.has(t.device.id)) {
-                byDevice.set(t.device.id, {
-                    deviceId: t.device.id,
-                    slNo: t.externalRef ?? t.warrantyRef ?? "",
-                    customerName: t.device.account?.name ?? "Unknown",
-                    deviceName: `${t.device.brand} ${t.device.model}`,
-                    deviceType: t.device.type,
-                    problem: t.device.problem,
+            const r = t.repair;
+            if (!r) continue;
+            if (!byDevice.has(r.device.id)) {
+                byDevice.set(r.device.id, {
+                    deviceId: r.device.id,
+                    slNo: r.externalRef ?? r.warrantyRef ?? "",
+                    customerName: r.device.account?.name ?? "Unknown",
+                    deviceName: `${r.device.brand} ${r.device.model}`,
+                    deviceType: r.device.type,
+                    problem: r.device.problem,
                     updatedAt: t.updatedAt.toISOString(),
                 });
             }

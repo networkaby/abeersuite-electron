@@ -189,7 +189,7 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
     try {
         const { id, error } = await parseIdParam(params);
         if (error) return error;
-        const orderLineCount = await prisma.shopOrderLine.count({ where: { productId: id } });
+        const orderLineCount = await prisma.ticketOrderLine.count({ where: { productId: id } });
         if (orderLineCount > 0) return NextResponse.json({ error: "Cannot delete — referenced in shop orders." }, { status: 400 });
         await prisma.invProduct.delete({ where: { id } });
         return NextResponse.json({ success: true });

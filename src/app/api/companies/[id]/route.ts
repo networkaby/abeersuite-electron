@@ -37,10 +37,11 @@ export async function GET(
                 include: {
                     devices: {
                         include: {
-                            tickets: {
-                                orderBy: { createdAt: "desc" },
+                            repairs: {
                                 include: {
-                                    ticketStatus: { select: { label: true, color: true } },
+                                    ticket: {
+                                        include: { ticketStatus: { select: { label: true, color: true } } },
+                                    },
                                 },
                             },
                         },
@@ -83,7 +84,12 @@ export async function GET(
         ...company,
         accountId: company.account!.id,
         creditLimit: company.account!.creditLimit,
-        devices: company.account!.devices,
+        devices: company.account!.devices.map((d) => ({
+            ...d,
+            tickets: d.repairs
+                .map((r) => ({ ...r.ticket, ...r }))
+                .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()),
+        })),
         customers: linkedCustomers,
         phone: contacts.phones[0]?.value ?? contacts.derivedPhones[0]?.value ?? null,
         email: contacts.emails[0]?.value ?? contacts.derivedEmails[0]?.value ?? null,

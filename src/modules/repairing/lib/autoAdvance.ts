@@ -1,5 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { Prisma } from "@/generated/prisma/client";
+import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 import { selectPrimaryPhone, selectPrimaryEmail } from "@/shared/lib/prisma/fragments";
 import { resolveTicketSource, type TicketLike } from "./ticketSources";
 import { runServerTool } from "./toolRegistry";
@@ -23,15 +24,21 @@ type ToolConfig = {
 };
 
 const ticketSelect = {
-    id: true, status: true, workerId: true, deviceId: true, context: true,
+    id: true, status: true, workerId: true, context: true,
     ticketStatus: { select: { label: true } },
-    device: {
+    // Device lives on the repair detail (null for device-free flavours).
+    repair: {
         select: {
-            type: true, brand: true, model: true, problem: true,
-            account: {
+            deviceId: true,
+            device: {
                 select: {
-                    person: { select: { name: true, phones: selectPrimaryPhone, emails: selectPrimaryEmail } },
-                    company: { select: { name: true, phones: selectPrimaryPhone, emails: selectPrimaryEmail } },
+                    type: true, brand: true, model: true, problem: true,
+                    account: {
+                        select: {
+                            person: { select: { name: true, phones: selectPrimaryPhone, emails: selectPrimaryEmail } },
+                            company: { select: { name: true, phones: selectPrimaryPhone, emails: selectPrimaryEmail } },
+                        },
+                    },
                 },
             },
         },
@@ -49,6 +56,8 @@ export async function autoAdvance(ticketId: number, userId: number): Promise<Aut
     const openedTabs: string[] = [];
     let navigateTo: string | null = null;
     const result_ = (): AutoAdvanceResult => ({ openTabs: openedTabs, navigateTo });
+    // Actor snapshot for every log this run writes (no User FK).
+    const author = await buildActorSnapshot(userId);
 
     for (let hop = 0; hop < MAX_AUTO_HOPS; hop++) {
         const ticket = await prisma.ticket.findUnique({ where: { id: ticketId }, select: ticketSelect });
@@ -67,7 +76,7 @@ export async function autoAdvance(ticketId: number, userId: number): Promise<Aut
 
         // Loop guard: a cycle (A ✓→B, B ✓→A) must not run forever.
         if (visited.has(worker.id)) {
-            await log(ticketId, ticket.status, worker.id, `⚠️ Auto-run loop detected at "${worker.label}" — stopped`, userId);
+            await log(ticketId, ticket.status, worker.id, `⚠️ Auto-run loop detected at "${worker.label}" — stopped`, author);
             return result_();
         }
         visited.add(worker.id);
@@ -76,7 +85,7 @@ export async function autoAdvance(ticketId: number, userId: number): Promise<Aut
         const cfg = (worker.work.toolConfig ?? {}) as ToolConfig;
         const ticketLike: TicketLike = {
             id: ticket.id, status: ticket.status, ticketStatus: ticket.ticketStatus,
-            context: ticket.context as Record<string, unknown> | null, device: ticket.device,
+            context: ticket.context as Record<string, unknown> | null, device: ticket.repair?.device ?? null,
         };
         const inputs: Record<string, string> = {};
         for (const [key, b] of Object.entries(cfg.bindings ?? {})) {
@@ -87,10 +96,10 @@ export async function autoAdvance(ticketId: number, userId: number): Promise<Aut
         // Run the tool (headless). Unknown tool → stop (can't decide an outcome).
         // Privileged tools (create_child) also get the runtime ticket context.
         const result = await runServerTool(worker.work.toolType, inputs, {
-            ticketId: ticket.id, status: ticket.status, workerId: worker.id, deviceId: ticket.deviceId, userId,
+            ticketId: ticket.id, status: ticket.status, workerId: worker.id, deviceId: ticket.repair?.deviceId ?? null, userId,
         }).catch(() => null);
         if (!result) {
-            await log(ticketId, ticket.status, worker.id, `⚠️ Auto-run: tool "${worker.work.toolType}" not runnable — stopped`, userId);
+            await log(ticketId, ticket.status, worker.id, `⚠️ Auto-run: tool "${worker.work.toolType}" not runnable — stopped`, author);
             return result_();
         }
         const outcome: "success" | "unsuccess" = result.success ? "success" : "unsuccess";
@@ -112,7 +121,7 @@ export async function autoAdvance(ticketId: number, userId: number): Promise<Aut
         if (!target) {
             await prisma.$transaction(async (tx) => {
                 await tx.ticket.update({ where: { id: ticketId }, data: { context: merged as Prisma.InputJsonValue, updatedAt: new Date() } });
-                await tx.ticketLog.create({ data: { ticketId, status: ticket.status, workerId: worker.id, note: `Work done · ${result.success ? "Success" : "Unsuccess"} — ${worker.label} (auto, no route)`, userId } });
+                await tx.ticketLog.create({ data: { ticketId, status: ticket.status, workerId: worker.id, note: `Work done · ${result.success ? "Success" : "Unsuccess"} — ${worker.label} (auto, no route)`, author } });
             });
             return result_();
         }
@@ -130,12 +139,12 @@ export async function autoAdvance(ticketId: number, userId: number): Promise<Aut
                 data: { workerId: newWorkerId, status: newStatus, context: merged as Prisma.InputJsonValue, updatedAt: new Date() },
             });
             // Completion stamp for the Action we just ran (feeds the Finished list + history).
-            await tx.ticketLog.create({ data: { ticketId, status: ticket.status, workerId: worker.id, note: `Work done · ${result.success ? "Success" : "Unsuccess"} — ${worker.label} (auto)`, userId } });
+            await tx.ticketLog.create({ data: { ticketId, status: ticket.status, workerId: worker.id, note: `Work done · ${result.success ? "Success" : "Unsuccess"} — ${worker.label} (auto)`, author } });
             if (triggerStatusId) {
-                await tx.ticketLog.create({ data: { ticketId, status: triggerStatusId, note: `Auto-advanced by: ${worker.label}`, userId } });
-                if (entrySub) await tx.ticketLog.create({ data: { ticketId, status: triggerStatusId, workerId: entrySub.id, note: `Entered: ${entrySub.label}`, userId } });
+                await tx.ticketLog.create({ data: { ticketId, status: triggerStatusId, note: `Auto-advanced by: ${worker.label}`, author } });
+                if (entrySub) await tx.ticketLog.create({ data: { ticketId, status: triggerStatusId, workerId: entrySub.id, note: `Entered: ${entrySub.label}`, author } });
             } else if (newWorkerId) {
-                await tx.ticketLog.create({ data: { ticketId, status: newStatus, workerId: newWorkerId, note: `Entered: ${targetWorker?.label ?? ""}`, userId } });
+                await tx.ticketLog.create({ data: { ticketId, status: newStatus, workerId: newWorkerId, note: `Entered: ${targetWorker?.label ?? ""}`, author } });
             }
         });
 
@@ -143,21 +152,21 @@ export async function autoAdvance(ticketId: number, userId: number): Promise<Aut
         if (newWorkerId) {
             const landing = await prisma.ticketWorker.findUnique({ where: { id: newWorkerId }, select: { spawnPipelineId: true } });
             if (landing?.spawnPipelineId) {
-                await spawnChild({ parentId: ticketId, parentStatus: newStatus, parentWorkerId: newWorkerId, spawnPipelineId: landing.spawnPipelineId, deviceId: ticket.deviceId, userId }).catch(() => { /* never blocks */ });
+                await spawnChild({ parentId: ticketId, parentStatus: newStatus, parentWorkerId: newWorkerId, spawnPipelineId: landing.spawnPipelineId, deviceId: ticket.repair?.deviceId ?? null, userId }).catch(() => { /* never blocks */ });
             }
         }
         // 6th power: the completed Action's own action chain, filtered by outcome (best-effort).
-        await runWorkerActions({ ticketId, status: newStatus, workerId: worker.id, deviceId: ticket.deviceId, userId, outcome }, worker.actions).catch(() => { /* never blocks */ });
+        await runWorkerActions({ ticketId, status: newStatus, workerId: worker.id, deviceId: ticket.repair?.deviceId ?? null, userId, outcome, author }, worker.actions).catch(() => { /* never blocks */ });
 
         // Loop continues — if the new landing worker is ALSO an Action, it runs next.
     }
 
     // Bound exceeded — stop and log (prevents runaway chains).
     const t = await prisma.ticket.findUnique({ where: { id: ticketId }, select: { status: true, workerId: true } });
-    await log(ticketId, t?.status ?? "", t?.workerId ?? null, `⚠️ Auto-run chain exceeded ${MAX_AUTO_HOPS} hops — stopped`, userId);
+    await log(ticketId, t?.status ?? "", t?.workerId ?? null, `⚠️ Auto-run chain exceeded ${MAX_AUTO_HOPS} hops — stopped`, author);
     return result_();
 }
 
-async function log(ticketId: number, status: string, workerId: string | null, note: string, userId: number) {
-    await prisma.ticketLog.create({ data: { ticketId, status, workerId: workerId ?? undefined, note, userId } }).catch(() => { /* swallow */ });
+async function log(ticketId: number, status: string, workerId: string | null, note: string, author: Prisma.InputJsonValue) {
+    await prisma.ticketLog.create({ data: { ticketId, status, workerId: workerId ?? undefined, note, author } }).catch(() => { /* swallow */ });
 }

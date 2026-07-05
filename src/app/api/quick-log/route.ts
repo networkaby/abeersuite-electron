@@ -67,29 +67,33 @@ export async function POST(req: Request) {
         if (!ok) return NextResponse.json({ error: "Company not found" }, { status: 400 });
     }
 
-    const lead = await prisma.deal.create({
+    // A deal = a Ticket (flavour "deal") + a TicketDeal detail.
+    const lead = await prisma.ticket.create({
         data: {
             pipelineId,
             status: entryStatus.id,
             title,
-            contactName: contactName || null,
-            phone: phone || null,
-            source: source || null,
             notes: notes || null,
-            personId: personId ?? null,
-            companyId: companyId ?? null,
             createdBy: await buildActorSnapshot(user.id),
+            deal: {
+                create: {
+                    contactName: contactName || null,
+                    phone: phone || null,
+                    source: source || null,
+                    personId: personId ?? null,
+                    companyId: companyId ?? null,
+                },
+            },
         },
         select: {
             id: true,
             pipelineId: true,
             status: true,
             title: true,
-            contactName: true,
-            phone: true,
             createdAt: true,
+            deal: { select: { contactName: true, phone: true } },
         },
     });
 
-    return NextResponse.json(lead, { status: 201 });
+    return NextResponse.json({ ...lead, ...lead.deal, deal: undefined }, { status: 201 });
 }

@@ -11,13 +11,16 @@ export async function GET() {
     const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
     if (response) return response;
     try {
-        const [pipeline, deliveries] = await Promise.all([
+        const [pipeline, deliveryTickets] = await Promise.all([
             getDeliveryPipeline(),
-            prisma.delivery.findMany({
-                select: { id: true, orderSource: true, orderId: true, statusId: true, carrier: true, awb: true, trackingUrl: true, chargeToCustomerPaise: true, createdAt: true },
+            prisma.ticket.findMany({
+                where: { delivery: { isNot: null } },
+                select: { id: true, status: true, createdAt: true, delivery: { select: { orderSource: true, orderId: true, carrier: true, awb: true, trackingUrl: true, chargeToCustomerPaise: true } } },
                 orderBy: { createdAt: "desc" },
             }),
         ]);
+        // Flatten each delivery Ticket to the old flat Delivery shape.
+        const deliveries = deliveryTickets.map((t) => ({ id: t.id, statusId: t.status, createdAt: t.createdAt, ...t.delivery! }));
 
         // Resolve the order reference/customer for each delivery (inv vouchers in one batch).
         const invIds = deliveries.filter((d) => d.orderSource === "inv").map((d) => d.orderId);

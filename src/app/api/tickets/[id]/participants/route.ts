@@ -6,6 +6,7 @@ import { z } from "zod";
 import { prismaUniqueError } from "@/shared/lib/api";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 
 const participantSchema = z.object({
     userId: z.coerce.number().int().positive("userId required"),
@@ -89,7 +90,7 @@ export async function POST(
                 ticketId,
                 status: currentStatus!.status,
                 note: `Secondary owner added: ${targetUser.name}${body.addedForRole ? ` (${body.addedForRole})` : ""}`,
-                userId: user.id,
+                author: await buildActorSnapshot(user.id),
             },
         });
 

@@ -15,10 +15,13 @@ export async function findOpenDealForParty(
     party: { personId?: number | null; companyId?: number | null },
 ): Promise<{ id: number } | null> {
     if (party.personId == null && party.companyId == null) return null;
-    return db.deal.findFirst({
+    // A deal is a Ticket with a TicketDeal detail; filter by the party on that detail.
+    return db.ticket.findFirst({
         where: {
-            ...(party.personId != null ? { personId: party.personId } : {}),
-            ...(party.companyId != null ? { companyId: party.companyId } : {}),
+            deal: {
+                ...(party.personId != null ? { personId: party.personId } : {}),
+                ...(party.companyId != null ? { companyId: party.companyId } : {}),
+            },
             ticketStatus: { isTerminal: false },
         },
         orderBy: { createdAt: "desc" },

@@ -14,7 +14,7 @@ export type ToolContext = {
     ticketId: number;
     status: string;
     workerId: string;
-    deviceId: number;
+    deviceId: number | null;   // a repair parent's device (null for device-free flavours)
     userId: number;
 };
 

@@ -21,25 +21,47 @@ const ASSIGNED_POSITION_SELECT = {
     },
 } as const;
 
-const TASK_SELECT = {
+// A task is a bare Ticket (flavour "task", no detail). We flatten the core Ticket back
+// to the old flat Task shape (description ← notes, dueDate ← dueAt, completedAt ←
+// closedAt, order ← sortOrder, comments ← logs) so the task board keeps its contract.
+export const TASK_TICKET_SELECT = {
     id: true,
     title: true,
-    description: true,
+    notes: true,      // → description
     category: true,
     priority: true,
     pipelineId: true,
     status: true,
     assignedPositionId: true,
-    createdBy: true, // JSON actor snapshot
-    dueDate: true,
-    completedAt: true,
-    order: true,
+    createdBy: true,  // JSON actor snapshot
+    dueAt: true,      // → dueDate
+    closedAt: true,   // → completedAt
+    sortOrder: true,  // → order
     createdAt: true,
     updatedAt: true,
     ticketStatus: { select: { id: true, label: true, color: true, order: true, isTerminal: true } },
     assignedPosition: ASSIGNED_POSITION_SELECT,
-    _count: { select: { comments: true } },
+    _count: { select: { logs: true } },
 } as const;
+
+type TaskTicketRow = {
+    id: number; title: string | null; notes: string | null; category: string | null;
+    priority: string; pipelineId: string | null; status: string; assignedPositionId: string | null;
+    createdBy: unknown; dueAt: Date | null; closedAt: Date | null; sortOrder: number;
+    createdAt: Date; updatedAt: Date; ticketStatus: unknown; assignedPosition: unknown;
+    _count: { logs: number };
+};
+
+export function flattenTask(t: TaskTicketRow) {
+    return {
+        id: t.id, title: t.title, description: t.notes, category: t.category, priority: t.priority,
+        pipelineId: t.pipelineId, status: t.status, assignedPositionId: t.assignedPositionId,
+        assignedPosition: t.assignedPosition, createdBy: t.createdBy,
+        dueDate: t.dueAt, completedAt: t.closedAt, order: t.sortOrder,
+        createdAt: t.createdAt, updatedAt: t.updatedAt, ticketStatus: t.ticketStatus,
+        _count: { comments: t._count.logs },
+    };
+}
 
 export async function GET(req: Request) {
     const { response } = await requirePermission(PERMISSIONS.ADMINISTRATION_TASKS_VIEW);
@@ -47,12 +69,12 @@ export async function GET(req: Request) {
     try {
         const { searchParams } = new URL(req.url);
         const pipelineId = searchParams.get("pipelineId") ?? ADMIN_PIPELINE_ID;
-        const tasks = await prisma.task.findMany({
+        const tasks = await prisma.ticket.findMany({
             where: { pipelineId },
-            orderBy: [{ order: "asc" }, { createdAt: "desc" }],
-            select: TASK_SELECT,
+            orderBy: [{ sortOrder: "asc" }, { createdAt: "desc" }],
+            select: TASK_TICKET_SELECT,
         });
-        return NextResponse.json(tasks);
+        return NextResponse.json(tasks.map(flattenTask));
     } catch (e) {
         return handleApiError(e, "Failed to fetch tasks");
     }
@@ -80,21 +102,21 @@ export async function POST(req: Request) {
             );
         }
 
-        const task = await prisma.task.create({
+        const task = await prisma.ticket.create({
             data: {
                 title: data.title,
-                description: data.description ?? null,
+                notes: data.description ?? null,
                 category: data.category ?? null,
                 priority: data.priority ?? "MEDIUM",
                 pipelineId,
                 status: entry.id,
                 assignedPositionId: data.assignedPositionId ?? null,
-                dueDate: data.dueDate ? new Date(data.dueDate) : null,
+                dueAt: data.dueDate ? new Date(data.dueDate) : null,
                 createdBy: await buildTaskActor(user.id),
             },
-            select: TASK_SELECT,
+            select: TASK_TICKET_SELECT,
         });
-        return NextResponse.json(task, { status: 201 });
+        return NextResponse.json(flattenTask(task), { status: 201 });
     } catch (e) {
         return handleApiError(e, "Failed to create task");
     }

@@ -48,7 +48,7 @@ export async function DELETE(
     if (response) return response;
     try {
         const { id } = await params;
-        const ticketCount = await prisma.ticket.count({ where: { serviceCenterId: Number(id) } });
+        const ticketCount = await prisma.ticketRepair.count({ where: { serviceCenterId: Number(id) } });
         if (ticketCount > 0) {
             return NextResponse.json({ error: "Cannot delete a service center that is linked to tickets" }, { status: 409 });
         }

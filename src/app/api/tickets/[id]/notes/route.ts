@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 
 const noteSchema = z.object({
     note: z.string().trim().min(1, "Note text is required"),
@@ -39,7 +40,7 @@ export async function POST(
                 status: ticket.status,
                 note,
                 visibility: visibility === "PUBLIC" ? "PUBLIC" : "INTERNAL",
-                userId,
+                author: await buildActorSnapshot(userId),
             },
         });
 

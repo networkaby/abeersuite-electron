@@ -34,12 +34,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
         if (Object.keys(data).length === 0) return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
 
-        const updated = await prisma.delivery.update({
-            where: { id },
+        // Carrier / AWB / tracking / amounts live on the TicketDelivery detail (keyed
+        // by ticketId — the delivery's id is its Ticket id).
+        const updated = await prisma.ticketDelivery.update({
+            where: { ticketId: id },
             data,
-            select: { id: true, carrier: true, awb: true, trackingUrl: true, chargeToCustomerPaise: true, costToCarrierPaise: true },
+            select: { ticketId: true, carrier: true, awb: true, trackingUrl: true, chargeToCustomerPaise: true, costToCarrierPaise: true },
         });
-        return NextResponse.json(updated);
+        return NextResponse.json({ ...updated, id: updated.ticketId });
     } catch (e) {
         return handleApiError(e, "Failed to update delivery");
     }

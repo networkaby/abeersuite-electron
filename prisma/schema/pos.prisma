@@ -156,7 +156,7 @@ model PosShift {
   // ── Close ─────────────────────────────────────────────────────────────────
   closedAt               DateTime?
   closedById             Int?
-  closedBy               User?         @relation("PosShiftClosedBy", fields: [closedById], references: [id])
+  closedBy               User?     @relation("PosShiftClosedBy", fields: [closedById], references: [id])
   declaredCashPaise      BigInt? // what the closer physically counted
   expectedCashPaise      BigInt? // opening + cash sales − drops (computed at close)
   variancePaise          BigInt? // declared − expected; +ve = over, −ve = short

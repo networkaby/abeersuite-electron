@@ -16,21 +16,22 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         const { data, error } = await validateRequest(req, createActivitySchema);
         if (error) return error;
 
-        const lead = await prisma.deal.findUnique({ where: { id: dealId }, select: { id: true } });
+        const lead = await prisma.ticket.findUnique({ where: { id: dealId }, select: { id: true } });
         if (!lead) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
 
-        const activity = await prisma.dealActivity.create({
+        // A deal activity is a TicketLog (body → note).
+        const log = await prisma.ticketLog.create({
             data: {
-                dealId,
+                ticketId: dealId,
                 author: await buildActorSnapshot(user.id),
                 kind: data.kind,
-                body: data.body,
+                note: data.body,
                 // dueAt only meaningful for TASK, but harmless on others.
                 dueAt: data.kind === "TASK" && data.dueAt ? new Date(data.dueAt) : null,
             },
-            select: { id: true, kind: true, body: true, dueAt: true, doneAt: true, createdAt: true, author: true },
+            select: { id: true, kind: true, note: true, dueAt: true, doneAt: true, createdAt: true, author: true },
         });
-        return NextResponse.json(activity, { status: 201 });
+        return NextResponse.json({ ...log, body: log.note, note: undefined }, { status: 201 });
     } catch (e) {
         return handleApiError(e, "Failed to add activity");
     }

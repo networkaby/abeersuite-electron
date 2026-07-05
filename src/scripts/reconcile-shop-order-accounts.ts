@@ -33,17 +33,23 @@ async function run(dryRun: boolean): Promise<ReconcileResult> {
         skipped: 0,
     };
 
-    const orders = await prisma.shopOrder.findMany({
-        where: { accountId: null },
+    // Orders are order-flavour Tickets: accountId on the core, identity on the detail.
+    const orderTickets = await prisma.ticket.findMany({
+        where: { order: { isNot: null }, accountId: null },
         orderBy: { createdAt: "asc" },
         select: {
             id: true,
-            personId: true,
-            guestEmail: true,
-            guestPhone: true,
             createdAt: true,
+            order: { select: { personId: true, guestEmail: true, guestPhone: true } },
         },
     });
+    const orders = orderTickets.map((t) => ({
+        id: t.id,
+        personId: t.order?.personId ?? null,
+        guestEmail: t.order?.guestEmail ?? null,
+        guestPhone: t.order?.guestPhone ?? null,
+        createdAt: t.createdAt,
+    }));
 
     for (const order of orders) {
         result.scanned += 1;
@@ -117,11 +123,11 @@ async function run(dryRun: boolean): Promise<ReconcileResult> {
         if (ensured.created) result.createdAccounts += 1;
 
         if (!dryRun) {
-            await prisma.shopOrder.update({
+            await prisma.ticket.update({
                 where: { id: order.id },
                 data: {
-                    personId,
                     accountId: ensured.accountId,
+                    order: { update: { personId } },
                 },
             });
         }

@@ -36,10 +36,12 @@ export async function GET(
                 include: {
                     devices: {
                         include: {
-                            tickets: {
-                                orderBy: { createdAt: "desc" },
+                            // A device's repair tickets hang off TicketRepair now.
+                            repairs: {
                                 include: {
-                                    ticketStatus: { select: { label: true, color: true } },
+                                    ticket: {
+                                        include: { ticketStatus: { select: { label: true, color: true } } },
+                                    },
                                 },
                             },
                         },
@@ -73,7 +75,14 @@ export async function GET(
         email: person.emails[0]?.email ?? null,
         accountId: person.account!.id,
         creditLimit: person.account!.creditLimit,
-        devices: person.account!.devices,
+        // Flatten each device's repair tickets back to the old device.tickets shape
+        // (core ticket + status + repair fields), newest first.
+        devices: person.account!.devices.map((d) => ({
+            ...d,
+            tickets: d.repairs
+                .map((r) => ({ ...r.ticket, ...r }))
+                .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()),
+        })),
         companies: person.companies.map(link => ({
             ...link,
             company: {
