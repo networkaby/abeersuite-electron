@@ -7,6 +7,18 @@ import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { getDepartmentPool } from "@/shared/lib/auth/departmentPool";
 import { revokeRoleSessions } from "@/shared/lib/auth/revokeSessions";
+import { SIDEBAR_MODULES } from "@/shared/lib/auth/sidebarModules";
+
+// Permissions the Role editor assigns role-direct, never department-pooled:
+// Works (`work:*`), POS operations (`pos:*` — vouchers + shift/till), and the
+// links of non-pooled sidebar modules (Workspace: `ui:sidebar:workspace:*`). The
+// editor offers these OUTSIDE the department lens, so the pool invariant below
+// must not strip them. Derived from the sidebar's single source so it can't drift.
+const UNPOOLED_SIDEBAR_IDS = new Set(
+    SIDEBAR_MODULES.filter((m) => !m.pooled).flatMap((m) => m.childPermissionIds),
+);
+const isUnpooled = (id: string): boolean =>
+    id.startsWith("work:") || id.startsWith("pos:") || UNPOOLED_SIDEBAR_IDS.has(id);
 
 const rolePermissionsSchema = z.object({
     permissionIds: z.array(z.string().trim()),
@@ -26,15 +38,20 @@ export async function PUT(
         const role = await prisma.role.findUnique({ where: { id: roleId }, select: { departmentId: true } });
         if (!role) return NextResponse.json({ error: "Role not found" }, { status: 404 });
 
-        // Enforce the department-pool invariant: a role may only grant permissions
-        // inside its department's pool. The Role editor already offers pooled ids
-        // only, but it also re-sends any already-granted permission (so nothing is
-        // silently hidden) — without this filter those out-of-pool grants would be
-        // re-persisted, letting the role drift outside its pool. All-access
-        // departments pool everything (`isAllAccess` / null ids) → no filtering.
+        // Enforce the department-pool invariant: a role may only grant *pooled*
+        // permissions from its department's pool. Two carve-outs:
+        //   • already-granted-but-out-of-pool ids are NOT re-persisted (the editor
+        //     re-sends them so nothing is hidden — the filter drops them so the role
+        //     can't drift outside its pool);
+        //   • role-direct categories the editor offers OUTSIDE the pool lens (Works,
+        //     POS, Workspace links — see `isUnpooled`) are always allowed, else they
+        //     could never be saved for a non-all-access department.
+        // All-access departments pool everything (`isAllAccess` / null ids) → no filtering.
         const pool = await getDepartmentPool(role.departmentId);
         const allowed = pool && !pool.isAllAccess ? new Set(pool.permissionIds ?? []) : null;
-        const permissionIds = allowed ? data.permissionIds.filter((id) => allowed.has(id)) : data.permissionIds;
+        const permissionIds = allowed
+            ? data.permissionIds.filter((id) => allowed.has(id) || isUnpooled(id))
+            : data.permissionIds;
 
         // Replace full permission set for this role
         await prisma.rolePermission.deleteMany({ where: { roleId } });
