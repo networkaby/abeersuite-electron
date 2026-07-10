@@ -8,13 +8,16 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { sumPaise, sumShiftCashSalesPaise, buildShiftTenderBreakdown } from "@/modules/pos/lib/shiftMath";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { user, response } = await requirePermission(PERMISSIONS.POS_SHIFT_VIEW_BR);
+    // Any signed-in staff may ASK; access is decided per-shift below. The shift's
+    // own operator always reads their shift (they run it — open/close/drop need no
+    // oversight grant); everyone else needs the branch/org view permission.
+    const { user, response } = await requireAuth();
     if (response) return response;
 
     const { id: idStr } = await params;
@@ -62,12 +65,19 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         });
         if (!shift) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-        // Branch-scoped users can only see their own branches' shifts unless org/admin.
+        // Access model: the shift's own operator always reads their own shift (no
+        // oversight grant needed — they must be able to view + close it). Everyone
+        // else needs oversight: admin / view:org sees any branch; view:branch sees
+        // only their own branches' shifts.
+        const isOwner = shift.userId === user!.id;
         const isOrg =
             user!.permissions.includes(PERMISSIONS.ADMIN_BYPASS) ||
             user!.permissions.includes(PERMISSIONS.POS_SHIFT_VIEW_ORG);
-        if (!isOrg && !user!.branchIds.includes(shift.branchId)) {
-            return NextResponse.json({ error: "No access to this branch's shifts" }, { status: 403 });
+        const canViewBranch =
+            user!.permissions.includes(PERMISSIONS.POS_SHIFT_VIEW_BR) &&
+            user!.branchIds.includes(shift.branchId);
+        if (!isOwner && !isOrg && !canViewBranch) {
+            return NextResponse.json({ error: "No access to this shift" }, { status: 403 });
         }
 
         // Running cash-sales total — sum of debits to the counter till from
