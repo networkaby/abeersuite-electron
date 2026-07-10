@@ -56,6 +56,10 @@ export type CombinedRow = {
      *  surface this field. */
     createdAt?:  string;
     createdBy:   string | null;
+    /** Inventory rows only: a live (non-deleted) voucher references this one via
+     *  refVoucherId — i.e. it has been converted to its next document. Drives the
+     *  "Converted" mark + hides the Convert action. */
+    converted?:  boolean;
 };
 
 interface UseCombinedVouchersOptions {
@@ -73,6 +77,7 @@ type RawInv = {
     partyAccountId?: number | null;
     partyPersonId?:  number | null;
     partyCompanyId?: number | null;
+    converted?: boolean;
     totalAmount: number | string;
     deletedAt?: string | null; cancelledAt?: string | null;
     createdAt: string;
@@ -148,6 +153,7 @@ export function useCombinedVouchers(options: UseCombinedVouchersOptions = {}) {
                     cancelledAt: v.cancelledAt ?? null,
                     createdAt:   v.createdAt,
                     createdBy:   v.createdBy?.name ?? null,
+                    converted:   v.converted ?? false,
                 }));
                 const gl: CombinedRow[] = (glRes.data ?? []).map((v) => ({
                     id:          `gl-${v.id}`,

@@ -285,6 +285,11 @@ export function VoucherRegisterTable({
                                         ) : (
                                             <span>{r.reference}</span>
                                         )}
+                                        {r.converted && (
+                                            <span className="ml-1.5 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium not-italic text-emerald-700">
+                                                Converted
+                                            </span>
+                                        )}
                                     </td>
 
                                     {/* Branch — inv rows only; gl/je show — */}
@@ -353,6 +358,7 @@ export function VoucherRegisterTable({
                                                 kind={r.kind}
                                                 reference={r.reference}
                                                 deletedAt={r.deletedAt}
+                                                converted={r.converted}
                                                 onChanged={onChanged}
                                             />
                                         </td>

@@ -137,6 +137,15 @@ export async function GET(req: NextRequest) {
     );
     const creatorName = (v: { universalVoucher: { createdById: number } | null }) =>
         v.universalVoucher?.createdById != null ? { name: creatorById.get(v.universalVoucher.createdById) ?? null } : null;
+    // Live-conversion flag: a source is "converted" while a non-deleted, non-
+    // cancelled voucher references it via refVoucherId. Deleting/cancelling that
+    // target clears the flag (re-opens conversion). One grouped lookup.
+    const voucherIdsForConv = vouchers.map((v) => v.id);
+    const liveConvRefs = voucherIdsForConv.length === 0 ? [] : await prisma.voucherDetail.findMany({
+        where:  { refVoucherId: { in: voucherIdsForConv }, universalVoucher: { deletedAt: null, status: { not: "CANCELLED" } } },
+        select: { refVoucherId: true },
+    });
+    const convertedIds = new Set(liveConvRefs.map((r) => r.refVoucherId));
     const enriched = vouchers.map((v) => {
         // Derived party display fields from the frozen snapshot so list/register
         // clients keep reading `partyName` / `partyPhone` unchanged.
@@ -150,7 +159,7 @@ export async function GET(req: NextRequest) {
             createdAt:   v.universalVoucher?.createdAt,
         };
         if (v.partyId == null) {
-            return { ...v, type: v.universalVoucher?.type, branch: v.universalVoucher?.branch ?? null, date: v.universalVoucher?.date, reference: v.universalVoucher?.voucherNo ?? "", ...spineLifecycle, ...partyDisplay, createdBy: creatorName(v), partyAccountId: null, partyPersonId: null, partyCompanyId: null };
+            return { ...v, type: v.universalVoucher?.type, branch: v.universalVoucher?.branch ?? null, date: v.universalVoucher?.date, reference: v.universalVoucher?.voucherNo ?? "", ...spineLifecycle, ...partyDisplay, createdBy: creatorName(v), converted: convertedIds.has(v.id), partyAccountId: null, partyPersonId: null, partyCompanyId: null };
         }
         // Same partyId may resolve as either a Person or a Company id depending
         // on which lookup matches. Person wins when both are set (shouldn't
@@ -168,6 +177,7 @@ export async function GET(req: NextRequest) {
             ...spineLifecycle,   // 5D-8: status/deletedAt/cancelledAt/createdAt on spine
             ...partyDisplay,
             createdBy:       creatorName(v),
+            converted:       convertedIds.has(v.id),
             partyAccountId:  accFromPerson ?? accFromCompany ?? null,
             partyPersonId:   accFromPerson  != null ? v.partyId : null,
             partyCompanyId:  accFromPerson  == null && accFromCompany != null ? v.partyId : null,
@@ -468,11 +478,13 @@ export async function POST(req: NextRequest) {
         resolvedAccountId = (await prisma.account.findUnique({ where: { companyId: partyId }, select: { id: true } }))?.id ?? null;
     }
 
-    // Office SALES_ORDER rides the unified Orders pipeline (P7) so it shows on the
-    // Orders board alongside counter + online orders.
+    // Orders ride the unified Orders pipeline (P7) so they show on the Orders board
+    // AND get an entry stage (New) — which is what makes them editable (order edits
+    // are gated to New / Under-Review). Both office SALES_ORDER and counter POS_ORDER
+    // need it; without the stage a (e.g. converted) order opens non-editable.
     let orderPipelineId: string | null = null;
     let orderStatusId: string | null = null;
-    if (type === "SALES_ORDER") {
+    if (type === "SALES_ORDER" || type === "POS_ORDER") {
         const op = await getOrderPipeline(prisma);
         orderPipelineId = op?.id ?? null;
         orderStatusId = orderEntryStatus(op);

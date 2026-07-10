@@ -23,8 +23,8 @@ export async function GET(_req: Request, { params }: Params) {
     const voucherRow = await prisma.voucherDetail.findUnique({
         where: { id: Number(id) },
         include: {
-            // 5D-2 creator + 5D-6 ref + 5D-11 type + 5D-12 branch live on the spine.
-            universalVoucher: { select: { createdById: true, voucherNo: true, type: true, branchId: true, branch: { select: { id: true, name: true } } } },
+            // 5D-2 creator + 5D-6 ref + 5D-11 type + 5D-12 branch + 5D-4 party ledger live on the spine.
+            universalVoucher: { select: { createdById: true, voucherNo: true, type: true, branchId: true, partyAccountId: true, branch: { select: { id: true, name: true } } } },
             // refVoucher powers parent-link surfaces — "Replaces <old ref>"
             // for a SALE_RETURN against a SALE, or "Linked to PO-…" on a GRN.
             refVoucher: { select: { id: true, universalVoucher: { select: { voucherNo: true, type: true } } } },   // 5D-11 type on spine
@@ -67,6 +67,9 @@ export async function GET(_req: Request, { params }: Params) {
         // 5D-6/5D-11/5D-12: the user-facing number + type + branch come from the spine now.
         type:         voucher.universalVoucher?.type,
         branchId:     voucher.universalVoucher?.branchId ?? null,
+        // 5D-4: the canonical party ledger lives on the spine — surface it as
+        // `accountId` so edit-mode hydration (POS screen, forms) can load the customer.
+        accountId:    voucher.universalVoucher?.partyAccountId ?? null,
         branch:       voucher.universalVoucher?.branch ?? null,
         reference:    voucher.universalVoucher?.voucherNo ?? "",
         refVoucher:   voucher.refVoucher ? { id: voucher.refVoucher.id, type: voucher.refVoucher.universalVoucher?.type, reference: voucher.refVoucher.universalVoucher?.voucherNo ?? "" } : null,

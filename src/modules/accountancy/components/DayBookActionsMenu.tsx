@@ -21,7 +21,7 @@ import { useRouter } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
 import { extractApiError } from "@/shared/lib/api";
-import { MoreVertical, Pencil, Ban, Trash2, Copy, Undo2, AlertTriangle, Printer, FileText } from "lucide-react";
+import { MoreVertical, Pencil, Ban, Trash2, Copy, Undo2, AlertTriangle, Printer, FileText, ArrowRightLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -35,6 +35,7 @@ import {
 import type { CombinedSource } from "@/modules/accountancy/hooks/useCombinedVouchers";
 import { apiBase, referenceHref, receiptHref, type ReceiptVariant } from "@/modules/accountancy/lib/voucherUrls";
 import { stashDuplicate, todayLocalISO, type DuplicateLine } from "@/modules/accountancy/lib/duplicate";
+import { convertTargets } from "@/modules/accountancy/lib/convertMap";
 
 // ── Props ──────────────────────────────────────────────────────────────────
 
@@ -46,6 +47,9 @@ interface Props {
     /** Soft-deleted? When set, the menu offers Restore + Hard Delete instead
      *  of Edit / Cancel / Delete / Duplicate. */
     deletedAt?: string | null;
+    /** Already converted (a live voucher references it)? Hides the Convert action
+     *  — delete that target to convert again. */
+    converted?: boolean;
     /** Fired after any successful action so the caller can reload. */
     onChanged?: () => void;
 }
@@ -55,7 +59,7 @@ type ConfirmAction = "cancel" | "hard-delete" | null;
 // ── Component ─────────────────────────────────────────────────────────────
 
 export function DayBookActionsMenu({
-    rawId, source, kind, reference, deletedAt, onChanged,
+    rawId, source, kind, reference, deletedAt, converted, onChanged,
 }: Props) {
     const router = useRouter();
     const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
@@ -164,6 +168,27 @@ export function DayBookActionsMenu({
         }
     };
 
+    // ── Convert (generic voucher conversion) ───────────────────────────────
+    // Only inventory documents convert (estimates / orders → next document); the
+    // allowed targets come from the shared CONVERT_MAP. Posts nothing itself — the
+    // convert API creates the target and returns its editable-form URL.
+    const targets = source === "inv" && !converted ? convertTargets(kind) : [];
+    const convert = async (targetKind: string) => {
+        setBusy(true);
+        try {
+            const { data } = await axios.post<{ editUrl: string | null; posted?: boolean; warning?: string | null }>(`${base}/convert`, { targetKind });
+            if (data.warning) toast.warning(data.warning);
+            else toast.success(data.posted ? "Converted & posted" : "Converted");
+            // Stay in the current list (Day Book / register) and reload it — the new
+            // posted voucher appears and the source flips to "Converted".
+            onChanged?.();
+        } catch (e: unknown) {
+            toast.error(extractApiError(e, "Convert failed"));
+        } finally {
+            setBusy(false);
+        }
+    };
+
     // ── Reason-dialog copy ──────────────────────────────────────────────────
     const dialogCopy = (() => {
         switch (confirmAction) {
@@ -237,6 +262,16 @@ export function DayBookActionsMenu({
                             <DropdownMenuItem onSelect={() => void duplicate()} disabled={busy}>
                                 <Copy className="size-4" /> Duplicate
                             </DropdownMenuItem>
+                            {targets.length > 0 && (
+                                <>
+                                    <DropdownMenuSeparator />
+                                    {targets.map((t) => (
+                                        <DropdownMenuItem key={t.kind} onSelect={() => void convert(t.kind)} disabled={busy}>
+                                            <ArrowRightLeft className="size-4" /> Convert to {t.label}
+                                        </DropdownMenuItem>
+                                    ))}
+                                </>
+                            )}
                         </>
                     )}
                 </DropdownMenuContent>

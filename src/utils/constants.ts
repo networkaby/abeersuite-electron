@@ -245,7 +245,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         ],
         children: [
             { label: "Daybook", icon: ClipboardList, href: "/office/accountancy/reports/day-book", permission: "finance:voucher:create" },
-            // { label: "Optional Vouchers", icon: PackageCheck, href: "/office/accountancy/reports/optional-vouchers", permission: "finance:voucher:create" },
+            { label: "Orders n Estimates", icon: PackageCheck, href: "/office/accountancy/orders-estimates", permission: "finance:voucher:create" },
             { label: "Pending Inventory", icon: ClipboardList, href: "/office/accountancy/reports/pending-vouchers", permission: "finance:voucher:create" },
             { label: "Stock Summary", icon: BarChart3, href: "/office/inventory/stock-summary", permission: "inventory:manage" },
             { label: "Account Ledger", icon: BookOpen, href: "/office/accountancy/account-ledgers", permission: "finance:voucher:create" },
@@ -257,7 +257,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Profit & Loss A/c", icon: BookOpen, href: "/office/accountancy/reports/profit-loss" },
             // GST Reports moved to the Compliance module (see below).
 
-            // { label: "Estimates", icon: ScrollText, href: "/vouchers/estimates" },
+            // { label: "Estimates", icon: ScrollText, href: "/office/accountancy/estimates" },
 
             // { label: "Financial Insights", icon: ChartArea, href: "/office/accountancy/reports" },
             {
