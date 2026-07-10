@@ -32,9 +32,9 @@ export async function GET(req: NextRequest) {
 
     if (types.length === 0) return NextResponse.json({ rows: [] });
 
-    let branchFilter: { branchId?: string } = {};
+    let activeBranchId: string;
     try {
-        branchFilter = { branchId: resolveActiveBranchId(req, session) };
+        activeBranchId = resolveActiveBranchId(req, session);
     } catch (e) {
         if (e instanceof BranchAccessError)
             return NextResponse.json({ error: e.message }, { status: 400 });
@@ -59,10 +59,9 @@ export async function GET(req: NextRequest) {
 
     const rows = await prisma.voucherDetail.findMany({
         where: {
-            // 5D-8 lifecycle + 5D-11 type on spine
-            universalVoucher: { status: VoucherStatus.POSTED, deletedAt: null, type: { in: types } },
+            // 5D-8 lifecycle + 5D-11 type + 5D-12 branch all live on the spine
+            universalVoucher: { status: VoucherStatus.POSTED, deletedAt: null, type: { in: types }, branchId: activeBranchId },
             refVoucherId: null,   // not already linked to a source voucher
-            ...branchFilter,
             ...partyFilter,
         },
         orderBy: [{ universalVoucher: { date: "desc" } }, { id: "desc" }],   // 5D-10
