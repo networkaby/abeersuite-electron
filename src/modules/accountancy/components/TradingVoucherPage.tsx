@@ -195,6 +195,9 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
     // PATCH on save. Set once on mount and locked in; subsequent param
     // changes do not retrigger the fetch (would discard user edits).
     const voucherIdParam = searchParams.get("voucherId");
+    // parentId → deep-link "convert from parent" (Settle Challan → + Sale Invoice):
+    // the parent picker auto-selects it on mount and copies its lines + party.
+    const parentIdParam = searchParams.get("parentId");
     const editVoucherId = voucherIdParam ? Number(voucherIdParam) : null;
     const isEditing = editVoucherId != null && Number.isFinite(editVoucherId);
     const [editLoading, setEditLoading] = useState(isEditing);
@@ -538,7 +541,16 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                     },
                     quantity: String(typeof l.quantity === "string" ? parseFloat(l.quantity) : l.quantity),
                     freeQty: fmtNum(l.freeQty),
-                    rate: String(typeof l.rate === "string" ? parseFloat(l.rate) : l.rate),
+                    // DB stores the EXCLUSIVE rate. When the form displays tax-inclusive
+                    // prices, re-show the inclusive value (excl x (1+tax)) so the total
+                    // round-trips — save back-divides by (1+tax). Mirrors the parent-pick copy.
+                    rate: String((() => {
+                        const excl = typeof l.rate === "string" ? parseFloat(l.rate) : l.rate;
+                        const tr = typeof l.taxRate === "string" ? parseFloat(l.taxRate) : (l.taxRate ?? 0);
+                        // Round the inclusive display rate to 2dp so the client's per-line
+                        // total matches the server's recompute (avoids a 1-paise tender mismatch).
+                        return prefs.rateInclTax && tr > 0 ? Math.round(excl * (1 + tr / 100) * 100) / 100 : excl;
+                    })()),
                     // Restore MRP from the saved line (mrpPaise → ₹).
                     mrpRupees: (l as { mrpPaise?: number | null }).mrpPaise != null
                         ? String(((l as { mrpPaise?: number | null }).mrpPaise as number) / 100)
@@ -1879,6 +1891,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                                     pickedRef={parentLink?.reference ?? null}
                                     onClear={() => setParentLink(null)}
                                     label={copy.linkParentLabel ?? "Link to parent"}
+                                    autoPickId={!voucherIdParam && parentIdParam ? Number(parentIdParam) : undefined}
                                     onPick={(parent) => {
                                         setParentLink({ id: parent.id, reference: parent.reference });
                                         // Carry over the parent's party so the user doesn't re-pick.
@@ -1890,6 +1903,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                                                     : (copy.party === "Sundry Debtors" ? "customer" : "supplier"),
                                                 name: parent.partyName ?? "",
                                                 phone: parent.partyPhone ?? null,
+                                                accountId: parent.accountId ?? null,
                                             } as PickedParty);
                                         }
                                         // Save the parent's reference + date for downstream printing /
@@ -1914,7 +1928,14 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                                             },
                                             quantity:    String(Number(l.quantity) || 0),
                                             freeQty:     l.freeQty != null && Number(l.freeQty) > 0 ? String(Number(l.freeQty)) : "",
-                                            rate:        String(Number(l.rate) || 0),
+                                            // Stored rate is EXCLUSIVE → show inclusive when the form is in
+                                            // tax-inclusive mode, so the derived voucher's total matches the source.
+                                            rate:        String((() => {
+                                                const excl = Number(l.rate) || 0;
+                                                const tr = Number(l.taxRate) || 0;
+                                                // Round to 2dp so client + server totals agree (no 1-paise tender mismatch).
+                                                return prefs.rateInclTax && tr > 0 ? Math.round(excl * (1 + tr / 100) * 100) / 100 : excl;
+                                            })()),
                                             mrpRupees:   "",
                                             discountPct: Number(l.discountPct) > 0 ? String(Number(l.discountPct)) : "",
                                             discountAmt: Number(l.discountAmt) > 0 ? String(Number(l.discountAmt)) : "",
@@ -1942,24 +1963,6 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                                 </div>
                             )}
 
-                            {/* Cash / Bank ledger picker — Vyapar's "Payment Type"
-                                slot. Always visible in CASH mode; in CREDIT mode,
-                                only when the user has typed a Received amount > 0
-                                (the upfront cash has to land somewhere). */}
-                            {copy.showPaymentBlock && (payMode === "CASH" || received > 0) && cashBankAccounts.length > 0 && (
-                                <div className="space-y-1">
-                                    <label className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">
-                                        {copy.cashLedgerLabel}
-                                    </label>
-                                    <GlAccountCombobox
-                                        value={paymentAccount?.id ?? null}
-                                        onChange={setPaymentAccount}
-                                        accounts={cashBankAccounts}
-                                        placeholder="Cash in Hand"
-                                        className="w-56"
-                                    />
-                                </div>
-                            )}
                             <div>
                                 <Button
                                     variant="outline"
@@ -2090,7 +2093,22 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                                         Operator picks any cash / bank / wallet ledger; the system
                                         auto-fills the AR Balance row below for the remainder. */}
                                     {tenders.map((t, idx) => (
-                                        <div key={t.id} className="grid grid-cols-[1fr_auto_auto] gap-2 items-center">
+                                        <div key={t.id} className="grid grid-cols-[auto_1fr_auto_auto] gap-2 items-center">
+                                            {/* Full-payment tick — fills this tender to cover the whole balance. */}
+                                            <Checkbox
+                                                checked={Math.abs(balance) < 0.005}
+                                                title="Received in full via this method"
+                                                onCheckedChange={(v) => {
+                                                    if (v === true) {
+                                                        setTenders((rows) => {
+                                                            const others = rows.reduce((s, r, i) => i === idx ? s : s + (parseFloat(r.amount) || 0), 0);
+                                                            return rows.map((r, i) => i === idx ? { ...r, amount: Math.max(0, grandTotal - others).toFixed(2) } : r);
+                                                        });
+                                                    } else {
+                                                        setTenders((rows) => rows.map((r, i) => i === idx ? { ...r, amount: "" } : r));
+                                                    }
+                                                }}
+                                            />
                                             <GlAccountCombobox
                                                 value={t.accountId}
                                                 onChange={(acc) => setTenders((rows) => rows.map((r, i) => i === idx ? { ...r, account: acc, accountId: acc?.id ?? null } : r))}

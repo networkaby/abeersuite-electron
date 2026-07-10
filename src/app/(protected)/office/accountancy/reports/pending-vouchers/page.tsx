@@ -333,7 +333,7 @@ function SettleDialog({
                                 key={t}
                                 variant="outline"
                                 size="sm"
-                                onClick={() => { router.push(SETTLE_NEW_ROUTE[t]); onClose(); }}
+                                onClick={() => { router.push(`${SETTLE_NEW_ROUTE[t]}?parentId=${target.id}`); onClose(); }}
                             >
                                 + {SETTLING_LABEL[t]}
                             </Button>

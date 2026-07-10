@@ -39,6 +39,7 @@ export type ParentVoucherPayload = {
     partyId:    number | null;
     partyType:  string | null;
     partyPhone: string | null;
+    accountId:  number | null;   // party ledger — needed to book the derived voucher's AR/AP tender
     lines:      ParentVoucherLine[];
 };
 
@@ -57,12 +58,16 @@ export function ParentVoucherPicker({
     onPick,
     onClear,
     label,
+    autoPickId,
 }: {
     parentType: string;            // e.g. "PURCHASE_ORDER" | "SALES_ORDER" | "SALE" | "PURCHASE" | "GRN" | "CHALLAN"
     pickedRef: string | null;      // reference of the linked parent, or null
     onPick: (parent: ParentVoucherPayload) => void;
     onClear: () => void;
     label: string;                 // "Link to Purchase Order" / "Link to Sales Order" / …
+    /** When set, auto-selects this parent once on mount — e.g. arriving from the
+     *  Settle dialog's "+ Sale Invoice" with a challan to convert from. */
+    autoPickId?: number | null;
 }) {
     const [query, setQuery] = useState("");
     const [rows, setRows] = useState<ListRow[]>([]);
@@ -113,6 +118,16 @@ export function ParentVoucherPicker({
             setHydrating(false);
         }
     };
+
+    // Auto-pick a caller-supplied parent (deep-link from the Settle dialog), once,
+    // while nothing is linked yet.
+    const autoPickedRef = useRef(false);
+    useEffect(() => {
+        if (autoPickId == null || autoPickedRef.current || pickedRef) return;
+        autoPickedRef.current = true;
+        void handlePick(autoPickId);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [autoPickId]);
 
     return (
         <div ref={rootRef} className="relative">
