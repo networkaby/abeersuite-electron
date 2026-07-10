@@ -12,12 +12,13 @@ export interface ConvertTarget {
 }
 
 export const CONVERT_MAP: Record<string, ConvertTarget[]> = {
-    // Estimates → an order (commitment) or straight to a sale (invoice). POS
-    // estimates stay on the POS side (POS order / POS sale), not the office chain.
-    ESTIMATE:       [{ kind: "SALES_ORDER", label: "Sales Order" }, { kind: "SALE", label: "Sale" }],
+    // Estimates → an order (commitment), a delivery challan, or straight to a sale
+    // (invoice). POS estimates stay on the POS side, not the office chain.
+    ESTIMATE:       [{ kind: "SALES_ORDER", label: "Sales Order" }, { kind: "CHALLAN", label: "Challan" }, { kind: "SALE", label: "Sale" }],
     POS_ESTIMATE:   [{ kind: "POS_ORDER", label: "POS Order" }, { kind: "POS", label: "POS Sale" }],
-    // Orders (counter / office / online) → the sale invoice.
-    SALES_ORDER:    [{ kind: "SALE", label: "Sale" }],
+    // Office order → deliver goods (challan) or invoice (sale). Counter/online
+    // orders (POS/ONLINE) go straight to their sale.
+    SALES_ORDER:    [{ kind: "CHALLAN", label: "Challan" }, { kind: "SALE", label: "Sale" }],
     POS_ORDER:      [{ kind: "POS", label: "POS Sale" }],
     ONLINE_ORDER:   [{ kind: "SALE", label: "Sale" }],
     // Purchase order → the purchase bill, or a goods-received note.
