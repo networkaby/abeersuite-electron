@@ -7,6 +7,7 @@
 // and reloads (via onConverted) so the source flips to "Converted".
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
 import { ArrowRightLeft, Loader2 } from "lucide-react";
@@ -18,11 +19,17 @@ import { extractApiError } from "@/shared/lib/api";
 import { convertTargets } from "@/modules/accountancy/lib/convertMap";
 
 export function ConvertVoucherButton({ rawId, kind, onConverted }: { rawId: number; kind: string; onConverted?: () => void }) {
+    const router = useRouter();
     const [busy, setBusy] = useState(false);
     const targets = convertTargets(kind);
     if (targets.length === 0) return null;
 
     const run = async (targetKind: string) => {
+        // POS sale rings up at the till — open it pre-filled from this source.
+        if (targetKind === "POS") {
+            router.push(`/vouchers/pos/new?fromVoucherId=${rawId}`);
+            return;
+        }
         setBusy(true);
         try {
             const { data } = await axios.post<{ editUrl: string | null; posted?: boolean; warning?: string | null }>(

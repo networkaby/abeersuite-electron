@@ -174,6 +174,11 @@ export function DayBookActionsMenu({
     // convert API creates the target and returns its editable-form URL.
     const targets = source === "inv" && !converted ? convertTargets(kind) : [];
     const convert = async (targetKind: string) => {
+        // POS sale rings up at the till — open it pre-filled from this source.
+        if (targetKind === "POS") {
+            router.push(`/vouchers/pos/new?fromVoucherId=${rawId}`);
+            return;
+        }
         setBusy(true);
         try {
             const { data } = await axios.post<{ editUrl: string | null; posted?: boolean; warning?: string | null }>(`${base}/convert`, { targetKind });

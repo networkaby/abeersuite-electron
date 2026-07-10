@@ -127,6 +127,9 @@ const createSchema = z.object({
     // voucher so the bank/UPI statement matches 1:1. Requires an identified
     // customer; rejected alongside a gift-card redemption.
     collectSurplus: z.boolean().default(false),
+    // Convert-to-sale: the source estimate/order this POS sale was rung up from.
+    // Stored as refVoucherId so the source flips to "Converted".
+    sourceVoucherId: z.number().int().positive().optional(),
 });
 
 class GlPostFailedError extends Error {
@@ -558,6 +561,8 @@ export async function POST(req: Request) {
                 data: {
                     // 5D-11/5D-12: type + branch live on the spine (engineCreateSpine set them).
                     universalVoucherId: spineId,
+                    // Convert-to-sale link → marks the source estimate/order "Converted".
+                    refVoucherId:   body.sourceVoucherId ?? null,
                     // 5D-5/5D-8/5D-10: description + postedAt + status + date + 5D-4 party live on the spine.
                     partyJson:      buildPartyJson({ name: partyName }) ?? Prisma.DbNull,
                     partyType,

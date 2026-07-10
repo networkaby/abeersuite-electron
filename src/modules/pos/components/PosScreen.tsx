@@ -26,7 +26,7 @@ import type { PartySearchAndCreateHandle } from "@/shared/components/PartySearch
 
 type EditMeta = { charges: { accountId: number; description?: string; amount: number }[]; discountAmt: number; discountPct: number | null; shippingAmt: number; roundOff: number };
 
-export default function PosScreen({ editId }: { editId?: number }) {
+export default function PosScreen({ editId, fromId }: { editId?: number; fromId?: number }) {
     const router = useRouter();
     // Edit mode: reopen a posted POS sale here (instead of the office form, which
     // drops the POS-specific charge rows → wrong Balance Sheet). We hydrate only the
@@ -35,6 +35,9 @@ export default function PosScreen({ editId }: { editId?: number }) {
     // gift-card rows are preserved and the GL re-posts faithfully. A reduced total
     // over the unchanged payment lands as a credit on the customer's account.
     const isEdit = editId != null;
+    // Convert-to-sale: source estimate/order id whose customer + cart pre-fill a
+    // NEW sale; sent as sourceVoucherId on checkout so the source flips to "Converted".
+    const convertFromRef = useRef<number | null>(null);
     const editMeta = useRef<EditMeta | null>(null);
 
     // Focus/handle refs — owned here, shared with the hook and the shell.
@@ -115,6 +118,46 @@ export default function PosScreen({ editId }: { editId?: number }) {
         // One-shot hydration keyed on the voucher id; the helpers it calls are stable.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isEdit, editId]);
+
+    // ── Convert-to-sale: pre-load a source estimate/order into a NEW sale ───────
+    // "Convert to POS Sale" opens the till pre-filled (customer + cart) so the
+    // cashier reviews and rings it up. NOT edit mode — completing it creates a fresh
+    // POS sale that links back (sourceVoucherId → refVoucherId), marking the source
+    // "Converted".
+    useEffect(() => {
+        if (fromId == null || isEdit) return;
+        b.resetDraft();
+        let cancelled = false;
+        (async () => {
+            try {
+                const { data } = await axios.get<{
+                    accountId: number | null;
+                    lines: { productId: number; description: string | null; quantity: string | number; rate: string | number; taxRate: string | number; mrpPaise: number | null; savedSalePricePaise: number | null; product: { sku: string; name: string } }[];
+                }>(`/api/inventory/vouchers/${fromId}`);
+                if (cancelled) return;
+                convertFromRef.current = fromId;
+                if (data.accountId != null) await b.fetchSnapshot(data.accountId);
+                if (cancelled) return;
+                b.setCart(data.lines.map((l) => ({
+                    productId: l.productId,
+                    sku: l.product.sku,
+                    name: l.product.name,
+                    qty: Number(l.quantity),
+                    unitPrice: Number(l.rate),
+                    description: l.description?.split(" · ").slice(1).join(" · ") || "",
+                    taxRate: Number(l.taxRate),
+                    mrpPaise: l.mrpPaise,
+                    barcodePaise: l.savedSalePricePaise,
+                })));
+                toast.message("Loaded from source — review and ring up to complete the conversion.");
+            } catch (e: unknown) {
+                if (cancelled) return;
+                toast.error(extractApiError(e, "Could not load the document to convert"));
+            }
+        })();
+        return () => { cancelled = true; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [fromId, isEdit]);
 
     const generateInvoice = async (printAfter = false) => {
         const { snapshot, cart, lineRows, pay, splits, payAccountById } = b;
@@ -242,6 +285,7 @@ export default function PosScreen({ editId }: { editId?: number }) {
                 autoApply: !b.appliedCoupon && !!b.autoCoupon,     // let the server pick the best auto offer
                 giftCardCode: b.giftCard?.code ?? undefined,     // server draws min(balance, total) as a tender
                 collectSurplus: b.overpaid > 0.01,               // accept extra → Receipt voucher (clears dues FIFO, leftover = advance)
+                sourceVoucherId: convertFromRef.current ?? undefined,   // convert-to-sale link → source flips to "Converted"
                 charges: validCharges.map((c) => ({
                     accountId: c.accountId as number,
                     description: c.description.trim() || undefined,
@@ -268,6 +312,7 @@ export default function PosScreen({ editId }: { editId?: number }) {
             b.setDisplayHold("thankyou");
             setTimeout(() => b.setDisplayHold(null), 4500);
             b.resetAfterSubmit();
+            convertFromRef.current = null;   // conversion completed
             if (printAfter) {
                 const relayAvailable = await fetch("http://localhost:9191/health", { signal: AbortSignal.timeout(1000) })
                     .then((r) => r.ok).catch(() => false);
