@@ -46,7 +46,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
                 partyJson: true, partyType: true, partyId: true,
                 discountPct: true, discountAmt: true, shippingAmt: true, roundOff: true, totalAmount: true,
                 universalVoucherId: true,
-                universalVoucher: { select: { type: true, voucherNo: true, branchId: true, partyAccountId: true } },
+                universalVoucher: { select: { type: true, voucherNo: true, branchId: true, partyAccountId: true, description: true } },
             },
         });
         if (!source) return NextResponse.json({ error: "Voucher not found" }, { status: 404 });
@@ -102,6 +102,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         const sourceTotal     = source.totalAmount != null ? Number(source.totalAmount) : 0;
         const tenders         = needsTender && partyAccountId ? [{ accountId: partyAccountId, amount: sourceTotal }] : [];
 
+        // Narration: carry the source's narration onto the converted document,
+        // tagged with the source reference so the trail is visible.
+        const sourceRef       = source.universalVoucher?.voucherNo ?? `#${sourceId}`;
+        const sourceNarration = (source.universalVoucher?.description ?? "").trim();
+        const description     = sourceNarration
+            ? `${sourceNarration} · Converted from ${sourceRef}`
+            : `Converted from ${sourceRef}`;
+
         const today = new Date().toISOString().slice(0, 10);
         const cookie = req.headers.get("cookie") ?? "";
         // Carry percentage discounts only (they recompute identically); absolute
@@ -109,7 +117,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         const payload = {
             type:         targetKind,
             date:         today,
-            description:  `Converted from ${source.universalVoucher?.voucherNo ?? `#${sourceId}`}`,
+            description,
             branchId:     source.universalVoucher?.branchId ?? undefined,
             partyName:    readPartyName(source.partyJson) ?? undefined,
             partyType:    source.partyType ?? undefined,
