@@ -96,7 +96,7 @@ export async function GET(req: NextRequest) {
         orderBy: [{ universalVoucher: { date: "desc" } }, { id: "desc" }],   // 5D-10: date on spine
         include: {
             // 5D-2 creator + 5D-6 ref + 5D-8 lifecycle + 5D-10 date + 5D-12 branch live on the spine.
-            universalVoucher: { select: { createdById: true, voucherNo: true, date: true, type: true, status: true, deletedAt: true, cancelledAt: true, createdAt: true, branch: { select: { id: true, name: true } } } },   // +5D-11 type +5D-12 branch
+            universalVoucher: { select: { createdById: true, voucherNo: true, description: true, date: true, type: true, status: true, deletedAt: true, cancelledAt: true, createdAt: true, branch: { select: { id: true, name: true } } } },   // +5D-5 description +5D-11 type +5D-12 branch
             // refReturns = vouchers that reference THIS one via refVoucherId. For a
             // POS_ORDER / POS_ESTIMATE it means a sale was raised against it →
             // "converted" (not pending). (For SALE etc. it's the returns count.)
@@ -159,7 +159,7 @@ export async function GET(req: NextRequest) {
             createdAt:   v.universalVoucher?.createdAt,
         };
         if (v.partyId == null) {
-            return { ...v, type: v.universalVoucher?.type, branch: v.universalVoucher?.branch ?? null, date: v.universalVoucher?.date, reference: v.universalVoucher?.voucherNo ?? "", ...spineLifecycle, ...partyDisplay, createdBy: creatorName(v), converted: convertedIds.has(v.id), partyAccountId: null, partyPersonId: null, partyCompanyId: null };
+            return { ...v, type: v.universalVoucher?.type, branch: v.universalVoucher?.branch ?? null, date: v.universalVoucher?.date, reference: v.universalVoucher?.voucherNo ?? "", description: v.universalVoucher?.description ?? null, ...spineLifecycle, ...partyDisplay, createdBy: creatorName(v), converted: convertedIds.has(v.id), partyAccountId: null, partyPersonId: null, partyCompanyId: null };
         }
         // Same partyId may resolve as either a Person or a Company id depending
         // on which lookup matches. Person wins when both are set (shouldn't
@@ -174,6 +174,7 @@ export async function GET(req: NextRequest) {
             branch:          v.universalVoucher?.branch ?? null,   // 5D-12: branch on spine
             date:            v.universalVoucher?.date,   // 5D-10: date on spine
             reference:       v.universalVoucher?.voucherNo ?? "",   // 5D-6
+            description:     v.universalVoucher?.description ?? null,   // 5D-5: narration on spine
             ...spineLifecycle,   // 5D-8: status/deletedAt/cancelledAt/createdAt on spine
             ...partyDisplay,
             createdBy:       creatorName(v),
