@@ -8,8 +8,8 @@
 //   • FREE — no open shift: the last close (declared / variance / to-vault /
 //     closed-by) plus the till GL balance (carry-over float sitting in the drawer).
 //
-// Default scope: active branch. `branchId=all` requires pos:shift:view:org (or
-// admin:bypass), mirroring /api/pos/shifts.
+// Default scope: active branch (radius is always branch). `branchId=all` is
+// admin-only (admin:bypass), mirroring /api/pos/shifts.
 
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse, type NextRequest } from "next/server";
@@ -45,7 +45,7 @@ type LastClose = {
 };
 
 export async function GET(req: NextRequest) {
-    const { user, response } = await requirePermission(PERMISSIONS.POS_SHIFT_VIEW_BR);
+    const { user, response } = await requirePermission(PERMISSIONS.POS_SHIFT_VIEW);
     if (response) return response;
 
     try {
@@ -54,10 +54,10 @@ export async function GET(req: NextRequest) {
 
         let branchFilter: { branchId?: string } = {};
         if (branchParam === "all") {
-            const isOrg =
-                user!.permissions.includes(PERMISSIONS.ADMIN_BYPASS) ||
-                user!.permissions.includes(PERMISSIONS.POS_SHIFT_VIEW_ORG);
-            if (!isOrg) return NextResponse.json({ error: "Org-wide view not permitted" }, { status: 403 });
+            // Cross-branch view is admin-only (branch is the only radius).
+            if (!user!.permissions.includes(PERMISSIONS.ADMIN_BYPASS)) {
+                return NextResponse.json({ error: "Cross-branch view not permitted" }, { status: 403 });
+            }
         } else if (branchParam) {
             branchFilter = { branchId: branchParam };
         } else {

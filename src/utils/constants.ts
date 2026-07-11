@@ -164,12 +164,12 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         label: "POS",
         icon: Monitor,
         key: "pos",
-        permission: "pos:shift:view:branch",
+        permission: "pos:shift:view",
         dashboardHref: "/office/pos/shifts",
         pathPrefixes: ["/office/pos"],
         children: [
-            { label: "Shift Reports", href: "/office/pos/shifts", icon: Clock, permission: "pos:shift:view:branch" },
-            { label: "Counters", href: "/office/pos/counters", icon: ClipboardList, permission: "pos:shift:view:branch" },
+            { label: "Shift Reports", href: "/office/pos/shifts", icon: Clock, permission: "pos:shift:view" },
+            { label: "Counters", href: "/office/pos/counters", icon: ClipboardList, permission: "pos:shift:view" },
         ],
     },
 

@@ -1,7 +1,7 @@
 // /api/pos/shifts — shift lifecycle endpoints (list, open).
 //
-// GET  — list shifts (filterable). Default scope: active branch.
-//        `branchId=all` requires pos:shift:view:org (or admin:bypass).
+// GET  — list shifts (filterable). Default scope: active branch (radius is
+//        always branch). `branchId=all` is admin-only (admin:bypass).
 // POST — open a new shift at a specific counter. Body: { counterId, vaultTopUpPaise, notes? }.
 //        The counter's till account carries any existing balance (carry-over from
 //        the previous close). Only the `vaultTopUpPaise` portion triggers a Contra
@@ -31,7 +31,7 @@ const openSchema = z.object({
 
 // ── GET /api/pos/shifts ──────────────────────────────────────────────────────
 export async function GET(req: NextRequest) {
-    const { user, response } = await requirePermission(PERMISSIONS.POS_SHIFT_VIEW_BR);
+    const { user, response } = await requirePermission(PERMISSIONS.POS_SHIFT_VIEW);
     if (response) return response;
 
     try {
@@ -46,10 +46,10 @@ export async function GET(req: NextRequest) {
 
         let branchFilter: { branchId?: string } = {};
         if (branchParam === "all") {
-            const isOrg =
-                user!.permissions.includes(PERMISSIONS.ADMIN_BYPASS) ||
-                user!.permissions.includes(PERMISSIONS.POS_SHIFT_VIEW_ORG);
-            if (!isOrg) return NextResponse.json({ error: "Org-wide view not permitted" }, { status: 403 });
+            // Cross-branch view is admin-only (branch is the only radius).
+            if (!user!.permissions.includes(PERMISSIONS.ADMIN_BYPASS)) {
+                return NextResponse.json({ error: "Cross-branch view not permitted" }, { status: 403 });
+            }
         } else if (branchParam) {
             branchFilter = { branchId: branchParam };
         } else {

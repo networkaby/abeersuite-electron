@@ -158,8 +158,10 @@ export const PERMISSIONS = {
     POS_SHIFT_OPEN:                     "pos:shift:open",
     POS_SHIFT_CLOSE:                    "pos:shift:close",
     POS_SHIFT_DROP:                     "pos:shift:drop",
-    POS_SHIFT_VIEW_BR:                  "pos:shift:view:branch",
-    POS_SHIFT_VIEW_ORG:                 "pos:shift:view:org",
+    // Radius is always branch (decided by the holder's position), so shift view
+    // carries no scope suffix — flat pos:shift:view. Cross-branch ("all") view is
+    // admin-only. Replaced the old :branch/:org pair (retired with the org scope).
+    POS_SHIFT_VIEW:                     "pos:shift:view",
     POS_SHIFT_MANAGE:                   "pos:shift:manage",
 
     // Roles

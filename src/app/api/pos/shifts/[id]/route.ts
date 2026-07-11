@@ -67,16 +67,14 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
         // Access model: the shift's own operator always reads their own shift (no
         // oversight grant needed — they must be able to view + close it). Everyone
-        // else needs oversight: admin / view:org sees any branch; view:branch sees
-        // only their own branches' shifts.
+        // else needs oversight: admin sees any branch; pos:shift:view sees only
+        // their own branches' shifts (branch is the only radius).
         const isOwner = shift.userId === user!.id;
-        const isOrg =
-            user!.permissions.includes(PERMISSIONS.ADMIN_BYPASS) ||
-            user!.permissions.includes(PERMISSIONS.POS_SHIFT_VIEW_ORG);
+        const isAdminUser = user!.permissions.includes(PERMISSIONS.ADMIN_BYPASS);
         const canViewBranch =
-            user!.permissions.includes(PERMISSIONS.POS_SHIFT_VIEW_BR) &&
+            user!.permissions.includes(PERMISSIONS.POS_SHIFT_VIEW) &&
             user!.branchIds.includes(shift.branchId);
-        if (!isOwner && !isOrg && !canViewBranch) {
+        if (!isOwner && !isAdminUser && !canViewBranch) {
             return NextResponse.json({ error: "No access to this shift" }, { status: 403 });
         }
 
