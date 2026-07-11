@@ -19,6 +19,7 @@ import {
     forwardRef,
     useEffect,
     useImperativeHandle,
+    useMemo,
     useRef,
     useState,
     type KeyboardEvent as ReactKeyboardEvent,
@@ -152,6 +153,14 @@ function FieldError({ msg }: { msg: string | null }) {
 
 // ── Component ───────────────────────────────────────────────────────────────
 
+// A row in the dropdown is either a direct search hit (person/company) or a
+// company surfaced under a person because that person is linked to it — a
+// customer may bill to himself OR to any of his companies.
+type LinkedCompanyRef = { id: number; name: string; accountId: number | null };
+type DisplayRow =
+    | { kind: "hit"; hit: PartyHit }
+    | { kind: "linked"; company: LinkedCompanyRef; via: string };
+
 const EMPTY_NEW_PARTY = {
     name: "", phone: "", email: "", address: "",
     companyName: "", companyPhone: "", companyEmail: "", companyAddress: "",
@@ -208,8 +217,29 @@ export const PartySearchAndCreate = forwardRef<
     // browseHits is cleared in the blur handler (with delay) so clicks complete first.
     const activeHits = query.trim() ? hits : browseHits;
 
-    // Reset highlight when active hits change
-    useEffect(() => { setHighlightedHit(0); }, [activeHits]);
+    // Flatten hits into the navigable list, expanding each person's linked
+    // companies into their own selectable sub-rows. A company that is already a
+    // top-level hit (matched directly by name/phone) is not repeated, and each
+    // linked company shows once even if two persons link to it.
+    const displayRows = useMemo<DisplayRow[]>(() => {
+        const rows: DisplayRow[] = [];
+        const shownCompanyIds = new Set<number>(
+            activeHits.filter((h) => h.type === "company").map((h) => h.id),
+        );
+        for (const hit of activeHits) {
+            rows.push({ kind: "hit", hit });
+            if (hit.type !== "customer") continue;
+            for (const lc of hit.linkedCompanies ?? []) {
+                if (shownCompanyIds.has(lc.id)) continue;
+                shownCompanyIds.add(lc.id);
+                rows.push({ kind: "linked", company: lc, via: hit.name });
+            }
+        }
+        return rows;
+    }, [activeHits]);
+
+    // Reset highlight when the visible rows change
+    useEffect(() => { setHighlightedHit(0); }, [displayRows]);
 
     // ── Create dialog state ─────────────────────────────────────────────────
     const [openDialog, setOpenDialog] = useState(false);
@@ -302,6 +332,25 @@ export const PartySearchAndCreate = forwardRef<
         });
     };
 
+    // Pick a company that surfaced as a person's linked-company sub-row — the
+    // customer is billing to his company, not to himself. We only have the
+    // company's ledger from the search payload (no phone), which is enough for
+    // the voucher to hit the right party.
+    const pickCompany = (company: { id: number; name: string; accountId: number | null }) => {
+        if (company.accountId == null) {
+            toast.error(`${company.name} has no ledger account yet`);
+            return;
+        }
+        setQuery(company.name);
+        onPicked({
+            kind: "company",
+            id: company.id,
+            name: company.name,
+            phone: null,
+            accountId: company.accountId,
+        });
+    };
+
     const openNewParty = async () => { await doOpenNewParty(); };
     // Keep ref in sync each render so the imperative handle's closure isn't stale.
     openNewPartyRef.current = () => { void doOpenNewParty(); };
@@ -338,13 +387,19 @@ export const PartySearchAndCreate = forwardRef<
         setOpenDialog(true);
     };
 
-    // "New customer" sits at index `activeHits.length` in the navigable list
-    // whenever the query is long enough to allow creation. Keep this as the
+    // "New customer" sits after every hit + linked-company sub-row (index
+    // `displayRows.length`) in the navigable list whenever the query is long
+    // enough to allow creation. Keep this as the
     // single source of truth so arrow nav, Enter, and the rendered highlight
     // all agree on the row's position.
     const showNewCustomerRow = !locked && query.trim().length >= 2;
-    const newCustomerIndex = activeHits.length;
-    const navLength = activeHits.length + (showNewCustomerRow ? 1 : 0);
+    const newCustomerIndex = displayRows.length;
+    const navLength = displayRows.length + (showNewCustomerRow ? 1 : 0);
+
+    const pickRow = (row: DisplayRow) => {
+        if (row.kind === "hit") pickHit(row.hit);
+        else pickCompany(row.company);
+    };
 
     const onSearchKeyDown = async (e: ReactKeyboardEvent<HTMLInputElement>) => {
         if (e.key === "ArrowDown") {
@@ -364,9 +419,9 @@ export const PartySearchAndCreate = forwardRef<
                 openNewParty();
                 return;
             }
-            if (activeHits.length > 0) {
-                const hit = activeHits[highlightedHit] ?? activeHits[0];
-                if (hit) pickHit(hit);
+            if (displayRows.length > 0) {
+                const row = displayRows[highlightedHit] ?? displayRows[0];
+                if (row) pickRow(row);
                 return;
             }
             // No hits yet (debounce may not have fired) — fall through to the
@@ -537,7 +592,7 @@ export const PartySearchAndCreate = forwardRef<
         }
     };
 
-    const showDropdown = !locked && (activeHits.length > 0 || showNewCustomerRow);
+    const showDropdown = !locked && (displayRows.length > 0 || showNewCustomerRow);
 
     return (
         <div className={`relative ${className ?? ""}`}>
@@ -575,35 +630,64 @@ export const PartySearchAndCreate = forwardRef<
             )}
             {showDropdown && (
                 <ul className="absolute left-0 right-0 top-full z-50 mt-1 max-h-80 overflow-y-auto rounded-md border border-border bg-popover shadow-lg">
-                    {activeHits.map((c, i) => (
-                        <li key={`${c.type}-${c.id}`}>
-                            <button
-                                type="button"
-                                onClick={() => pickHit(c)}
-                                onMouseEnter={() => setHighlightedHit(i)}
-                                className={`flex w-full items-start gap-3 px-3 py-2 text-left text-sm ${i === highlightedHit ? "bg-muted" : "hover:bg-muted"}`}
-                            >
-                                {c.type === "company"
-                                    ? <Building2 size={14} className="mt-0.5 shrink-0 text-muted-foreground" />
-                                    : <User size={14} className="mt-0.5 shrink-0 text-muted-foreground" />}
-                                <div className="flex min-w-0 flex-1 flex-col">
-                                    <div className="flex items-center gap-2">
-                                        <span className="min-w-0 flex-1 truncate">{c.name}</span>
-                                        <Badge variant="secondary" className="shrink-0 text-[10px]">
-                                            {c.type === "company" ? "Company" : "Person"}
-                                        </Badge>
-                                    </div>
-                                    {(c.phone || c.address || c.email) && (
-                                        <div className="truncate text-[11px] text-muted-foreground">
-                                            {[c.phone, c.address?.replace(/\s*\n\s*/g, " · "), c.email]
-                                                .filter(Boolean)
-                                                .join(" · ")}
+                    {displayRows.map((row, i) => {
+                        if (row.kind === "linked") {
+                            const lc = row.company;
+                            return (
+                                <li key={`linked-${lc.id}`}>
+                                    <button
+                                        type="button"
+                                        onClick={() => pickCompany(lc)}
+                                        onMouseEnter={() => setHighlightedHit(i)}
+                                        className={`flex w-full items-start gap-3 py-2 pl-9 pr-3 text-left text-sm ${i === highlightedHit ? "bg-muted" : "hover:bg-muted"}`}
+                                    >
+                                        <Building2 size={14} className="mt-0.5 shrink-0 text-muted-foreground" />
+                                        <div className="flex min-w-0 flex-1 flex-col">
+                                            <div className="flex items-center gap-2">
+                                                <span className="min-w-0 flex-1 truncate">{lc.name}</span>
+                                                <Badge variant="outline" className="shrink-0 text-[10px]">
+                                                    Company
+                                                </Badge>
+                                            </div>
+                                            <div className="truncate text-[11px] text-muted-foreground">
+                                                bill to company · via {row.via}
+                                            </div>
                                         </div>
-                                    )}
-                                </div>
-                            </button>
-                        </li>
-                    ))}
+                                    </button>
+                                </li>
+                            );
+                        }
+                        const c = row.hit;
+                        return (
+                            <li key={`${c.type}-${c.id}`}>
+                                <button
+                                    type="button"
+                                    onClick={() => pickHit(c)}
+                                    onMouseEnter={() => setHighlightedHit(i)}
+                                    className={`flex w-full items-start gap-3 px-3 py-2 text-left text-sm ${i === highlightedHit ? "bg-muted" : "hover:bg-muted"}`}
+                                >
+                                    {c.type === "company"
+                                        ? <Building2 size={14} className="mt-0.5 shrink-0 text-muted-foreground" />
+                                        : <User size={14} className="mt-0.5 shrink-0 text-muted-foreground" />}
+                                    <div className="flex min-w-0 flex-1 flex-col">
+                                        <div className="flex items-center gap-2">
+                                            <span className="min-w-0 flex-1 truncate">{c.name}</span>
+                                            <Badge variant="secondary" className="shrink-0 text-[10px]">
+                                                {c.type === "company" ? "Company" : "Person"}
+                                            </Badge>
+                                        </div>
+                                        {(c.phone || c.address || c.email) && (
+                                            <div className="truncate text-[11px] text-muted-foreground">
+                                                {[c.phone, c.address?.replace(/\s*\n\s*/g, " · "), c.email]
+                                                    .filter(Boolean)
+                                                    .join(" · ")}
+                                            </div>
+                                        )}
+                                    </div>
+                                </button>
+                            </li>
+                        );
+                    })}
                     {showNewCustomerRow && (
                         <li className="border-t border-border">
                             <button
