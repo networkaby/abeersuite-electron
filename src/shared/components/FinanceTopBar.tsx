@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import axios from "axios";
 import { fmt } from "@/utils/constants";
+import { hasModuleNavAccess } from "@/shared/lib/auth/permissionScope";
 import { Wallet, Building2, TrendingUp, TrendingDown, RefreshCw, SquareChevronDown, SquareChevronUp, Wrench } from "lucide-react";
 import { toast } from "sonner";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -90,7 +91,7 @@ export default function FinanceTopBar({
 }: {
     permissions?: string[];
 }) {
-    const canView = permissions.includes(PERMISSIONS.ACCOUNTANCY_VIEW);
+    const canView = hasModuleNavAccess(permissions, "accountancy");
     const [data, setData] = useState<CashPosition | null>(null);
     const [loading, setLoading] = useState(false);
     const [recomputing, setRecomputing] = useState(false);

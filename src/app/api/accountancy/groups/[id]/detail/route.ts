@@ -10,7 +10,7 @@ import {
 // GET /api/accountancy/groups/[id]/detail
 // Returns the group, its child sub-groups (with rolled-up balances), and direct ledger accounts.
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requireAnyPermission(PERMISSIONS.ACCOUNTANCY_MASTERS_CREATE, PERMISSIONS.ACCOUNTANCY_MASTERS_EDIT, PERMISSIONS.ACCOUNTANCY_MASTERS_DELETE, PERMISSIONS.ACCOUNTANCY_VIEW);
+    const { response } = await requireAnyPermission(PERMISSIONS.ACCOUNTANCY_MASTERS_CREATE, PERMISSIONS.ACCOUNTANCY_MASTERS_EDIT, PERMISSIONS.ACCOUNTANCY_MASTERS_DELETE);
     if (response) return response;
 
     const { id } = await params;

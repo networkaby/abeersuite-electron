@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { getDeliveryPipeline } from "@/modules/delivery/lib/delivery";
@@ -8,7 +8,7 @@ import { readPartyName } from "@/shared/lib/accountancy/partySnapshot";
 
 // GET /api/deliveries → { stages, deliveries } for the Delivery board (P8).
 export async function GET() {
-    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW);
+    const { response } = await requireAuth();
     if (response) return response;
     try {
         const [pipeline, deliveryTickets] = await Promise.all([

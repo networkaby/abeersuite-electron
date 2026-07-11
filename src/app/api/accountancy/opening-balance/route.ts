@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
@@ -8,7 +8,7 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 // Returns: per-account opening balance rows, per-product opening stock rows,
 // totals, and the Difference in Opening Balances (auto-parked to suspense).
 export async function GET() {
-    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW);
+    const { response } = await requireModuleAccess("accountancy");
     if (response) return response;
 
     try {

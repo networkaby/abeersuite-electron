@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { toNumber } from "@/modules/accountancy/lib/balance";
@@ -18,7 +18,7 @@ import { readPartyName } from "@/shared/lib/accountancy/partySnapshot";
 const EDITABLE_STAGES: string[] = [ORDER_STAGE.NEW, ORDER_STAGE.UNDER_REVIEW];
 
 export async function GET(_req: Request, { params }: { params: Promise<{ source: string; id: string }> }) {
-    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW);
+    const { response } = await requireModuleAccess("orders");
     if (response) return response;
     const { source, id: idStr } = await params;
     const id = Number(idStr);
@@ -78,7 +78,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ source:
 }
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ source: string; id: string }> }) {
-    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW);
+    const { response } = await requireModuleAccess("orders");
     if (response) return response;
     const { source, id: idStr } = await params;
     const id = Number(idStr);

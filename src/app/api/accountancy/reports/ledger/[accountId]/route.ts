@@ -11,7 +11,7 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 // GET /api/accountancy/reports/ledger/[accountId]?from=YYYY-MM-DD&to=YYYY-MM-DD
 export async function GET(req: Request, { params }: { params: Promise<{ accountId: string }> }) {
-    const { response } = await requireModuleAccess("accountancy", PERMISSIONS.ACCOUNTANCY_VIEW);
+    const { response } = await requireModuleAccess("accountancy");
     if (response) return response;
 
     const { accountId } = await params;

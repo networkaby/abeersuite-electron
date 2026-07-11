@@ -14,7 +14,7 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 // duplicate every transaction. Set `?includeEngine=1` to list all spine rows
 // for debugging / admin views.
 export async function GET(req: Request) {
-    const { user, response } = await requireModuleAccess("accountancy", PERMISSIONS.ACCOUNTANCY_VIEW);
+    const { user, response } = await requireModuleAccess("accountancy");
     if (response) return response;
 
     const { searchParams } = new URL(req.url);

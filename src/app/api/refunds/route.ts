@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { getRefundPipeline } from "@/modules/refund/lib/refund";
@@ -8,7 +8,7 @@ import { readPartyName } from "@/shared/lib/accountancy/partySnapshot";
 
 // GET /api/refunds → { stages, refunds } for the Refund board (P9).
 export async function GET() {
-    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW);
+    const { response } = await requireAuth();
     if (response) return response;
     try {
         const [pipeline, refundTickets] = await Promise.all([

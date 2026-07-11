@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import {
     aggregateClosingAsOf, loadNormalBalanceMap,
@@ -21,7 +21,7 @@ const updateSchema = z.object({
 
 // GET /api/accountancy/gl-accounts/[id]
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW);
+    const { response } = await requireModuleAccess("accountancy");
     if (response) return response;
 
     const { id } = await params;
@@ -53,7 +53,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
 // PATCH /api/accountancy/gl-accounts/[id]
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW);
+    const { response } = await requireModuleAccess("accountancy");
     if (response) return response;
 
     const { id } = await params;
@@ -83,7 +83,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
 // DELETE /api/accountancy/gl-accounts/[id] — soft delete
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW);
+    const { response } = await requireModuleAccess("accountancy");
     if (response) return response;
 
     const { id } = await params;

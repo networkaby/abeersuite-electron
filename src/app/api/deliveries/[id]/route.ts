@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { handleApiError } from "@/shared/lib/api";
 
@@ -9,7 +9,7 @@ import { handleApiError } from "@/shared/lib/api";
 const CARRIERS = ["SHIPROCKET", "DTDC", "MARUTI", "OWN_BOY", "PICKUP"];
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW);
+    const { response } = await requireAuth();
     if (response) return response;
 
     const id = Number((await params).id);

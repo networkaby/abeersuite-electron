@@ -10,7 +10,7 @@ export async function GET(
     req: Request,
     { params }: { params: Promise<{ ledgerId: string }> },
 ) {
-    const { response } = await requireModuleAccess("accountancy", PERMISSIONS.ACCOUNTANCY_VIEW);
+    const { response } = await requireModuleAccess("accountancy");
     if (response) return response;
 
     const { ledgerId } = await params;

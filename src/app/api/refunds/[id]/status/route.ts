@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { assertRefundStatus, getRefundForPayout, markRefundPaid, REFUND_STAGE } from "@/modules/refund/lib/refund";
@@ -10,7 +10,7 @@ import { assertRefundStatus, getRefundForPayout, markRefundPaid, REFUND_STAGE } 
 // pay-back: a PAYMENT voucher (Dr customer / Cr cash-bank) reversing the advance
 // Receipt, via the canonical create+post voucher routes — no new GL math here.
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW);
+    const { response } = await requireAuth();
     if (response) return response;
 
     const id = Number((await params).id);

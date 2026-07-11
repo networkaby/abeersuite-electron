@@ -100,7 +100,7 @@ function sourceKind(s: TaxSource): "product" | "group" | "org-default" | null {
 }
 
 export async function GET() {
-    const { response } = await requireModuleAccess("accountancy", PERMISSIONS.ACCOUNTANCY_VIEW);
+    const { response } = await requireModuleAccess("accountancy");
     if (response) return response;
     try {
         const [products, groups, rates, org] = await Promise.all([

@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { assertOrderStatus, ORDER_STAGE, ORDER_RELEASE_STAGES } from "@/modules/order/lib/orderPipeline";
@@ -20,7 +20,7 @@ import { spawnRefund } from "@/modules/refund/lib/refund";
 export async function PATCH(req: Request, { params }: { params: Promise<{ source: string; id: string }> }) {
     // Gate on accountancy:view for now (the same gate POS/order creation uses);
     // a dedicated orders:manage permission can replace this later.
-    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW);
+    const { response } = await requireModuleAccess("orders");
     if (response) return response;
 
     const { source, id: idStr } = await params;

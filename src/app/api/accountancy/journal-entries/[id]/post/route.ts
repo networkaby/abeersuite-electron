@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { isBalanced, balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
 import { setSpineLifecycle } from "@/modules/accountancy/lib/transactionEngine";
 import { handleApiError } from "@/shared/lib/api";
@@ -8,7 +8,7 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 // POST /api/accountancy/journal-entries/[id]/post
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW);
+    const { response } = await requireModuleAccess("accountancy");
     if (response) return response;
 
     const { id } = await params;

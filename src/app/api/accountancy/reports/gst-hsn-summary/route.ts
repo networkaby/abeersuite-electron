@@ -9,7 +9,7 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 // HSN-wise rollup of posted inventory voucher lines. Lines whose product has
 // no HSN code fall into a "(no HSN)" bucket so the user notices the gap.
 export async function GET(req: Request) {
-    const { response } = await requireModuleAccess("accountancy", PERMISSIONS.ACCOUNTANCY_VIEW);
+    const { response } = await requireModuleAccess("accountancy");
     if (response) return response;
 
     const { searchParams } = new URL(req.url);

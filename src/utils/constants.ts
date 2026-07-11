@@ -213,7 +213,6 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         label: "Accountancy",
         icon: Calculator,
         key: "accountancy",
-        permission: "accountancy:view",
         dashboardHref: "/office/accountancy",
 
         pathPrefixes: ["/office/accountancy"],
@@ -389,13 +388,12 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         label: "Orders",
         icon: ListOrdered,
         key: "orders",
-        permission: "accountancy:view",
         dashboardHref: "/office/orders",
         pathPrefixes: ["/office/orders"],
         children: [
-            { label: "Orders board", icon: ListOrdered, href: "/office/orders", permission: "accountancy:view" },
-            { label: "Delivery", icon: Truck, href: "/office/orders/delivery", permission: "accountancy:view" },
-            { label: "Refunds", icon: Undo2, href: "/office/orders/refund", permission: "accountancy:view" },
+            { label: "Orders board", icon: ListOrdered, href: "/office/orders" },
+            { label: "Delivery", icon: Truck, href: "/office/orders/delivery" },
+            { label: "Refunds", icon: Undo2, href: "/office/orders/refund" },
         ],
     },
 
@@ -564,7 +562,6 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         label: "Compliance",
         icon: BadgePercent,
         key: "compliance",
-        permission: "accountancy:view",
         dashboardHref: "/office/accountancy/reports/gst",
         pathPrefixes: ["/office/accountancy/reports/gst"],
         children: [

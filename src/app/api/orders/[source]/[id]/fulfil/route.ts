@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { toNumber } from "@/modules/accountancy/lib/balance";
@@ -19,7 +19,7 @@ import { syncVoucherLink } from "@/modules/accountancy/lib/voucherLinks";
 // advances the order to Delivered. Counter/office orders (source="inv") for now;
 // online ShopOrder fulfilment (needs per-line tax resolution) is a follow-up.
 export async function POST(req: NextRequest, { params }: { params: Promise<{ source: string; id: string }> }) {
-    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW);
+    const { response } = await requireModuleAccess("orders");
     if (response) return response;
 
     const { source, id: idStr } = await params;
