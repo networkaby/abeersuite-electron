@@ -1322,7 +1322,7 @@ export default function UserProfilePage() {
     const sessionUserId = session?.user ? Number((session.user as { id?: string }).id) : undefined;
     const isSelf = sessionUserId !== undefined && sessionUserId === Number(id);
     const isAdmin = Boolean(
-        (session?.user as { permissions?: string[] })?.permissions?.includes("users:edit:org") ||
+        (session?.user as { permissions?: string[] })?.permissions?.includes("users:edit") ||
         (session?.user as { permissions?: string[] })?.permissions?.includes("admin:bypass")
     );
 

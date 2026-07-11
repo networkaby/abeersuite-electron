@@ -581,9 +581,9 @@ export const MODULE_SECTIONS: ModuleSection[] = [
 ];
 
 export const ADMIN_NAV: SettingsNavItem[] = [
-    { label: "Users", href: "/office/admin/users", icon: UserCog, permission: "users:edit:org" },
-    { label: "Org Chart", href: "/office/admin/org-chart", icon: Network, permission: "users:edit:org" },
-    { label: "Role", href: "/office/admin/role", icon: ShieldCheck, permission: "roles:edit:org" },
+    { label: "Users", href: "/office/admin/users", icon: UserCog, permission: "users:edit" },
+    { label: "Org Chart", href: "/office/admin/org-chart", icon: Network, permission: "users:edit" },
+    { label: "Role", href: "/office/admin/role", icon: ShieldCheck, permission: "roles:edit" },
     { label: "Branches", href: "/office/admin/branches", icon: Building2, permission: "branches:edit" },
     { label: "Departments", href: "/office/admin/departments", icon: Users, permission: "departments:edit" },
     { label: "Positions", href: "/office/admin/positions", icon: Briefcase, permission: "positions:edit" },

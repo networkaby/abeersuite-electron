@@ -29,7 +29,7 @@ export async function PUT(
     req: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const { response } = await requireAnyPermission(PERMISSIONS.ROLES_EDIT_ORG);
+    const { response } = await requireAnyPermission(PERMISSIONS.ROLES_EDIT);
     if (response) return response;
     try {
         const { id: roleId } = await params;

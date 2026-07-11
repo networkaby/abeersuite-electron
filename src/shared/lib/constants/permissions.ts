@@ -161,8 +161,8 @@ export const PERMISSIONS = {
 
     // Roles
     ROLES_CREATE:                       "roles:create",
-    ROLES_EDIT_ORG:                     "roles:edit:org",
-    ROLES_DELETE_ORG:                   "roles:delete:org",
+    ROLES_EDIT:                     "roles:edit",
+    ROLES_DELETE:                   "roles:delete",
     ROLES_MANAGE:                       "roles:manage",
 
     // Branches / Departments / Positions / POS Counters — split out of the
@@ -198,8 +198,8 @@ export const PERMISSIONS = {
 
     // Users
     USERS_CREATE:                       "users:create",
-    USERS_EDIT_ORG:                     "users:edit:org",
-    USERS_DELETE_ORG:                   "users:delete:org",
+    USERS_EDIT:                     "users:edit",
+    USERS_DELETE:                   "users:delete",
     USERS_MANAGE:                       "users:manage",
 
     // Administration — internal work board (pipeline-based todos)

@@ -18,7 +18,7 @@ const createRoleSchema = z.object({
 export async function GET() {
     // Viewing roles is allowed for anyone who can act on roles (manage or any action).
     const { response } = await requireAnyPermission(
-        PERMISSIONS.ROLES_CREATE, PERMISSIONS.ROLES_EDIT_ORG, PERMISSIONS.ROLES_DELETE_ORG,
+        PERMISSIONS.ROLES_CREATE, PERMISSIONS.ROLES_EDIT, PERMISSIONS.ROLES_DELETE,
     );
     if (response) return response;
     try {

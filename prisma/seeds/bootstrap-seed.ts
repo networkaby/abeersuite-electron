@@ -137,11 +137,11 @@ const PERMISSIONS = [
     { id: "pos-counters:edit", label: "Edit POS counters", module: "admin", description: "Edit POS counter records." },
     { id: "pos-counters:delete", label: "Delete POS counters", module: "admin", description: "Delete POS counter records." },
     { id: "users:create", label: "Create users", module: "admin", description: "Create user accounts." },
-    { id: "users:edit:org", label: "Edit users", module: "admin", description: "Edit user accounts." },
-    { id: "users:delete:org", label: "Delete users", module: "admin", description: "Delete user accounts." },
+    { id: "users:edit", label: "Edit users", module: "admin", description: "Edit user accounts." },
+    { id: "users:delete", label: "Delete users", module: "admin", description: "Delete user accounts." },
     { id: "roles:create", label: "Create roles", module: "admin", description: "Create role definitions." },
-    { id: "roles:edit:org", label: "Edit roles", module: "admin", description: "Edit role definitions and grants." },
-    { id: "roles:delete:org", label: "Delete roles", module: "admin", description: "Delete custom role definitions." },
+    { id: "roles:edit", label: "Edit roles", module: "admin", description: "Edit role definitions and grants." },
+    { id: "roles:delete", label: "Delete roles", module: "admin", description: "Delete custom role definitions." },
     { id: "inventory:manage", label: "Manage inventory masters", module: "admin", description: "Maintain units, categories, brands, warranty terms, and inventory product masters. Also gates pricing-strategy CRUD." },
 
     // crm

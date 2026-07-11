@@ -22,7 +22,7 @@ export async function GET(
     _: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const { response } = await requirePermission(PERMISSIONS.USERS_EDIT_ORG);
+    const { response } = await requirePermission(PERMISSIONS.USERS_EDIT);
     if (response) return response;
     try {
         const { id } = await params;
@@ -71,7 +71,7 @@ export async function POST(
     req: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const { response } = await requirePermission(PERMISSIONS.USERS_EDIT_ORG);
+    const { response } = await requirePermission(PERMISSIONS.USERS_EDIT);
     if (response) return response;
     try {
         const { id } = await params;

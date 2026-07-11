@@ -17,7 +17,7 @@ type Props = {
 export default async function PersonProfileView({ personId, backHref = "/office/customers" }: Props) {
     const session = await auth();
     const permissions = ((session?.user as { permissions?: string[] } | undefined)?.permissions ?? []);
-    const canEmergencyReset = permissions.includes(PERMISSIONS.USERS_EDIT_ORG) || permissions.includes(PERMISSIONS.ADMIN_BYPASS);
+    const canEmergencyReset = permissions.includes(PERMISSIONS.USERS_EDIT) || permissions.includes(PERMISSIONS.ADMIN_BYPASS);
 
     const person = await prisma.person.findUnique({
         where: { id: personId },

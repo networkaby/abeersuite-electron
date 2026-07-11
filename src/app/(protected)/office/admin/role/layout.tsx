@@ -3,6 +3,6 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 export default makePermissionLayout([
     PERMISSIONS.ROLES_CREATE,
-    PERMISSIONS.ROLES_EDIT_ORG,
-    PERMISSIONS.ROLES_DELETE_ORG,
+    PERMISSIONS.ROLES_EDIT,
+    PERMISSIONS.ROLES_DELETE,
 ]);
