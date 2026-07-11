@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextRequest, NextResponse } from "next/server";
-import { requireAnyPermission, requireAuth } from "@/shared/lib/auth/permissions";
+import { requirePermission, requireAuth } from "@/shared/lib/auth/permissions";
 import { invBomCreateSchema } from "@/shared/lib/schemas/bomSchemas";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
 
 // POST /api/inventory/boms
 export async function POST(req: Request) {
-    const { response } = await requireAnyPermission(PERMISSIONS.INVENTORY_MASTERS_CREATE, PERMISSIONS.INVENTORY_MANAGE);
+    const { response } = await requirePermission(PERMISSIONS.INVENTORY_MASTERS_CREATE);
     if (response) return response;
     try {
         const { data, error } = await validateRequest(req, invBomCreateSchema);

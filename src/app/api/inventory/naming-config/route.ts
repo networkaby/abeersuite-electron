@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
 import { invNamingConfigUpdateSchema } from "@/shared/lib/schemas/inventorySchemas";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -11,7 +11,9 @@ import { DEFAULT_NAMING_CONFIG } from "@/modules/inventory/lib/productName";
 // the first save. PUT upserts (no POST, no [id]).
 
 export async function GET() {
-    const { response } = await requirePermission(PERMISSIONS.INVENTORY_MANAGE);
+    // Read is open to any signed-in user: every product-creating role needs the
+    // naming template to auto-generate names. Writes stay behind inventory:manage.
+    const { response } = await requireAuth();
     if (response) return response;
     try {
         const row = await prisma.invNamingConfig.findFirst({ orderBy: { id: "asc" } });

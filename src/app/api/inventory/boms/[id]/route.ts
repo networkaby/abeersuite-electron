@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireAnyPermission, requireAuth } from "@/shared/lib/auth/permissions";
+import { requirePermission, requireAuth } from "@/shared/lib/auth/permissions";
 import { invBomUpdateSchema } from "@/shared/lib/schemas/bomSchemas";
 import { handleApiError, validateRequest, parseIdParam } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -28,7 +28,7 @@ export async function GET(_req: Request, { params }: Params) {
 }
 
 export async function PATCH(req: Request, { params }: Params) {
-    const { response } = await requireAnyPermission(PERMISSIONS.INVENTORY_MASTERS_EDIT, PERMISSIONS.INVENTORY_MANAGE);
+    const { response } = await requirePermission(PERMISSIONS.INVENTORY_MASTERS_EDIT);
     if (response) return response;
     try {
         const { id, error: idError } = await parseIdParam(params);
@@ -66,7 +66,7 @@ export async function PATCH(req: Request, { params }: Params) {
 }
 
 export async function DELETE(_req: Request, { params }: Params) {
-    const { response } = await requireAnyPermission(PERMISSIONS.INVENTORY_MASTERS_DELETE, PERMISSIONS.INVENTORY_MANAGE);
+    const { response } = await requirePermission(PERMISSIONS.INVENTORY_MASTERS_DELETE);
     if (response) return response;
     try {
         const { id, error } = await parseIdParam(params);

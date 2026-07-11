@@ -68,6 +68,11 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
         ...voucherPerms(["create", "post", "cancel", "delete"]),
         "finance:allocation:manage",
         "inventory:manage",
+        // inventory:manage no longer passes product/masters CRUD routes — the
+        // granular keys below are required (manage keeps only admin/config:
+        // naming-convention writes, item import, pricing, voucher-register nav).
+        "products:create", "products:edit", "products:delete",
+        "inventory:masters:create", "inventory:masters:edit", "inventory:masters:delete",
         "inventory:view:org", "inventory:edit:branch",
         "inventory:voucher:cancel", "inventory:voucher:delete",
         "pos:shift:open", "pos:shift:close", "pos:shift:drop",

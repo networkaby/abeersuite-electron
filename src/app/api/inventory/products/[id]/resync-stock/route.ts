@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireAnyPermission } from "@/shared/lib/auth/permissions";
+import { requirePermission } from "@/shared/lib/auth/permissions";
 import { toNumber } from "@/modules/accountancy/lib/balance";
 import { handleApiError, parseIdParam } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -15,7 +15,7 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 // Returns the before/after values per branch so the caller can verify
 // the drift was real.
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requireAnyPermission(PERMISSIONS.PRODUCTS_EDIT, PERMISSIONS.INVENTORY_MANAGE);
+    const { response } = await requirePermission(PERMISSIONS.PRODUCTS_EDIT);
     if (response) return response;
     try {
         const { id, error } = await parseIdParam(params);

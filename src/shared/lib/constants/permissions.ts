@@ -134,9 +134,11 @@ export const PERMISSIONS = {
     INVENTORY_VOUCHER_DELETE:           "inventory:voucher:delete",
     INVENTORY_VOUCHER_HARD_DELETE:      "inventory:voucher:hard-delete",
     // Inventory module pages — Products (the catalog) and Masters (the 8 setup
-    // tables, gated together). View rides the sidebar link; inventory:manage stays
-    // the umbrella (each key OR inventory:manage passes the route). Product tax
-    // fields are still carved out separately as compliance:tax:edit.
+    // tables, gated together). View rides the sidebar link; these granular keys
+    // are the ONLY gates on the CRUD routes (inventory:manage no longer passes
+    // them — it remains only for inventory admin/config: naming-convention writes,
+    // item import, pricing pages, voucher-register nav). Product tax fields are
+    // still carved out separately as compliance:tax:edit.
     PRODUCTS_CREATE:                    "products:create",
     PRODUCTS_EDIT:                      "products:edit",
     PRODUCTS_DELETE:                    "products:delete",

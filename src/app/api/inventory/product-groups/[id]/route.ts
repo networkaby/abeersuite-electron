@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireAnyPermission } from "@/shared/lib/auth/permissions";
+import { requireAnyPermission, requirePermission } from "@/shared/lib/auth/permissions";
 import { invProductGroupUpdateSchema, TAX_CLASSIFICATION_FIELDS } from "@/shared/lib/schemas/inventorySchemas";
 import { prismaUniqueError } from "@/shared/lib/api";
 import { validateRequest } from "@/shared/lib/api";
@@ -35,7 +35,8 @@ async function wouldFormCycle(id: number, candidateParentId: number): Promise<bo
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
     // A body touching ONLY GST fields (the Tax Classification page's inline
     // edits) is allowed by the narrower compliance:tax:edit; anything that also
-    // touches other group fields (name, parent, active) needs inventory:manage.
+    // touches other group fields (name, parent, active) needs inventory:masters:edit
+    // — which also covers tax-only bodies (full edit implies tax edit).
     let peekedBody: Record<string, unknown> = {};
     try { peekedBody = await req.clone().json(); } catch { /* invalid JSON — validateRequest reports it below */ }
     const bodyKeys = Object.keys(peekedBody);
@@ -43,8 +44,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const isTaxOnly = bodyKeys.length > 0 && bodyKeys.every((k) => taxFieldSet.includes(k));
 
     const { response } = isTaxOnly
-        ? await requireAnyPermission(PERMISSIONS.COMPLIANCE_TAX_EDIT, PERMISSIONS.INVENTORY_MANAGE)
-        : await requireAnyPermission(PERMISSIONS.INVENTORY_MASTERS_EDIT, PERMISSIONS.INVENTORY_MANAGE);
+        ? await requireAnyPermission(PERMISSIONS.COMPLIANCE_TAX_EDIT, PERMISSIONS.INVENTORY_MASTERS_EDIT)
+        : await requirePermission(PERMISSIONS.INVENTORY_MASTERS_EDIT);
     if (response) return response;
     try {
         const { id, error: idError } = await parseIdParam(params);
@@ -85,7 +86,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 }
 
 export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requireAnyPermission(PERMISSIONS.INVENTORY_MASTERS_DELETE, PERMISSIONS.INVENTORY_MANAGE);
+    const { response } = await requirePermission(PERMISSIONS.INVENTORY_MASTERS_DELETE);
     if (response) return response;
     try {
         const { id, error } = await parseIdParam(params);

@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireAnyPermission } from "@/shared/lib/auth/permissions";
+import { requirePermission } from "@/shared/lib/auth/permissions";
 import { handleApiError, prismaUniqueError, validateRequest, parseIdParam, pickDefined } from "@/shared/lib/api";
 import { revalidateTag } from "next/cache";
 import { GST_RATES_TAG } from "../route";
@@ -15,7 +15,7 @@ const updateSchema = z.object({
 });
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requireAnyPermission(PERMISSIONS.INVENTORY_MASTERS_EDIT, PERMISSIONS.INVENTORY_MANAGE);
+    const { response } = await requirePermission(PERMISSIONS.INVENTORY_MASTERS_EDIT);
     if (response) return response;
     try {
         const { id, error: idError } = await parseIdParam(params);
@@ -41,7 +41,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 }
 
 export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requireAnyPermission(PERMISSIONS.INVENTORY_MASTERS_DELETE, PERMISSIONS.INVENTORY_MANAGE);
+    const { response } = await requirePermission(PERMISSIONS.INVENTORY_MASTERS_DELETE);
     if (response) return response;
     try {
         const { id, error } = await parseIdParam(params);
