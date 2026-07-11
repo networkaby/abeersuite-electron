@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { updateTaskSchema } from "@/shared/lib/schemas/taskSchema";
@@ -26,7 +26,7 @@ function flattenTaskDetail(t: { logs: LogRow[] } & Parameters<typeof flattenTask
 }
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission(PERMISSIONS.ADMINISTRATION_TASKS_VIEW);
+    const { response } = await requireModuleAccess("administration");
     if (response) return response;
     const { id } = await params;
     try {
@@ -39,7 +39,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 }
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { user, response } = await requirePermission(PERMISSIONS.ADMINISTRATION_TASKS_MANAGE);
+    const { user, response } = await requireModuleAccess("administration");
     if (response) return response;
     const { id } = await params;
     const taskId = Number(id);
@@ -128,7 +128,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 }
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission(PERMISSIONS.ADMINISTRATION_TASKS_MANAGE);
+    const { response } = await requireModuleAccess("administration");
     if (response) return response;
     const { id } = await params;
     try {

@@ -15,7 +15,7 @@ export async function DELETE(
     const { user, response } = await requireAuth();
     if (response) return response;
 
-    if (!isAdmin(user) && !hasPermission(user, PERMISSIONS.CUSTOMERS_HARD_DELETE)) {
+    if (!isAdmin(user) && !hasPermission(user, PERMISSIONS.CUSTOMERS_DELETE)) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

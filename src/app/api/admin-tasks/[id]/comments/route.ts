@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { createTaskCommentSchema } from "@/shared/lib/schemas/taskSchema";
@@ -8,7 +8,7 @@ import { buildTaskActor } from "@/modules/administration/lib/taskActor";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
     // Any viewer of the board may comment.
-    const { user, response } = await requirePermission(PERMISSIONS.ADMINISTRATION_TASKS_VIEW);
+    const { user, response } = await requireModuleAccess("administration");
     if (response) return response;
     const { id } = await params;
     try {

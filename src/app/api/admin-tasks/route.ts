@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { createTaskSchema } from "@/shared/lib/schemas/taskSchema";
@@ -64,7 +64,7 @@ export function flattenTask(t: TaskTicketRow) {
 }
 
 export async function GET(req: Request) {
-    const { response } = await requirePermission(PERMISSIONS.ADMINISTRATION_TASKS_VIEW);
+    const { response } = await requireModuleAccess("administration");
     if (response) return response;
     try {
         const { searchParams } = new URL(req.url);
@@ -81,7 +81,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-    const { user, response } = await requirePermission(PERMISSIONS.ADMINISTRATION_TASKS_MANAGE);
+    const { user, response } = await requireModuleAccess("administration");
     if (response) return response;
     try {
         const { data, error } = await validateRequest(req, createTaskSchema);

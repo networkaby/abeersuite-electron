@@ -10,7 +10,7 @@ export default async function CustomerToolsPage() {
     const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
     const canHardDelete =
         permissions.includes(PERMISSIONS.ADMIN_BYPASS) ||
-        permissions.includes(PERMISSIONS.CUSTOMERS_HARD_DELETE);
+        permissions.includes(PERMISSIONS.CUSTOMERS_DELETE);
 
     return (
         <ScrollArea className="h-full" type="always">

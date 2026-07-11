@@ -1,6 +1,6 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { hasModuleNavAccess } from "@/shared/lib/auth/permissionScope";
 import { PathBreadcrumb } from "@/shared/components/PathBreadcrumb";
 
 // Area layout for /office/administration — permission gate (same as
@@ -10,10 +10,7 @@ import { PathBreadcrumb } from "@/shared/components/PathBreadcrumb";
 export default async function AdministrationLayout({ children }: { children: React.ReactNode }) {
     const session = await auth();
     const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
-    if (
-        !permissions.includes(PERMISSIONS.ADMIN_BYPASS) &&
-        !permissions.includes(PERMISSIONS.ADMINISTRATION_TASKS_VIEW)
-    ) {
+    if (!hasModuleNavAccess(permissions, "administration")) {
         redirect("/office/work-flow-inbox");
     }
 

@@ -176,10 +176,10 @@ export async function requireVoucherPermission(
  * module layout guard so "has the nav → may load its data". Finer per-kind limits
  * (view/open) are applied inside the handler, later.
  */
-export async function requireModuleAccess(moduleKey: string, capabilityPermissionId: string): Promise<GuardResult> {
+export async function requireModuleAccess(moduleKey: string, capabilityPermissionId?: string): Promise<GuardResult> {
     const result = await requireAuth();
     if (result.response) return result;
-    if (hasModuleNavAccess(result.user.permissions, moduleKey) || hasPermission(result.user, capabilityPermissionId)) {
+    if (hasModuleNavAccess(result.user.permissions, moduleKey) || (capabilityPermissionId != null && hasPermission(result.user, capabilityPermissionId))) {
         return result;
     }
     return { user: null, response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };

@@ -1,6 +1,6 @@
 import { auth } from "@/auth";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { hasModuleNavAccess } from "@/shared/lib/auth/permissionScope";
 import { TaskBoard } from "@/modules/administration/components";
 
 /** Administration work board rides the seeded internal-management pipeline. */
@@ -12,9 +12,7 @@ export default async function AdministrationPage() {
         | { id?: string; permissions?: string[] }
         | undefined;
     const permissions = sessionUser?.permissions ?? [];
-    const canManage =
-        permissions.includes(PERMISSIONS.ADMIN_BYPASS) ||
-        permissions.includes(PERMISSIONS.ADMINISTRATION_TASKS_MANAGE);
+    const canManage = hasModuleNavAccess(permissions, "administration");
     const currentUserId = Number(sessionUser?.id ?? 0);
 
     const [stages, positionRows, myPositions] = await Promise.all([

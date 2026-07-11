@@ -515,14 +515,13 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         label: "Administration",
         icon: Settings,
         key: "administration",
-        permission: "administration:tasks:view",
         dashboardHref: "/office/administration",
         pathPrefixes: ["/office/administration"],
         createActions: [
-            { label: "New Task +", subtitle: "Add an internal work item", icon: ListChecks, variant: "default", href: "/office/administration?new=1", permission: "administration:tasks:manage" },
+            { label: "New Task +", subtitle: "Add an internal work item", icon: ListChecks, variant: "default", href: "/office/administration?new=1" },
         ],
         children: [
-            { label: "Work Board", icon: ListChecks, href: "/office/administration", permission: "administration:tasks:view" },
+            { label: "Work Board", icon: ListChecks, href: "/office/administration" },
             // Roadmap placeholders — not yet built:
 
         ],

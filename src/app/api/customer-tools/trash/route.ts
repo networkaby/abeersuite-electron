@@ -10,7 +10,7 @@ export async function GET() {
     if (response) return response;
 
     // Env super-admin (admin:bypass) OR explicit customers:hard-delete grant.
-    if (!isAdmin(user) && !hasPermission(user, PERMISSIONS.CUSTOMERS_HARD_DELETE)) {
+    if (!isAdmin(user) && !hasPermission(user, PERMISSIONS.CUSTOMERS_DELETE)) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
