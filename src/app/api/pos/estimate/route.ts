@@ -17,7 +17,7 @@ import { createPosQuoteVoucher, type PosQuoteBody } from "@/modules/pos/lib/posQ
  * Gated by the same permission as the POS sale — a cashier needs no deals:manage.
  */
 export async function POST(req: NextRequest) {
-    const { user, response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
+    const { user, response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW);
     if (response) return response;
 
     const session = await auth();

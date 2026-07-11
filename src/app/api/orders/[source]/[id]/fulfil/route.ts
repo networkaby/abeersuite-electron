@@ -19,7 +19,7 @@ import { syncVoucherLink } from "@/modules/accountancy/lib/voucherLinks";
 // advances the order to Delivered. Counter/office orders (source="inv") for now;
 // online ShopOrder fulfilment (needs per-line tax resolution) is a follow-up.
 export async function POST(req: NextRequest, { params }: { params: Promise<{ source: string; id: string }> }) {
-    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
+    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW);
     if (response) return response;
 
     const { source, id: idStr } = await params;

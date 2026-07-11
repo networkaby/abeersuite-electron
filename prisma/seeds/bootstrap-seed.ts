@@ -211,10 +211,8 @@ const PERMISSIONS = [
     { id: "finance:opening-balance:manage", label: "Manage opening balances", module: "finance", description: "Edit per-account opening balance and opening stock at the books-beginning date." },
 
     // inventory — branch-scoped view/edit + three-tier lifecycle on stock vouchers
-    { id: "inventory:view:branch", label: "View inventory (own branch)",   module: "inventory", description: "View vouchers, stock, and reports for the user's assigned branches." },
-    { id: "inventory:edit:branch", label: "Edit inventory (own branch)",   module: "inventory", description: "Create and post vouchers within the user's assigned branches." },
-    { id: "inventory:view:org",    label: "View inventory (all branches)", module: "inventory", description: "View inventory data across all branches." },
-    { id: "inventory:edit:org",    label: "Edit inventory (all branches)", module: "inventory", description: "Create and post vouchers for any branch." },
+    { id: "inventory:view", label: "View inventory", module: "inventory", description: "View vouchers, stock, and reports for the user's branch (radius is always branch; cross-branch view is admin-only)." },
+    { id: "inventory:edit", label: "Edit inventory", module: "inventory", description: "Create and post inventory vouchers (GRN / Challan / etc.) for the user's branch." },
     { id: "inventory:voucher:cancel",      label: "Cancel inventory vouchers",      module: "inventory", description: "Reverse stock + GL impact and mark CANCELLED. Generic fallback for the per-kind cancel keys." },
     { id: "inventory:voucher:delete",      label: "Delete inventory vouchers",      module: "inventory", description: "Soft-delete; reverses stock + GL impact. Recoverable via restore. Generic fallback for the per-kind delete keys." },
     { id: "inventory:voucher:hard-delete", label: "Hard-delete inventory vouchers", module: "inventory", description: "Physically remove with audit snapshot." },
@@ -256,21 +254,15 @@ const PERMISSIONS = [
     { id: "pos:shift:open",        label: "Open POS shift",                 module: "pos", description: "Open your own till session with an opening cash float." },
     { id: "pos:shift:close",       label: "Close POS shift",                module: "pos", description: "Declare physical cash count and hand over to manager (posts Contra)." },
     { id: "pos:shift:drop",        label: "Record mid-shift cash drop",     module: "pos", description: "Log cash dropped into the safe during an open shift." },
-    { id: "pos:shift:view:branch", label: "View POS shifts (own branch)",   module: "pos", description: "View shift report for the user's assigned branches." },
-    { id: "pos:shift:view:org",    label: "View POS shifts (all branches)", module: "pos", description: "View shift report across all branches." },
+    { id: "pos:shift:view", label: "View POS shifts", module: "pos", description: "View the shift report and counter board for the user's branch (cross-branch view is admin-only)." },
     { id: "pos:shift:manage",      label: "Manage POS shifts",              module: "pos", description: "Force-close stuck shifts, edit drops, override variance." },
 
     // accountancy — module-level CRUD gate (Owner / CA only)
-    { id: "accountancy:create:own",  label: "Create accountancy entries (own)",   module: "accountancy", description: "Create vouchers / invoices / journal entries within own scope." },
-    { id: "accountancy:view:own",    label: "View accountancy (own)",             module: "accountancy", description: "View accountancy data scoped to own records." },
-    { id: "accountancy:view:br",     label: "View accountancy (branch)",          module: "accountancy", description: "View accountancy data across the user's branch." },
-    { id: "accountancy:view:org",    label: "View accountancy (organisation)",    module: "accountancy", description: "View the full accountancy module across the organisation. This is the gate that shows / hides the Accountancy sidebar section." },
-    { id: "accountancy:edit:own",    label: "Edit accountancy (own)",             module: "accountancy", description: "Edit accountancy entries within own scope." },
-    { id: "accountancy:edit:br",     label: "Edit accountancy (branch)",          module: "accountancy", description: "Edit accountancy entries across the user's branch." },
-    { id: "accountancy:edit:org",    label: "Edit accountancy (organisation)",    module: "accountancy", description: "Edit any accountancy entry organisation-wide." },
-    { id: "accountancy:delete:own",  label: "Delete accountancy (own)",           module: "accountancy", description: "Delete own accountancy entries (subject to per-operation guards)." },
-    { id: "accountancy:delete:br",   label: "Delete accountancy (branch)",        module: "accountancy", description: "Delete branch-scoped accountancy entries." },
-    { id: "accountancy:delete:org",  label: "Delete accountancy (organisation)",  module: "accountancy", description: "Delete any accountancy entry organisation-wide." },
+    // Flat accountancy view — the single gate that shows/hides the Accountancy
+    // sidebar and guards its reads (radius is always branch). The old
+    // create/edit/delete + own/br/org ladder was retired: accountancy writes run
+    // through the voucher matrix (finance:voucher:*) and accountancy:masters:*.
+    { id: "accountancy:view",        label: "View accountancy",                   module: "accountancy", description: "View the Accountancy module (day-book, ledgers, reports, vouchers) for the user's branch. This is the gate that shows / hides the Accountancy sidebar section." },
     { id: "compliance:tax:edit", label: "Change tax classification", module: "accountancy", description: "Edit GST rate, HSN code, and taxability on inventory items and product groups from the Tax Classification page." },
     { id: "accountancy:masters:create", label: "Create accounting masters", module: "accountancy", description: "Create account groups and GL ledgers (chart of accounts)." },
     { id: "accountancy:masters:edit", label: "Edit accounting masters", module: "accountancy", description: "Edit account groups and GL ledgers." },

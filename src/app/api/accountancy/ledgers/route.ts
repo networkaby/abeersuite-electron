@@ -20,7 +20,7 @@ const createSchema = z.object({
 // Without groupId → pure GL accounts (no person/company), flat array (existing behaviour)
 // With groupId    → ALL account types in that group, paginated: { items, total }
 export async function GET(req: Request) {
-    const { response } = await requireAnyPermission(PERMISSIONS.ACCOUNTANCY_MASTERS_CREATE, PERMISSIONS.ACCOUNTANCY_MASTERS_EDIT, PERMISSIONS.ACCOUNTANCY_MASTERS_DELETE, PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
+    const { response } = await requireAnyPermission(PERMISSIONS.ACCOUNTANCY_MASTERS_CREATE, PERMISSIONS.ACCOUNTANCY_MASTERS_EDIT, PERMISSIONS.ACCOUNTANCY_MASTERS_DELETE, PERMISSIONS.ACCOUNTANCY_VIEW);
     if (response) return response;
 
     const { searchParams } = new URL(req.url);

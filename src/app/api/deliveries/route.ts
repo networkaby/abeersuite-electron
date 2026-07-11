@@ -8,7 +8,7 @@ import { readPartyName } from "@/shared/lib/accountancy/partySnapshot";
 
 // GET /api/deliveries → { stages, deliveries } for the Delivery board (P8).
 export async function GET() {
-    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
+    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW);
     if (response) return response;
     try {
         const [pipeline, deliveryTickets] = await Promise.all([

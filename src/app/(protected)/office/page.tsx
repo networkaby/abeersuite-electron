@@ -54,9 +54,9 @@ export default async function OfficePage() {
     // Repair permission layer is being rebuilt — gate the card on repair sidebar-nav
     // access (new visibility model) instead of the removed tickets:* permissions.
     const showRepair   = hasModuleNavAccess(user.permissions, "repair");
-    const showShowroom = can("pos:shift:open") || can("pos:shift:view:branch");
-    const showFinance  = can("accountancy:view:own") || can("finance:voucher:create");
-    const showDespatch = can("inventory:view:branch");
+    const showShowroom = can("pos:shift:open") || can("pos:shift:view");
+    const showFinance  = can("accountancy:view") || can("finance:voucher:create");
+    const showDespatch = can("inventory:view");
     const showHr       = can("users:manage");
 
     const anyCard = showAdmin || showRepair || showShowroom || showFinance || showDespatch || showHr;

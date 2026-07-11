@@ -18,9 +18,9 @@ import { spawnRefund } from "@/modules/refund/lib/refund";
 // stage must belong to P7 and (if the order already has a stage) be a SEEDED
 // StatusTransition from the current one.
 export async function PATCH(req: Request, { params }: { params: Promise<{ source: string; id: string }> }) {
-    // Gate on accountancy:view:org for now (the same gate POS/order creation uses);
+    // Gate on accountancy:view for now (the same gate POS/order creation uses);
     // a dedicated orders:manage permission can replace this later.
-    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
+    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW);
     if (response) return response;
 
     const { source, id: idStr } = await params;

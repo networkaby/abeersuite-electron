@@ -137,7 +137,7 @@ class GlPostFailedError extends Error {
 }
 
 export async function POST(req: Request) {
-    const { user, response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
+    const { user, response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW);
     if (response) return response;
 
     const { data, error } = await validateRequest(req, createSchema);

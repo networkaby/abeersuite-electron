@@ -30,7 +30,7 @@ function sumGroup(node: GroupNode | undefined): number {
 }
 
 export async function GET() {
-    const { response } = await requireModuleAccess("accountancy", PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
+    const { response } = await requireModuleAccess("accountancy", PERMISSIONS.ACCOUNTANCY_VIEW);
     if (response) return response;
 
     try {

@@ -6,7 +6,7 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 // GET /api/settings/account-groups — flat list of account groups for settings
 // selectors (e.g. the additional-cost pool group). Settings-scoped so a settings
-// admin without accountancy:view:org can still choose a group. Read-only.
+// admin without accountancy:view can still choose a group. Read-only.
 export async function GET() {
     const { response } = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
     if (response) return response;

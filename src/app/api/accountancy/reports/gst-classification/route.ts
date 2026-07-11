@@ -22,7 +22,7 @@ import {
 // Single round-trip — uses resolveProductTaxBatch so the catalog is resolved
 // in-memory after only three queries (products, groups, OrgDefaults).
 //
-// Permission: accountancy:view:org (same as other accountancy reports).
+// Permission: accountancy:view (same as other accountancy reports).
 // ─────────────────────────────────────────────────────────────────────────────
 
 const decimalToNumber = (v: unknown): number | null => {
@@ -100,7 +100,7 @@ function sourceKind(s: TaxSource): "product" | "group" | "org-default" | null {
 }
 
 export async function GET() {
-    const { response } = await requireModuleAccess("accountancy", PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
+    const { response } = await requireModuleAccess("accountancy", PERMISSIONS.ACCOUNTANCY_VIEW);
     if (response) return response;
     try {
         const [products, groups, rates, org] = await Promise.all([

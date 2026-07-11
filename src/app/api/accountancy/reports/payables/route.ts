@@ -13,7 +13,7 @@ export const maxDuration = 60;
 // Aggregates open bills under "Sundry Creditors" group by party,
 // with ageing buckets (0-30 / 30-60 / 60-90 / 90+).
 export async function GET(req: Request) {
-    const { response } = await requireModuleAccess("accountancy", PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
+    const { response } = await requireModuleAccess("accountancy", PERMISSIONS.ACCOUNTANCY_VIEW);
     if (response) return response;
 
     const { searchParams } = new URL(req.url);

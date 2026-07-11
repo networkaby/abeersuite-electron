@@ -11,7 +11,7 @@ import { WORKSPACE_NAV, MODULE_SECTIONS, ADMIN_NAV, SETTINGS_NAV } from "@/utils
  *
  * Permission family: `ui:sidebar:<moduleKey>:<linkKey>` — one id per nav link at
  * any depth. Kept separate from the "can do things here" keys (`customers:view`,
- * `accountancy:view:org`…) so visibility and capability stay independent.
+ * `accountancy:view`…) so visibility and capability stay independent.
  *
  * Derived from the Workspace group (WORKSPACE_NAV) + MODULE_SECTIONS + the two
  * "Admin Only" groups (ADMIN_NAV / SETTINGS_NAV) so the picker never drifts from

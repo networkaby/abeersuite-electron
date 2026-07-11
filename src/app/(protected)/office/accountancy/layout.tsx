@@ -8,7 +8,7 @@ export default async function AccountancyLayout({ children }: { children: React.
     // New model: having any Accountancy sidebar nav grant lets the user open the
     // module (they were given the UI). The capability check stays as an alternative
     // for capability-only users. Finer limits live inside each tool, not here.
-    if (!hasModuleNavAccess(perms, "accountancy") && !hasPermissionWithScope(perms, "accountancy:view:org")) {
+    if (!hasModuleNavAccess(perms, "accountancy") && !hasPermissionWithScope(perms, "accountancy:view")) {
         redirect("/office");
     }
     return <>{children}</>;

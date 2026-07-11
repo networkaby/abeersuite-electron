@@ -73,8 +73,8 @@ export const GENERIC_VOUCHER_PERMISSION: Record<VoucherAction, string> = {
 
 /** Generic inventory keys — additive fallback for inventory voucher kinds. */
 const GENERIC_INVENTORY_PERMISSION: Record<VoucherAction, string> = {
-    create: PERMISSIONS.INVENTORY_EDIT_BR,
-    post:   PERMISSIONS.INVENTORY_EDIT_BR,
+    create: PERMISSIONS.INVENTORY_EDIT,
+    post:   PERMISSIONS.INVENTORY_EDIT,
     cancel: PERMISSIONS.INVENTORY_VOUCHER_CANCEL,
     delete: PERMISSIONS.INVENTORY_VOUCHER_DELETE,
 };

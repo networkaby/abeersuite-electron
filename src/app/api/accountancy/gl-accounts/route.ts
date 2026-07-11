@@ -36,7 +36,7 @@ export async function GET(req: Request) {
     // key can still pick accounts in the form.
     const { user, response } = await requireAuth();
     if (response) return response;
-    if (!hasPermission(user, PERMISSIONS.ACCOUNTANCY_VIEW_ORG) && !userCanAuthorVoucher(user)) {
+    if (!hasPermission(user, PERMISSIONS.ACCOUNTANCY_VIEW) && !userCanAuthorVoucher(user)) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -79,7 +79,7 @@ export async function GET(req: Request) {
 // Account `type` is no longer stored on the row — it's derived from the parent
 // group. Caller must pass `groupId`; `normalBalance` is required.
 export async function POST(req: Request) {
-    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
+    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW);
     if (response) return response;
 
     const { data, error } = await validateRequest(req, createSchema);

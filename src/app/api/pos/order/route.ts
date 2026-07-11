@@ -26,7 +26,7 @@ type PayLine = { paymentAccountId: number | null; amount: number; reference?: st
  * created, so a receipt failure never leaves an orphan order.
  */
 export async function POST(req: NextRequest) {
-    const { user, response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
+    const { user, response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW);
     if (response) return response;
 
     const session = await auth();

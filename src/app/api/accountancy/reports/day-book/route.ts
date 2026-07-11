@@ -29,7 +29,7 @@ const KINDS: Kind[] = ["All", "Sale", "POS", "Purchase", "Estimate", "Sale Retur
 export async function GET(req: Request) {
     // New model: the Accountancy sidebar nav grant (or the capability) admits the
     // read. Per-kind view/open filtering is a later, finer pass.
-    const { response } = await requireModuleAccess("accountancy", PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
+    const { response } = await requireModuleAccess("accountancy", PERMISSIONS.ACCOUNTANCY_VIEW);
     if (response) return response;
 
     const { searchParams } = new URL(req.url);

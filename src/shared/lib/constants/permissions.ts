@@ -12,17 +12,11 @@ export const PERMISSIONS = {
     // ever hold this. Never add "admin:bypass" to bootstrap-seed.ts.
     ADMIN_BYPASS:                       "admin:bypass",
 
-    // Accountancy — scoped views/edits
-    ACCOUNTANCY_VIEW_OWN:               "accountancy:view:own",
-    ACCOUNTANCY_VIEW_BR:                "accountancy:view:br",
-    ACCOUNTANCY_VIEW_ORG:               "accountancy:view:org",
-    ACCOUNTANCY_CREATE_OWN:             "accountancy:create:own",
-    ACCOUNTANCY_EDIT_OWN:               "accountancy:edit:own",
-    ACCOUNTANCY_EDIT_BR:                "accountancy:edit:br",
-    ACCOUNTANCY_EDIT_ORG:               "accountancy:edit:org",
-    ACCOUNTANCY_DELETE_OWN:             "accountancy:delete:own",
-    ACCOUNTANCY_DELETE_BR:              "accountancy:delete:br",
-    ACCOUNTANCY_DELETE_ORG:             "accountancy:delete:org",
+    // Accountancy — flat view gate (radius is always branch, decided by position;
+    // :own/:br/:org retired). The old create/edit/delete scope ladder was removed:
+    // those keys enforced nothing — accountancy writes run through the voucher
+    // matrix (finance:voucher:*) and accountancy:masters:* instead.
+    ACCOUNTANCY_VIEW:                   "accountancy:view",
     // Accountancy Masters — the chart of accounts (Account Groups, Ledgers, Chart
     // of Accounts), gated together. Separate from viewing (was gated by view:org)
     // and from voucher creation. Opening Balance keeps finance:opening-balance:manage.
@@ -124,12 +118,13 @@ export const PERMISSIONS = {
     TIERS_EDIT:                         "tiers:edit",
     TIERS_DELETE:                       "tiers:delete",
 
-    // Inventory
+    // Inventory — flat view/edit (radius is always branch, decided by position;
+    // :branch/:org retired). INVENTORY_EDIT is the voucher-authoring key (GRN /
+    // Challan / etc. create+post via the voucher matrix). Cross-branch stock view
+    // is admin-only.
     INVENTORY_MANAGE:                   "inventory:manage",
-    INVENTORY_VIEW_BR:                  "inventory:view:branch",
-    INVENTORY_EDIT_BR:                  "inventory:edit:branch",
-    INVENTORY_VIEW_ORG:                 "inventory:view:org",
-    INVENTORY_EDIT_ORG:                 "inventory:edit:org",
+    INVENTORY_VIEW:                     "inventory:view",
+    INVENTORY_EDIT:                     "inventory:edit",
     INVENTORY_VOUCHER_CANCEL:           "inventory:voucher:cancel",
     INVENTORY_VOUCHER_DELETE:           "inventory:voucher:delete",
     INVENTORY_VOUCHER_HARD_DELETE:      "inventory:voucher:hard-delete",

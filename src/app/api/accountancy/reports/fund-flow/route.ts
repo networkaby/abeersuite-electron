@@ -14,7 +14,7 @@ export const maxDuration = 60;
 // Sources & application of funds, plus working-capital movement between
 // the start and end of the period. Mirrors Tally's MIS Fund Flow.
 export async function GET(req: Request) {
-    const { response } = await requireModuleAccess("accountancy", PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
+    const { response } = await requireModuleAccess("accountancy", PERMISSIONS.ACCOUNTANCY_VIEW);
     if (response) return response;
 
     const { searchParams } = new URL(req.url);

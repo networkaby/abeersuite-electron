@@ -90,7 +90,7 @@ export default function FinanceTopBar({
 }: {
     permissions?: string[];
 }) {
-    const canView = permissions.includes(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
+    const canView = permissions.includes(PERMISSIONS.ACCOUNTANCY_VIEW);
     const [data, setData] = useState<CashPosition | null>(null);
     const [loading, setLoading] = useState(false);
     const [recomputing, setRecomputing] = useState(false);

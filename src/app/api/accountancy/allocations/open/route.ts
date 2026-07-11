@@ -18,7 +18,7 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 // the InvVoucher's `journalEntryId` (the canonical receipts-engine link),
 // not the InvVoucher id directly.
 export async function GET(req: Request) {
-    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
+    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW);
     if (response) return response;
 
     const { searchParams } = new URL(req.url);

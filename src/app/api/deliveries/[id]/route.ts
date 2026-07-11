@@ -9,7 +9,7 @@ import { handleApiError } from "@/shared/lib/api";
 const CARRIERS = ["SHIPROCKET", "DTDC", "MARUTI", "OWN_BOY", "PICKUP"];
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
+    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW);
     if (response) return response;
 
     const id = Number((await params).id);

@@ -132,7 +132,9 @@ export default function InventoryDetailsPage() {
 
     const { data: session } = useSession();
     const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
-    const canViewOrg = hasPermissionWithScope(permissions, "inventory:view:org");
+    // Cross-branch ("All Branches") stock total is admin-only — branch is the only
+    // radius, so a normal inventory viewer sees just their own branch's stock.
+    const canViewOrg = permissions.includes("admin:bypass");
     // Adding / editing a product from the Item Ledger uses the same product
     // permissions as the Products page (inventory:manage is the umbrella). Hide the
     // affordances when the role lacks them so the buttons never 403 on save.

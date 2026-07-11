@@ -6,7 +6,7 @@ import { TaxClassificationClient } from "./TaxClassificationClient";
 
 export const metadata = { title: "Tax Classification" };
 
-// SSR shell — accountancy layout already gates `accountancy:view:org`, so we
+// SSR shell — accountancy layout already gates `accountancy:view`, so we
 // only resolve the user once to find out whether the edit affordances should
 // be rendered. Gated by the dedicated `compliance:tax:edit` (or the broader
 // `inventory:manage`, which already covers every inventory-master field

@@ -36,7 +36,7 @@ async function enrichVoucher(v: { id: number; createdById: number; cancelledById
 
 // GET /api/accountancy/vouchers/[id]
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
+    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW);
     if (response) return response;
 
     const { id } = await params;

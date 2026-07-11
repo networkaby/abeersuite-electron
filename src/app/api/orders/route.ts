@@ -8,7 +8,7 @@ import { listOrders } from "@/modules/order/lib/orderAdapter";
 
 // GET /api/orders → { stages, orders } for the unified Orders board (P7).
 export async function GET() {
-    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
+    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW);
     if (response) return response;
     try {
         const [pipeline, orders] = await Promise.all([getOrderPipeline(prisma), listOrders()]);

@@ -11,7 +11,7 @@ import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 // Period: Indian fiscal year start (1-Apr) → asOf.
 // Returns Tally's "Principal Groups" and "Principal Ratios" panels.
 export async function GET(req: Request) {
-    const { response } = await requireModuleAccess("accountancy", PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
+    const { response } = await requireModuleAccess("accountancy", PERMISSIONS.ACCOUNTANCY_VIEW);
     if (response) return response;
 
     const { searchParams } = new URL(req.url);

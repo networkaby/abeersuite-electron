@@ -27,7 +27,7 @@ const createSchema = z.object({
 
 // GET /api/accountancy/vouchers?type=CONTRA&status=DRAFT&includeDeleted=1
 export async function GET(req: Request) {
-    const { user, response } = await requireModuleAccess("accountancy", PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
+    const { user, response } = await requireModuleAccess("accountancy", PERMISSIONS.ACCOUNTANCY_VIEW);
     if (response) return response;
 
     const { searchParams } = new URL(req.url);

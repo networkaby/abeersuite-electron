@@ -497,17 +497,14 @@ export const MATRIX_ROWS: {
             key: "accountancy",
             label: "Accountancy",
             module: "accountancy",
+            // Read-only gate (flat accountancy:view — radius is always branch).
+            // Accountancy writes run through the Voucher matrix (finance:voucher:*)
+            // and the Masters row below; there is no generic accountancy
+            // create/edit/delete permission, so those columns are intentionally absent.
             cells: {
-                create: "accountancy:create:own",
-                viewOwn: "accountancy:view:own",
-                viewBranch: "accountancy:view:br",
-                viewOrg: "accountancy:view:org",
-                editOwn: "accountancy:edit:own",
-                editBranch: "accountancy:edit:br",
-                editOrg: "accountancy:edit:org",
-                deleteOwn: "accountancy:delete:own",
-                deleteBranch: "accountancy:delete:br",
-                deleteOrg: "accountancy:delete:org",
+                viewOwn: "accountancy:view",
+                viewBranch: "accountancy:view",
+                viewOrg: "accountancy:view",
             },
         },
         // Retention — plain create/edit/delete per page (view rides the sidebar
@@ -581,14 +578,14 @@ export const MATRIX_ROWS: {
             },
         },
         // Accountancy Masters — the chart of accounts (Account Groups, Ledgers,
-        // Chart of Accounts) gated together. View rides accountancy:view:org;
+        // Chart of Accounts) gated together. View rides accountancy:view;
         // create/edit/delete are their own keys. Opening Balance is separate.
         {
             key: "accountancyMasters",
             label: "Masters",
             module: "accountancy",
             cells: {
-                viewOwn: "accountancy:view:org", viewBranch: "accountancy:view:org", viewOrg: "accountancy:view:org",
+                viewOwn: "accountancy:view", viewBranch: "accountancy:view", viewOrg: "accountancy:view",
                 create: "accountancy:masters:create",
                 editOwn: "accountancy:masters:edit", editBranch: "accountancy:masters:edit", editOrg: "accountancy:masters:edit",
                 deleteOwn: "accountancy:masters:delete", deleteBranch: "accountancy:masters:delete", deleteOrg: "accountancy:masters:delete",

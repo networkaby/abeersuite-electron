@@ -25,7 +25,7 @@ const createSchema = z.object({
 // GET /api/accountancy/allocations?targetType=INVOICE&targetId=42
 // Lists allocations linked to a particular target (or by source if ?sourceType=&sourceId=).
 export async function GET(req: Request) {
-    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
+    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW);
     if (response) return response;
 
     const { searchParams } = new URL(req.url);

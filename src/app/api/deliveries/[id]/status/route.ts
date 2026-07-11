@@ -8,7 +8,7 @@ import { assertDeliveryStatus } from "@/modules/delivery/lib/delivery";
 // PATCH /api/deliveries/[id]/status  body { statusId } — move a delivery along P8
 // (validates the seeded transition graph).
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
+    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW);
     if (response) return response;
 
     const id = Number((await params).id);

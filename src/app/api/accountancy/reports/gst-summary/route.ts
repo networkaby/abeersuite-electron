@@ -13,7 +13,7 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 // added to InvProduct + Customer/Company we can break this down further by
 // HSN and party type — for now rate-wise is the daily-useful summary.
 export async function GET(req: Request) {
-    const { response } = await requireModuleAccess("accountancy", PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
+    const { response } = await requireModuleAccess("accountancy", PERMISSIONS.ACCOUNTANCY_VIEW);
     if (response) return response;
 
     const { searchParams } = new URL(req.url);
