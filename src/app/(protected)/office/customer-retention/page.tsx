@@ -10,7 +10,7 @@ const SECTIONS: { href: string; perm: string }[] = [
     { href: "/office/customer-retention/coupons",        perm: PERMISSIONS.COUPONS_MANAGE },
     { href: "/office/customer-retention/gift-cards",     perm: PERMISSIONS.COUPONS_MANAGE },
     { href: "/office/customer-retention/loyalty",        perm: PERMISSIONS.LOYALTY_MANAGE },
-    { href: "/office/customer-retention/customer-tiers", perm: PERMISSIONS.CUSTOMERS_MANAGE },
+    { href: "/office/customer-retention/customer-tiers", perm: PERMISSIONS.CUSTOMERS_EDIT },
 ];
 
 export default async function CustomerRetentionIndex() {

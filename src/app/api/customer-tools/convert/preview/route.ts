@@ -9,10 +9,10 @@ export async function GET(req: Request) {
     const { user, response } = await requireAuth();
     if (response) return response;
 
-    // Page-level gate uses CUSTOMERS_MANAGE + COMPANIES_MANAGE together — the
+    // Page-level gate uses CUSTOMERS_EDIT + COMPANIES_MANAGE together — the
     // converter creates one party type and tombstones the other.
     if (
-        !hasPermission(user, PERMISSIONS.CUSTOMERS_MANAGE) ||
+        !hasPermission(user, PERMISSIONS.CUSTOMERS_EDIT) ||
         !hasPermission(user, PERMISSIONS.COMPANIES_MANAGE)
     ) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });

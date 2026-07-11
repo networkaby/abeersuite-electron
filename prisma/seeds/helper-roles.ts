@@ -61,8 +61,8 @@ const voucherPerms = (actions: string[]): string[] =>
 const ROLE_PERMISSIONS: Record<string, string[]> = {
     // R5 — Branch Manager: full branch authority; no global settings/roles.
     R5: [
-        "customers:view", "customers:view:org",
-        "customers:create", "customers:edit:branch", "customers:edit:org", "customers:delete:branch",
+        "customers:view",
+        "customers:create", "customers:edit", "customers:delete",
         "companies:manage",
         "service-centers:view", "service-centers:view:org",
         ...voucherPerms(["create", "post", "cancel", "delete"]),
@@ -85,7 +85,7 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
 
     // R6 — Accountant: books, GST, vouchers, reconciliation. No admin/POS/tickets.
     R6: [
-        "customers:view", "customers:view:org",
+        "customers:view",
         "companies:manage",
         "finance:journal:cancel", "finance:journal:delete",
         ...voucherPerms(["create", "post", "cancel", "delete"]),
@@ -101,8 +101,8 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
 
     // R7 — Sales Executive: CRM, customer acquisition, ecommerce, counter sales.
     R7: [
-        "customers:view", "customers:view:org",
-        "customers:create", "customers:edit:own", "customers:edit:branch", "customers:delete:own",
+        "customers:view",
+        "customers:create", "customers:edit", "customers:delete",
         "companies:manage",
         "deals:view", "deals:manage",
         "ecommerce:manage",
@@ -112,7 +112,7 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
 
     // R3 — Counter / Cashier: POS, customer intake, ticket triage, branch inventory.
     R3: [
-        "customers:view", "customers:manage", "companies:manage",
+        "customers:view", "customers:create", "customers:edit", "customers:delete", "companies:manage",
         "deals:view", "deals:manage",
         "inventory:view:branch", "inventory:edit:branch",
         "pos:shift:open", "pos:shift:close", "pos:shift:drop", "pos:shift:view:branch",

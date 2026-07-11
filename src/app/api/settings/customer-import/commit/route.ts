@@ -21,7 +21,7 @@ export const maxDuration = 300;
 
 // POST /api/settings/customer-import/commit — actually create/update people.
 export async function POST(req: Request) {
-    const { response } = await requirePermission(PERMISSIONS.CUSTOMERS_MANAGE);
+    const { response } = await requirePermission(PERMISSIONS.CUSTOMERS_EDIT);
     if (response) return response;
 
     const { data, error } = await validateRequest(req, commitSchema);

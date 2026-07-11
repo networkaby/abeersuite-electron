@@ -98,10 +98,7 @@ export async function PUT(
     req: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const { response } = await requireAnyPermission(
-        PERMISSIONS.CUSTOMERS_EDIT_OWN, PERMISSIONS.CUSTOMERS_EDIT_BRANCH,
-        PERMISSIONS.CUSTOMERS_EDIT_DEPARTMENT, PERMISSIONS.CUSTOMERS_EDIT_ORG,
-    );
+    const { response } = await requireAnyPermission(PERMISSIONS.CUSTOMERS_EDIT);
     if (response) return response;
 
     const { id } = await params;
@@ -161,10 +158,7 @@ export async function DELETE(
     _: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const { response } = await requireAnyPermission(
-        PERMISSIONS.CUSTOMERS_DELETE_OWN, PERMISSIONS.CUSTOMERS_DELETE_BRANCH,
-        PERMISSIONS.CUSTOMERS_DELETE_DEPARTMENT, PERMISSIONS.CUSTOMERS_DELETE_ORG,
-    );
+    const { response } = await requireAnyPermission(PERMISSIONS.CUSTOMERS_DELETE);
     if (response) return response;
 
     const { id } = await params;

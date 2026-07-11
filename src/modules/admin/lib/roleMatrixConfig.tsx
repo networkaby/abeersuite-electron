@@ -336,13 +336,13 @@ export const MATRIX_ROWS: {
                 viewOwn: "customers:view",
                 viewBranch: "customers:view",
                 viewOrg: "customers:view",
-                create: ["customers:manage", "companies:manage"],
-                editOwn: ["customers:manage", "companies:manage"],
-                editBranch: ["customers:manage", "companies:manage"],
-                editOrg: ["customers:manage", "companies:manage"],
-                deleteOwn: ["customers:manage", "companies:manage"],
-                deleteBranch: ["customers:manage", "companies:manage"],
-                deleteOrg: ["customers:manage", "companies:manage"],
+                create: ["customers:create", "companies:manage"],
+                editOwn: ["customers:edit", "companies:manage"],
+                editBranch: ["customers:edit", "companies:manage"],
+                editOrg: ["customers:edit", "companies:manage"],
+                deleteOwn: ["customers:delete", "companies:manage"],
+                deleteBranch: ["customers:delete", "companies:manage"],
+                deleteOrg: ["customers:delete", "companies:manage"],
             },
         },
         {
@@ -595,10 +595,10 @@ export const MATRIX_ROWS: {
             },
         },
         // Contacts module (key "customers") — Person (people) AND Companies share
-        // ONE create/edit/delete set (customers:*), so both links open the same
-        // table. View rides the sidebar link (customers:view). People carry a legacy
-        // own/branch/dept/org edit split; the matrix grants the org (broadest) key
-        // and the routes accept any edit/delete scope.
+        // ONE flat create/edit/delete set (customers:*), so both links open the same
+        // table. Contacts carry no branch, so there is no radius: any branch may CRUD.
+        // View rides customers:view; edit/delete are the flat customers:edit /
+        // customers:delete (the old own/branch/dept/org ladder is retired).
         {
             key: "contacts",
             label: "Contacts",
@@ -606,8 +606,8 @@ export const MATRIX_ROWS: {
             cells: {
                 viewOwn: "customers:view", viewBranch: "customers:view", viewOrg: "customers:view",
                 create: "customers:create",
-                editOwn: "customers:edit:org", editBranch: "customers:edit:org", editOrg: "customers:edit:org",
-                deleteOwn: "customers:delete:org", deleteBranch: "customers:delete:org", deleteOrg: "customers:delete:org",
+                editOwn: "customers:edit", editBranch: "customers:edit", editOrg: "customers:edit",
+                deleteOwn: "customers:delete", deleteBranch: "customers:delete", deleteOrg: "customers:delete",
             },
         },
         // admin:bypass is intentionally removed from the matrix — it is a code-only
@@ -699,6 +699,27 @@ export const SIDEBAR_LINK_MATRIX_ROW_KEY: Record<string, string> = {
     [sidebarChildPermissionId("customers", "person")]: "contacts",
     [sidebarChildPermissionId("customers", "companies")]: "contacts",
 };
+
+// The granular permission ids a sidebar link "unlocks" — every cell id of the
+// matrix row it expands to (see SIDEBAR_LINK_MATRIX_ROW_KEY). The Department pool
+// pools MODULE VISIBILITY (the `ui:sidebar:*` links); the granular create/edit/
+// delete LEVEL is a per-role decision. So the role-permissions save API allows a
+// granular id whenever its owning link is pooled, using this map — otherwise the
+// editor would let you tick e.g. Contacts → Create (customers:create) but the pool
+// filter would silently drop it on save. Keyed by the link's `ui:sidebar:*` id.
+export const SIDEBAR_LINK_GRANULAR_IDS: Record<string, string[]> = Object.fromEntries(
+    Object.entries(SIDEBAR_LINK_MATRIX_ROW_KEY).map(([linkId, rowKey]) => {
+        const row = MATRIX_ROWS.find((r) => r.key === rowKey);
+        const ids = row
+            ? [...new Set(
+                Object.values(row.cells)
+                    .flatMap((cell) => (Array.isArray(cell) ? cell : [cell]))
+                    .filter((id): id is string => Boolean(id))
+            )]
+            : [];
+        return [linkId, ids];
+    })
+);
 
 // A sidebar link with ONE extra yes/no permission beyond "can see this page" —
 // simpler than a full matrix row, for links where only a single additional

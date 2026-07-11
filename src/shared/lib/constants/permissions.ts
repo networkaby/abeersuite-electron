@@ -39,22 +39,14 @@ export const PERMISSIONS = {
     DEALS_VIEW:                         "deals:view",
     DEALS_MANAGE:                       "deals:manage",
 
-    // Customers
+    // Customers (Contacts = Person + Company; share ONE flat set). Contacts carry
+    // no branch, so there is no radius to enforce — any branch may CRUD (gated only
+    // by holding the write id). The old own/department/branch/org ladder and the
+    // customers:manage umbrella are retired (radius = branch, and Contacts have none).
     CUSTOMERS_VIEW:                     "customers:view",
-    CUSTOMERS_VIEW_OWN:                 "customers:view:own",
-    CUSTOMERS_VIEW_BRANCH:              "customers:view:branch",
-    CUSTOMERS_VIEW_DEPARTMENT:          "customers:view:department",
-    CUSTOMERS_VIEW_ORG:                 "customers:view:org",
     CUSTOMERS_CREATE:                   "customers:create",
-    CUSTOMERS_EDIT_OWN:                 "customers:edit:own",
-    CUSTOMERS_EDIT_BRANCH:              "customers:edit:branch",
-    CUSTOMERS_EDIT_DEPARTMENT:          "customers:edit:department",
-    CUSTOMERS_EDIT_ORG:                 "customers:edit:org",
-    CUSTOMERS_DELETE_OWN:               "customers:delete:own",
-    CUSTOMERS_DELETE_BRANCH:            "customers:delete:branch",
-    CUSTOMERS_DELETE_DEPARTMENT:        "customers:delete:department",
-    CUSTOMERS_DELETE_ORG:               "customers:delete:org",
-    CUSTOMERS_MANAGE:                   "customers:manage",
+    CUSTOMERS_EDIT:                     "customers:edit",
+    CUSTOMERS_DELETE:                   "customers:delete",
     CUSTOMERS_HARD_DELETE:              "customers:hard-delete",
 
     // E-commerce

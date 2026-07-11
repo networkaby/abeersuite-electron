@@ -6,7 +6,7 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { customerTierSchema } from "@/shared/lib/schemas/customerTierSchemas";
 
 // GET /api/customer-tiers — all spend-tier rows (sorted). Read-only to any authed
-// user (POS reads it via the snapshot too); edits require customers:manage.
+// user (POS reads it via the snapshot too); edits require tiers:create / tiers:manage.
 export async function GET() {
     const { response } = await requireAuth();
     if (response) return response;

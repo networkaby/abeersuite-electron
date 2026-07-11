@@ -101,23 +101,15 @@ const PERMISSIONS = [
     // and off the Role Matrix UI.
     { id: "admin:bypass", label: "Bypass all permission checks", module: "core", description: "Grants full access. Only usable by the env super admin — never grant this to a role.", systemOnly: true },
 
-    // customers
+    // customers — Contacts (Person + Company) share ONE flat set. Contacts carry no
+    // branch, so there is no radius to enforce: any branch may CRUD (gated only by
+    // holding the write id). The old own/department/branch/org ladder and the
+    // customers:manage umbrella are retired.
     { id: "customers:view", label: "View customers & companies", module: "customers", description: "Access the Customers and Companies pages and view records." },
-    { id: "customers:manage", label: "Manage customers", module: "customers", description: "Create, edit, and delete customer records." },
     { id: "companies:manage", label: "Manage companies", module: "customers", description: "Create, edit, and delete company records." },
-    { id: "customers:view:own", label: "View own customers", module: "customers", description: "View customer records owned by the user." },
-    { id: "customers:view:department", label: "View department customers", module: "customers", description: "View customer records within user departments." },
-    { id: "customers:view:branch", label: "View branch customers", module: "customers", description: "View customer records within user branches." },
-    { id: "customers:view:org", label: "View organisation customers", module: "customers", description: "View customer records across the organisation." },
-    { id: "customers:create", label: "Create customers", module: "customers", description: "Create customer records." },
-    { id: "customers:edit:own", label: "Edit own customers", module: "customers", description: "Edit customer records owned by the user." },
-    { id: "customers:edit:department", label: "Edit department customers", module: "customers", description: "Edit customer records within user departments." },
-    { id: "customers:edit:branch", label: "Edit branch customers", module: "customers", description: "Edit customer records within user branches." },
-    { id: "customers:edit:org", label: "Edit organisation customers", module: "customers", description: "Edit customer records across the organisation." },
-    { id: "customers:delete:own", label: "Delete own customers", module: "customers", description: "Delete customer records owned by the user." },
-    { id: "customers:delete:department", label: "Delete department customers", module: "customers", description: "Delete customer records within user departments." },
-    { id: "customers:delete:branch", label: "Delete branch customers", module: "customers", description: "Delete customer records within user branches." },
-    { id: "customers:delete:org", label: "Delete organisation customers", module: "customers", description: "Delete customer records across the organisation." },
+    { id: "customers:create", label: "Create customers", module: "customers", description: "Create Person / Company records." },
+    { id: "customers:edit", label: "Edit customers", module: "customers", description: "Edit any Person / Company record (no branch limit)." },
+    { id: "customers:delete", label: "Delete customers", module: "customers", description: "Delete any Person / Company record (no branch limit)." },
     { id: "customers:hard-delete", label: "Hard-delete converted customers", module: "customers", description: "Permanently remove soft-deleted (converted) Person / Company tombstone rows from the Trash view at /office/settings/customer-tools." },
 
     // Repair (tickets + assignments) permission layer removed — being rebuilt the

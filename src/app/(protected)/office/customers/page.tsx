@@ -12,8 +12,7 @@ export default async function ContactsPage() {
     if (!canView) redirect("/office/work-flow-inbox");
     const canEdit =
         isAdmin ||
-        permissions.includes(PERMISSIONS.CUSTOMERS_MANAGE) ||
-        permissions.some((p) => p.startsWith("customers:edit"));
+        permissions.includes(PERMISSIONS.CUSTOMERS_EDIT);
 
     const positionRows = await prisma.position.findMany({
         orderBy: { title: "asc" },

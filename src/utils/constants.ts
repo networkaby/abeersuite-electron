@@ -540,7 +540,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Coupons", icon: Ticket, href: "/office/customer-retention/coupons", permission: "coupons:manage" },
             { label: "Gift Cards", icon: CreditCard, href: "/office/customer-retention/gift-cards", permission: "coupons:manage" },
             { label: "Loyalty", icon: Gift, href: "/office/customer-retention/loyalty", permission: "loyalty:manage" },
-            { label: "Spend Tiers", icon: BadgePercent, href: "/office/customer-retention/customer-tiers", permission: "customers:manage" },
+            { label: "Spend Tiers", icon: BadgePercent, href: "/office/customer-retention/customer-tiers", permission: "customers:edit" },
             // Campaigns page not built yet — was pointing at the non-existent /office/roadmap/retention/campaigns (404).
             // { label: "Campaigns", icon: Megaphone, href: "/office/roadmap/retention/campaigns" },
         ],
@@ -605,8 +605,8 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     { label: "Backup & Restore", href: "/office/settings/backup-restore", icon: Database, permission: "settings:manage" },
     { label: "Downloads", href: "/office/settings/downloads", icon: Download, permission: "settings:manage" },
     { label: "Item Import", href: "/office/settings/item-import", icon: Upload, permission: "inventory:manage" },
-    { label: "Customer Import", href: "/office/settings/customer-import", icon: Upload, permission: "customers:manage" },
-    { label: "Customer Tools", href: "/office/settings/customer-tools", icon: Users, permission: "customers:manage" },
+    { label: "Customer Import", href: "/office/settings/customer-import", icon: Upload, permission: "customers:edit" },
+    { label: "Customer Tools", href: "/office/settings/customer-tools", icon: Users, permission: "customers:edit" },
 ];
 
 // ─── ButtonBar ────────────────────────────────────────────────────────────────

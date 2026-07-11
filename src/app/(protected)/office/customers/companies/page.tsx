@@ -80,7 +80,7 @@ export default function CompaniesPage() {
     const perms = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
     const canManageLoyalty = perms.includes(PERMISSIONS.LOYALTY_MANAGE) || perms.includes(PERMISSIONS.ADMIN_BYPASS);
     // Companies share the Contacts (customers:*) permission set — see role page.
-    const canEditCompany = perms.includes(PERMISSIONS.CUSTOMERS_EDIT_ORG) || perms.includes(PERMISSIONS.ADMIN_BYPASS);
+    const canEditCompany = perms.includes(PERMISSIONS.CUSTOMERS_EDIT) || perms.includes(PERMISSIONS.ADMIN_BYPASS);
     const [companies, setCompanies] = useState<CompanyListItem[]>([]);
     const [search, setSearch] = useState("");
     const [selectedId, setSelectedId] = useState<number | null>(null);

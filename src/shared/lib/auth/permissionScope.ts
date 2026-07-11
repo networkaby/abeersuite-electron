@@ -3,7 +3,6 @@ export type PermissionScope = "own" | "department" | "branch" | "org";
 const SCOPE_ORDER: PermissionScope[] = ["own", "department", "branch", "org"];
 
 const LEGACY_TO_SCOPED_ACTIONS: Record<string, string[]> = {
-    "customers:manage": ["customers:create", "customers:edit", "customers:delete"],
     "users:manage": ["users:create", "users:edit", "users:delete"],
     "roles:manage": ["roles:create", "roles:edit", "roles:delete"],
 };

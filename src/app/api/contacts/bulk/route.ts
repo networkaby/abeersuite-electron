@@ -19,7 +19,7 @@ const bulkSchema = z.object({
 });
 
 export async function POST(req: Request) {
-    const { response } = await requirePermission(PERMISSIONS.CUSTOMERS_EDIT_ORG);
+    const { response } = await requirePermission(PERMISSIONS.CUSTOMERS_EDIT);
     if (response) return response;
     try {
         const { data, error } = await validateRequest(req, bulkSchema);

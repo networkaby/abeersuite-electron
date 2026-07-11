@@ -23,7 +23,7 @@ export const dynamic = "force-dynamic";
 
 // POST /api/settings/customer-import/preview — validate without writing.
 export async function POST(req: Request) {
-    const { response } = await requirePermission(PERMISSIONS.CUSTOMERS_MANAGE);
+    const { response } = await requirePermission(PERMISSIONS.CUSTOMERS_EDIT);
     if (response) return response;
 
     const { data, error } = await validateRequest(req, previewSchema);

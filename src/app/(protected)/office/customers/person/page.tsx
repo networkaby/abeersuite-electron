@@ -97,7 +97,7 @@ export default function CustomersPage() {
     const perms = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
     const canManageUsers = perms.includes(PERMISSIONS.USERS_MANAGE) || perms.includes(PERMISSIONS.ADMIN_BYPASS);
     const canManageLoyalty = perms.includes(PERMISSIONS.LOYALTY_MANAGE) || perms.includes(PERMISSIONS.ADMIN_BYPASS);
-    const canEditCustomer = perms.includes(PERMISSIONS.CUSTOMERS_EDIT_ORG) || perms.includes(PERMISSIONS.ADMIN_BYPASS);
+    const canEditCustomer = perms.includes(PERMISSIONS.CUSTOMERS_EDIT) || perms.includes(PERMISSIONS.ADMIN_BYPASS);
 
     const router = useRouter();
 
