@@ -95,14 +95,13 @@ export function PhysicalStockPage() {
     // Permissions for the inline lifecycle bar — same rules as the row 3-dot menu.
     const { data: session } = useSession();
     const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
-    const canCancel     = hasPermissionWithScope(permissions, "inventory:voucher:cancel");
-    const canDelete     = hasPermissionWithScope(permissions, "inventory:voucher:delete");
-    const canHardDelete = hasPermissionWithScope(permissions, "inventory:voucher:hard-delete");
+    const holds = (id: string | null) => id != null && hasPermissionWithScope(permissions, id);
+    const canCancel     = holds(requiredVoucherPermission("PHYSICAL_STOCK", "cancel"));
+    const canDelete     = holds(requiredVoucherPermission("PHYSICAL_STOCK", "delete"));
+    const canHardDelete = canDelete;
     // Posting is a separate permission — a create-but-not-post user keeps only Save
     // Draft. Matches the route's userCanVoucherKind(type, "post") check exactly.
-    const vPost = requiredVoucherPermission("PHYSICAL_STOCK", "post");
-    const canPost = hasPermissionWithScope(permissions, vPost.generic)
-        || (vPost.perKind != null && hasPermissionWithScope(permissions, vPost.perKind));
+    const canPost = holds(requiredVoucherPermission("PHYSICAL_STOCK", "post"));
 
     // Close / Cancel — smart back-nav (matches TradingVoucherPage):
     //   • Same-tab open → router.back() returns to wherever the operator came from.

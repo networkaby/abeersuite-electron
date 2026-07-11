@@ -227,15 +227,14 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
     const vCancel = requiredVoucherPermission(kind, "cancel");
     const vDelete = requiredVoucherPermission(kind, "delete");
     const vPost   = requiredVoucherPermission(kind, "post");
-    const holds = (g: string, p: string | null) =>
-        hasPermissionWithScope(permissions, g) || (p != null && hasPermissionWithScope(permissions, p));
-    const canCancel     = holds(vCancel.generic, vCancel.perKind);
-    const canDelete     = holds(vDelete.generic, vDelete.perKind);
+    const holds = (p: string | null) => p != null && hasPermissionWithScope(permissions, p);
+    const canCancel     = holds(vCancel);
+    const canDelete     = holds(vDelete);
     const canHardDelete = canDelete;
     // Posting is a separate permission. A create-but-not-post user keeps only the
     // Save Draft button — the Save (finalise) button is hidden so they can't try
     // an action that would 403.
-    const canPost       = holds(vPost.generic, vPost.perKind);
+    const canPost       = holds(vPost);
 
     const copy = PER_KIND[kind];
     const isEditing = voucherId != null && Number.isFinite(voucherId);

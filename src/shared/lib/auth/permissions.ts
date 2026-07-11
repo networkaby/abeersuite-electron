@@ -61,8 +61,8 @@ export function isAdmin(user: ResolvedUser): boolean {
 // Phase 5 5E: `type` widened to string — the spine's `type` is a plain string
 // (spans every voucher kind). Unknown kinds fall back to the generic permission.
 export function userCanVoucher(user: ResolvedUser, type: VoucherType | string, action: VoucherAction): boolean {
-    const { perKind, generic } = requiredVoucherPermission(type as VoucherType, action);
-    return (perKind != null && hasPermission(user, perKind)) || hasPermission(user, generic);
+    const perKind = requiredVoucherPermission(type as VoucherType, action);
+    return perKind != null && hasPermission(user, perKind);
 }
 
 /**
@@ -74,9 +74,9 @@ export function userCanVoucher(user: ResolvedUser, type: VoucherType | string, a
  * while leaving the channel vouchers gated exactly as before (by their own flow).
  */
 export function userCanVoucherKind(user: ResolvedUser, type: VoucherType | string, action: VoucherAction): boolean {
-    const { perKind, generic } = requiredVoucherPermission(type as VoucherType, action);
+    const perKind = requiredVoucherPermission(type as VoucherType, action);
     if (perKind == null) return true;
-    return hasPermission(user, perKind) || hasPermission(user, generic);
+    return hasPermission(user, perKind);
 }
 
 /**
@@ -89,9 +89,7 @@ export function userCanVoucherKind(user: ResolvedUser, type: VoucherType | strin
 export function userCanAuthorVoucher(user: ResolvedUser): boolean {
     if (isAdmin(user)) return true;
     return user.permissions.some((p) =>
-        p === PERMISSIONS.FINANCE_VOUCHER_CREATE
-        || p === PERMISSIONS.INVENTORY_EDIT
-        || p.startsWith("finance:voucher:create:")
+        p.startsWith("finance:voucher:create:")
         || p.startsWith("inventory:voucher:create:"),
     );
 }
@@ -163,8 +161,8 @@ export async function requireVoucherPermission(
 ): Promise<GuardResult> {
     const result = await requireAuth();
     if (result.response) return result;
-    const { perKind, generic } = requiredVoucherPermission(type, action);
-    const ok = (perKind != null && hasPermission(result.user, perKind)) || hasPermission(result.user, generic);
+    const perKind = requiredVoucherPermission(type, action);
+    const ok = perKind != null && hasPermission(result.user, perKind);
     if (!ok) {
         return { user: null, response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
     }

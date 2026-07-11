@@ -63,22 +63,6 @@ export const VOUCHER_GROUPS: { key: VoucherGroupKey; label: string }[] = [
     { key: "optional",  label: "Optional vouchers" },
 ];
 
-/** Generic (kind-agnostic) GL keys — additive fallback in the accountancy guards. */
-export const GENERIC_VOUCHER_PERMISSION: Record<VoucherAction, string> = {
-    create: PERMISSIONS.FINANCE_VOUCHER_CREATE,
-    post:   PERMISSIONS.FINANCE_VOUCHER_POST,
-    cancel: PERMISSIONS.FINANCE_VOUCHER_CANCEL,
-    delete: PERMISSIONS.FINANCE_VOUCHER_DELETE,
-};
-
-/** Generic inventory keys — additive fallback for inventory voucher kinds. */
-const GENERIC_INVENTORY_PERMISSION: Record<VoucherAction, string> = {
-    create: PERMISSIONS.INVENTORY_EDIT,
-    post:   PERMISSIONS.INVENTORY_EDIT,
-    cancel: PERMISSIONS.INVENTORY_VOUCHER_CANCEL,
-    delete: PERMISSIONS.INVENTORY_VOUCHER_DELETE,
-};
-
 // Raw rows carry only the four write-action ids (matching the existing constants);
 // view/open ids are derived from the create id below (`<ns>:voucher:view:<slug>`).
 interface RawVoucherRow {
@@ -227,19 +211,16 @@ export function voucherKindPermissionIds(type: VoucherType | InvVoucherType): st
 }
 
 /**
- * Resolve the permission id required to perform `action` on a voucher of `type`,
- * plus the generic (module-appropriate) fallback. Guards should allow the action
- * if the user holds EITHER (additive — generic grants keep working).
+ * The per-kind permission id required to perform `action` on a voucher of `type`,
+ * or null for kinds with no matrix row (POS / online channel variants). The old
+ * generic (kind-agnostic) fallback keys were retired — authorization is per-kind.
  */
 export function requiredVoucherPermission(
     type: VoucherType | InvVoucherType | string,
     action: VoucherAction,
-): { perKind: string | null; generic: string } {
+): string | null {
     const row = ROW_BY_TYPE.get(type as VoucherType);
-    const generic = row?.module === "inventory"
-        ? GENERIC_INVENTORY_PERMISSION[action]
-        : GENERIC_VOUCHER_PERMISSION[action];
-    return { perKind: row ? row.perms[action] : null, generic };
+    return row ? row.perms[action] : null;
 }
 
 // ── Seed helper ──────────────────────────────────────────────────────────────

@@ -148,13 +148,12 @@ export function JournalVoucherPage({ voucherId }: { voucherId?: number } = {}) {
     const router = useRouter();
     const { data: session } = useSession();
     const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
-    const canCancel     = hasPermissionWithScope(permissions, "finance:voucher:cancel");
-    const canDelete     = hasPermissionWithScope(permissions, "finance:voucher:delete");
-    const canHardDelete = hasPermissionWithScope(permissions, "finance:voucher:hard-delete");
-    // Posting is a separate permission (per-kind OR generic). A create-but-not-post
-    // user keeps only Save Draft — the Save (finalise) button is hidden.
-    const canPost       = hasPermissionWithScope(permissions, "finance:voucher:post:journal")
-        || hasPermissionWithScope(permissions, "finance:voucher:post");
+    const canCancel     = hasPermissionWithScope(permissions, "finance:voucher:cancel:journal");
+    const canDelete     = hasPermissionWithScope(permissions, "finance:voucher:delete:journal");
+    const canHardDelete = canDelete;
+    // Posting is a separate permission. A create-but-not-post user keeps only Save
+    // Draft — the Save (finalise) button is hidden.
+    const canPost       = hasPermissionWithScope(permissions, "finance:voucher:post:journal");
 
     // Close / Cancel / Back — go back if there's tab history, otherwise fall
     // Close / back behaviour:

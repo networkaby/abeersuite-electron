@@ -84,8 +84,7 @@ export function InvVoucherForm({ type, redirectTo }: { type: InvVoucherKind; red
     const { data: session } = useSession();
     const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
     const vPost = requiredVoucherPermission(type, "post");
-    const canPost = hasPermissionWithScope(permissions, vPost.generic)
-        || (vPost.perKind != null && hasPermissionWithScope(permissions, vPost.perKind));
+    const canPost = vPost != null && hasPermissionWithScope(permissions, vPost);
 
     const [form, setForm] = useState({
         date:         toIsoDate(new Date()),

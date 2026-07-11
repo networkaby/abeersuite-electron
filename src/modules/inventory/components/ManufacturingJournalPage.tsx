@@ -105,14 +105,13 @@ export function ManufacturingJournalPage() {
 
     const { data: session } = useSession();
     const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
-    const canCancel     = hasPermissionWithScope(permissions, "inventory:voucher:cancel");
-    const canDelete     = hasPermissionWithScope(permissions, "inventory:voucher:delete");
-    const canHardDelete = hasPermissionWithScope(permissions, "inventory:voucher:hard-delete");
+    const holds = (id: string | null) => id != null && hasPermissionWithScope(permissions, id);
+    const canCancel     = holds(requiredVoucherPermission("MANUFACTURING_JOURNAL", "cancel"));
+    const canDelete     = holds(requiredVoucherPermission("MANUFACTURING_JOURNAL", "delete"));
+    const canHardDelete = canDelete;
     // Posting is a separate permission — a create-but-not-post user keeps only Save
     // Draft. Matches the route's userCanVoucherKind(type, "post") check exactly.
-    const vPost = requiredVoucherPermission("MANUFACTURING_JOURNAL", "post");
-    const canPost = hasPermissionWithScope(permissions, vPost.generic)
-        || (vPost.perKind != null && hasPermissionWithScope(permissions, vPost.perKind));
+    const canPost = holds(requiredVoucherPermission("MANUFACTURING_JOURNAL", "post"));
 
     // Close / Cancel — smart back-nav (matches TradingVoucherPage).
     const closeForm = useCallback(() => {

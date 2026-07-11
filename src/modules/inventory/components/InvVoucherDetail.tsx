@@ -72,9 +72,7 @@ export function InvVoucherDetail({ basePath, label, formPath }: {
     const router = useRouter();
     const { data: session } = useSession();
     const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
-    const canCancel     = hasPermissionWithScope(permissions, "inventory:voucher:cancel");
-    const canDelete     = hasPermissionWithScope(permissions, "inventory:voucher:delete");
-    const canHardDelete = hasPermissionWithScope(permissions, "inventory:voucher:hard-delete");
+    const holds = (id: string | null) => id != null && hasPermissionWithScope(permissions, id);
 
     // Close / back behaviour:
     //   • Same-tab navigation (e.g. Day Book → detail): router.back() returns
@@ -121,9 +119,10 @@ export function InvVoucherDetail({ basePath, label, formPath }: {
 
     // Posting is a separate permission — hide Post on a draft for a create-but-not-
     // post user (matches the route's per-kind post check).
-    const vPost = requiredVoucherPermission(voucher.type, "post");
-    const canPost = hasPermissionWithScope(permissions, vPost.generic)
-        || (vPost.perKind != null && hasPermissionWithScope(permissions, vPost.perKind));
+    const canPost       = holds(requiredVoucherPermission(voucher.type, "post"));
+    const canCancel     = holds(requiredVoucherPermission(voucher.type, "cancel"));
+    const canDelete     = holds(requiredVoucherPermission(voucher.type, "delete"));
+    const canHardDelete = canDelete;
 
     return (
         <div className="space-y-6 max-w-4xl">
