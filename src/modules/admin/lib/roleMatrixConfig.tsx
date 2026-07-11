@@ -1,31 +1,14 @@
-// ── Role-page config: matrices, module metadata, form types + helpers ────────
+// ── Role-page config: matrices, form types + helpers ─────────────────────────
 // Extracted from office/admin/role/page.tsx (which had grown past 2,200 lines).
 // Pure data + types + two tiny helpers — no state, no components.
 
 
 import axios from "axios";
-import {
-    BadgePercent,
-    Boxes,
-    Calculator,
-    ClipboardList,
-    Gift,
-    HeartHandshake,
-    Settings,
-    ShieldCheck,
-    ShoppingCart,
-    Store,
-    Ticket,
-    Users,
-    Wallet,
-    Wrench,
-} from "lucide-react";
 import { type MatrixColumnGroup, type MatrixRow, type ColumnTint } from "@/shared/components/PermissionMatrix";
 import {
     VOUCHER_MATRIX,
     VOUCHER_GROUPS,
     VOUCHER_ACTIONS,
-    ALL_VOUCHER_PERMISSION_IDS,
     type VoucherGroupKey,
 } from "@/shared/lib/auth/voucherMatrix";
 import { sidebarChildPermissionId } from "@/shared/lib/auth/sidebarModules";
@@ -51,9 +34,6 @@ export const VOUCHER_ROWS_BY_GROUP: { key: VoucherGroupKey; label: string; rows:
         cells: Object.fromEntries(VOUCHER_ACTIONS.map((a) => [a.key, r.perms[a.key]])),
     })),
 }));
-// Every per-kind voucher permission id — used to keep them out of the loose chips.
-export const VOUCHER_PERM_SET = new Set<string>(ALL_VOUCHER_PERMISSION_IDS);
-
 // POS voucher matrix (gates the /vouchers/pos UI only). Shown only when the role
 // can see POS (the workspace visibility toggle). Sparse cells render as N/A.
 export const POS_VISIBILITY_ID = sidebarChildPermissionId("workspace", "pos");
@@ -175,109 +155,6 @@ export const ROLE_ACCENT: Record<string, string> = {
     "bg-teal-100 text-teal-600": "border-l-teal-400",
 };
 
-export const MODULE_META: Record<string, { label: string; description: string; icon: React.ReactNode; chip: string }> = {
-    core: {
-        label: "Core",
-        description: "System-level access controls",
-        icon: <ShieldCheck size={13} />,
-        chip: "bg-red-50 border-red-200 text-red-700",
-    },
-    customers: {
-        label: "Customers",
-        description: "Customer and company record access",
-        icon: <Users size={13} />,
-        chip: "bg-blue-50 border-blue-200 text-blue-700",
-    },
-    tickets: {
-        label: "Tickets",
-        description: "Ticket workflow and ownership",
-        icon: <Ticket size={13} />,
-        chip: "bg-indigo-50 border-indigo-200 text-indigo-700",
-    },
-    assignments: {
-        label: "Assignments",
-        description: "Work Inbox visibility scopes",
-        icon: <ClipboardList size={13} />,
-        chip: "bg-emerald-50 border-emerald-200 text-emerald-700",
-    },
-    service: {
-        label: "Service",
-        description: "Service centers and warranty fields",
-        icon: <Wrench size={13} />,
-        chip: "bg-orange-50 border-orange-200 text-orange-700",
-    },
-    admin: {
-        label: "Administration",
-        description: "System settings and user management",
-        icon: <Settings size={13} />,
-        chip: "bg-purple-50 border-purple-200 text-purple-700",
-    },
-    accountancy: {
-        label: "Accountancy",
-        description: "Books, ledgers, and financial reports",
-        icon: <Calculator size={13} />,
-        chip: "bg-slate-50 border-slate-200 text-slate-700",
-    },
-    finance: {
-        label: "Finance",
-        description: "Voucher, invoice, journal, and payment lifecycle",
-        icon: <Wallet size={13} />,
-        chip: "bg-cyan-50 border-cyan-200 text-cyan-700",
-    },
-    inventory: {
-        label: "Inventory",
-        description: "Stock scopes and inventory voucher lifecycle",
-        icon: <Boxes size={13} />,
-        chip: "bg-amber-50 border-amber-200 text-amber-700",
-    },
-    pos: {
-        label: "Point of Sale",
-        description: "Shift, till, and handover controls",
-        icon: <ShoppingCart size={13} />,
-        chip: "bg-green-50 border-green-200 text-green-700",
-    },
-    loyalty: {
-        label: "Loyalty",
-        description: "Earn/redeem wallet config and adjustments",
-        icon: <HeartHandshake size={13} />,
-        chip: "bg-pink-50 border-pink-200 text-pink-700",
-    },
-    coupons: {
-        label: "Coupons",
-        description: "Promotions and gift-card management",
-        icon: <Gift size={13} />,
-        chip: "bg-rose-50 border-rose-200 text-rose-700",
-    },
-    crm: {
-        label: "CRM",
-        description: "Customer relationship and sales pipeline",
-        icon: <BadgePercent size={13} />,
-        chip: "bg-violet-50 border-violet-200 text-violet-700",
-    },
-    ecommerce: {
-        label: "E-commerce",
-        description: "Online storefront management",
-        icon: <Store size={13} />,
-        chip: "bg-teal-50 border-teal-200 text-teal-700",
-    },
-};
-
-export const MODULE_ORDER = [
-    "core",
-    "customers",
-    "tickets",
-    "assignments",
-    "service",
-    "admin",
-    "accountancy",
-    "finance",
-    "inventory",
-    "pos",
-    "loyalty",
-    "coupons",
-    "crm",
-    "ecommerce",
-];
 export const NO_COPY_ROLE = "__none__";
 
 export const MATRIX_COLUMN_GROUPS = [
@@ -612,13 +489,6 @@ export const MATRIX_ROWS: {
         // in the UI where it could be ticked by mistake.
     ];
 
-export const MATRIX_PERMISSION_IDS = new Set(
-    MATRIX_ROWS.flatMap((row) =>
-        Object.values(row.cells).flatMap((cell) => (Array.isArray(cell) ? cell : [cell]))
-    )
-        .filter((permissionId): permissionId is string => Boolean(permissionId))
-);
-
 // Simplified Create / Edit / Delete columns for a single-resource matrix row —
 // no View, no own/branch/org split, since a sidebar link like Users only needs
 // "can create, can edit, can delete" at a glance (same tint language as vouchers).
@@ -745,12 +615,6 @@ export const SIDEBAR_LINK_EXTRA_TOGGLE: Record<string, { id: string; label: stri
     // Retention pages are plain create/edit/delete matrices (no extra toggle) —
     // changing the discount / balance is part of "Edit", not a separate control.
 };
-
-// Every permission surfaced as an inline "extra toggle" beside its sidebar link —
-// kept out of the loose "Additional permissions" chips so it isn't shown twice.
-export const SIDEBAR_LINK_EXTRA_TOGGLE_IDS = new Set(
-    Object.values(SIDEBAR_LINK_EXTRA_TOGGLE).map((t) => t.id),
-);
 
 export function roleToForm(role: Role): RoleForm {
     return {

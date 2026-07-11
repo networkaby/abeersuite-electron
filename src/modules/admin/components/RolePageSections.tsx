@@ -7,7 +7,6 @@
 
 
 import { useState } from "react";
-import axios from "axios";
 import {
     Check,
     ChevronDown,
@@ -38,14 +37,12 @@ import {
     QUICK_ACTION_OPTIONS,
     COLOR_OPTIONS,
     ROLE_ACCENT,
-    MODULE_ORDER,
     NO_COPY_ROLE,
     MATRIX_ROWS,
     CORE_MATRIX_COLUMN_GROUPS,
     toSharedMatrixRow,
     SIDEBAR_LINK_MATRIX_ROW_KEY,
     SIDEBAR_LINK_EXTRA_TOGGLE,
-    type Permission,
     type WorkRow,
     type WorkGroupRow,
     type Department,
@@ -393,28 +390,6 @@ export function RoleList({
             </CardContent>
         </Card>
     );
-}
-
-export function PermissionMatrix({
-    permissions,
-    permissionById,
-    search,
-    selected,
-    original,
-    onTogglePerm,
-}: {
-    permissions: Permission[];
-    permissionById: Map<string, Permission>;
-    search: string;
-    selected: Set<string>;
-    original: Set<string>;
-    onTogglePerm: (id: string) => void;
-}) {
-    // Parked (old UI): this flat cross-module CRUD grid (Tickets/Customers/Users/
-    // Roles/…) is hidden temporarily — the new permission UI is being built at the
-    // MODULE level instead (see the Sidebar links card's per-link expand-to-matrix,
-    // e.g. Users/Role/Organisation). Not deleted; body kept below, commented out.
-    return null;
 }
 
 // The role's Quick Actions picker — flex list of everything creatable (vouchers +
@@ -943,91 +918,4 @@ export function SidebarVisibilitySection({
     );
 }
 
-export function AdditionalPermissions({
-    permissions,
-    selected,
-    original,
-    onTogglePerm,
-}: {
-    permissions: Permission[];
-    selected: Set<string>;
-    original: Set<string>;
-    onTogglePerm: (id: string) => void;
-}) {
-    if (permissions.length === 0) return null;
-
-    const modules = [
-        ...MODULE_ORDER.filter((module) => permissions.some((permission) => permission.module === module)),
-        ...Array.from(new Set(permissions.map((permission) => permission.module)))
-            .filter((module) => !MODULE_ORDER.includes(module))
-            .sort(),
-    ];
-    const grouped = modules.map((module) => ({
-        module,
-        permissions: permissions.filter((permission) => permission.module === module),
-    }));
-
-    return (
-        <div className="overflow-hidden rounded-lg border border-border bg-card">
-            {/* <div className="border-b border-border bg-muted/40 px-3 py-2">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    Additional permissions
-                </p>
-                <p className="mt-0.5 text-[11px] text-muted-foreground">
-                    Lifecycle, finance, POS, and module toggles not modelled by the CRUD matrix.
-                </p>
-            </div>
-            <div className="divide-y divide-border">
-                {grouped.map((group) => (
-                    <div key={group.module} className="px-3 py-2.5">
-                        <div className="mb-1.5 flex items-center gap-2">
-                            <span className="text-[11px] font-bold uppercase tracking-wider text-foreground">
-                                {MODULE_META[group.module]?.label ?? group.module}
-                            </span>
-                            <span className="text-[10px] text-muted-foreground">
-                                {group.permissions.length} {group.permissions.length === 1 ? "permission" : "permissions"}
-                            </span>
-                        </div>
-                        <div className="flex flex-wrap gap-1.5">
-                            {group.permissions.map((permission) => {
-                                const isOn = selected.has(permission.id);
-                                const changed = selected.has(permission.id) !== original.has(permission.id);
-                                return (
-                                    <Button
-                                        key={permission.id}
-                                        type="button"
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => onTogglePerm(permission.id)}
-                                        title={`${permission.label} (${permission.id})${permission.description ? `\n${permission.description}` : ""}`}
-                                        className={[
-                                            "h-auto items-start gap-1.5 rounded-md border px-2 py-1 text-left transition-colors",
-                                            isOn
-                                                ? "border-primary bg-primary/10 text-foreground hover:bg-primary/15"
-                                                : "border-border hover:border-primary/60 hover:bg-primary/5",
-                                            changed ? "ring-2 ring-primary/20" : "",
-                                        ].join(" ")}
-                                    >
-                                        <span
-                                            className={[
-                                                "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border",
-                                                isOn ? "border-primary bg-primary text-primary-foreground" : "border-border",
-                                            ].join(" ")}
-                                        >
-                                            {isOn && <Check size={10} strokeWidth={3} />}
-                                        </span>
-                                        <span className="flex flex-col">
-                                            <span className="text-[11px] font-medium leading-tight">{permission.label}</span>
-                                            <span className="text-[10px] leading-tight text-muted-foreground">{permission.id}</span>
-                                        </span>
-                                    </Button>
-                                );
-                            })}
-                        </div>
-                    </div>
-                ))}
-            </div> */}
-        </div>
-    );
-}
 

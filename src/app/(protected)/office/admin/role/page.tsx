@@ -14,12 +14,9 @@ import { PermissionMatrix as SharedPermissionMatrix, type MatrixRow } from "@/sh
 import {
     VOUCHER_COLUMN_GROUPS,
     VOUCHER_ROWS_BY_GROUP,
-    VOUCHER_PERM_SET,
     POS_BLOCK_SHIFT_IDS,
     EMPTY_ROLE,
     NO_COPY_ROLE,
-    MATRIX_PERMISSION_IDS,
-    SIDEBAR_LINK_EXTRA_TOGGLE_IDS,
     roleToForm,
     getErrorMessage,
     type Permission,
@@ -33,12 +30,10 @@ import {
     RoleDetailsCard,
     NewRoleDialog,
     RoleList,
-    PermissionMatrix,
     PosVoucherSection,
     QuickActionsSection,
     WorkAccessSection,
     SidebarVisibilitySection,
-    AdditionalPermissions,
 } from "@/modules/admin/components/RolePageSections";
 
 export default function RolePage() {
@@ -154,32 +149,6 @@ export default function RolePage() {
         )
         : allPerms
     ).filter((permission) => inLens(permission.id));
-
-    const matrixPermissions = filtered.filter((permission) => MATRIX_PERMISSION_IDS.has(permission.id));
-    const additionalPermissions = filtered.filter(
-        (permission) => !MATRIX_PERMISSION_IDS.has(permission.id)
-            && permission.id !== "admin:bypass"
-            // Per-kind voucher perms (GL + inventory) render in the voucher matrices
-            // below, not as loose chips. Generic finance:voucher:* fallbacks too.
-            && !permission.id.startsWith("finance:voucher:")
-            && !VOUCHER_PERM_SET.has(permission.id)
-            // Work permissions get their own direct "Works" section (grouped, not
-            // pool-filtered) — keep them out of the loose chips to avoid duplication.
-            && !permission.id.startsWith("work:")
-            // Sidebar link visibility renders in its own "Sidebar links" section.
-            && !permission.id.startsWith("ui:sidebar:")
-            // POS perms (voucher matrix, shift chips, report tabs) render in the POS
-            // section (revealed by the POS toggle) — keep them out of the loose chips.
-            && !permission.id.startsWith("pos:voucher:")
-            && !permission.id.startsWith("pos:report:")
-            // The operator-scoped shift perms (open/close/drop) render as chips in the
-            // POS block; the oversight ones (manage / view other branches) fall through
-            // to Additional permissions.
-            && !POS_BLOCK_SHIFT_IDS.includes(permission.id)
-            // Perms rendered as an inline toggle beside their sidebar link (e.g.
-            // compliance:tax:edit, pricing:*) — shown there, not as a loose chip.
-            && !SIDEBAR_LINK_EXTRA_TOGGLE_IDS.has(permission.id)
-    );
 
     // Show the POS shift block when its perms are seeded (they are, from bootstrap).
     const posShiftChipsAvailable = POS_BLOCK_SHIFT_IDS.some((id) => permissionById.has(id));
@@ -305,15 +274,6 @@ export default function RolePage() {
             } else {
                 next.add(id);
             }
-            return next;
-        });
-    };
-
-    // Set a group of ids on/off together (POS chips that carry more than one id).
-    const setPerms = (ids: string[], on: boolean) => {
-        setSelected((prev) => {
-            const next = new Set(prev);
-            for (const id of ids) { if (on) next.add(id); else next.delete(id); }
             return next;
         });
     };
@@ -481,14 +441,6 @@ export default function RolePage() {
                                             </div>
                                         ) : (
                                             <div className="space-y-3">
-                                                <PermissionMatrix
-                                                    permissions={matrixPermissions}
-                                                    permissionById={permissionById}
-                                                    search={search}
-                                                    selected={selected}
-                                                    original={original}
-                                                    onTogglePerm={togglePerm}
-                                                />
                                                 {visibleVoucherGroups.map((group) => (
                                                     <SharedPermissionMatrix
                                                         key={group.key}
@@ -502,12 +454,6 @@ export default function RolePage() {
                                                         defaultOpen={false}
                                                     />
                                                 ))}
-                                                <AdditionalPermissions
-                                                    permissions={additionalPermissions}
-                                                    selected={selected}
-                                                    original={original}
-                                                    onTogglePerm={togglePerm}
-                                                />
                                             </div>
                                         )}
                                     </CardContent>
