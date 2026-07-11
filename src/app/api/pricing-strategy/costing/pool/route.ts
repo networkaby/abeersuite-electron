@@ -8,7 +8,7 @@ import { getPoolSummary } from "@/modules/pricing-strategy/lib/costPool";
 // Returns the nominated group, its ledgers, the un-settled posted-debit entries
 // (remaining > 0), and summary totals. Read-only relative to the GL.
 export async function GET() {
-    const { response } = await requireAnyPermission(PERMISSIONS.PRICING_COSTING_MANAGE, PERMISSIONS.INVENTORY_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.PRICING_COSTING_MANAGE);
     if (response) return response;
     try {
         const summary = await getPoolSummary();

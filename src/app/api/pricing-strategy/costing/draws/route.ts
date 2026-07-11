@@ -12,7 +12,7 @@ import { getEntryRemainingPaise } from "@/modules/pricing-strategy/lib/costPool"
 //   ?invVoucherId=N    → all allocations spread from one purchase/GRN (its spine id)
 // Otherwise: the whole history (most recent first).
 export async function GET(req: Request) {
-    const { response } = await requireAnyPermission(PERMISSIONS.PRICING_COSTING_MANAGE, PERMISSIONS.INVENTORY_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.PRICING_COSTING_MANAGE);
     if (response) return response;
     try {
         const { searchParams } = new URL(req.url);
@@ -105,7 +105,7 @@ export async function GET(req: Request) {
 // POST /api/pricing-strategy/costing/draws — record an ALLOCATION or DISMISSAL
 // draw against a posted pool debit. NEVER posts to the GL.
 export async function POST(req: Request) {
-    const { user, response } = await requireAnyPermission(PERMISSIONS.PRICING_COSTING_MANAGE, PERMISSIONS.INVENTORY_MANAGE);
+    const { user, response } = await requireAnyPermission(PERMISSIONS.PRICING_COSTING_MANAGE);
     if (response) return response;
     try {
         const { data, error } = await validateRequest(req, costPoolDrawCreateSchema);

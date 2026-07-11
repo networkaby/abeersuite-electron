@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { validateRequest } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { runProductImport } from "@/shared/lib/import/productImport";
@@ -24,7 +24,7 @@ export const dynamic = "force-dynamic";
 
 // POST /api/settings/item-import/preview — validate without writing.
 export async function POST(req: Request) {
-    const { response } = await requirePermission(PERMISSIONS.INVENTORY_MANAGE);
+    const { response } = await requireModuleAccess("inventory");
     if (response) return response;
 
     const { data, error } = await validateRequest(req, previewSchema);

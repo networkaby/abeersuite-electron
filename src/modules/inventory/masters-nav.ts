@@ -25,7 +25,7 @@ export type InventoryMastersNavGroup = {
 };
 
 const BASE = "/office/inventory/masters";
-const MANAGE = PERMISSIONS.INVENTORY_MANAGE;
+const MANAGE = PERMISSIONS.INVENTORY_MASTERS_EDIT;
 
 export const INVENTORY_MASTERS_NAV_GROUPS: InventoryMastersNavGroup[] = [
     {
@@ -53,7 +53,6 @@ export function filterInventoryMastersNav(
     // (or the inventory:manage umbrella) sees the whole masters nav.
     const canMasters =
         isAdmin ||
-        permissions.includes(PERMISSIONS.INVENTORY_MANAGE) ||
         permissions.includes(PERMISSIONS.INVENTORY_MASTERS_CREATE) ||
         permissions.includes(PERMISSIONS.INVENTORY_MASTERS_EDIT) ||
         permissions.includes(PERMISSIONS.INVENTORY_MASTERS_DELETE);

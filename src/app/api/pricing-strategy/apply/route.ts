@@ -18,7 +18,7 @@ interface ApplyResult {
 // STRATEGY source) + the per-item COMPUTED margin. SAVED + priceOverridden rows
 // are left untouched (unless forceOverridden + explicit ids).
 export async function POST(req: Request) {
-    const { response } = await requireAnyPermission(PERMISSIONS.PRICING_STRATEGY_SET, PERMISSIONS.INVENTORY_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.PRICING_STRATEGY_SET);
     if (response) return response;
     try {
         const { data, error } = await validateRequest(req, pricingApplySchema);

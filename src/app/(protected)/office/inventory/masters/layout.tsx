@@ -11,7 +11,6 @@ export default async function InventoryMastersLayout({ children }: { children: R
     // View rides any inventory-masters capability or the inventory:manage umbrella.
     const canOpenMasters =
         permissions.includes(PERMISSIONS.ADMIN_BYPASS) ||
-        permissions.includes(PERMISSIONS.INVENTORY_MANAGE) ||
         permissions.includes(PERMISSIONS.INVENTORY_MASTERS_CREATE) ||
         permissions.includes(PERMISSIONS.INVENTORY_MASTERS_EDIT) ||
         permissions.includes(PERMISSIONS.INVENTORY_MASTERS_DELETE);

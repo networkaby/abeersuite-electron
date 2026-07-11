@@ -20,7 +20,7 @@ import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recom
 // sell the new price without waiting for a voucher.
 // Gated by pricing:labels:apply (or the inventory:manage umbrella).
 export async function PUT(req: Request) {
-    const { response } = await requireAnyPermission(PERMISSIONS.PRICING_LABELS_APPLY, PERMISSIONS.INVENTORY_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.PRICING_LABELS_APPLY);
     if (response) return response;
     try {
         const { data, error } = await validateRequest(req, salePriceSaveSchema);

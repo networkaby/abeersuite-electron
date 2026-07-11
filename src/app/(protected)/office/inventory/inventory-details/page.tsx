@@ -138,8 +138,8 @@ export default function InventoryDetailsPage() {
     // Adding / editing a product from the Item Ledger uses the same product
     // permissions as the Products page (inventory:manage is the umbrella). Hide the
     // affordances when the role lacks them so the buttons never 403 on save.
-    const canCreateProduct = hasPermissionWithScope(permissions, "products:create") || hasPermissionWithScope(permissions, "inventory:manage");
-    const canEditProduct = hasPermissionWithScope(permissions, "products:edit") || hasPermissionWithScope(permissions, "inventory:manage");
+    const canCreateProduct = hasPermissionWithScope(permissions, "products:create");
+    const canEditProduct = hasPermissionWithScope(permissions, "products:edit");
 
     const loadProducts = useCallback(() => {
         axios

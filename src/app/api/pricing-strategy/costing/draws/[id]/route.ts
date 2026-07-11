@@ -11,7 +11,7 @@ import { costPoolDrawUpdateSchema } from "@/shared/lib/schemas/costPoolSchemas";
 // fixed. `amountPaise` is re-capped against the source entry (line total minus
 // every OTHER draw on it). No GL impact — only `cost_pool_draws` is written.
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
-    const { response } = await requireAnyPermission(PERMISSIONS.PRICING_COSTING_MANAGE, PERMISSIONS.INVENTORY_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.PRICING_COSTING_MANAGE);
     if (response) return response;
     try {
         const { id } = await ctx.params;
@@ -67,7 +67,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
 // DELETE /api/pricing-strategy/costing/draws/[id] — undo a draw (history
 // correction). Restores that entry's remaining; no GL impact.
 export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
-    const { response } = await requireAnyPermission(PERMISSIONS.PRICING_COSTING_MANAGE, PERMISSIONS.INVENTORY_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.PRICING_COSTING_MANAGE);
     if (response) return response;
     try {
         const { id } = await ctx.params;

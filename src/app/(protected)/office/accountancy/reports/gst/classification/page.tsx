@@ -18,7 +18,6 @@ export default async function TaxClassificationPage() {
         (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
     const canEdit =
         hasPermissionWithScope(perms, PERMISSIONS.COMPLIANCE_TAX_EDIT) ||
-        hasPermissionWithScope(perms, PERMISSIONS.INVENTORY_MANAGE) ||
         hasPermissionWithScope(perms, PERMISSIONS.ADMIN_BYPASS);
 
     return (

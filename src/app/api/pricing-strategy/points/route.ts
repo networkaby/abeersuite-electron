@@ -15,7 +15,7 @@ const emptyPoints = (): StrategyPoints => ({
 });
 
 export async function GET() {
-    const { response } = await requireAnyPermission(PERMISSIONS.PRICING_STRATEGY_SET, PERMISSIONS.INVENTORY_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.PRICING_STRATEGY_SET);
     if (response) return response;
     try {
         const rows = await prisma.strategyPoint.findMany();
@@ -40,7 +40,7 @@ export async function GET() {
 }
 
 export async function PUT(req: Request) {
-    const { response } = await requireAnyPermission(PERMISSIONS.PRICING_STRATEGY_SET, PERMISSIONS.INVENTORY_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.PRICING_STRATEGY_SET);
     if (response) return response;
     try {
         const { data, error } = await validateRequest(req, strategyPointsSaveSchema);

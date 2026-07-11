@@ -20,7 +20,7 @@ export default async function PricingStrategyLayout({ children }: { children: Re
     // View is granted by any Pricing Strategy sidebar nav grant; inventory:manage
     // (the module's historical umbrella) also passes. Per-page edit rights are
     // enforced inside each tool, not here.
-    if (!hasModuleNavAccess(perms, "pricing-strategy") && !hasPermissionWithScope(perms, "inventory:manage")) {
+    if (!hasModuleNavAccess(perms, "pricing-strategy")) {
         redirect("/office");
     }
     return (

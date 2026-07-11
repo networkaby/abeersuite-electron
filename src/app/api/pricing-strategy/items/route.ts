@@ -82,7 +82,7 @@ export async function GET(req: Request) {
     // inventory:manage (see items/[id] PATCH).
     const { response } = await requireAnyPermission(
         PERMISSIONS.PRICING_STRATEGY_SET, PERMISSIONS.PRICING_COSTING_MANAGE,
-        PERMISSIONS.PRICING_LABELS_APPLY, PERMISSIONS.INVENTORY_MANAGE,
+        PERMISSIONS.PRICING_LABELS_APPLY,
     );
     if (response) return response;
     try {

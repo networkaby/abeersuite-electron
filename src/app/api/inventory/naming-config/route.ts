@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAuth, requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { invNamingConfigUpdateSchema } from "@/shared/lib/schemas/inventorySchemas";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -25,7 +25,7 @@ export async function GET() {
 }
 
 export async function PUT(req: Request) {
-    const { response } = await requirePermission(PERMISSIONS.INVENTORY_MANAGE);
+    const { response } = await requireModuleAccess("inventory");
     if (response) return response;
     try {
         const { data, error } = await validateRequest(req, invNamingConfigUpdateSchema);
