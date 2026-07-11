@@ -8,7 +8,7 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { getDepartmentPool } from "@/shared/lib/auth/departmentPool";
 import { revokeRoleSessions } from "@/shared/lib/auth/revokeSessions";
 import { SIDEBAR_MODULES } from "@/shared/lib/auth/sidebarModules";
-import { SIDEBAR_LINK_GRANULAR_IDS } from "@/modules/admin/lib/roleMatrixConfig";
+import { SIDEBAR_LINK_GRANULAR_IDS, SIDEBAR_LINK_EXTRA_TOGGLE } from "@/modules/admin/lib/roleMatrixConfig";
 
 // Permissions the Role editor assigns role-direct, never department-pooled:
 // Works (`work:*`), POS operations (`pos:*` — vouchers + shift/till), and the
@@ -62,8 +62,21 @@ export async function PUT(
                     .flatMap(([, granularIds]) => granularIds)
             )
             : null;
+        // Extra capability toggles (compliance:tax:edit, pricing:*) — same principle as
+        // the granular CRUD ids above: the department greenlights the module/link, and
+        // the finer toggle is a per-role decision, so the pool never carries the toggle
+        // id itself. Unlock it once its parent link is pooled, else the filter below
+        // would silently drop it (see SIDEBAR_LINK_EXTRA_TOGGLE).
+        const unlockedExtra = allowed
+            ? new Set(
+                Object.entries(SIDEBAR_LINK_EXTRA_TOGGLE)
+                    .filter(([linkId]) => allowed.has(linkId))
+                    .map(([, toggle]) => toggle.id)
+            )
+            : null;
         const permissionIds = allowed
-            ? data.permissionIds.filter((id) => allowed.has(id) || isUnpooled(id) || unlockedGranular!.has(id))
+            ? data.permissionIds.filter((id) =>
+                allowed.has(id) || isUnpooled(id) || unlockedGranular!.has(id) || unlockedExtra!.has(id))
             : data.permissionIds;
 
         // Replace full permission set for this role
