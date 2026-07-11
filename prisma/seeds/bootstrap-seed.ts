@@ -105,34 +105,25 @@ const PERMISSIONS = [
     // branch, so there is no radius to enforce: any branch may CRUD (gated only by
     // holding the write id). The old own/department/branch/org ladder and the
     // customers:manage umbrella are retired.
-    { id: "customers:view", label: "View customers & companies", module: "customers", description: "Access the Customers and Companies pages and view records." },
-    { id: "companies:manage", label: "Manage companies", module: "customers", description: "Create, edit, and delete company records." },
     { id: "customers:create", label: "Create customers", module: "customers", description: "Create Person / Company records." },
     { id: "customers:edit", label: "Edit customers", module: "customers", description: "Edit any Person / Company record (no branch limit)." },
     { id: "customers:delete", label: "Delete customers", module: "customers", description: "Delete any Person / Company record (no branch limit)." },
-    { id: "customers:hard-delete", label: "Hard-delete converted customers", module: "customers", description: "Permanently remove soft-deleted (converted) Person / Company tombstone rows from the Trash view at /office/settings/customer-tools." },
 
     // Repair (tickets + assignments) permission layer removed — being rebuilt the
     // new way (sidebar-link + CRUD matrix), like accountancy / inventory.
     // Service-centers permission layer likewise removed (not UI-assignable).
 
     // admin
-    { id: "users:manage", label: "Manage users", module: "admin", description: "Create, edit, and delete user accounts." },
-    { id: "roles:manage", label: "Manage roles", module: "admin", description: "Create and edit roles and their permission sets." },
     { id: "settings:manage", label: "Manage org settings", module: "admin", description: "Organisation-wide settings — org defaults, payment methods, printer/QR/voucher templates, backups, downloads, imports." },
-    { id: "branches:manage", label: "Manage branches", module: "admin", description: "Umbrella — create, edit, and delete branches (grants all branch actions)." },
     { id: "branches:create", label: "Create branches", module: "admin", description: "Create branch records." },
     { id: "branches:edit", label: "Edit branches", module: "admin", description: "Edit branch records." },
     { id: "branches:delete", label: "Delete branches", module: "admin", description: "Delete branch records." },
-    { id: "departments:manage", label: "Manage departments", module: "admin", description: "Umbrella — create, edit, and delete departments and edit their permission pools." },
     { id: "departments:create", label: "Create departments", module: "admin", description: "Create department records." },
     { id: "departments:edit", label: "Edit departments", module: "admin", description: "Edit department records and their permission pools." },
     { id: "departments:delete", label: "Delete departments", module: "admin", description: "Delete department records." },
-    { id: "positions:manage", label: "Manage positions", module: "admin", description: "Umbrella — create, edit, and delete positions and their holders." },
     { id: "positions:create", label: "Create positions", module: "admin", description: "Create position records." },
     { id: "positions:edit", label: "Edit positions", module: "admin", description: "Edit positions and assign/remove their holders." },
     { id: "positions:delete", label: "Delete positions", module: "admin", description: "Delete position records." },
-    { id: "pos-counters:manage", label: "Manage POS counters", module: "admin", description: "Umbrella — create, edit, and delete POS counters." },
     { id: "pos-counters:create", label: "Create POS counters", module: "admin", description: "Create POS counter records." },
     { id: "pos-counters:edit", label: "Edit POS counters", module: "admin", description: "Edit POS counter records." },
     { id: "pos-counters:delete", label: "Delete POS counters", module: "admin", description: "Delete POS counter records." },
@@ -142,27 +133,16 @@ const PERMISSIONS = [
     { id: "roles:create", label: "Create roles", module: "admin", description: "Create role definitions." },
     { id: "roles:edit", label: "Edit roles", module: "admin", description: "Edit role definitions and grants." },
     { id: "roles:delete", label: "Delete roles", module: "admin", description: "Delete custom role definitions." },
-    { id: "inventory:manage", label: "Manage inventory masters", module: "admin", description: "Maintain units, categories, brands, warranty terms, and inventory product masters. Also gates pricing-strategy CRUD." },
 
     // crm
-    { id: "deals:view", label: "View deals", module: "deals", description: "View the deals pipeline and deal details." },
-    { id: "deals:manage", label: "Manage deals", module: "deals", description: "Create, edit, delete, move, and reassign deals." },
 
     // finance — three-tier lifecycle on journal entries
-    { id: "finance:journal:cancel", label: "Cancel journal entries", module: "finance", description: "Mark a POSTED journal entry as CANCELLED. The original keeps its reference number and stays visible in lists; a reversing entry is written for the audit trail." },
-    { id: "finance:journal:delete", label: "Delete journal entries", module: "finance", description: "Soft-delete: hide a journal entry from normal views and exclude it from balance calculations. Recoverable via restore." },
-    { id: "finance:journal:hard-delete", label: "Hard-delete journal entries", module: "finance", description: "Physically remove a journal entry. A snapshot is written to the audit log so the deletion itself is traceable. Use for cleanup only." },
 
     // finance — three-tier lifecycle on invoices
 
     // finance — three-tier lifecycle on payments
 
     // finance — generic Tally accounting vouchers
-    { id: "finance:voucher:create",      label: "Create vouchers",      module: "finance", description: "Create Contra / Payment / Receipt / Credit Note / Debit Note vouchers." },
-    { id: "finance:voucher:post",        label: "Post vouchers",        module: "finance", description: "Move a draft voucher to POSTED — applies GL impact." },
-    { id: "finance:voucher:cancel",      label: "Cancel vouchers",      module: "finance", description: "Reverse a posted voucher and mark CANCELLED." },
-    { id: "finance:voucher:delete",      label: "Delete vouchers",      module: "finance", description: "Soft-delete a voucher; reverses GL impact. Recoverable." },
-    { id: "finance:voucher:hard-delete", label: "Hard-delete vouchers", module: "finance", description: "Physically remove a voucher with audit snapshot." },
 
     // finance — per-kind GL voucher gates (finance:voucher:<action>:<kind>). The
     // routes accept the per-kind key OR the generic key above. CANCEL covers
@@ -200,17 +180,10 @@ const PERMISSIONS = [
     { id: "finance:voucher:delete:journal",      label: "Delete journal voucher",      module: "finance", description: "Remove a Journal voucher (recoverable from the Recycle Bin)." },
 
     // finance — bill-wise allocation
-    { id: "finance:allocation:manage", label: "Manage bill-wise allocations", module: "finance", description: "Link / unlink any voucher to any other voucher (full or partial), drives outstandings + aging." },
 
     // finance — opening balance
-    { id: "finance:opening-balance:manage", label: "Manage opening balances", module: "finance", description: "Edit per-account opening balance and opening stock at the books-beginning date." },
 
     // inventory — branch-scoped view/edit + three-tier lifecycle on stock vouchers
-    { id: "inventory:view", label: "View inventory", module: "inventory", description: "View vouchers, stock, and reports for the user's branch (radius is always branch; cross-branch view is admin-only)." },
-    { id: "inventory:edit", label: "Edit inventory", module: "inventory", description: "Create and post inventory vouchers (GRN / Challan / etc.) for the user's branch." },
-    { id: "inventory:voucher:cancel",      label: "Cancel inventory vouchers",      module: "inventory", description: "Reverse stock + GL impact and mark CANCELLED. Generic fallback for the per-kind cancel keys." },
-    { id: "inventory:voucher:delete",      label: "Delete inventory vouchers",      module: "inventory", description: "Soft-delete; reverses stock + GL impact. Recoverable via restore. Generic fallback for the per-kind delete keys." },
-    { id: "inventory:voucher:hard-delete", label: "Hard-delete inventory vouchers", module: "inventory", description: "Physically remove with audit snapshot." },
 
     // inventory module pages — Products catalog + Masters (8 setup tables, gated
     // together). View rides the sidebar link; inventory:manage is the umbrella.
@@ -249,15 +222,12 @@ const PERMISSIONS = [
     { id: "pos:shift:open",        label: "Open POS shift",                 module: "pos", description: "Open your own till session with an opening cash float." },
     { id: "pos:shift:close",       label: "Close POS shift",                module: "pos", description: "Declare physical cash count and hand over to manager (posts Contra)." },
     { id: "pos:shift:drop",        label: "Record mid-shift cash drop",     module: "pos", description: "Log cash dropped into the safe during an open shift." },
-    { id: "pos:shift:view", label: "View POS shifts", module: "pos", description: "View the shift report and counter board for the user's branch (cross-branch view is admin-only)." },
-    { id: "pos:shift:manage",      label: "Manage POS shifts",              module: "pos", description: "Force-close stuck shifts, edit drops, override variance." },
 
     // accountancy — module-level CRUD gate (Owner / CA only)
     // Flat accountancy view — the single gate that shows/hides the Accountancy
     // sidebar and guards its reads (radius is always branch). The old
     // create/edit/delete + own/br/org ladder was retired: accountancy writes run
     // through the voucher matrix (finance:voucher:*) and accountancy:masters:*.
-    { id: "accountancy:view",        label: "View accountancy",                   module: "accountancy", description: "View the Accountancy module (day-book, ledgers, reports, vouchers) for the user's branch. This is the gate that shows / hides the Accountancy sidebar section." },
     { id: "compliance:tax:edit", label: "Change tax classification", module: "accountancy", description: "Edit GST rate, HSN code, and taxability on inventory items and product groups from the Tax Classification page." },
     { id: "accountancy:masters:create", label: "Create accounting masters", module: "accountancy", description: "Create account groups and GL ledgers (chart of accounts)." },
     { id: "accountancy:masters:edit", label: "Edit accounting masters", module: "accountancy", description: "Edit account groups and GL ledgers." },
@@ -265,7 +235,6 @@ const PERMISSIONS = [
 
     // loyalty — earn/redeem config, earn rules, and milestones (manual point
     // adjustments live on the customer record, not here). manage = umbrella.
-    { id: "loyalty:manage", label: "Manage loyalty", module: "loyalty", description: "Umbrella — edit loyalty config, earn rules, and milestones." },
     { id: "loyalty:create", label: "Create loyalty rules", module: "loyalty", description: "Create loyalty earn rules and milestones." },
     { id: "loyalty:edit", label: "Edit loyalty", module: "loyalty", description: "Edit loyalty config, earn rules, and milestones." },
     { id: "loyalty:delete", label: "Delete loyalty rules", module: "loyalty", description: "Delete loyalty earn rules and milestones." },
@@ -273,25 +242,19 @@ const PERMISSIONS = [
     // retention — coupons / gift cards / spend tiers (loyalty is above). View rides
     // the sidebar link; each page has create/edit/delete + a money-sensitive guard
     // where one exists. manage = umbrella (grants all actions on the page).
-    { id: "coupons:manage", label: "Manage coupons", module: "coupons", description: "Umbrella — create, edit, and delete discount coupons (incl. the discount value)." },
     { id: "coupons:create", label: "Create coupons", module: "coupons", description: "Create discount coupons." },
     { id: "coupons:edit", label: "Edit coupons", module: "coupons", description: "Edit coupons, incl. the discount value (name, dates, conditions, limits, % / flat amount)." },
     { id: "coupons:delete", label: "Delete coupons", module: "coupons", description: "Delete or disable coupons." },
-    { id: "gift-cards:manage", label: "Manage gift cards", module: "coupons", description: "Umbrella — create, edit, and delete gift cards (incl. loading/writing off balance)." },
     { id: "gift-cards:create", label: "Create gift cards", module: "coupons", description: "Create gift cards." },
     { id: "gift-cards:edit", label: "Edit gift cards", module: "coupons", description: "Edit gift cards, incl. issuing (loading balance) and writing off unused balance." },
     { id: "gift-cards:delete", label: "Delete gift cards", module: "coupons", description: "Delete gift cards." },
-    { id: "tiers:manage", label: "Manage spend tiers", module: "crm", description: "Umbrella — create, edit, and delete customer spending tiers." },
     { id: "tiers:create", label: "Create spend tiers", module: "crm", description: "Create customer spending tiers." },
     { id: "tiers:edit", label: "Edit spend tiers", module: "crm", description: "Edit customer spending tiers." },
     { id: "tiers:delete", label: "Delete spend tiers", module: "crm", description: "Delete customer spending tiers." },
 
     // ecommerce — online storefront catalog & orders
-    { id: "ecommerce:manage", label: "Manage ecommerce catalog & orders", module: "ecommerce", description: "Create shop products and view customer orders." },
 
     // administration — internal work board (pipeline-based todos on the P4 pipeline)
-    { id: "administration:tasks:view",   label: "View internal work board",   module: "administration", description: "View the Administration work board and its tasks, and add comments." },
-    { id: "administration:tasks:manage", label: "Manage internal work board", module: "administration", description: "Create, edit, assign, move, and delete tasks on the Administration work board." },
 ] as const;
 
 const ROLE_PERMISSIONS: Record<string, string[]> = {

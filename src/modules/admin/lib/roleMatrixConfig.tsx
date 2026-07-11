@@ -206,33 +206,6 @@ export const MATRIX_ROWS: {
         // Repair (Tickets / Ticket Ownership / Warranty / Assignments) rows removed —
         // the repair permission layer is being rebuilt the new sidebar-link + CRUD way.
         {
-            key: "buyers",
-            label: "Customers/Companies",
-            module: "customers",
-            cells: {
-                viewOwn: "customers:view",
-                viewBranch: "customers:view",
-                viewOrg: "customers:view",
-                create: ["customers:create", "companies:manage"],
-                editOwn: ["customers:edit", "companies:manage"],
-                editBranch: ["customers:edit", "companies:manage"],
-                editOrg: ["customers:edit", "companies:manage"],
-                deleteOwn: ["customers:delete", "companies:manage"],
-                deleteBranch: ["customers:delete", "companies:manage"],
-                deleteOrg: ["customers:delete", "companies:manage"],
-            },
-        },
-        {
-            key: "invoices",
-            label: "Invoices",
-            module: "customers",
-            cells: {
-                viewOwn: "customers:view",
-                viewBranch: "customers:view",
-                viewOrg: "customers:view",
-            },
-        },
-        {
             key: "users",
             label: "Users",
             module: "admin",
@@ -353,20 +326,6 @@ export const MATRIX_ROWS: {
         },
         // Statuses / Pipelines rows removed — workflow masters are part of Settings
         // and ride settings:manage (the Org Settings row above).
-        {
-            key: "accountancy",
-            label: "Accountancy",
-            module: "accountancy",
-            // Read-only gate (flat accountancy:view — radius is always branch).
-            // Accountancy writes run through the Voucher matrix (finance:voucher:*)
-            // and the Masters row below; there is no generic accountancy
-            // create/edit/delete permission, so those columns are intentionally absent.
-            cells: {
-                viewOwn: "accountancy:view",
-                viewBranch: "accountancy:view",
-                viewOrg: "accountancy:view",
-            },
-        },
         // Retention — plain create/edit/delete per page (view rides the sidebar
         // link). Changing the discount / balance is part of Edit, not a separate gate.
         {

@@ -61,69 +61,69 @@ const voucherPerms = (actions: string[]): string[] =>
 const ROLE_PERMISSIONS: Record<string, string[]> = {
     // R5 — Branch Manager: full branch authority; no global settings/roles.
     R5: [
-        "customers:view",
+        
         "customers:create", "customers:edit", "customers:delete",
-        "companies:manage",
+        
         ...voucherPerms(["create", "post", "cancel", "delete"]),
-        "finance:allocation:manage",
-        "inventory:manage",
+        
+        
         // inventory:manage no longer passes product/masters CRUD routes — the
         // granular keys below are required (manage keeps only admin/config:
         // naming-convention writes, item import, pricing, voucher-register nav).
         "products:create", "products:edit", "products:delete",
         "inventory:masters:create", "inventory:masters:edit", "inventory:masters:delete",
-        "inventory:view", "inventory:edit",
-        "inventory:voucher:cancel", "inventory:voucher:delete",
+        
+        
         "pos:shift:open", "pos:shift:close", "pos:shift:drop",
-        "pos:shift:view", "pos:shift:manage",
-        "accountancy:view",
-        "deals:view", "deals:manage",
-        "administration:tasks:view", "administration:tasks:manage",
+        
+        
+        
+        
     ],
 
     // R2 — Service Engineer: repair & diagnostics workflow.
     R2: [
-        "customers:view",
+        
     ],
 
     // R6 — Accountant: books, GST, vouchers, reconciliation. No admin/POS/tickets.
     R6: [
-        "customers:view",
-        "companies:manage",
-        "finance:journal:cancel", "finance:journal:delete",
+        
+        
+        
         ...voucherPerms(["create", "post", "cancel", "delete"]),
-        "finance:allocation:manage",
-        "finance:opening-balance:manage",
-        "inventory:view",
-        "pos:shift:view",
+        
+        
+        
+        
         // Accountancy reads via the flat view gate; writes come from the voucher
         // matrix above (create/post/cancel/delete) + masters, not a scope ladder.
-        "accountancy:view",
+        
     ],
 
     // R7 — Sales Executive: CRM, customer acquisition, ecommerce, counter sales.
     R7: [
-        "customers:view",
+        
         "customers:create", "customers:edit", "customers:delete",
-        "companies:manage",
-        "deals:view", "deals:manage",
-        "ecommerce:manage",
-        "inventory:view",
-        "pos:shift:open", "pos:shift:close", "pos:shift:drop", "pos:shift:view",
+        
+        
+        
+        
+        "pos:shift:open", "pos:shift:close", "pos:shift:drop",
     ],
 
     // R3 — Counter / Cashier: POS, customer intake, ticket triage, branch inventory.
     R3: [
-        "customers:view", "customers:create", "customers:edit", "customers:delete", "companies:manage",
-        "deals:view", "deals:manage",
-        "inventory:view", "inventory:edit",
-        "pos:shift:open", "pos:shift:close", "pos:shift:drop", "pos:shift:view",
+        "customers:create", "customers:edit", "customers:delete",
+        
+        
+        "pos:shift:open", "pos:shift:close", "pos:shift:drop",
     ],
 
     // R4 — Stores & Despatch: stock vouchers, goods in/out, repair item handoff.
     R4: [
-        "customers:view",
-        "inventory:view", "inventory:edit",
+        
+        
         "pos:shift:open", "pos:shift:close", "pos:shift:drop",
     ],
 };
