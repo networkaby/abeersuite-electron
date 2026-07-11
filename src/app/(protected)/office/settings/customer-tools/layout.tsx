@@ -10,10 +10,7 @@ export default async function CustomerToolsLayout({ children }: { children: Reac
     const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
     const bypass = permissions.includes(PERMISSIONS.ADMIN_BYPASS);
     if (!bypass) {
-        const hasBoth =
-            permissions.includes(PERMISSIONS.CUSTOMERS_EDIT) &&
-            permissions.includes(PERMISSIONS.COMPANIES_MANAGE);
-        if (!hasBoth) redirect("/office/work-flow-inbox");
+        if (!permissions.includes(PERMISSIONS.CUSTOMERS_EDIT)) redirect("/office/work-flow-inbox");
     }
     return <>{children}</>;
 }

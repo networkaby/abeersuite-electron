@@ -148,7 +148,7 @@ export async function PUT(
     const isSelf  = caller.id === userId;
     // Editing another user needs users:edit:org (or the users:manage umbrella / bypass).
     const isAdmin = caller.permissions.includes(PERMISSIONS.USERS_EDIT_ORG)
-        || caller.permissions.includes(PERMISSIONS.USERS_MANAGE)
+        || caller.permissions.includes(PERMISSIONS.USERS_EDIT_ORG)
         || caller.permissions.includes(PERMISSIONS.ADMIN_BYPASS);
 
     if (!isSelf && !isAdmin) {
@@ -223,7 +223,7 @@ export async function DELETE(
     if (response) return response;
     // Deleting a user needs users:delete:org (or the users:manage umbrella / bypass).
     if (!caller.permissions.includes(PERMISSIONS.USERS_DELETE_ORG)
-        && !caller.permissions.includes(PERMISSIONS.USERS_MANAGE)
+        && !caller.permissions.includes(PERMISSIONS.USERS_EDIT_ORG)
         && !caller.permissions.includes(PERMISSIONS.ADMIN_BYPASS)) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }

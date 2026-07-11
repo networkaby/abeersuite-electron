@@ -32,7 +32,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-    const { response } = await requireAnyPermission(PERMISSIONS.POSITIONS_CREATE, PERMISSIONS.POSITIONS_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.POSITIONS_CREATE);
     if (response) return response;
     try {
         const { data, error } = await validateRequest(req, createSchema);

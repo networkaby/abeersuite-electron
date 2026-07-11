@@ -7,7 +7,7 @@ import { loyaltyMilestoneUpdateSchema } from "@/shared/lib/schemas/loyaltySchema
 
 // PATCH /api/loyalty/milestones/[id] — edit threshold / bonus / label / enabled.
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requireAnyPermission(PERMISSIONS.LOYALTY_EDIT, PERMISSIONS.LOYALTY_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.LOYALTY_EDIT);
     if (response) return response;
 
     const { id, error: idError } = await parseIdParam(params);
@@ -31,7 +31,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 // DELETE /api/loyalty/milestones/[id] — removing a tier also drops its award
 // rows (cascade); customers keep the bonus points already granted.
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requireAnyPermission(PERMISSIONS.LOYALTY_DELETE, PERMISSIONS.LOYALTY_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.LOYALTY_DELETE);
     if (response) return response;
 
     const { id, error } = await parseIdParam(params);

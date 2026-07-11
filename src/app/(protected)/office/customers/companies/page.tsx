@@ -78,7 +78,7 @@ export default function CompaniesPage() {
     const router = useRouter();
     const { data: session } = useSession();
     const perms = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
-    const canManageLoyalty = perms.includes(PERMISSIONS.LOYALTY_MANAGE) || perms.includes(PERMISSIONS.ADMIN_BYPASS);
+    const canManageLoyalty = perms.includes(PERMISSIONS.LOYALTY_EDIT) || perms.includes(PERMISSIONS.ADMIN_BYPASS);
     // Companies share the Contacts (customers:*) permission set — see role page.
     const canEditCompany = perms.includes(PERMISSIONS.CUSTOMERS_EDIT) || perms.includes(PERMISSIONS.ADMIN_BYPASS);
     const [companies, setCompanies] = useState<CompanyListItem[]>([]);

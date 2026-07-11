@@ -11,7 +11,7 @@ import { getDepartmentPool } from "@/shared/lib/auth/departmentPool";
 // For an all-access department, `isAllAccess: true` and `permissionIds: null`
 // (the pool is "every permission", managed automatically).
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission(PERMISSIONS.ROLES_MANAGE);
+    const { response } = await requirePermission(PERMISSIONS.DEPARTMENTS_EDIT);
     if (response) return response;
     try {
         const { id } = await params;
@@ -33,7 +33,7 @@ const putSchema = z.object({
 // changed so the action is never silent. All-access pools are auto-managed and
 // reject edits.
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requireAnyPermission(PERMISSIONS.DEPARTMENTS_EDIT, PERMISSIONS.DEPARTMENTS_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.DEPARTMENTS_EDIT);
     if (response) return response;
     try {
         const { id } = await params;

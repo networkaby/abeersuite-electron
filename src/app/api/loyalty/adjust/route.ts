@@ -8,7 +8,7 @@ import { adjustPoints, ratesFromConfig } from "@/modules/loyalty/lib";
 
 // POST /api/loyalty/adjust — manual point grant / deduction by an admin.
 export async function POST(req: Request) {
-    const { user, response } = await requirePermission(PERMISSIONS.LOYALTY_MANAGE);
+    const { user, response } = await requirePermission(PERMISSIONS.LOYALTY_EDIT);
     if (response) return response;
 
     const { data, error } = await validateRequest(req, loyaltyAdjustSchema);

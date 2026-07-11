@@ -14,7 +14,7 @@ export async function GET(
     { params }: { params: Promise<{ id: string }> }
 ) {
     const { response } = await requireAnyPermission(
-        PERMISSIONS.ROLES_MANAGE, PERMISSIONS.ROLES_CREATE, PERMISSIONS.ROLES_EDIT_ORG, PERMISSIONS.ROLES_DELETE_ORG,
+        PERMISSIONS.ROLES_CREATE, PERMISSIONS.ROLES_EDIT_ORG, PERMISSIONS.ROLES_DELETE_ORG,
     );
     if (response) return response;
     try {
@@ -53,7 +53,7 @@ export async function PATCH(
     req: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const { response } = await requireAnyPermission(PERMISSIONS.ROLES_EDIT_ORG, PERMISSIONS.ROLES_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.ROLES_EDIT_ORG);
     if (response) return response;
     try {
         const { id } = await params;
@@ -104,7 +104,7 @@ export async function DELETE(
     _: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const { response } = await requireAnyPermission(PERMISSIONS.ROLES_DELETE_ORG, PERMISSIONS.ROLES_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.ROLES_DELETE_ORG);
     if (response) return response;
     try {
         const { id } = await params;

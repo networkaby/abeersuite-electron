@@ -205,13 +205,6 @@ export const PERMISSIONS = {
     // Administration — internal work board (pipeline-based todos)
     ADMINISTRATION_TASKS_VIEW:          "administration:tasks:view",
     ADMINISTRATION_TASKS_MANAGE:        "administration:tasks:manage",
-
-
-    // Auto-added by check-doc-sync --fix:
-    SERVICE_CENTERS_VIEW:                "service-centers:view",
-    SERVICE_CENTERS_MANAGE:              "service-centers:manage",
-    SERVICE_CENTERS_VIEW_BRANCH:         "service-centers:view:branch",
-    SERVICE_CENTERS_VIEW_ORG:            "service-centers:view:org",
 } as const;
 
 export type PermissionId = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

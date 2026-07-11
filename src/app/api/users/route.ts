@@ -92,7 +92,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-    const { user: caller, response } = await requireAnyPermission(PERMISSIONS.USERS_CREATE, PERMISSIONS.USERS_MANAGE);
+    const { user: caller, response } = await requireAnyPermission(PERMISSIONS.USERS_CREATE);
     if (response) return response;
     try {
         const { data, error } = await validateRequest(req, createUserSchema);

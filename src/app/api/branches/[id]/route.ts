@@ -27,7 +27,7 @@ const updateSchema = z.object({
 });
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requireAnyPermission(PERMISSIONS.BRANCHES_EDIT, PERMISSIONS.BRANCHES_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.BRANCHES_EDIT);
     if (response) return response;
     try {
         const { id } = await params;
@@ -64,7 +64,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 }
 
 export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requireAnyPermission(PERMISSIONS.BRANCHES_DELETE, PERMISSIONS.BRANCHES_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.BRANCHES_DELETE);
     if (response) return response;
     try {
         const { id } = await params;

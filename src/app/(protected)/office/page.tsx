@@ -50,14 +50,14 @@ export default async function OfficePage() {
     // still matches the tickets:view:own gate below.
     const can = (permissionId: string) => hasPermissionWithScope(user.permissions, permissionId);
 
-    const showAdmin    = isAdmin || can("users:manage") || can("settings:manage") || can("roles:manage");
+    const showAdmin    = isAdmin || can("users:edit:org") || can("settings:manage") || can("roles:edit:org");
     // Repair permission layer is being rebuilt — gate the card on repair sidebar-nav
     // access (new visibility model) instead of the removed tickets:* permissions.
     const showRepair   = hasModuleNavAccess(user.permissions, "repair");
-    const showShowroom = can("pos:shift:open") || can("pos:shift:view");
-    const showFinance  = can("accountancy:view") || can("finance:voucher:create");
-    const showDespatch = can("inventory:view");
-    const showHr       = can("users:manage");
+    const showShowroom = can("pos:shift:open");
+    const showFinance  = hasModuleNavAccess(user.permissions, "accountancy");
+    const showDespatch = hasModuleNavAccess(user.permissions, "inventory");
+    const showHr       = can("users:edit:org");
 
     const anyCard = showAdmin || showRepair || showShowroom || showFinance || showDespatch || showHr;
 

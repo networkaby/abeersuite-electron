@@ -204,7 +204,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         ],
         children: [
             { label: "All Repair", icon: ClipboardList, href: "/office/repairing/tickets", pipelineRef: "default" },
-            { label: "Service Centers", icon: Building2, href: "/office/repairing/service-centers", permission: "service-centers:view" },
+            { label: "Service Centers", icon: Building2, href: "/office/repairing/service-centers" },
         ],
     },
 
@@ -537,9 +537,9 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         pathPrefixes: ["/office/roadmap/retention", "/office/customer-retention"],
         children: [
             // { label: "Overview", icon: ChartArea, href: "/office/roadmap/retention" },
-            { label: "Coupons", icon: Ticket, href: "/office/customer-retention/coupons", permission: "coupons:manage" },
-            { label: "Gift Cards", icon: CreditCard, href: "/office/customer-retention/gift-cards", permission: "coupons:manage" },
-            { label: "Loyalty", icon: Gift, href: "/office/customer-retention/loyalty", permission: "loyalty:manage" },
+            { label: "Coupons", icon: Ticket, href: "/office/customer-retention/coupons", permission: "coupons:edit" },
+            { label: "Gift Cards", icon: CreditCard, href: "/office/customer-retention/gift-cards", permission: "coupons:edit" },
+            { label: "Loyalty", icon: Gift, href: "/office/customer-retention/loyalty", permission: "loyalty:edit" },
             { label: "Spend Tiers", icon: BadgePercent, href: "/office/customer-retention/customer-tiers", permission: "customers:edit" },
             // Campaigns page not built yet — was pointing at the non-existent /office/roadmap/retention/campaigns (404).
             // { label: "Campaigns", icon: Megaphone, href: "/office/roadmap/retention/campaigns" },
@@ -581,13 +581,13 @@ export const MODULE_SECTIONS: ModuleSection[] = [
 ];
 
 export const ADMIN_NAV: SettingsNavItem[] = [
-    { label: "Users", href: "/office/admin/users", icon: UserCog, permission: "users:manage" },
-    { label: "Org Chart", href: "/office/admin/org-chart", icon: Network, permission: "users:manage" },
-    { label: "Role", href: "/office/admin/role", icon: ShieldCheck, permission: "roles:manage" },
-    { label: "Branches", href: "/office/admin/branches", icon: Building2, permission: "branches:manage" },
-    { label: "Departments", href: "/office/admin/departments", icon: Users, permission: "departments:manage" },
-    { label: "Positions", href: "/office/admin/positions", icon: Briefcase, permission: "positions:manage" },
-    { label: "POS Counters", href: "/office/admin/counters", icon: Monitor, permission: "pos-counters:manage" },
+    { label: "Users", href: "/office/admin/users", icon: UserCog, permission: "users:edit:org" },
+    { label: "Org Chart", href: "/office/admin/org-chart", icon: Network, permission: "users:edit:org" },
+    { label: "Role", href: "/office/admin/role", icon: ShieldCheck, permission: "roles:edit:org" },
+    { label: "Branches", href: "/office/admin/branches", icon: Building2, permission: "branches:edit" },
+    { label: "Departments", href: "/office/admin/departments", icon: Users, permission: "departments:edit" },
+    { label: "Positions", href: "/office/admin/positions", icon: Briefcase, permission: "positions:edit" },
+    { label: "POS Counters", href: "/office/admin/counters", icon: Monitor, permission: "pos-counters:edit" },
 ];
 
 export const SETTINGS_NAV: SettingsNavItem[] = [

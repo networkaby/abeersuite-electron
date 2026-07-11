@@ -64,7 +64,6 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
         "customers:view",
         "customers:create", "customers:edit", "customers:delete",
         "companies:manage",
-        "service-centers:view", "service-centers:view:org",
         ...voucherPerms(["create", "post", "cancel", "delete"]),
         "finance:allocation:manage",
         "inventory:manage",
@@ -85,7 +84,6 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     // R2 — Service Engineer: repair & diagnostics workflow.
     R2: [
         "customers:view",
-        "service-centers:view", "service-centers:view:branch",
     ],
 
     // R6 — Accountant: books, GST, vouchers, reconciliation. No admin/POS/tickets.

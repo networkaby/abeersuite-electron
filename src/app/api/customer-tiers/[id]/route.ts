@@ -7,7 +7,7 @@ import { customerTierUpdateSchema } from "@/shared/lib/schemas/customerTierSchem
 
 // PATCH /api/customer-tiers/[id] — edit name / threshold / % / enabled / order.
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requireAnyPermission(PERMISSIONS.TIERS_EDIT, PERMISSIONS.TIERS_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.TIERS_EDIT);
     if (response) return response;
 
     const { id, error: idError } = await parseIdParam(params);
@@ -26,7 +26,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
 // DELETE /api/customer-tiers/[id] — remove a tier.
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requireAnyPermission(PERMISSIONS.TIERS_DELETE, PERMISSIONS.TIERS_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.TIERS_DELETE);
     if (response) return response;
 
     const { id, error } = await parseIdParam(params);

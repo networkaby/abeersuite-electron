@@ -7,9 +7,9 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 // a user with only loyalty (or only tiers) rights isn't bounced off the Coupons
 // gate. Keeps the breadcrumb root href (/office/customer-retention) valid.
 const SECTIONS: { href: string; perm: string }[] = [
-    { href: "/office/customer-retention/coupons",        perm: PERMISSIONS.COUPONS_MANAGE },
-    { href: "/office/customer-retention/gift-cards",     perm: PERMISSIONS.COUPONS_MANAGE },
-    { href: "/office/customer-retention/loyalty",        perm: PERMISSIONS.LOYALTY_MANAGE },
+    { href: "/office/customer-retention/coupons",        perm: PERMISSIONS.COUPONS_EDIT },
+    { href: "/office/customer-retention/gift-cards",     perm: PERMISSIONS.GIFT_CARDS_EDIT },
+    { href: "/office/customer-retention/loyalty",        perm: PERMISSIONS.LOYALTY_EDIT },
     { href: "/office/customer-retention/customer-tiers", perm: PERMISSIONS.CUSTOMERS_EDIT },
 ];
 

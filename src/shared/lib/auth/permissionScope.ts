@@ -2,10 +2,9 @@ export type PermissionScope = "own" | "department" | "branch" | "org";
 
 const SCOPE_ORDER: PermissionScope[] = ["own", "department", "branch", "org"];
 
-const LEGACY_TO_SCOPED_ACTIONS: Record<string, string[]> = {
-    "users:manage": ["users:create", "users:edit", "users:delete"],
-    "roles:manage": ["roles:create", "roles:edit", "roles:delete"],
-};
+// Legacy umbrella→granular expansion. The users:manage / roles:manage umbrellas
+// were retired (not UI-assignable); checks now use the granular keys directly.
+const LEGACY_TO_SCOPED_ACTIONS: Record<string, string[]> = {};
 
 function isScope(value: string): value is PermissionScope {
     return (SCOPE_ORDER as string[]).includes(value);

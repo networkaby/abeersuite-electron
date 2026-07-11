@@ -7,7 +7,7 @@ import { loyaltyEarnRuleUpdateSchema } from "@/shared/lib/schemas/loyaltySchemas
 
 // PATCH /api/loyalty/earn-rules/[id] — edit multiplier / enabled flag.
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requireAnyPermission(PERMISSIONS.LOYALTY_EDIT, PERMISSIONS.LOYALTY_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.LOYALTY_EDIT);
     if (response) return response;
 
     const { id, error: idError } = await parseIdParam(params);
@@ -26,7 +26,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
 // DELETE /api/loyalty/earn-rules/[id]
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requireAnyPermission(PERMISSIONS.LOYALTY_DELETE, PERMISSIONS.LOYALTY_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.LOYALTY_DELETE);
     if (response) return response;
 
     const { id, error } = await parseIdParam(params);

@@ -13,7 +13,7 @@ import { moneyNumber, round2 } from "@/shared/lib/format";
 // on the Gift Cards page); also safe to call from a scheduled job (GitHub Action).
 export async function POST() {
     // Writing off unused balance is part of managing gift cards (edit).
-    const { user, response } = await requireAnyPermission(PERMISSIONS.GIFT_CARDS_EDIT, PERMISSIONS.GIFT_CARDS_MANAGE);
+    const { user, response } = await requireAnyPermission(PERMISSIONS.GIFT_CARDS_EDIT);
     if (response) return response;
 
     try {

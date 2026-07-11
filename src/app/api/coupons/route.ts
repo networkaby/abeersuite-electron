@@ -23,7 +23,7 @@ export async function GET() {
 
 // POST /api/coupons — create a coupon (+ its include/exclude rules).
 export async function POST(req: Request) {
-    const { user, response } = await requireAnyPermission(PERMISSIONS.COUPONS_CREATE, PERMISSIONS.COUPONS_MANAGE);
+    const { user, response } = await requireAnyPermission(PERMISSIONS.COUPONS_CREATE);
     if (response) return response;
     const { data, error } = await validateRequest(req, couponSchema);
     if (error) return error;

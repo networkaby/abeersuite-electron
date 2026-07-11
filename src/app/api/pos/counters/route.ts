@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
         // admin counter list is allowed for anyone who can act on counters — the
         // umbrella `pos-counters:manage` or any of create/edit/delete.
         const canManageCounters =
-            sessionPerms.includes(PERMISSIONS.POS_COUNTERS_MANAGE) ||
+            sessionPerms.includes(PERMISSIONS.POS_COUNTERS_EDIT) ||
             sessionPerms.includes(PERMISSIONS.POS_COUNTERS_CREATE) ||
             sessionPerms.includes(PERMISSIONS.POS_COUNTERS_EDIT) ||
             sessionPerms.includes(PERMISSIONS.POS_COUNTERS_DELETE) ||
@@ -151,7 +151,7 @@ const createSchema = z.object({
 const CASH_IN_HAND_GROUP = "Cash-in-Hand";
 
 export async function POST(req: NextRequest) {
-    const { response } = await requireAnyPermission(PERMISSIONS.POS_COUNTERS_CREATE, PERMISSIONS.POS_COUNTERS_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.POS_COUNTERS_CREATE);
     if (response) return response;
 
     try {

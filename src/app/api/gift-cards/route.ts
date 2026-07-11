@@ -26,7 +26,7 @@ export async function GET() {
 // posting, no money taken. It can be shared, printed, edited and deleted freely
 // until it is sold via POST /api/gift-cards/[id]/issue (which posts the liability).
 export async function POST(req: Request) {
-    const { user, response } = await requireAnyPermission(PERMISSIONS.GIFT_CARDS_CREATE, PERMISSIONS.GIFT_CARDS_MANAGE);
+    const { user, response } = await requireAnyPermission(PERMISSIONS.GIFT_CARDS_CREATE);
     if (response) return response;
     const { data, error } = await validateRequest(req, giftCardGenerateSchema);
     if (error) return error;

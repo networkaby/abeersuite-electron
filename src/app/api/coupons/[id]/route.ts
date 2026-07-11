@@ -8,7 +8,7 @@ import { couponUpdateSchema } from "@/shared/lib/schemas/couponSchemas";
 // PATCH /api/coupons/[id] — edit fields (incl. the discount value) and/or replace
 // the include/exclude rules.
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requireAnyPermission(PERMISSIONS.COUPONS_EDIT, PERMISSIONS.COUPONS_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.COUPONS_EDIT);
     if (response) return response;
 
     const { id, error: idError } = await parseIdParam(params);
@@ -42,7 +42,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 // DELETE /api/coupons/[id] — hard delete if never redeemed, else soft-disable
 // (keep the row so historical CouponRedemption references stay intact).
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requireAnyPermission(PERMISSIONS.COUPONS_DELETE, PERMISSIONS.COUPONS_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.COUPONS_DELETE);
     if (response) return response;
 
     const { id, error } = await parseIdParam(params);

@@ -63,7 +63,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-    const { response } = await requireAnyPermission(PERMISSIONS.DEPARTMENTS_CREATE, PERMISSIONS.DEPARTMENTS_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.DEPARTMENTS_CREATE);
     if (response) return response;
     try {
         const { data, error } = await validateRequest(req, createSchema);

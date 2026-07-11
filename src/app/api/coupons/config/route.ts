@@ -19,7 +19,7 @@ export async function GET() {
 
 // PATCH /api/coupons/config — edit the global guard / ledger wiring.
 export async function PATCH(req: Request) {
-    const { response } = await requireAnyPermission(PERMISSIONS.COUPONS_EDIT, PERMISSIONS.COUPONS_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.COUPONS_EDIT);
     if (response) return response;
     const { data, error } = await validateRequest(req, couponConfigUpdateSchema);
     if (error) return error;

@@ -31,7 +31,7 @@ export async function GET() {
 
 // POST /api/loyalty/earn-rules — create a multiplier override.
 export async function POST(req: Request) {
-    const { response } = await requireAnyPermission(PERMISSIONS.LOYALTY_CREATE, PERMISSIONS.LOYALTY_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.LOYALTY_CREATE);
     if (response) return response;
 
     const { data, error } = await validateRequest(req, loyaltyEarnRuleSchema);

@@ -16,7 +16,7 @@ export async function GET() {
 
 // PATCH /api/loyalty/config — edit earn/redeem rates + expiry window.
 export async function PATCH(req: Request) {
-    const { response } = await requireAnyPermission(PERMISSIONS.LOYALTY_EDIT, PERMISSIONS.LOYALTY_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.LOYALTY_EDIT);
     if (response) return response;
 
     const { data, error } = await validateRequest(req, loyaltyConfigUpdateSchema);

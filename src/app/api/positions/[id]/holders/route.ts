@@ -10,7 +10,7 @@ import { revokeUserSessions } from "@/shared/lib/auth/revokeSessions";
 const assignSchema = z.object({ userId: z.number().int().positive() });
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requireAnyPermission(PERMISSIONS.POSITIONS_EDIT, PERMISSIONS.POSITIONS_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.POSITIONS_EDIT);
     if (response) return response;
     try {
         const { id: positionId } = await params;

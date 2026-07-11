@@ -20,7 +20,7 @@ export async function GET() {
 
 // POST /api/customer-tiers — add a tier.
 export async function POST(req: Request) {
-    const { response } = await requireAnyPermission(PERMISSIONS.TIERS_CREATE, PERMISSIONS.TIERS_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.TIERS_CREATE);
     if (response) return response;
     const { data, error } = await validateRequest(req, customerTierSchema);
     if (error) return error;

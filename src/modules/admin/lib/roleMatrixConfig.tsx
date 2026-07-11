@@ -233,23 +233,6 @@ export const MATRIX_ROWS: {
             },
         },
         {
-            key: "serviceCenters",
-            label: "Service Centers",
-            module: "service",
-            cells: {
-                viewOwn: "service-centers:view",
-                viewBranch: "service-centers:view",
-                viewOrg: "service-centers:view",
-                create: "service-centers:manage",
-                editOwn: "service-centers:manage",
-                editBranch: "service-centers:manage",
-                editOrg: "service-centers:manage",
-                deleteOwn: "service-centers:manage",
-                deleteBranch: "service-centers:manage",
-                deleteOrg: "service-centers:manage",
-            },
-        },
-        {
             key: "users",
             label: "Users",
             module: "admin",

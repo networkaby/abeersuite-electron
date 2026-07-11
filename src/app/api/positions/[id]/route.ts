@@ -30,7 +30,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 }
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requireAnyPermission(PERMISSIONS.POSITIONS_EDIT, PERMISSIONS.POSITIONS_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.POSITIONS_EDIT);
     if (response) return response;
     try {
         const { id } = await params;
@@ -63,7 +63,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 }
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requireAnyPermission(PERMISSIONS.POSITIONS_DELETE, PERMISSIONS.POSITIONS_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.POSITIONS_DELETE);
     if (response) return response;
     try {
         const { id } = await params;

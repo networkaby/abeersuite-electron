@@ -9,7 +9,7 @@ export async function DELETE(
     _req: Request,
     { params }: { params: Promise<{ id: string; userId: string }> },
 ) {
-    const { response } = await requireAnyPermission(PERMISSIONS.POSITIONS_EDIT, PERMISSIONS.POSITIONS_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.POSITIONS_EDIT);
     if (response) return response;
     try {
         const { id: positionId, userId: userIdStr } = await params;

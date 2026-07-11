@@ -114,12 +114,7 @@ const PERMISSIONS = [
 
     // Repair (tickets + assignments) permission layer removed — being rebuilt the
     // new way (sidebar-link + CRUD matrix), like accountancy / inventory.
-
-    // service
-    { id: "service-centers:view", label: "View service centers", module: "service", description: "Access the Service Centers page in the sidebar." },
-    { id: "service-centers:manage", label: "Manage service centers", module: "service", description: "Add, edit, and delete service center records." },
-    { id: "service-centers:view:branch", label: "View branch service centers", module: "service", description: "View service centers in user branches." },
-    { id: "service-centers:view:org", label: "View organisation service centers", module: "service", description: "View service centers across the organisation." },
+    // Service-centers permission layer likewise removed (not UI-assignable).
 
     // admin
     { id: "users:manage", label: "Manage users", module: "admin", description: "Create, edit, and delete user accounts." },

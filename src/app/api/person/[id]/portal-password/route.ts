@@ -17,7 +17,7 @@ export async function PATCH(
     req: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const { response } = await requirePermission(PERMISSIONS.USERS_MANAGE);
+    const { response } = await requirePermission(PERMISSIONS.USERS_EDIT_ORG);
     if (response) return response;
 
     const { data, error } = await validateRequest(req, schema);

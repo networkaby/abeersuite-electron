@@ -8,7 +8,7 @@ import { giftCardUpdateSchema } from "@/shared/lib/schemas/giftCardSchemas";
 // PATCH /api/gift-cards/[id] — edit a DRAFT card (value / code / owner / expiry).
 // Once issued (ACTIVE) the card is backed by a real liability and is immutable here.
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requireAnyPermission(PERMISSIONS.GIFT_CARDS_EDIT, PERMISSIONS.GIFT_CARDS_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.GIFT_CARDS_EDIT);
     if (response) return response;
 
     const { id, error: idError } = await parseIdParam(params);
@@ -58,7 +58,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 // DELETE /api/gift-cards/[id] — hard-delete a DRAFT card (nothing posted to the
 // GL). Issued/redeemed/expired cards carry real accounting and cannot be deleted.
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requireAnyPermission(PERMISSIONS.GIFT_CARDS_DELETE, PERMISSIONS.GIFT_CARDS_MANAGE);
+    const { response } = await requireAnyPermission(PERMISSIONS.GIFT_CARDS_DELETE);
     if (response) return response;
 
     const { id, error } = await parseIdParam(params);

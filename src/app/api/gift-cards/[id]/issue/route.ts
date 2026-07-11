@@ -11,7 +11,7 @@ import { enginePost } from "@/modules/accountancy/lib/transactionEngine";
 // ISSUE txn, and flips the card DRAFT → ACTIVE. This is the moment money is taken.
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
     // Issuing (selling) a card is part of editing it — activates + loads balance.
-    const { user, response } = await requireAnyPermission(PERMISSIONS.GIFT_CARDS_EDIT, PERMISSIONS.GIFT_CARDS_MANAGE);
+    const { user, response } = await requireAnyPermission(PERMISSIONS.GIFT_CARDS_EDIT);
     if (response) return response;
 
     const { id, error: idError } = await parseIdParam(params);

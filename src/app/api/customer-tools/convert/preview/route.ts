@@ -12,8 +12,7 @@ export async function GET(req: Request) {
     // Page-level gate uses CUSTOMERS_EDIT + COMPANIES_MANAGE together — the
     // converter creates one party type and tombstones the other.
     if (
-        !hasPermission(user, PERMISSIONS.CUSTOMERS_EDIT) ||
-        !hasPermission(user, PERMISSIONS.COMPANIES_MANAGE)
+        !hasPermission(user, PERMISSIONS.CUSTOMERS_EDIT)
     ) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
