@@ -164,12 +164,11 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         label: "POS",
         icon: Monitor,
         key: "pos",
-        permission: "pos:shift:view",
         dashboardHref: "/office/pos/shifts",
         pathPrefixes: ["/office/pos"],
         children: [
-            { label: "Shift Reports", href: "/office/pos/shifts", icon: Clock, permission: "pos:shift:view" },
-            { label: "Counters", href: "/office/pos/counters", icon: ClipboardList, permission: "pos:shift:view" },
+            { label: "Shift Reports", href: "/office/pos/shifts", icon: Clock },
+            { label: "Counters", href: "/office/pos/counters", icon: ClipboardList },
         ],
     },
 
@@ -182,13 +181,13 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         dashboardHref: "/office/customers",
         pathPrefixes: ["/office/customers"],
         createActions: [
-            { label: "Person +", subtitle: "Create a new person", icon: Users, variant: "default", action: "new-person", permission: "customers:view" },
-            { label: "Companies +", subtitle: "Create a new company", icon: Building2, variant: "outline", action: "new-company", permission: "customers:view" },
+            { label: "Person +", subtitle: "Create a new person", icon: Users, variant: "default", action: "new-person", permission: "customers:create" },
+            { label: "Companies +", subtitle: "Create a new company", icon: Building2, variant: "outline", action: "new-company", permission: "customers:create" },
         ],
         children: [
             // { label: "All Contacts", href: "/office/customers", icon: Users, permission: "customers:view" },
-            { label: "Person", href: "/office/customers/person", icon: Users, permission: "customers:view" },
-            { label: "Companies", href: "/office/customers/companies", icon: Building2, permission: "customers:view" },
+            { label: "Person", href: "/office/customers/person", icon: Users },
+            { label: "Companies", href: "/office/customers/companies", icon: Building2 },
         ],
     },
     // Repair & Warranty
@@ -374,14 +373,13 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         label: "CRM",
         icon: Network,
         key: "crm",
-        permission: "deals:view",
         dashboardHref: "/office/crm/deals",
         pathPrefixes: ["/office/crm"],
         createActions: [
-            { label: "New Deal +", subtitle: "Add a deal to the pipeline", icon: Network, variant: "default", href: "/office/crm/deals?new=1", permission: "deals:manage" },
+            { label: "New Deal +", subtitle: "Add a deal to the pipeline", icon: Network, variant: "default", href: "/office/crm/deals?new=1" },
         ],
         children: [
-            { label: "Deals", icon: ClipboardList, href: "/office/crm/deals", permission: "deals:view" },
+            { label: "Deals", icon: ClipboardList, href: "/office/crm/deals" },
             // Future under CRM: Contacts, Leads (lead-finding) — separate modules.
         ],
     },
@@ -413,8 +411,8 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         children: [
             // Dashboard is the module index (dashboardHref). Categories live in
             // Inventory → Masters; coupons live in Customer Retention.
-            { label: "Orders", icon: ClipboardList, href: "/office/ecommerce/orders", permission: "ecommerce:manage" },
-            { label: "Products", icon: Box, href: "/office/ecommerce/products", permission: "ecommerce:manage" },
+            { label: "Orders", icon: ClipboardList, href: "/office/ecommerce/orders" },
+            { label: "Products", icon: Box, href: "/office/ecommerce/products" },
         ],
     },
 
@@ -592,7 +590,7 @@ export const ADMIN_NAV: SettingsNavItem[] = [
 export const SETTINGS_NAV: SettingsNavItem[] = [
     { label: "Organisation", href: "/office/settings/organisation", icon: Building2, permission: "settings:manage" },
     { label: "Org Defaults", href: "/office/settings/org-defaults", icon: Settings, permission: "settings:manage" },
-    { label: "E-Commerce", href: "/office/settings/ecommerce", icon: ShoppingCart, permission: "ecommerce:manage" },
+    { label: "E-Commerce", href: "/office/settings/ecommerce", icon: ShoppingCart, permission: "settings:manage" },
     { label: "Payment Methods", href: "/office/settings/payment-methods", icon: CreditCard, permission: "settings:manage" },
     { label: "Workflow", href: "/office/settings/workflow", icon: Workflow, permission: "settings:manage" },
     { label: "Naming Convention", icon: ClipboardList, href: "/office/settings/naming-convention", permission: "inventory:manage" },

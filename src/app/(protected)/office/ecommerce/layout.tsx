@@ -1,7 +1,7 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import AdminTabsNav from "@/modules/ecommerce/components/AdminTabsNav";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { hasModuleNavAccess } from "@/shared/lib/auth/permissionScope";
 import { PathBreadcrumb } from "@/shared/components/PathBreadcrumb";
 
 // Full-height area shell: breadcrumb (+ Esc → back) and the tab bar stay pinned
@@ -12,7 +12,7 @@ import { PathBreadcrumb } from "@/shared/components/PathBreadcrumb";
 export default async function EcommerceModuleLayout({ children }: { children: React.ReactNode }) {
     const session = await auth();
     const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
-    if (!permissions.includes(PERMISSIONS.ADMIN_BYPASS) && !permissions.includes(PERMISSIONS.ECOMMERCE_MANAGE)) {
+    if (!hasModuleNavAccess(permissions, "e-commerce")) {
         redirect("/office/work-flow-inbox");
     }
 

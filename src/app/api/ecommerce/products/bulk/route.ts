@@ -1,7 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
@@ -20,7 +20,7 @@ const schema = z.object({
 });
 
 export async function POST(req: Request) {
-    const { response } = await requirePermission(PERMISSIONS.ECOMMERCE_MANAGE);
+    const { response } = await requireModuleAccess("e-commerce");
     if (response) return response;
     const { data, error } = await validateRequest(req, schema);
     if (error) return error;

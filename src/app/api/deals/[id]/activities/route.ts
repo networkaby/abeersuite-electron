@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { createActivitySchema } from "@/shared/lib/schemas/dealSchema";
@@ -8,7 +8,7 @@ import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 
 // Any viewer of the Deals may log an activity (note / call / meeting / task).
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { user, response } = await requirePermission(PERMISSIONS.DEALS_VIEW);
+    const { user, response } = await requireModuleAccess("crm");
     if (response) return response;
     const dealId = Number((await params).id);
     if (!Number.isInteger(dealId) || dealId < 1) return NextResponse.json({ error: "Invalid id" }, { status: 400 });

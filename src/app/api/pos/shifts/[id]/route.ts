@@ -9,6 +9,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
+import { hasModuleNavAccess } from "@/shared/lib/auth/permissionScope";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { sumPaise, sumShiftCashSalesPaise, buildShiftTenderBreakdown } from "@/modules/pos/lib/shiftMath";
@@ -72,7 +73,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         const isOwner = shift.userId === user!.id;
         const isAdminUser = user!.permissions.includes(PERMISSIONS.ADMIN_BYPASS);
         const canViewBranch =
-            user!.permissions.includes(PERMISSIONS.POS_SHIFT_VIEW) &&
+            hasModuleNavAccess(user!.permissions, "pos") &&
             user!.branchIds.includes(shift.branchId);
         if (!isOwner && !isAdminUser && !canViewBranch) {
             return NextResponse.json({ error: "No access to this shift" }, { status: 403 });

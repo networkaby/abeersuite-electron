@@ -45,7 +45,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             return NextResponse.json({ error: "Only OPEN shifts can initiate a handover" }, { status: 409 });
         }
 
-        const canManage = user!.permissions.includes(PERMISSIONS.POS_SHIFT_MANAGE) || user!.permissions.includes(PERMISSIONS.ADMIN_BYPASS);
+        const canManage = user!.permissions.includes(PERMISSIONS.ADMIN_BYPASS);
         if (shift.userId !== user!.id && !canManage) {
             return NextResponse.json({ error: "Not your shift" }, { status: 403 });
         }
@@ -129,7 +129,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
         if (shift.status !== "AWAITING_HANDOVER") {
             return NextResponse.json({ error: "No pending handover on this shift" }, { status: 409 });
         }
-        const canManage = user!.permissions.includes(PERMISSIONS.POS_SHIFT_MANAGE) || user!.permissions.includes(PERMISSIONS.ADMIN_BYPASS);
+        const canManage = user!.permissions.includes(PERMISSIONS.ADMIN_BYPASS);
         if (shift.userId !== user!.id && !canManage) {
             return NextResponse.json({ error: "Not your shift" }, { status: 403 });
         }

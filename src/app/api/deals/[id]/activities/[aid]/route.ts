@@ -1,13 +1,13 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { updateActivitySchema } from "@/shared/lib/schemas/dealSchema";
 
 // Toggle a TASK activity done / not-done.
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string; aid: string }> }) {
-    const { response } = await requirePermission(PERMISSIONS.DEALS_VIEW);
+    const { response } = await requireModuleAccess("crm");
     if (response) return response;
     const { id, aid } = await params;
     const dealId = Number(id);

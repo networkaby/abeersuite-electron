@@ -39,7 +39,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             return NextResponse.json({ error: "Cannot drop on a closed shift" }, { status: 409 });
         }
 
-        const canManage = user!.permissions.includes(PERMISSIONS.POS_SHIFT_MANAGE) || user!.permissions.includes(PERMISSIONS.ADMIN_BYPASS);
+        const canManage = user!.permissions.includes(PERMISSIONS.ADMIN_BYPASS);
         if (shift.userId !== user!.id && !canManage) {
             return NextResponse.json({ error: "Not your shift" }, { status: 403 });
         }

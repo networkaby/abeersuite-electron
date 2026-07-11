@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { OrderSource, ShopOrderStatus } from "@/generated/prisma/enums";
 import { Prisma } from "@/generated/prisma/client";
 import { getOrdersPipeline } from "@/modules/ecommerce/lib/ordersPipeline";
@@ -26,7 +26,7 @@ const ACCOUNT_SELECT = {
 } satisfies Prisma.AccountSelect;
 
 export async function GET(req: Request) {
-    const { response } = await requirePermission(PERMISSIONS.ECOMMERCE_MANAGE);
+    const { response } = await requireModuleAccess("e-commerce");
     if (response) return response;
     try {
         const { searchParams } = new URL(req.url);
@@ -121,7 +121,7 @@ const createSchema = z.object({
 });
 
 export async function POST(req: Request) {
-    const { response } = await requirePermission(PERMISSIONS.ECOMMERCE_MANAGE);
+    const { response } = await requireModuleAccess("e-commerce");
     if (response) return response;
 
     const { data, error } = await validateRequest(req, createSchema);

@@ -68,7 +68,7 @@ export default function CountersStatusPage() {
     const perms = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
     // Force-close another operator's shift (e.g. they fell ill / their PC died)
     // needs manage rights; the close API enforces the same.
-    const canManage = perms.includes(PERMISSIONS.POS_SHIFT_MANAGE) || perms.includes(PERMISSIONS.ADMIN_BYPASS);
+    const canManage = perms.includes(PERMISSIONS.ADMIN_BYPASS);
 
     const [cards, setCards]   = useState<CounterCard[]>([]);
     const [loading, setLoading] = useState(true);

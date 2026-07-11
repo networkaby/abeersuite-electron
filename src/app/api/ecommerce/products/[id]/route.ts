@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { invProductToAdmin } from "@/modules/ecommerce/lib/productAdmin";
 import { resolveShopListing } from "@/modules/ecommerce/lib/shopListing";
 import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
@@ -46,7 +46,7 @@ const productInclude = {
 } as const;
 
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission(PERMISSIONS.ECOMMERCE_MANAGE);
+    const { response } = await requireModuleAccess("e-commerce");
     if (response) return response;
     const { id } = await ctx.params;
     const pid = parseInt(id, 10);
@@ -62,7 +62,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
 }
 
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission(PERMISSIONS.ECOMMERCE_MANAGE);
+    const { response } = await requireModuleAccess("e-commerce");
     if (response) return response;
     const { id } = await ctx.params;
     const pid = parseInt(id, 10);
@@ -160,7 +160,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
 }
 
 export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission(PERMISSIONS.ECOMMERCE_MANAGE);
+    const { response } = await requireModuleAccess("e-commerce");
     if (response) return response;
     const { id } = await ctx.params;
     const pid = parseInt(id, 10);

@@ -1,12 +1,12 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
 
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission(PERMISSIONS.ECOMMERCE_MANAGE);
+    const { response } = await requireModuleAccess("e-commerce");
     if (response) return response;
     const { id } = await ctx.params;
     const oid = parseInt(id, 10);

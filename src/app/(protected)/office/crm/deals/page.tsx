@@ -1,7 +1,7 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { hasModuleNavAccess } from "@/shared/lib/auth/permissionScope";
 import { getDealsPipeline } from "@/modules/deals/lib/dealsPipeline";
 import { DealsWorkspace } from "@/modules/deals/components";
 
@@ -9,11 +9,10 @@ export default async function DealsPage() {
     const session = await auth();
     const sessionUser = session?.user as { id?: string; permissions?: string[] } | undefined;
     const permissions = sessionUser?.permissions ?? [];
-    if (!permissions.includes(PERMISSIONS.ADMIN_BYPASS) && !permissions.includes(PERMISSIONS.DEALS_VIEW)) {
+    if (!hasModuleNavAccess(permissions, "crm")) {
         redirect("/office/work-flow-inbox");
     }
-    const canManage =
-        permissions.includes(PERMISSIONS.ADMIN_BYPASS) || permissions.includes(PERMISSIONS.DEALS_MANAGE);
+    const canManage = hasModuleNavAccess(permissions, "crm");
     const currentUserId = Number(sessionUser?.id ?? 0);
 
     const pipeline = await getDealsPipeline(prisma);

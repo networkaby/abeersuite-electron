@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { createDealSchema } from "@/shared/lib/schemas/dealSchema";
@@ -79,7 +79,7 @@ export function flattenDeal(t: DealTicketRow) {
 }
 
 export async function GET(req: Request) {
-    const { response } = await requirePermission(PERMISSIONS.DEALS_VIEW);
+    const { response } = await requireModuleAccess("crm");
     if (response) return response;
     try {
         const pipeline = await getDealsPipeline(prisma);
@@ -118,7 +118,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-    const { user, response } = await requirePermission(PERMISSIONS.DEALS_MANAGE);
+    const { user, response } = await requireModuleAccess("crm");
     if (response) return response;
     try {
         const pipeline = await getDealsPipeline(prisma);

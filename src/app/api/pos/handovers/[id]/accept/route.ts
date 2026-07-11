@@ -63,7 +63,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             return NextResponse.json({ error: `Handover is already ${handover.status.toLowerCase()}` }, { status: 409 });
         }
         if (handover.toUserId !== user!.id) {
-            const canManage = user!.permissions.includes(PERMISSIONS.POS_SHIFT_MANAGE) || user!.permissions.includes(PERMISSIONS.ADMIN_BYPASS);
+            const canManage = user!.permissions.includes(PERMISSIONS.ADMIN_BYPASS);
             if (!canManage) return NextResponse.json({ error: "This handover is not addressed to you" }, { status: 403 });
         }
 

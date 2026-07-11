@@ -2,13 +2,14 @@ import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { hasModuleNavAccess } from "@/shared/lib/auth/permissionScope";
 import ContactsWorkspace from "@/modules/customer/components/ContactsWorkspace";
 
 export default async function ContactsPage() {
     const session = await auth();
     const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
     const isAdmin = permissions.includes(PERMISSIONS.ADMIN_BYPASS);
-    const canView = isAdmin || permissions.some((p) => p.startsWith("customers:view"));
+    const canView = hasModuleNavAccess(permissions, "customers");
     if (!canView) redirect("/office/work-flow-inbox");
     const canEdit =
         isAdmin ||

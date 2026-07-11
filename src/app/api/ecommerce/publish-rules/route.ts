@@ -1,7 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { loadShopPublishRules } from "@/shared/lib/shop/publishRules";
@@ -11,7 +11,7 @@ import { normalizeShopPublishRules } from "@/modules/ecommerce/lib/shopQualifica
 // before a product can be listed in /shop. Stored on OrgDefaults (singleton id=1).
 
 export async function GET() {
-    const { response } = await requirePermission(PERMISSIONS.ECOMMERCE_MANAGE);
+    const { response } = await requireModuleAccess("e-commerce");
     if (response) return response;
     try {
         const rules = await loadShopPublishRules();
@@ -31,7 +31,7 @@ const putSchema = z.object({
 });
 
 export async function PUT(req: Request) {
-    const { response } = await requirePermission(PERMISSIONS.ECOMMERCE_MANAGE);
+    const { response } = await requireModuleAccess("e-commerce");
     if (response) return response;
     const { data, error } = await validateRequest(req, putSchema);
     if (error) return error;

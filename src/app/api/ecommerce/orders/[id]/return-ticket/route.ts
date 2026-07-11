@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { Priority } from "@/generated/prisma/enums";
 import { validateRequest } from "@/shared/lib/api";
 import { z } from "zod";
@@ -17,7 +17,7 @@ const bodySchema = z.object({
 });
 
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
-    const { user, response } = await requirePermission(PERMISSIONS.ECOMMERCE_MANAGE);
+    const { user, response } = await requireModuleAccess("e-commerce");
     if (response) return response;
 
     const { id } = await ctx.params;

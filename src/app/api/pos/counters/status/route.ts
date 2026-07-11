@@ -13,7 +13,7 @@
 
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse, type NextRequest } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { resolveActiveBranchId, BranchAccessError } from "@/shared/lib/auth/activeBranch";
 import { auth } from "@/auth";
 import { handleApiError } from "@/shared/lib/api";
@@ -45,7 +45,7 @@ type LastClose = {
 };
 
 export async function GET(req: NextRequest) {
-    const { user, response } = await requirePermission(PERMISSIONS.POS_SHIFT_VIEW);
+    const { user, response } = await requireModuleAccess("pos");
     if (response) return response;
 
     try {

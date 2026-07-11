@@ -1,6 +1,6 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { hasModuleNavAccess } from "@/shared/lib/auth/permissionScope";
 import { PathBreadcrumb } from "@/shared/components/PathBreadcrumb";
 
 // Area layout for /office/crm/deals — permission gate + a breadcrumb strip rooted at
@@ -8,7 +8,7 @@ import { PathBreadcrumb } from "@/shared/components/PathBreadcrumb";
 export default async function DealsModuleLayout({ children }: { children: React.ReactNode }) {
     const session = await auth();
     const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
-    if (!permissions.includes(PERMISSIONS.ADMIN_BYPASS) && !permissions.includes(PERMISSIONS.DEALS_VIEW)) {
+    if (!hasModuleNavAccess(permissions, "crm")) {
         redirect("/office/work-flow-inbox");
     }
 
