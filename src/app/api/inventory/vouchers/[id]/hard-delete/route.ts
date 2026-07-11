@@ -19,7 +19,7 @@ const schema = z.object({ reason: z.string().trim().min(1, "Delete reason is req
 // posted (not already cancelled / soft-deleted) the cached stock + Account.balance
 // are restored first.
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response, user } = await requirePermission(PERMISSIONS.INVENTORY_VOUCHER_HARD_DELETE);
+    const { response, user } = await requirePermission(PERMISSIONS.ADMIN_BYPASS);
     if (response) return response;
 
     const { id } = await params;

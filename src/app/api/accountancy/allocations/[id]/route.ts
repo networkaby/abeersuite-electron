@@ -1,13 +1,12 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 // DELETE /api/accountancy/allocations/[id]
 // Unlink an allocation. The underlying vouchers remain — only the link is removed.
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission(PERMISSIONS.FINANCE_ALLOCATION_MANAGE);
+    const { response } = await requireAuth();
     if (response) return response;
 
     const { id } = await params;

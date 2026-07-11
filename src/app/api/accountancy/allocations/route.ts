@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requirePermission, requireAuth } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
@@ -48,7 +48,7 @@ export async function GET(req: Request) {
 // POST /api/accountancy/allocations
 // Create a free-form bill-wise link between any two vouchers.
 export async function POST(req: Request) {
-    const { user, response } = await requirePermission(PERMISSIONS.FINANCE_ALLOCATION_MANAGE);
+    const { user, response } = await requireAuth();
     if (response) return response;
 
     const { data, error } = await validateRequest(req, createSchema);

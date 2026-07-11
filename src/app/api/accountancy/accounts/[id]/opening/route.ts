@@ -17,7 +17,7 @@ const schema = z.object({
 });
 
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission(PERMISSIONS.FINANCE_OPENING_BALANCE_MANAGE);
+    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_MASTERS_EDIT);
     if (response) return response;
 
     const { id } = await params;

@@ -1,7 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 
 // PATCH /api/inventory/vouchers/[id]/status  body { status: "DRAFT" | "POSTED" }
@@ -16,9 +15,11 @@ import { handleApiError } from "@/shared/lib/api";
 // here (that would desync the books). 5D-9: bindingness is the spine's `binding`
 // flag, NOT a hardcoded type-list.
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    // Reverting a finalised (POSTED) document back to DRAFT is an un-finalize action —
-    // same gravity as Cancel, NOT a mere view. (Was gated only on ACCOUNTANCY_VIEW_ORG.)
-    const { response } = await requirePermission(PERMISSIONS.INVENTORY_VOUCHER_CANCEL);
+    // Reverting a finalised (POSTED) document back to DRAFT is an un-finalize action.
+    // The generic inventory:voucher:cancel key was retired (not UI-assignable); the
+    // route already hard-guards to OPTIONAL (non-binding) documents, so any staff
+    // member may flip those.
+    const { response } = await requireAuth();
     if (response) return response;
 
     const id = Number((await params).id);

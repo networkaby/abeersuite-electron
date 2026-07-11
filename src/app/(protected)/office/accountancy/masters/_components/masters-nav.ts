@@ -20,7 +20,7 @@ export const MASTERS_NAV_LINKS: MastersNavLink[] = [
         label: "Opening Balance",
         href: `${BASE}/opening-balance`,
         icon: Coins,
-        permission: PERMISSIONS.FINANCE_OPENING_BALANCE_MANAGE,
+        permission: PERMISSIONS.ACCOUNTANCY_MASTERS_EDIT,
     },
 ];
 

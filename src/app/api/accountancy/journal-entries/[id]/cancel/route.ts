@@ -16,7 +16,7 @@ const cancelSchema = z.object({
 // Tally-style: reverses GL impact via a counter-entry. Original keeps its
 // reference number and stays visible (struck through) for audit.
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { user, response } = await requirePermission(PERMISSIONS.FINANCE_JOURNAL_CANCEL);
+    const { user, response } = await requirePermission(PERMISSIONS.FINANCE_VOUCHER_CANCEL_JOURNAL);
     if (response) return response;
 
     const { id } = await params;

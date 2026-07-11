@@ -37,7 +37,7 @@ export async function GET(req: Request) {
     const to = searchParams.get("to");
     const includeDeleted =
         searchParams.get("includeDeleted") === "1" &&
-        (user!.permissions.includes(PERMISSIONS.ADMIN_BYPASS) || user!.permissions.includes(PERMISSIONS.FINANCE_VOUCHER_DELETE));
+        user!.permissions.includes(PERMISSIONS.ADMIN_BYPASS);
 
     // Phase 5 5E: the spine IS the financial voucher (Voucher table dropped). Filter
     // to the financial kinds that used to live in Voucher (the spine also holds

@@ -4,11 +4,12 @@ import { requireAuth, hasPermission } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
-// Each entity type's recycle-bin visibility is gated by the matching hard-delete permission.
+// Recycle-bin (hard-delete / restore) is an admin-only action across all entity
+// types — the per-kind hard-delete permissions were retired (not UI-assignable).
 const PERM_BY_TYPE: Record<string, string> = {
-    INV_VOUCHER:   PERMISSIONS.INVENTORY_VOUCHER_HARD_DELETE,
-    GL_VOUCHER:    PERMISSIONS.FINANCE_VOUCHER_HARD_DELETE,
-    JOURNAL_ENTRY: PERMISSIONS.FINANCE_JOURNAL_HARD_DELETE,
+    INV_VOUCHER:   PERMISSIONS.ADMIN_BYPASS,
+    GL_VOUCHER:    PERMISSIONS.ADMIN_BYPASS,
+    JOURNAL_ENTRY: PERMISSIONS.ADMIN_BYPASS,
 };
 
 // GET /api/audit?entityType=&includeRestored=1

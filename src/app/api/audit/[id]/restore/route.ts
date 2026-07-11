@@ -5,11 +5,12 @@ import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { restoreFromAudit } from "@/modules/accountancy/lib/auditRestore";
 
-// Whoever may hard-delete a given entity type may restore it.
+// Recycle-bin restore is admin-only across all entity types — the per-kind
+// hard-delete permissions were retired (not UI-assignable).
 const PERM_BY_TYPE: Record<string, string> = {
-    INV_VOUCHER:   PERMISSIONS.INVENTORY_VOUCHER_HARD_DELETE,
-    GL_VOUCHER:    PERMISSIONS.FINANCE_VOUCHER_HARD_DELETE,
-    JOURNAL_ENTRY: PERMISSIONS.FINANCE_JOURNAL_HARD_DELETE,
+    INV_VOUCHER:   PERMISSIONS.ADMIN_BYPASS,
+    GL_VOUCHER:    PERMISSIONS.ADMIN_BYPASS,
+    JOURNAL_ENTRY: PERMISSIONS.ADMIN_BYPASS,
 };
 
 // POST /api/audit/[id]/restore

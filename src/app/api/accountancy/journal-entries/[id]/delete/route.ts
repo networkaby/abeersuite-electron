@@ -16,7 +16,7 @@ const deleteSchema = z.object({
 // Soft delete: hides the entry from normal views and reverses any GL impact.
 // Recoverable via restore. (Tally label: "Delete"; for permanent removal use hard-delete.)
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { user, response } = await requirePermission(PERMISSIONS.FINANCE_JOURNAL_DELETE);
+    const { user, response } = await requirePermission(PERMISSIONS.FINANCE_VOUCHER_DELETE_JOURNAL);
     if (response) return response;
 
     const { id } = await params;

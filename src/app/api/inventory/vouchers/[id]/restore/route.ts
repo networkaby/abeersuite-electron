@@ -13,7 +13,7 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 // POST /api/inventory/vouchers/[id]/restore
 // Inverse of delete — re-applies stock + GL impact if the voucher was posted.
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response, user } = await requirePermission(PERMISSIONS.INVENTORY_VOUCHER_DELETE);
+    const { response, user } = await requirePermission(PERMISSIONS.ADMIN_BYPASS);
     if (response) return response;
 
     const { id } = await params;

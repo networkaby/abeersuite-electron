@@ -59,10 +59,7 @@ export async function GET(req: NextRequest) {
     // viewers don't see soft-deleted rows. The All Vouchers register passes
     // includeDeleted=1 when the user ticks the "Deleted" status filter.
     const includeDeletedParam = searchParams.get("includeDeleted") === "1";
-    const canSeeDeleted =
-        !!user
-        && (user.permissions.includes(PERMISSIONS.ADMIN_BYPASS)
-            || user.permissions.includes(PERMISSIONS.INVENTORY_VOUCHER_DELETE));
+    const canSeeDeleted = !!user && user.permissions.includes(PERMISSIONS.ADMIN_BYPASS);
     const includeDeleted = includeDeletedParam && canSeeDeleted;
 
     let branchScopeId: string | undefined;

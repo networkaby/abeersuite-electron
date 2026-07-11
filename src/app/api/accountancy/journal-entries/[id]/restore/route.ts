@@ -9,7 +9,7 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 // POST /api/accountancy/journal-entries/[id]/restore
 // Inverse of soft-delete. Re-applies GL impact if the entry was POSTED.
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission(PERMISSIONS.FINANCE_JOURNAL_DELETE);
+    const { response } = await requirePermission(PERMISSIONS.ADMIN_BYPASS);
     if (response) return response;
 
     const { id } = await params;

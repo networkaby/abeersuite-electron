@@ -22,7 +22,7 @@ export async function GET(req: Request) {
     const from = searchParams.get("from");
     const to = searchParams.get("to");
     const includeDeletedParam = searchParams.get("includeDeleted") === "1";
-    const canSeeDeleted = user!.permissions.includes(PERMISSIONS.ADMIN_BYPASS) || user!.permissions.includes(PERMISSIONS.FINANCE_JOURNAL_DELETE);
+    const canSeeDeleted = user!.permissions.includes(PERMISSIONS.ADMIN_BYPASS) || user!.permissions.includes(PERMISSIONS.FINANCE_VOUCHER_DELETE_JOURNAL);
     const includeDeleted = includeDeletedParam && canSeeDeleted;
     const includeEngine = searchParams.get("includeEngine") === "1";
 
