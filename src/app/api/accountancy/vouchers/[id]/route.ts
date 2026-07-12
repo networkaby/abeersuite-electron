@@ -7,7 +7,6 @@ import { isBalanced, balanceDelta, toNumber } from "@/modules/accountancy/lib/ba
 import { auditSnapshot } from "@/modules/accountancy/lib/voucherLifecycle";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 // Phase 5 5E: the UniversalVoucher spine IS the financial voucher (Voucher table
 // dropped). `id` is the spine id; lines are VoucherGlLine. The spine is scalar/

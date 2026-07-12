@@ -2,7 +2,6 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { createActivitySchema } from "@/shared/lib/schemas/dealSchema";
 import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 

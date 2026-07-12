@@ -16,7 +16,6 @@ import { getOpenSaleBillsForFifo } from "@/modules/accountancy/lib/outstandings"
 import { getVoucherTemplate } from "@/shared/lib/print/voucherTemplate";
 import * as Sentry from "@sentry/nextjs";
 import { validateRequest } from "@/shared/lib/api";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { checkCreditLimit, CreditLimitError } from "@/shared/lib/accountancy/checkCreditLimit";
 import { round2 } from "@/shared/lib/format";
 import {

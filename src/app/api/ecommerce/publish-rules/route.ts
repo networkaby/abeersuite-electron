@@ -3,7 +3,6 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { loadShopPublishRules } from "@/shared/lib/shop/publishRules";
 import { normalizeShopPublishRules } from "@/modules/ecommerce/lib/shopQualification";
 

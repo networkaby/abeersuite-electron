@@ -4,7 +4,6 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { parseRange } from "@/modules/accountancy/lib/period";
 import { aggregateRange, loadNormalBalanceMap, ledgerStatusFilterUv } from "@/modules/accountancy/lib/aggregateLedger";
 import { handleApiError } from "@/shared/lib/api";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 // Heavy aggregation: loads every JE touching Cash/Bank then walks lines. Give
 // Vercel headroom past the default 10s function limit so large datasets don't 504.

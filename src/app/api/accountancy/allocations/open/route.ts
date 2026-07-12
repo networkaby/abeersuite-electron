@@ -3,7 +3,6 @@ import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { NextResponse } from "next/server";
 import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { sumReceiptAllocations, loadTenderLines, sumVoucherAllocations } from "@/modules/accountancy/lib/outstandings";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 // GET /api/accountancy/allocations/open?accountId=N
 // Returns InvVoucher (SALE/POS/PURCHASE) and finance Voucher (CREDIT_NOTE /

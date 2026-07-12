@@ -4,7 +4,6 @@ import { requireModuleAccess, requireAuth } from "@/shared/lib/auth/permissions"
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 // Phase 4 G1: UNIVERSAL_VOUCHER is the spine target receipts now allocate against;
 // JOURNAL_ENTRY kept for back-compat until G5 retires the legacy GL tables.

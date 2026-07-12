@@ -4,7 +4,6 @@ import { aggregateRange, loadNormalBalanceMap } from "@/modules/accountancy/lib/
 import { buildGroupTree, type GroupNode } from "@/modules/accountancy/lib/groupTree";
 import { getClosingStockValue } from "@/modules/accountancy/lib/closingStock";
 import { handleApiError } from "@/shared/lib/api";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 
 // GET /api/accountancy/reports/ratio-analysis?asOf=YYYY-MM-DD

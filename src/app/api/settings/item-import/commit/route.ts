@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { validateRequest } from "@/shared/lib/api";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { runProductImport } from "@/shared/lib/import/productImport";
 
 // `z.record(enum, ...)` in Zod 4 enforces every enum key — not what we want

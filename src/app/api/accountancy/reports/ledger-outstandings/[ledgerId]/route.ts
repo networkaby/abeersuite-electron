@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { getLedgerOutstanding } from "@/modules/accountancy/lib/outstandings";
 import { handleApiError } from "@/shared/lib/api";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 // GET /api/accountancy/reports/ledger-outstandings/:ledgerId?asOf=YYYY-MM-DD
 // Open bills for a single party ledger, with ageing buckets.

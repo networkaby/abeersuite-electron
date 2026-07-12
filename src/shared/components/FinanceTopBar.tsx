@@ -7,7 +7,6 @@ import { fmt } from "@/utils/constants";
 import { hasModuleNavAccess } from "@/shared/lib/auth/permissionScope";
 import { Wallet, Building2, TrendingUp, TrendingDown, RefreshCw, SquareChevronDown, SquareChevronUp, Wrench } from "lucide-react";
 import { toast } from "sonner";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { usePanelStore } from "@/store/panelStore";
 import { BranchSwitcher } from "@/shared/components/BranchSwitcher";
 

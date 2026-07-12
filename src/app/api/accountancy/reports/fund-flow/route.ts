@@ -4,7 +4,6 @@ import { parseRange } from "@/modules/accountancy/lib/period";
 import { aggregateRange, loadNormalBalanceMap } from "@/modules/accountancy/lib/aggregateLedger";
 import { buildGroupTree, type GroupNode } from "@/modules/accountancy/lib/groupTree";
 import { handleApiError } from "@/shared/lib/api";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 // Heavy aggregation: two full-range GL aggregations (period start + end). Give
 // Vercel headroom past the default 10s function limit so large datasets don't 504.

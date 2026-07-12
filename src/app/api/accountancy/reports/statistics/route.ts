@@ -3,7 +3,6 @@ import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { parseRange } from "@/modules/accountancy/lib/period";
 import { handleApiError } from "@/shared/lib/api";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 // GET /api/accountancy/reports/statistics?from=YYYY-MM-DD&to=YYYY-MM-DD
 // Counts of every voucher kind in the period plus master-table totals — the

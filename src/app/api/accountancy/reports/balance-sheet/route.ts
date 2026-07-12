@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { parseAsOf, indianFiscalYearStart } from "@/modules/accountancy/lib/period";
 import { handleApiError } from "@/shared/lib/api";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import {
     aggregateClosingAsOf, loadNormalBalanceMap, netProfitLoss,
 } from "@/modules/accountancy/lib/aggregateLedger";

@@ -5,7 +5,6 @@ import { aggregateRange, loadNormalBalanceMap } from "@/modules/accountancy/lib/
 import { buildGroupTree } from "@/modules/accountancy/lib/groupTree";
 import { computeTradingStockAdjustment } from "@/modules/accountancy/lib/tradingStockAdjustment";
 import { handleApiError } from "@/shared/lib/api";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 // Heavy aggregation: full-range GL groupBy + whole-inventory stock valuation.
 // Give Vercel headroom past the default 10s function limit so large datasets

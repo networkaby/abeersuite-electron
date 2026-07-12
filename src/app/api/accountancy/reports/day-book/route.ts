@@ -7,7 +7,6 @@ import { ledgerStatusFilterUv } from "@/modules/accountancy/lib/aggregateLedger"
 import { resolveSourceBatch } from "@/modules/accountancy/lib/journalEntrySource";
 import { parsePagination } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 // Heavy aggregation: unbounded voucher pre-filter scan + paginated JE join.
 // Give Vercel headroom past the default 10s function limit so large datasets

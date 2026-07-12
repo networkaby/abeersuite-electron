@@ -8,7 +8,6 @@ import {
 } from "@/modules/accountancy/lib/aggregateLedger";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const createSchema = z.object({
     code: z.string().trim().min(1),

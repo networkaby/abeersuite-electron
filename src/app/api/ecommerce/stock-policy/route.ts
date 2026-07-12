@@ -3,7 +3,6 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { loadShopStockPolicy } from "@/shared/lib/shop/stockPolicy";
 
 // Owner-configurable org-wide out-of-stock policy (Settings → E-Commerce). A

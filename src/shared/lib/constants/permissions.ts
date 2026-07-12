@@ -12,41 +12,24 @@ export const PERMISSIONS = {
     // ever hold this. Never add "admin:bypass" to bootstrap-seed.ts.
     ADMIN_BYPASS:                       "admin:bypass",
 
-    // Accountancy — flat view gate (radius is always branch, decided by position;
-    // :own/:br/:org retired). The old create/edit/delete scope ladder was removed:
-    // those keys enforced nothing — accountancy writes run through the voucher
-    // matrix (finance:voucher:*) and accountancy:masters:* instead.
     // Accountancy Masters — the chart of accounts (Account Groups, Ledgers, Chart
-    // of Accounts), gated together. Separate from viewing (was gated by view:org)
-    // and from voucher creation. Opening Balance keeps finance:opening-balance:manage.
+    // of Accounts), gated together. Read access rides the accountancy sidebar nav.
     ACCOUNTANCY_MASTERS_CREATE:         "accountancy:masters:create",
     ACCOUNTANCY_MASTERS_EDIT:           "accountancy:masters:edit",
     ACCOUNTANCY_MASTERS_DELETE:         "accountancy:masters:delete",
 
-    // Companies — people + companies share the Contacts (customers:*) permission
-    // set, so companies have no CRUD keys of their own. companies:manage is kept
-    // only for Customer Tools (merge/convert).
-
-    // Deals (sales pipeline)
-
     // Customers (Contacts = Person + Company; share ONE flat set). Contacts carry
     // no branch, so there is no radius to enforce — any branch may CRUD (gated only
-    // by holding the write id). The old own/department/branch/org ladder and the
-    // customers:manage umbrella are retired (radius = branch, and Contacts have none).
+    // by holding the write id).
     CUSTOMERS_CREATE:                   "customers:create",
     CUSTOMERS_EDIT:                     "customers:edit",
     CUSTOMERS_DELETE:                   "customers:delete",
-
-    // E-commerce
-
-    // Finance — vouchers, journals, allocations
 
     // Finance — per-kind GL voucher gates: finance:voucher:<action>:<kind>.
     // The trailing segment is the VoucherType (kebab-case), NOT a scope — a
     // deliberate exception to area:operation:scope (like work:<id>), because a
     // department's accounting tools are split by voucher kind, not by visibility
-    // radius. Routes check the per-kind key OR the generic key above (additive
-    // fallback, so legacy grants keep working).
+    // radius. Authorization is per-kind (no generic fallback).
     //   • CANCEL covers cancel + edit + convert-to-draft (one eligibility).
     //   • DELETE is the single removal (soft-delete was retired 2026-06-09;
     //     the former "hard-delete" is now just "delete").
@@ -82,8 +65,7 @@ export const PERMISSIONS = {
     FINANCE_VOUCHER_DELETE_JOURNAL:      "finance:voucher:delete:journal",
 
     // Retention — view rides the sidebar link grant; each page has an independent
-    // create / edit / delete, plus a money-sensitive guard where one exists.
-    // `<page>:manage` stays as the umbrella (grants all actions on that page).
+    // create / edit / delete.
     LOYALTY_CREATE:                     "loyalty:create",
     LOYALTY_EDIT:                       "loyalty:edit",
     LOYALTY_DELETE:                     "loyalty:delete",
@@ -97,16 +79,10 @@ export const PERMISSIONS = {
     TIERS_EDIT:                         "tiers:edit",
     TIERS_DELETE:                       "tiers:delete",
 
-    // Inventory — flat view/edit (radius is always branch, decided by position;
-    // :branch/:org retired). INVENTORY_EDIT is the voucher-authoring key (GRN /
-    // Challan / etc. create+post via the voucher matrix). Cross-branch stock view
-    // is admin-only.
     // Inventory module pages — Products (the catalog) and Masters (the 8 setup
-    // tables, gated together). View rides the sidebar link; these granular keys
-    // are the ONLY gates on the CRUD routes (inventory:manage no longer passes
-    // them — it remains only for inventory admin/config: naming-convention writes,
-    // item import, pricing pages, voucher-register nav). Product tax fields are
-    // still carved out separately as compliance:tax:edit.
+    // tables, gated together). View rides the sidebar link; these granular keys are
+    // the gates on the CRUD routes. Product tax fields are carved out separately as
+    // compliance:tax:edit.
     PRODUCTS_CREATE:                    "products:create",
     PRODUCTS_EDIT:                      "products:edit",
     PRODUCTS_DELETE:                    "products:delete",
@@ -115,9 +91,7 @@ export const PERMISSIONS = {
     INVENTORY_MASTERS_DELETE:           "inventory:masters:delete",
 
     // Pricing Strategy — one edit gate per page. Viewing rides the sidebar link
-    // grant; the "Needs attention" page edits the product itself, so its edits
-    // stay on inventory:manage (not listed here). Each key OR inventory:manage
-    // passes the matching route (inventory:manage is the umbrella).
+    // grant. Each key passes its matching route.
     PRICING_STRATEGY_SET:               "pricing:strategy:set",
     PRICING_COSTING_MANAGE:             "pricing:costing:manage",
     PRICING_LABELS_APPLY:               "pricing:labels:apply",
@@ -126,19 +100,15 @@ export const PERMISSIONS = {
     POS_SHIFT_OPEN:                     "pos:shift:open",
     POS_SHIFT_CLOSE:                    "pos:shift:close",
     POS_SHIFT_DROP:                     "pos:shift:drop",
-    // Radius is always branch (decided by the holder's position), so shift view
-    // carries no scope suffix — flat pos:shift:view. Cross-branch ("all") view is
-    // admin-only. Replaced the old :branch/:org pair (retired with the org scope).
 
     // Roles
     ROLES_CREATE:                       "roles:create",
     ROLES_EDIT:                     "roles:edit",
     ROLES_DELETE:                   "roles:delete",
 
-    // Branches / Departments / Positions / POS Counters — split out of the
-    // former shared settings:manage. `:manage` is the umbrella (grants all + gates
-    // the admin tab); create/edit/delete are the independent action grants the
-    // Role matrix ticks. Mutating routes accept the action key OR `:manage`.
+    // Branches / Departments / Positions / POS Counters — split out of the former
+    // shared settings:manage. create/edit/delete are the independent action grants
+    // the Role matrix ticks; page access rides the admin sidebar nav.
     BRANCHES_CREATE:                     "branches:create",
     BRANCHES_EDIT:                       "branches:edit",
     BRANCHES_DELETE:                     "branches:delete",
@@ -156,18 +126,15 @@ export const PERMISSIONS = {
     SETTINGS_MANAGE:                    "settings:manage",
 
 
-    // Compliance (GST reports) — read access rides the general accountancy:view:*
-    // permissions; this is the one extra gate for the Tax Classification page's
-    // inline edits (rate / HSN / taxability), replacing the borrowed
-    // inventory:manage so it isn't tangled up with unrelated inventory-master CRUD.
+    // Compliance (GST reports) — read access rides the accountancy sidebar nav;
+    // this is the one extra gate for the Tax Classification page's inline edits
+    // (rate / HSN / taxability).
     COMPLIANCE_TAX_EDIT:                 "compliance:tax:edit",
 
     // Users
     USERS_CREATE:                       "users:create",
     USERS_EDIT:                     "users:edit",
     USERS_DELETE:                   "users:delete",
-
-    // Administration — internal work board (pipeline-based todos)
 } as const;
 
 export type PermissionId = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

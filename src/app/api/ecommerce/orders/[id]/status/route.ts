@@ -4,7 +4,6 @@ import { transitionOrderPipelineStatus } from "@/modules/ecommerce/lib/orderStat
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 // Pipeline-based transition is the only path. The legacy enum (`{ to }`) flow was
 // retired with the COD rebuild — orders ride the sales-orders pipeline (P7).
