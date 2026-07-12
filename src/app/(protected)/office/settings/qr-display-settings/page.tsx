@@ -16,8 +16,6 @@ interface RelayConfig {
     baudRate:           number;
     relayPort:          number;
     companyName:        string;
-    upiPayeeVpa:        string;
-    upiPayeeName:       string;
     idleFolder:         string;
     idleIntervalMs:     number;
     thankyouDurationMs: number;
@@ -33,8 +31,6 @@ const DEFAULT: RelayConfig = {
     baudRate:           921600,
     relayPort:          9192,
     companyName:        "",
-    upiPayeeVpa:        "",
-    upiPayeeName:       "",
     idleFolder:         "",
     idleIntervalMs:     5000,
     thankyouDurationMs: 4000,
@@ -139,13 +135,16 @@ export default function QrDisplaySettingsPage() {
         savings: { amount: 528, pct: 31 },
     });
 
-    const testUpi = () => {
-        if (!config.upiPayeeVpa) {
-            toast.error("Set the UPI VPA first");
-            return;
-        }
-        return runTest("Test UPI QR", "/pos/upi", { amount: 100, caption: "Test ₹100" });
-    };
+    // Real UPI VPAs are per-counter (Settings → Counters) and travel with each
+    // POS call. This diagnostic only checks the DQ11 renders a UPI QR frame, so it
+    // sends a throwaway sample payee — never a live one.
+    const testUpi = () =>
+        runTest("Test UPI QR", "/pos/upi", {
+            amount: 100,
+            vpa: "test@upi",
+            payeeName: "Test Payee",
+            caption: "Test ₹100",
+        });
 
     const testThankyou = () => runTest("Test thank-you", "/pos/thankyou", { amount: 1300 });
     const testIdle     = () => runTest("Start slideshow", "/idle/start", {});
@@ -228,29 +227,6 @@ export default function QrDisplaySettingsPage() {
                             onChange={(e) => setConfig((c) => ({ ...c, baudRate: Number(e.target.value) || 921600 }))}
                         />
                         <p className="text-xs text-muted-foreground">DQ11 expects 921600. Don&apos;t change unless you have a different display.</p>
-                    </div>
-                </div>
-
-                {/* UPI defaults */}
-                <div className="rounded-lg border border-border bg-card p-5 space-y-4">
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">UPI Defaults</p>
-                    <div className="space-y-1.5">
-                        <Label>UPI VPA (Payee Address)</Label>
-                        <Input
-                            value={config.upiPayeeVpa}
-                            onChange={(e) => setConfig((c) => ({ ...c, upiPayeeVpa: e.target.value }))}
-                            placeholder="shop@hdfc"
-                        />
-                        <p className="text-xs text-muted-foreground">Used when POS doesn&apos;t specify one per-call.</p>
-                    </div>
-                    <div className="space-y-1.5">
-                        <Label>Payee Name</Label>
-                        <Input
-                            value={config.upiPayeeName}
-                            onChange={(e) => setConfig((c) => ({ ...c, upiPayeeName: e.target.value }))}
-                            placeholder="Network Service"
-                        />
-                        <p className="text-xs text-muted-foreground">Shown above the QR.</p>
                     </div>
                 </div>
 

@@ -22,6 +22,7 @@ import { type TenderSplit } from "@/modules/pos/components/TenderSplitInput";
 import { usePosAccess } from "@/modules/pos/hooks/usePosAccess";
 import { usePosCustomerDisplay } from "@/modules/pos/hooks/usePosCustomerDisplay";
 import { qrDisplay } from "@/modules/pos/lib/qrDisplay";
+import { DEFAULT_PAYEE_NAME } from "@/modules/pos/lib/paymentLink";
 import { formatInr, parseDigitsInput } from "@/shared/lib/format";
 import { usePosDraftStore } from "@/store/posDraftStore";
 import { type Snapshot, type ProductOption, type CouponHit } from "@/modules/pos/lib/posDraftTypes";
@@ -576,6 +577,12 @@ export function usePosBilling(opts: {
         (s, x) => s + (payAccountById.get(x.paymentAccountId ?? -1)?.channel === "UPI" ? x.amount : 0),
         0,
     );
+    // VPA of the UPI account the cashier is collecting into — the per-counter payee
+    // for the DQ11 pay QR. First UPI split with a configured VPA wins (a counter
+    // usually has one). Same per-counter source as the Share QR; no relay fallback.
+    const upiVpa = splits
+        .map((x) => payAccountById.get(x.paymentAccountId ?? -1))
+        .find((a) => a?.channel === "UPI" && a.vpa)?.vpa ?? null;
     const collected = cashNet + splitsSum;
     const onCredit = Math.max(0, payableTotal - collected);
     const overpaid = Math.max(0, collected - payableTotal);
@@ -587,7 +594,8 @@ export function usePosBilling(opts: {
     // frames while a bill is built). The post-sale thank-you finale + printing stay
     // in each screen's submit routine; only this live coordinator is shared.
     usePosCustomerDisplay({
-        displayHold, checkoutOpen, upiEntered, cashNet, splitsSum, payableTotal, collected,
+        displayHold, checkoutOpen, upiEntered, upiVpa, upiPayeeName: DEFAULT_PAYEE_NAME,
+        cashNet, splitsSum, payableTotal, collected,
         cart, snapshot, subtotal, discountAmount, total, totalDiscount,
         effDiscountAmount, effRedemptionRupees, couponRupees, posExtraCharges, posTierLabel,
     });

@@ -18,6 +18,10 @@ export type PosCustomerDisplayParams = {
     displayHold: "thankyou" | null;
     checkoutOpen: boolean;
     upiEntered: number;
+    /** VPA of the counter's UPI account being collected into (null = none set). */
+    upiVpa: string | null;
+    /** Payee name shown above the pay QR (company-level). */
+    upiPayeeName: string;
     cashNet: number;
     splitsSum: number;
     payableTotal: number;
@@ -47,7 +51,8 @@ export type PosCustomerDisplayParams = {
 // Wait 250ms after the last state change before pushing.
 // Fire-and-forget; relay-down never blocks POS.
 export function usePosCustomerDisplay({
-    displayHold, checkoutOpen, upiEntered, cashNet, splitsSum, payableTotal, collected,
+    displayHold, checkoutOpen, upiEntered, upiVpa, upiPayeeName,
+    cashNet, splitsSum, payableTotal, collected,
     cart, snapshot, subtotal, discountAmount, total, totalDiscount,
     effDiscountAmount, effRedemptionRupees, couponRupees, posExtraCharges, posTierLabel,
 }: PosCustomerDisplayParams) {
@@ -56,8 +61,13 @@ export function usePosCustomerDisplay({
 
         const timer = setTimeout(() => {
             if (checkoutOpen && upiEntered > 0) {
+                // VPA + payee come from the active counter (per-counter identity),
+                // not a relay-side default. If the counter's UPI account has no VPA
+                // set, the QR can't render a payee — fix it under Settings → Counters.
                 void qrDisplay.upi({
                     amount: upiEntered,
+                    vpa: upiVpa ?? undefined,
+                    payeeName: upiPayeeName,
                     caption: `Pay ₹${upiEntered.toFixed(2)} via UPI`,
                 });
             } else if (checkoutOpen && (cashNet > 0 || splitsSum > 0)) {
@@ -127,7 +137,7 @@ export function usePosCustomerDisplay({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [
         displayHold, checkoutOpen, cart, snapshot,
-        cashNet, upiEntered, splitsSum, collected,
+        cashNet, upiEntered, upiVpa, splitsSum, collected,
         subtotal, discountAmount, total,
         totalDiscount, effDiscountAmount, effRedemptionRupees, couponRupees,
     ]);
