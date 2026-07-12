@@ -1,9 +1,9 @@
-<!-- BEGIN:nextjs-agent-rules --># Agent Rules
+# Agent Rules
 
 ## 1. Before Coding
 
 - Read this file completely.
-<!-- - Read `docs/vocabulary.md`. -->
+
 - Use the project vocabulary and simple Indian English in all communication.
 - Before making changes:
   1. Explain your understanding.
@@ -23,8 +23,7 @@ The project is almost complete. Now we are focusing on:
 
 Important:
 
-- The database is currently empty, so there is **no data loss risk**.
-- You can safely propose schema cleanup, table removal, or restructuring.
+- Production DB in use
 
 Guidelines:
 
@@ -54,8 +53,9 @@ Before adding a shared helper, hook, component, formatter, schema, or utility:
 1. Search `src/shared/`.
 2. Extend an existing implementation if possible.
 3. Otherwise:
-   - Place it in the appropriate shared folder.
-   - Export it from that folder's `index.ts`.
+
+- Place it in the appropriate shared folder.
+- Export it from that folder's `index.ts`.
 
 Accepted legacy locations (leave in place; do not migrate imports):
 
@@ -134,5 +134,3 @@ pnpm install:git-hooks
 After making code changes that affect routes, APIs, Prisma models, key components, or gotchas in a module, invoke `/sync-docs-with-code`. The skill reads recent commits, drafts the prose updates for the affected module doc(s), bumps the `_Last updated:` footer, and re-runs the checker.
 
 If you're committing pure narrative changes (a renamed concept in docs, a typo fix) the discipline collapses to: edit the doc in the same commit as the code. `_Last updated:` reflects that commit.
-
-<!-- END:nextjs-agent-rules -->
