@@ -10,7 +10,6 @@ import { z } from "zod/v3";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useQuickTicketStore, type Step, type BasicIdentity } from "@/store/quickTicketStore";
-import { useReferenceStore } from "@/store/referenceStore";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -49,7 +48,6 @@ const ticketSchema = z.object({
     notes: z.string().optional(),
     accessInfo: z.string().optional(),
     estimatedCost: z.string().optional(),
-    primaryOwnerId: z.string().optional(),
     warrantyRef: z.string().optional(),
     purchaseDate: z.string().optional(),
 });
@@ -75,10 +73,6 @@ function invalidFieldClass(hasError?: boolean) {
     return hasError ? "border-destructive focus-visible:ring-destructive/20" : "";
 }
 
-function colorDot(color: string) {
-    return color.split(" ")[0];
-}
-
 export default function QuickTicketButton() {
     const router = useRouter();
     const { data: session } = useSession();
@@ -87,7 +81,6 @@ export default function QuickTicketButton() {
         setStep, setIdentity, setBillingAccountId,
         setInitialPipelineId, reset,
     } = useQuickTicketStore();
-    const { technicians, fetchTechnicians } = useReferenceStore();
     const [priorities, setPriorities] = useState<Priority[]>([]);
     const [pipelines, setPipelines] = useState<PipelineOption[]>([]);
     const [selectedPipelineId, setSelectedPipelineId] = useState<string>("P1");
@@ -97,15 +90,14 @@ export default function QuickTicketButton() {
 
     const ticketForm = useForm<TicketFormData>({
         resolver: zodResolver(ticketSchema) as Resolver<TicketFormData>,
-        defaultValues: { priority: "MEDIUM", primaryOwnerId: "" },
+        defaultValues: { priority: "MEDIUM" },
     });
     const selectedPriority = ticketForm.watch("priority") ?? "MEDIUM";
-    const selectedOwnerId = ticketForm.watch("primaryOwnerId") ?? "";
 
     useEffect(() => {
         if (!open) return;
         setIsWarranty(false);
-        ticketForm.reset({ priority: "MEDIUM", primaryOwnerId: "" });
+        ticketForm.reset({ priority: "MEDIUM" });
         setLinkedCompanies([]);
         setBillingAccountId(null);
 
@@ -116,7 +108,6 @@ export default function QuickTicketButton() {
         }
 
         const load = async () => {
-            await fetchTechnicians();
             const [prioRes, pipeRes] = await Promise.all([
                 !dataLoaded ? axios.get<Priority[]>("/api/priorities") : Promise.resolve(null),
                 !dataLoaded ? axios.get<PipelineOption[]>("/api/pipelines") : Promise.resolve(null),
@@ -278,26 +269,6 @@ export default function QuickTicketButton() {
                                 </div>
                             )}
 
-                            {pipelines.length > 1 && (
-                                <div className="space-y-2">
-                                    <FieldLabel>Pipeline</FieldLabel>
-                                    <div className="flex flex-wrap gap-2">
-                                        {pipelines.map((p) => (
-                                            <Button
-                                                key={p.id}
-                                                type="button"
-                                                variant={selectedPipelineId === p.id ? "default" : "outline"}
-                                                size="sm"
-                                                onClick={() => setSelectedPipelineId(p.id)}
-                                            >
-                                                <span className={`h-2 w-2 ${colorDot(p.color)}`} />
-                                                {p.label}
-                                            </Button>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
                             <div className="grid grid-cols-3 gap-3">
                                 <div className="space-y-2">
                                     <FieldLabel required>Device Type</FieldLabel>
@@ -396,25 +367,6 @@ export default function QuickTicketButton() {
                                             {priorities.map((priority) => (
                                                 <SelectItem key={priority.id} value={priority.id}>
                                                     {priority.label}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                <div className="space-y-2">
-                                    <FieldLabel>Primary Owner</FieldLabel>
-                                    <Select
-                                        value={selectedOwnerId || "__unassigned__"}
-                                        onValueChange={(value) => ticketForm.setValue("primaryOwnerId", value === "__unassigned__" ? "" : value)}
-                                    >
-                                        <SelectTrigger className="w-full">
-                                            <SelectValue placeholder="Unassigned" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="__unassigned__">Unassigned</SelectItem>
-                                            {technicians.map((technician) => (
-                                                <SelectItem key={technician.id} value={String(technician.id)}>
-                                                    {technician.name}
                                                 </SelectItem>
                                             ))}
                                         </SelectContent>
