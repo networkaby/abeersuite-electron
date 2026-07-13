@@ -1,242 +1,202 @@
 # Architecture Overview
 
-Current implementation architecture of `service-mgmt-experiment`. Present-tense only — no history, no roadmap. For status, plans, and decisions, see [PROJECT_BRAIN.md](PROJECT_BRAIN.md).
+Current implementation of `service-mgmt-experiment` — an internal business OS for a multi-channel computer & CCTV shop (retail in-store + online, wholesale, and a repair service centre) on one shared inventory + accounting backbone.
 
-## 1) Runtime architecture
+**Present-tense only.** This file describes what the code is *now*. Status, plans, decisions, and history live in [PROJECT_BRAIN.md](PROJECT_BRAIN.md); setup in [README.md](README.md); contributor rules in [AGENTS.md](AGENTS.md); authoritative history in `git log`.
 
-- **Framework**: Next.js App Router (`src/app`).
-- **Rendering**: SSR-first pages, client components for interactive UI.
-- **Auth middleware**: `src/proxy.ts` (Next.js 16 rename — not `middleware.ts`).
-- **API layer**: route handlers under `src/app/api/*`.
-- **Data layer**: Prisma + PostgreSQL (Supabase).
-- **Realtime layer**: Supabase Realtime for inbox updates.
+> ⚠️ Several domain concepts were **replaced** as the project evolved. If a model or rule you remember isn't in this document, check **§13 Retired concepts** before assuming it still exists — do not rebuild against the old design.
 
-## 2) Domain modules
+---
 
-Domain modules live in `src/modules/`:
+## 1) Runtime
 
-- `core` — shared business workflows (assignment-oriented pages/logic).
-- `customer` — customer / company / lead components and helpers.
-- `message` — inbox and messaging.
-- `repairing` — ticket lifecycle, repair workflow UI.
-- `accountancy` — finance and accounting (`PartyCombobox`, `BookPage`, `GstSummaryView`, voucher pages, `outstandings`, `openingBalance`, `aggregateLedger`).
-- `inventory` — inventory masters + voucher UI (`InvProductCombobox`, `InvProductPicker`, `InvVoucherForm`, `InvVoucherDetail`, `InvProductFormFields`).
-- `pos` — POS register UI (`PosScreen`, `ActiveShiftBar`, `ShiftOpenDialog`, `ShiftCloseDialog`, `HandoverAcceptDialog`, `CashDropDialog`, `PosReturnDialog`).
-- `admin` — admin pages (branches, departments, posts, org chart, roles, users, pipelines, counters, naming-convention, year-ending).
-- `ecommerce` — staff-side shop admin (products, orders, categories, coupons).
-- `external` — customer-facing shop, store homepage, portal UI.
-- `lab` — experimental Front Office / Back Office prototype (`/lab`). Not production.
+- **Framework** — Next.js 16 App Router (`src/app`), React 19, Turbopack dev.
+- **Middleware** — `src/proxy.ts` (Next 16 renamed `middleware.ts` → `proxy.ts`; do **not** create `middleware.ts`).
+- **API** — route handlers under `src/app/api/*`.
+- **Data** — Prisma 7 (split schema) + PostgreSQL (Supabase). Client singleton in `src/shared/lib/prisma/`.
+- **Auth** — NextAuth v5 (JWT strategy), two independent credential providers (staff + portal).
+- **Money** — integer paise everywhere; format via `src/shared/lib/format/moneyInr.ts`. Round to 2dp once, at the ledger writer boundary (`round2`).
 
-Cross-cutting code lives in `src/shared/`. App-level shadcn primitives live in `src/components/ui/`.
+---
 
-> **Tally legacy**: `src/modules/tally/` still co-exists with `src/modules/accountancy/`. The module was renamed on 2026-05-07; the folder removal is pending.
+## 2) Domain modules (`src/modules/`)
 
-## 3) Route groups
+`accountancy` · `inventory` · `pos` · `pricing-strategy` · `coupons` · `loyalty` — the commerce + finance core.
+`repairing` · `deals` · `order` · `delivery` · `refund` — the pipeline/ticket flavours.
+`customer` (contacts) · `admin` · `administration` · `settings` · `home` · `message` · `core` — org, contacts, workspace.
+`ecommerce` (staff shop admin) · `external` (customer-facing shop/store/portal UI) · `lab` (throwaway prototype, not production).
 
-### Staff app — `/office/*` (requires staff session)
+Cross-cutting code lives in `src/shared/` (see §12). shadcn primitives live in `src/components/ui/`. Accepted legacy homes (leave in place): `src/utils/`, `src/store/`, `src/components/ui/`.
 
-Every directory under `src/app/(protected)/office/` is a real URL segment — URLs mirror the source layout 1:1.
+---
 
-- `admin/` — users, role permission matrix, branches, departments, posts, org-chart, pipelines, statuses, workers, counters, naming-convention, year-ending.
-- `core/` — accounts, assignments, call-log, search-slno.
-- `customers/` — customers, companies, unified "all" view, transactions tab.
-- `crm/` — leads list + detail.
-- `message/inbox/` — staff inbox.
-- `repairing/` — dashboard, tickets, service centres.
-- `social/users/[id]/` — staff profile + wall.
-- `accountancy/` — chart of accounts, vouchers (sales / purchase / estimate / contra / payment / receipt / credit-note / debit-note / branch-transfer / manufacturing-journals / physical-stock), invoices, journal entries, ledgers, opening-balance, voucher registers, day book, pending vouchers, reports (cash book, bank book, bank reconciliation, cash flow, fund flow, ratio analysis, statistics, receivables, payables, ledger-outstandings, GST hub including tax-classification, balance sheet, P&L).
-- `ecommerce/` — staff shop admin.
-- `inventory/` — masters (units, categories, brands, product-groups, warranty-terms, attribute-masters, BOMs, gst-rates), products, stock transactions, stock summary, stock ledger.
-- `pos/shifts/` — shift reports. The POS register itself opens at `/vouchers/pos` (standalone window).
-- `home/` — role-aware four-layer landing.
-- `roadmap/[moduleKey]/` — placeholder hub for future modules.
+## 3) Route groups (`src/app`)
 
-Staff sign-in: `/staff/login`; post-login redirect to `/office/work-flow-inbox` (see `src/proxy.ts`).
+- **`(protected)/office/*`** — staff app (requires a staff session). Segments mirror URLs 1:1: `accountancy`, `inventory`, `pos` (manager shift reports), `pricing-strategy`, `customer-retention`, `customers` (Contacts), `crm`, `orders`, `repairing`, `ecommerce`, `admin`, `administration`, `settings`, `work-flow-inbox` (post-login landing).
+- **`(protected)/vouchers/pos`** — the POS register (operator surface), opened standalone. `/vouchers/pos/new` is the New Sale screen.
+- **`(external)/*`** — customer-facing: `(store)` marketing homepage, `shop` (catalogue → cart → Razorpay checkout), `portal` (customer self-service), `login` (portal sign-in).
+- **`(protected)/lab`** — experimental Front/Back-office prototype. Not gated, not production.
+- Staff sign-in: `/staff/login`. Portal sign-in: `/login`.
 
-`/office/tally/*` 307-redirects to `/office/accountancy/*` (legacy URL preservation).
+---
 
-### External — public / customer-facing
+## 4) Authorization — the three-axis model
 
-Grouped under `src/app/(external)`:
+Authorization is **liberal by default**. A restriction must be one of three things sourced from the **position** (the appointment), never stapled to the person; a person = a union over their positions.
 
-- `(store)/` — marketing storefront homepage (hero, deals, featured, brands).
-- `shop/` — listing, product detail, cart, wishlist, compare, checkout (Razorpay), order confirmation.
-- `portal/` — customer hub (register, tickets, orders, repairs, wallet, wishlist).
-- Customer sign-in: `/login` (the `(external)/login/` page). `/portal/login` redirects to `/login`.
+- **Axis 1 — UI / visibility.** `ui:sidebar:<module>:<link>` grants decide which nav links a role sees, at full nav depth (generated from the constants nav tree via `src/shared/lib/auth/sidebarModules.ts`). This is the **only** thing that hides pages/tabs. The office manager POS module is `ui:sidebar:pos:*`; the operator's register link is `ui:sidebar:workspace:pos` — **they are different grants** (see §8).
+- **Axis 2 — Action.** Two sub-flavours defaulting in opposite directions:
+  - **Reads default OPEN.** GET data routes and page/layout/nav views take only `requireAuth` (any signed-in staff). No hidden capability gate blocks a read.
+  - **Writes default DENIED.** A write gates on the matching role-page permission — `requirePermission` / per-kind voucher keys (`finance:voucher:<action>:<kind>`, `inventory:voucher:<action>:<kind>`), and `requirePosVoucher` (the `pos:voucher:create:<kind>` tick) for POS create routes.
+- **Axis 3 — Radius.** Data visibility is the position's branch set (`where.branchId in branchIds`), lifted only by an all-branch grant. Contacts (Person/Company) carry no branch, so no radius applies to them. This replaces the old `:own/:branch/:org` scope suffix.
 
-### Experimental — `/lab`
+Guard helpers live in `src/shared/lib/auth/` (`requireAuth`, `requirePermission`, `requireVoucherPermission`, `requirePosVoucher`, `requirePortalAuth`). Direction is permission-driven, never role-name checks.
 
-`/lab` hosts the Front Office / Back Office prototype (customer concierge, persistent search list, device search). Not gated, not production.
+**Department permission pool** (`DepartmentPermission` / `Department.isAllAccess`) is an **authoring-time lens only** — it bounds which permissions a role *may be granted* in the Role editor; it never runs at request time (runtime resolves position → role → grants). See `departmentPool.ts`.
 
-## 4) API topology
+Sessions revoke instantly on grant changes: mutating routes bump `tokensValidFrom` (`revokeSessions.ts`) so affected users re-log with fresh JWTs.
 
-### Staff API
+---
 
-- `/api/tickets/*` — lifecycle, worker, notes, reopen, assign, transfer.
-- `/api/ticket-statuses/*`, `/api/workers/*`, `/api/worker-groups/*` — workflow config.
-- `/api/users/*` — CRUD, roles, permissions, activity, wall posts, password.
-- `/api/roles/*`, `/api/permissions/*` — RBAC.
-- `/api/branches/*`, `/api/departments/*`, `/api/posts/*`, `/api/org-chart/*` — org structure.
-- `/api/customers/*`, `/api/companies/*`, `/api/accounts/*` — customer/company domain (returns GSTIN/state/regType for `PartyCombobox` autofill).
-- `/api/crm/leads/*` — CRM lead pipeline.
-- `/api/inbox/*` — rooms, read state, messages.
-- `/api/accountancy/*` — account groups, ledgers, journal entries (three-tier delete: void/soft/hard), invoices, vouchers (sales/purchases/estimates/branch-transfer/manufacturing/physical-stock), opening balances + Suspense, voucher registers.
-- `/api/accountancy/reports/*` — cash-flow, fund-flow, ratio-analysis, statistics, gst-summary, gst-hsn-summary, gst-classification, payables, receivables, ledger-outstandings, pending-vouchers, day-book.
-- `/api/inventory/*` — master CRUD (units, categories, product-groups, brands, warranty-terms, attribute-masters, BOMs, gst-rates, products) + voucher CRUD.
-- `/api/pos/*` — sale, return (incl. lost-invoice), shifts, snapshots.
-- `/api/call-logs/*`, `/api/notifications/*`, `/api/wall-posts/*`, `/api/search-slno/*`, `/api/upload-signature/*`.
-- `/api/ecommerce/*` — staff shop admin (uses `InvProduct`).
+## 5) Accounting & the Transaction Engine
 
-### Customer-facing API
+There is **one** general-ledger representation: the **`UniversalVoucher` spine** + its GL lines. Every voucher kind — GL (payment/receipt/contra/credit-note/debit-note/journal) and inventory (sale/purchase/POS/estimate/order/GRN/challan/…) — is a single `UniversalVoucher` row.
 
-- `/api/shop/products`, `/api/shop/products/[handle]` — public catalogue.
-- `/api/shop/orders`, `/api/shop/orders/[id]/razorpay` — orders + payment init.
-- `/api/shop/razorpay/webhook` — HMAC-verified payment webhook.
-- `/api/portal/register`, `/api/portal/tickets` — customer self-service.
+- **`UniversalVoucher`** (`finance.prisma`) — the header/anchor: `type` (spans all kinds), `status`, `binding` (`REGULAR` = real transaction with GL/stock, `OPTIONAL` = non-binding document like estimate/order), `date`, `branchId`, `partyAccountId`, `voucherNo` (per-kind series number), creator. The global number is the row `id` (`UV-<id>` via `formatUvNo`).
+- **`VoucherGlLine`** — the Dr/Cr postings, each tagged by `VoucherGlRole` (body / tax / tender / charge / round-off). Tender legs (cash/bank/AR) are GL lines, not a separate table.
+- **`VoucherDetail`** (`inventory.prisma`) — a 1:1 sidecar holding only cosmetic/print fields (frozen party JSON, GST/place-of-supply, printed totals, settlement JSON, return links). *(This is the model formerly named `InvVoucher`.)*
+- **`VoucherInventoryLine`** + **`InvStockLedger`** — the goods lines and stock movements. The mere existence of inventory lines ⇒ it's an inventory voucher (no discriminator).
+- **`VoucherLink`** — loose, FK-free workflow links (ticket/deal/order/shop-order) so the ledger stays decoupled from the disposable workflow.
+- **`VoucherAllocation`** — settlement links (receipt → the bills it clears; advance → against-ref).
 
-Validation is Zod-driven on write endpoints. Auth uses guard helpers from `src/shared/lib/auth/` (`requirePermission` for staff, `requirePortalAuth` for portal).
+**The Transaction Engine** (`src/modules/accountancy/lib/transactionEngine.ts`) is the single internal ledger writer. A posting voucher funnels through **`enginePost(spec)`**, which drives two arms inside the *caller's* transaction (atomic; the engine never opens its own tx):
 
-## 5) Auth and authorization
+- **`engineGlArm`** — writes the balanced `VoucherGlLine` set + `Account.balance` deltas.
+- **`engineStockArm`** — writes `InvStockLedger` + `InvProduct`/`InvProductBranch` stock caches.
 
-### Staff
+`engineCreateSpine` mints the draft header up front (document anchor) so goods lines hang off it before posting. Closing stock / COGS is **not** posted per voucher — it's computed live at report time (Tally-style). Opening-balance mismatches route to a system **Suspense** ledger so the trial balance always balances.
 
-- NextAuth config in `src/auth.ts` (`Credentials` provider, JWT strategy).
-- Staff provider: `credentials-staff`. Login page: `/staff/login`. After login → `/office/work-flow-inbox` (or `callbackUrl`) via `src/proxy.ts`.
-- Session carries role, permissions, rank, scope, branch, department.
-- Authorization is **liberal by default**: reads (GET data routes and page/layout views) require only a valid staff session (`requireAuth`) — a hidden capability gate never blocks a read. **Writes** gate on the matching role-page permission — `requirePermission` / per-kind voucher keys, and `requirePosVoucher` (the `pos:voucher:create:<kind>` tick) for the POS create routes. Sidebar visibility rides the `ui:sidebar:*` family; data radius comes from the position's branch. Direction is permission-driven, not role-name checks.
+**The `Account` is the bridge.** Party ledgers (`accounts.prisma`: `AccountGroup` → `Account`) are the one durable link between the protected accounting core and the disposable workflow. The GL posting path, balances, and reports (BS / P&L / Day Book / Trial Balance) are a **protected surface** — verify with the parity harness and confirm before changing the math (see PROJECT_BRAIN.md).
 
-#### Department permission pool (authoring lens)
+---
 
-- Each department carries a **permission pool** (`DepartmentPermission`, or `Department.isAllAccess` = every permission). It is an **authoring-time lens only** — it never participates in runtime permission checks (those resolve position → role → grants). See `src/shared/lib/auth/departmentPool.ts`.
-- Invariant: **a role never grants a permission outside its department's pool.** The pool is the single ceiling, enforced at all three write paths:
-  - **Save pool** (`PUT /api/departments/[id]/permissions`) — cascade-strips removed permissions from every role homed in the department.
-  - **Move role** (`PATCH /api/roles/[id]` with `departmentId`) — strips grants outside the new pool.
-  - **Save role permissions** (`PUT /api/roles/[id]/permissions`) — filters the incoming set to the pool before persisting.
-- The Role editor (`office/admin/role`) offers only pooled ids: the voucher matrix gates per kind (`kindOffered`) and the Quick Actions bar filters by the same `inLens` predicate. Already-granted permissions are always shown so nothing granted is silently hidden; all-access departments offer everything.
+## 6) Inventory
 
-### Portal (customer)
+- **`InvProduct`** is the single source of truth for storefront + warehouse + POS (carries `hsnCode`, `gstRate`, `taxability`, `attrsJson`, naming config). No separate shop product.
+- Masters: `InvUnit`, `InvCategory`, `InvProductGroup`, `InvBrand`, `InvWarrantyTerm`, `InvAttributeMaster`, `GstRate`, `InvBom`/`InvBomLine`.
+- Stock: `InvProductBranch` (per-branch stock), `InvStockLedger` (movements), `StockReservation` / `RedemptionHold` (soft holds).
+- Pricing: `pricing-strategy` module + `StrategyPoint`; costing via `AdditionalCostAllocation`.
 
-- Separate credential table: `CustomerPortalCredential` (linked to `Customer`).
-- Sign-in page: `/login` (`src/app/(external)/login/page.tsx`). Provider: `credentials-portal`. Validation in `src/shared/lib/auth/authorizePortal.ts`.
-- Guard: `src/shared/lib/auth/portalAuthGuard.ts` (`requirePortalAuth`).
-- Portal and staff sessions are fully independent — no crossover.
+---
 
-## 6) Data model
+## 7) POS
 
-Prisma split schema (`prisma.config.ts` → `prisma/schema/`):
+- Tills are **counter-based, not user-based** — any cashier works any counter; variance lands on the counter account, and human accountability comes from the shift report.
+- Models (`pos.prisma`): `PosCounter` (+ `PosCounterPaymentAccount`, `PaymentGateway`), `PosShift` (`OPEN → AWAITING_HANDOVER → CLOSED`), `PosCashDrop`, `PosExpenditure`, `PosReceipt`, `PosHandover`.
+- A sale requires an **OPEN shift on a counter** — the create route returns `NO_OPEN_SHIFT` otherwise. Branch context comes from the shift, not the session cookie (parallel billing from many browsers).
+- POS create routes gate on **`requirePosVoucher`** (the `pos:voucher:create:<kind>` tick), because a counter operator holds `ui:sidebar:workspace:pos`, not the office `ui:sidebar:pos:*` module.
+- A POS sale is a `UniversalVoucher` (`type=POS`) with tender/charge GL lines, stock movement, GST routing, and optional loyalty/coupon/gift-card effects — one balanced posting via `enginePost`.
 
-- `base.prisma` — `Customer`, `Company`, `CustomerCompany` with GST fields (`gstin`, `gstStateCode`, `gstRegType`, `financialYearFrom`, `booksBeginningFrom`).
-- `users.prisma`, `rbac.prisma`, `org.prisma` — users, roles/permissions, branches/departments/posts, org chart.
-- `pipeline.prisma`, `tickets.prisma`, `accounts.prisma` — the unified pipeline workflow + `Account` bridge. Every flavour (repair / deal / order / delivery / refund / task) is ONE `Ticket` core row riding a `Pipeline`, plus an optional 1:1 detail table (`TicketRepair`, `TicketDeal`, `TicketOrder`+`TicketOrderLine`, `TicketDelivery`, `TicketRefund`; a task is a bare core row). `Pipeline.entityType` (`repair|deal|order|delivery|refund|task|none`) selects the detail + UI. `TicketLog` is the single timeline (repair notes, deal activities, task comments); its actor is a frozen `createdBy`/`author` JSON snapshot, not a User FK. Cross-pipeline transfer = update `pipelineId` + `status`.
-- `finance.prisma` — `AccountType`, `AccountGroup`, `Ledger`, `JournalEntry` (with `VOID` / `SOFT_DELETED` status), `Invoice` (with `returnOfId` self-FK), `InvoiceLine` (with `productId` FK), voucher records, opening balances.
-- `inventory.prisma` — `InvUnit`, `InvCategory`, `InvProductGroup`, `InvBrand`, `InvWarrantyTerm`, `InvProduct` (with `hsnCode`, `gstRate`, `taxability`, `attrsJson`, `namingConfig` — single source of truth for shop + warehouse), `InvProductBranch` (per-branch stock), `InvVoucher`, `InvVoucherLine`, `InvStockLedger` (with `branchId`), `InvAttribute`, `InvAttributeValue`, `InvBom`, `InvBomLine`, `InvGstRate`.
-- `pos.prisma` — `PosCounter`, `PosShift` (OPEN → AWAITING_HANDOVER → CLOSED), `PosCashDrop`, `PosHandover`.
-- `crm.prisma` — `CrmLead`.
-- `inbox.prisma` — `ChatRoom`, `ChatMessage`.
-- `social.prisma` — `WallPost`.
-- `shop.prisma` — ecommerce enums only (`ShopOrderStatus`, `ShopPaymentMethod`, `ShopOutOfStockPolicy`). An order is now a `Ticket` (flavour "order") + `TicketOrder` detail (prices in integer paise); the online channel is moving to `ONLINE_ORDER` vouchers. No `ShopProduct` — merged into `InvProduct`.
-- `portal.prisma` — `CustomerPortalCredential`.
-- `enums.prisma` — shared enums (`GstRegType`, `Taxability`, `VoucherStatus`, `EntryType`, `NormalBalance`, …).
+---
 
-> **Migration hygiene**: GST/HSN columns and naming-convention columns were added via `prisma db push` and have no migration recorded. Generate migrations before any production deploy.
+## 8) Workflow — pipelines & tickets
 
-## 7) Design rules
+The generic pipeline engine models a **journey**: `Pipeline` → `TicketStatus`, with a `Ticket` core row per journey plus an optional 1:1 detail table per flavour (`TicketRepair`, `TicketDeal`, `TicketDelivery`, `TicketRefund`, `TicketOrder`/`TicketOrderLine`). `TicketLog` is the single timeline (actor is a frozen JSON snapshot, not a User FK). `Device` + `ServiceCenter` support repair. Ownership = `createdBy` snapshot; assignment = `assignedPositionId` seat; `TicketParticipant` adds helpers.
 
-- Ticket workflow = primary status + worker handoffs.
-- One `Ticket` table rides every pipeline; domain fields live in optional 1:1 detail tables. Fewer models, and cross-pipeline transfer is a plain status/pipeline update.
-- Ownership = `createdBy` actor snapshot (who created); assignment = `assignedPositionId` seat; participants add helpers. No per-ticket owner User FK.
-- Pipeline model supports multiple workflows (repair, deal, order, delivery, refund, task).
-- Customer and Company are separated; `Account` is a legacy bridge.
-- Finance follows `AccountType → AccountGroup → Ledger`; normalised, not Tally-name-driven.
-- GST identity (GSTIN, state code, reg type) lives on `Customer` / `Company`, not a separate `Party` model.
-- HSN code and GST rate live on `InvProduct`, not per voucher line.
-- `InvProduct` is the single source of truth for shop + warehouse + POS.
-- Journal entries support three-tier delete: void (preserve, no GL impact), soft (hide, retain audit), hard (admin only).
-- Opening-balance mismatches route into a system "Suspense" ledger so trial balance always balances.
-- `CrmLead` represents prospects only; conversion promotes a lead into a `Customer`. No dual write.
-- Composition GST parties skip GST lines on sales vouchers regardless of product `gstRate`.
-- Shop prices stored as integer paise. Display via `src/shared/lib/format/moneyInr.ts`.
-- Portal and staff auth are fully separate; `CustomerPortalCredential` is not on the NextAuth session.
-- Razorpay payment confirmation relies on the signed webhook, not the client response.
-- Client-side cart / wishlist / compare are Zustand + localStorage (no DB until checkout).
-- POS tills are **counter-based**, not user-based. Any cashier on any counter; variance lands on the counter account; human accountability comes from the shift report.
+> **Evolving area — do not assume the end-state.** This layer is mid-redesign:
+> - **Repair currently runs on statuses only.** The automation engine (`Work`, `TicketWorker`, `WorkGroup`, `WorkerTransition`, `StatusTransition`) exists in the schema but is **soft-disconnected / parked** — don't wire new behaviour onto it without checking PROJECT_BRAIN.
+> - **Orders & estimates are becoming accountancy vouchers** (`SALES_ORDER` / `ONLINE_ORDER` / `ESTIMATE`), with the principle *document → voucher, journey → ticket*. `TicketOrder` still exists but is on the way out; don't build new order logic on it.
+> - Access to statuses is moving to a **Work-type + permission** model on a common pipeline spine.
+>
+> When old and new conflict, follow AGENTS.md: pick one model per flow, or park the conflict with a note — never mix both.
 
-## 8) External module structure (`src/modules/external/`)
+---
 
-- `shop/` — `ShopHeader`, `ShopFooter`, `ShopSearchBar`, `ProductCard`, `AddToCartButton`, `ShopCatalogClient`, `ProductDetailTabs`, `ProductGallery`, `ProductPurchasePanel`, `ShopPageBanner`, `ShopRemoteImage`.
-- `store/` — `HeroCarousel`, `DealOfTheDay`, `FeaturedRow`, `BrandStrip`, `TrustStrip`, `CategoryShowcase`, `PromoBanners`.
-- `portal/` — `PortalHeader`.
-- `ExternalRootShell.tsx` — root layout shell wrapping NextAuth `SessionProvider`.
+## 9) Contacts & parties
 
-Cross-boundary imports (external surface importing from staff-side `src/shared/`, `src/components/`, `src/lib/`, `src/store/`) are widespread; the main load-bearing categories are shadcn UI primitives (`@/components/ui/*`), money formatting (`@/shared/lib/format/moneyInr`), product helpers (`@/lib/shop/product-public`), brand constants (`@/utils/constants-company-details`), and zustand stores (`@/store/external/*`). If the customer surface is ever extracted into a separate app, these are the import categories to break.
+- **`Person`**, **`Company`**, **`PersonCompany`** (join), with `Phone` / `Email` and a `ContactLifecycle` (`base.prisma`). *(These replaced the old `Customer` / `CustomerCompany`.)*
+- GST identity (GSTIN, state code, reg type) lives on `Person` / `Company`, not a separate party model.
+- Contacts are a **flat** permission surface: `customers:{view,create,edit,delete}`, any branch (no radius — contacts have no branch).
+- The accounting-facing party is the **`Account`** (party ledger); a Person/Company links to its `Account`.
 
-## 9) Shared structure (`src/shared/`)
+---
 
-Cross-cutting code lives under `src/shared/`. Single-module code lives under `src/modules/<m>/`.
+## 10) Adjacent domains
+
+- **Loyalty** (`loyalty.prisma`) — points earn/redeem with expiry lots (`LoyaltyLot`/`LoyaltyLedger`), tiers, milestones; applied inside the POS sale tx.
+- **Coupons / gift cards** (`coupons.prisma`) — `Coupon` (+ product rules), `CouponRedemption`, `GiftCard`/`GiftCardTxn`.
+- **Shop / portal** — the storefront reads `InvProduct`; checkout is Razorpay, confirmed by the **signed webhook**, not the client response. Cart/wishlist/compare are Zustand + localStorage (no DB until checkout). Portal auth (`PersonPortalCredential`) is fully separate from the staff session — no crossover.
+
+---
+
+## 11) Data model map (`prisma/schema/`, split schema via `prisma.config.ts`)
+
+| File | Key models |
+|---|---|
+| `base.prisma` | Person, Company, PersonCompany, Phone, Email |
+| `accounts.prisma` | AccountGroup, Account, CustomerTier |
+| `finance.prisma` | **UniversalVoucher**, **VoucherGlLine**, VoucherLink, VoucherAllocation, VoucherSeries, VoucherPrintTemplate, BooksConfig, AuditLog |
+| `inventory.prisma` | InvProduct(+Code/Branch), masters (InvUnit/Category/ProductGroup/Brand/WarrantyTerm/AttributeMaster/GstRate), **VoucherDetail**, **VoucherInventoryLine**, InvStockLedger, StockReservation, RedemptionHold, InvBom(+Line), StrategyPoint, AdditionalCostAllocation |
+| `pos.prisma` | PosCounter(+PaymentAccount), PaymentGateway, PosShift, PosCashDrop, PosExpenditure, PosReceipt, PosHandover |
+| `pipeline.prisma` | Pipeline, TicketStatus, TicketWorker, WorkGroup, Work, WorkerTransition, StatusTransition |
+| `tickets.prisma` | Ticket, TicketRepair/Deal/Order(+Line)/Delivery/Refund, TicketLog, TicketParticipant, Device, ServiceCenter |
+| `org.prisma` | Branch, Department, Position, UserPosition, PositionRole, Organisation, OrgDefaults |
+| `rbac.prisma` | Role, Permission, RolePermission, UserPermission, DepartmentPermission |
+| `users.prisma` | User, QuickNote |
+| `loyalty.prisma` / `coupons.prisma` | loyalty + coupon/gift-card models |
+| `inbox.prisma` / `social.prisma` / `portal.prisma` / `shop.prisma` | chat, wall posts, PersonPortalCredential, shop enums |
+| `enums.prisma` | VoucherType, InvVoucherType, VoucherBinding, VoucherGlRole, VoucherStatus, PaymentMethod, GstRegType, … |
+
+---
+
+## 12) Shared structure & conventions (`src/shared/`)
 
 ```
 src/shared/
-├─ components/      cross-cutting UI (Sidebar, Topbar, PartyPicker, BranchSwitcher, etc.)
-├─ hooks/           cross-cutting React hooks (index.ts barrel)
-├─ types/           cross-cutting type defs (inventoryTypes.ts, orgChart.ts)
+├─ components/   cross-cutting UI (Sidebar, Topbar, PartySearchAndCreate, BranchSwitcher, print/*)
+├─ hooks/        cross-cutting hooks (index.ts barrel)
+├─ types/        cross-cutting types
 └─ lib/
-   ├─ api/          validateRequest, parsePagination, prismaUniqueError, handleApiError, generateNextOpaqueId (index.ts barrel)
-   ├─ auth/         permissions, authGuard, portalAuthGuard, permissionScope, makePermissionLayout, authorizeStaff, authorizePortal, portalIdentifier, portalAccountContext, staffEmailAllowlist, activeBranch, freeRoutes
-   ├─ constants/    accounting.ts, permissions.ts
-   ├─ format/       formatDate, timeAgo, moneyInr, numberWords, slugify, utils (cn)
-   ├─ prisma/       prismaClient (singleton), fragments
-   ├─ portal/       mockAdapters (DTO + mock data — replace as APIs land)
-   ├─ schemas/      commonSchemas, inventorySchemas, bomSchemas, orgDefaultsSchemas
-   ├─ shop/         storeContent, productPublic, demoReviews, shopImagePlaceholder
-   ├─ supabase/     supabaseClient (Supabase singleton)
-   ├─ http.ts       fetch wrapper
-   └─ orgDefaults.ts
+   ├─ api/       validateRequest, parsePagination, handleApiError, opaque-id gen
+   ├─ auth/      permissions, permissionScope, posVoucherMatrix, voucherMatrix, sidebarModules,
+   │             authorizeStaff/Portal, departmentPool, revokeSessions, loginRateLimit
+   ├─ accountancy/ settlement, partySnapshot, checkCreditLimit, voucherBinding, outstandings
+   ├─ format/    moneyInr (paise), round2, formatDate, numberWords
+   ├─ prisma/    prismaClient singleton
+   └─ print/     voucher/receipt templates
 ```
 
-**Boundary rule:** code goes in `src/shared/` only if imported by two or more modules (or from `src/app/`). Single-module code lives in `src/modules/<m>/{lib,hooks,components}/`. Promote later, don't speculate.
+- **Boundary rule:** code goes in `src/shared/` only if used by ≥2 modules (or from `src/app/`); otherwise `src/modules/<m>/{lib,hooks,components}/`.
+- **Naming:** components `PascalCase.tsx`; hooks `useThing.ts`; utilities/schemas/constants `camelCase.ts`; directories `kebab-case`.
+- **Reuse before creating:** grep `src/shared/` first; export from the folder's `index.ts`.
 
-**Naming:** components `PascalCase.tsx`; hooks `useFooBar.ts` (camelCase); utilities / schemas / constants `camelCase.ts`; directories `kebab-case`.
+---
 
-**Lookup:** before adding a new shared helper, grep `src/shared/` for the keyword. If the folder has an `index.ts`, that's the public surface.
+## 13) Retired concepts — DO NOT RESURRECT
 
-## 10) Project layout
+These were superseded. If you find prose or memory referencing them, treat it as historical and build against the current model above.
 
-```
-src/
-├─ app/                              Next.js routes
-│  ├─ (protected)/office/*           Staff UI (122 page.tsx files)
-│  ├─ (protected)/vouchers/pos/      Standalone POS register
-│  ├─ (external)/                    Customer-facing (shop, portal, store, login)
-│  ├─ api/*                          ~218 route handlers
-│  ├─ lab/                           Experimental Front/Back Office prototype
-│  └─ staff/login/                   Staff sign-in
-├─ modules/                          Domain modules (see §2)
-├─ components/                       App-level wrappers + shadcn UI primitives
-├─ shared/                           Cross-cutting (see §9)
-├─ store/                            Zustand stores (incl. store/external/* for shop)
-├─ utils/constants.ts                Sidebar module sections + general constants
-├─ auth.ts                           NextAuth config
-└─ proxy.ts                          Auth middleware (Next 16 rename)
+| Retired | Replaced by |
+|---|---|
+| `JournalEntry` / `JournalLine` | `UniversalVoucher` + `VoucherGlLine` (the spine is the sole GL) |
+| `Voucher` / `VoucherLine` (GL header/lines) | `UniversalVoucher` (totals computed from Dr legs) |
+| `Invoice` / `InvoiceLine` | `UniversalVoucher` (SALE) + `VoucherInventoryLine` |
+| `InvVoucher` / `InvVoucherLine` | renamed **`VoucherDetail`** / **`VoucherInventoryLine`** |
+| `Customer` / `CustomerCompany` / `CustomerPortalCredential` | `Person` / `PersonCompany` / `PersonPortalCredential` |
+| `ShopProduct` / `ShopOrder` models | `InvProduct` (single master); online orders → Ticket flavour / `ONLINE_ORDER` voucher |
+| Permission grid `module × action × scope` (`accountancy:edit:branch`, `:own/:org` suffixes) | three-axis model (§4): `ui:sidebar:*` + per-kind write keys + branch radius |
+| Hidden read/capability gates on GET routes & pages | reads default-open (`requireAuth`); only writes gate |
+| `posts` (org seat) | `Position` |
+| Repair driven by the Work/Worker automation engine | repair runs on **statuses only** (engine parked) |
 
-prisma/
-├─ schema/                           Split Prisma schema (see §6)
-├─ prisma.config.ts                  Datasource + seed command
-└─ seeds/
-   ├─ bootstrap-seed.ts              Production seed (RBAC, statuses, COA, units, warranty, etc.)
-   ├─ helper-inventory-masters.ts    Trade-specific reference data (brands, categories, HSN/GST groups)
-   ├─ dummy-*.ts                     Manual demo seeds
-   ├─ hard-clean.ts                  Reset to bootstrap state
-   ├─ purge-vouchers.ts
-   ├─ recompute-balances.ts          Recompute Account.balance drift
-   └─ data/                          Fixture data
-```
+---
 
-## 11) Operational notes
+## 14) Operational notes
 
-- Use `pnpm`.
-- After Prisma schema changes: `prisma generate` and **restart dev server** (Turbopack caches Prisma chunks).
-- On Next.js 16, keep auth middleware in `src/proxy.ts`; do not move to `middleware.ts`.
-- Set `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` in `.env`.
-- See `docs/seeds.md` for seed lifecycle (`bootstrap`, `dummy-*`, `hard-clean`).
-- See `docs/completed-and-protected.md` before touching protected surfaces (POS GL, BS, P&L, Day Book, accounting math).
-- For per-module URLs, permissions, models, key components, and gotchas, read `docs/modules/<module>.md`.
+- Use `pnpm`. After a Prisma schema change: `prisma generate` **and restart the dev server** (Turbopack caches Prisma chunks).
+- Keep middleware in `src/proxy.ts` (never `middleware.ts`).
+- Some columns were added via `prisma db push` with no migration recorded — generate migrations before a production deploy.
+- **Production DB is in use** — check impact on seeds, APIs, and UI before removing anything (AGENTS.md).
+- Seeds: `bootstrap-seed.ts` (production master data), `helper-*.ts` (trade-specific), `dummy-*.ts` (demo), `hard-clean.ts` (reset to bootstrap). See `docs/seeds.md`.
+- Razorpay needs `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` / `RAZORPAY_WEBHOOK_SECRET`.
+- Protected surfaces (POS/GL posting, Balance Sheet, P&L, Day Book, accounting math): treat as append-only/verified — run the parity harness and confirm before changing (see PROJECT_BRAIN.md "protected" notes).
