@@ -222,6 +222,7 @@ const PERMISSIONS = [
     { id: "pos:shift:open",        label: "Open POS shift",                 module: "pos", description: "Open your own till session with an opening cash float." },
     { id: "pos:shift:close",       label: "Close POS shift",                module: "pos", description: "Declare physical cash count and hand over to manager (posts Contra)." },
     { id: "pos:shift:drop",        label: "Record mid-shift cash drop",     module: "pos", description: "Log cash dropped into the safe during an open shift." },
+    { id: "pos:shift:force-close", label: "Force-close another's shift",     module: "pos", description: "Emergency-close a stuck open shift on behalf of the operator (counts the drawer; closedBy = you)." },
 
     // accountancy — module-level CRUD gate (Owner / CA only)
     // Flat accountancy view — the single gate that shows/hides the Accountancy

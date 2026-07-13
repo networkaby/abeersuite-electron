@@ -66,13 +66,14 @@ const initials = (name: string) =>
 export default function CountersStatusPage() {
     const { data: session } = useSession();
     const perms = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
-    // Force-close another operator's shift (e.g. they fell ill / their PC died)
-    // is an oversight action — the counter-manage tick (or env super-admin) grants
-    // it. A plain operator holds only `pos:shift:close` (their OWN shift), never this.
+    // Force-close another operator's shift (e.g. they fell ill / their PC died) is
+    // an oversight action gated by the dedicated `pos:shift:force-close` tick (the
+    // "Can force-close shift" toggle on the Counters sidebar link) or env super-admin.
+    // A plain operator holds only `pos:shift:close` (their OWN shift), never this.
     // The close API enforces the same pair.
     const canManage =
         perms.includes(PERMISSIONS.ADMIN_BYPASS) ||
-        perms.includes(PERMISSIONS.POS_COUNTERS_EDIT);
+        perms.includes(PERMISSIONS.POS_SHIFT_FORCE_CLOSE);
 
     const [cards, setCards]   = useState<CounterCard[]>([]);
     const [loading, setLoading] = useState(true);

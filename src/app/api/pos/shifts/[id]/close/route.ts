@@ -72,11 +72,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             );
         }
         // Force-close on behalf of the operator is an oversight action: the
-        // counter-manage tick (`pos-counters:edit`) or env super-admin. A plain
-        // cashier holds `pos:shift:close` for their OWN shift only.
+        // dedicated `pos:shift:force-close` tick or env super-admin. A plain cashier
+        // holds `pos:shift:close` for their OWN shift only.
         const canManage =
             user!.permissions.includes(PERMISSIONS.ADMIN_BYPASS) ||
-            user!.permissions.includes(PERMISSIONS.POS_COUNTERS_EDIT);
+            user!.permissions.includes(PERMISSIONS.POS_SHIFT_FORCE_CLOSE);
         if (shift.userId !== user!.id && !canManage) {
             return NextResponse.json({ error: "Not your shift" }, { status: 403 });
         }

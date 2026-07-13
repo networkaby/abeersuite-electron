@@ -536,6 +536,12 @@ export const SIDEBAR_LINK_GRANULAR_IDS: Record<string, string[]> = Object.fromEn
 // only once the link itself is ticked (can't grant an edit on a page the role
 // can't open). Keyed by the link's `ui:sidebar:*` permission id.
 export const SIDEBAR_LINK_EXTRA_TOGGLE: Record<string, { id: string; label: string }> = {
+    // POS counters board — seeing it is oversight; the extra toggle grants the
+    // authority to emergency-close a stuck operator shift from it.
+    [sidebarChildPermissionId("pos", "counters")]: {
+        id: "pos:shift:force-close",
+        label: "Can force-close shift",
+    },
     [sidebarChildPermissionId("compliance", "tax-classification")]: {
         id: "compliance:tax:edit",
         label: "Can change tax",

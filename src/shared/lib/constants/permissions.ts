@@ -100,6 +100,9 @@ export const PERMISSIONS = {
     POS_SHIFT_OPEN:                     "pos:shift:open",
     POS_SHIFT_CLOSE:                    "pos:shift:close",
     POS_SHIFT_DROP:                     "pos:shift:drop",
+    // Oversight: emergency-close a stuck OPEN shift on another operator's behalf
+    // (from the counters board). Distinct from the operator's own `pos:shift:close`.
+    POS_SHIFT_FORCE_CLOSE:              "pos:shift:force-close",
 
     // Roles
     ROLES_CREATE:                       "roles:create",
