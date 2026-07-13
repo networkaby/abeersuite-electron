@@ -437,13 +437,17 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         label: "Delivery",
         icon: Truck,
         key: "delivery",
-        dashboardHref: "/office/roadmap/delivery",
-        pathPrefixes: ["/office/roadmap/delivery"],
+        dashboardHref: "",
+        pathPrefixes: [""],
         children: [
             // { label: "Overview", icon: ChartArea, href: "/office/roadmap/delivery" },
-            { label: "Shipments", icon: Package, href: "/office/roadmap/delivery/shipments" },
-            { label: "Couriers", icon: Building2, href: "/office/roadmap/delivery/couriers" },
-            { label: "Proof of delivery", icon: FileText, href: "/office/roadmap/delivery/pod" },
+            // { label: "Shipments", icon: Package, href: "/office/roadmap/delivery/shipments" },
+            // { label: "Couriers", icon: Building2, href: "/office/roadmap/delivery/couriers" },
+            // { label: "Proof of delivery", icon: FileText, href: "/office/roadmap/delivery/pod" },
+
+            //shiprocket integrati
+            //Local Courier Integration
+
         ],
     },
 
