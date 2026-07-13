@@ -7,7 +7,7 @@
 // `seedTenderSplit` for a fresh row) so each screen controls its own layout.
 
 import React from "react";
-import { Smartphone, CreditCard, FileText, Building2, Wallet, Banknote, QrCode, Trash2 } from "lucide-react";
+import { Smartphone, CreditCard, FileText, Building2, Wallet, Banknote, QrCode, Trash2, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -41,7 +41,7 @@ export function seedTenderSplit(accounts: TenderAccount[], remaining = 0, includ
 }
 
 export function TenderSplitInput({
-    accounts, value, onChange, onShare, includeCash = false, onEnter,
+    accounts, value, onChange, onShare, includeCash = false, onEnter, onFill,
 }: {
     accounts: TenderAccount[];
     value: TenderSplit[];
@@ -51,6 +51,9 @@ export function TenderSplitInput({
     /** Add a "Cash (drawer)" option (paymentAccountId = null) to the picker. */
     includeCash?: boolean;
     onEnter?: (e: React.KeyboardEvent) => void;
+    /** When provided, each row shows a ✓ that fills it with the remaining unpaid
+     *  balance (same helper as the Cash row). Omitted where there is no bill total. */
+    onFill?: (s: TenderSplit) => void;
 }) {
     const byId = new Map(accounts.map((a) => [a.id, a]));
     const patch = (id: string, p: Partial<TenderSplit>) => onChange(value.map((x) => (x.id === id ? { ...x, ...p } : x)));
@@ -81,14 +84,26 @@ export function TenderSplitInput({
                                 ))}
                             </SelectContent>
                         </Select>
-                        <Input
-                            value={s.amount || ""}
-                            onChange={(ev) => patch(s.id, { amount: Number(ev.target.value) || 0 })}
-                            onKeyDown={onEnter}
-                            placeholder="₹ amount"
-                            className="text-right"
-                            inputMode="decimal"
-                        />
+                        <div className="flex items-center gap-1">
+                            {onFill && (
+                                <button
+                                    type="button"
+                                    title="Fill remaining amount here"
+                                    onClick={() => onFill(s)}
+                                    className="shrink-0 rounded-full p-0.5 text-emerald-600 transition-colors hover:bg-emerald-50 hover:text-emerald-700 dark:hover:bg-emerald-950/40"
+                                >
+                                    <Check size={11} strokeWidth={2.5} />
+                                </button>
+                            )}
+                            <Input
+                                value={s.amount || ""}
+                                onChange={(ev) => patch(s.id, { amount: Number(ev.target.value) || 0 })}
+                                onKeyDown={onEnter}
+                                placeholder="₹ amount"
+                                className="text-right"
+                                inputMode="decimal"
+                            />
+                        </div>
                         {canShare ? (
                             <Button
                                 type="button"

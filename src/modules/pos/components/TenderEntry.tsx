@@ -45,6 +45,17 @@ export function TenderEntry({
     const splitsSum = splits.reduce((s, x) => s + x.amount, 0);
     const total = cashNet + splitsSum;
 
+    // Per-split "fill remaining" — sets THIS line to the unpaid balance
+    // (bill − cash − every OTHER split). Only offered when there is a bill total
+    // (checkout); the Rcv dialog omits it, since tenders define their own total.
+    const fillSplit = targetTotal != null
+        ? (s: TenderSplit) => {
+            const others = cashNet + (splitsSum - s.amount);
+            const remaining = Math.max(0, +(targetTotal - others).toFixed(2));
+            setSplits((prev) => prev.map((x) => (x.id === s.id ? { ...x, amount: remaining } : x)));
+        }
+        : undefined;
+
     return (
         <div className="space-y-2">
             {/* Cash — tendered + change-back on one row, net-cash hint below. */}
@@ -99,6 +110,7 @@ export function TenderEntry({
                 onChange={setSplits}
                 onShare={onShare}
                 onEnter={onEnter}
+                onFill={fillSplit}
             />
 
             <div className="flex items-center justify-between gap-2">
