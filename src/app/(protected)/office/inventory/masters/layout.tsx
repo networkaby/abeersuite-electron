@@ -1,23 +1,9 @@
-import { auth } from "@/auth";
-import { redirect } from "next/navigation";
 import { InventoryMastersNav } from "@/modules/inventory/components/InventoryMastersNav";
 import { PathBreadcrumb } from "@/shared/components/PathBreadcrumb";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
-export default async function InventoryMastersLayout({ children }: { children: React.ReactNode }) {
-    const session = await auth();
-    const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
-
-    // View rides any inventory-masters capability or the inventory:manage umbrella.
-    const canOpenMasters =
-        permissions.includes(PERMISSIONS.ADMIN_BYPASS) ||
-        permissions.includes(PERMISSIONS.INVENTORY_MASTERS_CREATE) ||
-        permissions.includes(PERMISSIONS.INVENTORY_MASTERS_EDIT) ||
-        permissions.includes(PERMISSIONS.INVENTORY_MASTERS_DELETE);
-    if (!canOpenMasters) {
-        redirect("/office/work-flow-inbox");
-    }
-
+// Viewing masters is a read — default-open for signed-in staff. The
+// masters:create/edit/delete keys gate the write APIs, not the pages.
+export default function InventoryMastersLayout({ children }: { children: React.ReactNode }) {
     return (
         <div className="flex h-full flex-col">
             <PathBreadcrumb
@@ -32,7 +18,7 @@ export default async function InventoryMastersLayout({ children }: { children: R
                 }}
             />
             <div className="flex-none px-6">
-                <InventoryMastersNav permissions={permissions} />
+                <InventoryMastersNav />
             </div>
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</div>
         </div>

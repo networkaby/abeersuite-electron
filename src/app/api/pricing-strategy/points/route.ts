@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireAnyPermission } from "@/shared/lib/auth/permissions";
+import { requireAuth, requireAnyPermission } from "@/shared/lib/auth/permissions";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { strategyPointsSaveSchema, type StrategyPoints } from "@/shared/lib/schemas/pricingSchemas";
@@ -15,7 +15,7 @@ const emptyPoints = (): StrategyPoints => ({
 });
 
 export async function GET() {
-    const { response } = await requireAnyPermission(PERMISSIONS.PRICING_STRATEGY_SET);
+    const { response } = await requireAuth();
     if (response) return response;
     try {
         const rows = await prisma.strategyPoint.findMany();

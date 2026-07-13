@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireModuleAccess } from "@/shared/lib/auth/permissions";
+import { requireAuth, requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import {
     aggregateClosingAsOf, loadNormalBalanceMap,
@@ -20,7 +20,7 @@ const updateSchema = z.object({
 
 // GET /api/accountancy/gl-accounts/[id]
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requireModuleAccess("accountancy");
+    const { response } = await requireAuth();
     if (response) return response;
 
     const { id } = await params;

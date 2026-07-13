@@ -1,7 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { NextResponse } from "next/server";
-import { requireModuleAccess } from "@/shared/lib/auth/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
 import { resolveSourceBatch } from "@/modules/accountancy/lib/journalEntrySource";
 import { ledgerStatusFilterUv } from "@/modules/accountancy/lib/aggregateLedger";
@@ -10,7 +10,7 @@ import { handleApiError } from "@/shared/lib/api";
 
 // GET /api/accountancy/reports/ledger/[accountId]?from=YYYY-MM-DD&to=YYYY-MM-DD
 export async function GET(req: Request, { params }: { params: Promise<{ accountId: string }> }) {
-    const { response } = await requireModuleAccess("accountancy");
+    const { response } = await requireAuth();
     if (response) return response;
 
     const { accountId } = await params;

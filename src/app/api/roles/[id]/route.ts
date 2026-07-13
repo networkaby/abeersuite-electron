@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireAnyPermission } from "@/shared/lib/auth/permissions";
+import { requireAuth, requireAnyPermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
@@ -13,9 +13,7 @@ export async function GET(
     _: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const { response } = await requireAnyPermission(
-        PERMISSIONS.ROLES_CREATE, PERMISSIONS.ROLES_EDIT, PERMISSIONS.ROLES_DELETE,
-    );
+    const { response } = await requireAuth();
     if (response) return response;
     try {
         const { id } = await params;

@@ -1,10 +1,10 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireModuleAccess } from "@/shared/lib/auth/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { getDealsPipeline } from "@/modules/deals/lib/dealsPipeline";
 
 export async function GET() {
-    const { response } = await requireModuleAccess("crm");
+    const { response } = await requireAuth();
     if (response) return response;
 
     const pipeline = await getDealsPipeline(prisma);

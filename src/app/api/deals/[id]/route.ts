@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireModuleAccess } from "@/shared/lib/auth/permissions";
+import { requireAuth, requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { updateDealSchema } from "@/shared/lib/schemas/dealSchema";
 import { assertDealStatus } from "@/modules/deals/lib/dealsPipeline";
@@ -34,7 +34,7 @@ function parseId(raw: string): number | null {
 }
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requireModuleAccess("crm");
+    const { response } = await requireAuth();
     if (response) return response;
     const id = parseId((await params).id);
     if (id === null) return NextResponse.json({ error: "Invalid id" }, { status: 400 });

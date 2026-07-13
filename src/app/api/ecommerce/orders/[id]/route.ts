@@ -1,11 +1,11 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireModuleAccess } from "@/shared/lib/auth/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
 
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
-    const { response } = await requireModuleAccess("e-commerce");
+    const { response } = await requireAuth();
     if (response) return response;
     const { id } = await ctx.params;
     const oid = parseInt(id, 10);

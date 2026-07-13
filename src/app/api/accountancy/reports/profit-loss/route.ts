@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireModuleAccess } from "@/shared/lib/auth/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { parseRange } from "@/modules/accountancy/lib/period";
 import { aggregateRange, loadNormalBalanceMap } from "@/modules/accountancy/lib/aggregateLedger";
 import { buildGroupTree } from "@/modules/accountancy/lib/groupTree";
@@ -13,7 +13,7 @@ export const maxDuration = 60;
 
 // GET /api/accountancy/reports/profit-loss?from=YYYY-MM-DD&to=YYYY-MM-DD
 export async function GET(req: Request) {
-    const { response } = await requireModuleAccess("accountancy");
+    const { response } = await requireAuth();
     if (response) return response;
 
     const { searchParams } = new URL(req.url);

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireModuleAccess } from "@/shared/lib/auth/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { getOutstandings } from "@/modules/accountancy/lib/outstandings";
 import { handleApiError } from "@/shared/lib/api";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
@@ -12,7 +12,7 @@ export const maxDuration = 60;
 // Aggregates open bills under "Sundry Creditors" group by party,
 // with ageing buckets (0-30 / 30-60 / 60-90 / 90+).
 export async function GET(req: Request) {
-    const { response } = await requireModuleAccess("accountancy");
+    const { response } = await requireAuth();
     if (response) return response;
 
     const { searchParams } = new URL(req.url);

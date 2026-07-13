@@ -4,24 +4,16 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/shared/lib/format/utils";
-import {
-    filterInventoryMastersNav,
-    INVENTORY_MASTERS_NAV_GROUPS,
-} from "@/modules/inventory/masters-nav";
-
-type Props = {
-    permissions: string[];
-};
+import { INVENTORY_MASTERS_NAV_GROUPS } from "@/modules/inventory/masters-nav";
 
 function isActive(pathname: string, href: string): boolean {
     return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export function InventoryMastersNav({ permissions }: Props) {
+// Viewing masters is a read — default-open; every staff member sees every tab.
+export function InventoryMastersNav() {
     const pathname = usePathname();
-    const groups = filterInventoryMastersNav(INVENTORY_MASTERS_NAV_GROUPS, permissions);
-
-    if (groups.every((g) => g.links.length === 0)) return null;
+    const groups = INVENTORY_MASTERS_NAV_GROUPS;
 
     return (
         <nav className="border-b border-border pb-2" aria-label="Inventory masters sections">

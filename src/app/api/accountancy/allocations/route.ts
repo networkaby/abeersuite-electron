@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireModuleAccess, requireAuth } from "@/shared/lib/auth/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
@@ -24,7 +24,7 @@ const createSchema = z.object({
 // GET /api/accountancy/allocations?targetType=INVOICE&targetId=42
 // Lists allocations linked to a particular target (or by source if ?sourceType=&sourceId=).
 export async function GET(req: Request) {
-    const { response } = await requireModuleAccess("accountancy");
+    const { response } = await requireAuth();
     if (response) return response;
 
     const { searchParams } = new URL(req.url);

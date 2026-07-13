@@ -1,8 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireAnyPermission } from "@/shared/lib/auth/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import {
     aggregateClosingAsOf, loadNormalBalanceMap,
 } from "@/modules/accountancy/lib/aggregateLedger";
@@ -10,7 +9,7 @@ import {
 // GET /api/accountancy/groups/[id]/detail
 // Returns the group, its child sub-groups (with rolled-up balances), and direct ledger accounts.
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requireAnyPermission(PERMISSIONS.ACCOUNTANCY_MASTERS_CREATE, PERMISSIONS.ACCOUNTANCY_MASTERS_EDIT, PERMISSIONS.ACCOUNTANCY_MASTERS_DELETE);
+    const { response } = await requireAuth();
     if (response) return response;
 
     const { id } = await params;

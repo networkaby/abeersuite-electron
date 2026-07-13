@@ -36,11 +36,10 @@ export async function GET(req: NextRequest) {
         const { searchParams } = new URL(req.url);
         const scope = searchParams.get("scope");
 
-        // ── Admin: full list across all branches (for /office/admin/counters) ─
+        // ── Full list across all branches (admin counters page + the POS Cash
+        // Book counter picker). Listing counters is a read — default-open;
+        // counter writes below keep their pos-counters:* gates. ─
         if (scope === "all") {
-            if (!canManageCounters) {
-                return NextResponse.json({ error: "pos-counters:manage permission required" }, { status: 403 });
-            }
             const counters = await prisma.posCounter.findMany({
                 orderBy: [{ branchId: "asc" }, { name: "asc" }],
                 include: {

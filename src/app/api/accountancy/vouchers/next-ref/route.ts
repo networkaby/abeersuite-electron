@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireAuth, userCanVoucher } from "@/shared/lib/auth/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { assembleReference } from "@/modules/accountancy/lib/voucherRef";
 
 // GET /api/accountancy/vouchers/next-ref?type=JOURNAL
@@ -17,12 +17,6 @@ export async function GET(req: Request) {
 
     const { searchParams } = new URL(req.url);
     const kind = searchParams.get("type") ?? "JOURNAL";
-
-    // Gate by the requested kind's create key (per-kind OR generic) — whoever may
-    // create this voucher may preview its next reference.
-    if (!userCanVoucher(user, kind, "create")) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
 
     const series = await prisma.voucherSeries.findUnique({ where: { kind } });
     if (!series) {

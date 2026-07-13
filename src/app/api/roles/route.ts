@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireAnyPermission } from "@/shared/lib/auth/permissions";
+import { requireAuth, requireAnyPermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
@@ -17,9 +17,7 @@ const createRoleSchema = z.object({
 
 export async function GET() {
     // Viewing roles is allowed for anyone who can act on roles (manage or any action).
-    const { response } = await requireAnyPermission(
-        PERMISSIONS.ROLES_CREATE, PERMISSIONS.ROLES_EDIT, PERMISSIONS.ROLES_DELETE,
-    );
+    const { response } = await requireAuth();
     if (response) return response;
     try {
         const roles = await prisma.role.findMany({

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireModuleAccess } from "@/shared/lib/auth/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { parseRange } from "@/modules/accountancy/lib/period";
 import { handleApiError } from "@/shared/lib/api";
@@ -8,7 +8,7 @@ import { handleApiError } from "@/shared/lib/api";
 // Counts of every voucher kind in the period plus master-table totals — the
 // data that powers Tally's "Statistics" screen.
 export async function GET(req: Request) {
-    const { response } = await requireModuleAccess("accountancy");
+    const { response } = await requireAuth();
     if (response) return response;
 
     const { searchParams } = new URL(req.url);

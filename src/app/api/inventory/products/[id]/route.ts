@@ -1,7 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { Prisma } from "@/generated/prisma/client";
 import { NextResponse } from "next/server";
-import { requireAnyPermission, requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAuth, requireAnyPermission, requirePermission } from "@/shared/lib/auth/permissions";
 import { invProductUpdateSchema, TAX_CLASSIFICATION_FIELDS } from "@/shared/lib/schemas/inventorySchemas";
 import { normalizeProductCodes } from "@/shared/lib/inventory";
 import { findSkuCodeCollision, skuCodeCollisionMessage } from "@/shared/lib/inventory/codeCollision";
@@ -27,10 +27,7 @@ const productInclude = {
 } as const;
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requireAnyPermission(
-        PERMISSIONS.PRODUCTS_CREATE, PERMISSIONS.PRODUCTS_EDIT, PERMISSIONS.PRODUCTS_DELETE,
-        PERMISSIONS.COMPLIANCE_TAX_EDIT,
-    );
+    const { response } = await requireAuth();
     if (response) return response;
     try {
         const { id, error } = await parseIdParam(params);

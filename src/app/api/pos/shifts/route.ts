@@ -11,7 +11,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
-import { requirePermission, requireModuleAccess } from "@/shared/lib/auth/permissions";
+import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
 import { resolveActiveBranchId, BranchAccessError } from "@/shared/lib/auth/activeBranch";
 import { auth } from "@/auth";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
@@ -31,7 +31,7 @@ const openSchema = z.object({
 
 // ── GET /api/pos/shifts ──────────────────────────────────────────────────────
 export async function GET(req: NextRequest) {
-    const { user, response } = await requireModuleAccess("pos");
+    const { user, response } = await requireAuth();
     if (response) return response;
 
     try {

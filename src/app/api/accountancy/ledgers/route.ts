@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireAnyPermission, requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
 import { parsePagination } from "@/shared/lib/api";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
@@ -20,7 +20,7 @@ const createSchema = z.object({
 // Without groupId → pure GL accounts (no person/company), flat array (existing behaviour)
 // With groupId    → ALL account types in that group, paginated: { items, total }
 export async function GET(req: Request) {
-    const { response } = await requireAnyPermission(PERMISSIONS.ACCOUNTANCY_MASTERS_CREATE, PERMISSIONS.ACCOUNTANCY_MASTERS_EDIT, PERMISSIONS.ACCOUNTANCY_MASTERS_DELETE);
+    const { response } = await requireAuth();
     if (response) return response;
 
     const { searchParams } = new URL(req.url);

@@ -14,13 +14,12 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import type { Prisma } from "@/generated/prisma/client";
 import { NextResponse, type NextRequest } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { readSettlement } from "@/shared/lib/accountancy/settlement";
 import { handleApiError, parsePagination } from "@/shared/lib/api";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 export async function GET(req: NextRequest) {
-    const { response } = await requirePermission(PERMISSIONS.POS_SHIFT_OPEN);
+    const { response } = await requireAuth();
     if (response) return response;
 
     const url  = new URL(req.url);

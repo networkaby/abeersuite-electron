@@ -17,6 +17,8 @@ export default async function CustomerRetentionIndex() {
     const session = await auth();
     const perms = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
     const bypass = perms.includes(PERMISSIONS.ADMIN_BYPASS);
+    // Prefer a section the user can edit; otherwise land on the first section
+    // read-only rather than bouncing them out of Retention entirely.
     const target = SECTIONS.find((s) => bypass || perms.includes(s.perm));
-    redirect(target?.href ?? "/office");
+    redirect(target?.href ?? SECTIONS[0].href);
 }

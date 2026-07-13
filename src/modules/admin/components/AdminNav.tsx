@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/shared/lib/format/utils";
 import { ADMIN_NAV } from "@/utils/constants";
+import { sidebarLinkPermissionIdForLabel } from "@/shared/lib/auth/sidebarModules";
 
 type Props = { permissions: string[] };
 
@@ -33,22 +34,20 @@ export function AdminNav({ permissions }: Props) {
         ADMIN_NAV.map(item => [item.href.split("/").pop()!, item])
     );
 
-    // A tab shows if the user holds its exact permission OR any action permission
-    // for the same resource. Admin resources split `<res>:manage` into
-    // `<res>:create|edit|delete`, so a role granted only one action still needs to
-    // reach the page — match on the resource prefix (`branches:` → any `branches:*`).
-    const canSee = (permission: string): boolean => {
-        if (permissions.includes(permission)) return true;
-        const prefix = `${permission.split(":")[0]}:`;
-        return permissions.some(p => p.startsWith(prefix));
+    // A tab shows if the role's "Sidebar links → Admin" tick grants it — the same
+    // single source of truth the Sidebar uses. Capability permissions gate the
+    // write APIs, not the nav.
+    const canSee = (label: string): boolean => {
+        const linkId = sidebarLinkPermissionIdForLabel("admin", label);
+        return !!linkId && permissions.includes(linkId);
     };
 
-    // Resolve groups, filtering out items the user has no permission for
+    // Resolve groups, filtering out items whose sidebar link isn't granted
     const groups = GROUP_SLUGS
         .map(slugs =>
             slugs
                 .map(slug => navMap[slug])
-                .filter(item => item && (hasBypass || canSee(item.permission)))
+                .filter(item => item && (hasBypass || canSee(item.label)))
         )
         .filter(group => group.length > 0);
 

@@ -3,7 +3,6 @@
 ## 1. Before Coding
 
 - Read this file completely.
-
 - Use the project vocabulary and simple Indian English in all communication.
 - Before making changes:
   1. Explain your understanding.
@@ -43,6 +42,8 @@ When old and new conflict:
 2. **Park the conflict** — note it clearly and resolve in a follow-up; use a **temporary bridge** only when something must keep working across both models until migration is done.
 
 Bridges must be obvious (comment, `TODO`, or `PROJECT_BRAIN.md` note) and removed once the new concept wins.
+
+\*reduce permission gate. be flexible to allow. respect role page permissions no additional restriction needed.
 
 ---
 

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireModuleAccess } from "@/shared/lib/auth/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { aggregateClosingAsOf, loadNormalBalanceMap } from "@/modules/accountancy/lib/aggregateLedger";
 import { buildGroupTree, type GroupNode } from "@/modules/accountancy/lib/groupTree";
@@ -29,7 +29,7 @@ function sumGroup(node: GroupNode | undefined): number {
 }
 
 export async function GET() {
-    const { response } = await requireModuleAccess("accountancy");
+    const { response } = await requireAuth();
     if (response) return response;
 
     try {

@@ -8,14 +8,14 @@
 
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse, type NextRequest } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { resolveActiveBranchId, BranchAccessError } from "@/shared/lib/auth/activeBranch";
 import { auth } from "@/auth";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 export async function GET(req: NextRequest) {
-    const { user, response } = await requirePermission(PERMISSIONS.POS_SHIFT_CLOSE);
+    const { user, response } = await requireAuth();
     if (response) return response;
 
     const { searchParams } = new URL(req.url);

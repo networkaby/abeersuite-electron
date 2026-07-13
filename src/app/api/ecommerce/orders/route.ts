@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireModuleAccess } from "@/shared/lib/auth/permissions";
+import { requireAuth, requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { OrderSource, ShopOrderStatus } from "@/generated/prisma/enums";
 import { Prisma } from "@/generated/prisma/client";
 import { getOrdersPipeline } from "@/modules/ecommerce/lib/ordersPipeline";
@@ -25,7 +25,7 @@ const ACCOUNT_SELECT = {
 } satisfies Prisma.AccountSelect;
 
 export async function GET(req: Request) {
-    const { response } = await requireModuleAccess("e-commerce");
+    const { response } = await requireAuth();
     if (response) return response;
     try {
         const { searchParams } = new URL(req.url);

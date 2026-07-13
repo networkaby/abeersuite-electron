@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireModuleAccess } from "@/shared/lib/auth/permissions";
+import { requireAuth, requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { updateTaskSchema } from "@/shared/lib/schemas/taskSchema";
 import { buildTaskActor } from "@/modules/administration/lib/taskActor";
@@ -25,7 +25,7 @@ function flattenTaskDetail(t: { logs: LogRow[] } & Parameters<typeof flattenTask
 }
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requireModuleAccess("administration");
+    const { response } = await requireAuth();
     if (response) return response;
     const { id } = await params;
     try {

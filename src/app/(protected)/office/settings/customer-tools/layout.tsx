@@ -1,16 +1,5 @@
-import { auth } from "@/auth";
-import { redirect } from "next/navigation";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
-
-// Customer Tools requires BOTH customers:edit AND companies:manage —
-// every action on the page (Convert today, Merge next) creates or destroys
-// records of one party type while affecting the other.
-export default async function CustomerToolsLayout({ children }: { children: React.ReactNode }) {
-    const session = await auth();
-    const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
-    const bypass = permissions.includes(PERMISSIONS.ADMIN_BYPASS);
-    if (!bypass) {
-        if (!permissions.includes(PERMISSIONS.CUSTOMERS_EDIT)) redirect("/office/work-flow-inbox");
-    }
+// Viewing Customer Tools is a read — default-open for signed-in staff. The
+// convert / merge write APIs keep their customers:edit gates.
+export default function CustomerToolsLayout({ children }: { children: React.ReactNode }) {
     return <>{children}</>;
 }

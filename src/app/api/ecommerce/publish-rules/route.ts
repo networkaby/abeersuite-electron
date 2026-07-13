@@ -1,7 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireModuleAccess } from "@/shared/lib/auth/permissions";
+import { requireAuth, requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { loadShopPublishRules } from "@/shared/lib/shop/publishRules";
 import { normalizeShopPublishRules } from "@/modules/ecommerce/lib/shopQualification";
@@ -10,7 +10,7 @@ import { normalizeShopPublishRules } from "@/modules/ecommerce/lib/shopQualifica
 // before a product can be listed in /shop. Stored on OrgDefaults (singleton id=1).
 
 export async function GET() {
-    const { response } = await requireModuleAccess("e-commerce");
+    const { response } = await requireAuth();
     if (response) return response;
     try {
         const rules = await loadShopPublishRules();

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
 import { validateRequest } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { voucherTemplateUpdateSchema } from "@/shared/lib/schemas/voucherTemplateSchemas";
@@ -14,7 +14,7 @@ type RouteCtx = { params: Promise<{ kind: string }> };
 
 // GET /api/settings/voucher-templates/[kind]
 export async function GET(_req: NextRequest, { params }: RouteCtx) {
-    const { response } = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
+    const { response } = await requireAuth();
     if (response) return response;
 
     const { kind } = await params;

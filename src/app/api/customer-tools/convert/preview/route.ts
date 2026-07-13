@@ -1,21 +1,14 @@
 import { NextResponse } from "next/server";
-import { requireAuth, hasPermission } from "@/shared/lib/auth/permissions";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { previewConvert, type ConvertDirection } from "@/modules/customer/lib/convertParty";
 
 // GET /api/customer-tools/convert/preview?direction=personToCompany&sourceId=42
 export async function GET(req: Request) {
-    const { user, response } = await requireAuth();
+    const { response } = await requireAuth();
     if (response) return response;
 
-    // Page-level gate uses CUSTOMERS_EDIT + COMPANIES_MANAGE together — the
-    // converter creates one party type and tombstones the other.
-    if (
-        !hasPermission(user, PERMISSIONS.CUSTOMERS_EDIT)
-    ) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    // Preview is a read — default-open. The convert POST keeps the edit gate.
 
     const { searchParams } = new URL(req.url);
     const direction = searchParams.get("direction") as ConvertDirection | null;

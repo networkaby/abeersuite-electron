@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireModuleAccess } from "@/shared/lib/auth/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { parseRange } from "@/modules/accountancy/lib/period";
 import { aggregateRange, loadNormalBalanceMap } from "@/modules/accountancy/lib/aggregateLedger";
 import { buildGroupTree, type GroupNode } from "@/modules/accountancy/lib/groupTree";
@@ -13,7 +13,7 @@ export const maxDuration = 60;
 // Sources & application of funds, plus working-capital movement between
 // the start and end of the period. Mirrors Tally's MIS Fund Flow.
 export async function GET(req: Request) {
-    const { response } = await requireModuleAccess("accountancy");
+    const { response } = await requireAuth();
     if (response) return response;
 
     const { searchParams } = new URL(req.url);

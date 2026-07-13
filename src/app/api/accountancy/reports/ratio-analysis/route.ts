@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireModuleAccess } from "@/shared/lib/auth/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { aggregateRange, loadNormalBalanceMap } from "@/modules/accountancy/lib/aggregateLedger";
 import { buildGroupTree, type GroupNode } from "@/modules/accountancy/lib/groupTree";
 import { getClosingStockValue } from "@/modules/accountancy/lib/closingStock";
@@ -10,7 +10,7 @@ import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 // Period: Indian fiscal year start (1-Apr) → asOf.
 // Returns Tally's "Principal Groups" and "Principal Ratios" panels.
 export async function GET(req: Request) {
-    const { response } = await requireModuleAccess("accountancy");
+    const { response } = await requireAuth();
     if (response) return response;
 
     const { searchParams } = new URL(req.url);

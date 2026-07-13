@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { PAYMENT_GATEWAY_PROVIDERS } from "@/modules/pos/lib/paymentGateways";
 import {
     credentialStatusFor,
@@ -13,7 +12,7 @@ import {
 // changes the provider/environment. Gated by settings:manage.
 
 export async function GET(req: Request) {
-    const { response } = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
+    const { response } = await requireAuth();
     if (response) return response;
     try {
         const url = new URL(req.url);

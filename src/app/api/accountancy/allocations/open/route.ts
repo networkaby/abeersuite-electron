@@ -1,7 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { NextResponse } from "next/server";
-import { requireModuleAccess } from "@/shared/lib/auth/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { sumReceiptAllocations, loadTenderLines, sumVoucherAllocations } from "@/modules/accountancy/lib/outstandings";
 
 // GET /api/accountancy/allocations/open?accountId=N
@@ -17,7 +17,7 @@ import { sumReceiptAllocations, loadTenderLines, sumVoucherAllocations } from "@
 // the InvVoucher's `journalEntryId` (the canonical receipts-engine link),
 // not the InvVoucher id directly.
 export async function GET(req: Request) {
-    const { response } = await requireModuleAccess("accountancy");
+    const { response } = await requireAuth();
     if (response) return response;
 
     const { searchParams } = new URL(req.url);

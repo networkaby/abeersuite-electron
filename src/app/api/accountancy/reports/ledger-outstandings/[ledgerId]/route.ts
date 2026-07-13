@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireModuleAccess } from "@/shared/lib/auth/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { getLedgerOutstanding } from "@/modules/accountancy/lib/outstandings";
 import { handleApiError } from "@/shared/lib/api";
 
@@ -9,7 +9,7 @@ export async function GET(
     req: Request,
     { params }: { params: Promise<{ ledgerId: string }> },
 ) {
-    const { response } = await requireModuleAccess("accountancy");
+    const { response } = await requireAuth();
     if (response) return response;
 
     const { ledgerId } = await params;

@@ -2,7 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import type { Prisma } from "@/generated/prisma/client";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import {
@@ -35,7 +35,7 @@ const createSchema = z.object({
 type CreateInput = z.infer<typeof createSchema>;
 
 export async function GET() {
-    const { response } = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
+    const { response } = await requireAuth();
     if (response) return response;
     try {
         const rows = await prisma.paymentGateway.findMany({

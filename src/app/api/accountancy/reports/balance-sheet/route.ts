@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireModuleAccess } from "@/shared/lib/auth/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { parseAsOf, indianFiscalYearStart } from "@/modules/accountancy/lib/period";
 import { handleApiError } from "@/shared/lib/api";
 import {
@@ -20,7 +20,7 @@ export const maxDuration = 60;
 // Defaults to the org setting when omitted; lets the BS page preview other
 // methods without changing the persistent default.
 export async function GET(req: Request) {
-    const { response } = await requireModuleAccess("accountancy");
+    const { response } = await requireAuth();
     if (response) return response;
 
     const { searchParams } = new URL(req.url);

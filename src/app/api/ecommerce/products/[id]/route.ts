@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireModuleAccess } from "@/shared/lib/auth/permissions";
+import { requireAuth, requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { invProductToAdmin } from "@/modules/ecommerce/lib/productAdmin";
 import { resolveShopListing } from "@/modules/ecommerce/lib/shopListing";
 import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
@@ -45,7 +45,7 @@ const productInclude = {
 } as const;
 
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
-    const { response } = await requireModuleAccess("e-commerce");
+    const { response } = await requireAuth();
     if (response) return response;
     const { id } = await ctx.params;
     const pid = parseInt(id, 10);

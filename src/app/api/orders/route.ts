@@ -1,13 +1,13 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireModuleAccess } from "@/shared/lib/auth/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { getOrderPipeline } from "@/modules/order/lib/orderPipeline";
 import { listOrders } from "@/modules/order/lib/orderAdapter";
 
 // GET /api/orders → { stages, orders } for the unified Orders board (P7).
 export async function GET() {
-    const { response } = await requireModuleAccess("orders");
+    const { response } = await requireAuth();
     if (response) return response;
     try {
         const [pipeline, orders] = await Promise.all([getOrderPipeline(prisma), listOrders()]);

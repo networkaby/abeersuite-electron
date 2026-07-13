@@ -1,7 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { Prisma } from "@/generated/prisma/client";
 import { NextResponse, type NextRequest } from "next/server";
-import { requireAnyPermission, requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
 import { invProductCreateSchema } from "@/shared/lib/schemas/inventorySchemas";
 import { normalizeProductCodes, primaryBarcode } from "@/shared/lib/inventory";
 import { findSkuCodeCollision, skuCodeCollisionMessage } from "@/shared/lib/inventory/codeCollision";
@@ -59,9 +59,7 @@ async function assertProductFks(data: {
 }
 
 export async function GET(req: NextRequest) {
-    const { response } = await requireAnyPermission(
-        PERMISSIONS.PRODUCTS_CREATE, PERMISSIONS.PRODUCTS_EDIT, PERMISSIONS.PRODUCTS_DELETE,
-    );
+    const { response } = await requireAuth();
     if (response) return response;
     try {
         const session = await auth();

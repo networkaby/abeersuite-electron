@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { requireModuleAccess } from "@/shared/lib/auth/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import {
     resolveProductTaxBatch,
@@ -99,7 +99,7 @@ function sourceKind(s: TaxSource): "product" | "group" | "org-default" | null {
 }
 
 export async function GET() {
-    const { response } = await requireModuleAccess("accountancy");
+    const { response } = await requireAuth();
     if (response) return response;
     try {
         const [products, groups, rates, org] = await Promise.all([

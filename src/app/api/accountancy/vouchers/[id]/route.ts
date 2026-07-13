@@ -1,7 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { NextResponse } from "next/server";
-import { requireModuleAccess, requireAuth, userCanVoucher } from "@/shared/lib/auth/permissions";
+import { requireAuth, userCanVoucher } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { isBalanced, balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
 import { auditSnapshot } from "@/modules/accountancy/lib/voucherLifecycle";
@@ -35,7 +35,7 @@ async function enrichVoucher(v: { id: number; createdById: number; cancelledById
 
 // GET /api/accountancy/vouchers/[id]
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requireModuleAccess("accountancy");
+    const { response } = await requireAuth();
     if (response) return response;
 
     const { id } = await params;

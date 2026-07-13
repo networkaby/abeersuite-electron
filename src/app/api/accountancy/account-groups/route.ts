@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireAnyPermission, requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { aggregateClosingAsOf, loadNormalBalanceMap } from "@/modules/accountancy/lib/aggregateLedger";
 import { validateRequest } from "@/shared/lib/api";
@@ -105,7 +105,7 @@ function buildTree(flat: FlatGroup[], ledgersByGroup: Map<number, LedgerRow[]>):
 // it's gated to the one page that needs it — keeping the hot path off it avoids
 // starving the connection pool.
 export async function GET(req: Request) {
-    const { response } = await requireAnyPermission(PERMISSIONS.ACCOUNTANCY_MASTERS_CREATE, PERMISSIONS.ACCOUNTANCY_MASTERS_EDIT, PERMISSIONS.ACCOUNTANCY_MASTERS_DELETE);
+    const { response } = await requireAuth();
     if (response) return response;
 
     const withLedgers = new URL(req.url).searchParams.get("withLedgers") === "1";

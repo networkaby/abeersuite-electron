@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission, requireAnyPermission } from "@/shared/lib/auth/permissions";
+import { requireAuth, requireAnyPermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
@@ -11,7 +11,7 @@ import { getDepartmentPool } from "@/shared/lib/auth/departmentPool";
 // For an all-access department, `isAllAccess: true` and `permissionIds: null`
 // (the pool is "every permission", managed automatically).
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission(PERMISSIONS.DEPARTMENTS_EDIT);
+    const { response } = await requireAuth();
     if (response) return response;
     try {
         const { id } = await params;

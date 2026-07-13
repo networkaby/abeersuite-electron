@@ -10,13 +10,11 @@ import {
     Tag,
     Workflow,
 } from "lucide-react";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 export type InventoryMastersNavLink = {
     label: string;
     href: string;
     icon: LucideIcon;
-    permission?: string;
 };
 
 export type InventoryMastersNavGroup = {
@@ -25,43 +23,22 @@ export type InventoryMastersNavGroup = {
 };
 
 const BASE = "/office/inventory/masters";
-const MANAGE = PERMISSIONS.INVENTORY_MASTERS_EDIT;
 
+// Viewing masters is a read — default-open, so every staff member sees every
+// tab. The masters:create/edit/delete keys gate the write APIs, not the nav.
 export const INVENTORY_MASTERS_NAV_GROUPS: InventoryMastersNavGroup[] = [
     {
         label: "Masters",
         links: [
-            { label: "Units", href: `${BASE}/units`, icon: Ruler, permission: MANAGE },
-            { label: "Categories", href: `${BASE}/categories`, icon: Layers, permission: MANAGE },
-            { label: "Groups", href: `${BASE}/product-groups`, icon: LayoutGrid, permission: MANAGE },
-            { label: "Brands", href: `${BASE}/brands`, icon: Tag, permission: MANAGE },
-            { label: "Warranty terms", href: `${BASE}/warranty-terms`, icon: ShieldCheck, permission: MANAGE },
-            { label: "Products", href: "/office/inventory/products", icon: Box, permission: MANAGE },
-            { label: "Attribute masters", href: `${BASE}/attribute-masters`, icon: ListChecks, permission: MANAGE },
-            { label: "GST Rates", href: `${BASE}/gst-rates`, icon: Percent, permission: MANAGE },
-            { label: "BOMs", href: `${BASE}/boms`, icon: Workflow, permission: MANAGE },
+            { label: "Units", href: `${BASE}/units`, icon: Ruler },
+            { label: "Categories", href: `${BASE}/categories`, icon: Layers },
+            { label: "Groups", href: `${BASE}/product-groups`, icon: LayoutGrid },
+            { label: "Brands", href: `${BASE}/brands`, icon: Tag },
+            { label: "Warranty terms", href: `${BASE}/warranty-terms`, icon: ShieldCheck },
+            { label: "Products", href: "/office/inventory/products", icon: Box },
+            { label: "Attribute masters", href: `${BASE}/attribute-masters`, icon: ListChecks },
+            { label: "GST Rates", href: `${BASE}/gst-rates`, icon: Percent },
+            { label: "BOMs", href: `${BASE}/boms`, icon: Workflow },
         ],
     },
 ];
-
-export function filterInventoryMastersNav(
-    groups: InventoryMastersNavGroup[],
-    permissions: string[],
-): InventoryMastersNavGroup[] {
-    const isAdmin = permissions.includes(PERMISSIONS.ADMIN_BYPASS);
-    // Masters split into inventory:masters:create/edit/delete; anyone holding one
-    // (or the inventory:manage umbrella) sees the whole masters nav.
-    const canMasters =
-        isAdmin ||
-        permissions.includes(PERMISSIONS.INVENTORY_MASTERS_CREATE) ||
-        permissions.includes(PERMISSIONS.INVENTORY_MASTERS_EDIT) ||
-        permissions.includes(PERMISSIONS.INVENTORY_MASTERS_DELETE);
-    return groups
-        .map((group) => ({
-            ...group,
-            links: group.links.filter(
-                (link) => canMasters || !link.permission || permissions.includes(link.permission),
-            ),
-        }))
-        .filter((group) => group.links.length > 0);
-}

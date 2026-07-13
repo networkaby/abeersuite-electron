@@ -1,7 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { requireModuleAccess, requireVoucherPermission } from "@/shared/lib/auth/permissions";
+import { requireAuth, requireVoucherPermission } from "@/shared/lib/auth/permissions";
 import { resolveActiveBranchId, COMBINED_BRANCH, BranchAccessError } from "@/shared/lib/auth/activeBranch";
 import { z } from "zod";
 import { isBalanced } from "@/modules/accountancy/lib/balance";
@@ -27,7 +27,7 @@ const createSchema = z.object({
 
 // GET /api/accountancy/vouchers?type=CONTRA&status=DRAFT&includeDeleted=1
 export async function GET(req: Request) {
-    const { user, response } = await requireModuleAccess("accountancy");
+    const { user, response } = await requireAuth();
     if (response) return response;
 
     const { searchParams } = new URL(req.url);

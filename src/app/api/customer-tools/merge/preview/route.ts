@@ -1,19 +1,14 @@
 import { NextResponse } from "next/server";
-import { requireAuth, hasPermission } from "@/shared/lib/auth/permissions";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { previewMerge, type MergeKind } from "@/modules/customer/lib/convertParty";
 
 // GET /api/customer-tools/merge/preview?kind=person&winnerId=4&loserId=3
 export async function GET(req: Request) {
-    const { user, response } = await requireAuth();
+    const { response } = await requireAuth();
     if (response) return response;
 
-    if (
-        !hasPermission(user, PERMISSIONS.CUSTOMERS_EDIT)
-    ) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    // Preview is a read — default-open. The merge POST keeps the edit gate.
 
     const { searchParams } = new URL(req.url);
     const kind = searchParams.get("kind") as MergeKind | null;

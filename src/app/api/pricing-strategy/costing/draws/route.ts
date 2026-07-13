@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireAnyPermission } from "@/shared/lib/auth/permissions";
+import { requireAuth, requireAnyPermission } from "@/shared/lib/auth/permissions";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { costPoolDrawCreateSchema } from "@/shared/lib/schemas/costPoolSchemas";
@@ -12,7 +12,7 @@ import { getEntryRemainingPaise } from "@/modules/pricing-strategy/lib/costPool"
 //   ?invVoucherId=N    → all allocations spread from one purchase/GRN (its spine id)
 // Otherwise: the whole history (most recent first).
 export async function GET(req: Request) {
-    const { response } = await requireAnyPermission(PERMISSIONS.PRICING_COSTING_MANAGE);
+    const { response } = await requireAuth();
     if (response) return response;
     try {
         const { searchParams } = new URL(req.url);

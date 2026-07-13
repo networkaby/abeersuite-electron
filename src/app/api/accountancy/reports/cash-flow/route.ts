@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireModuleAccess } from "@/shared/lib/auth/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { parseRange } from "@/modules/accountancy/lib/period";
 import { aggregateRange, loadNormalBalanceMap, ledgerStatusFilterUv } from "@/modules/accountancy/lib/aggregateLedger";
@@ -13,7 +13,7 @@ export const maxDuration = 60;
 // Aggregates cash inflows / outflows by the counter-side ledger of every
 // journal entry that touches a Cash-in-Hand or Bank Accounts ledger.
 export async function GET(req: Request) {
-    const { response } = await requireModuleAccess("accountancy");
+    const { response } = await requireAuth();
     if (response) return response;
 
     const { searchParams } = new URL(req.url);

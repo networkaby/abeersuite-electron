@@ -1,7 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireModuleAccess } from "@/shared/lib/auth/permissions";
+import { requireAuth, requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { loadShopStockPolicy } from "@/shared/lib/shop/stockPolicy";
 
@@ -9,7 +9,7 @@ import { loadShopStockPolicy } from "@/shared/lib/shop/stockPolicy";
 // per-product InvProduct.allowBackorder overrides it to always allow ordering.
 
 export async function GET() {
-    const { response } = await requireModuleAccess("e-commerce");
+    const { response } = await requireAuth();
     if (response) return response;
     try {
         const policy = await loadShopStockPolicy();

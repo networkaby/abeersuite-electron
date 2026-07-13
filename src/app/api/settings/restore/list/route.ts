@@ -1,5 +1,4 @@
-import { requirePermission } from "@/shared/lib/auth/permissions";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { listBackups } from "@/shared/lib/backup/dropbox";
 
 export const runtime = "nodejs";
@@ -8,7 +7,7 @@ export const dynamic = "force-dynamic";
 // GET /api/settings/restore/list — lists the .dump backups available in Dropbox
 // so the restore picker can show them (newest first).
 export async function GET() {
-    const { response } = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
+    const { response } = await requireAuth();
     if (response) return response;
 
     try {
