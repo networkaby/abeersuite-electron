@@ -21,7 +21,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { buildPartyJson } from "@/shared/lib/accountancy/partySnapshot";
-import { requireModuleAccess } from "@/shared/lib/auth/permissions";
+import { requirePosVoucher } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { invNextRef } from "@/modules/inventory/lib/stock";
 import { recordStockMovement } from "@/modules/inventory/lib/stockMovement";
@@ -50,7 +50,7 @@ class GlPostFailedError extends Error {
 }
 
 export async function POST(req: Request) {
-    const { user, response } = await requireModuleAccess("pos");
+    const { user, response } = await requirePosVoucher("sale-return", "create");
     if (response) return response;
 
     const { data, error } = await validateRequest(req, lostSchema);

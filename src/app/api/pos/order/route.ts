@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { requireModuleAccess } from "@/shared/lib/auth/permissions";
+import { requirePosVoucher } from "@/shared/lib/auth/permissions";
 import { resolveActiveBranchId, BranchAccessError } from "@/shared/lib/auth/activeBranch";
 import { handleApiError } from "@/shared/lib/api";
 import { createPosQuoteVoucher, type PosQuoteBody } from "@/modules/pos/lib/posQuoteVoucher";
@@ -25,7 +25,7 @@ type PayLine = { paymentAccountId: number | null; amount: number; reference?: st
  * created, so a receipt failure never leaves an orphan order.
  */
 export async function POST(req: NextRequest) {
-    const { user, response } = await requireModuleAccess("pos");
+    const { user, response } = await requirePosVoucher("order", "create");
     if (response) return response;
 
     const session = await auth();

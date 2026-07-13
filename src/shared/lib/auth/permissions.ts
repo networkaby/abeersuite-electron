@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { hasPermissionWithScope, hasModuleNavAccess } from "@/shared/lib/auth/permissionScope";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { requiredVoucherPermission, type VoucherAction } from "@/shared/lib/auth/voucherMatrix";
+import { canDoPosVoucher, type PosAction } from "@/shared/lib/auth/posVoucherMatrix";
 import type { VoucherType } from "@/generated/prisma/client";
 
 /**
@@ -183,6 +184,22 @@ export async function requireModuleAccess(moduleKey: string, capabilityPermissio
         return result;
     }
     return { user: null, response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
+}
+
+/**
+ * POS write gate — the operator holds the Role-page tick `pos:voucher:<action>:<kind>`
+ * (or the office-equivalent voucher permission). This is the authoritative
+ * "create means create" check for the POS create routes; it deliberately does NOT
+ * depend on the office `pos` module nav — operators carry `ui:sidebar:workspace:pos`,
+ * not `ui:sidebar:pos:*`. The open-shift requirement is enforced in each route body.
+ */
+export async function requirePosVoucher(kind: string, action: PosAction): Promise<GuardResult> {
+    const result = await requireAuth();
+    if (result.response) return result;
+    if (!canDoPosVoucher(kind, action, result.user.permissions, isAdmin(result.user))) {
+        return { user: null, response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
+    }
+    return result;
 }
 
 /** Build a `ResolvedUser` from a session object without enforcing any guard. */

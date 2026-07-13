@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { auth } from "@/auth";
-import { requireModuleAccess } from "@/shared/lib/auth/permissions";
+import { requirePosVoucher } from "@/shared/lib/auth/permissions";
 import { resolveActiveBranchId, BranchAccessError } from "@/shared/lib/auth/activeBranch";
 import { handleApiError } from "@/shared/lib/api";
 import { createPosQuoteVoucher, type PosQuoteBody } from "@/modules/pos/lib/posQuoteVoucher";
@@ -16,7 +16,7 @@ import { createPosQuoteVoucher, type PosQuoteBody } from "@/modules/pos/lib/posQ
  * Gated by the same permission as the POS sale — a cashier needs no deals:manage.
  */
 export async function POST(req: NextRequest) {
-    const { user, response } = await requireModuleAccess("pos");
+    const { user, response } = await requirePosVoucher("estimate", "create");
     if (response) return response;
 
     const session = await auth();
