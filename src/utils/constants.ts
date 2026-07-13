@@ -58,6 +58,7 @@ import {
     CreditCard,
     Gift,
     Trash2,
+    Package,
 } from "lucide-react";
 
 // Keys match the Priority enum: LOW | MEDIUM | HIGH | URGENT
@@ -203,7 +204,8 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         ],
         children: [
             { label: "All Repair", icon: ClipboardList, href: "/office/repairing/tickets", pipelineRef: "default" },
-            { label: "Service Centers", icon: Building2, href: "/office/repairing/service-centers" },
+            // { label: "Service Centers", icon: Building2, href: "/office/repairing/service-centers" },
+
         ],
     },
 
@@ -431,19 +433,19 @@ export const MODULE_SECTIONS: ModuleSection[] = [
     // },
 
     // Delivery
-    // {
-    //     label: "Delivery",
-    //     icon: Truck,
-    //     key: "delivery",
-    //     dashboardHref: "/office/roadmap/delivery",
-    //     pathPrefixes: ["/office/roadmap/delivery"],
-    //     children: [
-    //         // { label: "Overview", icon: ChartArea, href: "/office/roadmap/delivery" },
-    //         { label: "Shipments", icon: Package, href: "/office/roadmap/delivery/shipments" },
-    //         { label: "Couriers", icon: Building2, href: "/office/roadmap/delivery/couriers" },
-    //         { label: "Proof of delivery", icon: FileText, href: "/office/roadmap/delivery/pod" },
-    //     ],
-    // },
+    {
+        label: "Delivery",
+        icon: Truck,
+        key: "delivery",
+        dashboardHref: "/office/roadmap/delivery",
+        pathPrefixes: ["/office/roadmap/delivery"],
+        children: [
+            // { label: "Overview", icon: ChartArea, href: "/office/roadmap/delivery" },
+            { label: "Shipments", icon: Package, href: "/office/roadmap/delivery/shipments" },
+            { label: "Couriers", icon: Building2, href: "/office/roadmap/delivery/couriers" },
+            { label: "Proof of delivery", icon: FileText, href: "/office/roadmap/delivery/pod" },
+        ],
+    },
 
     // Field Service
     // {
