@@ -103,7 +103,7 @@ Validation is Zod-driven on write endpoints. Auth uses guard helpers from `src/s
 - NextAuth config in `src/auth.ts` (`Credentials` provider, JWT strategy).
 - Staff provider: `credentials-staff`. Login page: `/staff/login`. After login → `/office/work-flow-inbox` (or `callbackUrl`) via `src/proxy.ts`.
 - Session carries role, permissions, rank, scope, branch, department.
-- API uses `requirePermission` for fine-grained authorization. Direction is permission-driven, not role-name checks.
+- Authorization is **liberal by default**: reads (GET data routes and page/layout views) require only a valid staff session (`requireAuth`) — a hidden capability gate never blocks a read. **Writes** gate on the matching role-page permission — `requirePermission` / per-kind voucher keys, and `requirePosVoucher` (the `pos:voucher:create:<kind>` tick) for the POS create routes. Sidebar visibility rides the `ui:sidebar:*` family; data radius comes from the position's branch. Direction is permission-driven, not role-name checks.
 
 #### Department permission pool (authoring lens)
 
