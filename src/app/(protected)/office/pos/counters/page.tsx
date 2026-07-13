@@ -67,8 +67,12 @@ export default function CountersStatusPage() {
     const { data: session } = useSession();
     const perms = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
     // Force-close another operator's shift (e.g. they fell ill / their PC died)
-    // needs manage rights; the close API enforces the same.
-    const canManage = perms.includes(PERMISSIONS.ADMIN_BYPASS);
+    // is an oversight action — the counter-manage tick (or env super-admin) grants
+    // it. A plain operator holds only `pos:shift:close` (their OWN shift), never this.
+    // The close API enforces the same pair.
+    const canManage =
+        perms.includes(PERMISSIONS.ADMIN_BYPASS) ||
+        perms.includes(PERMISSIONS.POS_COUNTERS_EDIT);
 
     const [cards, setCards]   = useState<CounterCard[]>([]);
     const [loading, setLoading] = useState(true);
