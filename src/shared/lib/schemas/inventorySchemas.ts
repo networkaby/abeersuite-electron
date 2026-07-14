@@ -136,7 +136,9 @@ export const invProductUpdateSchema = invProductCreateSchema.partial().extend({
 
 // ── Naming convention (InvNamingConfig singleton) ──────────────────────────
 
-const tokenKind = z.enum(["brand", "category", "group", "modelNo", "warranty", "unit", "literal", "attr"]);
+// Must stay in step with `TokenKind` in modules/inventory/lib/productName.ts —
+// that type is the source of truth for what a token can be.
+const tokenKind = z.enum(["brand", "category", "group", "modelNo", "warranty", "unit", "literal", "attr", "userPart"]);
 
 const namingTokenSchema = z.object({
     kind: tokenKind,

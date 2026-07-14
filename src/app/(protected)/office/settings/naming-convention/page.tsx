@@ -220,7 +220,10 @@ function FallbackEditor({ value, onChange }: { value: FallbackMap; onChange: (v:
                                     } else {
                                         next[slot] = v as TokenKind;
                                     }
-                                    onChange({ ...value, [k]: next });
+                                    // A chain is dense and ordered. Assigning past the end
+                                    // (picking slot 2 while 0/1 are none) leaves array holes,
+                                    // which JSON-encode as null and fail the token enum.
+                                    onChange({ ...value, [k]: next.filter(Boolean) });
                                 }}
                             >
                                 <SelectTrigger className="w-40">

@@ -17,7 +17,7 @@
 //     R1's RolePermission grants
 //   • Workflow: 9 Pipelines, 63 TicketStatuses, 8 Works (1 gated → work:*
 //     permissions), 43 Workers, status + worker transitions
-//   • Org structure: 2 Branches (HQ + Online Store), 7 Departments, Role ranks
+//   • Org structure: 1 Branch (HQ), 8 Departments, Role ranks
 //   • Chart of accounts: 28 AccountGroups (Tally tree) + ~50 GL ledgers
 //     **Stock-in-Hand group is intentionally empty** — closing-stock value is
 //     derived live by `getClosingStockValue` and injected as a synthetic
@@ -595,10 +595,14 @@ const STATUS_STARTS: Record<string, string> = {
 // SECTION 3 — Org structure: Branches + Departments
 // ════════════════════════════════════════════════════════════════════════════
 
-// Only the two branches needed for the typical setup. Add more via UI later.
+// Only HQ — the one branch every setup needs. Add more via UI later.
 // HQ inherits the organisation address from COMPANY_DETAILS — for a single-
 // state business this lets you start with a printable invoice address on
 // day one. Admins add further branches (regional / online) via the UI.
+//
+// The online channel has no branch of its own: ONLINE_ORDER / ONLINE_INVOICE
+// run under HQ like every other voucher. (When per-storefront branches arrive,
+// resolve by domain → branch.)
 const HQ_GSTIN = COMPANY_DETAILS.tax.gstin ?? "";
 const BRANCHES = [
     {
@@ -608,27 +612,6 @@ const BRANCHES = [
         address:      `${COMPANY_DETAILS.address.line1}, ${COMPANY_DETAILS.address.city}`,
         phone:        COMPANY_DETAILS.contact.phone || null,
         // Structured identity for invoice headers / letterheads
-        addressLine1: COMPANY_DETAILS.address.line1,
-        addressLine2: COMPANY_DETAILS.address.line2 ?? "",
-        city:         COMPANY_DETAILS.address.city,
-        state:        COMPANY_DETAILS.address.state,
-        pinCode:      COMPANY_DETAILS.address.pin,
-        country:      COMPANY_DETAILS.address.country,
-        email:        COMPANY_DETAILS.contact.email || null,
-        gstin:        HQ_GSTIN,
-        gstStateCode: HQ_GSTIN.length >= 2 ? HQ_GSTIN.slice(0, 2) : "",
-    },
-    {
-        // Virtual branch that owns every ONLINE transaction (ONLINE_ORDER /
-        // ONLINE_INVOICE). A storefront customer has no working-branch cookie,
-        // so the online channel stamps this fixed branch instead of guessing.
-        // Inherits HQ's GST identity so online invoices still resolve seller
-        // state / CGST-SGST-vs-IGST correctly. (When per-storefront branches
-        // arrive, resolve by domain → branch and retire this fallback.)
-        id:    "BR-ONLINE",
-        name:  "Online Store",
-        address:      `${COMPANY_DETAILS.address.line1}, ${COMPANY_DETAILS.address.city}`,
-        phone:        COMPANY_DETAILS.contact.phone || null,
         addressLine1: COMPANY_DETAILS.address.line1,
         addressLine2: COMPANY_DETAILS.address.line2 ?? "",
         city:         COMPANY_DETAILS.address.city,

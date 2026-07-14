@@ -1,7 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { ContactConflictError } from "@/modules/customer/lib/contactWrite";
 import { handleApiError, parsePagination, validateRequest } from "@/shared/lib/api";
@@ -197,8 +196,14 @@ export async function GET(req: Request) {
 }
 
 // POST /api/person — create person + auto-create ledger account + contact rows
+//
+// Open to any signed-in user. Creating a party is a prerequisite of POS billing,
+// ticket intake, and voucher entry — every surface that bills someone needs it.
+// Gating it on the Contacts page's `customers:create` imposed a restriction the
+// Role page cannot lift: department pools carry only `ui:sidebar:*` links, so
+// `customers:create` is not grantable to any role outside all-access admin.
 export async function POST(req: Request) {
-    const { response } = await requirePermission(PERMISSIONS.CUSTOMERS_CREATE);
+    const { response } = await requireAuth();
     if (response) return response;
 
     const { data, error } = await validateRequest(req, createPersonSchema);
