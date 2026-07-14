@@ -94,11 +94,15 @@ export async function GET(
     });
 }
 
+// Open to any signed-in user, same as POST /api/person: whoever can create a
+// party mid-billing must be able to fix its typos too (CreatePersonDialog defers
+// GST/shipping details to "edit later" — this route IS that later edit).
+// DELETE below keeps its customers:delete gate.
 export async function PUT(
     req: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const { response } = await requireAnyPermission(PERMISSIONS.CUSTOMERS_EDIT);
+    const { response } = await requireAuth();
     if (response) return response;
 
     const { id } = await params;

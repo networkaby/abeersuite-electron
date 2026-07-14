@@ -102,11 +102,14 @@ export async function GET(
     });
 }
 
+// Open to any signed-in user, same as PUT /api/person/[id]: whoever can create
+// a company party mid-billing must be able to fix its typos too. DELETE below
+// keeps its customers:delete gate.
 export async function PUT(
     req: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const { response } = await requireAnyPermission(PERMISSIONS.CUSTOMERS_EDIT);
+    const { response } = await requireAuth();
     if (response) return response;
 
     const { id } = await params;

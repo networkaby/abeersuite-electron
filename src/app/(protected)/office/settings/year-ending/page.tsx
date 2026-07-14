@@ -185,6 +185,9 @@ export default function YearEndingPage() {
     );
 
     return (
+        // The settings layout clips its children (overflow-hidden) — every
+        // settings page provides its own scroll, same as payment-methods.
+        <ScrollArea className="h-full" type="always">
         <div className="space-y-6 p-6">
             <div>
                 <h1 className="text-xl font-semibold">Year Ending — Voucher Numbering</h1>
@@ -580,5 +583,6 @@ export default function YearEndingPage() {
                 </DialogContent>
             </Dialog>
         </div>
+        </ScrollArea>
     );
 }
