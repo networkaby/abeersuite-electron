@@ -54,3 +54,45 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         return handleApiError(e, "Failed to update ledger");
     }
 }
+
+// DELETE /api/accountancy/ledgers/[id] — hard delete, gated on data integrity
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_MASTERS_DELETE);
+    if (response) return response;
+
+    const { id, error: idError } = await parseIdParam(params);
+    if (idError) return idError;
+
+    const account = await prisma.account.findUnique({
+        where: { id },
+        select: { id: true, personId: true, companyId: true, _count: { select: { children: true } } },
+    });
+    if (!account) return NextResponse.json({ error: "Ledger not found" }, { status: 404 });
+
+    // Identity ledgers belong to a customer/company — remove the contact instead.
+    if (account.personId !== null || account.companyId !== null) {
+        return NextResponse.json(
+            { error: "This ledger belongs to a customer/company — delete the contact instead" },
+            { status: 409 },
+        );
+    }
+    // Never orphan posted ledger entries — trial balance must stay intact.
+    const lineCount = await prisma.voucherGlLine.count({ where: { accountId: id } });
+    if (lineCount > 0) {
+        return NextResponse.json({ error: "Cannot delete — ledger has posted entries" }, { status: 409 });
+    }
+    if (account._count.children > 0) {
+        return NextResponse.json({ error: "Cannot delete — ledger has sub-accounts" }, { status: 409 });
+    }
+
+    try {
+        await prisma.account.delete({ where: { id } });
+        return NextResponse.json({ ok: true });
+    } catch (e) {
+        // Any remaining FK reference (branch vault, counter till, loyalty, coupon…).
+        if (e && typeof e === "object" && "code" in e && e.code === "P2003") {
+            return NextResponse.json({ error: "Cannot delete — ledger is in use elsewhere" }, { status: 409 });
+        }
+        return handleApiError(e, "Failed to delete ledger");
+    }
+}

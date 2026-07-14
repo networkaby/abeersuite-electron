@@ -7,7 +7,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import {
     ChevronRight, ChevronDown, Plus, Loader2, ArrowRight,
-    Pencil, Check, X,
+    Pencil, Check, X, Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -178,6 +178,18 @@ export default function LedgersPage() {
             toast.error(msg ?? "Failed to update ledger");
         } finally {
             setSavingLedger(false);
+        }
+    };
+
+    const deleteLedger = async (l: LedgerRow) => {
+        if (!confirm(`Delete ledger "${l.name}"?`)) return;
+        try {
+            await axios.delete(`/api/accountancy/ledgers/${l.id}`);
+            toast.success("Ledger deleted");
+            load();
+        } catch (err: unknown) {
+            const msg = axios.isAxiosError(err) ? err.response?.data?.error : "Cannot delete";
+            toast.error(msg ?? "Cannot delete ledger");
         }
     };
 
@@ -489,14 +501,25 @@ export default function LedgersPage() {
                                                     </Button>
                                                 </>
                                             ) : (
-                                                <Button
-                                                    variant="ghost" size="icon-sm"
-                                                    className="text-muted-foreground hover:bg-primary/10 hover:text-primary"
-                                                    onClick={() => startEditLedger(l)}
-                                                    aria-label={`Edit ${l.name}`}
-                                                >
-                                                    <Pencil size={14} />
-                                                </Button>
+                                                <>
+                                                    <Button
+                                                        variant="ghost" size="icon-sm"
+                                                        className="text-muted-foreground hover:bg-primary/10 hover:text-primary"
+                                                        onClick={() => startEditLedger(l)}
+                                                        aria-label={`Edit ${l.name}`}
+                                                    >
+                                                        <Pencil size={14} />
+                                                    </Button>
+                                                    <Button
+                                                        variant="ghost" size="icon-sm"
+                                                        className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                                                        onClick={() => deleteLedger(l)}
+                                                        disabled={isIdentity}
+                                                        aria-label={`Delete ${l.name}`}
+                                                    >
+                                                        <Trash2 size={14} />
+                                                    </Button>
+                                                </>
                                             )}
                                         </div>
                                     </td>
