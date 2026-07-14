@@ -1,4 +1,3 @@
-import type { FullConfig } from "@playwright/test";
 
 /**
  * App-identity guard. Runs once before any project.
@@ -13,7 +12,7 @@ import type { FullConfig } from "@playwright/test";
  * providers — `credentials-staff` / `credentials-portal` are specific to this
  * project, so their presence confirms we're talking to the right server.
  */
-export default async function globalSetup(_config: FullConfig): Promise<void> {
+export default async function globalSetup(): Promise<void> {
     const base = process.env.E2E_BASE_URL || "http://localhost:3000";
     const url = `${base}/api/auth/providers`;
 

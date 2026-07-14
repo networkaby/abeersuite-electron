@@ -780,14 +780,14 @@ export default function GeneratePage() {
     }, [hydrated, query, fBrand, fCategory, fGroup, fMethod, fSource, fBarcodeCapped, fSaleCapped, fInStock, tBarcodeShrink, tProfitReduce, tProfitIncrease, ranges, filtersOpen]);
 
     // Dynamic filter options — distinct values present in the data.
-    const distinct = (pick: (r: Row) => string) =>
-        [...new Set(rows.map(pick).filter(Boolean))].sort((a, b) => a.localeCompare(b));
-    const brands = useMemo(() => distinct((r) => r.brand), [rows]);
-    const categories = useMemo(() => distinct((r) => r.category), [rows]);
-    const groups = useMemo(() => distinct((r) => r.group), [rows]);
+    const distinct = useCallback((pick: (r: Row) => string) =>
+        [...new Set(rows.map(pick).filter(Boolean))].sort((a, b) => a.localeCompare(b)), [rows]);
+    const brands = useMemo(() => distinct((r) => r.brand), [distinct]);
+    const categories = useMemo(() => distinct((r) => r.category), [distinct]);
+    const groups = useMemo(() => distinct((r) => r.group), [distinct]);
     const methodOpts = useMemo(
         () => distinct((r) => r.method).map((code) => ({ value: code, label: COST_METHODS.find((m) => m.code === code)?.full ?? code })),
-        [rows],
+        [distinct],
     );
     const [selected, setSelected] = useState<Set<number>>(new Set());
     // Brand / Category / Group hidden by default — taxonomy noise; show via Columns.

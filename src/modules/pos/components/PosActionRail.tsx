@@ -12,7 +12,7 @@
 
 import { Fragment } from "react";
 import {
-    Banknote, HandCoins, HelpCircle, TicketPlus, Pause, StickyNote, Percent, Tag, Users, Printer,
+    Banknote, HandCoins, HelpCircle, TicketPlus,
     type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";

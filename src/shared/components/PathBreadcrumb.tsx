@@ -22,7 +22,6 @@ import {
 } from "@/components/ui/breadcrumb";
 import { useEscapeBack } from "@/shared/hooks/useEscapeBack";
 import { BreadcrumbBar } from "@/shared/components/BreadcrumbBar";
-import { cn } from "@/shared/lib/format/utils";
 
 export interface PathBreadcrumbProps {
     /** First crumb: clickable link to the module/area root. */

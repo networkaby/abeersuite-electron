@@ -1,5 +1,4 @@
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { TicketPercent } from "lucide-react";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { CouponList } from "@/modules/coupons/components/CouponList";
 import { CouponConfigCard } from "@/modules/coupons/components/CouponConfigCard";

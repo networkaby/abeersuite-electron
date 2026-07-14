@@ -37,11 +37,6 @@ async function columnExists(table: string, column: string): Promise<boolean> {
   return rows.length > 0;
 }
 
-async function tableExists(table: string): Promise<boolean> {
-  const { rows } = await pool.query(`SELECT to_regclass($1) AS tbl`, [`public."${table}"`]);
-  return rows[0]?.tbl != null;
-}
-
 async function main() {
   const client = await pool.connect();
   try {

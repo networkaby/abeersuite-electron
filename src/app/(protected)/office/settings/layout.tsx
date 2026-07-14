@@ -1,5 +1,3 @@
-import { auth } from "@/auth";
-import { SettingsNav } from "@/modules/admin/components/SettingsNav";
 import { PathBreadcrumb } from "@/shared/components/PathBreadcrumb";
 
 // Slug → human label for breadcrumb segments. Keeps multi-word and acronym
@@ -27,9 +25,6 @@ const SETTINGS_CRUMB_LABELS: Record<string, string> = {
 };
 
 export default async function SettingsLayout({ children }: { children: React.ReactNode }) {
-    const session = await auth();
-    const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
-
     return (
         <div className="flex h-full flex-col">
             <PathBreadcrumb
@@ -37,9 +32,6 @@ export default async function SettingsLayout({ children }: { children: React.Rea
                 escapeBack
                 labels={SETTINGS_CRUMB_LABELS}
             />
-            {/* <div className="flex-none px-6">
-                <SettingsNav permissions={permissions} />
-            </div> */}
             <div className="min-h-0 flex-1 overflow-hidden">
                 {children}
             </div>

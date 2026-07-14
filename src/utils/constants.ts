@@ -8,7 +8,6 @@ import {
     Settings,
     ShieldCheck,
     Wrench,
-    Plus,
     FileText,
     Calculator,
     Network,
@@ -58,7 +57,6 @@ import {
     CreditCard,
     Gift,
     Trash2,
-    Package,
 } from "lucide-react";
 
 // Keys match the Priority enum: LOW | MEDIUM | HIGH | URGENT

@@ -19,7 +19,7 @@ import {
     Landmark, Building2, Layers, Briefcase, AlertCircle,
     Maximize2, RotateCcw, ZoomIn, ZoomOut,
 } from "lucide-react";
-import type { OrgStructure, PositionNode } from "@/shared/types/orgChart";
+import type { OrgStructure } from "@/shared/types/orgChart";
 import { Button } from "@/components/ui/button";
 
 const HQ_BRANCH_ID = "BR-HQ";
@@ -34,9 +34,7 @@ const POS_W = 150, POS_H = 44;
 const HQ_Y = 0;
 const BRANCH_Y = 220;
 const DEPT_Y = 380;
-const POS_Y_BASE = 500;
 const BRANCH_GAP = 260; // distance between branch centers
-const DEPT_VERTICAL = 70;
 const POS_VERTICAL = 60;
 
 type NodeKind = "hq" | "branch" | "dept" | "position";

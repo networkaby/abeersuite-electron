@@ -1,13 +1,5 @@
 "use client";
 
-/* eslint-disable react-hooks/refs */
-// `react-hooks/refs` flags every `cb.wrapperRef` / `cb.inputRef` / `cb.listRef`
-// usage in this file. These refs come from the `useComboboxNav` hook and are
-// passed to DOM elements via the `ref` prop — standard React forwarding, not
-// the "read .current during render" anti-pattern the rule targets. Disabled
-// file-wide so we don't pepper every JSX line with comments that don't quite
-// land on the attribute the rule reports against.
-
 /**
  * GlAccountCombobox — searchable GL account picker for journal-voucher rows.
  * Inline text input + dropdown; type to filter by code or name. No API call
@@ -140,6 +132,9 @@ export function GlAccountCombobox({
             window.removeEventListener("resize", measure);
             window.removeEventListener("scroll", measure, true);
         };
+        // The specific `cb` members used here are the stable deps; depending on the
+        // whole `cb` object (new each render from the combobox hook) would re-run every render.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [cb.open, cb.wrapperRef, cb.setDropdownWidth, portalTarget]);
 
     // Wrap handleKeyDown to add Tab commit-on-exit (the generic hook intentionally

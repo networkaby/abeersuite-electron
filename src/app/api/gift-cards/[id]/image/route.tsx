@@ -41,6 +41,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
                         <div style={{ fontSize: 40, fontWeight: 700, letterSpacing: 2, color: "#0f172a", marginTop: 4 }}>{card.code}</div>
                         <div style={{ fontSize: 16, color: "#64748b", marginTop: 14 }}>{meta}</div>
                     </div>
+                    {/* eslint-disable-next-line @next/next/no-img-element -- satori ImageResponse only supports <img>, not next/image */}
                     <img src={qr} width={150} height={150} alt="QR" />
                 </div>
             </div>

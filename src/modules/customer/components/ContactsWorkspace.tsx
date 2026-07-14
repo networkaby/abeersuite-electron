@@ -17,7 +17,7 @@ import { formatDate } from "@/shared/lib/format";
 import { extractApiError } from "@/shared/lib/api";
 import {
     LIFECYCLE_META, LIFECYCLES,
-    type ContactDto, type ContactLifecycle, type ContactPositionOption, type ContactsResponse,
+    type ContactDto, type ContactPositionOption, type ContactsResponse,
 } from "../lib/contactTypes";
 
 const ALL = "__all__";
@@ -106,7 +106,7 @@ export default function ContactsWorkspace({
     const toggleOne = (id: number) =>
         setSelected((s) => {
             const next = new Set(s);
-            next.has(id) ? next.delete(id) : next.add(id);
+            if (next.has(id)) next.delete(id); else next.add(id);
             return next;
         });
 

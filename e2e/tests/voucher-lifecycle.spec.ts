@@ -45,7 +45,7 @@ test.describe("voucher lifecycle", () => {
     });
 
     // Full lifecycle — un-fixme after a live verification pass.
-    test.fixme("create, post, cancel, then restore a payment voucher", async ({ page }) => {
+    test.fixme("create, post, cancel, then restore a payment voucher", async () => {
         // 1. Go to /vouchers/payments/new (GlVoucherPage, kind=PAYMENT).
         // 2. Pick the Cr cash/bank ledger (top line) and a Dr expense/party row,
         //    enter an amount so isBalanced() is satisfied → "Save" enables.

@@ -105,7 +105,6 @@ interface Ticket {
     }[];
 }
 
-type LogEntry = Ticket["logs"][number];
 type LogKind = "success" | "fail" | "note" | "entered" | "advanced" | "retry" | "revert" | "system";
 
 // System-generated notes that aren't outcomes/entries — shown muted in the timeline.

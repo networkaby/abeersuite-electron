@@ -191,6 +191,9 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
             window.removeEventListener("resize", measure);
             window.removeEventListener("scroll", measure, true);
         };
+        // The specific `cb` members used here are the stable deps; depending on the
+        // whole `cb` object (new each render from the combobox hook) would re-run every render.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [cb.open, cb.wrapperRef, cb.setDropdownWidth, portalTarget]);
 
     // Wrap handleKeyDown to add Tab commit-on-exit + Enter-creates-when-empty.
@@ -233,7 +236,6 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
     // Keep the list ref pointing at the scrollable inner div so keyboard
     // navigation auto-scrolls the highlighted item into view.
     const listRef = useRef<HTMLUListElement>(null);
-    // eslint-disable-next-line react-hooks/immutability
     useEffect(() => { cb.listRef.current = listRef.current; });
 
     return (

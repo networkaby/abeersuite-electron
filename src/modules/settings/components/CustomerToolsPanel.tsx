@@ -646,6 +646,9 @@ function TrashSection() {
         }
     }
 
+    // Intentionally recompute the "now" reference whenever the recycle-bin rows
+    // reload, so row ages re-evaluate against a fresh timestamp.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     const now = useMemo(() => Date.now(), [rows]);
 
     return (

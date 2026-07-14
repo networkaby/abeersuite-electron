@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ActiveShiftBar } from "@/modules/pos/components/ActiveShiftBar";
-import { ShiftOpenDialog, type OpenedShift } from "@/modules/pos/components/ShiftOpenDialog";
+import { ShiftOpenDialog } from "@/modules/pos/components/ShiftOpenDialog";
 import { HandoverAcceptDialog } from "@/modules/pos/components/HandoverAcceptDialog";
 import { CashDropDialog } from "@/modules/pos/components/CashDropDialog";
 import { ShiftCloseDialog } from "@/modules/pos/components/ShiftCloseDialog";
@@ -75,7 +75,7 @@ export function PosScreenShell({
             <ShiftOpenDialog
                 open={b.shiftOpenDialogOpen}
                 onOpenChange={b.setShiftOpenDialogOpen}
-                onOpened={(_s: OpenedShift) => {
+                onOpened={() => {
                     // Re-fetch via /api/pos/shifts/current so we get the full
                     // counter info including per-method payment mappings (the
                     // dialog's payload only carries id/name/tillAccount).

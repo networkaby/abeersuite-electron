@@ -40,7 +40,7 @@ import { toast } from "sonner";
 import {
     Trash2, Plus, StickyNote, Settings2,
     Image as ImageIcon, FileText, ScanLine, Link2,
-    CopyPlus, Building2,
+    CopyPlus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -175,6 +175,8 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
             el.removeEventListener("input", markDirty);
             el.removeEventListener("change", markDirty);
         };
+        // Mount-once native listener on the stable form-root ref.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
     const isDirtyRef = useRef(false);
     const [closeDialogOpen, setCloseDialogOpen] = useState(false);
@@ -1072,12 +1074,6 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
         }
         const displayName = payMode === "CREDIT" ? party?.name : (walkInName.trim() || undefined);
         const description = header.description.trim() || copy.narrationFallback(displayName);
-
-        // CASH mode auto-pays in full (received = grand total). User can still
-        // override via the Received field — but the default mirrors counter sales.
-        const receivedForPayload = payMode === "CASH"
-            ? ((parseFloat(header.received) || 0) > 0 ? (parseFloat(header.received) || 0) : grandTotal)
-            : received;
 
         setSaving(true);
         try {

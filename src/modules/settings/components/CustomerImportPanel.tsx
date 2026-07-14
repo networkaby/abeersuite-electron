@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { parseCsv } from "@/shared/lib/import/csvParse";
-import { CUSTOMER_IMPORT_FIELDS, type CustomerImportField } from "@/shared/lib/import/customerImportFields";
+import { type CustomerImportField } from "@/shared/lib/import/customerImportFields";
 
 const FIELD_LABELS: Record<CustomerImportField, string> = {
     name: "Name *",

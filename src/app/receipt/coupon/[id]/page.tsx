@@ -58,7 +58,10 @@ export default async function CouponPrintPage({ params }: { params: Promise<{ id
                         <div className="name">{coupon.name}</div>
                     </div>
                     <div className="body">
-                        <div className="qr"><img src={qrDataUrl} alt={`QR for ${coupon.code}`} /></div>
+                        <div className="qr">
+                            {/* eslint-disable-next-line @next/next/no-img-element -- QR data-URL on a print receipt; next/image is inappropriate here */}
+                            <img src={qrDataUrl} alt={`QR for ${coupon.code}`} />
+                        </div>
                         <div className="meta">
                             <div className="code-cap">Code</div>
                             <div className="code">{coupon.code}</div>

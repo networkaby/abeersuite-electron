@@ -31,7 +31,6 @@ interface GlAccount {
     isActive: boolean;
     balance: number;
     group: { id: number; name: string; type: GroupTypeStr } | null;
-    _count: { lines: number };
 }
 
 const cellClass = "w-full rounded-md border border-input bg-background px-2 py-1 text-sm focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
@@ -276,7 +275,6 @@ function AccountSection({
                         <th className="px-5 py-2 text-left font-medium">Group</th>
                         <th className="px-5 py-2 text-left font-medium">Normal Balance</th>
                         <th className="px-5 py-2 text-right font-medium">Current Balance</th>
-                        <th className="px-5 py-2 text-right font-medium">Entries</th>
                         <th className="px-5 py-2 text-center font-medium">Status</th>
                         <th className="px-5 py-2" />
                     </tr>
@@ -322,7 +320,6 @@ function AccountSection({
                                     {fmt(a.balance)}
                                 </span>
                             </td>
-                            <td className="px-5 py-3 text-right text-muted-foreground">{a._count.lines}</td>
                             <td className="px-5 py-3 text-center">
                                 <span className={`text-xs px-2 py-0.5 border font-medium ${a.isActive ? "bg-green-100 text-green-700 border-green-200" : "bg-muted text-muted-foreground border-border"}`}>
                                     {a.isActive ? "Active" : "Inactive"}

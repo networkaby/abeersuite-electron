@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Building2, Layers, Briefcase, Globe2 } from "lucide-react";
+import { Building2, Layers, Globe2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import type { PositionNode, OrgStructure } from "@/shared/types/orgChart";
 

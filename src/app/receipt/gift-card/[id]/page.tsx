@@ -61,7 +61,10 @@ export default async function GiftCardPrintPage({ params }: { params: Promise<{ 
                         <div className="value">₹{fmtAmt(value)}</div>
                     </div>
                     <div className="body">
-                        <div className="qr"><img src={qrDataUrl} alt={`QR for ${card.code}`} /></div>
+                        <div className="qr">
+                            {/* eslint-disable-next-line @next/next/no-img-element -- QR data-URL on a print receipt; next/image is inappropriate here */}
+                            <img src={qrDataUrl} alt={`QR for ${card.code}`} />
+                        </div>
                         <div className="meta">
                             <div className="code-cap">Redeem code</div>
                             <div className="code">{card.code}</div>

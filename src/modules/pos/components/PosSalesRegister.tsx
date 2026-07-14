@@ -18,7 +18,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { fmt } from "@/utils/constants";
 import { ActiveShiftBar, type ActiveShift } from "@/modules/pos/components/ActiveShiftBar";
-import { ShiftOpenDialog, type OpenedShift } from "@/modules/pos/components/ShiftOpenDialog";
+import { ShiftOpenDialog } from "@/modules/pos/components/ShiftOpenDialog";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -175,7 +175,7 @@ export function PosSalesRegister() {
             .then((r) => setLedger(r.data))
             .catch(() => toast.error("Failed to load till ledger"))
             .finally(() => setLedgerLoading(false));
-    }, [tab, counterId, rangeFrom, rangeTo]);
+    }, [tab, counterId, rangeFrom, rangeTo, todayISO]);
 
     const load = useCallback(async (search: string, pg: number, f: string, t: string) => {
         setLoading(true);
@@ -244,7 +244,7 @@ export function PosSalesRegister() {
             <ShiftOpenDialog
                 open={shiftOpenOpen}
                 onOpenChange={setShiftOpenOpen}
-                onOpened={(_s: OpenedShift) => { setShiftOpenOpen(false); refreshShift(); }}
+                onOpened={() => { setShiftOpenOpen(false); refreshShift(); }}
             />
 
             {/* ── Header ── */}

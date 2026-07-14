@@ -25,10 +25,9 @@ import { useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
-    Globe2, Building2, Layers, Briefcase, Users, AlertCircle,
+    Building2, Layers, Briefcase, Users, AlertCircle,
     ChevronDown, ChevronRight, ZoomIn, ZoomOut, Maximize2, Landmark,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { PositionNode, OrgStructure } from "@/shared/types/orgChart";
 

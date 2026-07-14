@@ -21,10 +21,12 @@ type EscalationFormData = { serviceCenterId: string; externalRef: string; escala
 export default function TicketEscalation({ ticket, onClose }: Props) {
     const { data: session } = useSession();
     const [serviceCenters, setServiceCenters] = useState<ServiceCenterOption[]>([]);
-    const { register, handleSubmit, setValue, watch, control, formState: { isSubmitting } } = useForm({
+    const { register, handleSubmit, setValue, control, formState: { isSubmitting } } = useForm({
         defaultValues: { serviceCenterId: "", externalRef: "", escalatedAt: toIsoDate(new Date()), expectedReturn: "" },
     });
     const serviceCenterId = useWatch({ control, name: "serviceCenterId" });
+    const escalatedAt = useWatch({ control, name: "escalatedAt" });
+    const expectedReturn = useWatch({ control, name: "expectedReturn" });
 
     useEffect(() => { axios.get("/api/service-centers").then((r) => setServiceCenters(r.data)); }, []);
 
@@ -76,7 +78,7 @@ export default function TicketEscalation({ ticket, onClose }: Props) {
                         <div>
                             <Label className="mb-1 block">Escalated Date</Label>
                             <TallyDateInput
-                                value={watch("escalatedAt") ?? ""}
+                                value={escalatedAt ?? ""}
                                 onValueChange={(iso) => setValue("escalatedAt", iso, { shouldValidate: true })}
                             />
                         </div>
@@ -85,7 +87,7 @@ export default function TicketEscalation({ ticket, onClose }: Props) {
                                 Expected Return <span className="text-muted-foreground">(optional)</span>
                             </Label>
                             <TallyDateInput
-                                value={watch("expectedReturn") ?? ""}
+                                value={expectedReturn ?? ""}
                                 onValueChange={(iso) => setValue("expectedReturn", iso, { shouldValidate: true })}
                             />
                         </div>

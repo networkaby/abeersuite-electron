@@ -11,19 +11,11 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useMemo, useState } from "react";
-import { Plus, X, Search, Tag, FolderTree, Boxes, IndianRupee, Package, CalendarClock } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Search, Tag, FolderTree, Boxes, IndianRupee, Package, CalendarClock } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -272,13 +264,6 @@ export function MatchConditions({
     /** Hide the "Days since last sale" range when the data source can't supply staleness. */
     showStaleDays?: boolean;
 }) {
-    const addAttrRow = () =>
-        onChange({ attrs: [...value.attrs, { key: "", op: "eq", value: "" }] });
-    const updateAttrRow = (idx: number, patch: Partial<AttrRow>) =>
-        onChange({ attrs: value.attrs.map((a, i) => (i === idx ? { ...a, ...patch } : a)) });
-    const removeAttrRow = (idx: number) =>
-        onChange({ attrs: value.attrs.filter((_, i) => i !== idx) });
-
     return (
         <>
             {/* Taxonomy filters (multi-select) */}

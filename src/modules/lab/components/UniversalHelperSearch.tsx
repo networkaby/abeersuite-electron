@@ -249,7 +249,7 @@ export default function UniversalHelperSearch() {
         }
         document.addEventListener("keydown", handle);
         return () => document.removeEventListener("keydown", handle);
-    }, []);
+    }, [detailOpen]);
 
     return (
         <section>

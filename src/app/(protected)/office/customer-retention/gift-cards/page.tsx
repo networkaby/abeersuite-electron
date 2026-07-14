@@ -1,5 +1,4 @@
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { CreditCard } from "lucide-react";
 import { GiftCards } from "@/modules/coupons/components/GiftCards";
 import { getOrganisation } from "@/shared/lib/org/getOrganisation";
 

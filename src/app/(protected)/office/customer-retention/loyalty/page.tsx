@@ -1,6 +1,6 @@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent } from "@/components/ui/card";
-import { Gift, Coins, BadgeCheck, BadgeX } from "lucide-react";
+import { Coins, BadgeCheck, BadgeX } from "lucide-react";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { LoyaltyConfigForm } from "@/modules/loyalty/components/LoyaltyConfigForm";
 import { LoyaltyEarnRules } from "@/modules/loyalty/components/LoyaltyEarnRules";

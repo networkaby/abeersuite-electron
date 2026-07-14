@@ -105,7 +105,7 @@ export function useRegisterFilters(storageKey: string) {
     });
 
     const toggleStatus  = (s: string) =>
-        setStatuses((prev) => { const n = new Set(prev); n.has(s) ? n.delete(s) : n.add(s); return n; });
+        setStatuses((prev) => { const n = new Set(prev); if (n.has(s)) n.delete(s); else n.add(s); return n; });
     const clearStatuses = () => setStatuses(new Set());
 
     const showDeleted = statuses.has("DELETED");

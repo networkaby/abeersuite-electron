@@ -15,16 +15,10 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { VOUCHER_MATRIX, VOUCHER_GROUPS, ALL_VOUCHER_PERMISSION_IDS, voucherKindPermissionIds } from "@/shared/lib/auth/voucherMatrix";
+import { VOUCHER_MATRIX, VOUCHER_GROUPS, voucherKindPermissionIds } from "@/shared/lib/auth/voucherMatrix";
 import { SIDEBAR_MODULES } from "@/shared/lib/auth/sidebarModules";
 
 interface Branch { id: string; name: string; }
-interface Permission {
-    id: string;
-    label: string;
-    module: string;
-    description?: string | null;
-}
 interface Department {
     id: string;
     name: string;
@@ -105,7 +99,6 @@ function DeptFormFields({
 export default function DepartmentsPage() {
     const [departments, setDepartments] = useState<Department[]>([]);
     const [branches, setBranches] = useState<Branch[]>([]);
-    const [permissions, setPermissions] = useState<Permission[]>([]);
     const [loading, setLoading] = useState(true);
     const [addingNew, setAddingNew] = useState(false);
     const [editId, setEditId] = useState<string | null>(null);
@@ -125,14 +118,12 @@ export default function DepartmentsPage() {
 
     const fetchAll = async () => {
         try {
-            const [dRes, bRes, pRes] = await Promise.all([
+            const [dRes, bRes] = await Promise.all([
                 axios.get<Department[]>("/api/departments"),
                 axios.get<Branch[]>("/api/branches"),
-                axios.get<Permission[]>("/api/permissions"),
             ]);
             setDepartments(dRes.data);
             setBranches(bRes.data);
-            setPermissions(pRes.data);
             // Keep the current selection, else select the first department.
             setSelectedId(prev => prev && dRes.data.some(d => d.id === prev) ? prev : dRes.data[0]?.id ?? null);
         } catch { toast.error("Failed to load data"); }
@@ -164,14 +155,6 @@ export default function DepartmentsPage() {
         setAddingNew(false);
         setEditId(null);
         setSelectedId(id);
-    };
-
-    const togglePoolPerm = (id: string) => {
-        setPoolSelected(prev => {
-            const next = new Set(prev);
-            if (next.has(id)) next.delete(id); else next.add(id);
-            return next;
-        });
     };
 
     // Bulk on/off for a set of ids (a voucher-kind toggle flips all of its actions).
@@ -359,11 +342,9 @@ export default function DepartmentsPage() {
                                         </div>
                                     ) : (
                                         <PoolEditor
-                                            permissions={permissions}
                                             selected={poolSelected}
                                             saving={poolSaving}
                                             dirty={poolDirty}
-                                            onToggle={togglePoolPerm}
                                             onToggleMany={setPoolPerms}
                                             onSave={savePool}
                                         />
@@ -383,39 +364,20 @@ export default function DepartmentsPage() {
 }
 
 function PoolEditor({
-    permissions,
     selected,
     saving,
     dirty,
-    onToggle,
     onToggleMany,
     onSave,
 }: {
-    permissions: Permission[];
     selected: Set<string>;
     saving: boolean;
     dirty: boolean;
-    onToggle: (id: string) => void;
     onToggleMany: (ids: string[], on: boolean) => void;
     onSave: () => void;
 }) {
     const [search, setSearch] = useState("");
     const q = search.trim().toLowerCase();
-    const matches = (p: Permission) =>
-        !q || [p.label, p.id, p.module, p.description ?? ""].some(v => v.toLowerCase().includes(q));
-    const filtered = permissions.filter(matches);
-    // admin:bypass is a system-only sentinel; every per-kind voucher permission
-    // gets its own toggle in the Vouchers section below (the dept declares which
-    // voucher KINDS it works with — the create/post/cancel/delete access level is
-    // decided per-role). Generic finance:voucher:* fallbacks stay hidden.
-    const voucherPermSet = new Set<string>(ALL_VOUCHER_PERMISSION_IDS);
-    const poolable = filtered.filter(p =>
-        p.id !== "admin:bypass"
-        && !p.id.startsWith("finance:voucher:")
-        && !p.id.startsWith("ui:sidebar:")
-        && !voucherPermSet.has(p.id),
-    );
-    const modules = [...new Set(poolable.map(p => p.module))].sort();
     // Sidebar top-level modules (Contacts, Inventory, CRM…) — the dept declares
     // which modules it can see; child links are gated per role on the Role page.
     const sidebarRows = SIDEBAR_MODULES.filter(
@@ -503,28 +465,6 @@ function PoolEditor({
                         ))}
                     </div>
                 )}
-                {/* Parked (old UI): flat module → permission checkbox rows (accountancy
-                    own/branch/org, ticket scopes, Work items…). Hidden while we design the
-                    newer pool-picking UI for these — not deleted, `modules`/`poolable` above
-                    still compute it, just not rendered. Bring back or replace once decided. */}
-                {/* {modules.map(module => (
-                    <div key={module}>
-                        <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{module}</p>
-                        <div className="space-y-1">
-                            {poolable.filter(p => p.module === module).map(p => (
-                                <PermRow
-                                    key={p.id}
-                                    label={p.label}
-                                    sub={p.id}
-                                    title={p.description ?? p.id}
-                                    on={selected.has(p.id)}
-                                    onClick={() => onToggle(p.id)}
-                                />
-                            ))}
-
-                        </div>
-                    </div>
-                ))} */}
                 {voucherGroups.length === 0 && sidebarRows.length === 0 && (
                     <p className="py-6 text-center text-sm text-muted-foreground">No permissions match your search.</p>
                 )}
@@ -568,39 +508,3 @@ function PermChip({
     );
 }
 
-function PermRow({
-    label, sub, title, on, onClick,
-}: {
-    label: string;
-    sub: string;
-    title?: string;
-    on: boolean;
-    onClick: () => void;
-}) {
-    return (
-        <button
-            type="button"
-            onClick={onClick}
-            title={title}
-            className={[
-                "flex w-full items-center gap-2.5 rounded-md border px-2.5 py-1.5 text-left transition-colors",
-                on
-                    ? "border-primary bg-primary/10"
-                    : "border-border bg-background hover:border-primary/50 hover:bg-muted/40",
-            ].join(" ")}
-        >
-            <span
-                className={[
-                    "flex h-4 w-4 shrink-0 items-center justify-center rounded border",
-                    on ? "border-primary bg-primary text-primary-foreground" : "border-border",
-                ].join(" ")}
-            >
-                {on && <Check size={11} strokeWidth={3} />}
-            </span>
-            <span className="min-w-0 flex-1">
-                <span className="block truncate text-xs font-medium text-foreground">{label}</span>
-                <span className="block truncate text-[10px] text-muted-foreground">{sub}</span>
-            </span>
-        </button>
-    );
-}

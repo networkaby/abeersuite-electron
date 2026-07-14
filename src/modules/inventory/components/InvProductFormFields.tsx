@@ -1,12 +1,5 @@
 "use client";
 
-/* eslint-disable react-hooks/refs */
-// This form uses ref.current reads in JSX render to gate "auto-filled" hints
-// (nameDirty / onlineNameDirty / slugDirty). They flip on user input via
-// onChange. The new react-hooks/refs rule forbids reading .current during
-// render, but here it's just a boolean hint — reading a stale value across
-// renders is acceptable since the next user keystroke will fix it.
-
 import { useEffect, useRef } from "react";
 import { RefreshCw, Trash2 } from "lucide-react";
 import { flattenTree, treeLabel, type MasterKind } from "@/modules/inventory/components/InventoryMasterDropdownQuickDialog";
@@ -232,6 +225,9 @@ export function InvProductFormFields({
             ...(nextOnlineName !== null ? { shopSubheading: nextOnlineName } : {}),
             ...(nextSlug       !== null ? { slug:           nextSlug }       : {}),
         }));
+        // buildMasters closes only over the form fields + masters already listed here;
+        // depending on the function itself (new each render) would re-run every render.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [
         form.brandId, form.categoryId, form.groupId, form.warrantyTermId,
         form.unitId, form.modelNo, form.attrs, form.namePart,

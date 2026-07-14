@@ -7,7 +7,6 @@ import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { resolvePositionDepartmentId } from "@/shared/lib/org/positionDepartment";
 import { flattenPositionRoles, POSITION_INCLUDE } from "@/shared/lib/org/positionIncludes";
-import { syncPositionRoles } from "@/shared/lib/org/positionRoles";
 
 const createSchema = z.object({
     id:               z.string().trim().min(1, "ID is required").toUpperCase(),

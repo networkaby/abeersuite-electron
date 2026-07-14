@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 import { Building2 } from "lucide-react";
@@ -24,7 +24,7 @@ export function BranchSwitcher() {
     const [user, setUser] = useState<SessionUser>(null);
 
     const permissions = user?.permissions ?? [];
-    const userBranchIds = user?.branchIds ?? [];
+    const userBranchIds = useMemo(() => user?.branchIds ?? [], [user]);
     const isAdmin = permissions.includes(PERMISSIONS.ADMIN_BYPASS);
 
     // Fetch session ourselves so we don't depend on SessionProvider being mounted.

@@ -4,7 +4,6 @@ import { requireVoucherPermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { isBalanced } from "@/modules/accountancy/lib/balance";
 import { engineCreateVoucher } from "@/modules/accountancy/lib/transactionEngine";
-import { invNextRef } from "@/modules/inventory/lib/stock";
 import { recordStockMovement } from "@/modules/inventory/lib/stockMovement";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import * as Sentry from "@sentry/nextjs";

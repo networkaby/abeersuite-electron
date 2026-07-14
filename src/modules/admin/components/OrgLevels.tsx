@@ -139,15 +139,6 @@ function VConnector({ delay = 0 }: { delay?: number }) {
     );
 }
 
-// ── Empty level placeholder ──────────────────────────────────────────────────
-
-function EmptyLevel({ label }: { label: string }) {
-    return (
-        <div className="px-4 py-2 rounded border border-dashed border-white/15 text-[11px] text-white/40 italic">
-            No {label}
-        </div>
-    );
-}
 
 // ── Main component ───────────────────────────────────────────────────────────
 
