@@ -18,13 +18,14 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { formatDate, formatTimeOnly } from "@/shared/lib/format/formatDate";
-import type { OrgNode } from "@/shared/types/orgChart";
-import OrgTree from "@/modules/admin/components/OrgTree";
+import type { OrgStructure } from "@/shared/types/orgChart";
+import StructureTree from "@/modules/admin/components/StructureTree";
 import UserAvatar from "@/shared/components/UserAvatar";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -1118,17 +1119,19 @@ function SecurityTab({ profileId }: { profileId: number }) {
 
 // ── OrgPositionTab ────────────────────────────────────────────────────────────
 
-function OrgPositionTab({ profile }: { profile: UserProfile }) {
-    const [roots, setRoots] = useState<OrgNode[]>([]);
+function OrgPositionTab() {
+    const [structure, setStructure] = useState<OrgStructure | null>(null);
     const [loading, setLoading] = useState(true);
     useEffect(() => {
-        axios.get<OrgNode[]>("/api/org-chart")
-            .then(r => setRoots(r.data))
+        axios.get<OrgStructure>("/api/positions/structure")
+            .then(r => setStructure(r.data))
             .catch(() => toast.error("Failed to load org chart"))
             .finally(() => setLoading(false));
     }, []);
     if (loading) return <div className="flex items-center justify-center py-20 text-sm text-muted-foreground">Loading org chart…</div>;
-    return <OrgTree roots={roots} highlightId={profile.id} />;
+    if (!structure || (structure.orgWidePositions.length === 0 && structure.branches.every(b => b.deptGroups.length === 0)))
+        return <div className="flex items-center justify-center py-20 text-sm text-muted-foreground">No positions defined yet.</div>;
+    return <StructureTree structure={structure} />;
 }
 
 function ActivityTimelineTab({
@@ -1400,7 +1403,8 @@ export default function UserProfilePage() {
     );
 
     return (
-        <div>
+        <ScrollArea className="h-full" type="always">
+        <div className="p-4">
             {/* Back nav */}
             <div className="flex items-center gap-2 mb-4 print:hidden">
                 <Button asChild variant="ghost" size="sm" className="-ml-2 text-muted-foreground">
@@ -1520,7 +1524,7 @@ export default function UserProfilePage() {
                             onSaved={updated => setProfile(prev => prev ? { ...prev, ...updated } : prev)} />
                     )}
                     {activeTab === 5 && isSelf && <SecurityTab profileId={profile.id} />}
-                    {activeTab === 6 && <OrgPositionTab profile={profile} />}
+                    {activeTab === 6 && <OrgPositionTab />}
                 </div>
 
                 {/* Collapsible sidebar — hidden on small screens */}
@@ -1531,5 +1535,6 @@ export default function UserProfilePage() {
                 )}
             </div>
         </div>
+        </ScrollArea>
     );
 }
