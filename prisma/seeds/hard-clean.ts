@@ -97,8 +97,10 @@ const TRANSACTION_TABLES = [
 // NOTE: InvUnit + InvWarrantyTerm are intentionally excluded — they are
 // universal masters seeded by bootstrap-seed.ts (sections 9 + 10) and must
 // survive a hard-clean. InvBrand / InvCategory / InvProductGroup are
-// trade-specific reference data seeded by helper-inventory-masters.ts (NOT
-// bootstrap), so they are wiped here and restored by `pnpm seed:helper-inventory`.
+// trade-specific reference data seeded by the helper seeds (NOT bootstrap):
+// InvBrand → helper-brands.ts, InvCategory / InvProductGroup →
+// helper-inventory-masters.ts. They are wiped here and restored by
+// `pnpm seed:helper-brands` + `pnpm seed:helper-inventory`.
 const INVENTORY_MASTERS = [
     "InvStockLedger", "VoucherInventoryLine", "VoucherDetail",  // re-listed defensively
     "InvBomLine", "InvBom",

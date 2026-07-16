@@ -5,7 +5,8 @@ All seed scripts and their fixture data live under `prisma/seeds/`.
 ```
 prisma/seeds/
 ├─ bootstrap-seed.ts            PRODUCTION — single source of truth for setup (RBAC seeds only R1)
-├─ helper-inventory-masters.ts  HELPER — trade-specific masters (brands, categories, HSN/GST groups)
+├─ helper-brands.ts             HELPER — trade-specific brand master (InvBrand)
+├─ helper-inventory-masters.ts  HELPER — trade-specific masters (categories, HSN/GST groups)
 ├─ helper-roles.ts              HELPER — trade-specific starter roles (R2–R7, non-system / admin-editable)
 ├─ hard-clean.ts                CLEANER — wipes everything bootstrap doesn't seed
 ├─ purge-vouchers.ts            OPS — wipes only vouchers/JEs/invoices/payments
@@ -52,7 +53,19 @@ pnpm prisma db seed       # 2. runs bootstrap-seed.ts
 
 > **Universal vs trade-specific.** Bootstrap seeds only masters common to **every** trade (units, GST slabs, warranty terms, chart of accounts, the `R1` Admin role, workflow). Masters that are **specific to the computer/CCTV/printer trade** — brands, categories, the HSN/GST product-group spine, and the `R2`–`R7` starter roles — are NOT in bootstrap; they live in the helper seeds below. A different trade would ship its own helpers (or just build roles in the Role Matrix).
 
-> Production deployments run `pnpm prisma db seed` (mandatory) then, for this trade, `pnpm seed:helper-inventory` and `pnpm seed:helper-roles`. Do not run any `dummy-*` script in production.
+> Production deployments run `pnpm prisma db seed` (mandatory) then, for this trade, `pnpm seed:helper-brands`, `pnpm seed:helper-inventory` and `pnpm seed:helper-roles`. Do not run any `dummy-*` script in production.
+
+## Helper seed (trade-specific brands)
+
+```bash
+pnpm seed:helper-brands   # after `pnpm prisma db seed`
+```
+
+`helper-brands.ts` is **real, production-usable** reference data — not demo/fake — but trade-specific, so it's kept out of bootstrap. Idempotent (upsert-by-name). Seeds:
+
+- **InvBrand** — ~60 brands (computers, storage, printers, CCTV, networking, peripherals)
+
+Wiped by `hard-clean` (`InvBrand` is in its `INVENTORY_MASTERS` list) — re-run this helper to restore.
 
 ## Helper seed (trade-specific reference data)
 
@@ -62,11 +75,10 @@ pnpm seed:helper-inventory   # after `pnpm prisma db seed`
 
 `helper-inventory-masters.ts` is **real, production-usable** reference data — not demo/fake — but trade-specific, so it's kept out of bootstrap. Idempotent (upsert-by-name). Seeds:
 
-- **InvBrand** — ~60 brands (computers, storage, printers, CCTV, networking, peripherals)
 - **InvCategory** — 7 use-case categories (Laptops, Desktops, Printers, CCTV & Security, Components, Monitors, Networking)
 - **InvProductGroup** — HSN/GST tax-spine tree (~66 groups; each leaf carries an HSN code + GST slab so products inherit tax classification by walking up the parent chain)
 
-Wiped by `hard-clean` (all three are in its `INVENTORY_MASTERS` list) — re-run this helper to restore.
+Wiped by `hard-clean` (both are in its `INVENTORY_MASTERS` list) — re-run this helper to restore.
 
 ## Helper seed (trade-specific starter roles)
 
@@ -91,7 +103,7 @@ Manual, idempotent, **never** auto-run by Prisma. Use for demos, screenshots, lo
 | `pnpm seed:dummy-customers` | Demo persons + companies with phones/emails + party-linked Account ledgers |
 | `pnpm seed:dummy-shop` | Demo product catalog (laptops, desktops, etc.) — reads from `data/demoCatalogSeed.ts` |
 | `pnpm seed:dummy-vouchers` | Demo invoices, payments, journal entries |
-| `pnpm seed:dummy-all` | Runs in dependency order: customers → **helper-roles** → users → **helper-inventory** → shop → vouchers (helper-roles runs before users so demo positions resolve their `R2`/`R3`/`R4` templates; helper-inventory runs before shop so demo products resolve their brand / category / group) |
+| `pnpm seed:dummy-all` | Runs in dependency order: customers → **helper-roles** → users → **helper-brands** → **helper-inventory** → shop → vouchers (helper-roles runs before users so demo positions resolve their `R2`/`R3`/`R4` templates; helper-brands + helper-inventory run before shop so demo products resolve their brand / category / group) |
 
 ## Cleaner — return to bootstrap state
 

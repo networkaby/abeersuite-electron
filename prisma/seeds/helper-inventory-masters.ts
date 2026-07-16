@@ -6,12 +6,13 @@
 // warranty terms, chart of accounts, RBAC, workflow). A different trade
 // would ship its own helper instead of this one.
 //
-// Seeds three masters, all idempotent (upsert-by-name):
-//   1. InvBrand        — ~60 brands (computers, storage, CCTV, networking…)
-//   2. InvCategory     — 7 use-case categories (Laptops, Desktops, …)
-//   3. InvProductGroup — HSN/GST tax-spine tree (parent → leaf, each leaf
+// Seeds two masters, all idempotent (upsert-by-name):
+//   1. InvCategory     — 7 use-case categories (Laptops, Desktops, …)
+//   2. InvProductGroup — HSN/GST tax-spine tree (parent → leaf, each leaf
 //                        carries an HSN code + GST slab so products inherit
 //                        tax classification by walking up the parent chain)
+//
+// Brands live in their own helper — see helper-brands.ts (pnpm seed:helper-brands).
 //
 // Run: pnpm seed:helper-inventory   (after `pnpm prisma db seed`)
 //
@@ -36,30 +37,7 @@ const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
 // ════════════════════════════════════════════════════════════════════════════
-// 1 — Brands
-// ════════════════════════════════════════════════════════════════════════════
-const BRANDS = [
-    // Computers & Laptops
-    "Acer", "AMD", "Apple", "Asus", "Dell", "Gigabyte", "HP", "HCL",
-    "Intel", "Lenovo", "LG", "MSI", "Samsung", "Sony",
-    // Storage
-    "Corsair", "Crucial", "Kingston", "SanDisk", "Seagate", "Toshiba",
-    "Transcend", "WD",
-    // Printers & Consumables
-    "Brother", "Canon", "Epson", "Kyocera", "Lexmark", "Panasonic",
-    "Ricoh", "TVS", "Xerox",
-    // CCTV & Security
-    "Annke", "Axis", "Bosch", "CP Plus", "Dahua", "Ezviz", "Godrej",
-    "Hanwha", "Hikvision", "Honeywell", "Reolink", "Zicom",
-    // Networking
-    "Cisco", "D-Link", "Grandstream", "Netgear", "Tenda", "TP-Link", "Ubiquiti",
-    // Peripherals & Accessories
-    "APC", "Beetel", "Belkin", "Boat", "Hola", "iBall", "Intex",
-    "Logitech", "Luminous", "Microtek", "Nvidia", "Stanley", "Zebronics",
-];
-
-// ════════════════════════════════════════════════════════════════════════════
-// 2 — Categories (use-case axis — separate from the HSN/GST group spine)
+// 1 — Categories (use-case axis — separate from the HSN/GST group spine)
 // ════════════════════════════════════════════════════════════════════════════
 const CATEGORIES = [
     "Laptops", "Desktops", "Printers", "CCTV & Security",
@@ -67,7 +45,7 @@ const CATEGORIES = [
 ];
 
 // ════════════════════════════════════════════════════════════════════════════
-// 3 — Product Group tree (HSN/GST spine)
+// 2 — Product Group tree (HSN/GST spine)
 // ════════════════════════════════════════════════════════════════════════════
 // Two levels (parent → sub-group). Each leaf carries an HSN code + GST rate so
 // the cascade resolves automatically when InvProduct.gstRateId / hsnCode are
@@ -268,20 +246,6 @@ async function seedGroupTree(nodes: GroupSpec[], parentId: number | null, depth:
 
 async function main(): Promise<void> {
     console.log("\n━━━ HELPER SEED — trade-specific inventory masters ━━━━━━━━━━━━━━━━━");
-
-    // ── Brands ──────────────────────────────────────────────────────────
-    const uniqueBrands = [...new Set(BRANDS)];
-    let brandsCreated = 0;
-    for (const name of uniqueBrands) {
-        const existing = await prisma.invBrand.findFirst({ where: { name } });
-        if (existing) {
-            await prisma.invBrand.update({ where: { id: existing.id }, data: { isActive: true } });
-        } else {
-            await prisma.invBrand.create({ data: { name, isActive: true } });
-            brandsCreated++;
-        }
-    }
-    console.log(`  ✓ Brands: ${uniqueBrands.length} total (${brandsCreated} new)`);
 
     // ── Categories ──────────────────────────────────────────────────────
     let catsCreated = 0;
