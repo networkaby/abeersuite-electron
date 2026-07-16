@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, Layers } from "lucide-react";
+import { Plus, Pencil, Trash2, Layers, ChevronRight, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,7 +25,15 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import {
+    Dialog,
+    DialogContent,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
 import { flattenTree, treeLabel } from "@/modules/inventory/components/InventoryMasterDropdownQuickDialog";
+import { useCollapsibleTree } from "@/modules/inventory/hooks";
 
 type InvCategory = {
     id: number;
@@ -104,6 +112,10 @@ export default function InventoryCategoriesPage() {
 
     const parentOptions = rows.filter((c) => c.id !== editId);
 
+    // Collapsible hierarchy view: parent → child ordering (via flattenTree) with
+    // per-node expand/collapse. Shared with the product-groups master page.
+    const { visible, collapsed, toggle, expandAll, collapseAll, hasTree } = useCollapsibleTree(rows);
+
     return (
         <div className="flex h-full flex-col gap-4 overflow-hidden p-6">
             <div className="flex flex-none flex-wrap items-center justify-between gap-4">
@@ -113,15 +125,25 @@ export default function InventoryCategoriesPage() {
                         Categories
                     </h2>
                 </div>
-                <Button type="button" onClick={() => { setForm(empty); setEditId(null); setAdding(true); }} disabled={adding}>
-                    <Plus className="size-4" />
-                    New category
-                </Button>
+                <div className="flex items-center gap-2">
+                    {hasTree ? (
+                        <>
+                            <Button type="button" variant="outline" size="sm" onClick={expandAll}>Expand all</Button>
+                            <Button type="button" variant="outline" size="sm" onClick={collapseAll}>Collapse all</Button>
+                        </>
+                    ) : null}
+                    <Button type="button" onClick={() => { setForm(empty); setEditId(null); setAdding(true); }} disabled={adding}>
+                        <Plus className="size-4" />
+                        New category
+                    </Button>
+                </div>
             </div>
 
-            {adding || editId != null ? (
-                <div className="flex-none space-y-3 border-2 border-border bg-muted/30 p-4">
-                    <p className="text-sm font-semibold">{adding ? "New category" : "Edit category"}</p>
+            <Dialog open={adding || editId != null} onOpenChange={(o) => { if (!o) cancel(); }}>
+                <DialogContent className="sm:max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle>{adding ? "New category" : "Edit category"}</DialogTitle>
+                    </DialogHeader>
                     <div className="grid gap-3 sm:grid-cols-2">
                         <div className="space-y-2">
                             <Label>Name</Label>
@@ -157,16 +179,16 @@ export default function InventoryCategoriesPage() {
                             </label>
                         </div>
                     </div>
-                    <div className="flex gap-2">
-                        <Button type="button" onClick={save} disabled={saving}>
-                            Save
-                        </Button>
+                    <DialogFooter>
                         <Button type="button" variant="outline" onClick={cancel}>
                             Cancel
                         </Button>
-                    </div>
-                </div>
-            ) : null}
+                        <Button type="button" onClick={save} disabled={saving}>
+                            Save
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             <ScrollArea className="min-h-0 flex-1 border border-border">
                 <Table>
@@ -174,29 +196,43 @@ export default function InventoryCategoriesPage() {
                         <TableRow>
                             <TableHead>Name</TableHead>
                             <TableHead>Slug</TableHead>
-                            <TableHead>Parent</TableHead>
                             <TableHead> </TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {loading ? (
                             <TableRow>
-                                <TableCell colSpan={4} className="text-muted-foreground">
+                                <TableCell colSpan={3} className="text-muted-foreground">
                                     Loading…
                                 </TableCell>
                             </TableRow>
-                        ) : rows.length === 0 ? (
+                        ) : visible.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={4} className="text-muted-foreground">
+                                <TableCell colSpan={3} className="text-muted-foreground">
                                     No categories yet.
                                 </TableCell>
                             </TableRow>
                         ) : (
-                            rows.map((c) => (
+                            visible.map(({ row: c, depth, hasChildren }) => (
                                 <TableRow key={c.id}>
-                                    <TableCell className="font-medium">{c.name}</TableCell>
+                                    <TableCell className="font-medium" style={{ paddingLeft: `${12 + depth * 20}px` }}>
+                                        <span className="flex items-center gap-1">
+                                            {hasChildren ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => toggle(c.id)}
+                                                    className="-ml-1 rounded p-0.5 hover:bg-muted"
+                                                    aria-label={collapsed.has(c.id) ? "Expand" : "Collapse"}
+                                                >
+                                                    {collapsed.has(c.id) ? <ChevronRight className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+                                                </button>
+                                            ) : depth > 0 ? (
+                                                <span className="text-muted-foreground">└</span>
+                                            ) : null}
+                                            {c.name}
+                                        </span>
+                                    </TableCell>
                                     <TableCell className="text-muted-foreground text-sm">{c.slug ?? "—"}</TableCell>
-                                    <TableCell className="text-sm">{c.parent?.name ?? "—"}</TableCell>
                                     <TableCell className="text-right space-x-2">
                                         {!c.isActive ? <Badge variant="outline">inactive</Badge> : null}
                                         <Button

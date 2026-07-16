@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, LayoutGrid } from "lucide-react";
+import { Plus, Pencil, Trash2, LayoutGrid, ChevronRight, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,7 +25,15 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import {
+    Dialog,
+    DialogContent,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
 import { flattenTree, treeLabel } from "@/modules/inventory/components/InventoryMasterDropdownQuickDialog";
+import { useCollapsibleTree } from "@/modules/inventory/hooks";
 
 type GstRateOpt = { id: number; rate: string | number; label: string; isActive: boolean };
 
@@ -131,6 +139,10 @@ export default function InventoryProductGroupsPage() {
     // Groups eligible as parent: all except the current group being edited (to avoid self-ref).
     const parentOptions = rows.filter((r) => r.id !== editId);
 
+    // Collapsible hierarchy view: parent → child ordering (via flattenTree) with
+    // per-node expand/collapse. Shared with the categories master page.
+    const { visible, collapsed, toggle, expandAll, collapseAll, hasTree } = useCollapsibleTree(rows);
+
     return (
         <div className="flex h-full flex-col gap-4 overflow-hidden p-6">
             <div className="flex flex-none flex-wrap items-center justify-between gap-4">
@@ -138,15 +150,25 @@ export default function InventoryProductGroupsPage() {
                     <LayoutGrid className="size-5" aria-hidden />
                     Product groups
                 </h2>
-                <Button type="button" onClick={() => { setForm(emptyForm); setEditId(null); setAdding(true); }} disabled={adding}>
-                    <Plus className="size-4" />
-                    New group
-                </Button>
+                <div className="flex items-center gap-2">
+                    {hasTree ? (
+                        <>
+                            <Button type="button" variant="outline" size="sm" onClick={expandAll}>Expand all</Button>
+                            <Button type="button" variant="outline" size="sm" onClick={collapseAll}>Collapse all</Button>
+                        </>
+                    ) : null}
+                    <Button type="button" onClick={() => { setForm(emptyForm); setEditId(null); setAdding(true); }} disabled={adding}>
+                        <Plus className="size-4" />
+                        New group
+                    </Button>
+                </div>
             </div>
 
-            {adding || editId != null ? (
-                <div className="flex-none space-y-4 border-2 border-border bg-muted/30 p-4">
-                    <p className="text-sm font-semibold">{adding ? "New group" : "Edit group"}</p>
+            <Dialog open={adding || editId != null} onOpenChange={(o) => { if (!o) cancel(); }}>
+                <DialogContent className="sm:max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle>{adding ? "New group" : "Edit group"}</DialogTitle>
+                    </DialogHeader>
 
                     <div className="grid gap-4 sm:grid-cols-2">
                         {/* Name */}
@@ -239,19 +261,18 @@ export default function InventoryProductGroupsPage() {
                         </div>
                     </div>
 
-                    <div className="flex gap-2">
-                        <Button type="button" onClick={save} disabled={saving}>Save</Button>
+                    <DialogFooter>
                         <Button type="button" variant="outline" onClick={cancel}>Cancel</Button>
-                    </div>
-                </div>
-            ) : null}
+                        <Button type="button" onClick={save} disabled={saving}>Save</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             <ScrollArea className="min-h-0 flex-1 border border-border">
                 <Table>
                     <TableHeader>
                         <TableRow>
                             <TableHead>Name</TableHead>
-                            <TableHead>Parent</TableHead>
                             <TableHead>GST</TableHead>
                             <TableHead>HSN</TableHead>
                             <TableHead>Taxability</TableHead>
@@ -261,17 +282,32 @@ export default function InventoryProductGroupsPage() {
                     <TableBody>
                         {loading ? (
                             <TableRow>
-                                <TableCell colSpan={6} className="text-muted-foreground">Loading…</TableCell>
+                                <TableCell colSpan={5} className="text-muted-foreground">Loading…</TableCell>
                             </TableRow>
-                        ) : rows.length === 0 ? (
+                        ) : visible.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={6} className="text-muted-foreground">No groups yet.</TableCell>
+                                <TableCell colSpan={5} className="text-muted-foreground">No groups yet.</TableCell>
                             </TableRow>
                         ) : (
-                            rows.map((r) => (
+                            visible.map(({ row: r, depth, hasChildren }) => (
                                 <TableRow key={r.id}>
-                                    <TableCell className="font-medium">{r.name}</TableCell>
-                                    <TableCell className="text-sm text-muted-foreground">{r.parent?.name ?? <span className="italic">—</span>}</TableCell>
+                                    <TableCell className="font-medium" style={{ paddingLeft: `${12 + depth * 20}px` }}>
+                                        <span className="flex items-center gap-1">
+                                            {hasChildren ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => toggle(r.id)}
+                                                    className="-ml-1 rounded p-0.5 hover:bg-muted"
+                                                    aria-label={collapsed.has(r.id) ? "Expand" : "Collapse"}
+                                                >
+                                                    {collapsed.has(r.id) ? <ChevronRight className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+                                                </button>
+                                            ) : depth > 0 ? (
+                                                <span className="text-muted-foreground">└</span>
+                                            ) : null}
+                                            {r.name}
+                                        </span>
+                                    </TableCell>
                                     <TableCell className="text-sm">{r.gstRate ? r.gstRate.label : <span className="italic text-muted-foreground">inherit</span>}</TableCell>
                                     <TableCell className="font-mono text-sm">{r.hsnCode ?? <span className="italic text-muted-foreground">inherit</span>}</TableCell>
                                     <TableCell className="text-sm">{r.taxability ?? <span className="italic text-muted-foreground">inherit</span>}</TableCell>
