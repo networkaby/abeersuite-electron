@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Upload, FileText, CheckCircle2, AlertTriangle, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -44,6 +44,27 @@ const FIELD_GROUPS: Array<{ label: string; fields: ProductImportField[] }> = [
 const IGNORE = "__ignore__" as const;
 type Mapping = Record<string, ProductImportField | typeof IGNORE>;
 type Mode = "skip" | "update" | "patch";
+
+interface UnitMaster {
+    id: number;
+    code: string;
+    label: string | null;
+}
+
+/// Unit values are matched exactly the way the server does it
+/// (`norm` in productImport.ts) — trim + lowercase, against code and label.
+/// Keep the two in step: this panel resolves the operator's spelling to a
+/// master **code** and sends that, so the server never needs alias logic.
+const normUnit = (s: string) => s.trim().toLowerCase();
+
+/// Auto-pick for a source unit value. Only exact code/label hits — anything
+/// else (e.g. "Meters" against our MTR/"Metre") is left for the operator to
+/// map by hand rather than guessed at.
+function autoMatchUnit(raw: string, units: UnitMaster[]): string | null {
+    const k = normUnit(raw);
+    const hit = units.find((u) => normUnit(u.code) === k || (u.label != null && normUnit(u.label) === k));
+    return hit?.code ?? null;
+}
 
 interface RowResult {
     rowIndex: number;
@@ -132,8 +153,33 @@ export function ItemImportPanel() {
     const [committing, setCommitting] = useState(false);
     const [preview, setPreview] = useState<PreviewResult | null>(null);
     const [commitResult, setCommitResult] = useState<PreviewResult | null>(null);
+    const [units, setUnits] = useState<UnitMaster[]>([]);
+    /// Manual unit picks only, keyed by the normalized source value. The
+    /// effective choice is derived (see `unitResolution`) as
+    /// `override ?? autoMatch`, so there is no state to keep in sync when the
+    /// operator remaps the unit column or uploads a different file.
+    const [unitOverrides, setUnitOverrides] = useState<Record<string, string>>({});
 
     const sampleRow = rows[0] ?? [];
+
+    // Unit master drives the 2b dropdown. Small list (~13 rows) and the GET is
+    // open to any signed-in user, so fetch once on mount.
+    useEffect(() => {
+        let cancelled = false;
+        void (async () => {
+            try {
+                const res = await fetch("/api/inventory/units");
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const json = (await res.json()) as UnitMaster[];
+                if (!cancelled) setUnits(json);
+            } catch {
+                if (!cancelled) toast.error("Could not load the unit master — unit mapping is unavailable");
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     const mappedFields = useMemo(() => {
         const set = new Set<ProductImportField>();
@@ -143,10 +189,44 @@ export function ItemImportPanel() {
 
     const hasRequired = mappedFields.has("name") && mappedFields.has("unit") && mappedFields.has("sku");
 
+    /// Column index the operator pointed at Unit, or -1.
+    const unitColumnIndex = useMemo(() => headers.findIndex((h) => mapping[h] === "unit"), [headers, mapping]);
+
+    /// Distinct unit spellings in the file, with a row count so the operator
+    /// can see which ones actually matter. Keyed by the normalized value —
+    /// "MTR" and "mtr" are one entry.
+    const unitValues = useMemo(() => {
+        if (unitColumnIndex < 0) return [];
+        const seen = new Map<string, { raw: string; key: string; count: number }>();
+        for (const r of rows) {
+            const raw = (r[unitColumnIndex] ?? "").trim();
+            if (raw === "") continue;
+            const key = normUnit(raw);
+            const hit = seen.get(key);
+            if (hit) hit.count += 1;
+            else seen.set(key, { raw, key, count: 1 });
+        }
+        return [...seen.values()].sort((a, b) => b.count - a.count || a.raw.localeCompare(b.raw));
+    }, [rows, unitColumnIndex]);
+
+    /// Source value → master unit code ("" when still unmapped).
+    const unitResolution = useMemo(() => {
+        const out = new Map<string, string>();
+        for (const u of unitValues) out.set(u.key, unitOverrides[u.key] ?? autoMatchUnit(u.raw, units) ?? "");
+        return out;
+    }, [unitValues, unitOverrides, units]);
+
+    const unresolvedUnitCount = useMemo(
+        () => unitValues.filter((u) => !unitResolution.get(u.key)).length,
+        [unitValues, unitResolution],
+    );
+    const unitsReady = unresolvedUnitCount === 0;
+
     async function handleFile(f: File | null) {
         setFile(f);
         setPreview(null);
         setCommitResult(null);
+        setUnitOverrides({});
         if (!f) {
             setHeaders([]);
             setRows([]);
@@ -175,7 +255,13 @@ export function ItemImportPanel() {
                 if (!target || target === IGNORE) continue;
                 const cell = rows[i][c] ?? "";
                 if (cell.trim() === "") continue;
-                values[target] = cell;
+                // Send the resolved master code for unit, not the operator's
+                // spelling — the server matches code/label exactly and knows
+                // nothing about "Meters" vs "Metre". Falls back to the raw cell
+                // if somehow unmapped, which the server then reports as an error
+                // row exactly as before.
+                values[target] =
+                    target === "unit" ? unitResolution.get(normUnit(cell)) || cell : cell;
             }
             payload.push({ rowIndex: i, values });
         }
@@ -349,6 +435,69 @@ export function ItemImportPanel() {
                 </section>
             )}
 
+            {/* Step 2b — map unit values to the unit master */}
+            {mappedFields.has("unit") && unitValues.length > 0 && (
+                <section className="rounded-lg border bg-card p-4 space-y-3">
+                    <div>
+                        <h2 className="text-sm font-semibold">2b. Map units</h2>
+                        <p className="text-xs text-muted-foreground">
+                            Every unit value in your file must point at a unit in our master. Exact code or label
+                            matches are picked automatically — set the rest yourself. Units are never auto-created, so
+                            an unmapped value would error out every row using it.
+                        </p>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-xs">
+                            <thead className="border-b text-muted-foreground">
+                                <tr>
+                                    <th className="py-1.5 px-2 text-left font-medium">Your unit</th>
+                                    <th className="py-1.5 px-2 text-left font-medium">Rows</th>
+                                    <th className="py-1.5 px-2 text-left font-medium">Maps to</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {unitValues.map((u) => {
+                                    const chosen = unitResolution.get(u.key) ?? "";
+                                    return (
+                                        <tr key={u.key} className="border-b last:border-b-0">
+                                            <td className="py-1.5 px-2 font-mono">{u.raw}</td>
+                                            <td className="py-1.5 px-2 text-muted-foreground">{u.count}</td>
+                                            <td className="py-1.5 px-2">
+                                                <select
+                                                    className={
+                                                        chosen
+                                                            ? "h-8 rounded border bg-background px-2 text-xs min-w-[220px]"
+                                                            : "h-8 rounded border border-amber-500 bg-background px-2 text-xs min-w-[220px]"
+                                                    }
+                                                    value={chosen}
+                                                    onChange={(e) =>
+                                                        setUnitOverrides((m) => ({ ...m, [u.key]: e.target.value }))
+                                                    }
+                                                >
+                                                    <option value="">— Select unit —</option>
+                                                    {units.map((m) => (
+                                                        <option key={m.id} value={m.code}>
+                                                            {m.label ? `${m.code} — ${m.label}` : m.code}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                    {!unitsReady && (
+                        <p className="text-[11px] text-amber-600">
+                            {unresolvedUnitCount} unit {unresolvedUnitCount === 1 ? "value is" : "values are"} still
+                            unmapped
+                            {units.length === 0 ? " — unit master could not be loaded" : ""}.
+                        </p>
+                    )}
+                </section>
+            )}
+
             {/* Step 3 — options + preview */}
             {headers.length > 0 && (
                 <section className="rounded-lg border bg-card p-4 space-y-3">
@@ -406,10 +555,15 @@ export function ItemImportPanel() {
                             Units and GST rates are not auto-created — those must already exist.
                         </p>
                     </div>
-                    <Button onClick={handlePreview} disabled={!hasRequired || previewing} size="sm">
+                    <Button onClick={handlePreview} disabled={!hasRequired || !unitsReady || previewing} size="sm">
                         <FileText className="mr-1.5 size-3.5" />
                         {previewing ? "Previewing…" : "Preview"}
                     </Button>
+                    {hasRequired && !unitsReady && (
+                        <p className="text-[11px] text-amber-600">
+                            Finish mapping your units in step 2b to preview.
+                        </p>
+                    )}
                 </section>
             )}
 
