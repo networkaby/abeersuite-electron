@@ -24,7 +24,6 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import {
     Dialog,
     DialogContent,
@@ -190,9 +189,9 @@ export default function InventoryCategoriesPage() {
                 </DialogContent>
             </Dialog>
 
-            <ScrollArea className="min-h-0 flex-1 border border-border">
+            <div className="min-h-0 flex-1 overflow-auto border border-border [&_[data-slot=table-container]]:overflow-x-visible">
                 <Table>
-                    <TableHeader>
+                    <TableHeader className="sticky top-0 z-20 bg-background [&_th]:bg-background [&_tr]:border-b [&_th]:shadow-[inset_0_-1px_0_var(--border)]">
                         <TableRow>
                             <TableHead>Name</TableHead>
                             <TableHead>Slug</TableHead>
@@ -262,8 +261,7 @@ export default function InventoryCategoriesPage() {
                         )}
                     </TableBody>
                 </Table>
-                <ScrollBar orientation="horizontal" />
-            </ScrollArea>
+            </div>
         </div>
     );
 }

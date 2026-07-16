@@ -128,8 +128,8 @@ export default function AttributeMastersPage() {
     };
 
     return (
-        <div className="space-y-6">
-            <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex h-full flex-col gap-4 overflow-hidden p-6">
+            <div className="flex flex-none flex-wrap items-center justify-between gap-4">
                 <h2 className="text-xl font-semibold tracking-tight flex items-center gap-2">
                     <ListChecks className="size-5" aria-hidden />
                     Attribute masters
@@ -140,14 +140,14 @@ export default function AttributeMastersPage() {
                 </Button>
             </div>
 
-            <p className="text-sm text-muted-foreground">
+            <p className="flex-none text-sm text-muted-foreground">
                 Define the attribute keys used in product custom attributes (e.g. <code className="font-mono text-xs">ram</code>, <code className="font-mono text-xs">storage</code>, <code className="font-mono text-xs">os</code>).
                 Optionally restrict an attribute to a specific category — product form dropdowns filter by the selected category plus global attributes.
                 These keys are also used in the naming convention&apos;s <strong>Custom attribute</strong> token.
             </p>
 
             {adding || editId != null ? (
-                <div className="space-y-3 border-2 border-border bg-muted/30 p-4">
+                <div className="flex-none space-y-3 border-2 border-border bg-muted/30 p-4">
                     <p className="text-sm font-semibold">{adding ? "New attribute" : "Edit attribute"}</p>
                     <div className="flex flex-wrap items-end gap-4">
                         <div className="space-y-2 min-w-[140px]">
@@ -209,9 +209,9 @@ export default function AttributeMastersPage() {
                 </div>
             ) : null}
 
-            <div className="overflow-x-auto border border-border">
+            <div className="min-h-0 flex-1 overflow-auto border border-border [&_[data-slot=table-container]]:overflow-x-visible">
                 <Table>
-                    <TableHeader>
+                    <TableHeader className="sticky top-0 z-20 bg-background [&_th]:bg-background [&_tr]:border-b [&_th]:shadow-[inset_0_-1px_0_var(--border)]">
                         <TableRow>
                             <TableHead>Key</TableHead>
                             <TableHead>Label</TableHead>
