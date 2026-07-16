@@ -2,9 +2,8 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import type { Prisma } from "@/generated/prisma/client";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError, pickDefined } from "@/shared/lib/api";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import {
     getGatewayProvider,
     validateGatewayConfigJson,
@@ -26,7 +25,7 @@ const patchSchema = z.object({
 type PatchInput = z.infer<typeof patchSchema>;
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
+    const { response } = await requireAuth();
     if (response) return response;
     try {
         const { id } = paramsSchema.parse(await params);
@@ -89,7 +88,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 }
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
+    const { response } = await requireAuth();
     if (response) return response;
     try {
         const { id } = paramsSchema.parse(await params);

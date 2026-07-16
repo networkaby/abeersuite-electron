@@ -1,10 +1,9 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const statusTransitionsSchema = z.object({
     toIds: z.array(z.string().trim()),
@@ -13,7 +12,7 @@ const statusTransitionsSchema = z.object({
 // PUT /api/ticket-statuses/[id]/transitions
 // Body: { toIds: string[] } — replaces all transitions FROM this status
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
+    const { response } = await requireAuth();
     if (response) return response;
     try {
         const { id } = await params;

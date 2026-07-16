@@ -1,7 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 
 // POST /api/accountancy/voucher-series/[kind]/reset
 // Resets nextSeq to 0. Used at year-end to restart numbering from startFrom.
@@ -9,7 +8,7 @@ export async function POST(
     _: Request,
     { params }: { params: Promise<{ kind: string }> },
 ) {
-    const { response } = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
+    const { response } = await requireAuth();
     if (response) return response;
 
     const { kind } = await params;

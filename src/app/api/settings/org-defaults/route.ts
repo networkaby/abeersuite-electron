@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { validateRequest } from "@/shared/lib/api";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { orgDefaultsUpdateSchema } from "@/shared/lib/schemas/orgDefaultsSchemas";
 
 const orgDefaultsInclude = {
@@ -26,7 +25,7 @@ export async function GET() {
 
 // PATCH /api/settings/org-defaults — update org-wide defaults.
 export async function PATCH(req: Request) {
-    const { response } = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
+    const { response } = await requireAuth();
     if (response) return response;
 
     const { data, error } = await validateRequest(req, orgDefaultsUpdateSchema);

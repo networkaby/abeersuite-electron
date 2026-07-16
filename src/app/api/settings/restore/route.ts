@@ -1,5 +1,4 @@
-import { requirePermission } from "@/shared/lib/auth/permissions";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { triggerWorkflow } from "@/shared/lib/backup/githubDispatch";
 import { isUnderBackupFolder } from "@/shared/lib/backup/dropbox";
 
@@ -12,7 +11,7 @@ export const dynamic = "force-dynamic";
 // is uploaded through the browser and the page can be closed after triggering.
 // Requires confirm === "RESTORE".
 export async function POST(req: Request) {
-    const { response } = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
+    const { response } = await requireAuth();
     if (response) return response;
 
     const body = (await req.json().catch(() => null)) as { path?: string; confirm?: string } | null;

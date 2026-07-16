@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { validateRequest } from "@/shared/lib/api";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { voucherTemplateUpdateSchema } from "@/shared/lib/schemas/voucherTemplateSchemas";
 import {
     isVoucherTemplateKind,
@@ -34,7 +33,7 @@ export async function GET(_req: NextRequest, { params }: RouteCtx) {
 
 // PUT /api/settings/voucher-templates/[kind] — partial update.
 export async function PUT(req: NextRequest, { params }: RouteCtx) {
-    const { user, response } = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
+    const { user, response } = await requireAuth();
     if (response) return response;
 
     const { kind } = await params;

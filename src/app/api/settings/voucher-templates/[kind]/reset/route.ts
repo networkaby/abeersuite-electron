@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { requirePermission } from "@/shared/lib/auth/permissions";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import {
     isVoucherTemplateKind,
     buildVoucherTemplateDefaults,
@@ -13,7 +12,7 @@ type RouteCtx = { params: Promise<{ kind: string }> };
 // POST /api/settings/voucher-templates/[kind]/reset
 // Restores the row to the canonical bootstrap defaults.
 export async function POST(_req: NextRequest, { params }: RouteCtx) {
-    const { user, response } = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
+    const { user, response } = await requireAuth();
     if (response) return response;
 
     const { kind } = await params;

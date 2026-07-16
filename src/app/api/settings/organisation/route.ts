@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { validateRequest } from "@/shared/lib/api";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { organisationUpdateSchema } from "@/shared/lib/schemas/organisationSchemas";
 import { normaliseGstinState } from "@/shared/lib/gst/validateGstinState";
 import {
@@ -36,7 +35,7 @@ export async function GET() {
  * storage detail. GSTIN auto-populates gstStateCode; mismatches are rejected.
  */
 export async function PATCH(req: NextRequest) {
-    const { user, response } = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
+    const { user, response } = await requireAuth();
     if (response) return response;
 
     const { data, error } = await validateRequest(req, organisationUpdateSchema);

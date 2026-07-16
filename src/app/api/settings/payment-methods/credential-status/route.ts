@@ -9,7 +9,7 @@ import {
 
 // Reports whether each provider's required env vars are present — names + booleans
 // only, NEVER the secret values. Lets the Settings form re-poll when the operator
-// changes the provider/environment. Gated by settings:manage.
+// changes the provider/environment. Open to any signed-in staff (requireAuth).
 
 export async function GET(req: Request) {
     const { response } = await requireAuth();

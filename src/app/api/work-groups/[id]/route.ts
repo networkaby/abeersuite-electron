@@ -1,9 +1,8 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { z } from "zod";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const patchSchema = z.object({
     label: z.string().trim().min(1).optional(),
@@ -24,7 +23,7 @@ async function mintGroupPermission(id: string, label: string): Promise<string> {
 
 // PATCH /api/work-groups/[id]
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
+    const { response } = await requireAuth();
     if (response) return response;
     try {
         const { id } = await params;
@@ -62,7 +61,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 // DELETE /api/work-groups/[id] — works in the group keep existing; their groupId is
 // nulled (onDelete: SetNull).
 export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
+    const { response } = await requireAuth();
     if (response) return response;
     try {
         const { id } = await params;

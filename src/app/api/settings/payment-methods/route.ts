@@ -2,9 +2,8 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import type { Prisma } from "@/generated/prisma/client";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import {
     PAYMENT_GATEWAY_PROVIDERS,
     GATEWAY_PROVIDER_IDS,
@@ -16,8 +15,8 @@ import { clearOnlineSiblings } from "@/shared/lib/payments/gatewayMutations";
 
 // Settings → Payment Methods. The global catalog of configured payment gateways /
 // methods. Secrets stay in env vars: this route never accepts or returns key/secret
-// values — only whether the provider's env vars are present (✓/✗). Gated by
-// settings:manage (every heavy global-config settings page uses it).
+// values — only whether the provider's env vars are present (✓/✗). Any signed-in
+// staff may read and write — the Settings sidebar tick decides who reaches the page.
 
 const environmentSchema = z.enum(["TEST", "LIVE"]);
 
@@ -66,7 +65,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-    const { response } = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
+    const { response } = await requireAuth();
     if (response) return response;
     const { data, error } = await validateRequest<CreateInput>(req, createSchema);
     if (error) return error;

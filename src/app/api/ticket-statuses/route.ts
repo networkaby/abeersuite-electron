@@ -1,11 +1,10 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { generateNextOpaqueId } from "@/shared/lib/api";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { labelColorSchema } from "@/shared/lib/schemas/commonSchemas";
 
 const ticketStatusSchema = labelColorSchema.extend({
@@ -46,7 +45,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-    const { response } = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
+    const { response } = await requireAuth();
     if (response) return response;
     try {
         const { data, error } = await validateRequest(req, ticketStatusSchema);

@@ -1,9 +1,8 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { generateNextOpaqueId, validateRequest, handleApiError } from "@/shared/lib/api";
 import { z } from "zod";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const schema = z.object({
     label: z.string().trim().min(1, "Label is required"),
@@ -43,7 +42,7 @@ export async function GET() {
 
 // POST /api/work-groups
 export async function POST(req: Request) {
-    const { response } = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
+    const { response } = await requireAuth();
     if (response) return response;
     try {
         const { data, error } = await validateRequest(req, schema);

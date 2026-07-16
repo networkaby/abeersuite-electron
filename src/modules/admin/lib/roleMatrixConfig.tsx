@@ -307,25 +307,9 @@ export const MATRIX_ROWS: {
                 deleteOrg: "pos-counters:delete",
             },
         },
-        {
-            key: "orgSettings",
-            label: "Org Settings",
-            module: "admin",
-            cells: {
-                viewOwn: "settings:manage",
-                viewBranch: "settings:manage",
-                viewOrg: "settings:manage",
-                create: "settings:manage",
-                editOwn: "settings:manage",
-                editBranch: "settings:manage",
-                editOrg: "settings:manage",
-                deleteOwn: "settings:manage",
-                deleteBranch: "settings:manage",
-                deleteOrg: "settings:manage",
-            },
-        },
-        // Statuses / Pipelines rows removed — workflow masters are part of Settings
-        // and ride settings:manage (the Org Settings row above).
+        // Org Settings / Statuses / Pipelines rows removed — the whole Settings
+        // surface (incl. workflow masters) is gated only by the Settings sidebar
+        // ticks; there is no separate settings:manage capability to grant here.
         // Retention — plain create/edit/delete per page (view rides the sidebar
         // link). Changing the discount / balance is part of Edit, not a separate gate.
         {
@@ -475,7 +459,6 @@ export const SIDEBAR_LINK_MATRIX_ROW_KEY: Record<string, string> = {
     [sidebarChildPermissionId("admin", "departments")]: "departments",
     [sidebarChildPermissionId("admin", "positions")]: "positions",
     [sidebarChildPermissionId("admin", "pos-counters")]: "posCounters",
-    [sidebarChildPermissionId("settings", "organisation")]: "orgSettings",
     // Retention — create/edit/delete matrix per link.
     [sidebarChildPermissionId("retention", "coupons")]: "coupons",
     [sidebarChildPermissionId("retention", "gift-cards")]: "giftCards",

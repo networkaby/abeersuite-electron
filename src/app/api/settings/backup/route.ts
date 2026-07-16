@@ -1,5 +1,4 @@
-import { requirePermission } from "@/shared/lib/auth/permissions";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { triggerWorkflow } from "@/shared/lib/backup/githubDispatch";
 import { makeBackupFileName } from "@/shared/lib/backup/dropbox";
 
@@ -11,7 +10,7 @@ export const dynamic = "force-dynamic";
 // Fire-and-forget: returns immediately with the file name the dump will get.
 // The user can close the page; the file shows up in Dropbox a few minutes later.
 export async function POST() {
-    const { response } = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
+    const { response } = await requireAuth();
     if (response) return response;
 
     const fileName = makeBackupFileName();

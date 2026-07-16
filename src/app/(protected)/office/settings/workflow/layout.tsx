@@ -1,8 +1,7 @@
 import { WorkflowTabsNav } from "@/modules/admin/components/WorkflowTabsNav";
 
-// Viewing workflow masters (statuses, pipelines, workers, works) is a read —
-// default-open for signed-in staff; the sidebar tick decides who sees the link.
-// Write APIs keep their settings:manage gates.
+// Workflow masters (statuses, pipelines, workers, works) — view and edit are both
+// open to signed-in staff; the Settings sidebar tick decides who sees the link.
 export default function WorkflowLayout({ children }: { children: React.ReactNode }) {
     return (
         <div className="flex h-full flex-col">
