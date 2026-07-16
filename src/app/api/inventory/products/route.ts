@@ -12,6 +12,7 @@ import {
     productOpeningValue, syncProductCacheFromOpening,
 } from "@/modules/inventory/lib/stockValue";
 import { resolveActiveBranchId } from "@/shared/lib/auth/activeBranch";
+import { toNumber } from "@/modules/accountancy/lib/balance";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import * as Sentry from "@sentry/nextjs";
 import { auth } from "@/auth";
@@ -76,26 +77,40 @@ export async function GET(req: NextRequest) {
             catch { activeBranchId = null; }
         }
 
-        const rows = await prisma.invProduct.findMany({
-            orderBy: { sku: "asc" },
-            include: {
-                ...productInclude,
-                branchStocks: activeBranchId
-                    ? { where: { branchId: activeBranchId }, select: { branchId: true, stock: true } }
-                    : { select: { branchId: true, stock: true } },
-            },
-        });
+        const [rows, ledgerSums] = await Promise.all([
+            prisma.invProduct.findMany({
+                orderBy: { sku: "asc" },
+                include: productInclude,
+            }),
+            // Live stock from the source of truth — NOT the InvProduct.stock /
+            // InvProductBranch caches (they drift; e.g. imported opening stock
+            // never reached the branch cache and every row showed 0). Same
+            // formula as recomputeProductStock (stockMovement.ts):
+            //   stock = openingStock (master column, folded in like a GL
+            //           opening balance — it is NOT a ledger row)
+            //         + Σ(inQty − outQty) from InvStockLedger
+            // Branch scope filters the ledger movements; openingStock is
+            // org-level and folds into every scope.
+            prisma.invStockLedger.groupBy({
+                by: ["productId"],
+                ...(activeBranchId ? { where: { branchId: activeBranchId } } : {}),
+                _sum: { inQty: true, outQty: true },
+            }),
+        ]);
 
-        // Surface per-branch stock as `stock` (overrides legacy global cache)
-        // when a single branch is in scope; otherwise return the sum.
+        const movedByProduct = new Map<number, number>();
+        for (const r of ledgerSums) {
+            movedByProduct.set(r.productId, toNumber(r._sum.inQty ?? 0) - toNumber(r._sum.outQty ?? 0));
+        }
+
         const enriched = rows.map((r) => {
-            const branchStocks = (r as { branchStocks?: { stock: number }[] }).branchStocks ?? [];
-            const branchStock = activeBranchId
-                ? (branchStocks[0]?.stock ?? 0)
-                : branchStocks.reduce((s, b) => s + b.stock, 0);
+            const moved = movedByProduct.get(r.id);
+            const opening = r.openingStock != null ? toNumber(r.openingStock) : null;
+            // No opening AND no movements → null ("stock not tracked", shown as —).
+            const stock = moved == null && opening == null ? null : (opening ?? 0) + (moved ?? 0);
             // Derived primary barcode for list display/search/sort (the full set
             // is `codes`, included above).
-            return { ...r, stock: branchStock, barcode1: primaryBarcode(r.codes) };
+            return { ...r, stock, barcode1: primaryBarcode(r.codes) };
         });
 
         return NextResponse.json(enriched);

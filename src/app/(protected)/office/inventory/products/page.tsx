@@ -104,7 +104,22 @@ type SortField =
     | "sku" | "name" | "namePart" | "categoryName" | "brandName" | "groupName"
     | "warrantyName" | "unitCode" | "modelNo" | "barcode1" | "stock" | "isActive";
 
-type FilterField = "categoryId" | "brandId" | "groupId" | "warrantyTermId" | "unitId" | "isActive";
+type FilterField = "categoryId" | "brandId" | "groupId" | "warrantyTermId" | "unitId" | "isActive" | "stock";
+
+/// Bucket key for the Stock column filter — numeric stock folded into four
+/// coarse states the operator actually filters by ("what's out of stock?").
+function stockBucket(v: number | null): string {
+    if (v == null) return "__none__";
+    if (v === 0) return "zero";
+    return v > 0 ? "pos" : "neg";
+}
+
+const STOCK_FILTER_ITEMS: { key: string; label: string }[] = [
+    { key: "pos",      label: "In stock (> 0)" },
+    { key: "zero",     label: "Out of stock (0)" },
+    { key: "neg",      label: "Negative (< 0)" },
+    { key: "__none__", label: "Untracked (—)" },
+];
 
 function optLabel(o: Opt | undefined | null): string {
     if (!o) return "—";
@@ -166,7 +181,9 @@ export default function InventoryProductsPage() {
 
     const loadProducts = useCallback(() =>
         axios
-            .get<Row[]>("/api/inventory/products")
+            // SKU master is org-level: show the ALL-branch total (opening +
+            // every branch's movements), not the session's active branch.
+            .get<Row[]>("/api/inventory/products?branchId=all")
             .then((r) => setRows(r.data))
             .catch(() => toast.error("Failed to load products"))
         , []);
@@ -275,8 +292,9 @@ export default function InventoryProductsPage() {
         for (const [field, allowed] of colFilters) {
             if (allowed.size === 0) continue;
             out = out.filter((r) => {
-                const v = r[field];
-                const key = v == null ? "__none__" : String(v);
+                // Stock filters by coarse bucket (in/zero/negative/untracked),
+                // not by the raw number.
+                const key = field === "stock" ? stockBucket(r.stock) : r[field] == null ? "__none__" : String(r[field]);
                 return allowed.has(key);
             });
         }
@@ -709,11 +727,16 @@ export default function InventoryProductsPage() {
                                 </TableHead>
                                 <TableHead className="min-w-32"><SortHead field="modelNo" sort={sort} onSort={cycleSort}>Model No</SortHead></TableHead>
                                 <TableHead className="min-w-36"><SortHead field="barcode1" sort={sort} onSort={cycleSort}>Barcode</SortHead></TableHead>
-                                <TableHead className="w-20 text-right"><SortHead field="stock" sort={sort} onSort={cycleSort} align="right">Stock</SortHead></TableHead>
+                                <TableHead className="w-24 text-right">
+                                    <div className="flex items-center justify-end gap-1">
+                                        <SortHead field="stock" sort={sort} onSort={cycleSort} align="right">Stock</SortHead>
+                                        <ColFilter field="stock" options={[]} rows={rows} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} fixedItems={STOCK_FILTER_ITEMS} align="right" />
+                                    </div>
+                                </TableHead>
                                 <TableHead className="w-20 text-center">
                                     <div className="flex items-center justify-center gap-1">
                                         <SortHead field="isActive" sort={sort} onSort={cycleSort}>Active</SortHead>
-                                        <ColFilter field="isActive" options={[]} rows={rows} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} booleanField />
+                                        <ColFilter field="isActive" options={[]} rows={rows} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} booleanField align="right" />
                                     </div>
                                 </TableHead>
                                 {!isEdit ? <TableHead className="w-24 text-right"> </TableHead> : null}
@@ -1019,7 +1042,7 @@ function SortHead({
 /// has a null relation). For booleanField (isActive), shows ✓ / inactive.
 function ColFilter({
     field, options, rows, colFilters, onToggle, onClear, booleanField = false,
-    onCreate, createLabel,
+    fixedItems, align = "left", onCreate, createLabel,
 }: {
     field: FilterField;
     options: Opt[];
@@ -1028,6 +1051,11 @@ function ColFilter({
     onToggle: (f: FilterField, key: string) => void;
     onClear: (f: FilterField) => void;
     booleanField?: boolean;
+    /** Fixed option list (e.g. stock buckets) — replaces the master-derived list. */
+    fixedItems?: { key: string; label: string }[];
+    /** Popover edge. Right-most columns (Stock / Active) open right-aligned so
+     *  the panel doesn't clip past the viewport edge. */
+    align?: "left" | "right";
     onCreate?: () => Promise<number | null>;
     createLabel?: string;
 }) {
@@ -1059,8 +1087,11 @@ function ColFilter({
     const active = (colFilters.get(field)?.size ?? 0) > 0;
     const selected = colFilters.get(field) ?? new Set<string>();
 
-    // Build the option list. For booleanField, two fixed options.
-    const items: { key: string; label: string }[] = booleanField
+    // Build the option list. fixedItems (stock buckets) and booleanField
+    // (isActive) use fixed lists; everything else derives from the master rows.
+    const items: { key: string; label: string }[] = fixedItems
+        ? fixedItems
+        : booleanField
         ? [{ key: "true", label: "Active" }, { key: "false", label: "Inactive" }]
         : (() => {
             const list = options.map((o) => ({ key: String(o.id), label: optLabel(o) }));
@@ -1086,7 +1117,7 @@ function ColFilter({
                 <Filter className="size-3.5" />
             </button>
             {open ? (
-                <div className="absolute z-20 mt-1 left-0 min-w-56 rounded-md border border-border bg-popover text-popover-foreground shadow-md">
+                <div className={`absolute z-20 mt-1 ${align === "right" ? "right-0" : "left-0"} min-w-56 rounded-md border border-border bg-popover text-popover-foreground shadow-md`}>
                     <div className="flex items-center justify-between px-2 pt-2 text-xs">
                         <span className="text-muted-foreground">Filter</span>
                         {active ? (
@@ -1095,7 +1126,7 @@ function ColFilter({
                             </button>
                         ) : null}
                     </div>
-                    {!booleanField ? (
+                    {!booleanField && !fixedItems ? (
                         <div className="px-2 pt-1">
                             <input
                                 ref={inputRef}
