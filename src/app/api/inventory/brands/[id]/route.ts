@@ -8,6 +8,7 @@ import { handleApiError } from "@/shared/lib/api";
 import { parseIdParam } from "@/shared/lib/api";
 import { pickDefined } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { regenerateProductNamesSafe } from "@/modules/inventory/lib/regenerateNames";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { response } = await requirePermission(PERMISSIONS.INVENTORY_MASTERS_EDIT);
@@ -25,6 +26,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 isActive: b.isActive,
             }),
         });
+        // A renamed brand changes the generated name of every product using it.
+        if (b.name !== undefined) await regenerateProductNamesSafe({ brandId: id });
         return NextResponse.json(row);
     } catch (e: unknown) {
         const conflict = prismaUniqueError(e, "Brand name already exists");

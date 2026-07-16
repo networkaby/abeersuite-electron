@@ -4,6 +4,7 @@ import { requireAuth, requireModuleAccess } from "@/shared/lib/auth/permissions"
 import { invNamingConfigUpdateSchema } from "@/shared/lib/schemas/inventorySchemas";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { DEFAULT_NAMING_CONFIG } from "@/modules/inventory/lib/productName";
+import { regenerateProductNamesSafe } from "@/modules/inventory/lib/regenerateNames";
 
 // Singleton — there is at most one row. GET returns the row, or
 // DEFAULT_NAMING_CONFIG when the table is empty so the page renders before
@@ -34,6 +35,10 @@ export async function PUT(req: Request) {
         const row = existing
             ? await prisma.invNamingConfig.update({ where: { id: existing.id }, data })
             : await prisma.invNamingConfig.create({ data });
+        // The template drives every product's generated name — rebuild the whole
+        // catalog so stored names track the new convention. The helper reloads the
+        // freshly-saved config itself.
+        await regenerateProductNamesSafe({ all: true });
         return NextResponse.json(row);
     } catch (e) {
         return handleApiError(e, "Failed to save naming config");

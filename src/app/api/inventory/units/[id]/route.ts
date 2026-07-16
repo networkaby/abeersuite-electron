@@ -9,6 +9,7 @@ import { handleApiError } from "@/shared/lib/api";
 import { parseIdParam } from "@/shared/lib/api";
 import { pickDefined } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { regenerateProductNamesSafe } from "@/modules/inventory/lib/regenerateNames";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { response } = await requirePermission(PERMISSIONS.INVENTORY_MASTERS_EDIT);
@@ -34,6 +35,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             }),
         });
         revalidateTag(INV_UNITS_TAG, { expire: 0 });
+        // A renamed unit code changes the generated name of every product using it.
+        if (b.code !== undefined) await regenerateProductNamesSafe({ unitId: id });
         return NextResponse.json(row);
     } catch (e) {
         return handleApiError(e, "Failed to update unit");

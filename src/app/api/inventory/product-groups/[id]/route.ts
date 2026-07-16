@@ -8,6 +8,7 @@ import { handleApiError } from "@/shared/lib/api";
 import { parseIdParam } from "@/shared/lib/api";
 import { pickDefined } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { regenerateProductNamesSafe } from "@/modules/inventory/lib/regenerateNames";
 
 const groupInclude = {
     parent:  { select: { id: true, name: true } },
@@ -77,6 +78,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             }),
             include: groupInclude,
         });
+        // A renamed group changes the generated name of every product using it.
+        if (b.name !== undefined) await regenerateProductNamesSafe({ groupId: id });
         return NextResponse.json(row);
     } catch (e: unknown) {
         const conflict = prismaUniqueError(e, "Group name already exists");
