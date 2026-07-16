@@ -9,12 +9,17 @@ prisma/seeds/
 ├─ helper-roles.ts              HELPER — trade-specific starter roles (R2–R7, non-system / admin-editable)
 ├─ hard-clean.ts                CLEANER — wipes everything bootstrap doesn't seed
 ├─ purge-vouchers.ts            OPS — wipes only vouchers/JEs/invoices/payments
+├─ purge-demo-contacts.ts       OPS — wipes demo contacts (+ transactions), keeps products + settings
+├─ purge-demo-products.ts       OPS — wipes demo products (+ transactions), keeps contacts + settings
 ├─ recompute-balances.ts        OPS — recompute Account.balance drift from JournalLine
 ├─ dummy-users.ts               DEV — 3 demo non-admin staff logins + basic Posts
 ├─ dummy-org-rich.ts     DEV — 36 users, 36 posts, 5 branches, 10 depts (org chart demo)
 ├─ dummy-customers.ts    DEV — demo customers + companies
 ├─ dummy-shop.ts         DEV — demo product catalog (consumes data/demoCatalogSeed.ts)
 ├─ dummy-vouchers.ts     DEV — demo vouchers + journal entries
+├─ lib/
+│  ├─ purgeDemo.ts       SHARED — transaction table list + purge steps for the demo cleaners
+│  └─ positionSeedSync.ts SHARED — upsert a position + its role-template links
 └─ data/
    └─ demoCatalogSeed.ts FIXTURE — hardcoded product list used by dummy-shop
 ```
@@ -127,6 +132,31 @@ pnpm seed:purge-vouchers
 ```
 
 Wipes only voucher/journal/invoice/payment tables — useful when you want to re-test posting flows without nuking customers and inventory.
+
+## Demo cleaners — contacts and products, separately
+
+```bash
+pnpm seed:purge-demo-contacts   # contacts go, products stay
+pnpm seed:purge-demo-products   # products go, contacts stay
+pnpm seed:purge-demo            # both, in that order
+```
+
+These sit between `purge-vouchers` and `hard-clean`: they remove demo **contacts** or the demo **product catalog** while keeping every setting `hard-clean` would have destroyed. Use them when the demo data must go but your UI-configured state must stay.
+
+| Script | Removes | Keeps |
+|---|---|---|
+| `seed:purge-demo-contacts` | Persons / Companies / Phones / Emails / PersonCompany + party-linked `Account` ledgers | The whole product catalog |
+| `seed:purge-demo-products` | `InvProduct` + cascade children (`inv_product_codes`, `inv_product_branches`, `stock_reservations`, `CouponProductRule`, product-scoped `LoyaltyEarnRule`) | All contacts + their ledgers |
+
+> **Both scripts also purge every transaction — this is not optional.** `Account.personId` / `Ticket.personId` / `TicketRepair.personId` are RESTRICT FKs onto the parties, `VoucherInventoryLine.productId` / `InvStockLedger.productId` / `TicketRepair.productId` / `InvBom` are RESTRICT onto the products, and the party ledgers are pinned by `UniversalVoucher.accountId`. Postgres refuses the DELETE while those rows exist, so the books reset to opening-balance state either way. There is no "clean contacts but keep the vouchers" option. `Account.balance` resets to 0; opening-balance fields are untouched.
+
+The shared transaction table list and the purge steps live in **`lib/purgeDemo.ts`** — one copy, consumed by both scripts. (`purge-vouchers.ts` and `hard-clean.ts` still carry their own older, narrower lists; they were left alone.)
+
+**Both preserve** (the difference from `hard-clean`): all Users, all Roles + grants (including non-system / admin-edited ones), `DepartmentPermission` pools, `payment_gateways` + POS counters + counter rails, `ServiceCenter`, **InvBrand / InvCategory / InvProductGroup / InvAttributeMaster**, Coupon + Loyalty config masters, and Chat + WallPost (staff-only — they FK to `User`, never to a party or product). Everything bootstrap seeds survives as usual.
+
+> **Products are removed with `DELETE`, never `TRUNCATE … CASCADE`.** `Coupon.freeProductId` / `.buyProductId` are `onDelete: SetNull`, but Postgres `TRUNCATE … CASCADE` cascades on FK *existence*, ignoring the `onDelete` action — it would truncate the whole `Coupon` table. A `DELETE` fires the SET NULL instead, so coupons survive with their product links blanked.
+
+Repopulate with `pnpm seed:dummy-customers` and `pnpm seed:dummy-shop`.
 
 ## Fixture data (`prisma/seeds/data/`)
 
