@@ -6,10 +6,17 @@ export const zOptStr = (maxLen: number) =>
     z
         .union([z.string(), z.null(), z.undefined()])
         .transform((v) => {
-            if (v === undefined || v === null) return null;
+            // undefined = field ABSENT from the payload → keep it undefined so
+            // partial-update routes (which gate on `!== undefined` or use
+            // pickDefined) SKIP it and preserve the stored value. Previously this
+            // returned null for undefined, so any PATCH that omitted an optional
+            // string silently cleared it (e.g. editing a product's brand wiped
+            // its namePart / shopSubheading / slug / hsnCode). null or "" remain
+            // an explicit clear.
+            if (v === undefined) return undefined;
+            if (v === null) return null;
             const t = String(v).trim();
-            if (t === "") return null;
-            return t.slice(0, maxLen);
+            return t === "" ? null : t.slice(0, maxLen);
         });
 
 // Scannable product codes — barcode / EAN / UPC. Replaces the former
