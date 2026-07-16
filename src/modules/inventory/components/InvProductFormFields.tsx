@@ -171,12 +171,20 @@ export function InvProductFormFields({
 }) {
     const label = (o: Opt) => o.name ?? `${o.code ?? ""} ${o.label ?? ""}`.trim();
 
-    // Per-field dirty flags: once the user hand-edits Name / Online name /
-    // Slug, master changes stop auto-filling that field. Edit mode opens with
-    // all flags `true` so existing saved values are preserved.
-    const nameDirty = useRef(isEditMode);
+    // Per-field dirty flags: once the user hand-edits Online name / Slug,
+    // master changes stop auto-filling that field. Edit mode opens with the
+    // flags `true` so existing saved values are preserved.
     const onlineNameDirty = useRef(isEditMode);
     const slugDirty = useRef(isEditMode);
+
+    // Name is a derived field — it is never hand-typed (the input is disabled).
+    // It always reflects the naming convention. On edit open we keep the saved
+    // name for the first pass so a legacy name that predates the convention is
+    // not silently rewritten; after any name-source change (brand / group /
+    // model / custom name part / …) it regenerates. This ref holds the last
+    // source signature so we can tell a real change from an incidental
+    // re-render (parent passing new master-array identities, etc.).
+    const nameSrcSig = useRef<string | null>(null);
 
     const findById = (list: Opt[], id: string) =>
         id ? list.find((o) => String(o.id) === id) ?? null : null;
@@ -195,13 +203,13 @@ export function InvProductFormFields({
         userPart: form.namePart || null,
     });
 
-    // Re-generate a single field on demand (used by the refresh buttons in
-    // edit mode). Resets the dirty flag so future master changes auto-fill again.
+    // Re-generate a single field on demand (the refresh buttons). For online
+    // name / slug it also clears the dirty flag so future master changes
+    // auto-fill again. Name has no dirty flag — it always tracks the convention.
     function regenField(which: "name" | "onlineName" | "slug") {
         if (!namingConfig) return;
         const masters = buildMasters();
         if (which === "name") {
-            nameDirty.current = false;
             setForm((f) => ({ ...f, name: buildOfflineName(masters, namingConfig) }));
         } else if (which === "onlineName") {
             onlineNameDirty.current = false;
@@ -216,7 +224,20 @@ export function InvProductFormFields({
     useEffect(() => {
         if (!namingConfig) return;
         const masters = buildMasters();
-        const nextName       = nameDirty.current       ? null : buildOfflineName(masters, namingConfig);
+
+        // Name: convention-derived, not hand-editable. Regenerate on every
+        // source change; on edit open keep the saved name (first pass) so a
+        // legacy name isn't clobbered just by opening the editor.
+        const sig = JSON.stringify([
+            form.brandId, form.categoryId, form.groupId, form.warrantyTermId,
+            form.unitId, form.modelNo, form.namePart, form.attrs,
+        ]);
+        const firstPass = nameSrcSig.current === null;
+        const srcChanged = !firstPass && nameSrcSig.current !== sig;
+        nameSrcSig.current = sig;
+        const rebuildName = isEditMode ? srcChanged : true;
+
+        const nextName       = rebuildName             ? buildOfflineName(masters, namingConfig) : null;
         const nextOnlineName = onlineNameDirty.current ? null : buildOnlineName(masters, namingConfig);
         const nextSlug       = slugDirty.current       ? null : buildOnlineSlug(masters, namingConfig);
         setForm((f) => ({
@@ -282,13 +303,7 @@ export function InvProductFormFields({
                     <div className="space-y-2 sm:col-span-2">
                         <Label>Name</Label>
                         <div className="flex items-center gap-2">
-                            <Input
-                                value={form.name}
-                                onChange={(e) => {
-                                    nameDirty.current = true;
-                                    setForm((f) => ({ ...f, name: e.target.value }));
-                                }}
-                            />
+                            <Input value={form.name} disabled readOnly className="disabled:opacity-100" />
                             {namingConfig && (
                                 <Button
                                     type="button"
@@ -301,9 +316,11 @@ export function InvProductFormFields({
                                 </Button>
                             )}
                         </div>
-                        {namingConfig && !nameDirty.current ? (
-                            <p className="text-[11px] text-muted-foreground">Auto-filled from naming convention. Type to override.</p>
-                        ) : null}
+                        <p className="text-[11px] text-muted-foreground">
+                            Built from the naming convention. Not typed directly — edit the{" "}
+                            <strong>Custom name part</strong> below or the masters (brand, group, model), or press
+                            regenerate.
+                        </p>
                     </div>
                     <div className="space-y-2 sm:col-span-2">
                         <Label>Custom name part</Label>

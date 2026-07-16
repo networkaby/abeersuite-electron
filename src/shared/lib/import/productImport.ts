@@ -470,6 +470,10 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
     // chunk) and only fall back to per-row `update` for the rare update path.
     // Default Prisma tx timeout (5s) is far too low for thousand-row imports;
     // bump to 10 minutes.
+    //
+    // One freeze timestamp for the whole batch — every row whose imported Sale
+    // Price becomes its SAVED price is stamped with the same salePriceFrozenAt.
+    const importFrozenAt = new Date();
     const buildPayload = (v: (typeof validRows)[number]) => {
         const opening = { openingStock: v.data.openingStock, openingRate: v.data.openingRate };
         const cachePatch = syncProductCacheFromOpening(opening);
@@ -477,6 +481,12 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
         return {
             sku: v.data.sku,
             name: v.data.name!,
+            // The imported name is also stored as the custom name part
+            // (userPart token) so a later regenerate rebuilds `name` around it
+            // instead of wiping it. At import there is no brand/group applied
+            // yet, so name === namePart here; regenerate updates name once
+            // masters are set. See InvProduct.namePart.
+            namePart: v.data.name!,
             unitId: v.data.unitId!,
             categoryId: v.data.categoryId,
             groupId: v.data.groupId,
@@ -489,6 +499,13 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
             gstRateId: v.data.gstRateId,
             taxability: v.data.taxability,
             savedSalePricePaise: v.data.savedSalePricePaise,
+            // An imported Sale Price becomes the product's price: source = SAVED
+            // so the recompute (below) materializes it as effectiveSalePricePaise
+            // (POS + barcode), instead of the STRATEGY markup engine. No Sale
+            // Price → keep the STRATEGY default. Mirrors the Update & Print
+            // Labels "Sale Price" save.
+            effectiveSalePriceSource: v.data.savedSalePricePaise != null ? ("SAVED" as const) : ("STRATEGY" as const),
+            salePriceFrozenAt: v.data.savedSalePricePaise != null ? importFrozenAt : null,
             mrpPaise: v.data.mrpPaise,
             openingStock: v.data.openingStock,
             openingRate: v.data.openingRate,
@@ -508,7 +525,12 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
     const buildPatchPayload = (v: (typeof validRows)[number]) => {
         const p = v.present;
         const out: Record<string, unknown> = {};
-        if (p.has("name") && v.data.name) out.name = v.data.name;
+        if (p.has("name") && v.data.name) {
+            out.name = v.data.name;
+            // Keep the custom name part in step with a patched name (see
+            // buildPayload) so regenerate stays lossless.
+            out.namePart = v.data.name;
+        }
         if (p.has("sku")) out.sku = v.data.sku;
         if (p.has("unit") && v.data.unitId != null) out.unitId = v.data.unitId;
         if (p.has("category")) out.categoryId = v.data.categoryId;
@@ -527,7 +549,14 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
         if (p.has("hsnCode")) out.hsnCode = v.data.hsnCode;
         if (p.has("gstRate")) out.gstRateId = v.data.gstRateId;
         if (p.has("taxability")) out.taxability = v.data.taxability;
-        if (p.has("salePrice")) out.savedSalePricePaise = v.data.savedSalePricePaise;
+        if (p.has("salePrice")) {
+            // Patching a Sale Price makes it the product's price (source = SAVED),
+            // same as buildPayload / the labels page. `present` only holds
+            // non-empty cells, so savedSalePricePaise is non-null here.
+            out.savedSalePricePaise = v.data.savedSalePricePaise;
+            out.effectiveSalePriceSource = "SAVED";
+            out.salePriceFrozenAt = importFrozenAt;
+        }
         if (p.has("mrp")) out.mrpPaise = v.data.mrpPaise;
         // Opening fields move as a group — if any are touched, recompute the
         // derived openingValue + cache columns. Untouched openings stay null

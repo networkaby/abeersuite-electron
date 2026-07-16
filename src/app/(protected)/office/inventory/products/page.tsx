@@ -2,15 +2,17 @@
 
 // Unified products page — read-only browse by default with all classification
 // fields visible + search + pagination; flip to "Edit cells" to bulk-edit
-// category / brand / group / warranty / unit / model / barcode / name / active
-// inline. Pricing, opening stock, GST, naming-config etc. are still edited via
-// the per-row dialog (pencil button → InvProductDialog).
+// category / brand / group / warranty / unit / model / barcode / Custom / active
+// inline. Name is derived, not typed — it regenerates from the masters + Custom
+// (namePart) per the naming convention, or via the per-row regenerate button.
+// Pricing, opening stock, GST, naming-config etc. are still edited via the
+// per-row dialog (pencil button → InvProductDialog).
 //
 // Save model (edit mode): per dirty row, parallel PATCH /api/inventory/products/{id}.
 // The existing PATCH already accepts every classification field this grid touches —
 // no batch endpoint needed.
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import Link from "next/link";
 import axios from "axios";
@@ -376,7 +378,16 @@ export default function InventoryProductsPage() {
             const next = new Map(prev);
             for (const id of selected) {
                 const cur = next.get(id) ?? {};
-                next.set(id, { ...cur, [field]: value });
+                const merged: Patch = { ...cur, [field]: value };
+                // Bulk-applied fields (category / brand / group / warranty /
+                // unit) are all name sources — regenerate Name to match, same
+                // as the per-cell edits. Empty result is dropped.
+                const row = rows.find((r) => r.id === id);
+                if (row) {
+                    const nm = computeName(row, merged);
+                    if (nm) merged.name = nm;
+                }
+                next.set(id, merged);
             }
             return next;
         });
@@ -440,41 +451,60 @@ export default function InventoryProductsPage() {
         setDialogOpen(true);
     }
 
-    /// Rebuild the offline name for one row from its current (dirty-or-saved)
-    /// classification fields, using the org-wide InvNamingConfig. Patches the
-    /// row's name field with the result. No-op if the naming config hasn't
-    /// loaded yet.
-    function regenerateName(r: Row) {
-        if (!namingConfig) {
-            toast.error("Naming config not loaded yet");
-            return;
-        }
+    /// Build the offline name for one row from its classification fields using
+    /// the org-wide InvNamingConfig. `override` wins over the row's current
+    /// (dirty-or-saved) values — used so a name-source change regenerates from
+    /// the NEW value in the same tick (setDirty is async, so val() would still
+    /// read the pre-change value). Returns "" if config isn't loaded or the
+    /// template resolves to nothing.
+    function computeName(r: Row, override: Patch): string {
+        if (!namingConfig) return "";
+        const pick = <K extends keyof Row>(key: K): Row[K] =>
+            (key in override ? (override as Record<string, unknown>)[key as string] as Row[K] : val(r, key));
         const findOpt = (list: Opt[], id: number | null | undefined) =>
             id == null ? null : list.find((o) => o.id === id) ?? null;
-        const cat = findOpt(categories, val(r, "categoryId") as number | null);
-        const brand = findOpt(brands, val(r, "brandId") as number | null);
-        const grp = findOpt(groups, val(r, "groupId") as number | null);
-        const war = findOpt(warrantyTerms, val(r, "warrantyTermId") as number | null);
-        const unit = findOpt(units, val(r, "unitId") as number);
+        const cat = findOpt(categories, pick("categoryId") as number | null);
+        const brand = findOpt(brands, pick("brandId") as number | null);
+        const grp = findOpt(groups, pick("groupId") as number | null);
+        const war = findOpt(warrantyTerms, pick("warrantyTermId") as number | null);
+        const unit = findOpt(units, pick("unitId") as number);
         const masters: NamingMasters = {
             brand: brand ? { name: brand.name ?? "" } : null,
             category: cat ? { name: cat.name ?? "" } : null,
             group: grp ? { name: grp.name ?? "" } : null,
             warranty: war ? { name: war.name ?? "" } : null,
             unit: unit ? { code: unit.code ?? "" } : null,
-            modelNo: (val(r, "modelNo") as string | null) || null,
+            modelNo: (pick("modelNo") as string | null) || null,
             attrs: null,
             // userPart survives every regenerate — the template inserts it
             // wherever the `userPart` token sits. Operator edits the Custom
-            // column, never the auto-built portions.
-            userPart: (val(r, "namePart") as string | null) || null,
+            // column, never the auto-built Name.
+            userPart: (pick("namePart") as string | null) || null,
         };
-        const next = buildOfflineName(masters, namingConfig).trim();
+        return buildOfflineName(masters, namingConfig).trim();
+    }
+
+    /// Regenerate button (per row). Name is not hand-typed — this is the manual
+    /// rebuild path when nothing else changed (e.g. the naming config itself).
+    function regenerateName(r: Row) {
+        if (!namingConfig) {
+            toast.error("Naming config not loaded yet");
+            return;
+        }
+        const next = computeName(r, {});
         if (!next) {
             toast.error("Naming config produced an empty name — pick more masters first");
             return;
         }
         patch(r.id, { name: next });
+    }
+
+    /// Patch a name-source field (brand / group / model / Custom / …) and
+    /// regenerate Name in the same update so it always tracks the convention.
+    /// An empty regen result is dropped so the existing name is not wiped.
+    function patchWithRegen(r: Row, change: Patch) {
+        const next = computeName(r, change);
+        patch(r.id, next ? { ...change, name: next } : change);
     }
 
     const isEdit = mode === "edit";
@@ -713,11 +743,10 @@ export default function InventoryProductsPage() {
                                             <TableCell className={isEdit ? "min-w-48 align-top whitespace-normal break-words" : "font-medium align-top whitespace-normal break-words"}>
                                                 {isEdit ? (
                                                     <div className="flex items-start gap-1">
-                                                        <div className="flex-1 min-w-0">
-                                                            <AutoGrowInput
-                                                                value={val(r, "name") as string}
-                                                                onChange={(v) => patch(r.id, { name: v })}
-                                                            />
+                                                        {/* Name is derived, not typed — edit the Custom column or
+                                                            the masters, or press regenerate. */}
+                                                        <div className="flex-1 min-w-0 px-2 py-1 text-sm font-medium">
+                                                            {(val(r, "name") as string) || <span className="text-muted-foreground">—</span>}
                                                         </div>
                                                         <button
                                                             type="button"
@@ -738,7 +767,7 @@ export default function InventoryProductsPage() {
                                                 {isEdit ? (
                                                     <Input
                                                         value={(val(r, "namePart") as string | null) ?? ""}
-                                                        onChange={(e) => patch(r.id, { namePart: e.target.value.trim() === "" ? null : e.target.value })}
+                                                        onChange={(e) => patchWithRegen(r, { namePart: e.target.value.trim() === "" ? null : e.target.value })}
                                                         placeholder="1.5M Special…"
                                                         className="h-8"
                                                     />
@@ -753,7 +782,7 @@ export default function InventoryProductsPage() {
                                                     <CellSelect
                                                         value={val(r, "categoryId") as number | null}
                                                         options={categoryOptionsHier}
-                                                        onChange={(v) => patch(r.id, { categoryId: v })}
+                                                        onChange={(v) => patchWithRegen(r, { categoryId: v })}
                                                         onCreate={() => createMaster("category")}
                                                     />
                                                 ) : (
@@ -767,7 +796,7 @@ export default function InventoryProductsPage() {
                                                     <CellSelect
                                                         value={val(r, "brandId") as number | null}
                                                         options={brands}
-                                                        onChange={(v) => patch(r.id, { brandId: v })}
+                                                        onChange={(v) => patchWithRegen(r, { brandId: v })}
                                                         onCreate={() => createMaster("brand")}
                                                     />
                                                 ) : (
@@ -781,7 +810,7 @@ export default function InventoryProductsPage() {
                                                     <CellSelect
                                                         value={val(r, "groupId") as number | null}
                                                         options={groupOptionsHier}
-                                                        onChange={(v) => patch(r.id, { groupId: v })}
+                                                        onChange={(v) => patchWithRegen(r, { groupId: v })}
                                                         onCreate={() => createMaster("group")}
                                                     />
                                                 ) : (
@@ -795,7 +824,7 @@ export default function InventoryProductsPage() {
                                                     <CellSelect
                                                         value={val(r, "warrantyTermId") as number | null}
                                                         options={warrantyTerms}
-                                                        onChange={(v) => patch(r.id, { warrantyTermId: v })}
+                                                        onChange={(v) => patchWithRegen(r, { warrantyTermId: v })}
                                                         onCreate={() => createMaster("warranty")}
                                                     />
                                                 ) : (
@@ -809,7 +838,7 @@ export default function InventoryProductsPage() {
                                                     <CellSelect
                                                         value={val(r, "unitId") as number}
                                                         options={units}
-                                                        onChange={(v) => v != null && patch(r.id, { unitId: v })}
+                                                        onChange={(v) => v != null && patchWithRegen(r, { unitId: v })}
                                                         clearable={false}
                                                         onCreate={() => createMaster("unit")}
                                                     />
@@ -823,7 +852,7 @@ export default function InventoryProductsPage() {
                                                 {isEdit ? (
                                                     <Input
                                                         value={(val(r, "modelNo") as string | null) ?? ""}
-                                                        onChange={(e) => patch(r.id, { modelNo: e.target.value.trim() === "" ? null : e.target.value })}
+                                                        onChange={(e) => patchWithRegen(r, { modelNo: e.target.value.trim() === "" ? null : e.target.value })}
                                                         className="h-8"
                                                     />
                                                 ) : (
@@ -1100,39 +1129,6 @@ function ColFilter({
                 </div>
             ) : null}
         </div>
-    );
-}
-
-/// Single-line by default, grows vertically as the text wraps. Used for the
-/// Name cell so a long product name shows in full while still feeling like
-/// an input. Sets rows={1} and resizes on every render to the scrollHeight.
-function AutoGrowInput({
-    value,
-    onChange,
-    className,
-}: {
-    value: string;
-    onChange: (v: string) => void;
-    className?: string;
-}) {
-    const ref = useRef<HTMLTextAreaElement | null>(null);
-    useLayoutEffect(() => {
-        const el = ref.current;
-        if (!el) return;
-        el.style.height = "auto";
-        el.style.height = `${el.scrollHeight}px`;
-    }, [value]);
-    return (
-        <textarea
-            ref={ref}
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            rows={1}
-            className={
-                "block w-full resize-none rounded-md border border-input bg-transparent px-2 py-1 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring " +
-                (className ?? "")
-            }
-        />
     );
 }
 
