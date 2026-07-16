@@ -235,7 +235,12 @@ export function InvProductFormFields({
         const firstPass = nameSrcSig.current === null;
         const srcChanged = !firstPass && nameSrcSig.current !== sig;
         nameSrcSig.current = sig;
-        const rebuildName = isEditMode ? srcChanged : true;
+        // In edit mode, only rebuild when there's a Custom part (namePart) to
+        // anchor it — otherwise the saved name IS the descriptive content and a
+        // masters-only rebuild would wipe it. Create mode always builds (no
+        // existing name to lose). The regenerate button forces a rebuild either way.
+        const hasCustom      = !!(form.namePart && form.namePart.trim());
+        const rebuildName    = isEditMode ? (srcChanged && hasCustom) : true;
 
         const nextName       = rebuildName             ? buildOfflineName(masters, namingConfig) : null;
         const nextOnlineName = onlineNameDirty.current ? null : buildOnlineName(masters, namingConfig);

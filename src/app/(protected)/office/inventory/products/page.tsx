@@ -48,7 +48,6 @@ import {
     type NamingConfigShape,
     type NamingMasters,
 } from "@/modules/inventory/lib/productName";
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import {
     Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList,
     BreadcrumbPage, BreadcrumbSeparator,
@@ -380,10 +379,13 @@ export default function InventoryProductsPage() {
                 const cur = next.get(id) ?? {};
                 const merged: Patch = { ...cur, [field]: value };
                 // Bulk-applied fields (category / brand / group / warranty /
-                // unit) are all name sources — regenerate Name to match, same
-                // as the per-cell edits. Empty result is dropped.
+                // unit) are name sources — regenerate Name to match, but only
+                // for rows that have a Custom part to anchor the rebuild (same
+                // rule as patchWithRegen). Rows without one keep their existing
+                // descriptive name.
                 const row = rows.find((r) => r.id === id);
-                if (row) {
+                const namePart = (cur.namePart !== undefined ? cur.namePart : row?.namePart) ?? "";
+                if (row && namePart.trim()) {
                     const nm = computeName(row, merged);
                     if (nm) merged.name = nm;
                 }
@@ -500,9 +502,17 @@ export default function InventoryProductsPage() {
     }
 
     /// Patch a name-source field (brand / group / model / Custom / …) and
-    /// regenerate Name in the same update so it always tracks the convention.
-    /// An empty regen result is dropped so the existing name is not wiped.
+    /// regenerate Name so it tracks the convention — but ONLY when the product
+    /// has a Custom part (namePart) to anchor the rebuild. With no Custom part
+    /// the existing name IS the descriptive content (imported / hand-typed), so
+    /// a masters-only rebuild would wipe it — leave the name untouched instead.
+    /// The per-row regenerate button still forces a rebuild when wanted.
     function patchWithRegen(r: Row, change: Patch) {
+        const namePart = (("namePart" in change ? change.namePart : val(r, "namePart")) as string | null) ?? "";
+        if (!namePart.trim()) {
+            patch(r.id, change);
+            return;
+        }
         const next = computeName(r, change);
         patch(r.id, next ? { ...change, name: next } : change);
     }
@@ -645,10 +655,14 @@ export default function InventoryProductsPage() {
                     </div>
                 </div>
             ) : null}
-            <ScrollArea className="min-h-0 flex-1 border border-border">
+            {/* Single flex-fill scroll box owning BOTH axes: the inner shadcn
+                table-container's overflow-x is neutralized so this div is the
+                only scroller, which lets the header stick on vertical scroll.
+                Matches the Update & Print Labels grid. */}
+            <div className="min-h-0 flex-1 overflow-auto border border-border [&_[data-slot=table-container]]:overflow-x-visible">
                 <div className={isEdit && selected.size > 0 ? "pb-20" : ""}>
                     <Table>
-                        <TableHeader>
+                        <TableHeader className="sticky top-0 z-20 bg-background [&_th]:bg-background [&_tr]:border-b [&_th]:shadow-[inset_0_-1px_0_var(--border)]">
                             <TableRow>
                                 {isEdit ? (
                                     <TableHead className="w-10">
@@ -917,8 +931,7 @@ export default function InventoryProductsPage() {
                     </Table>
 
                 </div>
-                <ScrollBar orientation="horizontal" />
-            </ScrollArea>
+            </div>
 
             <div className="-mt-4 flex flex-none flex-wrap items-center justify-between gap-2 border-t border-border bg-background py-1 text-sm">
                 <div className="flex items-center gap-3 text-muted-foreground">

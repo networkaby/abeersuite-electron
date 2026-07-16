@@ -141,9 +141,13 @@ export function buildOnlineSlug(masters: NamingMasters, cfg: NamingConfigShape):
 // Hard-coded defaults — used by the API when no row exists and by the seed.
 export const DEFAULT_NAMING_CONFIG: NamingConfigShape = {
     nameFields: [
-        { kind: "brand",   enabled: true, defaultValue: null },
-        { kind: "group",   enabled: true, defaultValue: "General" },
-        { kind: "modelNo", enabled: true, defaultValue: null },
+        { kind: "brand",    enabled: true, defaultValue: null },
+        { kind: "group",    enabled: true, defaultValue: "General" },
+        { kind: "modelNo",  enabled: true, defaultValue: null },
+        // Operator-curated free text (InvProduct.namePart). Sits after the
+        // master-driven tokens so regenerate rebuilds masters around it without
+        // ever overwriting it. Must match bootstrap-seed.ts namingDefaults.
+        { kind: "userPart", enabled: true, defaultValue: null },
     ],
     separator: " ",
     onlineNameFields: [

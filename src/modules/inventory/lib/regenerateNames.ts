@@ -86,6 +86,13 @@ export async function regenerateProductNames(
 
     const updates: Array<{ id: number; name: string }> = [];
     for (const p of products) {
+        // Only rebuild products that have a Custom part (namePart) to anchor the
+        // name. With no custom part the stored name IS the descriptive content
+        // (imported / hand-typed) and a masters-only rebuild would wipe it — so
+        // a master rename / naming-config change leaves those names untouched.
+        // Matches the grid / dialog rule (patchWithRegen).
+        if (!p.namePart || !p.namePart.trim()) continue;
+
         const masters: NamingMasters = {
             brand: p.brand,
             category: p.category,
