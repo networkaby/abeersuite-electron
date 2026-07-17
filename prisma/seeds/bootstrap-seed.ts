@@ -1319,20 +1319,42 @@ async function main() {
     });
     console.log(`      ✓ CouponConfig singleton seeded (coupon ledger #${couponExpenseLedger?.id ?? "—"}, gift-card liability #${giftCardLiabilityLedger?.id ?? "—"}, breakage #${giftCardBreakageLedger?.id ?? "—"})\n`);
 
-    // Spend-tier auto-discounts — admin-owned (rename / add / remove / toggle), so
-    // only seed the starter set when the table is empty; never clobber admin edits.
-    if ((await prisma.customerTier.count()) === 0) {
-        await prisma.customerTier.createMany({
-            data: [
-                { name: "Bronze",   minSpend: 0,      discountPct: 0, sortOrder: 0 },
-                { name: "Silver",   minSpend: 10000,  discountPct: 2, sortOrder: 1 },
-                { name: "Gold",     minSpend: 50000,  discountPct: 5, sortOrder: 2 },
-                { name: "Platinum", minSpend: 200000, discountPct: 8, sortOrder: 3 },
-            ],
+    // Spend-tier periods + their levels — admin-owned (rename / add / remove / toggle /
+    // retune amounts). A period is a title customers compete for over a bracket of the
+    // past; each carries its own copy of the ladder, so a customer can hold a title in
+    // several periods at once and the percentages add up.
+    //
+    // FRESH DEPLOYMENTS ONLY. If anything is configured already, this leaves it
+    // completely alone — no adopting, no re-pointing, no amount edits. An install that
+    // predates periods is migrated once, deliberately, by:
+    //     pnpm tsx prisma/seeds/migrate-tier-periods.ts
+    const [tierPeriodCount, tierLevelCount] = await Promise.all([
+        prisma.customerTierPeriod.count(),
+        prisma.customerTier.count(),
+    ]);
+    if (tierPeriodCount === 0 && tierLevelCount === 0) {
+        const starterPeriod = await prisma.customerTierPeriod.create({
+            data: {
+                name: "Best of 6 months",
+                fromDay: 0,
+                toDay: 180,
+                sortOrder: 0,
+                levels: {
+                    create: [
+                        { name: "Bronze",   minSpend: 0,      discountPct: 0, sortOrder: 0 },
+                        { name: "Silver",   minSpend: 10000,  discountPct: 2, sortOrder: 1 },
+                        { name: "Gold",     minSpend: 50000,  discountPct: 5, sortOrder: 2 },
+                        { name: "Platinum", minSpend: 200000, discountPct: 8, sortOrder: 3 },
+                    ],
+                },
+            },
         });
-        console.log(`      ✓ CustomerTier starter rows seeded (Bronze/Silver/Gold/Platinum)\n`);
+        // One period only: brackets tile, so a second starter period would need its own
+        // amounts to be worth anything. Adding periods is the admin's job — the page
+        // copies this ladder into each new one.
+        console.log(`      ✓ CustomerTierPeriod starter seeded ("${starterPeriod.name}", days ${starterPeriod.fromDay}-${starterPeriod.toDay} + Bronze/Silver/Gold/Platinum)\n`);
     } else {
-        console.log(`      • CustomerTier rows already present — left untouched\n`);
+        console.log(`      • Spend tiers already configured (${tierPeriodCount} period(s), ${tierLevelCount} level(s)) — left untouched\n`);
     }
 
     // ── Section 12: VoucherSeries ──────────────────────────────────────

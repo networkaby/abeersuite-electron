@@ -21,6 +21,7 @@ import { Badge } from "@/components/ui/badge";
 import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/components/GlAccountCombobox";
 import { formatInr, parseDecimalInput, parseDigitsInput } from "@/shared/lib/format";
 import { newChargeRow, type Snapshot, type CartLine, type ChargeRow, type CouponHit } from "@/modules/pos/lib/posDraftTypes";
+import { type TierResult } from "@/shared/lib/pricing";
 
 type GiftCardState = { id: number; code: string; balance: number };
 
@@ -42,6 +43,8 @@ export type PosBillSummaryProps = {
     totalDiscount: number;
     discountPct: number;
     discountAmount: number;
+    /** Spend tiers resolved against the live cart (usePosBilling), not the snapshot. */
+    tier?: TierResult;
 
     // Snapshot + loyalty redemption
     snapshot: Snapshot | null;
@@ -100,7 +103,7 @@ export type PosBillSummaryProps = {
 };
 
 export function PosBillSummary({
-    subtotal, tax, total, totalDiscount, discountPct, discountAmount,
+    subtotal, tax, total, totalDiscount, discountPct, discountAmount, tier,
     snapshot, rates, canRedeem, loyaltyBalance, redeemBlocked, maxRedeemablePts,
     redeemOn, setRedeemOn, redeemPointsStr, setRedeemPointsStr, effRedemptionRupees,
     appliedCoupon, setAppliedCoupon, autoCoupon, couponRupees, couponDroppedTier,
@@ -160,6 +163,11 @@ export function PosBillSummary({
                 the next line instead of each eating a full row. */}
             {(() => {
                 const chips: React.ReactNode[] = [];
+                // Every title feeds the discount (periods apply independently), so the
+                // chip explains the whole stack, not one winner. These come from the live
+                // resolution in usePosBilling — snapshot.tierTitles is history-only and
+                // would miss a CURRENT_SALE title earned by the bill on screen.
+                const titles = tier?.titles ?? [];
                 // Tier discount — automatic, display-only
                 if (discountPct > 0) {
                     chips.push(
@@ -168,9 +176,9 @@ export function PosBillSummary({
                                 className="cursor-help underline decoration-dotted underline-offset-2"
                                 title={couponDroppedTier
                                     ? "Tier discount is replaced by the applied non-stackable coupon."
-                                    : `Automatic ${snapshot?.customerLevel || "spend"}-tier discount from lifetime spend, applied on pre-GST goods. Configured under Customer Tiers; separate from loyalty points.`}
+                                    : `Automatic spend-tier discount, applied on pre-GST goods. Each period is earned and applied independently, so the percentages add up${titles.length > 0 ? `: ${titles.map((t) => `${t.levelName} of "${t.periodName}" ${t.discountPct}%`).join(" + ")}` : ""}. Configured under Customer Tiers; separate from loyalty points.`}
                             >
-                                Level Discount ({snapshot?.customerLevel ? `${snapshot.customerLevel} ` : ""}{discountPct}%)
+                                Level Discount ({tier?.badgeLevelName ? `${tier.badgeLevelName} ` : ""}{discountPct}%)
                             </span>
                             <span className="font-medium tabular-nums">− {formatInr(discountAmount)}</span>
                         </span>,

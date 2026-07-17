@@ -134,7 +134,7 @@ The generic pipeline engine models a **journey**: `Pipeline` → `TicketStatus`,
 | File | Key models |
 |---|---|
 | `base.prisma` | Person, Company, PersonCompany, Phone, Email |
-| `accounts.prisma` | AccountGroup, Account, CustomerTier |
+| `accounts.prisma` | AccountGroup, Account, CustomerTierPeriod, CustomerTier |
 | `finance.prisma` | **UniversalVoucher**, **VoucherGlLine**, VoucherLink, VoucherAllocation, VoucherSeries, VoucherPrintTemplate, BooksConfig, AuditLog |
 | `inventory.prisma` | InvProduct(+Code/Branch), masters (InvUnit/Category/ProductGroup/Brand/WarrantyTerm/AttributeMaster/GstRate), **VoucherDetail**, **VoucherInventoryLine**, InvStockLedger, StockReservation, RedemptionHold, InvBom(+Line), StrategyPoint, AdditionalCostAllocation |
 | `pos.prisma` | PosCounter(+PaymentAccount), PaymentGateway, PosShift, PosCashDrop, PosExpenditure, PosReceipt, PosHandover |

@@ -85,21 +85,89 @@ model Account {
   @@index([groupId])
 }
 
-/// Spend-tier auto-discount — a percentage off driven by the customer's lifetime
-/// spend, surfaced on the POS snapshot. NOT loyalty-points related (it posts to
-/// "Discount Allowed"). Fully admin-managed: rename, add/remove, enable/disable,
-/// and edit the threshold + %. Configured at /office/customer-retention/customer-tiers.
+/// A period customers are ranked in — the title ("Best of the month") plus the BRACKET
+/// of history it counts spend over. Each period owns its OWN set of levels, so a
+/// customer can hold several titles at once (Gold of the month AND Silver of the quarter).
+///
+/// The bracket is a slice of the past measured in days-ago: a sale counts when its age
+/// is `fromDay <= age < toDay`. Brackets are rolling (relative to today), NOT lifetime,
+/// so a customer who stops buying falls out of the recent ones. Tiling the brackets
+/// (0-30, 30-90, 90-180 …) partitions spend, so each sale feeds exactly one period and
+/// titles stop cascading. Overlapping brackets are ALLOWED — the same sale then counts
+/// towards both titles, and since titles stack that money is discounted twice; it is the
+/// admin's job to pick days that don't overlap unless they mean to.
+///
+/// Admin-managed at /office/customer-retention/customer-tiers. Survives hard-clean.
+/// Who the bill on the counter counts for, on a period that counts it at all.
+enum TierCurrentSaleScope {
+  /// Posted history only — the bill earns nothing for itself.
+  NONE
+  /// Only customers with no posted bill yet, so a first purchase can earn its own level.
+  NEW
+  /// Only customers who have bought before.
+  RETURNING
+  /// Everyone. One rule for strangers and regulars alike.
+  ALL
+}
+
+model CustomerTierPeriod {
+  id        Int            @id @default(autoincrement())
+  /// The title awarded in this period, e.g. "Best of the month" / "Best of the quarter".
+  name      String
+  /// Whether the bill on the counter (before discount) is added on top of this period's
+  /// posted spend, and for whom. Needs fromDay = 0 (the current sale is today, and a
+  /// bracket starting further back does not contain it) UNLESS currentSaleOnly is set,
+  /// which drops the bracket altogether.
+  ///
+  /// The bill's value only exists in the POS, so the account snapshot scores history alone
+  /// and the POS re-resolves it live as the cart changes.
+  currentSaleScope TierCurrentSaleScope @default(NONE)
+  /// Ignore posted history entirely — this period scores ONLY the bill on the counter, and
+  /// fromDay/toDay stop applying.
+  ///
+  /// This is what makes a "fresh customers only" ladder airtight. Scoping the current sale
+  /// to NEW is not enough on its own: the bracket is ungated, so a returning customer with
+  /// posted spend in that day range would still collect the title. With no bracket there is
+  /// nothing to leak — a customer the scope excludes scores 0 and earns nothing.
+  currentSaleOnly Boolean @default(false)
+  /// Start of the bracket in days-ago, inclusive. 0 = today. Ignored when currentSaleOnly.
+  fromDay   Int            @default(0)
+  /// End of the bracket in days-ago, exclusive. Must be greater than fromDay.
+  /// e.g. fromDay 30 + toDay 90 = "the 30-to-90-days-ago slice".
+  toDay     Int            @default(180)
+  enabled   Boolean        @default(true)
+  sortOrder Int            @default(0)
+  levels    CustomerTier[]
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@index([enabled])
+}
+
+/// One level inside a period ("Gold" of "Best of the month") — a spend threshold and
+/// the auto-discount % it earns. NOT loyalty-points related (it posts to "Discount
+/// Allowed"). Fully admin-managed: rename, add/remove, enable/disable, edit threshold + %.
 model CustomerTier {
   id          Int      @id @default(autoincrement())
   name        String // display name + POS badge label (e.g. Bronze / Gold / VIP)
-  /// Lifetime spend (₹) required to reach this tier.
+  /// Spend (₹) inside the parent period's bracket required to reach this level.
   minSpend    Decimal  @db.Decimal(14, 2)
-  /// Automatic discount % applied on pre-GST goods at this tier.
+  /// Automatic discount % applied on pre-GST goods at this level. Periods apply
+  /// INDEPENDENTLY: a customer holding titles in several periods gets the SUM of their
+  /// percentages (clamped to 100). Brackets are what keep that honest — tile them and
+  /// each rupee is counted once.
   discountPct Decimal  @db.Decimal(5, 2)
   enabled     Boolean  @default(true)
   sortOrder   Int      @default(0)
+  /// TODO(bridge): nullable only so the existing production level rows survive the
+  /// `db push` that introduces periods. bootstrap-seed backfills orphans onto the
+  /// default period; tighten to required once production is backfilled. A level with
+  /// no period is inert — the POS snapshot only reads levels through their period.
+  periodId    Int?
+  period      CustomerTierPeriod? @relation(fields: [periodId], references: [id], onDelete: Cascade)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   @@index([enabled])
+  @@index([periodId])
 }

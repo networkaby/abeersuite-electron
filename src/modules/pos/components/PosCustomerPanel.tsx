@@ -10,11 +10,12 @@
 import {
     User, Building2, Phone, Mail, MapPin,
     CreditCard, Wallet, TrendingDown, AlertCircle, Sparkles,
-    TrendingUp, Award, Clock, Star, Tag,
+    TrendingUp, Award, Clock, Star, Tag, Crown,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { formatInr } from "@/shared/lib/format";
 import { type Snapshot } from "@/modules/pos/lib/posDraftTypes";
+import { type TierResult } from "@/shared/lib/pricing";
 
 const since = (iso: string | null) => {
     if (!iso) return "never";
@@ -27,8 +28,14 @@ const since = (iso: string | null) => {
     return `${Math.floor(days / 365)} yr ago`;
 };
 
-/** The right-hand column: empty / loading / populated customer profile. */
-export function PosCustomerPanel({ snapshot, loading }: { snapshot: Snapshot | null; loading: boolean }) {
+/**
+ * The right-hand column: empty / loading / populated customer profile.
+ *
+ * `tier` comes from usePosBilling, NOT from the snapshot — it is resolved against the
+ * live cart, so a CURRENT_SALE title appears as the bill grows. The snapshot's own
+ * tier fields are the history-only view and would go stale here.
+ */
+export function PosCustomerPanel({ snapshot, loading, tier }: { snapshot: Snapshot | null; loading: boolean; tier: TierResult }) {
     return (
         <aside className="flex min-h-0 flex-col overflow-y-auto bg-muted/30 p-4">
             {!snapshot ? (
@@ -42,18 +49,19 @@ export function PosCustomerPanel({ snapshot, loading }: { snapshot: Snapshot | n
             ) : loading ? (
                 <div className="text-sm text-muted-foreground">Loading…</div>
             ) : (
-                <CustomerPanel snapshot={snapshot} />
+                <CustomerPanel snapshot={snapshot} tier={tier} />
             )}
         </aside>
     );
 }
 
-function CustomerPanel({ snapshot }: { snapshot: Snapshot }) {
+function CustomerPanel({ snapshot, tier }: { snapshot: Snapshot; tier: TierResult }) {
     const c = snapshot.party;
+    const level = tier.badgeLevelName;
     const levelColor =
-        snapshot.customerLevel === "Platinum" ? "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300" :
-            snapshot.customerLevel === "Gold" ? "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300" :
-                snapshot.customerLevel === "Silver" ? "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300" :
+        level === "Platinum" ? "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300" :
+            level === "Gold" ? "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300" :
+                level === "Silver" ? "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300" :
                     "bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300";
     return (
         <div className="space-y-3">
@@ -62,7 +70,7 @@ function CustomerPanel({ snapshot }: { snapshot: Snapshot }) {
                 <div className="flex items-center gap-2">
                     {c.kind === "company" ? <Building2 size={16} className="shrink-0 text-muted-foreground" /> : <User size={16} className="shrink-0 text-muted-foreground" />}
                     <h2 className="truncate text-base font-semibold">{c.name}</h2>
-                    {snapshot.customerLevel && <Badge className={`text-[10px] ${levelColor}`}>{snapshot.customerLevel}</Badge>}
+                    {level && <Badge className={`text-[10px] ${levelColor}`}>{level}</Badge>}
                 </div>
                 <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
                     {c.phone && <span className="inline-flex items-center gap-1"><Phone size={11} /> {c.phone}</span>}
@@ -132,11 +140,52 @@ function CustomerPanel({ snapshot }: { snapshot: Snapshot }) {
                 </div>
             )}
 
+            {/* Titles held — one per period whose bracket of spend cleared a level.
+                Every one contributes its % (periods apply independently), so the rows
+                add up to the discount shown on the bill. */}
+            {tier.titles.length > 0 && (
+                <div className="rounded-lg border border-amber-300/40 bg-amber-500/5 p-2.5">
+                    <div className="mb-1.5 flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-400">
+                        <Crown size={11} /> Titles held
+                    </div>
+                    <ul className="space-y-1">
+                        {tier.titles.map((t) => (
+                            <li key={t.periodId} className="flex items-center gap-2 text-xs">
+                                <span className="min-w-0 flex-1 truncate">
+                                    <span className="font-medium">{t.levelName}</span>
+                                    <span className="text-muted-foreground"> · {t.periodName}</span>
+                                </span>
+                                <span className="shrink-0 tabular-nums text-[10px] text-muted-foreground">
+                                    {formatInr(t.spend)} · {t.fromDay}–{t.toDay}d{t.includesCurrentSale ? " + bill" : ""}
+                                </span>
+                                <Badge variant="secondary" className="shrink-0 tabular-nums text-[10px]">+{t.discountPct}%</Badge>
+                            </li>
+                        ))}
+                    </ul>
+                    {(tier.titles.length > 1 || tier.cappedByGuard) && (
+                        <div className="mt-1.5 flex items-center justify-between border-t border-amber-300/40 pt-1.5 text-[11px]">
+                            <span className="text-muted-foreground">Total discount</span>
+                            <span className="flex items-center gap-1.5">
+                                {/* Say so when the guard trimmed the stack — otherwise the
+                                    rows visibly don't add up to the total. */}
+                                {tier.cappedByGuard && (
+                                    <span className="text-muted-foreground line-through tabular-nums">{tier.rawPct}%</span>
+                                )}
+                                <span className="font-medium tabular-nums">{tier.discountPct}%</span>
+                                {tier.cappedByGuard && (
+                                    <span className="text-amber-700 dark:text-amber-400">capped at {tier.capPct}%</span>
+                                )}
+                            </span>
+                        </div>
+                    )}
+                </div>
+            )}
+
             {/* Value & loyalty */}
             <div className="grid grid-cols-2 gap-1.5">
                 <Stat icon={<TrendingUp size={14} />} label="Lifetime turnover" value={formatInr(snapshot.turnover.lifetime)} sub={`${snapshot.turnover.invoiceCount} invoices`} />
                 <Stat icon={<TrendingUp size={14} />} label="Last 12 mo" value={formatInr(snapshot.turnover.last12Months)} />
-                <Stat icon={<Award size={14} />} label="Loyalty points" value={String(snapshot.loyaltyPoints)} sub={snapshot.loyaltyRates?.enabled ? `worth ${formatInr(snapshot.loyaltyPoints * snapshot.loyaltyRates.redeemValue)} · 1 pt / ₹${snapshot.loyaltyRates.globalEarnRatePer}` : snapshot.discountPct > 0 ? `${snapshot.discountPct}% discount tier` : "No tier yet"} />
+                <Stat icon={<Award size={14} />} label="Loyalty points" value={String(snapshot.loyaltyPoints)} sub={snapshot.loyaltyRates?.enabled ? `worth ${formatInr(snapshot.loyaltyPoints * snapshot.loyaltyRates.redeemValue)} · 1 pt / ₹${snapshot.loyaltyRates.globalEarnRatePer}` : tier.discountPct > 0 ? `${tier.discountPct}% discount tier` : "No tier yet"} />
                 <Stat icon={<Clock size={14} />} label="Last visit" value={since(snapshot.lastVisitAt)} />
             </div>
 

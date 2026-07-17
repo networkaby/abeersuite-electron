@@ -6,6 +6,7 @@ import { handleApiError } from "@/shared/lib/api";
 import { selectPrimaryPhone, selectPrimaryEmail } from "@/shared/lib/prisma/fragments";
 import { getLedgerOutstanding } from "@/modules/accountancy/lib/outstandings";
 import { ratesFromConfig, liveBalance } from "@/modules/loyalty/lib";
+import { resolveTierTitles, type TierPeriodInput } from "@/shared/lib/pricing";
 
 // GET /api/pos/account-snapshot/[accountId]
 // Polymorphic POS "we know you" panel — works for either a Person account
@@ -16,7 +17,11 @@ import { ratesFromConfig, liveBalance } from "@/modules/loyalty/lib";
 //   party          — { kind: "person" | "company", id, name, phone, email, gstin }
 //   account        — current ledger balance + opening balance
 //   turnover       — lifetime + last-12-month InvVoucher (SALE+POS) totals
-//   discountPct    — tier from lifetime turnover (Bronze/Silver/Gold/Platinum)
+//   tierTitles     — every title held, one per CustomerTierPeriod whose bracket of
+//                    spend clears one of that period's levels
+//   discountPct    — the SUM of those titles' percentages (periods apply independently),
+//                    capped by the global discount guard and a hard 100; driven by
+//                    bracketed spend, NOT lifetime
 //   loyaltyPoints  — placeholder = ⌊lifetime / 100⌋
 //   lastVisitAt    — most recent of (latest sale voucher date, latest ticket createdAt)
 //   recentTickets  — last 3 tickets (matched via Ticket.billingAccountId)
@@ -99,12 +104,24 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
         const oneYearAgo = new Date();
         oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
 
+        // Each period ("Best of the month", "Best of the quarter") carries its own levels
+        // and its own BRACKET of history, so a customer can hold several titles at once.
+        // Spend is counted per bracket — NOT lifetime — so a customer who stops buying
+        // falls out of the recent ones. Admin-set at
+        // /office/customer-retention/customer-tiers. Levels arrive minSpend desc so the
+        // first one cleared is the highest.
+        const tierPeriods = await prisma.customerTierPeriod.findMany({
+            where: { enabled: true },
+            orderBy: [{ sortOrder: "asc" }, { fromDay: "asc" }],
+            include: { levels: { where: { enabled: true }, orderBy: { minSpend: "desc" } } },
+        });
+
         // 5D-4/5D-8/5D-10/5D-11: party + status + deletedAt + date + type all live on the spine.
         const baseWhere: Prisma.VoucherDetailWhereInput = {
             universalVoucher: { partyAccountId: accountId, status: "POSTED", deletedAt: null, type: { in: [...SALE_TYPES] } },
         };
 
-        const [lifetimeAgg, ytdAgg, latestVoucher, latestTicket, recentTickets, ledgerOutstanding, loyaltyConfig, spendTiers] = await Promise.all([
+        const [lifetimeAgg, ytdAgg, periodAggs, latestVoucher, latestTicket, recentTickets, ledgerOutstanding, loyaltyConfig, couponConfig] = await Promise.all([
             prisma.voucherDetail.aggregate({
                 where: baseWhere,
                 _sum: { totalAmount: true },
@@ -114,6 +131,29 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
                 where: { universalVoucher: { partyAccountId: accountId, status: "POSTED", deletedAt: null, date: { gte: oneYearAgo }, type: { in: [...SALE_TYPES] } } },
                 _sum: { totalAmount: true },
             }),
+            // Spend inside each period's bracket — this is what decides the titles. One
+            // aggregate per period; there are only a handful of periods.
+            //
+            // The bracket holds sales aged `fromDay <= age < toDay`. Older edge (toDay) is
+            // exclusive and newer edge (fromDay) inclusive, so tiled brackets (0-30, 30-90)
+            // hand a sale to exactly one period — no gap at the seam, no double count.
+            // fromDay 0 has no upper bound, so a sale made today still counts.
+            Promise.all(tierPeriods.map((p) => {
+                const notBefore = new Date();
+                notBefore.setDate(notBefore.getDate() - p.toDay);
+                const notAfter = new Date();
+                notAfter.setDate(notAfter.getDate() - p.fromDay);
+                return prisma.voucherDetail.aggregate({
+                    where: {
+                        universalVoucher: {
+                            partyAccountId: accountId, status: "POSTED", deletedAt: null,
+                            type: { in: [...SALE_TYPES] },
+                            date: p.fromDay === 0 ? { gt: notBefore } : { gt: notBefore, lte: notAfter },
+                        },
+                    },
+                    _sum: { totalAmount: true },
+                });
+            })),
             prisma.voucherDetail.findFirst({
                 where: baseWhere,
                 orderBy: { universalVoucher: { date: "desc" } },   // 5D-10
@@ -140,29 +180,53 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
             // Real persisted loyalty balance + the rates the POS UI needs to
             // compute the ₹ value of a redemption live.
             prisma.loyaltyConfig.findUnique({ where: { id: 1 } }),
-            // Spend-tier auto-discount table (admin-managed; /office/customer-retention/customer-tiers).
-            // Only enabled tiers count; highest minSpend the lifetime clears wins.
-            prisma.customerTier.findMany({ where: { enabled: true }, orderBy: { minSpend: "desc" } }),
+            // The global discount guard — caps the stacked tier % (see below).
+            prisma.couponConfig.findUnique({ where: { id: 1 }, select: { maxTotalDiscountPct: true } }),
         ]);
 
         const lifetimeTotal = Number(lifetimeAgg?._sum.totalAmount ?? 0);
         const ytdTotal = Number(ytdAgg?._sum.totalAmount ?? 0);
         const invoiceCount = lifetimeAgg?._count._all ?? 0;
 
-        // Resolve the customer's spend tier from the admin-managed CustomerTier
-        // table (enabled rows, pre-sorted minSpend desc — first one the lifetime
-        // clears wins). No match (e.g. all tiers disabled) → no discount.
-        const matchedTier = spendTiers.find((t) => lifetimeTotal >= Number(t.minSpend));
-        const discountPct = matchedTier ? Number(matchedTier.discountPct) : 0;
+        // Periods as the resolver wants them: Decimals flattened to numbers, posted bracket
+        // spend attached. The bill on the counter is NOT here — it only exists in the POS,
+        // so a "consider current sale" period scores its history alone at this point. The
+        // POS re-resolves these against the live cart through the same resolveTierTitles.
+        const tierPeriodInputs: TierPeriodInput[] = tierPeriods.map((p, i) => ({
+            id:               p.id,
+            name:             p.name,
+            currentSaleScope: p.currentSaleScope,
+            currentSaleOnly:  p.currentSaleOnly,
+            fromDay:          p.fromDay,
+            toDay:            p.toDay,
+            spend:            Number(periodAggs[i]?._sum.totalAmount ?? 0),
+            levels:           p.levels.map((l) => ({
+                name:        l.name,
+                minSpend:    Number(l.minSpend),
+                discountPct: Number(l.discountPct),
+            })),
+        }));
+
+        // Global guard (CouponConfig.maxTotalDiscountPct — the "Discount guard", editable
+        // from both Spend Tiers and Coupons).
+        const tierCapPct = couponConfig?.maxTotalDiscountPct != null ? Number(couponConfig.maxTotalDiscountPct) : null;
+        // At rest: no bill, so this is the history-only view. The POS overrides it live.
+        const tier = resolveTierTitles({
+            periods: tierPeriodInputs,
+            currentSaleValue: 0,
+            isNewCustomer: invoiceCount === 0,
+            capPct: tierCapPct,
+        });
+        const discountPct = tier.discountPct;
         // Live, dynamic balance — Σ in-window lots under the current expiry window
         // (was a derived ⌊lifetime/100⌋ placeholder). `loyaltyRates` carries the full
         // rate set so the POS UI can enforce the redeem floors / show the ₹ value.
         const loyaltyRates = loyaltyConfig ? ratesFromConfig(loyaltyConfig) : null;
         const loyaltyPoints = loyaltyRates ? await liveBalance(prisma, accountId, loyaltyRates) : 0;
 
-        // Customer-facing tier name is now free-form (admin-defined); empty when
-        // the customer hasn't reached any enabled tier.
-        const customerLevel = matchedTier?.name ?? "";
+        // Customer-facing level name is free-form (admin-defined) and belongs to the
+        // badge title; empty when the customer has earned no title at all.
+        const customerLevel = tier.badgeLevelName;
 
         // Deny-by-default (matches checkCreditLimit): NULL is treated as 0.
         //   0    = no credit facility (must pay in full)
@@ -194,6 +258,16 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
             },
             turnover: { lifetime: lifetimeTotal, last12Months: ytdTotal, invoiceCount },
             discountPct,
+            // The raw material, so the POS can re-resolve against the live cart — a
+            // CURRENT_SALE period scores 0 until there is a bill to score.
+            tierPeriods: tierPeriodInputs,
+            tierCapPct,
+            // History-only view (no bill). The POS recomputes all of this from
+            // `tierPeriods` as items are scanned; other callers can use it as-is.
+            tierTitles:    tier.titles,
+            badgePeriodId: tier.badgePeriodId,
+            rawTierPct:    tier.rawPct,
+            cappedByGuard: tier.cappedByGuard,
             loyaltyPoints,
             loyaltyRates,
             customerLevel,

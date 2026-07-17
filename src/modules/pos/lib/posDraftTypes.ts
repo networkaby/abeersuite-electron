@@ -3,10 +3,21 @@
 // PosScreen / PosQuoteScreen — both screens and the posDraftStore import from here
 // so the one draft shape has a single definition.
 
+import { type TierPeriodInput, type TierTitle } from "@/shared/lib/pricing";
+
 export type Snapshot = {
     party: { kind: "person" | "company"; id: number; name: string; phone: string | null; email: string | null; gstin: string | null; address: string | null };
     account: { id: number; balance: number; openingBalance: number | null } | null;
     turnover: { lifetime: number; last12Months: number; invoiceCount: number };
+    // Spend-tier periods with their bracket spend already attached. The POS re-resolves
+    // these against the live cart (a CURRENT_SALE period scores 0 here), so treat the
+    // `tier*` fields below as the history-only view — usePosBilling is the live truth.
+    tierPeriods: TierPeriodInput[];
+    tierCapPct: number | null;
+    tierTitles: TierTitle[];
+    badgePeriodId: number | null;
+    rawTierPct: number;
+    cappedByGuard: boolean;
     discountPct: number;
     loyaltyPoints: number;
     loyaltyRates: {

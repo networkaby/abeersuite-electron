@@ -18,8 +18,10 @@ export async function GET() {
 }
 
 // PATCH /api/coupons/config — edit the global guard / ledger wiring.
+// maxTotalDiscountPct caps coupon + spend-tier + loyalty together, so it is editable
+// from the Spend Tiers page as well as Coupons — either page's edit right will do.
 export async function PATCH(req: Request) {
-    const { response } = await requireAnyPermission(PERMISSIONS.COUPONS_EDIT);
+    const { response } = await requireAnyPermission(PERMISSIONS.COUPONS_EDIT, PERMISSIONS.TIERS_EDIT);
     if (response) return response;
     const { data, error } = await validateRequest(req, couponConfigUpdateSchema);
     if (error) return error;

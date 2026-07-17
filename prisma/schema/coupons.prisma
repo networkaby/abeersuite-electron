@@ -219,7 +219,11 @@ model GiftCardTxn {
 model CouponConfig {
   id                         Int      @id @default(1)
   /// Max total discount as % of the bill across coupon + tier + loyalty combined
-  /// (null = no global guard). The coupon portion is clamped last.
+  /// (null = no global guard). Enforced in two places: the stacked spend-tier % is
+  /// capped at this in the POS account snapshot (tier and the cap are both a % of the
+  /// same goods value, so capping the % caps the rupees), then the coupon portion is
+  /// clamped last against whatever tier + loyalty left (applyGlobalDiscountGuard).
+  /// Editable from Coupons AND Spend Tiers — it is one shared ceiling, not per-page.
   maxTotalDiscountPct        Decimal? @db.Decimal(5, 2)
   /// Dedicated expense ledger coupon discounts post to (Dr on a sale).
   couponExpenseAccountId     Int?

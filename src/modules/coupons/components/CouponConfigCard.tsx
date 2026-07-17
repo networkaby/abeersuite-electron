@@ -53,7 +53,7 @@ export function CouponConfigCard() {
                 </CardTitle>
                 <CardDescription>
                     Caps the <span className="font-medium">total</span> discount on any bill (coupon + spend-tier + loyalty combined),
-                    as a % of the goods value. Leave blank for no cap.
+                    as a % of the goods value. Leave blank for no cap. The same cap is editable from Spend Tiers.
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">

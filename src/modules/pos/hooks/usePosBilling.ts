@@ -24,6 +24,7 @@ import { usePosCustomerDisplay } from "@/modules/pos/hooks/usePosCustomerDisplay
 import { qrDisplay } from "@/modules/pos/lib/qrDisplay";
 import { DEFAULT_PAYEE_NAME } from "@/modules/pos/lib/paymentLink";
 import { formatInr, parseDigitsInput } from "@/shared/lib/format";
+import { resolveTierTitles } from "@/shared/lib/pricing";
 import { usePosDraftStore } from "@/store/posDraftStore";
 import { type Snapshot, type ProductOption, type CouponHit } from "@/modules/pos/lib/posDraftTypes";
 
@@ -235,10 +236,31 @@ export function usePosBilling(opts: {
     });
     const subtotal = lineRows.reduce((s, l) => s + l.gross, 0);   // pre-tax goods value
     const tax = lineRows.reduce((s, l) => s + l.taxAmount, 0);
-    const discountPct = snapshot?.discountPct ?? 0;
-    const discountAmount = (subtotal * discountPct) / 100;
     const shippingAmt = Math.max(0, parseAmt(shippingAmtStr));
     const manualChargesNet = charges.reduce((s, c) => s + parseAmt(c.amount), 0);
+
+    // ── Spend tiers, resolved live ────────────────────────────────────────────
+    // A CURRENT_SALE period scores the bill on the counter, so the discount moves as
+    // items are scanned — a first-time customer can earn a level on the very bill that
+    // earns it. Bracket periods ignore the cart and just use their ledger spend.
+    //
+    // currentSaleValue is the bill BEFORE any discount (goods + tax + shipping +
+    // charges). It has to be pre-discount: the discount is what we're resolving, so
+    // feeding the discounted total back in would be circular. It's the closest honest
+    // stand-in for what the bill will post as — it differs by the discount itself.
+    //
+    // /api/pos/sale re-runs this same resolver on the posted lines and uses ITS answer,
+    // so a tampered browser cannot award itself a discount.
+    const currentSaleValue = subtotal + tax + shippingAmt + manualChargesNet;
+    const tier = resolveTierTitles({
+        periods: snapshot?.tierPeriods ?? [],
+        currentSaleValue,
+        // Same definition the coupon engine uses for isNewCustomer — no posted bill yet.
+        isNewCustomer: (snapshot?.turnover.invoiceCount ?? 0) === 0,
+        capPct: snapshot?.tierCapPct ?? null,
+    });
+    const discountPct = tier.discountPct;
+    const discountAmount = (subtotal * discountPct) / 100;
 
     // ── Loyalty redemption (mirrors the server) ───────────────────────────────
     // Redemption rides a negative charge to the dedicated "Loyalty Points
@@ -325,7 +347,9 @@ export function usePosBilling(opts: {
     ];
     // "Level Discount (Tier Name)" — the spend-tier row label.
     const posTierLabel = effDiscountAmount > 0.005
-        ? `Level Discount${snapshot?.customerLevel ? ` (${snapshot.customerLevel})` : discountPct ? ` (${discountPct}%)` : ""}`
+        // `tier.badgeLevelName`, not snapshot.customerLevel — the snapshot's is the
+        // history-only badge and goes stale the moment a CURRENT_SALE level is cleared.
+        ? `Level Discount${tier.badgeLevelName ? ` (${tier.badgeLevelName})` : discountPct ? ` (${discountPct}%)` : ""}`
         : undefined;
 
     async function applyGiftCard() {
@@ -643,6 +667,7 @@ export function usePosBilling(opts: {
         payAccounts, payAccountById,
         // bill math
         lineRows, subtotal, tax, discountPct, discountAmount, totalDiscount,
+        tier, currentSaleValue,
         rates, canRedeem, loyaltyBalance, redeemBlocked, maxRedeemablePts,
         effRedeemPts, effRedemptionRupees, effDiscountAmount, couponRupees,
         couponDroppedTier, couponBlockedLoyalty,
