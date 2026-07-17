@@ -20,11 +20,23 @@ export interface PosAccess {
     canDrop: boolean;
 }
 
+// While the session is still loading (fresh load / refresh), we don't yet know
+// the staff's permissions. Rather than flash a stripped-down bar (only Sale, no
+// Order/Estimate) and pop the rest in once the fetch lands, we render
+// optimistically — show everything — and only hide once the check confirms no
+// permission. Safe because this is UI-only decluttering, not a security gate.
+const ALL_ALLOWED: PosAccess = {
+    canSale: true, canOrder: true, canEstimate: true,
+    canReturn: true, canRcv: true, canExp: true, canDrop: true,
+};
+
 export function usePosAccess(): PosAccess {
-    const { data: session } = useSession();
+    const { data: session, status } = useSession();
     const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
     const key = permissions.join(",");
+    const loading = status === "loading";
     return useMemo(() => {
+        if (loading) return ALL_ALLOWED;
         const perms = key ? key.split(",") : [];
         const isAdmin = perms.includes("admin:bypass");
         const create = (kind: string) => canDoPosVoucher(kind, "create", perms, isAdmin);
@@ -37,5 +49,5 @@ export function usePosAccess(): PosAccess {
             canExp: create("expense"),
             canDrop: isAdmin || perms.includes("pos:shift:drop"),
         };
-    }, [key]);
+    }, [key, loading]);
 }
