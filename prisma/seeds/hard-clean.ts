@@ -88,7 +88,7 @@ const TRANSACTION_TABLES = [
     // rows off Ticket, but they're listed for clarity.
     "TicketDelivery", "TicketRefund", "TicketDeal", "TicketRepair",
     "TicketLog", "TicketParticipant", "Ticket", "Device",
-    "WallPost", "CustomerSocialProfile",
+    "WallPostLike", "WallPostComment", "WallPost", "SocialConnection", "CustomerSocialProfile",
     "ChatMessage", "ChatRoomMember", "ChatRoom",
     "PersonPortalCredential",
 ];

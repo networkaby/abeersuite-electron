@@ -46,6 +46,8 @@ model Person {
   companies        PersonCompany[]
   portalCredential PersonPortalCredential?
   socialProfile    CustomerSocialProfile?  @relation("PersonSocialProfile")
+  sentConnections     SocialConnection[]   @relation("ConnectionRequester")
+  receivedConnections SocialConnection[]   @relation("ConnectionAddressee")
   dealTickets      TicketDeal[] // deals (Ticket flavour "deal") linked to this person
   orderTickets     TicketOrder[] // orders (Ticket flavour "order") linked to this person
   owner            Position?               @relation("PersonOwnerPosition", fields: [ownerPositionId], references: [id])

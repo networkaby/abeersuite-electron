@@ -27,6 +27,7 @@ import { formatDate, formatTimeOnly } from "@/shared/lib/format/formatDate";
 import type { OrgStructure } from "@/shared/types/orgChart";
 import StructureTree from "@/modules/admin/components/StructureTree";
 import UserAvatar from "@/shared/components/UserAvatar";
+import { uploadImageToCloudinary as uploadToCloudinary } from "@/shared/lib/uploadToCloudinary";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -112,21 +113,6 @@ function timeAgo(iso: string): string {
     return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-// ── Cloudinary upload ─────────────────────────────────────────────────────────
-
-async function uploadToCloudinary(file: File): Promise<string> {
-    const { data: sig } = await axios.get<{
-        timestamp: number; signature: string; apiKey: string; cloudName: string; folder: string;
-    }>("/api/upload-signature");
-    const form = new FormData();
-    form.append("file", file); form.append("api_key", sig.apiKey);
-    form.append("timestamp", String(sig.timestamp)); form.append("signature", sig.signature);
-    form.append("folder", sig.folder);
-    const res = await axios.post<{ secure_url: string }>(
-        `https://api.cloudinary.com/v1_1/${sig.cloudName}/image/upload`, form,
-    );
-    return res.data.secure_url;
-}
 
 // ── ProfileHeader ─────────────────────────────────────────────────────────────
 
@@ -1125,6 +1111,55 @@ function SecurityTab({ profileId }: { profileId: number }) {
 
 // ── OrgPositionTab ────────────────────────────────────────────────────────────
 
+// ── FriendsTab ────────────────────────────────────────────────────────────────
+// A staff member's friends = the joined customers (implicit model). Cards link to
+// the office customer profile (the portal profile is customer-gated).
+interface SocialFriend {
+    kind: "USER" | "PERSON"; id: number; name: string; avatarUrl: string | null;
+    role: string | null; roleBadge: { label: string; color: string } | null; isCustomer: boolean;
+}
+function FriendsTab({ userId }: { userId: number }) {
+    const [friends, setFriends] = useState<SocialFriend[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        axios.get<SocialFriend[]>(`/api/users/${userId}/friends`)
+            .then((r) => setFriends(r.data))
+            .catch(() => toast.error("Failed to load friends"))
+            .finally(() => setLoading(false));
+    }, [userId]);
+
+    if (loading) return <p className="py-8 text-center text-sm text-muted-foreground">Loading friends…</p>;
+    if (friends.length === 0) {
+        return (
+            <div className="border-2 border-dashed border-border bg-card/50 py-12 text-center">
+                <Users size={28} className="mx-auto text-muted-foreground/40" />
+                <p className="mt-1 text-sm text-muted-foreground">No friends yet.</p>
+            </div>
+        );
+    }
+    return (
+        <div className="max-w-3xl">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{friends.length} friend{friends.length !== 1 ? "s" : ""}</p>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+                {friends.map((f) => (
+                    <Link
+                        key={`${f.kind}-${f.id}`}
+                        href={f.kind === "USER" ? `/office/social/users/${f.id}` : `/office/customers/all?personId=${f.id}`}
+                        className="flex items-center gap-2.5 rounded-lg border border-border bg-card p-3 transition-colors hover:bg-muted/50"
+                    >
+                        <UserAvatar avatarUrl={f.avatarUrl} name={f.name} role={f.role} sizePx={36} />
+                        <div className="min-w-0">
+                            <p className="truncate text-sm font-medium">{f.name}</p>
+                            <p className="text-[11px] text-muted-foreground">{f.isCustomer ? "Customer" : (f.roleBadge?.label ?? "Staff")}</p>
+                        </div>
+                    </Link>
+                ))}
+            </div>
+        </div>
+    );
+}
+
 function OrgPositionTab() {
     const [structure, setStructure] = useState<OrgStructure | null>(null);
     const [loading, setLoading] = useState(true);
@@ -1308,8 +1343,9 @@ const TABS = [
     { id: 5 as const, label: "Security", icon: Lock, access: "self" },
     // { id: 6 as const, label: "Permissions", icon: Shield, access: "selfOrAdmin" },
     { id: 6 as const, label: "Org Position", icon: GitBranch, access: "all" },
+    { id: 7 as const, label: "Friends", icon: Users, access: "all" },
 ];
-type TabId = 1 | 2 | 3 | 4 | 5 | 6;
+type TabId = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
@@ -1531,6 +1567,7 @@ export default function UserProfilePage() {
                     )}
                     {activeTab === 5 && isSelf && <SecurityTab profileId={profile.id} />}
                     {activeTab === 6 && <OrgPositionTab />}
+                    {activeTab === 7 && <FriendsTab userId={profile.id} />}
                 </div>
 
                 {/* Collapsible sidebar — hidden on small screens */}

@@ -24,8 +24,61 @@ model WallPost {
   body       String
   createdAt  DateTime        @default(now())
 
+  likes    WallPostLike[]
+  comments WallPostComment[]
+
   @@index([ownerKind, ownerId, createdAt])
   @@index([authorKind, authorId])
+}
+
+// A reaction on a post by a SocialActor. One per (post, actor).
+model WallPostLike {
+  id        Int             @id @default(autoincrement())
+  postId    Int
+  post      WallPost        @relation(fields: [postId], references: [id], onDelete: Cascade)
+  likerKind SocialActorKind
+  likerId   Int
+  createdAt DateTime        @default(now())
+
+  @@unique([postId, likerKind, likerId])
+  @@index([postId])
+}
+
+// A comment on a post, authored by a SocialActor (FK-free actor, like WallPost).
+model WallPostComment {
+  id         Int             @id @default(autoincrement())
+  postId     Int
+  post       WallPost        @relation(fields: [postId], references: [id], onDelete: Cascade)
+  authorKind SocialActorKind
+  authorId   Int
+  body       String
+  createdAt  DateTime        @default(now())
+
+  @@index([postId, createdAt])
+}
+
+enum ConnectionStatus {
+  PENDING
+  ACCEPTED
+}
+
+// A friend connection between two customers (Person↔Person). Staff are every
+// customer's automatic friends and never need a row here — this models only the
+// explicit customer↔customer requests. A friendship exists when a row (either
+// direction) between the pair is ACCEPTED.
+model SocialConnection {
+  id          Int              @id @default(autoincrement())
+  requesterId Int
+  requester   Person           @relation("ConnectionRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  addresseeId Int
+  addressee   Person           @relation("ConnectionAddressee", fields: [addresseeId], references: [id], onDelete: Cascade)
+  status      ConnectionStatus @default(PENDING)
+  createdAt   DateTime         @default(now())
+  respondedAt DateTime?
+
+  @@unique([requesterId, addresseeId])
+  @@index([addresseeId, status])
+  @@index([requesterId, status])
 }
 
 // A customer's opt-in social identity. Created when a Person taps "Join" on the
@@ -38,6 +91,7 @@ model CustomerSocialProfile {
   /// Public handle (@nickname), unique across customers.
   handle    String   @unique
   avatarUrl String?
+  coverUrl  String?
   bio       String?
   joinedAt  DateTime @default(now())
 

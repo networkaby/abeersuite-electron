@@ -93,6 +93,53 @@ export async function resolveSocialActors(
     return map;
 }
 
+// The social "friends" set — everyone in the community: all staff (User) plus all
+// joined customers (Person with a social profile). Implicit model: everyone is
+// friends with everyone. Optionally excludes one actor (the profile being viewed,
+// so a profile doesn't list itself).
+export async function getCommunityFriends(
+    exclude?: SocialActorRef,
+    db: Prisma.TransactionClient = prisma,
+): Promise<ResolvedSocialActor[]> {
+    const [staff, customers] = await Promise.all([
+        db.user.findMany({ orderBy: { name: "asc" }, take: 200, select: { id: true } }),
+        db.person.findMany({ where: { socialProfile: { isNot: null } }, orderBy: { name: "asc" }, take: 200, select: { id: true } }),
+    ]);
+    const refs: SocialActorRef[] = [
+        ...staff.map((u) => ({ kind: "USER" as const, id: u.id })),
+        ...customers.map((p) => ({ kind: "PERSON" as const, id: p.id })),
+    ].filter((r) => !(exclude && r.kind === exclude.kind && r.id === exclude.id));
+    const map = await resolveSocialActors(refs, db);
+    return refs.map((r) => map.get(socialKey(r.kind, r.id))!);
+}
+
+// The friends of a specific actor under model A (staff auto-friend everyone;
+// customers connect to each other by request):
+//   • a staff member's friends = the whole community (all staff + joined customers)
+//   • a customer's friends       = all staff (auto) + their ACCEPTED peer customers
+export async function getFriendsFor(
+    actor: SocialActorRef,
+    db: Prisma.TransactionClient = prisma,
+): Promise<ResolvedSocialActor[]> {
+    if (actor.kind === "USER") return getCommunityFriends(actor, db);
+
+    const personId = actor.id;
+    const [staff, connections] = await Promise.all([
+        db.user.findMany({ orderBy: { name: "asc" }, take: 200, select: { id: true } }),
+        db.socialConnection.findMany({
+            where:  { status: "ACCEPTED", OR: [{ requesterId: personId }, { addresseeId: personId }] },
+            select: { requesterId: true, addresseeId: true },
+        }),
+    ]);
+    const peerIds = connections.map((c) => (c.requesterId === personId ? c.addresseeId : c.requesterId));
+    const refs: SocialActorRef[] = [
+        ...staff.map((u) => ({ kind: "USER" as const, id: u.id })),
+        ...peerIds.map((id) => ({ kind: "PERSON" as const, id })),
+    ];
+    const map = await resolveSocialActors(refs, db);
+    return refs.map((r) => map.get(socialKey(r.kind, r.id))!);
+}
+
 // Convenience for a single ref.
 export async function resolveSocialActor(
     ref: SocialActorRef,
