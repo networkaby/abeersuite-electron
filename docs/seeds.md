@@ -130,7 +130,7 @@ pnpm seed:hard-clean
 - Chart of accounts (AccountGroup tree + GL ledgers)
 - **InvUnit** (13 units) — universal bootstrap data
 - **InvWarrantyTerm** (~10 terms) — universal bootstrap data
-- OrgDefaults singleton, InvNamingConfig singleton
+- OrgDefaults singleton, InvNamingConfig singleton, CreditLimitConfig singleton
 - Account opening balances, CompanySettings
 
 > **Destructive.** Vouchers + customers + products are unrecoverable. Use only in dev.

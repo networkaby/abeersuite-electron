@@ -85,6 +85,32 @@ model Account {
   @@index([groupId])
 }
 
+// ── CreditLimitConfig (singleton, id=1) ──────────────────────────────────────
+//
+// Global auto credit-limit calculator. The per-customer manual limit still lives
+// on Account.creditLimit; this row only controls the AUTO floor layered on top.
+//
+// Auto limit for a customer = pctOfSales% of that customer's POSTED sales in the
+// last windowDays. The EFFECTIVE limit enforced at the register is the HIGHER of
+// the manual limit and the auto limit (see resolveEffectiveCreditLimit). When
+// autoEnabled is false nothing auto-grants and behaviour is exactly the old
+// deny-by-default: manual limit only, null/0 = cash-only.
+model CreditLimitConfig {
+  id           Int      @id @default(1) // singleton — always row id=1
+  /// Master switch. false = manual-only (legacy deny-by-default). true = every
+  /// customer also gets an auto limit sized from their own recent sales.
+  autoEnabled  Boolean  @default(false)
+  /// X — look back this many days of posted sales to size the auto limit.
+  windowDays   Int      @default(90)
+  /// Y — the auto limit is this percent of the windowed sales total.
+  pctOfSales   Decimal  @default(10) @db.Decimal(6, 2)
+  /// Optional hard ceiling on the computed auto number (null = no ceiling).
+  maxAutoLimit Decimal? @db.Decimal(14, 2)
+  /// Round the auto number to the nearest step (0 = no rounding).
+  roundToStep  Int      @default(0)
+  updatedAt    DateTime @updatedAt
+}
+
 /// A period customers are ranked in — the title ("Best of the month") plus the BRACKET
 /// of history it counts spend over. Each period owns its OWN set of levels, so a
 /// customer can hold several titles at once (Gold of the month AND Silver of the quarter).

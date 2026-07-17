@@ -1319,6 +1319,17 @@ async function main() {
     });
     console.log(`      ✓ CouponConfig singleton seeded (coupon ledger #${couponExpenseLedger?.id ?? "—"}, gift-card liability #${giftCardLiabilityLedger?.id ?? "—"}, breakage #${giftCardBreakageLedger?.id ?? "—"})\n`);
 
+    // ── CreditLimitConfig singleton (id=1) ─────────────────────────────
+    // Global auto credit-limit calculator. Create-only so admin edits (from
+    // Settings → Credit Limit) survive a reseed. Defaults are auto OFF, so
+    // behaviour stays deny-by-default (manual limits only) until switched on.
+    await prisma.creditLimitConfig.upsert({
+        where:  { id: 1 },
+        create: { id: 1, autoEnabled: false, windowDays: 90, pctOfSales: 10, roundToStep: 0 },
+        update: {},
+    });
+    console.log(`      ✓ CreditLimitConfig singleton seeded (auto OFF; 10% of last-90-day sales when enabled)\n`);
+
     // Spend-tier periods + their levels — admin-owned (rename / add / remove / toggle /
     // retune amounts). A period is a title customers compete for over a bracket of the
     // past; each carries its own copy of the ladder, so a customer can hold a title in

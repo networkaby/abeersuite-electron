@@ -7,3 +7,4 @@ export { useTallyDate, parseTallyDate, isoToDisplay, toIsoDate } from "./useTall
 export { useEscape } from "./useEscape";
 export { useEscapeBack } from "./useEscapeBack";
 export { useNow } from "./useNow";
+export { useDebouncedValue } from "./useDebouncedValue";

@@ -24,7 +24,7 @@ const CONTACT_SELECT = {
             holders: { select: { user: { select: { id: true, name: true, avatarUrl: true, role: true } } } },
         },
     },
-    account: { select: { id: true } },
+    account: { select: { id: true, creditLimit: true } },
     phones: { select: { phone: true, isPrimary: true } },
     emails: { select: { email: true, isPrimary: true } },
     _count: { select: { dealTickets: true } },
@@ -44,6 +44,7 @@ export async function GET(req: Request) {
         const ownerPositionId = sp.get("ownerPositionId")?.trim();
         const tag = sp.get("tag")?.trim();
         const hasDeal = sp.get("hasDeal"); // "1" | "0"
+        const credit = sp.get("credit"); // "manual" (positive manual limit) | "none" (no manual limit)
         const sort = sp.get("sort") ?? "recent";
         const includeInactive = sp.get("inactive") === "1";
 
@@ -59,6 +60,14 @@ export async function GET(req: Request) {
                     : {}),
             ...(tag ? { tags: { has: tag } } : {}),
             ...(hasDeal === "1" ? { dealTickets: { some: {} } } : hasDeal === "0" ? { dealTickets: { none: {} } } : {}),
+            // Manual credit limit: "manual" = a positive limit is set; "none" = no
+            // limit set (null/0, or no account yet) — the ones needing adjustment.
+            // NOT (not OR) so it never collides with the `q` search's OR key.
+            ...(credit === "manual"
+                ? { account: { is: { creditLimit: { gt: 0 } } } }
+                : credit === "none"
+                    ? { NOT: { account: { is: { creditLimit: { gt: 0 } } } } }
+                    : {}),
             ...(q
                 ? {
                       OR: [

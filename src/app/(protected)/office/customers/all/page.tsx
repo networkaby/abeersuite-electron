@@ -20,20 +20,19 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { useDebouncedValue } from "@/shared/hooks";
 import { LoyaltyPanel } from "@/modules/loyalty/components/LoyaltyPanel";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { PRIORITY_META } from "@/utils/constants";
 import { initials } from "@/modules/customer/lib/initials";
 import type { Ticket, CustomerDevice } from "@/modules/customer/lib/customerTypes";
 import CustomerEmptyState from "@/modules/customer/components/CustomerEmptyState";
-import DevicesMiniGrid from "@/modules/customer/components/DevicesMiniGrid";
 import { EntityListPanel } from "@/shared/components/EntityListPanel";
 import { TransactionsTable, type CustomerTransactions } from "@/modules/customer/components/TransactionsTable";
 import CustomerLinkPanel from "@/modules/customer/components/CustomerLinkPanel";
 import CompanyLinkPanel from "@/modules/customer/components/CompanyLinkPanel";
-import CustomerEmergencyPasswordResetCard from "@/modules/customer/components/CustomerEmergencyPasswordResetCard";
-import PersonProfileEdit from "@/modules/customer/components/PersonProfileEdit";
-import CompanyProfileEdit from "@/modules/customer/components/CompanyProfileEdit";
+import PersonProfileTab from "@/modules/customer/components/PersonProfileTab";
+import CompanyProfileTab from "@/modules/customer/components/CompanyProfileTab";
 
 type PersonRow = {
     id: number;
@@ -56,6 +55,7 @@ type CombinedListItem =
 type PersonDetail = {
     id: number;
     accountId: number;
+    creditLimit: string | null;
     name: string;
     phone: string | null;
     email: string | null;
@@ -70,6 +70,7 @@ type PersonDetail = {
 type CompanyDetail = {
     id: number;
     accountId: number;
+    creditLimit: string | null;
     name: string;
     phone: string | null;
     email: string | null;
@@ -109,12 +110,17 @@ export default function AllCustomersPage() {
 
     const perms = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
     const canManageUsers = perms.includes(PERMISSIONS.USERS_EDIT) || perms.includes(PERMISSIONS.ADMIN_BYPASS);
+    const canEditCustomer = perms.includes(PERMISSIONS.CUSTOMERS_EDIT) || perms.includes(PERMISSIONS.ADMIN_BYPASS);
     const canManageLoyalty = perms.includes(PERMISSIONS.LOYALTY_EDIT) || perms.includes(PERMISSIONS.ADMIN_BYPASS);
 
+    // Server-side search across both lists. The old in-browser filter only saw
+    // the first page of people the API returned, so matches beyond it vanished.
+    const debouncedSearch = useDebouncedValue(search, 300);
     useEffect(() => {
-        axios.get<PersonRow[]>("/api/person").then((res) => setPeople(res.data)).catch(() => setPeople([]));
-        axios.get<CompanyRow[]>("/api/companies").then((res) => setCompanies(res.data)).catch(() => setCompanies([]));
-    }, []);
+        const params = debouncedSearch.trim() ? { q: debouncedSearch.trim() } : undefined;
+        axios.get<PersonRow[]>("/api/person", { params }).then((res) => setPeople(res.data)).catch(() => setPeople([]));
+        axios.get<CompanyRow[]>("/api/companies", { params }).then((res) => setCompanies(res.data)).catch(() => setCompanies([]));
+    }, [debouncedSearch]);
 
     // Pre-select a row from URL query params on mount.  Day Book / register
     // tables link here as /office/customers/all?personId=<id> or ?companyId=<id>
@@ -258,18 +264,6 @@ export default function AllCustomersPage() {
         [people, companies]
     );
 
-    const filtered = useMemo(
-        () =>
-            search.trim()
-                ? merged.filter(
-                    (item) =>
-                        item.name.toLowerCase().includes(search.toLowerCase()) ||
-                        (item.phone ?? "").includes(search)
-                )
-                : merged,
-        [merged, search]
-    );
-
     const personTickets: (Ticket & { device: CustomerDevice })[] = personDetail
         ? personDetail.devices
             .flatMap((device) => device.tickets.map((ticket) => ({ ...ticket, device })))
@@ -302,10 +296,10 @@ export default function AllCustomersPage() {
                 search={search}
                 onSearchChange={setSearch}
                 searchPlaceholder="Search name or phone…"
-                isEmpty={filtered.length === 0}
+                isEmpty={merged.length === 0}
                 emptyMessage={search ? "No matches" : "No customers yet"}
             >
-                {filtered.map((item) => {
+                {merged.map((item) => {
                     const Icon = item.kind === "person" ? User : Building2;
                     const isActive = selected?.kind === item.kind && selected.id === item.id;
                     return (
@@ -396,23 +390,12 @@ export default function AllCustomersPage() {
 
                         <div className={`flex-1 overflow-y-auto ${personTab === "transactions" ? "" : "p-6"}`}>
                             {personTab === "profile" && (
-                                <div className="space-y-6">
-                                    <PersonProfileEdit
-                                        key={selected?.id}
-                                        profile={{
-                                            id: personDetail.id,
-                                            name: personDetail.name,
-                                            address: personDetail.address,
-                                            phones: personDetail.phones ?? [],
-                                            emails: personDetail.emails ?? [],
-                                        }}
-                                        onSaved={refetchPersonDetail}
-                                    />
-                                    <DevicesMiniGrid devices={personDetail.devices} />
-                                    {canManageUsers && (
-                                        <CustomerEmergencyPasswordResetCard customerId={personDetail.id} />
-                                    )}
-                                </div>
+                                <PersonProfileTab
+                                    detail={personDetail}
+                                    canEditCustomer={canEditCustomer}
+                                    canManageUsers={canManageUsers}
+                                    onSaved={refetchPersonDetail}
+                                />
                             )}
 
                             {personTab === "tickets" && (
@@ -546,22 +529,11 @@ export default function AllCustomersPage() {
 
                         <div className={`flex-1 overflow-y-auto ${companyTab === "transactions" ? "" : "p-6"}`}>
                             {companyTab === "profile" && (
-                                <div className="space-y-6">
-                                    <CompanyProfileEdit
-                                        key={selected?.id}
-                                        profile={{
-                                            id: companyDetail.id,
-                                            name: companyDetail.name,
-                                            address: companyDetail.address,
-                                            companyReg: companyDetail.companyReg,
-                                            taxId: companyDetail.taxId,
-                                            phones: companyDetail.contactRows?.phones ?? [],
-                                            emails: companyDetail.contactRows?.emails ?? [],
-                                        }}
-                                        onSaved={refetchCompanyDetail}
-                                    />
-                                    <DevicesMiniGrid devices={companyDetail.devices} />
-                                </div>
+                                <CompanyProfileTab
+                                    detail={companyDetail}
+                                    canEditCompany={canEditCustomer}
+                                    onSaved={refetchCompanyDetail}
+                                />
                             )}
 
                             {companyTab === "contacts" && (

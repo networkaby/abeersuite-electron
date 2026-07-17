@@ -11,12 +11,13 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDate } from "@/shared/lib/format/formatDate";
+import { useDebouncedValue } from "@/shared/hooks";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { initials } from "@/modules/customer/lib/initials";
 import { phoneError, emailError } from "@/shared/components/PartySearchAndCreate";
 import type { CustomerDevice } from "@/modules/customer/lib/customerTypes";
 import CustomerEmptyState from "@/modules/customer/components/CustomerEmptyState";
-import DevicesMiniGrid from "@/modules/customer/components/DevicesMiniGrid";
+import CompanyProfileTab from "@/modules/customer/components/CompanyProfileTab";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -41,8 +42,6 @@ import {
 import { EntityListPanel } from "@/shared/components/EntityListPanel";
 import { TransactionsTable, type CustomerTransactions } from "@/modules/customer/components/TransactionsTable";
 import CompanyLinkPanel from "@/modules/customer/components/CompanyLinkPanel";
-import CompanyProfileEdit from "@/modules/customer/components/CompanyProfileEdit";
-import AccountCreditLimitCard from "@/modules/customer/components/AccountCreditLimitCard";
 import { LoyaltyPanel } from "@/modules/loyalty/components/LoyaltyPanel";
 
 interface CompanyListItem {
@@ -95,16 +94,22 @@ export default function CompaniesPage() {
     const [form, setForm] = useState({ name: "", phone: "", email: "", address: "", companyReg: "", taxId: "" });
     const [saving, setSaving] = useState(false);
 
-    const loadList = useCallback(async () => {
+    // Server-side search — let the DB match name / phone / reg across the whole
+    // table instead of filtering the loaded page in the browser.
+    const debouncedSearch = useDebouncedValue(search, 300);
+
+    const loadList = useCallback(async (q: string) => {
         try {
-            const response = await axios.get<CompanyListItem[]>("/api/companies");
+            const response = await axios.get<CompanyListItem[]>("/api/companies", {
+                params: q ? { q } : undefined,
+            });
             setCompanies(response.data);
         } catch {
             toast.error("Failed to load companies");
         }
     }, []);
 
-    useEffect(() => { loadList(); }, [loadList]);
+    useEffect(() => { loadList(debouncedSearch.trim()); }, [loadList, debouncedSearch]);
 
     useEffect(() => {
         if (!selectedId) {
@@ -193,7 +198,7 @@ export default function CompaniesPage() {
             toast.success("Company created");
             setShowCreate(false);
             setForm({ name: "", phone: "", email: "", address: "", companyReg: "", taxId: "" });
-            await loadList();
+            await loadList(search.trim());
             setSelectedId(response.data.id);
         } catch {
             toast.error("Failed to create company");
@@ -201,14 +206,6 @@ export default function CompaniesPage() {
             setSaving(false);
         }
     };
-
-    const filtered = search
-        ? companies.filter((company) =>
-            company.name.toLowerCase().includes(search.toLowerCase()) ||
-            (company.phone ?? "").includes(search) ||
-            (company.companyReg ?? "").toLowerCase().includes(search.toLowerCase())
-        )
-        : companies;
 
     return (
         <div className="flex h-full flex-col overflow-hidden bg-card">
@@ -232,10 +229,10 @@ export default function CompaniesPage() {
                     onSearchChange={setSearch}
                     searchPlaceholder="Search name, phone, reg…"
                     onAdd={() => setShowCreate(true)}
-                    isEmpty={filtered.length === 0}
+                    isEmpty={companies.length === 0}
                     emptyMessage={search ? "No matches" : "No companies yet"}
                 >
-                    {filtered.map((company) => (
+                    {companies.map((company) => (
                         <Button
                             key={company.id}
                             type="button"
@@ -326,29 +323,11 @@ export default function CompaniesPage() {
 
                                 {/* Profile — inline editing */}
                                 {tab === "profile" && (
-                                    <div className="space-y-6">
-                                        <CompanyProfileEdit
-                                            key={selectedId}
-                                            profile={{
-                                                id: detail.id,
-                                                name: detail.name,
-                                                address: detail.address,
-                                                companyReg: detail.companyReg,
-                                                taxId: detail.taxId,
-                                                phones: detail.contactRows?.phones ?? [],
-                                                emails: detail.contactRows?.emails ?? [],
-                                            }}
-                                            onSaved={refetchDetail}
-                                        />
-                                        <AccountCreditLimitCard
-                                            key={`cl-${selectedId}`}
-                                            accountId={detail.accountId}
-                                            initialLimit={detail.creditLimit}
-                                            canEdit={canEditCompany}
-                                            onSaved={refetchDetail}
-                                        />
-                                        <DevicesMiniGrid devices={detail.devices} />
-                                    </div>
+                                    <CompanyProfileTab
+                                        detail={detail}
+                                        canEditCompany={canEditCompany}
+                                        onSaved={refetchDetail}
+                                    />
                                 )}
 
                                 {/* Contacts — link management */}

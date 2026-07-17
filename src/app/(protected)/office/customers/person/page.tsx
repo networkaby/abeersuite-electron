@@ -11,13 +11,14 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDate } from "@/shared/lib/format/formatDate";
+import { useDebouncedValue } from "@/shared/hooks";
 import { PRIORITY_META } from "@/utils/constants";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { initials } from "@/modules/customer/lib/initials";
 import { phoneError, emailError } from "@/shared/components/PartySearchAndCreate";
 import type { Ticket, CustomerDevice } from "@/modules/customer/lib/customerTypes";
 import CustomerEmptyState from "@/modules/customer/components/CustomerEmptyState";
-import DevicesMiniGrid from "@/modules/customer/components/DevicesMiniGrid";
+import PersonProfileTab from "@/modules/customer/components/PersonProfileTab";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -45,9 +46,6 @@ import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { indianFiscalYearStart } from "@/modules/accountancy/lib/period";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import CustomerLinkPanel from "@/modules/customer/components/CustomerLinkPanel";
-import CustomerEmergencyPasswordResetCard from "@/modules/customer/components/CustomerEmergencyPasswordResetCard";
-import PersonProfileEdit from "@/modules/customer/components/PersonProfileEdit";
-import AccountCreditLimitCard from "@/modules/customer/components/AccountCreditLimitCard";
 import { LoyaltyPanel } from "@/modules/loyalty/components/LoyaltyPanel";
 
 interface CustomerListItem {
@@ -101,16 +99,23 @@ export default function CustomersPage() {
 
     const router = useRouter();
 
-    const loadList = useCallback(async () => {
+    // Server-side search: the list holds only what the API returns for the
+    // current query. Empty query → newest page. Filtering in the browser used to
+    // hide matches that lived beyond the first page, so we let the DB search.
+    const debouncedSearch = useDebouncedValue(search, 300);
+
+    const loadList = useCallback(async (q: string) => {
         try {
-            const response = await axios.get<CustomerListItem[]>("/api/person");
+            const response = await axios.get<CustomerListItem[]>("/api/person", {
+                params: q ? { q } : undefined,
+            });
             setCustomers(response.data);
         } catch {
             toast.error("Failed to load customers");
         }
     }, []);
 
-    useEffect(() => { loadList(); }, [loadList]);
+    useEffect(() => { loadList(debouncedSearch.trim()); }, [loadList, debouncedSearch]);
 
     useEffect(() => {
         if (!selectedId) {
@@ -199,7 +204,7 @@ export default function CustomersPage() {
             toast.success("Customer created");
             setShowCreate(false);
             setForm({ name: "", phone: "", email: "", address: "" });
-            await loadList();
+            await loadList(search.trim());
             setSelectedId(response.data.id);
         } catch {
             toast.error("Failed to create customer");
@@ -207,13 +212,6 @@ export default function CustomersPage() {
             setSaving(false);
         }
     };
-
-    const filtered = search
-        ? customers.filter((customer) =>
-            customer.name.toLowerCase().includes(search.toLowerCase()) ||
-            (customer.phone ?? "").includes(search)
-        )
-        : customers;
 
     const allTickets: (Ticket & { device: CustomerDevice })[] = detail
         ? detail.devices.flatMap((device) => device.tickets.map((ticket) => ({ ...ticket, device })))
@@ -241,10 +239,10 @@ export default function CustomersPage() {
                     onSearchChange={setSearch}
                     searchPlaceholder="Search name or phone…"
                     onAdd={() => setShowCreate(true)}
-                    isEmpty={filtered.length === 0}
+                    isEmpty={customers.length === 0}
                     emptyMessage={search ? "No matches" : "No customers yet"}
                 >
-                    {filtered.map((customer) => (
+                    {customers.map((customer) => (
                         <Button
                             key={customer.id}
                             asChild
@@ -342,30 +340,12 @@ export default function CustomersPage() {
 
                                 {/* Profile — inline editing */}
                                 {tab === "profile" && (
-                                    <div className="space-y-6">
-                                        <PersonProfileEdit
-                                            key={selectedId}
-                                            profile={{
-                                                id: detail.id,
-                                                name: detail.name,
-                                                address: detail.address,
-                                                phones: detail.phones ?? [],
-                                                emails: detail.emails ?? [],
-                                            }}
-                                            onSaved={refetchDetail}
-                                        />
-                                        <AccountCreditLimitCard
-                                            key={`cl-${selectedId}`}
-                                            accountId={detail.accountId}
-                                            initialLimit={detail.creditLimit}
-                                            canEdit={canEditCustomer}
-                                            onSaved={refetchDetail}
-                                        />
-                                        <DevicesMiniGrid devices={detail.devices} />
-                                        {canManageUsers && (
-                                            <CustomerEmergencyPasswordResetCard customerId={detail.id} />
-                                        )}
-                                    </div>
+                                    <PersonProfileTab
+                                        detail={detail}
+                                        canEditCustomer={canEditCustomer}
+                                        canManageUsers={canManageUsers}
+                                        onSaved={refetchDetail}
+                                    />
                                 )}
 
                                 {/* Tickets */}

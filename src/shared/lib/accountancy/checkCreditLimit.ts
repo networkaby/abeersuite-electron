@@ -1,4 +1,5 @@
 import type { Prisma } from "@/generated/prisma/client";
+import { resolveEffectiveCreditLimit } from "./creditLimit";
 
 // ── CreditLimitError ─────────────────────────────────────────────────────────
 // Thrown by checkCreditLimit when a sale would breach the account's credit
@@ -21,11 +22,13 @@ export class CreditLimitError extends Error {
 // Must be called INSIDE a prisma.$transaction so the balance read is fresh
 // and consistent with the writes that follow.
 //
-// Rules (deny-by-default — credit is a privilege that must be granted):
-//   creditLimit IS NULL  → treated exactly like 0 — NO credit sales allowed
-//   creditLimit IS 0     → no credit sales allowed; any additionalDebit > 0 throws
-//   creditLimit > 0      → throws when (current balance + additionalDebit) > creditLimit
-//   An explicit POSITIVE limit is the ONLY way to permit a credit sale.
+// The EFFECTIVE limit is resolved via resolveEffectiveCreditLimit — the higher
+// of the per-customer manual limit and the config-driven AUTO limit (Y% of the
+// customer's sales in the last X days). With auto OFF this is deny-by-default:
+//   effective IS 0   → no credit sales allowed; any additionalDebit > 0 throws
+//   effective > 0    → throws when (current balance + additionalDebit) > effective
+// With auto ON a customer with no manual limit can still buy on credit up to
+// their auto number.
 //
 // @param tx              Prisma transaction client
 // @param accountId       Customer AR account id (Account.id)
@@ -48,9 +51,10 @@ export async function checkCreditLimit(
     // Unknown account — let the FK constraint handle it.
     if (!account) return;
 
-    // Deny-by-default: a NULL limit is treated exactly like 0 (no credit). An
-    // account can only buy on credit when an explicit positive limit is set.
-    const limit   = account.creditLimit === null ? 0 : Number(account.creditLimit);
+    // Effective limit = max(manual, auto). Manual null → 0; auto is 0 unless the
+    // config switches it on. Both 0 → no credit (deny-by-default).
+    const manual  = account.creditLimit === null ? 0 : Number(account.creditLimit);
+    const { effective: limit } = await resolveEffectiveCreditLimit(tx, accountId, manual);
     const current = Number(account.balance);    // positive = customer owes us
 
     if (limit === 0) {

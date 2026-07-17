@@ -23,7 +23,8 @@ export interface ContactDto {
     isActive: boolean;
     createdAt: string;
     owner: ContactOwnerLite | null;
-    account: { id: number } | null;
+    /** creditLimit is the per-customer MANUAL limit (Prisma Decimal → string); null = none set. */
+    account: { id: number; creditLimit: string | null } | null;
     phones: { phone: string; isPrimary: boolean }[];
     emails: { email: string; isPrimary: boolean }[];
     _count: { deals: number };

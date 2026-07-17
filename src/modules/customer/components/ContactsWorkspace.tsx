@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { PaginationBar } from "@/shared/components/PaginationBar";
 import UserAvatar from "@/shared/components/UserAvatar";
 import { formatDate } from "@/shared/lib/format";
+import { formatRupees } from "@/shared/lib/format/moneyInr";
 import { extractApiError } from "@/shared/lib/api";
 import {
     LIFECYCLE_META, LIFECYCLES,
@@ -43,9 +44,12 @@ function toCsv(rows: ContactDto[]): string {
 export default function ContactsWorkspace({
     positions,
     canEdit,
+    autoCredit,
 }: {
     positions: ContactPositionOption[];
     canEdit: boolean;
+    /** Global auto credit-limit switch — drives the "Auto" badge for customers with no manual limit. */
+    autoCredit: boolean;
 }) {
     const [items, setItems] = useState<ContactDto[]>([]);
     const [total, setTotal] = useState(0);
@@ -59,6 +63,7 @@ export default function ContactsWorkspace({
     const [lifecycle, setLifecycle] = useState<string>(ALL);
     const [owner, setOwner] = useState<string>(ALL);
     const [hasDeal, setHasDeal] = useState<string>(ALL);
+    const [credit, setCredit] = useState<string>(ALL);
     const [tag, setTag] = useState("");
     const [sort, setSort] = useState("recent");
 
@@ -78,6 +83,7 @@ export default function ContactsWorkspace({
             if (lifecycle !== ALL) params.set("lifecycleStage", lifecycle);
             if (owner !== ALL) params.set("ownerPositionId", owner);
             if (hasDeal !== ALL) params.set("hasDeal", hasDeal);
+            if (credit !== ALL) params.set("credit", credit);
             if (tag.trim()) params.set("tag", tag.trim());
             const res = await axios.get<ContactsResponse>(`/api/contacts?${params.toString()}`);
             setItems(res.data.items);
@@ -87,11 +93,11 @@ export default function ContactsWorkspace({
         } finally {
             setLoading(false);
         }
-    }, [page, pageSize, sort, debouncedQ, lifecycle, owner, hasDeal, tag]);
+    }, [page, pageSize, sort, debouncedQ, lifecycle, owner, hasDeal, credit, tag]);
 
     useEffect(() => { load(); }, [load]);
     // Reset to page 1 when filters change.
-    useEffect(() => { setPage(1); }, [debouncedQ, lifecycle, owner, hasDeal, tag, pageSize, sort]);
+    useEffect(() => { setPage(1); }, [debouncedQ, lifecycle, owner, hasDeal, credit, tag, pageSize, sort]);
 
     const pageIds = useMemo(() => items.map((c) => c.id), [items]);
     const allOnPageSelected = pageIds.length > 0 && pageIds.every((id) => selected.has(id));
@@ -179,6 +185,14 @@ export default function ContactsWorkspace({
                         <SelectItem value="0">No deal</SelectItem>
                     </SelectContent>
                 </Select>
+                <Select value={credit} onValueChange={setCredit}>
+                    <SelectTrigger className="w-[170px]"><SelectValue placeholder="Credit limit" /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value={ALL}>Any credit</SelectItem>
+                        <SelectItem value="manual">Manual limit set</SelectItem>
+                        <SelectItem value="none">No manual limit</SelectItem>
+                    </SelectContent>
+                </Select>
                 <Input value={tag} onChange={(e) => setTag(e.target.value)} placeholder="Tag…" className="w-[120px]" />
                 <Select value={sort} onValueChange={setSort}>
                     <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
@@ -228,15 +242,16 @@ export default function ContactsWorkspace({
                             <TableHead>Lifecycle</TableHead>
                             <TableHead>Owner</TableHead>
                             <TableHead>Tags</TableHead>
+                            <TableHead className="text-right">Credit limit</TableHead>
                             <TableHead className="text-right">Deals</TableHead>
                             <TableHead className="text-right">Created</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {loading ? (
-                            <TableRow><TableCell colSpan={7} className="py-8 text-center text-sm text-muted-foreground">Loading…</TableCell></TableRow>
+                            <TableRow><TableCell colSpan={8} className="py-8 text-center text-sm text-muted-foreground">Loading…</TableCell></TableRow>
                         ) : items.length === 0 ? (
-                            <TableRow><TableCell colSpan={7} className="py-8 text-center text-sm text-muted-foreground">No contacts match.</TableCell></TableRow>
+                            <TableRow><TableCell colSpan={8} className="py-8 text-center text-sm text-muted-foreground">No contacts match.</TableCell></TableRow>
                         ) : (
                             items.map((c) => {
                                 const phone = c.phones.find((p) => p.isPrimary)?.phone ?? c.phones[0]?.phone;
@@ -264,6 +279,14 @@ export default function ContactsWorkspace({
                                                 {c.tags.slice(0, 3).map((t) => <span key={t} className="rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">{t}</span>)}
                                                 {c.tags.length > 3 && <span className="text-[11px] text-muted-foreground">+{c.tags.length - 3}</span>}
                                             </div>
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                            {(() => {
+                                                const manual = c.account?.creditLimit != null ? Number(c.account.creditLimit) : 0;
+                                                if (manual > 0) return <span className="tabular-nums">{formatRupees(manual)}</span>;
+                                                if (autoCredit) return <Badge className="bg-blue-100 text-blue-700">Auto</Badge>;
+                                                return <span className="text-muted-foreground">—</span>;
+                                            })()}
                                         </TableCell>
                                         <TableCell className="text-right tabular-nums">{c._count.deals || "—"}</TableCell>
                                         <TableCell className="text-right text-xs text-muted-foreground">{formatDate(c.createdAt)}</TableCell>

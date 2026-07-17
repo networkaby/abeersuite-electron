@@ -592,6 +592,7 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     { label: "Org Defaults", href: "/office/settings/org-defaults", icon: Settings, permission: "settings:manage" },
     { label: "E-Commerce", href: "/office/settings/ecommerce", icon: ShoppingCart, permission: "settings:manage" },
     { label: "Payment Methods", href: "/office/settings/payment-methods", icon: CreditCard, permission: "settings:manage" },
+    { label: "Credit Limit", href: "/office/settings/credit-limit", icon: Calculator, permission: "settings:manage" },
     { label: "Workflow", href: "/office/settings/workflow", icon: Workflow, permission: "settings:manage" },
     { label: "Naming Convention", icon: ClipboardList, href: "/office/settings/naming-convention", permission: "inventory:masters:edit" },
     { label: "Year Ending", href: "/office/settings/year-ending", icon: Calendar, permission: "settings:manage" },

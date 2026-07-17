@@ -7,6 +7,7 @@ import { selectPrimaryPhone, selectPrimaryEmail } from "@/shared/lib/prisma/frag
 import { getLedgerOutstanding } from "@/modules/accountancy/lib/outstandings";
 import { ratesFromConfig, liveBalance } from "@/modules/loyalty/lib";
 import { resolveTierTitles, type TierPeriodInput } from "@/shared/lib/pricing";
+import { resolveEffectiveCreditLimit } from "@/shared/lib/accountancy/creditLimit";
 
 // GET /api/pos/account-snapshot/[accountId]
 // Polymorphic POS "we know you" panel — works for either a Person account
@@ -228,12 +229,12 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
         // badge title; empty when the customer has earned no title at all.
         const customerLevel = tier.badgeLevelName;
 
-        // Deny-by-default (matches checkCreditLimit): NULL is treated as 0.
+        // Effective limit = max(manual, auto) — mirrors checkCreditLimit so the
+        // POS "available credit" reflects any auto limit granted by the config.
         //   0    = no credit facility (must pay in full)
         //   > 0  = hard cap; enforced at sale APIs and the POS checkout dialog
-        const creditLimit: number = account.creditLimit !== null
-            ? Number(account.creditLimit)
-            : 0;
+        const manualLimit = account.creditLimit !== null ? Number(account.creditLimit) : 0;
+        const { effective: creditLimit } = await resolveEffectiveCreditLimit(prisma, accountId, manualLimit);
         const balance    = Number(account.balance);    // ledger balance (positive = customer owes)
         const balanceDue = Math.max(0, balance);
         const overdueDue = ledgerOutstanding?.bills

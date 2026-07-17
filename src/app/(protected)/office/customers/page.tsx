@@ -15,15 +15,19 @@ export default async function ContactsPage() {
         isAdmin ||
         permissions.includes(PERMISSIONS.CUSTOMERS_EDIT);
 
-    const positionRows = await prisma.position.findMany({
-        orderBy: { title: "asc" },
-        select: { id: true, title: true, branch: { select: { name: true } } },
-    });
+    const [positionRows, creditConfig] = await Promise.all([
+        prisma.position.findMany({
+            orderBy: { title: "asc" },
+            select: { id: true, title: true, branch: { select: { name: true } } },
+        }),
+        // Fail-safe: a missing table (pre-`db push`) falls back to auto OFF.
+        prisma.creditLimitConfig.findUnique({ where: { id: 1 }, select: { autoEnabled: true } }).catch(() => null),
+    ]);
     const positions = positionRows.map((p) => ({ id: p.id, title: p.title, branchName: p.branch?.name ?? null }));
 
     return (
         <div className="h-full px-6 py-5">
-            <ContactsWorkspace positions={positions} canEdit={canEdit} />
+            <ContactsWorkspace positions={positions} canEdit={canEdit} autoCredit={creditConfig?.autoEnabled ?? false} />
         </div>
     );
 }
