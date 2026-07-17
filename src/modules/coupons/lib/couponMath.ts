@@ -10,11 +10,14 @@ export type CouponChannel = "POS" | "SHOP" | "BOTH";
 export type CouponApplyMode = "CODE" | "AUTO";
 export type CouponEligibility = "ANY" | "NEW" | "RETURNING";
 
-/// One include/exclude rule on a coupon.
+/// One include/exclude rule on a coupon. The set taxonomy fields are ANDed
+/// together (see lineMatchesRule); rules of the same kind are ORed.
 export interface CouponRuleLite {
     kind: "INCLUDE" | "EXCLUDE";
     productId: number | null;
     categoryId: number | null;
+    groupId: number | null;
+    brandId: number | null;
 }
 
 /// A coupon narrowed to plain numbers (Prisma Decimals already converted) plus
@@ -53,6 +56,7 @@ export interface CartLineLite {
     productId: number;
     groupId: number | null;
     categoryId: number | null;
+    brandId: number | null;
     qty: number;
     unitPrice: number; // pre-tax unit goods price
 }
@@ -76,12 +80,30 @@ export type EvalResult = EvalOk | EvalFail;
 
 const lineGoods = (l: CartLineLite): number => l.qty * l.unitPrice;
 
-/// Does a cart line match an include/exclude rule? Direct product or category
-/// match (Phase 1 does not walk the category tree — note for later).
+/// Does a cart line match an include/exclude rule? EVERY taxonomy field set on the
+/// rule must match the line (AND) — so product + category + group + brand narrow
+/// each other, e.g. brand Samsung AND category Phones = Samsung phones only. A rule
+/// with nothing set matches nothing. Matches are direct: the category / group trees
+/// are NOT walked, so a rule on a parent does not catch its children (note for later).
 function lineMatchesRule(line: CartLineLite, rule: CouponRuleLite): boolean {
-    if (rule.productId != null) return line.productId === rule.productId;
-    if (rule.categoryId != null) return line.categoryId === rule.categoryId;
-    return false;
+    let anySet = false;
+    if (rule.productId != null) {
+        if (line.productId !== rule.productId) return false;
+        anySet = true;
+    }
+    if (rule.categoryId != null) {
+        if (line.categoryId !== rule.categoryId) return false;
+        anySet = true;
+    }
+    if (rule.groupId != null) {
+        if (line.groupId !== rule.groupId) return false;
+        anySet = true;
+    }
+    if (rule.brandId != null) {
+        if (line.brandId !== rule.brandId) return false;
+        anySet = true;
+    }
+    return anySet;
 }
 
 /// Σ goods of the lines the coupon applies to. With no INCLUDE rules, every line

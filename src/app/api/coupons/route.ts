@@ -3,7 +3,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requireAuth, requireAnyPermission } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
-import { couponSchema } from "@/shared/lib/schemas/couponSchemas";
+import { couponSchema, toCouponRuleCreate } from "@/shared/lib/schemas/couponSchemas";
 
 // GET /api/coupons — all coupons (+ rules + redemption count). Read-only to any
 // authed user (POS reads it); edits require coupons:manage.
@@ -35,9 +35,7 @@ export async function POST(req: Request) {
                 // singleUse ⇒ a hard total cap of 1 (the engine reads totalUsageLimit).
                 totalUsageLimit: fields.singleUse ? 1 : fields.totalUsageLimit ?? null,
                 createdById: user!.id,
-                rules: rules?.length
-                    ? { create: rules.map((r) => ({ kind: r.kind, productId: r.productId ?? null, categoryId: r.categoryId ?? null })) }
-                    : undefined,
+                rules: rules?.length ? { create: rules.map(toCouponRuleCreate) } : undefined,
             },
             include: { rules: true, _count: { select: { redemptions: true } } },
         });

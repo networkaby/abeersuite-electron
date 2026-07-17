@@ -125,18 +125,28 @@ model Coupon {
   @@index([issuedByMilestoneId])
 }
 
-/// Product / category include + exclude lists for a coupon. One table, a `kind`
-/// discriminator ("INCLUDE" | "EXCLUDE") — Prisma can't dual-relate the same FK.
-/// Queryable (vs JSON) so the admin form reuses SearchableSelect + we can index.
+/// Product / category / group / brand include + exclude lists for a coupon. One
+/// table, a `kind` discriminator ("INCLUDE" | "EXCLUDE") — Prisma can't dual-relate
+/// the same FK. Queryable (vs JSON) so the admin form reuses SearchableSelect + we
+/// can index.
+///
+/// Matching (see lineMatchesRule in couponMath.ts): the four taxonomy FKs on ONE
+/// row are ANDed — a row with brandId=Samsung + categoryId=Phones matches only
+/// Samsung phones. Rows of the same `kind` are ORed. A row with all four null
+/// matches nothing (the form can't create one).
 model CouponProductRule {
-  id         Int          @id @default(autoincrement())
+  id         Int              @id @default(autoincrement())
   couponId   Int
-  coupon     Coupon       @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  coupon     Coupon           @relation(fields: [couponId], references: [id], onDelete: Cascade)
   kind       String // "INCLUDE" | "EXCLUDE"
   productId  Int?
-  product    InvProduct?  @relation("CouponRuleProduct", fields: [productId], references: [id], onDelete: Cascade)
+  product    InvProduct?      @relation("CouponRuleProduct", fields: [productId], references: [id], onDelete: Cascade)
   categoryId Int?
-  category   InvCategory? @relation("CouponRuleCategory", fields: [categoryId], references: [id], onDelete: Cascade)
+  category   InvCategory?     @relation("CouponRuleCategory", fields: [categoryId], references: [id], onDelete: Cascade)
+  groupId    Int?
+  group      InvProductGroup? @relation("CouponRuleGroup", fields: [groupId], references: [id], onDelete: Cascade)
+  brandId    Int?
+  brand      InvBrand?        @relation("CouponRuleBrand", fields: [brandId], references: [id], onDelete: Cascade)
 
   @@index([couponId, kind])
 }

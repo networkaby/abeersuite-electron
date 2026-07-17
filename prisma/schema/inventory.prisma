@@ -67,7 +67,8 @@ model InvProductGroup {
   taxability Taxability?
 
   products         InvProduct[]
-  loyaltyEarnRules LoyaltyEarnRule[] @relation("InvProductGroupLoyaltyRules")
+  loyaltyEarnRules LoyaltyEarnRule[]   @relation("InvProductGroupLoyaltyRules")
+  couponRules      CouponProductRule[] @relation("CouponRuleGroup")
 
   @@unique([name])
   @@index([parentId])
@@ -80,7 +81,8 @@ model InvBrand {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  products InvProduct[]
+  products    InvProduct[]
+  couponRules CouponProductRule[] @relation("CouponRuleBrand")
 
   @@unique([name])
 }

@@ -7,9 +7,11 @@ import { getOrganisation } from "@/shared/lib/org/getOrganisation";
 export const metadata = { title: "Coupons" };
 
 export default async function CouponsPage() {
-    const [categories, products, org] = await Promise.all([
+    const [categories, products, groups, brands, org] = await Promise.all([
         prisma.invCategory.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
         prisma.invProduct.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, take: 2000, select: { id: true, sku: true, name: true } }),
+        prisma.invProductGroup.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+        prisma.invBrand.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
         getOrganisation(),
     ]);
 
@@ -28,7 +30,7 @@ export default async function CouponsPage() {
                     </div>
                 </div> */}
                 <CouponConfigCard />
-                <CouponList categories={categories} products={products} brandName={org.brandName} />
+                <CouponList masters={{ categories, products, groups, brands }} brandName={org.brandName} />
             </div>
         </ScrollArea>
     );

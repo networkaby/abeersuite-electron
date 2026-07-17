@@ -8,11 +8,18 @@ export const couponChannelEnum = z.enum(["POS", "SHOP", "BOTH"]);
 export const couponApplyModeEnum = z.enum(["CODE", "AUTO"]);
 export const couponEligibilityEnum = z.enum(["ANY", "NEW", "RETURNING"]);
 
+// The taxonomy fields on one rule are ANDed by the engine; rules of the same kind
+// are ORed. At least one must be set — an all-null rule can never match a line.
 const couponRuleSchema = z.object({
     kind:       z.enum(["INCLUDE", "EXCLUDE"]),
     productId:  z.number().int().positive().nullable().optional(),
     categoryId: z.number().int().positive().nullable().optional(),
-});
+    groupId:    z.number().int().positive().nullable().optional(),
+    brandId:    z.number().int().positive().nullable().optional(),
+}).refine(
+    (r) => r.productId != null || r.categoryId != null || r.groupId != null || r.brandId != null,
+    { message: "A rule needs at least one of product / category / group / brand" },
+);
 
 const baseShape = {
     code:            z.string().trim().min(1).max(40).nullable().optional(),
@@ -65,6 +72,18 @@ function refineCoupon(
 
 export const couponSchema = z.object(baseShape).superRefine(refineCoupon);
 export type CouponInput = z.infer<typeof couponSchema>;
+
+export type CouponRuleInput = z.infer<typeof couponRuleSchema>;
+
+/// Validated rule → Prisma create row. Shared by the create + replace paths so the
+/// taxonomy field list lives in exactly one place.
+export const toCouponRuleCreate = (r: CouponRuleInput) => ({
+    kind: r.kind,
+    productId: r.productId ?? null,
+    categoryId: r.categoryId ?? null,
+    groupId: r.groupId ?? null,
+    brandId: r.brandId ?? null,
+});
 
 // Partial — inline edits change one field at a time; the create path owns the
 // per-type/code invariants, and the existing row already satisfies them.

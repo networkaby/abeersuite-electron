@@ -48,7 +48,10 @@ function toContext(row: CouponRow): CouponContext {
         totalUsageLimit: row.totalUsageLimit,
         perCustomerLimit: row.perCustomerLimit,
         singleUse: row.singleUse,
-        rules: row.rules.map((r) => ({ kind: r.kind === "EXCLUDE" ? "EXCLUDE" : "INCLUDE", productId: r.productId, categoryId: r.categoryId })),
+        rules: row.rules.map((r) => ({
+            kind: r.kind === "EXCLUDE" ? "EXCLUDE" : "INCLUDE",
+            productId: r.productId, categoryId: r.categoryId, groupId: r.groupId, brandId: r.brandId,
+        })),
     };
 }
 
@@ -159,7 +162,9 @@ export async function issueMilestoneCoupon(
             eligibility: t.eligibility, stackable: t.stackable,
             ownerAccountId: args.accountId, singleUse: true, totalUsageLimit: 1,
             issuedByMilestoneId: args.milestoneId, isActive: true, createdById: args.createdById,
-            rules: t.rules.length ? { create: t.rules.map((r) => ({ kind: r.kind, productId: r.productId, categoryId: r.categoryId })) } : undefined,
+            rules: t.rules.length
+                ? { create: t.rules.map((r) => ({ kind: r.kind, productId: r.productId, categoryId: r.categoryId, groupId: r.groupId, brandId: r.brandId })) }
+                : undefined,
         },
     });
     return code;

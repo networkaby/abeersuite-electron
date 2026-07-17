@@ -267,20 +267,34 @@ export async function POST(req: Request) {
     // redeem-cap %) + group/category parent chains so both the per-line
     // multiplier and the cart-aware redeem ceiling (product → group → category →
     // global) can be computed. Skipped for walk-in / disabled — no extra queries.
+    // Each line's product taxonomy (group / category / brand). Loyalty earn rules and
+    // coupon include/exclude rules both need it, so it is loaded at most once and
+    // shared — whichever feature runs first pays for the query.
+    type LineTaxonomy = { groupId: number | null; categoryId: number | null; brandId: number | null };
+    let taxById: Map<number, LineTaxonomy> | null = null;
+    async function loadTaxonomy(): Promise<Map<number, LineTaxonomy>> {
+        if (taxById) return taxById;
+        const productIds = [...new Set(body.lines.map((l) => l.productId))];
+        const products = await prisma.invProduct.findMany({
+            where: { id: { in: productIds } },
+            select: { id: true, groupId: true, categoryId: true, brandId: true },
+        });
+        taxById = new Map(products.map((p) => [p.id, { groupId: p.groupId, categoryId: p.categoryId, brandId: p.brandId }]));
+        return taxById;
+    }
+
     let earnLines: EarnLine[] = [];
     let rulesIndex = buildRulesIndex([]);
     let taxonomyMaps: TaxonomyMaps = { groupParent: new Map(), categoryParent: new Map() };
     if (loyaltyEnabled) {
-        const productIds = [...new Set(body.lines.map((l) => l.productId))];
-        const [products, groups, categories, rules] = await Promise.all([
-            prisma.invProduct.findMany({ where: { id: { in: productIds } }, select: { id: true, groupId: true, categoryId: true } }),
+        const [tax, groups, categories, rules] = await Promise.all([
+            loadTaxonomy(),
             prisma.invProductGroup.findMany({ select: { id: true, parentId: true } }),
             prisma.invCategory.findMany({ select: { id: true, parentId: true } }),
             prisma.loyaltyEarnRule.findMany({ where: { enabled: true }, select: { scope: true, categoryId: true, groupId: true, productId: true, multiplier: true, redeemCapPct: true, enabled: true } }),
         ]);
-        const taxById = new Map(products.map((p) => [p.id, p]));
         earnLines = body.lines.map((l) => {
-            const p = taxById.get(l.productId);
+            const p = tax.get(l.productId);
             return { productId: l.productId, groupId: p?.groupId ?? null, categoryId: p?.categoryId ?? null, goods: l.quantity * l.unitPrice };
         });
         rulesIndex = buildRulesIndex(rules.map((r) => ({ ...r, multiplier: Number(r.multiplier), redeemCapPct: r.redeemCapPct == null ? null : Number(r.redeemCapPct) })));
@@ -328,16 +342,14 @@ export async function POST(req: Request) {
             ? (await prisma.voucherDetail.count({ where: { universalVoucher: { partyAccountId: customerAccount.id, status: "POSTED", deletedAt: null, type: { in: ["SALE", "POS"] } } } })) === 0
             : false;
         // Coupon eligibility needs each line's taxonomy (include/exclude rules).
-        // Reuse the loyalty earn lines when present; else load just for the coupon.
-        let couponLines: CartLineLite[];
-        if (earnLines.length) {
-            couponLines = earnLines.map((e) => ({ productId: e.productId, groupId: e.groupId, categoryId: e.categoryId, qty: 1, unitPrice: e.goods }));
-        } else {
-            const productIds = [...new Set(body.lines.map((l) => l.productId))];
-            const products = await prisma.invProduct.findMany({ where: { id: { in: productIds } }, select: { id: true, groupId: true, categoryId: true } });
-            const taxById = new Map(products.map((p) => [p.id, p]));
-            couponLines = body.lines.map((l) => ({ productId: l.productId, groupId: taxById.get(l.productId)?.groupId ?? null, categoryId: taxById.get(l.productId)?.categoryId ?? null, qty: l.quantity, unitPrice: l.unitPrice }));
-        }
+        const tax = await loadTaxonomy();
+        const couponLines: CartLineLite[] = body.lines.map((l) => ({
+            productId: l.productId,
+            groupId: tax.get(l.productId)?.groupId ?? null,
+            categoryId: tax.get(l.productId)?.categoryId ?? null,
+            brandId: tax.get(l.productId)?.brandId ?? null,
+            qty: l.quantity, unitPrice: l.unitPrice,
+        }));
         const couponInput: EvalInput = {
             accountId: isIdentified ? customerAccount.id : null,
             lines: couponLines,

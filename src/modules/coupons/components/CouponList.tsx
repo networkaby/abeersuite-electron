@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
     DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { CouponForm, type Coupon, type CategoryOpt, type ProductOpt } from "./CouponForm";
+import { CouponForm, type Coupon, type RuleMasters } from "./CouponForm";
 import {
     couponHeadline, couponValueText, couponWhatsappUrl, couponWhatsappWebUrl, couponEmailUrl, type CouponShareInfo,
 } from "@/modules/coupons/lib/couponShare";
@@ -37,7 +37,7 @@ const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
     { value: "ALL", label: "All" }, { value: "ACTIVE", label: "Active" }, { value: "INACTIVE", label: "Inactive" }, { value: "AUTO", label: "Auto-apply" },
 ];
 
-export function CouponList({ categories, products, brandName }: { categories: CategoryOpt[]; products: ProductOpt[]; brandName: string }) {
+export function CouponList({ masters, brandName }: { masters: RuleMasters; brandName: string }) {
     const [coupons, setCoupons] = useState<Coupon[]>([]);
     const [loading, setLoading] = useState(true);
     const [formOpen, setFormOpen] = useState(false);
@@ -150,8 +150,7 @@ export function CouponList({ categories, products, brandName }: { categories: Ca
                 {formOpen && (
                     <CouponForm
                         initial={editing ?? undefined}
-                        categories={categories}
-                        products={products}
+                        masters={masters}
                         onSaved={() => { setFormOpen(false); load(); }}
                         onCancel={() => setFormOpen(false)}
                     />

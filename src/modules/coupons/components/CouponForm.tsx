@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { Save, X } from "lucide-react";
@@ -14,9 +14,26 @@ import { SearchableSelect } from "@/shared/components/SearchableSelect";
 import { extractApiError } from "@/shared/lib/api";
 import { parseDecimalInput, parseDigitsInput, toDateInput } from "@/shared/lib/format";
 
-export interface CategoryOpt { id: number; name: string }
+export interface NamedOpt { id: number; name: string }
 export interface ProductOpt { id: number; sku: string; name: string }
-export interface CouponRule { kind: "INCLUDE" | "EXCLUDE"; productId: number | null; categoryId: number | null }
+
+/// The inventory masters the item-rule pickers choose from.
+export interface RuleMasters {
+    categories: NamedOpt[];
+    products: ProductOpt[];
+    groups: NamedOpt[];
+    brands: NamedOpt[];
+}
+
+/// One item rule. The fields that are set are ANDed by the engine (brand + category
+/// = that brand's items in that category); separate rules are ORed.
+export interface CouponRule {
+    kind: "INCLUDE" | "EXCLUDE";
+    productId: number | null;
+    categoryId: number | null;
+    groupId: number | null;
+    brandId: number | null;
+}
 
 export interface Coupon {
     id: number;
@@ -56,15 +73,20 @@ const fromDateInput = (d: string): string | null => (d.trim() === "" ? null : ne
 
 interface Props {
     initial?: Coupon;
-    categories: CategoryOpt[];
-    products: ProductOpt[];
+    masters: RuleMasters;
     onSaved: () => void;
     onCancel: () => void;
     /// When rendered inside a dialog: drop the dashed card chrome + internal header.
     embedded?: boolean;
 }
 
-export function CouponForm({ initial, categories, products, onSaved, onCancel, embedded }: Props) {
+/// Shared by every product picker on the form (offer item, buy/get, rules).
+const productOptions = (products: ProductOpt[]) =>
+    products.map((p) => ({ value: p.id, label: `${p.sku} — ${p.name}`, leaf: p.name }));
+
+export function CouponForm({ initial, masters, onSaved, onCancel, embedded }: Props) {
+    const { products } = masters;
+    const prodOpts = useMemo(() => productOptions(products), [products]);
     const editing = !!initial;
     const [code, setCode] = useState(str(initial?.code));
     const [name, setName] = useState(initial?.name ?? "");
@@ -212,7 +234,7 @@ export function CouponForm({ initial, categories, products, onSaved, onCancel, e
                         <Field label="Offer item (must be in cart)">
                             <SearchableSelect<number>
                                 value={freeProductId}
-                                options={products.map((p) => ({ value: p.id, label: `${p.sku} — ${p.name}`, leaf: p.name }))}
+                                options={prodOpts}
                                 onChange={setFreeProductId}
                                 placeholder="— pick item —"
                                 triggerClassName="h-9"
@@ -231,7 +253,7 @@ export function CouponForm({ initial, categories, products, onSaved, onCancel, e
                         <Field label="Buy item (blank = any)">
                             <SearchableSelect<number>
                                 value={buyProductId}
-                                options={products.map((p) => ({ value: p.id, label: `${p.sku} — ${p.name}`, leaf: p.name }))}
+                                options={prodOpts}
                                 onChange={setBuyProductId}
                                 placeholder="— any item —"
                                 triggerClassName="h-9"
@@ -246,7 +268,7 @@ export function CouponForm({ initial, categories, products, onSaved, onCancel, e
                         <Field label="Get item (blank = same as buy)">
                             <SearchableSelect<number>
                                 value={freeProductId}
-                                options={products.map((p) => ({ value: p.id, label: `${p.sku} — ${p.name}`, leaf: p.name }))}
+                                options={prodOpts}
                                 onChange={setFreeProductId}
                                 placeholder="— same item —"
                                 triggerClassName="h-9"
@@ -259,8 +281,8 @@ export function CouponForm({ initial, categories, products, onSaved, onCancel, e
                 )}
             </div>
 
-            {/* Item rules (optional) — limit the coupon to / exclude specific products or categories */}
-            <RuleEditor rules={rules} setRules={setRules} categories={categories} products={products} />
+            {/* Item rules (optional) — limit the coupon to / exclude items by product, category, group or brand */}
+            <RuleEditor rules={rules} setRules={setRules} masters={masters} prodOpts={prodOpts} />
 
             {/* Constraints */}
             <div className="grid gap-3 sm:grid-cols-3">
@@ -305,16 +327,47 @@ export function CouponForm({ initial, categories, products, onSaved, onCancel, e
     );
 }
 
-function RuleEditor({ rules, setRules, categories, products }: {
+const EMPTY_RULE: CouponRule = { kind: "INCLUDE", productId: null, categoryId: null, groupId: null, brandId: null };
+
+/// The rule fields that are ANDed. Order = how the chip reads.
+const RULE_FIELDS = ["productId", "categoryId", "groupId", "brandId"] as const;
+type RuleField = (typeof RULE_FIELDS)[number];
+
+const ruleIsEmpty = (r: CouponRule) => RULE_FIELDS.every((f) => r[f] == null);
+
+/// Compose a rule across the four pickers, then "Add rule" commits it as one chip.
+/// Anything left blank is simply absent from the AND.
+function RuleEditor({ rules, setRules, masters, prodOpts }: {
     rules: CouponRule[];
     setRules: (r: CouponRule[]) => void;
-    categories: CategoryOpt[];
-    products: ProductOpt[];
+    masters: RuleMasters;
+    prodOpts: { value: number; label: string; leaf?: string }[];
 }) {
-    const [kind, setKind] = useState<"INCLUDE" | "EXCLUDE">("INCLUDE");
-    const catName = (id: number) => categories.find((c) => c.id === id)?.name ?? `cat #${id}`;
-    const prodName = (id: number) => { const p = products.find((x) => x.id === id); return p ? `${p.sku} — ${p.name}` : `#${id}`; };
-    const add = (rule: CouponRule) => setRules([...rules, rule]);
+    const { categories, products, groups, brands } = masters;
+    const [draft, setDraft] = useState<CouponRule>(EMPTY_RULE);
+
+    const named = (list: NamedOpt[], id: number, fallback: string) => list.find((x) => x.id === id)?.name ?? `${fallback} #${id}`;
+    const labelFor = (r: CouponRule, f: RuleField): string => {
+        const id = r[f]!;
+        switch (f) {
+            case "productId": { const p = products.find((x) => x.id === id); return p ? `${p.sku} — ${p.name}` : `#${id}`; }
+            case "categoryId": return named(categories, id, "cat");
+            case "groupId": return named(groups, id, "group");
+            case "brandId": return named(brands, id, "brand");
+        }
+    };
+    /// "Samsung + Phones" — the AND of every field set on the rule.
+    const ruleLabel = (r: CouponRule) => RULE_FIELDS.filter((f) => r[f] != null).map((f) => labelFor(r, f)).join(" + ");
+
+    const addDraft = () => { setRules([...rules, draft]); setDraft({ ...EMPTY_RULE, kind: draft.kind }); };
+
+    const pickers: { field: RuleField; placeholder: string; width: string; options: { value: number; label: string; leaf?: string }[] }[] = [
+        { field: "productId",  placeholder: "+ product",  width: "w-48", options: prodOpts },
+        { field: "categoryId", placeholder: "+ category", width: "w-44", options: categories.map((c) => ({ value: c.id, label: c.name })) },
+        { field: "groupId",    placeholder: "+ group",    width: "w-44", options: groups.map((g) => ({ value: g.id, label: g.name })) },
+        { field: "brandId",    placeholder: "+ brand",    width: "w-40", options: brands.map((b) => ({ value: b.id, label: b.name })) },
+    ];
+
     return (
         <div className="space-y-2 rounded-md border border-border/60 p-3">
             <div className="flex items-center justify-between">
@@ -322,39 +375,36 @@ function RuleEditor({ rules, setRules, categories, products }: {
                 <span className="text-[10px] text-muted-foreground">no rules = applies to the whole bill</span>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-                <Select value={kind} onValueChange={(v) => setKind(v as "INCLUDE" | "EXCLUDE")}>
+                <Select value={draft.kind} onValueChange={(v) => setDraft({ ...draft, kind: v as CouponRule["kind"] })}>
                     <SelectTrigger className="h-8 w-28 text-xs"><SelectValue /></SelectTrigger>
                     <SelectContent>
                         <SelectItem value="INCLUDE">Only on</SelectItem>
                         <SelectItem value="EXCLUDE">Exclude</SelectItem>
                     </SelectContent>
                 </Select>
-                <div className="w-48">
-                    <SearchableSelect<number>
-                        value={null}
-                        options={products.map((p) => ({ value: p.id, label: `${p.sku} — ${p.name}`, leaf: p.name }))}
-                        onChange={(v) => { if (v != null) add({ kind, productId: v, categoryId: null }); }}
-                        placeholder="+ product"
-                        clearable={false}
-                        triggerClassName="h-8 text-xs"
-                    />
-                </div>
-                <div className="w-44">
-                    <SearchableSelect<number>
-                        value={null}
-                        options={categories.map((c) => ({ value: c.id, label: c.name }))}
-                        onChange={(v) => { if (v != null) add({ kind, productId: null, categoryId: v }); }}
-                        placeholder="+ category"
-                        clearable={false}
-                        triggerClassName="h-8 text-xs"
-                    />
-                </div>
+                {pickers.map((p) => (
+                    <div key={p.field} className={p.width}>
+                        <SearchableSelect<number>
+                            value={draft[p.field]}
+                            options={p.options}
+                            onChange={(v) => setDraft({ ...draft, [p.field]: v })}
+                            placeholder={p.placeholder}
+                            triggerClassName="h-8 text-xs"
+                        />
+                    </div>
+                ))}
+                <Button size="sm" variant="secondary" className="h-8 text-xs" disabled={ruleIsEmpty(draft)} onClick={addDraft}>
+                    Add rule
+                </Button>
             </div>
+            <p className="text-[10px] text-muted-foreground">
+                Fields set on one rule must ALL match — brand + category = that brand&rsquo;s items in that category. Separate rules match independently.
+            </p>
             {rules.length > 0 && (
                 <div className="flex flex-wrap gap-1.5">
                     {rules.map((r, i) => (
                         <span key={i} className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] ${r.kind === "INCLUDE" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300" : "bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300"}`}>
-                            {r.kind === "INCLUDE" ? "only" : "excl"} · {r.productId != null ? prodName(r.productId) : catName(r.categoryId!)}
+                            {r.kind === "INCLUDE" ? "only" : "excl"} · {ruleLabel(r)}
                             <button type="button" onClick={() => setRules(rules.filter((_, j) => j !== i))} className="opacity-70 hover:opacity-100"><X size={11} /></button>
                         </span>
                     ))}

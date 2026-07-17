@@ -3,7 +3,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requireAnyPermission } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError, parseIdParam } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
-import { couponUpdateSchema } from "@/shared/lib/schemas/couponSchemas";
+import { couponUpdateSchema, toCouponRuleCreate } from "@/shared/lib/schemas/couponSchemas";
 
 // PATCH /api/coupons/[id] — edit fields (incl. the discount value) and/or replace
 // the include/exclude rules.
@@ -27,9 +27,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 ...fields,
                 ...(totalUsageLimit !== undefined ? { totalUsageLimit } : {}),
                 // When `rules` is sent, replace the whole set atomically.
-                ...(rules
-                    ? { rules: { deleteMany: {}, create: rules.map((r) => ({ kind: r.kind, productId: r.productId ?? null, categoryId: r.categoryId ?? null })) } }
-                    : {}),
+                ...(rules ? { rules: { deleteMany: {}, create: rules.map(toCouponRuleCreate) } } : {}),
             },
             include: { rules: true, _count: { select: { redemptions: true } } },
         });
