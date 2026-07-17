@@ -23,10 +23,10 @@ import { usePosAccess } from "@/modules/pos/hooks/usePosAccess";
 import { usePosCustomerDisplay } from "@/modules/pos/hooks/usePosCustomerDisplay";
 import { qrDisplay } from "@/modules/pos/lib/qrDisplay";
 import { DEFAULT_PAYEE_NAME } from "@/modules/pos/lib/paymentLink";
-import { formatInr, parseDigitsInput } from "@/shared/lib/format";
+import { formatInr, parseDigitsInput, round2 } from "@/shared/lib/format";
 import { resolveTierTitles } from "@/shared/lib/pricing";
 import { usePosDraftStore } from "@/store/posDraftStore";
-import { type Snapshot, type ProductOption, type CouponHit } from "@/modules/pos/lib/posDraftTypes";
+import { type Snapshot, type ProductOption, type CartLine, type CouponHit } from "@/modules/pos/lib/posDraftTypes";
 
 // Text-input sanitiser — same shape as TradingVoucherPage's num.
 // Project rule: no <input type="number">; we keep raw strings in state and
@@ -260,7 +260,38 @@ export function usePosBilling(opts: {
         capPct: snapshot?.tierCapPct ?? null,
     });
     const discountPct = tier.discountPct;
-    const discountAmount = (subtotal * discountPct) / 100;
+
+    // ── Spend-tier discount: a % of COST (incl. tax), applied per line BEFORE tax ──
+    // Margin is a % of cost-incl (additivePrice), so the discount is too → margin%
+    // and discount% at the same rate are the identical rupee amount (exact break-even).
+    // Mechanically each line's taxable is cut by `discount% × costExcl × qty` and GST
+    // recomputed on the reduced base (Sec 15(3)(a) trade discount, correct for mixed
+    // rates). Cost is snapshotted on the line at add-to-cart; edited/converted carts
+    // fall back to the product list. No cost basis → no discount on that line. No
+    // margin floor (clearance may sell below cost); only clamp to the line gross so
+    // taxable never goes negative. /api/pos/sale re-resolves cost from the ledger and
+    // uses ITS answer, so the browser cannot inflate the discount.
+    const lineCostExcl = (l: CartLine): number | null => {
+        const paise = l.costPaise ?? allProducts.find((p) => p.id === l.productId)?.costPaise ?? null;
+        return paise == null ? null : paise / 100;
+    };
+    const lineTierDiscExcl = cart.map((l) => {
+        const c = lineCostExcl(l);
+        if (c == null || discountPct <= 0) return 0;
+        return Math.min((discountPct / 100) * c * l.qty, l.qty * l.unitPrice);
+    });
+    // Inclusive rupee effect shown on the bill = Σ (line gross incl − line net incl),
+    // where the tax saving rides along. Feeding THIS as the voucher-level discount to
+    // calcVoucherTotals yields the same total as netting per line (they're equal by
+    // construction), so the client total still matches the server's per-line post.
+    const discountAmount = cart.reduce((sum, l, i) => {
+        const net = calcLineTotals({ quantity: l.qty, rate: l.unitPrice, discountPct: 0, discountAmt: lineTierDiscExcl[i], taxRate: l.taxRate }).amount;
+        return sum + (lineRows[i].amount - net);
+    }, 0);
+    // Synthetic % for display — the discount as a share of the tag (incl. GST) the
+    // customer sees; the configured "% of cost" never leaves admin surfaces.
+    const grossIncl = subtotal + tax;
+    const synthDiscountPct = grossIncl > 0 ? round2((discountAmount / grossIncl) * 100) : 0;
 
     // ── Loyalty redemption (mirrors the server) ───────────────────────────────
     // Redemption rides a negative charge to the dedicated "Loyalty Points
@@ -345,11 +376,16 @@ export function usePosBilling(opts: {
         ...(shippingAmt > 0.005 ? [{ label: "Shipping", amount: shippingAmt }] : []),
         ...(Math.abs(roundOff) > 0.005 ? [{ label: "Round-off", amount: roundOff }] : []),
     ];
-    // "Level Discount (Tier Name)" — the spend-tier row label.
+    // "Level Discount (Tier · synthetic%)" — the spend-tier row label. The % shown is
+    // the synthetic share of the customer's tag (incl. GST), NOT the configured
+    // % of cost (which stays on admin surfaces only). `tier.badgeLevelName`, not
+    // snapshot.customerLevel — the snapshot's is the history-only badge and goes stale
+    // the moment a CURRENT_SALE level is cleared.
     const posTierLabel = effDiscountAmount > 0.005
-        // `tier.badgeLevelName`, not snapshot.customerLevel — the snapshot's is the
-        // history-only badge and goes stale the moment a CURRENT_SALE level is cleared.
-        ? `Level Discount${tier.badgeLevelName ? ` (${tier.badgeLevelName})` : discountPct ? ` (${discountPct}%)` : ""}`
+        ? `Level Discount${(() => {
+            const parts = [tier.badgeLevelName, synthDiscountPct > 0 ? `${synthDiscountPct}%` : ""].filter(Boolean);
+            return parts.length ? ` (${parts.join(" · ")})` : "";
+        })()}`
         : undefined;
 
     async function applyGiftCard() {
@@ -386,7 +422,9 @@ export function usePosBilling(opts: {
             isNewCustomer: snapshot.turnover.invoiceCount === 0,
             tierRupees: discountAmount,
             loyaltyRupees: redemptionRupees,
-            lines: cart.map((l) => ({ productId: l.productId, qty: l.qty, unitPrice: l.unitPrice })),
+            // taxRate rides along so the server can gross up its resolved cost to
+            // cost-incl-tax — the PERCENT-coupon base.
+            lines: cart.map((l) => ({ productId: l.productId, qty: l.qty, unitPrice: l.unitPrice, taxRate: l.taxRate })),
         });
         return data;
     }
@@ -519,6 +557,7 @@ export function usePosBilling(opts: {
                 productId: p.id, sku: p.sku, name: p.name,
                 qty: 1, unitPrice: defaultPrice, description: "",
                 taxRate: p.taxRate ?? 0,
+                costPaise: p.costPaise ?? null,
                 mrpPaise: p.mrpPaise ?? null,
                 barcodePaise: p.barcodePricePaise ?? null,
                 warrantyLabel,
@@ -666,7 +705,7 @@ export function usePosBilling(opts: {
         refreshActiveShift, shiftOpenedAt,
         payAccounts, payAccountById,
         // bill math
-        lineRows, subtotal, tax, discountPct, discountAmount, totalDiscount,
+        lineRows, subtotal, tax, discountPct, synthDiscountPct, discountAmount, totalDiscount,
         tier, currentSaleValue,
         rates, canRedeem, loyaltyBalance, redeemBlocked, maxRedeemablePts,
         effRedeemPts, effRedemptionRupees, effDiscountAmount, couponRupees,

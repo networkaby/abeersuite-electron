@@ -315,6 +315,7 @@ export function PosScreenShell({
                             total={b.total}
                             totalDiscount={b.totalDiscount}
                             discountPct={b.discountPct}
+                            synthDiscountPct={b.synthDiscountPct}
                             discountAmount={b.discountAmount}
                             tier={b.tier}
                             snapshot={b.snapshot}

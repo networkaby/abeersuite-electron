@@ -13,6 +13,7 @@ import { computeGstSplit } from "@/shared/lib/gst/computeGstSplit";
 import { stateNameForCode, isValidStateCode } from "@/shared/lib/gst/indianStates";
 import { computePriceLadder } from "@/modules/pos/lib/priceLadder";
 import { resolveProductTaxBatch } from "@/modules/inventory/lib/gstResolver";
+import { round2 } from "@/shared/lib/format";
 
 // Resolves the id as an InvVoucher (the new shape, used by POS sales since
 // the Invoice→InvVoucher consolidation on 2026-05-24). The URL path keeps
@@ -130,7 +131,15 @@ export default async function PosReceiptPage({
     // per-line price + tax for the buyer's ITC — so SALE renders the normal
     // invoice, not the ladder.
     const isSaleKind = kind === "POS";
-    const tierDiscount = Number(voucher.discountAmt ?? 0);
+    // The spend-tier discount now lives on the goods lines (line.amount is NET). To
+    // show it as its own "Level discount" row the ladder needs the GROSS (pre-tier)
+    // line amounts + the tier as a bill-level figure — the exact inputs it took when
+    // the discount was voucher-level, so its reconciliation is unchanged. Reconstruct
+    // the gross incl amount (qty × rate × (1 + gst)) and derive the tier = gross − net.
+    const lineGrossIncl = (l: (typeof voucher.lines)[number]): number =>
+        Number(l.quantity) * Number(l.rate) * (1 + Number(l.taxRate) / 100);
+    const grossGoodsIncl = voucher.lines.reduce((s, l) => s + lineGrossIncl(l), 0);
+    const tierDiscount = voucher.lines.reduce((s, l) => s + Math.max(0, lineGrossIncl(l) - Number(l.amount)), 0);
     let loyaltyDiscount = 0, couponDiscount = 0;
     let loyaltyLabel: string | undefined, couponLabel: string | undefined;
     // Bill-level adjustments (everything that isn't a goods discount): shipping,
@@ -154,11 +163,17 @@ export default async function PosReceiptPage({
     if (shippingAmt > 0.005) extraCharges.push({ label: "Shipping", amount: shippingAmt });
     if (Math.abs(roundOff) > 0.005) extraCharges.push({ label: "Round-off", amount: roundOff });
 
-    // Resolve the spend-tier NAME from the voucher's discount % → "Level Discount (Silver)".
+    // Resolve the spend-tier NAME from the voucher's configured discount % (the record
+    // key), but SHOW the synthetic % — the discount as a share of the tag the customer
+    // sees. The configured "% of cost" never appears on the customer receipt.
     const vDiscPct  = Number(voucher.discountPct ?? 0);
     const tierName  = vDiscPct > 0 ? spendTiers.find((t) => Number(t.discountPct) === vDiscPct)?.name : undefined;
+    const synthTierPct = grossGoodsIncl > 0.005 ? round2((tierDiscount / grossGoodsIncl) * 100) : 0;
     const tierLabel = tierDiscount > 0.005
-        ? `Level Discount${tierName ? ` (${tierName})` : vDiscPct > 0 ? ` (${vDiscPct}%)` : ""}`
+        ? `Level Discount${(() => {
+            const parts = [tierName, synthTierPct > 0 ? `${synthTierPct}%` : ""].filter(Boolean);
+            return parts.length ? ` (${parts.join(" · ")})` : "";
+        })()}`
         : undefined;
 
     const hasLadderData = isSaleKind && (
@@ -176,7 +191,10 @@ export default async function PosReceiptPage({
                     barcodePaise: l.savedSalePricePaise,
                     taxRatePct:  Number(l.taxRate),
                     taxAmount:   Number(l.taxAmount),
-                    amount:      Number(l.amount),
+                    // GROSS (pre-tier) inclusive amount so the ladder breaks the tier
+                    // out as its own row (goodsPaid = gross − tier − loyalty − coupon
+                    // reconciles to the net the line already stores).
+                    amount:      lineGrossIncl(l),
                     hsnCode:     taxByProduct.get(l.productId)?.hsnCode ?? null,
                 })),
                 tierDiscount,
@@ -258,7 +276,9 @@ export default async function PosReceiptPage({
         }),
         subtotal:       Number(voucher.subtotal),
         discountPct:    Number(voucher.discountPct ?? 0),
-        discountAmount: Number(voucher.discountAmt ?? 0),
+        // Tier discount is per-line now; expose the reconstructed inclusive total for
+        // relays that read this flat field (the ladder `discounts` array is canonical).
+        discountAmount: round2(tierDiscount),
         tax:            taxAmt,
         total:          Number(voucher.totalAmount),
         grossAtTag:     ladder?.barcodeTotal ?? null,

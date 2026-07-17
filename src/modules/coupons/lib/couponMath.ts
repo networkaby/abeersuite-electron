@@ -59,6 +59,12 @@ export interface CartLineLite {
     brandId: number | null;
     qty: number;
     unitPrice: number; // pre-tax unit goods price
+    /// Unit COST incl. tax (rupees) — the base for PERCENT coupons, so every
+    /// %-type discount is measured on the same base as the pricing margin
+    /// (cost+tax) and a coupon% ≤ margin% can never give away more than the
+    /// margin. null/absent = no cost basis → the line adds nothing to a
+    /// PERCENT coupon's base (same rule as the spend-tier discount).
+    costIncl?: number | null;
 }
 
 export interface EvalInput {
@@ -121,6 +127,20 @@ export function eligibleSubtotal(c: CouponContext, lines: CartLineLite[]): numbe
     return r2(sum);
 }
 
+/// Σ COST (incl. tax) of the eligible lines — the PERCENT-coupon base. Same
+/// include/exclude filtering as eligibleSubtotal; lines with no cost basis add 0.
+export function eligibleCostBase(c: CouponContext, lines: CartLineLite[]): number {
+    const includes = c.rules.filter((r) => r.kind === "INCLUDE");
+    const excludes = c.rules.filter((r) => r.kind === "EXCLUDE");
+    let sum = 0;
+    for (const line of lines) {
+        if (excludes.some((r) => lineMatchesRule(line, r))) continue;
+        if (includes.length > 0 && !includes.some((r) => lineMatchesRule(line, r))) continue;
+        if (line.costIncl != null) sum += line.qty * line.costIncl;
+    }
+    return r2(sum);
+}
+
 /// Gate a coupon against the cart: active, window, min-bill, eligibility, owner,
 /// and "applies to at least one line". Pure — no usage-limit check (that needs DB).
 export function checkCouponEligibility(c: CouponContext, input: EvalInput): { ok: true } | EvalFail {
@@ -150,7 +170,12 @@ export function computeCouponDiscount(c: CouponContext, input: EvalInput): EvalR
     switch (c.type) {
         case "PERCENT": {
             if (c.percentOff == null) return { ok: false, reason: "Coupon misconfigured (no %)" };
-            raw = elig * (c.percentOff / 100);
+            // % of COST (incl. tax) of the eligible lines — the same base the pricing
+            // margin uses, so coupon% and margin% at the same rate are the identical
+            // rupee amount. Lines with no cost basis contribute nothing; still
+            // clamped to the eligible SALE value so it can't exceed what those
+            // lines actually charge.
+            raw = Math.min(eligibleCostBase(c, input.lines) * (c.percentOff / 100), elig);
             if (c.maxDiscountAmt != null) raw = Math.min(raw, c.maxDiscountAmt);
             break;
         }

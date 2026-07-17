@@ -15,6 +15,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { buildPartyJson } from "@/shared/lib/accountancy/partySnapshot";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { invNextRef, calcLineTotals, calcVoucherTotals } from "@/modules/inventory/lib/stock";
+import { resolveEffectiveCostMap } from "@/modules/pricing-strategy/lib/resolveCost";
 import { engineCreateSpine } from "@/modules/accountancy/lib/transactionEngine";
 import { syncVoucherLinks, syncVoucherLink } from "@/modules/accountancy/lib/voucherLinks";
 import { getDealsPipeline, findOpenDealForParty } from "@/modules/deals/lib/dealsPipeline";
@@ -75,28 +76,56 @@ export async function createPosQuoteVoucher(opts: {
         if (!l.productId || !(l.quantity > 0)) throw new Error("Each line needs a product and quantity > 0");
     }
 
+    // Spend-tier discount = discount% × COST (incl. tax), applied per line BEFORE tax
+    // — same basis + mechanism as the POS sale, so a quote's numbers match the sale it
+    // becomes. Server resolves each line's GST-exclusive cost by the product's
+    // effective method; discount = discount% × costExcl × qty, clamped to the line
+    // gross (no margin floor). No cost basis → no discount on that line.
+    const discountPct = body.discountPct != null ? Number(body.discountPct) : 0;
+    const costPaiseById = await resolveEffectiveCostMap(lines.map((l) => l.productId));
+    const costExclById = new Map<number, number | null>(
+        [...costPaiseById].map(([id, paise]) => [id, paise == null ? null : paise / 100]),
+    );
+
     const computedLines = lines.map((l) => {
         const rate = Number(l.unitPrice) || 0;
+        const cost = costExclById.get(l.productId) ?? null;
+        const lineDisc = cost == null || discountPct <= 0
+            ? 0
+            : Math.min((discountPct / 100) * cost * l.quantity, l.quantity * rate);
         const { discountAmt, taxAmount, amount } = calcLineTotals({
             quantity: l.quantity,
             rate,
             discountPct: 0,
-            discountAmt: 0,
+            discountAmt: lineDisc,
             taxRate: l.taxRate ?? 0,
         });
-        return { ...l, rate, discountAmt, taxAmount, amount };
+        // grossAmount = the same line with no discount — for the inclusive tier effect.
+        const grossAmount = calcLineTotals({ quantity: l.quantity, rate, discountPct: 0, discountAmt: 0, taxRate: l.taxRate ?? 0 }).amount;
+        return { ...l, rate, discountAmt, taxAmount, amount, grossAmount };
     });
 
-    const lineSubtotal = computedLines.reduce((s, l) => s + l.amount, 0);
-    const overallDiscount =
-        body.discountAmt != null && Number(body.discountAmt) > 0
-            ? Number(body.discountAmt)
-            : body.discountPct != null && Number(body.discountPct) > 0
-                ? (lineSubtotal * Number(body.discountPct)) / 100
-                : 0;
+    // Inclusive rupee effect of the per-line tier discount (gross incl − net incl).
+    const tierInclusive = computedLines.reduce((s, l) => s + (l.grossAmount - l.amount), 0);
+    // ORDER bodies carry the FULL discount (tier + loyalty + coupon); the tier part is
+    // now on the lines, so only the remainder (loyalty + coupon) rides voucher-level.
+    // ESTIMATE bodies carry the tier alone → remainder ≈ 0. Legacy callers that sent
+    // only a % (no discountAmt) → tier only → remainder 0.
+    const requestedDiscount = body.discountAmt != null && Number(body.discountAmt) > 0
+        ? Number(body.discountAmt)
+        : tierInclusive;
+    const overallDiscount = Math.max(0, requestedDiscount - tierInclusive);
     const shippingAmt = Number(body.shippingAmt) || 0;
     const roundOff = Number(body.roundOff) || 0;
-    const { subtotal, taxAmount, totalAmount } = calcVoucherTotals(computedLines, shippingAmt, overallDiscount, roundOff, 0);
+    const netTotals = calcVoucherTotals(computedLines, shippingAmt, overallDiscount, roundOff, 0);
+    // Stored-field convention (matches /api/pos/sale): subtotal is GROSS of the
+    // per-line pre-tax tier discount and discountAmt carries it (+ the voucher-level
+    // remainder), so subtotal − discountAmt + shipping + roundOff still reconciles to
+    // totalAmount and the tier stays visible as a discount on the document.
+    const tierPretax   = computedLines.reduce((s, l) => s + l.discountAmt, 0);
+    const subtotal     = netTotals.subtotal + tierPretax;
+    const storedDiscount = tierPretax + overallDiscount;
+    const { taxAmount, totalAmount } = netTotals;
 
     const personId = body.partyType === "customer" && body.partyId ? body.partyId : null;
     const companyId = body.partyType === "company" && body.partyId ? body.partyId : null;
@@ -147,7 +176,7 @@ export async function createPosQuoteVoucher(opts: {
                 deliveryMode: "COUNTER",
                 // 5A-3: orderPipelineId/orderStatusId dropped — live on VoucherLink (syncVoucherLinks below).
                 discountPct: body.discountPct != null ? Number(body.discountPct) : null,
-                discountAmt: overallDiscount > 0 ? overallDiscount : null,
+                discountAmt: storedDiscount > 0 ? storedDiscount : null,
                 shippingAmt,
                 roundOff,
                 subtotal,
@@ -167,7 +196,7 @@ export async function createPosQuoteVoucher(opts: {
                 rate: l.rate,
                 mrpPaise: l.mrpPaise ?? null,
                 savedSalePricePaise: l.savedSalePricePaise ?? null,
-                discountPct: 0,
+                discountPct,
                 discountAmt: l.discountAmt,
                 taxRate: l.taxRate ?? 0,
                 taxAmount: l.taxAmount,

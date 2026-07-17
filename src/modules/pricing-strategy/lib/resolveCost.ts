@@ -118,6 +118,34 @@ export async function resolveCostBatch(
     return out;
 }
 
+/// One-call effective cost per product (paise, GST-EXCLUSIVE): resolves each
+/// product's cost by its OWN effective method (product.costMethod ??
+/// OrgDefaults.valuationMethod), batched per method. The single shared basis for
+/// every "% of cost" consumer — pricing apply, POS lookup snapshot, the POS
+/// spend-tier discount, and %-type coupons — so they can never disagree.
+export async function resolveEffectiveCostMap(productIds: number[]): Promise<Map<number, number | null>> {
+    const out = new Map<number, number | null>();
+    const ids = [...new Set(productIds)];
+    if (ids.length === 0) return out;
+    const [orgDefaults, products] = await Promise.all([
+        prisma.orgDefaults.findUnique({ where: { id: 1 }, select: { valuationMethod: true } }),
+        prisma.invProduct.findMany({ where: { id: { in: ids } }, select: { id: true, stock: true, costMethod: true } }),
+    ]);
+    const orgMethod: CostMethod = orgDefaults?.valuationMethod ?? "WEIGHTED_AVG";
+    const byMethod = new Map<CostMethod, PricingProduct[]>();
+    for (const p of products) {
+        const m = p.costMethod ?? orgMethod;
+        const bucket = byMethod.get(m) ?? [];
+        bucket.push({ id: p.id, stock: p.stock });
+        byMethod.set(m, bucket);
+    }
+    for (const [method, group] of byMethod.entries()) {
+        const resolved = await resolveCostBatch(group, method);
+        for (const [id, r] of resolved) out.set(id, r.costPaise);
+    }
+    return out;
+}
+
 export async function resolveCost(
     product: PricingProduct,
     method: CostMethod,

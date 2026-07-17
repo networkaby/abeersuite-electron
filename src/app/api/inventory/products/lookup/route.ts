@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { resolveProductTaxBatch } from "@/modules/inventory/lib/gstResolver";
 import { loadLastInwardCostMap } from "@/modules/inventory/lib/valuation";
+import { resolveEffectiveCostMap } from "@/modules/pricing-strategy/lib/resolveCost";
 import { buildRulesIndex, resolveRedeemCapPct } from "@/modules/loyalty/lib";
 import { barcodeTagPaise, normalizeBarcodeBands } from "@/shared/lib/pricing/barcodePrice";
 import { primaryBarcode } from "@/shared/lib/inventory";
@@ -92,6 +93,8 @@ export async function GET(req: NextRequest) {
         const { products: taxByProduct } = await resolveProductTaxBatch({ productIds: [product.id] });
         const resolved = taxByProduct.get(product.id);
         const lastInward = await loadLastInwardCostMap([{ id: product.id, stock: product.stock }]);
+        // GST-EXCLUSIVE effective cost — the spend-tier / %-coupon discount base.
+        const costMap = await resolveEffectiveCostMap([product.id]);
         const capMap = await loadRedeemCapOverrides([{ id: product.id, groupId: product.groupId, categoryId: product.categoryId }]);
         return NextResponse.json({
             ...product,
@@ -106,6 +109,8 @@ export async function GET(req: NextRequest) {
             taxRate: resolved?.gstRate ?? null,
             hsnCode: resolved?.hsnCode ?? null,
             lastPurchasePaise: lastInward.get(product.id) ?? null,
+            // GST-EXCLUSIVE resolved cost (paise) — the spend-tier discount base.
+            costPaise: costMap.get(product.id) ?? null,
             redeemCapPct: capMap.get(product.id) ?? null,
             // Printed barcode tag (paise) derived from saved price + MRP — the
             // public price snapshotted on POS lines for the customer ladder.
@@ -152,6 +157,11 @@ export async function GET(req: NextRequest) {
         products.map((p) => ({ id: p.id, stock: p.stock })),
     );
 
+    // GST-exclusive resolved cost per product (effective method) — the spend-tier /
+    // %-coupon discount base snapshotted onto POS cart lines. Same order of work as
+    // the lastInward walk above (batched per method).
+    const costMap = await resolveEffectiveCostMap(products.map((p) => p.id));
+
     // Loyalty redeem-cap overrides (empty unless cap rules exist) so the POS can
     // size the redeemable amount per cart consistently with the server.
     const capMap = await loadRedeemCapOverrides(products.map((p) => ({ id: p.id, groupId: p.groupId, categoryId: p.categoryId })));
@@ -170,6 +180,8 @@ export async function GET(req: NextRequest) {
             taxRate: r?.gstRate ?? null,
             hsnCode: r?.hsnCode ?? null,
             lastPurchasePaise: lastInward.get(p.id) ?? null,
+            // GST-EXCLUSIVE resolved cost (paise) — the spend-tier discount base.
+            costPaise: costMap.get(p.id) ?? null,
             redeemCapPct: capMap.get(p.id) ?? null,
             // Printed barcode tag (paise) derived from saved price + MRP — the
             // public price snapshotted on POS lines for the customer ladder.

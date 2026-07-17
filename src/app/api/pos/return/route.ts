@@ -30,7 +30,7 @@ import { buildPartyJson, readPartyName } from "@/shared/lib/accountancy/partySna
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
-import { invNextRef } from "@/modules/inventory/lib/stock";
+import { invNextRef, calcLineTotals } from "@/modules/inventory/lib/stock";
 import { recordStockMovement } from "@/modules/inventory/lib/stockMovement";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import { saleToSpec } from "@/modules/accountancy/lib/voucherMappers";
@@ -123,14 +123,33 @@ export async function POST(req: Request) {
         const branchId = shift?.branchId ?? original.universalVoucher?.branchId ?? "";   // 5D-12: branch on spine
 
         // ── Compute return totals ─────────────────────────────────────────────
-        const returnSubtotal = returnLines.reduce((s, { voucherLine, qty }) => {
-            return s + qty * Number(voucherLine.rate);
-        }, 0);
-        const returnTaxAmount = returnLines.reduce((s, { voucherLine, qty }) => {
-            const tax = Number(voucherLine.taxRate ?? 0);
-            return s + (qty * Number(voucherLine.rate) * tax) / 100;
-        }, 0);
-        const returnTotal = returnSubtotal + returnTaxAmount;
+        // Prorate the ORIGINAL line's spend-tier discount by the fraction of that line
+        // being returned, so the credit note reverses the NET amount the customer paid
+        // (not the gross tag) and GST reverses on the reduced taxable at each line's
+        // own rate. A line with no discount reverses at gross exactly as before.
+        const returnComputed = returnLines.map(({ voucherLine, qty }) => {
+            const rate    = Number(voucherLine.rate);
+            const taxRate = Number(voucherLine.taxRate ?? 0);
+            const origQty  = Number(voucherLine.quantity) || 0;
+            const origDisc = Number(voucherLine.discountAmt ?? 0);
+            const lineDisc = origQty > 0 ? (origDisc * qty) / origQty : 0;
+            const { discountAmt, taxAmount, amount } = calcLineTotals({ quantity: qty, rate, discountPct: 0, discountAmt: lineDisc, taxRate });
+            return {
+                voucherLine, qty, rate, taxRate,
+                discountAmt,
+                discountPct: Number(voucherLine.discountPct ?? 0),
+                taxAmount, amount,
+                goodsNet: qty * rate - discountAmt,   // pre-tax net goods
+                goodsGross: qty * rate,               // pre-tax gross — for the loyalty fraction
+            };
+        });
+        const returnGoodsNet  = returnComputed.reduce((s, l) => s + l.goodsNet, 0);
+        const returnTaxAmount = returnComputed.reduce((s, l) => s + l.taxAmount, 0);
+        // Prorated pre-tax tier discount being reversed — stored as the voucher-level
+        // discountAmt (with a GROSS subtotal) so the engine emits the Discount
+        // Allowed reversal leg (Cr on a sale return), mirroring the original JE.
+        const returnDiscount  = returnComputed.reduce((s, l) => s + l.discountAmt, 0);
+        const returnTotal     = returnGoodsNet + returnTaxAmount;
         if (returnTotal <= 0) return NextResponse.json({ error: "Return total must be > 0" }, { status: 400 });
 
         // ── Refund tender row — single Cr leg on the SALE_RETURN JE ─────
@@ -153,7 +172,8 @@ export async function POST(req: Request) {
         // Fraction of the original sale being returned (by pre-tax goods value),
         // used to claw back earned / restore redeemed points proportionally.
         const originalGoods = originalLines.reduce((s, l) => s + Number(l.quantity) * Number(l.rate), 0);
-        const returnFraction = originalGoods > 0 ? returnSubtotal / originalGoods : 1;
+        const returnGrossGoods = returnComputed.reduce((s, l) => s + l.goodsGross, 0);
+        const returnFraction = originalGoods > 0 ? returnGrossGoods / originalGoods : 1;
         const loyaltyConfig = await prisma.loyaltyConfig.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} });
         const loyaltyRates = ratesFromConfig(loyaltyConfig);
 
@@ -163,7 +183,7 @@ export async function POST(req: Request) {
 
             // 1. SALE_RETURN InvVoucher + refund tender row.
             const vRef = await invNextRef(tx, "SALE_RETURN");
-            const stockLines = returnLines.filter((rl) => rl.voucherLine.productId !== null);
+            const stockLines = returnComputed.filter((rl) => rl.voucherLine.productId !== null);
             // Phase 5 5.0/5C: spine FIRST; enginePost attaches GL via existingSpineId.
             const voucherDescription = `Sale return of ${original.universalVoucher?.voucherNo ?? ""}${data.notes ? ` — ${data.notes}` : ""}`;
             const spineId = await engineCreateSpine(tx, {
@@ -187,8 +207,12 @@ export async function POST(req: Request) {
                     refVoucherId:   original.id,
                     deliveryMode:   "COUNTER",
                     placeOfSupply:  sellerStateCode,
-                    subtotal:       returnSubtotal + returnTaxAmount,
+                    // GROSS of the reversed tier discount — subtotal − taxAmount must
+                    // equal the gross goods so the body (Sales Returns) leg reverses
+                    // the full gross, with the discount reversal on its own leg.
+                    subtotal:       returnGoodsNet + returnTaxAmount + returnDiscount,
                     taxAmount:      returnTaxAmount,
+                    discountAmt:    returnDiscount,
                     totalAmount:    returnTotal,
                     // 5D-2: creator lives on the spine.
                     // G4b: refund tender → settlementJson.
@@ -200,22 +224,20 @@ export async function POST(req: Request) {
             });
             // Phase 5 5C: goods lines hang off the spine.
             await tx.voucherInventoryLine.createMany({
-                data: stockLines.map(({ voucherLine, qty }) => {
-                    const rate    = Number(voucherLine.rate);
-                    const taxRate = Number(voucherLine.taxRate ?? 0);
-                    const goods   = qty * rate;
-                    const lineTax = (goods * taxRate) / 100;
-                    return {
-                        universalVoucherId: spineId,
-                        productId:   voucherLine.productId!,
-                        description: voucherLine.description,
-                        quantity:    qty,
-                        rate,
-                        taxRate,
-                        taxAmount:   lineTax,
-                        amount:      goods + lineTax,
-                    };
-                }),
+                data: stockLines.map((l) => ({
+                    universalVoucherId: spineId,
+                    productId:   l.voucherLine.productId!,
+                    description: l.voucherLine.description,
+                    quantity:    l.qty,
+                    rate:        l.rate,
+                    taxRate:     l.taxRate,
+                    // Prorated tier discount reversed with the line, so the credit note
+                    // mirrors the net Sales + net GST the original sale posted.
+                    discountAmt: l.discountAmt,
+                    discountPct: l.discountPct,
+                    taxAmount:   l.taxAmount,
+                    amount:      l.amount,
+                })),
             });
 
             // 2. GL post — SALE_RETURN is purchase-shape (counter Cr).
@@ -231,6 +253,7 @@ export async function POST(req: Request) {
                 subtotal:    voucher.subtotal,
                 taxAmount:   voucher.taxAmount,
                 shippingAmt: voucher.shippingAmt,
+                discountAmt: voucher.discountAmt,
                 roundOff:    voucher.roundOff,
                 totalAmount: voucher.totalAmount,
                 tenders:     [{ accountId: refundAccountId, amount: returnTotal }],

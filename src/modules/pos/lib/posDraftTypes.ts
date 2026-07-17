@@ -62,6 +62,10 @@ export type ProductOption = {
     /// Null = no rate found anywhere in the chain (line stays untaxed).
     taxRate?: number | null;
     hsnCode?: string | null;
+    /// GST-EXCLUSIVE resolved cost (paise) via the product's effective cost method —
+    /// the SAME basis pricing marks up from. Snapshotted onto the cart line as the
+    /// spend-tier discount base. null = no cost basis → no tier discount on the line.
+    costPaise?: number | null;
     /// Loyalty redeem-cap override (% of this item's value redeemable with points).
     /// null = inherit the global cap. Snapshotted onto the cart line at add time.
     redeemCapPct?: number | null;
@@ -75,6 +79,11 @@ export type CartLine = {
     /// Snapshotted at add-to-cart time so changing a product's GST later
     /// doesn't retroactively shift prices in an active sale.
     taxRate: number;
+    /// GST-EXCLUSIVE cost (paise) snapshotted at add-to-cart time — the spend-tier
+    /// discount base (discount = tier% × costExcl, applied pre-tax per line). The
+    /// server re-resolves this from the ledger and never trusts the client value.
+    /// null = no cost basis → the line gets no tier discount.
+    costPaise?: number | null;
     mrpPaise?: number | null;
     /// Barcode / printed tag price (paise) snapshotted at add-to-cart time — feeds
     /// the customer-facing price ladder (barcode line + "price benefit").

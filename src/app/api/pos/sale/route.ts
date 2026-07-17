@@ -2,9 +2,10 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse, after } from "next/server";
 import { requirePosVoucher } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
-import { invNextRef, calcVoucherTotals } from "@/modules/inventory/lib/stock";
+import { invNextRef, calcVoucherTotals, calcLineTotals } from "@/modules/inventory/lib/stock";
 import { recordStockMovementsBatch } from "@/modules/inventory/lib/stockMovement";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
+import { resolveEffectiveCostMap } from "@/modules/pricing-strategy/lib/resolveCost";
 import { saleToSpec } from "@/modules/accountancy/lib/voucherMappers";
 import { buildSettlementJson } from "@/shared/lib/accountancy/settlement";
 import { enginePost, engineCreateSpine } from "@/modules/accountancy/lib/transactionEngine";
@@ -227,40 +228,45 @@ export async function POST(req: Request) {
         : [];
 
     // ── Validate line items + payment totals ──────────────────────────────
-    const computedLines = body.lines.map((l) => {
-        const lineSubtotal = l.quantity * l.unitPrice;
-        const lineTax = (lineSubtotal * l.taxRate) / 100;
-        return {
-            productId:   l.productId,
-            description: l.description,
-            quantity:    l.quantity,
-            unitPrice:   l.unitPrice,
-            taxRate:     l.taxRate,
-            taxAmount:   lineTax,
-            amount:      lineSubtotal + lineTax,
-            // Customer-facing ladder snapshots (paise) — display only.
-            mrpPaise:            l.mrpPaise ?? null,
-            savedSalePricePaise: l.savedSalePricePaise ?? null,
-        };
-    });
-    // Shipping / round-off / charges parity with office SALE — same single
-    // source of truth (calcVoucherTotals) so /api/inventory/vouchers and
-    // /api/pos/sale always agree on the math.
-    const taxAmount = computedLines.reduce((s, l) => s + l.taxAmount, 0);
-
-    // ── Discounts: tier (Discount Allowed) + loyalty redemption (Loyalty Points
-    // Redeemed) ───────────────────────────────────────────────────────────────
-    // goodsValue = pre-tax goods (Σ qty × unit price). The tier discount rides the
-    // voucher-level discountAmt path; the loyalty redemption rides a negative
-    // charge to the dedicated ledger so the two are broken out in the P&L.
+    // goodsValue = pre-tax goods (Σ qty × unit price). grossTaxAmount = the tag GST
+    // before any tier discount — drives the loyalty floors + coupon-stacking math.
     const goodsValue = body.lines.reduce((s, l) => s + l.quantity * l.unitPrice, 0);
-    const tierDiscount = Math.min(Math.max(0, body.discountAmt), goodsValue);
+    const grossTaxAmount = body.lines.reduce((s, l) => s + (l.quantity * l.unitPrice * l.taxRate) / 100, 0);
+
+    // ── Spend-tier discount: % of COST (incl. tax), applied per line BEFORE tax ──
+    // Margin is a % of cost-incl (additivePrice), so the discount is too → margin%
+    // and discount% at the same rate are the identical rupee amount (exact break-even).
+    // The server RE-RESOLVES each line's cost from the ledger (never trusts the
+    // client) via the product's effective cost method, then cuts each line's taxable
+    // by `discount% × costExcl × qty` and lets calcLineTotals recompute GST on the
+    // reduced base. Clamp to the line gross only (no margin floor — clearance may sell
+    // below cost). No cost basis → no discount on that line. The per-line discount
+    // nets into line.amount, so the voucher-level discountAmt is 0 (no separate
+    // "Discount Allowed" leg — Sales + GST post net).
+    const costPaiseById = await resolveEffectiveCostMap(body.lines.map((l) => l.productId));
+    const costExclById = new Map<number, number | null>(
+        [...costPaiseById].map(([id, paise]) => [id, paise == null ? null : paise / 100]),
+    );
+    // Per-line pre-tax discount IF the tier applies (before the coupon-drop decision).
+    const lineTierDiscExclRaw = body.lines.map((l) => {
+        const c = costExclById.get(l.productId) ?? null;
+        if (c == null || body.discountPct <= 0) return 0;
+        return Math.min((body.discountPct / 100) * c * l.quantity, l.quantity * l.unitPrice);
+    });
+    // Inclusive rupee effect (gross incl − net incl) — kept as the tier's voucher-level
+    // number for the loyalty floors + coupon-stacking math (which reason about the
+    // customer-facing discount), even though the discount now lives on the lines.
+    const tierDiscount = body.lines.reduce((s, l, i) => {
+        const gross = calcLineTotals({ quantity: l.quantity, rate: l.unitPrice, discountPct: 0, discountAmt: 0, taxRate: l.taxRate }).amount;
+        const net   = calcLineTotals({ quantity: l.quantity, rate: l.unitPrice, discountPct: 0, discountAmt: lineTierDiscExclRaw[i], taxRate: l.taxRate }).amount;
+        return s + (gross - net);
+    }, 0);
 
     // Pre-redemption invoice value — drives the min-invoice-to-earn and
     // min-invoice-to-redeem floors (the bill the customer would pay before any
     // loyalty redemption is applied).
     const manualChargesNet = body.charges.reduce((s, c) => s + c.amount, 0);
-    const invoiceValueGross = goodsValue + taxAmount + body.shippingAmt - tierDiscount + body.roundOff + manualChargesNet;
+    const invoiceValueGross = goodsValue + grossTaxAmount + body.shippingAmt - tierDiscount + body.roundOff + manualChargesNet;
 
     // ── Pre-load loyalty earn context (reads, outside the tx) ──────────────
     // Resolves each line's taxonomy + the earn-rule index (earn multiplier AND
@@ -343,13 +349,18 @@ export async function POST(req: Request) {
             : false;
         // Coupon eligibility needs each line's taxonomy (include/exclude rules).
         const tax = await loadTaxonomy();
-        const couponLines: CartLineLite[] = body.lines.map((l) => ({
-            productId: l.productId,
-            groupId: tax.get(l.productId)?.groupId ?? null,
-            categoryId: tax.get(l.productId)?.categoryId ?? null,
-            brandId: tax.get(l.productId)?.brandId ?? null,
-            qty: l.quantity, unitPrice: l.unitPrice,
-        }));
+        const couponLines: CartLineLite[] = body.lines.map((l) => {
+            const costExcl = costExclById.get(l.productId) ?? null;
+            return {
+                productId: l.productId,
+                groupId: tax.get(l.productId)?.groupId ?? null,
+                categoryId: tax.get(l.productId)?.categoryId ?? null,
+                brandId: tax.get(l.productId)?.brandId ?? null,
+                qty: l.quantity, unitPrice: l.unitPrice,
+                // Cost incl. tax — the PERCENT-coupon base (same as the tier's).
+                costIncl: costExcl == null ? null : costExcl * (1 + l.taxRate / 100),
+            };
+        });
         const couponInput: EvalInput = {
             accountId: isIdentified ? customerAccount.id : null,
             lines: couponLines,
@@ -388,6 +399,37 @@ export async function POST(req: Request) {
             }
         }
     }
+    // Effective per-line tier discount after the coupon interplay: a non-stackable
+    // coupon drops the tier (effectiveTierDiscount 0) or a total-discount cap scales
+    // it down. Scale the per-line pre-tax discounts by the same factor, then net them
+    // into the lines — GST recomputed on the reduced base, per each line's own rate,
+    // so mixed-rate carts stay correct and there is no separate Discount Allowed leg.
+    const tierFactor = tierDiscount > 0.005 ? Math.max(0, Math.min(1, effectiveTierDiscount / tierDiscount)) : 0;
+    const computedLines = body.lines.map((l, i) => {
+        const discountAmt = round2(lineTierDiscExclRaw[i] * tierFactor);
+        const { taxAmount: lineTax, amount } = calcLineTotals({
+            quantity: l.quantity, rate: l.unitPrice, discountPct: 0, discountAmt, taxRate: l.taxRate,
+        });
+        return {
+            productId:   l.productId,
+            description: l.description,
+            quantity:    l.quantity,
+            unitPrice:   l.unitPrice,
+            taxRate:     l.taxRate,
+            // Per-line spend-tier discount (pre-tax); discountPct is the configured
+            // tier % (record only — the displayed % is derived synthetically).
+            discountAmt,
+            discountPct: body.discountPct,
+            taxAmount:   lineTax,
+            amount,
+            // Customer-facing ladder snapshots (paise) — display only.
+            mrpPaise:            l.mrpPaise ?? null,
+            savedSalePricePaise: l.savedSalePricePaise ?? null,
+        };
+    });
+    // Net GST after the per-line tier discount — what actually posts + prints.
+    const taxAmount = computedLines.reduce((s, l) => s + l.taxAmount, 0);
+
     const couponCharge = couponRupees > 0 && couponExpenseAccountId != null
         ? { accountId: couponExpenseAccountId, description: `Coupon: ${body.couponCode ?? "auto"}`, amount: -couponRupees }
         : null;
@@ -405,13 +447,24 @@ export async function POST(req: Request) {
     ];
 
     const chargesNet = allCharges.reduce((s, c) => s + c.amount, 0);
-    const { subtotal, totalAmount } = calcVoucherTotals(
-        computedLines,
+    // Σ per-line pre-tax tier discount — stored as the voucher-level discountAmt so
+    // the engine still posts the "Discount Allowed" leg (P&L visibility kept). To keep
+    // the JE balanced with NET lines, subtotal is stored GROSS of that discount:
+    //   goodsAmount = subtotal − taxAmount  → full gross goods  (Cr Sales)
+    //   Dr Discount Allowed = discountAmt   (pre-tax — the GST share was never revenue)
+    //   Cr GST = net taxAmount              (recomputed on the discounted base)
+    // and totalAmount = subtotal + shipping − discountAmt + roundOff + chargesNet
+    // still reconciles because the lines already carry the netting.
+    const tierPretaxDiscount = round2(computedLines.reduce((s, l) => s + l.discountAmt, 0));
+    const netTotals = calcVoucherTotals(
+        computedLines,           // already NET of the per-line tier discount
         body.shippingAmt,
-        effectiveTierDiscount,   // tier discount (0 when a non-stackable coupon replaces it)
+        0,                       // discount enters via the stored gross subtotal below
         body.roundOff,
         chargesNet,              // includes the negative loyalty + coupon charges
     );
+    const subtotal    = round2(netTotals.subtotal + tierPretaxDiscount);
+    const totalAmount = netTotals.totalAmount;
 
     // ── Gift card (payment tender, NOT a discount) ─────────────────────────
     // Server owns the ₹ drawn: min(balance, bill). It posts Dr "Gift Card
@@ -581,9 +634,12 @@ export async function POST(req: Request) {
                     deliveryMode:   "COUNTER",
                     placeOfSupply:  sellerStateCode,
                     shippingAmt:    body.shippingAmt,
-                    discountAmt:    effectiveTierDiscount,
-                    // Store the tier % only when the tier discount actually applied
-                    // (a non-stackable coupon can drop it → effectiveTierDiscount 0).
+                    // Pre-tax tier discount total (Σ line discountAmt). Stored with the
+                    // GROSS subtotal above so the engine posts the "Discount Allowed"
+                    // leg exactly as before — only the amount's base changed (% of
+                    // cost, pre-tax). discountPct stays the configured tier % — the
+                    // receipt's tier-name lookup key when the tier actually applied.
+                    discountAmt:    tierPretaxDiscount,
                     discountPct:    effectiveTierDiscount > 0 ? body.discountPct : 0,
                     roundOff:       body.roundOff,
                     subtotal,
@@ -604,6 +660,9 @@ export async function POST(req: Request) {
                     quantity:    l.quantity,
                     rate:        l.unitPrice,
                     taxRate:     l.taxRate,
+                    // Per-line spend-tier discount (pre-tax) — netted into amount/tax.
+                    discountAmt: l.discountAmt,
+                    discountPct: l.discountPct,
                     taxAmount:   l.taxAmount,
                     amount:      l.amount,
                     mrpPaise:            l.mrpPaise,

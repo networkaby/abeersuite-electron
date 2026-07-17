@@ -398,7 +398,7 @@ function PeriodCard({ period, onChanged }: { period: Period; onChanged: () => vo
                                 </div>
                             </div>
                             <div className="space-y-1">
-                                <Label className="text-[11px] text-muted-foreground">Discount %</Label>
+                                <Label className="text-[11px] text-muted-foreground" title="Percent of item COST (incl. tax), applied before GST. Since the sale margin is also a % of cost, a tier% equal to the margin% breaks even exactly. The customer's receipt shows the equivalent % of the sale price, not this cost-%.">Discount % (of cost)</Label>
                                 <Input inputMode="decimal" value={discountPct} onChange={(e) => setDiscountPct(parseDecimalInput(e.target.value))} placeholder="5" className="h-9 text-right" />
                             </div>
                         </div>
@@ -431,7 +431,7 @@ function PeriodCard({ period, onChanged }: { period: Period; onChanged: () => vo
                                         className="h-8 w-full pl-5 text-right text-xs"
                                     />
                                 </div>
-                                <div className="relative w-14 shrink-0" title="Discount % at this level">
+                                <div className="relative w-14 shrink-0" title="Discount % of cost (incl. tax) at this level — applied before GST">
                                     <Input
                                         defaultValue={String(Number(t.discountPct))}
                                         key={String(t.discountPct)}

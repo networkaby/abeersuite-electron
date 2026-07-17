@@ -42,6 +42,9 @@ export type PosBillSummaryProps = {
     total: number;
     totalDiscount: number;
     discountPct: number;
+    /** Synthetic tier % — the discount as a share of the tag (incl. GST) the customer
+     *  sees. Shown in place of the configured "% of cost". */
+    synthDiscountPct: number;
     discountAmount: number;
     /** Spend tiers resolved against the live cart (usePosBilling), not the snapshot. */
     tier?: TierResult;
@@ -103,7 +106,7 @@ export type PosBillSummaryProps = {
 };
 
 export function PosBillSummary({
-    subtotal, tax, total, totalDiscount, discountPct, discountAmount, tier,
+    subtotal, tax, total, totalDiscount, discountPct, synthDiscountPct, discountAmount, tier,
     snapshot, rates, canRedeem, loyaltyBalance, redeemBlocked, maxRedeemablePts,
     redeemOn, setRedeemOn, redeemPointsStr, setRedeemPointsStr, effRedemptionRupees,
     appliedCoupon, setAppliedCoupon, autoCoupon, couponRupees, couponDroppedTier,
@@ -176,9 +179,9 @@ export function PosBillSummary({
                                 className="cursor-help underline decoration-dotted underline-offset-2"
                                 title={couponDroppedTier
                                     ? "Tier discount is replaced by the applied non-stackable coupon."
-                                    : `Automatic spend-tier discount, applied on pre-GST goods. Each period is earned and applied independently, so the percentages add up${titles.length > 0 ? `: ${titles.map((t) => `${t.levelName} of "${t.periodName}" ${t.discountPct}%`).join(" + ")}` : ""}. Configured under Customer Tiers; separate from loyalty points.`}
+                                    : `Automatic spend-tier discount, computed as a % of item cost (incl. tax) and applied before GST — so margin% and tier% at the same rate break even. The % shown is the synthetic share of the tag; the configured cost-% (${discountPct}%) stays in Customer Tiers. Periods apply independently, so they add up${titles.length > 0 ? `: ${titles.map((t) => `${t.levelName} of "${t.periodName}" ${t.discountPct}%`).join(" + ")}` : ""}.`}
                             >
-                                Level Discount ({tier?.badgeLevelName ? `${tier.badgeLevelName} ` : ""}{discountPct}%)
+                                Level Discount ({tier?.badgeLevelName ? `${tier.badgeLevelName} · ` : ""}{synthDiscountPct}%)
                             </span>
                             <span className="font-medium tabular-nums">− {formatInr(discountAmount)}</span>
                         </span>,

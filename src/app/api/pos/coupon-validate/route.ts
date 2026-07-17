@@ -5,6 +5,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { selectCouponForCart, finalizeCouponAmount, type EvalInput } from "@/modules/coupons/lib";
+import { resolveEffectiveCostMap } from "@/modules/pricing-strategy/lib/resolveCost";
 
 // POST /api/pos/coupon-validate — validate a coupon code (or pick the best auto
 // coupon) against the current cart. Returns the SAME ₹ the sale route will post,
@@ -16,6 +17,9 @@ const lineSchema = z.object({
     categoryId: z.number().int().nullable().optional(),
     qty:        z.number().min(0),
     unitPrice:  z.number().min(0),
+    // Line's snapshotted GST % — used to gross up the server-resolved cost to
+    // cost-incl-tax, the PERCENT-coupon base. Same snapshot /sale receives.
+    taxRate:    z.number().min(0).max(100).optional(),
 });
 
 const bodySchema = z.object({
@@ -40,21 +44,30 @@ export async function POST(req: Request) {
         const tierRupees = data.tierRupees ?? 0;
         const loyaltyRupees = data.loyaltyRupees ?? 0;
 
-        // Resolve each line's taxonomy server-side (the POS client doesn't send it)
-        // so include/exclude category rules evaluate IDENTICALLY here and in /sale.
+        // Resolve each line's taxonomy + effective cost server-side (the POS client
+        // doesn't send them) so include/exclude rules AND the PERCENT base evaluate
+        // IDENTICALLY here and in /sale.
         const productIds = [...new Set(data.lines.map((l) => l.productId))];
-        const products = await prisma.invProduct.findMany({ where: { id: { in: productIds } }, select: { id: true, groupId: true, categoryId: true, brandId: true } });
+        const [products, costPaiseById] = await Promise.all([
+            prisma.invProduct.findMany({ where: { id: { in: productIds } }, select: { id: true, groupId: true, categoryId: true, brandId: true } }),
+            resolveEffectiveCostMap(productIds),
+        ]);
         const taxById = new Map(products.map((p) => [p.id, p]));
 
         const input: EvalInput = {
             accountId: data.accountId ?? null,
-            lines: data.lines.map((l) => ({
-                productId: l.productId,
-                groupId: taxById.get(l.productId)?.groupId ?? null,
-                categoryId: taxById.get(l.productId)?.categoryId ?? null,
-                brandId: taxById.get(l.productId)?.brandId ?? null,
-                qty: l.qty, unitPrice: l.unitPrice,
-            })),
+            lines: data.lines.map((l) => {
+                const costPaise = costPaiseById.get(l.productId) ?? null;
+                return {
+                    productId: l.productId,
+                    groupId: taxById.get(l.productId)?.groupId ?? null,
+                    categoryId: taxById.get(l.productId)?.categoryId ?? null,
+                    brandId: taxById.get(l.productId)?.brandId ?? null,
+                    qty: l.qty, unitPrice: l.unitPrice,
+                    // Cost incl. tax — the PERCENT-coupon base (same as the tier's).
+                    costIncl: costPaise == null ? null : (costPaise / 100) * (1 + (l.taxRate ?? 0) / 100),
+                };
+            }),
             goodsValue,
             // Coupon-alone ceiling; finalizeCouponAmount applies the stacking-aware ceiling.
             billBeforeCoupon: goodsValue,
