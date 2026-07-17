@@ -283,25 +283,28 @@ export function AccountLedgerExplorer({
                                 !a.isActive && "opacity-50",
                             )}
                         >
-                            <div className="flex items-start justify-between gap-2">
-                                <div className="min-w-0 flex-1">
-                                    <p className="truncate text-sm font-medium">{a.name}</p>
+                            <div className="min-w-0">
+                                <p className="truncate text-sm font-medium">{a.name}</p>
+                                {/* Group + balance share the second line; the balance
+                                    breaks onto its own line here instead of being clipped
+                                    when the name/group is long. */}
+                                <div className="mt-0.5 flex items-center justify-between gap-2">
                                     <p className="truncate text-xs text-muted-foreground">
                                         {a.group?.name ?? "Ungrouped"}
                                     </p>
+                                    <span
+                                        className={cn(
+                                            "shrink-0 rounded px-1.5 py-0.5 text-xs font-mono font-medium",
+                                            a.balance === 0
+                                                ? "bg-muted text-muted-foreground"
+                                                : a.balance < 0
+                                                    ? "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300"
+                                                    : "bg-muted text-foreground",
+                                        )}
+                                    >
+                                        {drCr(a.balance, a.normalBalance)}
+                                    </span>
                                 </div>
-                                <span
-                                    className={cn(
-                                        "shrink-0 rounded px-1.5 py-0.5 text-xs font-mono font-medium",
-                                        a.balance === 0
-                                            ? "bg-muted text-muted-foreground"
-                                            : a.balance < 0
-                                                ? "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300"
-                                                : "bg-muted text-foreground",
-                                    )}
-                                >
-                                    {drCr(a.balance, a.normalBalance)}
-                                </span>
                             </div>
                         </button>
                     ))}

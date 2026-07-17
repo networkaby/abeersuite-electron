@@ -67,7 +67,10 @@ export function EntityListPanel({
                 </div>
             </div>
 
-            <ScrollArea className="flex-1 overflow-y-auto">
+            {/* Force the Radix viewport's inner wrapper to block so rows fill the
+                fixed panel width (default display:table lets rows grow to content
+                width, pushing right-aligned content off-screen where it's clipped). */}
+            <ScrollArea className="flex-1 overflow-y-auto [&>[data-slot=scroll-area-viewport]>div]:!block">
                 {isEmpty ? (
                     <p className="py-8 text-center text-xs text-muted-foreground">{emptyMessage}</p>
                 ) : (
