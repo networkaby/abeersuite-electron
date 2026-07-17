@@ -45,6 +45,7 @@ model Person {
   account          Account? // enforced at app level; FK lives on Account.personId
   companies        PersonCompany[]
   portalCredential PersonPortalCredential?
+  socialProfile    CustomerSocialProfile?  @relation("PersonSocialProfile")
   dealTickets      TicketDeal[] // deals (Ticket flavour "deal") linked to this person
   orderTickets     TicketOrder[] // orders (Ticket flavour "order") linked to this person
   owner            Position?               @relation("PersonOwnerPosition", fields: [ownerPositionId], references: [id])

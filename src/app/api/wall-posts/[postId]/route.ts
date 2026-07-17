@@ -17,13 +17,16 @@ export async function DELETE(
 
     const post = await prisma.wallPost.findUnique({
         where:  { id },
-        select: { id: true, wallUserId: true, authorId: true },
+        select: { id: true, ownerKind: true, ownerId: true, authorKind: true, authorId: true },
     });
     if (!post) return NextResponse.json({ error: "Post not found" }, { status: 404 });
 
+    // Staff caller may delete their own post, a post on their own wall, or (admin) any.
+    const isStaffAuthor = post.authorKind === "USER" && post.authorId === caller.id;
+    const isStaffOwner  = post.ownerKind === "USER" && post.ownerId === caller.id;
     const canDelete =
-        caller.id === post.authorId ||
-        caller.id === post.wallUserId ||
+        isStaffAuthor ||
+        isStaffOwner ||
         caller.permissions.includes(PERMISSIONS.ADMIN_BYPASS);
     if (!canDelete) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 

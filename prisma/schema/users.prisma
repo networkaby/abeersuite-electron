@@ -42,8 +42,8 @@ model User {
   ownedChatRooms                   ChatRoom[]                 @relation("OwnedChatRooms")
   chatRoomMembers                  ChatRoomMember[]
   chatMessages                     ChatMessage[]
-  wallPosts                        WallPost[]                 @relation("WallPosts")
-  authoredPosts                    WallPost[]                 @relation("AuthoredPosts")
+  // WallPost owner/author are now FK-free polymorphic (SocialActor USER|PERSON);
+  // resolved via socialActor.ts, so no back-relation here.
   userPositions                    UserPosition[]
   userPermissions                  UserPermission[]
   // POS shift relations

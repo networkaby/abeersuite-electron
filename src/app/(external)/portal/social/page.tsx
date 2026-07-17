@@ -1,20 +1,42 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Badge } from "@/components/ui/badge";
+import Link from "next/link";
+import axios from "axios";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getMockSocial } from "@/shared/lib/portal/mockAdapters";
+import { extractApiError } from "@/shared/lib/api";
 import PortalSectionHeader from "@/modules/external/portal/PortalSectionHeader";
-import { usePortalSocialStore } from "@/store/external/portalSocialStore";
-import { Globe2, Users } from "lucide-react";
+import { Globe2, Users, ArrowRight } from "lucide-react";
+
+interface Overview {
+    profile:
+        | { joined: false }
+        | { joined: true; handle: string; avatarUrl: string | null; bio: string | null; joinedAt: string };
+}
 
 export default function PortalSocialPage() {
-    const { joined, nickname, join } = usePortalSocialStore();
-    const [nickInput, setNickInput] = useState(nickname || "");
+    const [loading, setLoading] = useState(true);
+    const [joined, setJoined] = useState(false);
+    const [handle, setHandle] = useState<string | null>(null);
+    const [nickInput, setNickInput] = useState("");
     const [error, setError] = useState("");
+    const [joining, setJoining] = useState(false);
+
+    useEffect(() => {
+        axios.get<Overview>("/api/portal/social")
+            .then((res) => {
+                if (res.data.profile.joined) {
+                    setJoined(true);
+                    setHandle(res.data.profile.handle);
+                }
+            })
+            .catch(() => { /* fall through to the join card */ })
+            .finally(() => setLoading(false));
+    }, []);
 
     const canJoin = nickInput.trim().length >= 3;
 
@@ -25,7 +47,17 @@ export default function PortalSocialPage() {
             return;
         }
         setError("");
-        join(value);
+        setJoining(true);
+        try {
+            const res = await axios.post<{ handle: string }>("/api/portal/social/join", { handle: value });
+            setJoined(true);
+            setHandle(res.data.handle);
+            toast.success("You've joined social!");
+        } catch (e) {
+            setError(extractApiError(e, "Could not join"));
+        } finally {
+            setJoining(false);
+        }
     }
 
     return (
@@ -37,7 +69,26 @@ export default function PortalSocialPage() {
                     icon={Users}
                 />
 
-                {!joined ? (
+                {loading ? (
+                    <p className="text-sm text-muted-foreground">Loading…</p>
+                ) : joined ? (
+                    <Card className="border-border/70">
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2 text-lg">
+                                <Globe2 className="size-4 text-primary" />
+                                You&apos;re in{handle ? <> · <span className="text-primary">@{handle}</span></> : ""}!
+                            </CardTitle>
+                            <CardDescription>
+                                Our team are your default friends. Jump into the feed to see what&apos;s happening and post your own updates.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <Button asChild>
+                                <Link href="/portal/social/feed">Go social <ArrowRight className="size-4" /></Link>
+                            </Button>
+                        </CardContent>
+                    </Card>
+                ) : (
                     <Card className="border-border/70">
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2 text-lg">
@@ -45,7 +96,7 @@ export default function PortalSocialPage() {
                                 Before you join
                             </CardTitle>
                             <CardDescription>
-                                If you join, you will be visible to other customers of Network Service. Choose a nickname to continue.
+                                If you join, you will be visible to other customers and staff of Network Service. Choose a nickname to continue.
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
@@ -60,73 +111,13 @@ export default function PortalSocialPage() {
                                 />
                                 {error ? <p className="text-xs text-destructive">{error}</p> : null}
                             </div>
-                            <Button type="button" disabled={!canJoin} onClick={() => void handleJoin()}>
-                                Join social
+                            <Button type="button" disabled={!canJoin || joining} onClick={() => void handleJoin()}>
+                                {joining ? "Joining…" : "Join social"}
                             </Button>
                         </CardContent>
                     </Card>
-                ) : (
-                    <JoinedSocialView nickname={nickname} />
                 )}
             </div>
         </main>
     );
 }
-
-function JoinedSocialView({ nickname }: { nickname: string }) {
-    const [posts, setPosts] = useState<Awaited<ReturnType<typeof getMockSocial>>["posts"]>([]);
-    const [friends, setFriends] = useState<Awaited<ReturnType<typeof getMockSocial>>["friends"]>([]);
-
-    useEffect(() => {
-        let cancelled = false;
-        getMockSocial().then((data) => {
-            if (cancelled) return;
-            setPosts(data.posts);
-            setFriends(data.friends);
-        });
-        return () => {
-            cancelled = true;
-        };
-    }, []);
-
-    return (
-        <div className="grid gap-5 lg:grid-cols-[1.5fr_1fr]">
-            <Card className="border-border/70">
-                <CardHeader>
-                    <CardTitle className="text-lg">Community feed</CardTitle>
-                    <CardDescription>Welcome @{nickname}. Public feed is ready. Posting backend arrives in phase 2.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                    {posts.map((post) => (
-                        <article key={post.id} className="rounded-lg border border-border/70 bg-muted/30 p-3">
-                            <div className="flex items-center justify-between gap-3">
-                                <p className="text-sm font-medium">{post.author}</p>
-                                <span className="text-xs text-muted-foreground">{post.at}</span>
-                            </div>
-                            <p className="mt-1.5 text-sm text-foreground">{post.text}</p>
-                        </article>
-                    ))}
-                </CardContent>
-            </Card>
-
-            <Card className="border-border/70">
-                <CardHeader>
-                    <CardTitle className="text-base">Initial friends (internal team)</CardTitle>
-                    <CardDescription>Starter suggestions from Network Service team.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-2.5">
-                    {friends.map((friend) => (
-                        <div key={friend.id} className="flex items-center justify-between rounded-md border border-border/70 p-2.5">
-                            <div>
-                                <p className="text-sm font-medium">{friend.name}</p>
-                                <p className="text-xs text-muted-foreground">{friend.role}</p>
-                            </div>
-                            <Badge variant="outline">Suggested</Badge>
-                        </div>
-                    ))}
-                </CardContent>
-            </Card>
-        </div>
-    );
-}
-

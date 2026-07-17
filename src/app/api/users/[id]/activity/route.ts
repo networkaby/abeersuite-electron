@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
+import { resolveSocialActors, socialKey } from "@/shared/lib/social/socialActor";
 
 type ActivityType =
     | "ticket_created"
@@ -73,16 +74,20 @@ export async function GET(
                 take: limit,
             }),
             prisma.wallPost.findMany({
-                where: { authorId: userId, createdAt: { gte: range.gte, lte: range.lte } },
+                where: { authorKind: "USER", authorId: userId, createdAt: { gte: range.gte, lte: range.lte } },
                 select: {
                     id: true,
                     createdAt: true,
-                    wallUser: { select: { id: true, name: true } },
+                    ownerKind: true,
+                    ownerId: true,
                 },
                 orderBy: { createdAt: "desc" },
                 take: Math.max(30, Math.floor(limit / 2)),
             }),
         ]);
+
+        // Resolve the wall owners (staff or customer) for the "Posted on X's wall" line.
+        const wallOwners = await resolveSocialActors(wallPosts.map((p) => ({ kind: p.ownerKind, id: p.ownerId })));
 
         if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
@@ -100,14 +105,18 @@ export async function GET(
             };
         });
 
-        const wallActivities: ActivityItem[] = wallPosts.map((post) => ({
-            id: `wall-post-${post.id}`,
-            type: "wall_post",
-            title: "Posted on wall",
-            description: `Posted on ${post.wallUser.name}'s wall`,
-            createdAt: post.createdAt.toISOString(),
-            meta: { wallUserId: post.wallUser.id, wallUserName: post.wallUser.name },
-        }));
+        const wallActivities: ActivityItem[] = wallPosts.map((post) => {
+            const owner = wallOwners.get(socialKey(post.ownerKind, post.ownerId));
+            const ownerName = owner?.name ?? "someone";
+            return {
+                id: `wall-post-${post.id}`,
+                type: "wall_post",
+                title: "Posted on wall",
+                description: `Posted on ${ownerName}'s wall`,
+                createdAt: post.createdAt.toISOString(),
+                meta: { wallUserId: post.ownerId, wallUserName: ownerName },
+            };
+        });
 
         const activities = [...ticketActivities, ...wallActivities];
 

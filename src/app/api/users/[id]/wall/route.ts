@@ -4,18 +4,11 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { validateRequest } from "@/shared/lib/api";
 import { z } from "zod";
 import { handleApiError } from "@/shared/lib/api";
+import { resolveSocialActors, resolveSocialActor, socialKey } from "@/shared/lib/social/socialActor";
 
-const POST_SELECT = {
-    id:        true,
-    body:      true,
-    createdAt: true,
-    author: {
-        select: {
-            id: true, name: true, avatarUrl: true, role: true,
-            userRole: { select: { label: true, color: true } },
-        },
-    },
-} as const;
+// Staff wall = a wall OWNED by a User (kind USER). Owner/author are polymorphic
+// (see social.prisma); authors are resolved via socialActor so a customer's post
+// on a staff wall renders too.
 
 export async function GET(
     _: Request,
@@ -29,11 +22,16 @@ export async function GET(
     if (Number.isNaN(wallUserId)) return NextResponse.json({ error: "Invalid user id" }, { status: 400 });
 
     try {
-        const posts = await prisma.wallPost.findMany({
-            where:   { wallUserId },
-            select:  POST_SELECT,
+        const rows = await prisma.wallPost.findMany({
+            where:   { ownerKind: "USER", ownerId: wallUserId },
+            select:  { id: true, body: true, createdAt: true, authorKind: true, authorId: true },
             orderBy: { createdAt: "desc" },
         });
+        const actors = await resolveSocialActors(rows.map((r) => ({ kind: r.authorKind, id: r.authorId })));
+        const posts = rows.map((r) => ({
+            id: r.id, body: r.body, createdAt: r.createdAt,
+            author: actors.get(socialKey(r.authorKind, r.authorId))!,
+        }));
         return NextResponse.json(posts);
     } catch (e) {
         return handleApiError(e, "Failed to fetch wall");
@@ -62,11 +60,12 @@ export async function POST(
     if (error) return error;
 
     try {
-        const post = await prisma.wallPost.create({
-            data:   { wallUserId, authorId: caller.id, body: data.body },
-            select: POST_SELECT,
+        const row = await prisma.wallPost.create({
+            data:   { ownerKind: "USER", ownerId: wallUserId, authorKind: "USER", authorId: caller.id, body: data.body },
+            select: { id: true, body: true, createdAt: true, authorKind: true, authorId: true },
         });
-        return NextResponse.json(post, { status: 201 });
+        const author = await resolveSocialActor({ kind: row.authorKind, id: row.authorId });
+        return NextResponse.json({ id: row.id, body: row.body, createdAt: row.createdAt, author }, { status: 201 });
     } catch (e) {
         return handleApiError(e, "Failed to create post");
     }

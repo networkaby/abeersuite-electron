@@ -1,15 +1,45 @@
 // ── Social / Wall ──────────────────────────────────────────────────────────────
+//
+// ONE social graph shared by staff (User) and customers (Person). A wall post's
+// owner (whose wall it sits on) and author are each a SocialActor — USER or
+// PERSON — stored as FK-free (kind, id) pairs and resolved through
+// src/shared/lib/social/socialActor.ts (same convention as the FK-free
+// VoucherLink workflow links). Customers opt in from the portal, which creates
+// their CustomerSocialProfile; staff are every customer's default friends
+// (implicit for now — no connection table yet).
+
+enum SocialActorKind {
+  USER // staff member (User)
+  PERSON // customer (Person)
+}
 
 model WallPost {
-  id         Int      @id @default(autoincrement())
-  wallUserId Int
+  id         Int             @id @default(autoincrement())
+  /// Whose wall this post sits on.
+  ownerKind  SocialActorKind
+  ownerId    Int
+  /// Who wrote it.
+  authorKind SocialActorKind
   authorId   Int
   body       String
-  createdAt  DateTime @default(now())
+  createdAt  DateTime        @default(now())
 
-  wallUser User @relation("WallPosts", fields: [wallUserId], references: [id])
-  author   User @relation("AuthoredPosts", fields: [authorId], references: [id])
+  @@index([ownerKind, ownerId, createdAt])
+  @@index([authorKind, authorId])
+}
 
-  @@index([wallUserId])
-  @@index([authorId])
+// A customer's opt-in social identity. Created when a Person taps "Join" on the
+// portal Social tab — its existence IS the "has joined social" flag. Deleting the
+// Person cascades it away.
+model CustomerSocialProfile {
+  id        Int      @id @default(autoincrement())
+  personId  Int      @unique
+  person    Person   @relation("PersonSocialProfile", fields: [personId], references: [id], onDelete: Cascade)
+  /// Public handle (@nickname), unique across customers.
+  handle    String   @unique
+  avatarUrl String?
+  bio       String?
+  joinedAt  DateTime @default(now())
+
+  @@index([handle])
 }

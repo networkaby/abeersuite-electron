@@ -58,9 +58,12 @@ interface UserProfile {
 }
 interface WallPost {
     id: number; body: string; createdAt: string;
+    // Resolved SocialActor — author may be a staff User or a customer Person.
     author: {
-        id: number; name: string; avatarUrl: string | null; role: string | null;
-        userRole: { label: string; color: string } | null;
+        kind: "USER" | "PERSON"; id: number; name: string; avatarUrl: string | null;
+        href: string; role: string | null;
+        roleBadge: { label: string; color: string } | null;
+        isCustomer: boolean;
     };
 }
 interface UserActivity {
@@ -389,7 +392,8 @@ function WallTab({
     }
 
     const canDelete = (post: WallPost) =>
-        sessionUserId !== undefined && (sessionUserId === post.author.id || sessionUserId === profile.id);
+        sessionUserId !== undefined &&
+        ((!post.author.isCustomer && sessionUserId === post.author.id) || sessionUserId === profile.id);
 
     return (
         <div className="space-y-4">
@@ -425,18 +429,20 @@ function WallTab({
                     {posts.map(post => (
                         <div key={post.id} className="rounded-lg border border-border bg-card p-4">
                             <div className="flex items-start gap-3">
-                                <Link href={`/office/social/users/${post.author.id}`} className="shrink-0">
+                                <Link href={post.author.href} className="shrink-0">
                                     <UserAvatar avatarUrl={post.author.avatarUrl} name={post.author.name} role={post.author.role} sizePx={40} />
                                 </Link>
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2 flex-wrap">
-                                        <Link href={`/office/social/users/${post.author.id}`}
+                                        <Link href={post.author.href}
                                             className="text-sm font-semibold text-foreground hover:text-primary transition-colors">
                                             {post.author.name}
                                         </Link>
-                                        {post.author.userRole && (
-                                            <Badge className={`${post.author.userRole.color} text-[10px]`}>{post.author.userRole.label}</Badge>
-                                        )}
+                                        {post.author.roleBadge ? (
+                                            <Badge className={`${post.author.roleBadge.color} text-[10px]`}>{post.author.roleBadge.label}</Badge>
+                                        ) : post.author.isCustomer ? (
+                                            <Badge variant="outline" className="text-[10px]">Customer</Badge>
+                                        ) : null}
                                         <span className="text-[11px] text-muted-foreground ml-auto">{timeAgo(post.createdAt)}</span>
                                         {canDelete(post) && (
                                             <Button
