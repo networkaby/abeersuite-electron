@@ -9,7 +9,7 @@ import {
 import { getOrganisation } from "@/shared/lib/org/getOrganisation";
 import { VoucherTemplatesPreviewGallery } from "@/modules/settings/components/VoucherTemplatesPreviewGallery";
 
-export const metadata = { title: "Voucher Template Preview" };
+export const metadata = { title: "Print Template Preview" };
 
 export default async function VoucherTemplatesPreviewPage() {
     const [rows, organisation] = await Promise.all([
@@ -53,7 +53,7 @@ export default async function VoucherTemplatesPreviewPage() {
         <div className="space-y-4 px-6 pt-3 pb-6">
             <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div>
-                    <h1 className="text-xl font-semibold">Voucher Template Preview</h1>
+                    <h1 className="text-xl font-semibold">Print Template Preview</h1>
                     <p className="mt-1 text-sm text-muted-foreground max-w-2xl">
                         Side-by-side A4 and 80mm thermal preview for the selected voucher kind. Use this on a
                         client demo to show exactly what each print will look like before going live. Edit the
