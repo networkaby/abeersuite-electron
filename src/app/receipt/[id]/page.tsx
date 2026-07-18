@@ -7,33 +7,15 @@ import { formatDateTime } from "@/shared/lib/format/formatDate";
 import { selectPrimaryPhone, selectPrimaryEmail } from "@/shared/lib/prisma/fragments";
 import { getVoucherTemplate, resolvePaperFormat } from "@/shared/lib/print/voucherTemplate";
 import { resolveTemplateForFormat } from "@/shared/lib/print/voucherTemplateDefaults";
+import { RepairTicketBody, type RepairTicketBodyData } from "@/shared/components/print/RepairTicketBody";
 
 // Repair ticket / job receipt. Prints through the shared template-driven
 // renderer (REPAIR_TICKET kind) following the house print rule: thermal fires
 // the combined bridge first and falls back to the browser, where a format
 // picker switches A4 / thermal — each format rendering its own template. The
-// ticket-specific middle (device / problem / estimate) is supplied as the
-// custom `body`; the header + terms + signature + footer chrome are shared.
-
-// ── Small format-neutral body helpers (render fine at 80mm and A4 widths) ─────
-function Divider() {
-    return <div style={{ borderTop: "1px dashed #999", margin: "8px 0" }} />;
-}
-function SectionTitle({ children }: { children: React.ReactNode }) {
-    return (
-        <div style={{ fontWeight: 700, fontSize: 11, textTransform: "uppercase", letterSpacing: 1, margin: "6px 0 2px" }}>
-            {children}
-        </div>
-    );
-}
-function InfoRow({ label, value, bold }: { label: string; value: React.ReactNode; bold?: boolean }) {
-    return (
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 8, margin: "3px 0" }}>
-            <span style={{ color: "#555" }}>{label}</span>
-            <span style={{ fontWeight: bold ? 700 : 400 }}>{value}</span>
-        </div>
-    );
-}
+// ticket-specific middle (device / problem / estimate) is the <RepairTicketBody>
+// — its OWN document, not the invoice line-items layout; the header + terms +
+// signature + footer chrome are shared.
 
 export default async function ReceiptPage({
     params,
@@ -101,46 +83,18 @@ export default async function ReceiptPage({
         notes:      null,
     };
 
-    const body = (
-        <>
-            <div style={{ textAlign: "center" }}>
-                <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: 2 }}>{ticketNo}</div>
-                <div style={{ fontSize: 10, marginTop: 2 }}>{formatDateTime(ticket.createdAt)}</div>
-                <div style={{ marginTop: 4 }}>
-                    <span style={{ display: "inline-block", border: "1px solid #000", padding: "1px 6px", fontSize: 10, fontWeight: 700, letterSpacing: 1 }}>
-                        {ticket.status.replace("_", " ")}
-                    </span>
-                </div>
-            </div>
-
-            <Divider />
-            <SectionTitle>Customer</SectionTitle>
-            <InfoRow label="Name" value={account?.name ?? "—"} bold />
-            <InfoRow label="Phone" value={account?.phone ?? "—"} />
-            {account?.email && <InfoRow label="Email" value={account.email} />}
-
-            <Divider />
-            <SectionTitle>Device</SectionTitle>
-            <InfoRow label="Type" value={device.type} />
-            <InfoRow label="Brand" value={device.brand} />
-            <InfoRow label="Model" value={device.model} />
-
-            <Divider />
-            <SectionTitle>Problem</SectionTitle>
-            <div style={{ lineHeight: 1.5, fontSize: 11 }}>{device.problem}</div>
-
-            {ticket.repair.estimatedCost != null && (
-                <>
-                    <Divider />
-                    <InfoRow label="Estimated Cost" value={`₹ ${ticket.repair.estimatedCost}`} bold />
-                </>
-            )}
-
-            <Divider />
-            <InfoRow label="Priority" value={ticket.priority} bold />
-            {createdByName && <InfoRow label="Created by" value={createdByName} />}
-        </>
-    );
+    const bodyData: RepairTicketBodyData = {
+        ticketNo,
+        date:          formatDateTime(ticket.createdAt),
+        customer:      { name: account?.name ?? null, phone: account?.phone ?? null, email: account?.email ?? null },
+        device:        { type: device.type, brand: device.brand, model: device.model },
+        problem:       device.problem,
+        accessories:   ticket.repair.accessories ?? null,
+        estimatedCost: ticket.repair.estimatedCost != null ? String(ticket.repair.estimatedCost) : null,
+        priority:      ticket.priority,
+        createdBy:     createdByName,
+    };
+    const body = <RepairTicketBody data={bodyData} />;
 
     return (
         <ReceiptPreview

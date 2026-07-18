@@ -9,9 +9,41 @@
 
 import type { ThermalReceiptSample } from "@/shared/components/print/ThermalReceiptPreview";
 import type { VoucherTemplateKind } from "@/shared/lib/print/voucherTemplateDefaults";
+import type { RepairTicketBodyData } from "@/shared/components/print/RepairTicketBody";
+import type { ShippingSlipBodyData } from "@/shared/components/print/ShippingSlipBody";
 
 // Sample issuing-branch address for previewing the "Branch address" toggle.
 const SAMPLE_BRANCH_ADDRESS = "Zone Road, Ward 5\nBongaigaon, Assam, 783380";
+
+// Bespoke-document body fixtures — the repair ticket / shipping slip carry their
+// OWN body (not the invoice line-items layout), so the settings preview renders
+// the real body with these samples instead of a phantom invoice.
+export const SAMPLE_REPAIR_TICKET: RepairTicketBodyData = {
+    ticketNo:      "#0042",
+    date:          "18 Jul 2026, 21:18",
+    customer:      { name: "Wasim Akram", phone: "80113 55630", email: null },
+    device:        { type: "Laptop", brand: "Dell", model: "XPS 13" },
+    problem:       "Screen not turning on; suspected display cable.",
+    accessories:   "Carry bag, 65W charger",
+    estimatedCost: "2,500",
+    priority:      "MEDIUM",
+    createdBy:     "Admin",
+};
+
+export const SAMPLE_SHIPPING_SLIP: ShippingSlipBodyData = {
+    ticketNo:          "#0042",
+    date:              "18 Jul 2026",
+    ref:               "RMA-2291",
+    party:             { name: "ABC Service Centre", address: "Zone Road, Ward 5\nBongaigaon, Assam", phone: "90000 00000" },
+    partyNameFallback: null,
+    owner:             { name: "Wasim Akram", phone: "80113 55630" },
+    device:            { type: "Laptop", brand: "Dell", model: "XPS 13", problem: "Screen not turning on." },
+    accessories:       "charger, sleeve",
+    condition:         "minor scratches on lid",
+    notes:             null,
+    hasSlip:           true,
+    preparedBy:        "Admin",
+};
 
 export function buildSampleForKind(kind: VoucherTemplateKind): ThermalReceiptSample {
     const today = new Date().toISOString().slice(0, 10);

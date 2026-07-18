@@ -187,6 +187,13 @@ function inlineA4Styles(scope: string): string {
             font-size: 10px;
             color: #555;
         }
+        ${s}.disclaimer {
+            margin-top: 6px;
+            text-align: center;
+            font-size: 9px;
+            font-style: italic;
+            color: #777;
+        }
         @media print {
             ${s}.no-print { display: none !important; }
             ${rootRule} { background: #fff; }
@@ -496,6 +503,9 @@ function A4Footer({ template, sample }: A4ChromeProps) {
 
             {template.footerLine && (
                 <div className="footer-line">{template.footerLine}</div>
+            )}
+            {template.disclaimerLine && (
+                <div className="disclaimer">{template.disclaimerLine}</div>
             )}
 
             {/* Scannable voucher number — for pulling up the sale at return time. */}

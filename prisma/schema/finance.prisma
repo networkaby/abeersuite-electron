@@ -342,6 +342,10 @@ model VoucherPrintTemplate {
   termsText      String @default("")
   footerLine     String @default("Thank you · Visit again")
   signatureLabel String @default("Authorised Signatory")
+  // Legal boilerplate shown at the very bottom of every print (below the
+  // footer line, above the barcode) — e.g. "computer generated, no signature
+  // required". Blank hides it, same convention as termsText/footerLine.
+  disclaimerLine String @default("This is a computer-generated document and does not require a signature.")
 
   // Paper — default format used when the print route doesn't pass `?paper=`.
   // Values: "A4" | "THERMAL_80MM". POS rows are seeded with "THERMAL_80MM";

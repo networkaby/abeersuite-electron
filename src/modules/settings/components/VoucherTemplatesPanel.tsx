@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { extractApiError } from "@/shared/lib/api";
@@ -13,6 +13,8 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import ReceiptPreview from "@/shared/components/print/ReceiptPreview";
+import { RepairTicketBody } from "@/shared/components/print/RepairTicketBody";
+import { ShippingSlipBody } from "@/shared/components/print/ShippingSlipBody";
 import {
     VOUCHER_TEMPLATE_KIND_GROUPS,
     type VoucherTemplateDefaults,
@@ -21,18 +23,69 @@ import {
 } from "@/shared/lib/print/voucherTemplateDefaults";
 import { mergeTemplateWithOrg } from "@/shared/lib/print/mergeTemplateWithOrg";
 import type { OrganisationView } from "@/shared/lib/org/organisationView";
-import { buildSampleForKind, VOUCHER_KIND_LABEL as KIND_LABEL } from "@/modules/settings/lib/voucherTemplateSamples";
+import {
+    buildSampleForKind,
+    VOUCHER_KIND_LABEL as KIND_LABEL,
+    SAMPLE_REPAIR_TICKET,
+    SAMPLE_SHIPPING_SLIP,
+} from "@/modules/settings/lib/voucherTemplateSamples";
 
 interface Props {
     initialTemplates: VoucherTemplateDefaults[];
     organisation:     OrganisationView;
 }
 
-function clampInt(raw: string, min: number, max: number, fallback: number): number {
-    const n = parseInt(parseDigitsInput(raw), 10);
-    if (Number.isNaN(n)) return fallback;
-    return Math.min(max, Math.max(min, n));
+// Buffered numeric input: lets the user type freely (including intermediate
+// values below the min, e.g. "8" on the way to "80") and clamps to [min,max]
+// only on blur — so editing 120 → 80 works. Clamping on every keystroke would
+// snap "8" up to the min and trap the value.
+function NumberField({
+    value, min, max, onCommit,
+}: { value: number; min: number; max: number; onCommit: (n: number) => void }) {
+    const [text, setText] = useState(String(value));
+    // Resync when the row's value changes externally (kind switch / reset / save).
+    useEffect(() => { setText(String(value)); }, [value]);
+    return (
+        <Input
+            inputMode="numeric"
+            value={text}
+            onChange={(e) => setText(parseDigitsInput(e.target.value))}
+            onBlur={() => {
+                const n = parseInt(text, 10);
+                const next = Number.isNaN(n) ? value : Math.min(max, Math.max(min, n));
+                setText(String(next));
+                if (next !== value) onCommit(next);
+            }}
+        />
+    );
 }
+
+// Boolean-valued keys of the template — the show/hide switches operate on these.
+type BoolTemplateKey = {
+    [K in keyof VoucherTemplateDefaults]: VoucherTemplateDefaults[K] extends boolean ? K : never;
+}[keyof VoucherTemplateDefaults];
+
+// One row per print element; each has an independent A4 + thermal flag so a
+// format can show something the other hides.
+const SHOW_HIDE_ELEMENTS: { label: string; a4: BoolTemplateKey; thermal: BoolTemplateKey }[] = [
+    { label: "Logo",           a4: "showLogo",          thermal: "showLogoThermal" },
+    { label: "Header text",    a4: "showHeaderText",    thermal: "showHeaderTextThermal" },
+    { label: "HO address",     a4: "showAddress",       thermal: "showAddressThermal" },
+    { label: "Branch address", a4: "showBranchAddress", thermal: "showBranchAddressThermal" },
+    { label: "Phone",          a4: "showPhone",         thermal: "showPhoneThermal" },
+    { label: "GSTIN",          a4: "showGstin",         thermal: "showGstinThermal" },
+    { label: "Tax summary",    a4: "showTaxSummary",    thermal: "showTaxSummaryThermal" },
+    { label: "MRP (struck)",   a4: "showMrp",           thermal: "showMrpThermal" },
+    { label: "Signature",      a4: "showSignature",     thermal: "showSignatureThermal" },
+    { label: "Barcode",        a4: "showBarcode",       thermal: "showBarcodeThermal" },
+];
+
+// The bespoke documents (repair ticket / shipping slip) have no line-items
+// table, tax, barcode or issuing branch — hide those toggles for them.
+const BESPOKE_HIDDEN_ELEMENTS = new Set<BoolTemplateKey>([
+    "showTaxSummary", "showMrp", "showBarcode", "showBranchAddress",
+]);
+const BESPOKE_KINDS = new Set<VoucherTemplateKind>(["REPAIR_TICKET", "SHIPPING_SLIP"]);
 
 export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props) {
     const byKind = useMemo(() => {
@@ -73,6 +126,20 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
     // preview and the full-size popup render.
     const previewFormat = previewOverride ?? current.defaultPaper;
     const mergedPreview = mergeTemplateWithOrg(current, organisation);
+
+    // Bespoke documents carry their OWN body (not the invoice line-items layout),
+    // so preview the real body and drop the phantom line-items sample. Their
+    // Show/Hide table also hides the toggles that don't apply.
+    const bespokeBody =
+        selectedKind === "REPAIR_TICKET" ? <RepairTicketBody data={SAMPLE_REPAIR_TICKET} /> :
+        selectedKind === "SHIPPING_SLIP" ? <ShippingSlipBody data={SAMPLE_SHIPPING_SLIP} /> :
+        null;
+    const previewSample = bespokeBody
+        ? { ...sample, lines: [], subtotal: null, taxAmount: null, total: null, discounts: null, hsnSummary: null }
+        : sample;
+    const visibleElements = BESPOKE_KINDS.has(selectedKind)
+        ? SHOW_HIDE_ELEMENTS.filter((e) => !BESPOKE_HIDDEN_ELEMENTS.has(e.a4))
+        : SHOW_HIDE_ELEMENTS;
 
     function setField<K extends keyof VoucherTemplateDefaults>(
         field: K,
@@ -259,35 +326,36 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
                         </Field>
                     </fieldset>
 
-                    {/* Toggles */}
+                    {/* Toggles — one row per element, an independent A4 + Thermal
+                        switch each, so every print format respects its own set. */}
                     <fieldset className="space-y-2">
                         <legend className="text-xs uppercase tracking-wide font-medium text-muted-foreground">
                             Show / hide
                         </legend>
-                        {/* Every element has an independent A4 (left) + Thermal
-                            (right) toggle — each print format respects its own
-                            template. */}
-                        <div className="grid grid-cols-2 gap-x-6 gap-y-2">
-                            <ToggleRow label="Logo · A4"      on={current.showLogo}        onChange={(v) => setField("showLogo", v)} />
-                            <ToggleRow label="Logo · Thermal" on={current.showLogoThermal} onChange={(v) => setField("showLogoThermal", v)} />
-                            <ToggleRow label="Header text · A4"      on={current.showHeaderText}        onChange={(v) => setField("showHeaderText", v)} />
-                            <ToggleRow label="Header text · Thermal" on={current.showHeaderTextThermal} onChange={(v) => setField("showHeaderTextThermal", v)} />
-                            <ToggleRow label="HO address · A4"      on={current.showAddress}        onChange={(v) => setField("showAddress", v)} />
-                            <ToggleRow label="HO address · Thermal" on={current.showAddressThermal} onChange={(v) => setField("showAddressThermal", v)} />
-                            <ToggleRow label="Branch address · A4"      on={current.showBranchAddress}        onChange={(v) => setField("showBranchAddress", v)} />
-                            <ToggleRow label="Branch address · Thermal" on={current.showBranchAddressThermal} onChange={(v) => setField("showBranchAddressThermal", v)} />
-                            <ToggleRow label="Phone · A4"      on={current.showPhone}        onChange={(v) => setField("showPhone", v)} />
-                            <ToggleRow label="Phone · Thermal" on={current.showPhoneThermal} onChange={(v) => setField("showPhoneThermal", v)} />
-                            <ToggleRow label="GSTIN · A4"      on={current.showGstin}        onChange={(v) => setField("showGstin", v)} />
-                            <ToggleRow label="GSTIN · Thermal" on={current.showGstinThermal} onChange={(v) => setField("showGstinThermal", v)} />
-                            <ToggleRow label="Tax summary · A4"      on={current.showTaxSummary}        onChange={(v) => setField("showTaxSummary", v)} />
-                            <ToggleRow label="Tax summary · Thermal" on={current.showTaxSummaryThermal} onChange={(v) => setField("showTaxSummaryThermal", v)} />
-                            <ToggleRow label="MRP (struck) · A4"      on={current.showMrp}        onChange={(v) => setField("showMrp", v)} />
-                            <ToggleRow label="MRP (struck) · Thermal" on={current.showMrpThermal} onChange={(v) => setField("showMrpThermal", v)} />
-                            <ToggleRow label="Signature · A4"      on={current.showSignature}        onChange={(v) => setField("showSignature", v)} />
-                            <ToggleRow label="Signature · Thermal" on={current.showSignatureThermal} onChange={(v) => setField("showSignatureThermal", v)} />
-                            <ToggleRow label="Barcode · A4"      on={current.showBarcode}        onChange={(v) => setField("showBarcode", v)} />
-                            <ToggleRow label="Barcode · Thermal" on={current.showBarcodeThermal} onChange={(v) => setField("showBarcodeThermal", v)} />
+                        <div className="rounded-md border overflow-hidden">
+                            <div className="grid grid-cols-[1fr_3.5rem_3.5rem] items-center gap-x-3 border-b bg-muted/40 px-3 py-1.5 text-[10px] uppercase tracking-wide font-medium text-muted-foreground">
+                                <span>Element</span>
+                                <span className="text-center">A4</span>
+                                <span className="text-center">Thermal</span>
+                            </div>
+                            {visibleElements.map((el) => (
+                                <div
+                                    key={el.label}
+                                    className="grid grid-cols-[1fr_3.5rem_3.5rem] items-center gap-x-3 border-b px-3 py-1.5 text-sm last:border-0"
+                                >
+                                    <span className="truncate">{el.label}</span>
+                                    <Switch
+                                        className="justify-self-center"
+                                        checked={current[el.a4]}
+                                        onCheckedChange={(v) => setField(el.a4, v)}
+                                    />
+                                    <Switch
+                                        className="justify-self-center"
+                                        checked={current[el.thermal]}
+                                        onCheckedChange={(v) => setField(el.thermal, v)}
+                                    />
+                                </div>
+                            ))}
                         </div>
                     </fieldset>
 
@@ -315,6 +383,12 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
                                 onChange={(e) => setField("signatureLabel", e.target.value)}
                             />
                         </Field>
+                        <Field label="Disclaimer line" hint="Printed at the very bottom, below the footer line. Blank hides it.">
+                            <Input
+                                value={current.disclaimerLine}
+                                onChange={(e) => setField("disclaimerLine", e.target.value)}
+                            />
+                        </Field>
                     </fieldset>
 
                     {/* Paper */}
@@ -340,10 +414,11 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
                         </Field>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                             <Field label="Thermal width (mm)" hint="Used only for thermal printing.">
-                                <Input
-                                    inputMode="numeric"
-                                    value={String(current.paperWidthMm)}
-                                    onChange={(e) => setField("paperWidthMm", clampInt(e.target.value, 50, 120, current.paperWidthMm))}
+                                <NumberField
+                                    value={current.paperWidthMm}
+                                    min={50}
+                                    max={120}
+                                    onCommit={(n) => setField("paperWidthMm", n)}
                                 />
                             </Field>
                             <Field label="Thermal font family">
@@ -353,10 +428,11 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
                                 />
                             </Field>
                             <Field label="Thermal font size (px)">
-                                <Input
-                                    inputMode="numeric"
-                                    value={String(current.fontSizePx)}
-                                    onChange={(e) => setField("fontSizePx", clampInt(e.target.value, 8, 20, current.fontSizePx))}
+                                <NumberField
+                                    value={current.fontSizePx}
+                                    min={8}
+                                    max={20}
+                                    onCommit={(n) => setField("fontSizePx", n)}
                                 />
                             </Field>
                         </div>
@@ -409,7 +485,8 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
                             // (no headerLine1, no GSTIN, etc.) fall back to the
                             // org-wide values exactly like the real print route.
                             template={mergedPreview}
-                            sample={sample}
+                            sample={previewSample}
+                            body={bespokeBody}
                             previewMode
                         />
                     </ScaledPreviewBox>
@@ -432,7 +509,8 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
                             <ReceiptPreview
                                 format={previewFormat}
                                 template={mergedPreview}
-                                sample={sample}
+                                sample={previewSample}
+                                body={bespokeBody}
                                 previewMode
                             />
                         </div>
@@ -562,15 +640,3 @@ function ScaledPreviewBox({
     );
 }
 
-function ToggleRow({
-    label, on, onChange,
-}: { label: string; on: boolean; onChange: (v: boolean) => void }) {
-    return (
-        // Switch sits immediately before its label so the pairing is unambiguous
-        // (justify-between pushed them to opposite cell edges — read as unrelated).
-        <label className="flex items-center gap-2 text-sm cursor-pointer min-w-0">
-            <Switch checked={on} onCheckedChange={onChange} className="shrink-0" />
-            <span className="truncate">{label}</span>
-        </label>
-    );
-}

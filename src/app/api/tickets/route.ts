@@ -25,6 +25,7 @@ const createTicketSchema = z.object({
     priority: z.nativeEnum(Priority).optional(),
     notes: z.string().trim().optional().or(z.literal("")),
     accessInfo: z.string().trim().optional().or(z.literal("")),
+    accessories: z.string().trim().optional().or(z.literal("")),
     estimatedCost: z.preprocess(
         (value) => value === "" ? undefined : value,
         z.coerce.number().nonnegative().optional()
@@ -133,6 +134,7 @@ export async function POST(req: Request) {
                             },
                         },
                         accessInfo:          body.accessInfo || null,
+                        accessories:         body.accessories || null,
                         estimatedCost:       body.estimatedCost ? Number(body.estimatedCost) : null,
                         isWarranty:          Boolean(body.isWarranty),
                         warrantyStatus:      body.isWarranty ? "CLAIMED" : "NONE",

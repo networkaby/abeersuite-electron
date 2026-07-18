@@ -41,6 +41,7 @@ export const voucherTemplateUpdateSchema = z.object({
     termsText:      txt(1000),
     footerLine:     txt(200),
     signatureLabel: txt(80),
+    disclaimerLine: txt(300),
 
     defaultPaper:   z.enum(PAPER_FORMATS as unknown as [string, ...string[]]).optional(),
     paperWidthMm:   z.number().int().min(50).max(120).optional(),

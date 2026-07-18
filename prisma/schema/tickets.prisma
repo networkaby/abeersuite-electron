@@ -102,6 +102,7 @@ model TicketRepair {
 
   estimatedCost  Float?
   accessInfo     String?
+  accessories    String?   // items received with the device (bag, charger, cover …)
   expectedReturn DateTime?
   receivedBackAt DateTime?
   externalRef    String?

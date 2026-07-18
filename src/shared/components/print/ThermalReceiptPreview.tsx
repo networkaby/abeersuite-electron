@@ -129,6 +129,8 @@ function inlineStyleFromTemplate(t: VoucherTemplateDefaults, scope: string): str
         ${s}.small  { font-size: ${Math.max(8, t.fontSizePx - 2)}px; }
         ${s}.terms  { font-size: ${Math.max(8, t.fontSizePx - 3)}px; color: #444; line-height: 1.5; white-space: pre-wrap; }
         ${s}.sig-line { border-top: 1px solid #000; margin-top: 24px; padding-top: 2px; font-size: ${Math.max(8, t.fontSizePx - 3)}px; color: #555; }
+        ${s}.doctitle { font-weight: bold; font-size: ${t.fontSizePx + 1}px; letter-spacing: 1px; text-transform: uppercase; margin-top: 6px; }
+        ${s}.disclaimer { font-size: ${Math.max(7, t.fontSizePx - 4)}px; color: #666; font-style: italic; margin-top: 4px; }
         @media print {
             ${s}.no-print { display: none !important; }
         }
@@ -164,9 +166,6 @@ function ThermalHeader({ template, sample }: { template: VoucherTemplateDefaults
                 <div className="center" style={{ fontWeight: "bold", fontSize: template.fontSizePx + 2 }}>
                     {brand}
                 </div>
-            )}
-            {template.headerLine2 && (
-                <div className="center small">{template.headerLine2}</div>
             )}
             {template.showAddress && addrLines.length > 0 && (
                 <div className="center small">
@@ -333,6 +332,9 @@ function ThermalFooter({ template, sample }: { template: VoucherTemplateDefaults
 
             <div className="hr" />
             <div className="center small">{template.footerLine}</div>
+            {template.disclaimerLine && (
+                <div className="center disclaimer">{template.disclaimerLine}</div>
+            )}
 
             {/* Scannable voucher number — for pulling up the sale at return time. */}
             {template.showBarcode && sample.reference && (
@@ -352,6 +354,12 @@ function ReceiptBody({ template, sample, body }: BodyProps) {
         <div className="receipt">
             <ThermalHeader template={template} sample={sample} />
             <div className="hr" />
+            {/* Document title — below the divider, sitting right above the ticket
+                no / ref that the body opens with, so it reads as the heading of
+                what follows rather than a small line lost in the identity block. */}
+            {template.headerLine2 && (
+                <div className="center doctitle" style={{ marginTop: 0, marginBottom: 6 }}>{template.headerLine2}</div>
+            )}
             {body ?? <DefaultThermalMiddle template={template} sample={sample} />}
             <ThermalFooter template={template} sample={sample} />
         </div>

@@ -7,6 +7,7 @@ import { formatDate } from "@/shared/lib/format/formatDate";
 import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
 import { getVoucherTemplate, resolvePaperFormat } from "@/shared/lib/print/voucherTemplate";
 import { resolveTemplateForFormat } from "@/shared/lib/print/voucherTemplateDefaults";
+import { ShippingSlipBody, type ShippingSlipBodyData } from "@/shared/components/print/ShippingSlipBody";
 
 // Shipping slip / delivery challan for sending a device out to a service centre.
 // Prints through the shared template-driven renderer (SHIPPING_SLIP kind, A4 by
@@ -28,15 +29,6 @@ type ShippingSlip = {
     createdAt: string;
     createdBy: string | null;
 };
-
-function DefRow({ label, value }: { label: string; value: React.ReactNode }) {
-    return (
-        <div style={{ display: "flex", gap: 8, margin: "3px 0" }}>
-            <span style={{ color: "#555", minWidth: 120 }}>{label}</span>
-            <span style={{ flex: 1 }}>{value}</span>
-        </div>
-    );
-}
 
 export default async function ShippingSlipPage({
     params,
@@ -128,65 +120,21 @@ export default async function ShippingSlipPage({
         notes:      null,
     };
 
-    const body = (
-        <>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 8, margin: "4px 0" }}>
-                <span><span style={{ color: "#555" }}>Ticket:</span> <b>{ticketNo}</b></span>
-                <span><span style={{ color: "#555" }}>Date:</span> {formatDate(slip?.date ?? ticket.createdAt)}</span>
-            </div>
-            {slip?.ref && (
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 8, margin: "3px 0" }}>
-                    <span style={{ color: "#555" }}>Service Centre Ref / Job #:</span>
-                    <b>{slip.ref}</b>
-                </div>
-            )}
-
-            <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 8 }}>
-                <div style={{ flex: 1, minWidth: 150, border: "1px solid #ccc", borderRadius: 4, padding: 8 }}>
-                    <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 1, color: "#666", marginBottom: 4 }}>To — Service Centre</div>
-                    {party ? (
-                        <>
-                            <div style={{ fontWeight: 700 }}>{party.name}</div>
-                            {party.address && <div style={{ color: "#555", whiteSpace: "pre-line" }}>{party.address}</div>}
-                            {party.phone && <div style={{ color: "#555" }}>Ph: {party.phone}</div>}
-                        </>
-                    ) : (
-                        <div style={{ color: "#555" }}>{slip?.partyName ?? "—"}</div>
-                    )}
-                </div>
-                <div style={{ flex: 1, minWidth: 150, border: "1px solid #ccc", borderRadius: 4, padding: 8 }}>
-                    <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 1, color: "#666", marginBottom: 4 }}>Device Owner</div>
-                    <div style={{ fontWeight: 700 }}>{ownerName}</div>
-                    {ownerPhone && <div style={{ color: "#555" }}>Ph: {ownerPhone}</div>}
-                </div>
-            </div>
-
-            <div style={{ borderTop: "1px dashed #999", margin: "10px 0" }} />
-
-            <DefRow label="Device Type" value={device.type || "—"} />
-            <DefRow label="Brand" value={device.brand || "—"} />
-            <DefRow label="Model" value={device.model || "—"} />
-            <DefRow label="Reported Problem" value={device.problem || "—"} />
-            {slip?.accessories && <DefRow label="Accessories Sent" value={slip.accessories} />}
-            {slip?.condition && <DefRow label="Physical Condition" value={slip.condition} />}
-            {slip?.notes && <DefRow label="Notes" value={slip.notes} />}
-
-            {!slip && (
-                <p style={{ color: "#555", textAlign: "center", fontSize: 11, marginTop: 8 }}>
-                    No shipping slip saved for this ticket yet — showing the ticket&apos;s device details.
-                </p>
-            )}
-
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 24, marginTop: 40 }}>
-                <div style={{ flex: 1, borderTop: "1px solid #000", paddingTop: 3, fontSize: 10, color: "#555", textAlign: "center" }}>Sent by (Shop)</div>
-                <div style={{ flex: 1, borderTop: "1px solid #000", paddingTop: 3, fontSize: 10, color: "#555", textAlign: "center" }}>Received by (Service Centre)</div>
-            </div>
-
-            {slip?.createdBy && (
-                <p style={{ textAlign: "center", color: "#555", fontSize: 10, marginTop: 8 }}>Prepared by {slip.createdBy}.</p>
-            )}
-        </>
-    );
+    const bodyData: ShippingSlipBodyData = {
+        ticketNo,
+        date:              formatDate(slip?.date ?? ticket.createdAt),
+        ref:               slip?.ref ?? null,
+        party,
+        partyNameFallback: slip?.partyName ?? null,
+        owner:             { name: ownerName, phone: ownerPhone },
+        device,
+        accessories:       slip?.accessories ?? null,
+        condition:         slip?.condition ?? null,
+        notes:             slip?.notes ?? null,
+        hasSlip:           !!slip,
+        preparedBy:        slip?.createdBy ?? null,
+    };
+    const body = <ShippingSlipBody data={bodyData} />;
 
     return (
         <ReceiptPreview

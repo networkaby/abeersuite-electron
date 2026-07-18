@@ -24,7 +24,9 @@ const slug = (label: string) =>
     label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 
 // Any nav node — matches ModuleChild / NavItem structurally (label + optional children).
-type NavLike = { label: string; children?: readonly NavLike[] };
+// `sidebarKey` overrides the label-derived slug so a display-label rename doesn't
+// change the `ui:sidebar:*` permission id (which would silently drop grants).
+type NavLike = { label: string; sidebarKey?: string; children?: readonly NavLike[] };
 
 export interface SidebarChildRow {
     key: string;
@@ -54,7 +56,7 @@ export interface SidebarModuleRow {
 // so link keys stay unique even across depths.
 function makeChildren(moduleKey: string, items: readonly NavLike[], seen: Set<string>): SidebarChildRow[] {
     return items.map((it) => {
-        let childKey = slug(it.label);
+        let childKey = it.sidebarKey ?? slug(it.label);
         while (seen.has(childKey)) childKey = `${childKey}-x`;
         seen.add(childKey);
         return {

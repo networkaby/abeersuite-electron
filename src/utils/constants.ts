@@ -123,6 +123,14 @@ export type SettingsNavItem = {
     href: string;
     icon: LucideIcon;
     permission: string;
+    /**
+     * Stable slug for the sidebar-visibility permission id
+     * (`ui:sidebar:<module>:<sidebarKey>`). Defaults to slug(label) when omitted.
+     * Set this when the display label changes but the granted permission id must
+     * stay put — e.g. "Voucher Templates" → "Print Templates" keeps `voucher-templates`
+     * so existing grants (and the route) don't break.
+     */
+    sidebarKey?: string;
 };
 
 export type ButtonBarAction = {
@@ -599,8 +607,8 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     { label: "Year Ending", href: "/office/settings/year-ending", icon: Calendar, permission: "settings:manage" },
     { label: "Thermal Printer", href: "/office/settings/printer-settings", icon: Printer, permission: "settings:manage" },
     { label: "QR Display", href: "/office/settings/qr-display-settings", icon: QrCode, permission: "settings:manage" },
-    { label: "Print Templates", href: "/office/settings/voucher-templates", icon: FileText, permission: "settings:manage" },
-    { label: "Print Preview", href: "/office/settings/voucher-templates/preview", icon: FileText, permission: "settings:manage" },
+    { label: "Print Templates", href: "/office/settings/voucher-templates", icon: FileText, permission: "settings:manage", sidebarKey: "voucher-templates" },
+    // { label: "Print Preview", href: "/office/settings/voucher-templates/preview", icon: FileText, permission: "settings:manage", sidebarKey: "voucher-preview" },
     { label: "Backup & Restore", href: "/office/settings/backup-restore", icon: Database, permission: "settings:manage" },
     { label: "Downloads", href: "/office/settings/downloads", icon: Download, permission: "settings:manage" },
     { label: "Item Import", href: "/office/settings/item-import", icon: Upload, permission: "inventory:masters:edit" },

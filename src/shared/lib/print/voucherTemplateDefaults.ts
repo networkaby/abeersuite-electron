@@ -141,6 +141,8 @@ const FOOTER_LINE_BY_KIND: Partial<Record<VoucherTemplateKind, string>> = {
     SHIPPING_SLIP: "Please return the device with this slip.",
 };
 
+const DEFAULT_DISCLAIMER_LINE = "This is a computer-generated document and does not require a signature.";
+
 const TERMS_TEXT_BY_KIND: Partial<Record<VoucherTemplateKind, string>> = {
     REPAIR_TICKET: [
         "1. Please keep this receipt. It is required for device collection.",
@@ -299,6 +301,7 @@ export interface VoucherTemplateDefaults {
     termsText: string;
     footerLine: string;
     signatureLabel: string;
+    disclaimerLine: string; // e.g. "computer-generated, no signature required" — blank hides it
     defaultPaper: PaperFormat;
     paperWidthMm: number;
     fontFamily: string;
@@ -337,6 +340,7 @@ export function buildVoucherTemplateDefaults(kind: VoucherTemplateKind): Voucher
         termsText: TERMS_TEXT_BY_KIND[kind] ?? "",
         footerLine: FOOTER_LINE_BY_KIND[kind] ?? "Thank you · Visit again",
         signatureLabel: "Authorised Signatory",
+        disclaimerLine: DEFAULT_DISCLAIMER_LINE,
         defaultPaper: DEFAULT_PAPER_BY_KIND[kind],
         paperWidthMm: 80,
         fontFamily: "Courier New, monospace",
@@ -369,6 +373,7 @@ export type VoucherPrintTemplateRow = {
     showQrCode?: boolean | null;
     showBarcode?: boolean | null;             showBarcodeThermal?: boolean | null;
     termsText: string; footerLine: string; signatureLabel: string;
+    disclaimerLine?: string | null; // guards the window before `prisma db push` adds the column
     defaultPaper: string; paperWidthMm: number; fontFamily: string; fontSizePx: number;
 };
 
@@ -414,6 +419,7 @@ export function rowToVoucherTemplateDefaults(row: VoucherPrintTemplateRow): Vouc
         termsText:      row.termsText,
         footerLine:     row.footerLine,
         signatureLabel: row.signatureLabel,
+        disclaimerLine: row.disclaimerLine ?? f.disclaimerLine,
         defaultPaper:   isPaperFormat(row.defaultPaper) ? row.defaultPaper : f.defaultPaper,
         paperWidthMm:   row.paperWidthMm,
         fontFamily:     row.fontFamily,

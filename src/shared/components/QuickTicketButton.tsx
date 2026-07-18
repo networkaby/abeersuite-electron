@@ -10,6 +10,7 @@ import { z } from "zod/v3";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useQuickTicketStore, type Step, type BasicIdentity } from "@/store/quickTicketStore";
+import { extractApiError } from "@/shared/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -39,11 +40,16 @@ type Priority = { id: string; label: string };
 type PipelineOption = { id: string; label: string; color: string; isDefault: boolean };
 type LinkedCompany = { id: number; name: string; accountId: number | null };
 
+// Job Type (Paid Repair / Warranty Claim) + its warranty fields are hidden for
+// now. Flip to true to bring the warranty-claim intake flow back.
+const SHOW_JOB_TYPE = false;
+
 const ticketSchema = z.object({
     deviceType: z.string().min(1, "Device type is required"),
     brand: z.string().min(1, "Brand is required"),
     model: z.string().min(1, "Model is required"),
     problem: z.string().min(1, "Problem is required"),
+    accessories: z.string().optional(),
     priority: z.string(),
     notes: z.string().optional(),
     accessInfo: z.string().optional(),
@@ -176,8 +182,8 @@ export default function QuickTicketButton() {
             closeModal();
             window.open(`/receipt/${res.data.id}`, "_blank");
             router.push(`/office/repairing/tickets/${res.data.id}`);
-        } catch {
-            toast.error("Failed to create ticket");
+        } catch (err) {
+            toast.error(extractApiError(err, "Failed to create ticket"));
         }
     };
 
@@ -312,45 +318,60 @@ export default function QuickTicketButton() {
                             </div>
 
                             <div className="space-y-2">
-                                <FieldLabel>Job Type</FieldLabel>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <Button
-                                        type="button"
-                                        variant={!isWarranty ? "default" : "outline"}
-                                        className="justify-center"
-                                        onClick={() => {
-                                            setIsWarranty(false);
-                                            ticketForm.setValue("warrantyRef", "");
-                                            ticketForm.setValue("purchaseDate", "");
-                                        }}
-                                    >
-                                        <Wrench size={14} /> Paid Repair
-                                    </Button>
-                                    <Button
-                                        type="button"
-                                        variant={isWarranty ? "default" : "outline"}
-                                        className="justify-center"
-                                        onClick={() => setIsWarranty(true)}
-                                    >
-                                        <ShieldCheck size={14} /> Warranty Claim
-                                    </Button>
-                                </div>
+                                <FieldLabel>Accessories Received</FieldLabel>
+                                <Textarea
+                                    {...ticketForm.register("accessories")}
+                                    rows={2}
+                                    placeholder="Items handed in with the device — e.g. bag, charger, cover, SIM..."
+                                />
                             </div>
 
-                            {isWarranty && (
-                                <div className="grid grid-cols-2 gap-3 border-2 border-secondary/50 bg-secondary/30 p-4">
+                            {/* Job Type + Warranty — hidden for now. Flip SHOW_JOB_TYPE
+                                to bring the Paid Repair / Warranty Claim flow back. */}
+                            {SHOW_JOB_TYPE && (
+                                <>
                                     <div className="space-y-2">
-                                        <FieldLabel>Serial / Purchase Ref</FieldLabel>
-                                        <Input {...ticketForm.register("warrantyRef")} placeholder="Serial or receipt ref" />
+                                        <FieldLabel>Job Type</FieldLabel>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <Button
+                                                type="button"
+                                                variant={!isWarranty ? "default" : "outline"}
+                                                className="justify-center"
+                                                onClick={() => {
+                                                    setIsWarranty(false);
+                                                    ticketForm.setValue("warrantyRef", "");
+                                                    ticketForm.setValue("purchaseDate", "");
+                                                }}
+                                            >
+                                                <Wrench size={14} /> Paid Repair
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                variant={isWarranty ? "default" : "outline"}
+                                                className="justify-center"
+                                                onClick={() => setIsWarranty(true)}
+                                            >
+                                                <ShieldCheck size={14} /> Warranty Claim
+                                            </Button>
+                                        </div>
                                     </div>
-                                    <div className="space-y-2">
-                                        <FieldLabel>Purchase Date</FieldLabel>
-                                        <TallyDateInput
-                                            value={ticketForm.watch("purchaseDate") ?? ""}
-                                            onValueChange={(iso) => ticketForm.setValue("purchaseDate", iso, { shouldValidate: true })}
-                                        />
-                                    </div>
-                                </div>
+
+                                    {isWarranty && (
+                                        <div className="grid grid-cols-2 gap-3 border-2 border-secondary/50 bg-secondary/30 p-4">
+                                            <div className="space-y-2">
+                                                <FieldLabel>Serial / Purchase Ref</FieldLabel>
+                                                <Input {...ticketForm.register("warrantyRef")} placeholder="Serial or receipt ref" />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <FieldLabel>Purchase Date</FieldLabel>
+                                                <TallyDateInput
+                                                    value={ticketForm.watch("purchaseDate") ?? ""}
+                                                    onValueChange={(iso) => ticketForm.setValue("purchaseDate", iso, { shouldValidate: true })}
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+                                </>
                             )}
 
                             <div className="grid grid-cols-2 gap-3">

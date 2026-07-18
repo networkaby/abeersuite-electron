@@ -4,7 +4,7 @@ Current implementation of `service-mgmt-experiment` — an internal business OS 
 
 **Present-tense only.** This file describes what the code is *now*. Status, plans, decisions, and history live in [PROJECT_BRAIN.md](PROJECT_BRAIN.md); setup in [README.md](README.md); contributor rules in [AGENTS.md](AGENTS.md); authoritative history in `git log`.
 
-> ⚠️ Several domain concepts were **replaced** as the project evolved. If a model or rule you remember isn't in this document, check **§13 Retired concepts** before assuming it still exists — do not rebuild against the old design.
+> ⚠️ This file lists only what the code has **now**. If a model or rule you remember isn't described here, treat it as **not existing** — do not rebuild it against an older design.
 
 ---
 
@@ -99,16 +99,21 @@ There is **one** general-ledger representation: the **`UniversalVoucher` spine**
 
 ---
 
-## 8) Workflow — pipelines & tickets
+## 8) Workflow — pipelines, tickets & the work engine
 
-The generic pipeline engine models a **journey**: `Pipeline` → `TicketStatus`, with a `Ticket` core row per journey plus an optional 1:1 detail table per flavour (`TicketRepair`, `TicketDeal`, `TicketDelivery`, `TicketRefund`, `TicketOrder`/`TicketOrderLine`). `TicketLog` is the single timeline (actor is a frozen JSON snapshot, not a User FK). `Device` + `ServiceCenter` support repair. Ownership = `createdBy` snapshot; assignment = `assignedPositionId` seat; `TicketParticipant` adds helpers.
+The pipeline engine models a **journey**, three levels deep: `Pipeline` → `TicketStatus` (stages) → `TicketWorker` (sub-statuses inside a stage). One **`Ticket`** core row rides every pipeline; `Pipeline.entityType` (`repair` | `deal` | `order` | `delivery` | `refund` | `task` | `none`) selects the optional 1:1 detail table — `TicketRepair`, `TicketDeal`, `TicketOrder`/`TicketOrderLine`, `TicketDelivery`, `TicketRefund` (`task`/`none` = a bare core row). Cross-pipeline transfer is just an `update { pipelineId, status }` on the core row; the detail row stays attached as history.
 
-> **Evolving area — do not assume the end-state.** This layer is mid-redesign:
-> - **Repair currently runs on statuses only.** The automation engine (`Work`, `TicketWorker`, `WorkGroup`, `WorkerTransition`, `StatusTransition`) exists in the schema but is **soft-disconnected / parked** — don't wire new behaviour onto it without checking PROJECT_BRAIN.
-> - **Orders & estimates are becoming accountancy vouchers** (`SALES_ORDER` / `ONLINE_ORDER` / `ESTIMATE`), with the principle *document → voucher, journey → ticket*. `TicketOrder` still exists but is on the way out; don't build new order logic on it.
-> - Access to statuses is moving to a **Work-type + permission** model on a common pipeline spine.
->
-> When old and new conflict, follow AGENTS.md: pick one model per flow, or park the conflict with a note — never mix both.
+`TicketLog` is the single timeline (actor is a frozen JSON snapshot, not a User FK). `Device` + `ServiceCenter` support repair. Ownership = `createdBy` snapshot; assignment = `assignedPositionId` seat; `TicketParticipant` adds helpers. The **Work Inbox** (`/work-flow-inbox`, the post-login landing) lists tickets group-wise for the operator.
+
+**The sub-status carries the automation.** A `TicketWorker` completes through `/api/tickets/[id]/worker`, driving:
+
+- **Work units.** A `Work` (categorised by `WorkGroup`) is the unit of work a status/sub-status represents (calling, parts, QC). The Work owns the completion *vocabulary* (success/fail labels, popups, args); the worker owns the *wiring*. `Work.kind` is `"human"` (completed on the Work Inbox) or `"auto"` (a hardcoded tool runs it — `actionTools.ts` / `toolRegistry.ts`). A gated `Work` / `WorkGroup` mints a `work:<id>` / `workgroup:<id>` permission (act-on vs see-in-inbox).
+- **Outcome routing.** Success/unsuccess routes to `successWorkerId`/`failWorkerId` (same stage) or `successStatusId`/`failStatusId` (jump straight to another stage, applying its entry worker).
+- **Retry schedule.** A waiting worker (Unreachable, Awaiting-parts) re-arms on a front-loaded `retrySchedule`, setting `wakeAt` and dropping into the Work Inbox "Waiting" tab until due.
+- **Child spawn ("5th power").** A sub-status with `spawnPipelineId` spawns a CHILD ticket on another pipeline; the child reports back through `parentSignal` (`spawnChild.ts`, `reconcileParentFromChild`).
+- **Actions ("6th power").** An ordered, outcome-filtered list of hooks (`spawn | move_status | email | retry | …`) fires on completion — `runWorkerActions` (`actions.ts`), with `autoAdvance` for chained auto-works.
+
+Repair, deals, delivery, and refund all ride this one engine. **The `Account` is the only bridge into accountancy** — `Ticket.accountId` links to a party ledger; no voucher/GL FK points *into* workflow (`VoucherLink` stays loose and FK-free, §5).
 
 ---
 
@@ -172,26 +177,7 @@ src/shared/
 
 ---
 
-## 13) Retired concepts — DO NOT RESURRECT
-
-These were superseded. If you find prose or memory referencing them, treat it as historical and build against the current model above.
-
-| Retired | Replaced by |
-|---|---|
-| `JournalEntry` / `JournalLine` | `UniversalVoucher` + `VoucherGlLine` (the spine is the sole GL) |
-| `Voucher` / `VoucherLine` (GL header/lines) | `UniversalVoucher` (totals computed from Dr legs) |
-| `Invoice` / `InvoiceLine` | `UniversalVoucher` (SALE) + `VoucherInventoryLine` |
-| `InvVoucher` / `InvVoucherLine` | renamed **`VoucherDetail`** / **`VoucherInventoryLine`** |
-| `Customer` / `CustomerCompany` / `CustomerPortalCredential` | `Person` / `PersonCompany` / `PersonPortalCredential` |
-| `ShopProduct` / `ShopOrder` models | `InvProduct` (single master); online orders → Ticket flavour / `ONLINE_ORDER` voucher |
-| Permission grid `module × action × scope` (`accountancy:edit:branch`, `:own/:org` suffixes) | three-axis model (§4): `ui:sidebar:*` + per-kind write keys + branch radius |
-| Hidden read/capability gates on GET routes & pages | reads default-open (`requireAuth`); only writes gate |
-| `posts` (org seat) | `Position` |
-| Repair driven by the Work/Worker automation engine | repair runs on **statuses only** (engine parked) |
-
----
-
-## 14) Operational notes
+## 13) Operational notes
 
 - Use `pnpm`. After a Prisma schema change: `prisma generate` **and restart the dev server** (Turbopack caches Prisma chunks).
 - Keep middleware in `src/proxy.ts` (never `middleware.ts`).
