@@ -19,22 +19,21 @@
 
 export const WORKFLOW_STATUS = {
     /**
-     * Repair pipeline (P1) statuses where the device has LEFT the shop for an
-     * external service centre → the "Create Shipping Slip" action is offered.
-     * Current seed labels for reference (edit the IDs to lock your set):
-     *   S61 "Need Help" · S62 "Escalated - Send to service" · S4 "Escalated -Visit"
+     * Repair pipeline (P1) statuses where the "Create Shipping Slip" action is
+     * offered — the decision-to-send point and while already out (a device may
+     * loop through several centres). Live labels:
+     *   S62 "Escalated - Need Help" · S65 "Sent To Service"
      */
-    shipToService: ["S61", "S62", "S4"] as string[],
+    shipToService: ["S62"] as string[],
 
     /**
      * Repair pipeline (P1) statuses meaning the device is CURRENTLY out at an
      * external service centre (sent, awaiting return) → counted on the Repairs
-     * dashboard "At Service Centre" card. Narrower than `shipToService` (which is
-     * "can raise a slip"); this is "physically gone right now". Seed label:
-     *   S62 "Sent To Service"
-     * Adjust these IDs to match your locked "sent, not yet received back" set.
+     * dashboard "At Service Centre" card + the device-audit grouping. Narrower
+     * than `shipToService`; this is "physically gone right now". Live label:
+     *   S65 "Sent To Service"  (S5 "Received Back" = already back, so excluded)
      */
-    atServiceCentre: ["S62"] as string[],
+    atServiceCentre: ["S65"] as string[],
 
     /**
      * Repair pipeline (P1) statuses where the job is far enough along to raise

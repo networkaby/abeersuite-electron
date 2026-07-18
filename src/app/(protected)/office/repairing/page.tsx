@@ -2,7 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { auth } from "@/auth";
 import { badgeColor } from "@/shared/lib/format/entityColor";
 import Link from "next/link";
-import { Wrench, AlertCircle, Inbox } from "lucide-react";
+import { Wrench, Inbox, Package, Truck } from "lucide-react";
 import { timeAgo } from "@/shared/lib/format/timeAgo";
 import { getRepairPipeline } from "@/modules/repairing/lib/repairPipeline";
 import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
@@ -65,10 +65,16 @@ export default async function RepairingDashboardPage() {
         }))
     );
 
+    // "In hand" = open devices we still physically hold (open minus the ones
+    // currently out at a service centre). The per-centre breakdown lives on its
+    // own page (click the At Service Centre card) to keep this dashboard compact.
+    const inHand = Math.max(open - atServiceCentre, 0);
+
     const stats = [
-        { label: "Open", value: open, icon: Wrench, tone: "text-primary" },
-        { label: "At Service Centre", value: atServiceCentre, icon: AlertCircle, tone: "text-foreground" },
-        { label: "Total", value: total, icon: Inbox, tone: "text-foreground" },
+        { label: "Open", value: open, icon: Wrench, tone: "text-primary", href: null as string | null, hint: null as string | null },
+        { label: "In hand", value: inHand, icon: Package, tone: "text-foreground", href: "/office/repairing/service-centres", hint: "at the shop →" },
+        { label: "At Service Centre", value: atServiceCentre, icon: Truck, tone: "text-foreground", href: "/office/repairing/service-centres", hint: "view by centre →" },
+        { label: "Total", value: total, icon: Inbox, tone: "text-foreground", href: null, hint: null },
     ];
 
     return (
@@ -87,16 +93,27 @@ export default async function RepairingDashboardPage() {
             </div>
 
             {/* Stat cards */}
-            <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
-                {stats.map((s) => (
-                    <div key={s.label} className="flex items-center gap-4 rounded-lg border border-border bg-card p-5 shadow">
-                        <s.icon size={22} className="text-muted-foreground" />
-                        <div>
-                            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{s.label}</p>
-                            <p className={`text-3xl font-bold mt-0.5 ${s.tone}`}>{s.value}</p>
-                        </div>
-                    </div>
-                ))}
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                {stats.map((s) => {
+                    const inner = (
+                        <>
+                            <s.icon size={22} className="text-muted-foreground" />
+                            <div>
+                                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{s.label}</p>
+                                <p className={`text-3xl font-bold mt-0.5 ${s.tone}`}>{s.value}</p>
+                                {s.hint && <p className="text-xs text-muted-foreground">{s.hint}</p>}
+                            </div>
+                        </>
+                    );
+                    const cls = "flex items-center gap-4 rounded-lg border border-border bg-card p-5 shadow";
+                    return s.href ? (
+                        <Link key={s.label} href={s.href} className={`${cls} transition-colors hover:border-primary/50 hover:bg-muted/40`}>
+                            {inner}
+                        </Link>
+                    ) : (
+                        <div key={s.label} className={cls}>{inner}</div>
+                    );
+                })}
             </div>
 
             {/* Status funnel */}
@@ -146,9 +163,12 @@ export default async function RepairingDashboardPage() {
                                         <p className="text-sm font-medium text-foreground mt-1">
                                             {party?.name ?? "—"}
                                             <span className="text-muted-foreground font-normal text-xs ml-2">
-                                                · {device?.brand} {device?.model}
+                                                · {device?.brand} {device?.model}{device?.type ? ` (${device.type})` : ""}
                                             </span>
                                         </p>
+                                        {device?.problem && (
+                                            <p className="mt-0.5 truncate text-xs text-muted-foreground">{device.problem}</p>
+                                        )}
                                     </div>
                                 </Link>
                             );
