@@ -5,6 +5,8 @@ All seed scripts and their fixture data live under `prisma/seeds/`.
 ```
 prisma/seeds/
 ├─ bootstrap-seed.ts            PRODUCTION — single source of truth for setup (RBAC seeds only R1)
+├─ export-personal.ts           PERSONAL — reverse-create YOUR config snapshot from the live DB
+├─ personal-bootstrap.ts        PERSONAL — generic bootstrap + overlay your snapshot
 ├─ helper-brands.ts             HELPER — trade-specific brand master (InvBrand)
 ├─ helper-inventory-masters.ts  HELPER — trade-specific masters (categories, HSN/GST groups)
 ├─ helper-roles.ts              HELPER — trade-specific starter roles (R2–R7, non-system / admin-editable)
@@ -20,7 +22,9 @@ prisma/seeds/
 ├─ dummy-vouchers.ts     DEV — demo vouchers + journal entries
 ├─ lib/
 │  ├─ purgeDemo.ts       SHARED — transaction table list + purge steps for the demo cleaners
-│  └─ positionSeedSync.ts SHARED — upsert a position + its role-template links
+│  ├─ positionSeedSync.ts SHARED — upsert a position + its role-template links
+│  ├─ personalSnapshot.ts SHARED — export/import engine for the personal snapshot
+│  └─ personalSnapshotPath.ts SHARED — on-disk path of the git-ignored snapshot
 └─ data/
    └─ demoCatalogSeed.ts FIXTURE — hardcoded product list used by dummy-shop
 ```
@@ -54,6 +58,68 @@ pnpm prisma db seed       # 2. runs bootstrap-seed.ts
 > **Universal vs trade-specific.** Bootstrap seeds only masters common to **every** trade (units, GST slabs, warranty terms, chart of accounts, the `R1` Admin role, workflow). Masters that are **specific to the computer/CCTV/printer trade** — brands, categories, the HSN/GST product-group spine, and the `R2`–`R7` starter roles — are NOT in bootstrap; they live in the helper seeds below. A different trade would ship its own helpers (or just build roles in the Role Matrix).
 
 > Production deployments run `pnpm prisma db seed` (mandatory) then, for this trade, `pnpm seed:helper-brands`, `pnpm seed:helper-inventory` and `pnpm seed:helper-roles`. Do not run any `dummy-*` script in production.
+
+## Personal bootstrap — YOUR install vs a new client
+
+`bootstrap-seed.ts` is the **new-client installer**: generic, code-driven, kept in
+sync with the schema. Because it is idempotent it re-seeds baseline values (GST
+18%, ₹, the starter tier ladder, the demo Organisation …), so re-running it on
+your own install resets the settings you tuned.
+
+The **personal bootstrap** keeps the two concerns apart. You capture the
+configured state of *your* install to a snapshot, then replay it on top of a
+fresh generic bootstrap. Generic keeps evolving for new clients; your snapshot
+restores *your* real config, and stays fresh because you regenerate it from
+live data.
+
+```bash
+# 1. Capture — "reverse create" your snapshot from the live DB (READ-ONLY).
+#    Re-run any time you change settings.
+pnpm seed:personal:capture      # → prisma/seeds/data/personal.local.json
+
+# 2. Seed your install — generic bootstrap, then overlay your real config.
+pnpm seed:personal              # runs bootstrap-seed.ts as a subprocess, then the overlay
+pnpm seed:personal --overlay-only   # skip bootstrap; just re-apply your config
+```
+
+`--overlay-only` is the quick fix for *"I ran `pnpm prisma db seed` and it reset
+my settings"* — it re-applies your snapshot without a full rebuild.
+
+**Scope — "everything except tickets, vouchers, customers, products".**
+
+| Included (config / structure / masters) | Excluded |
+|---|---|
+| Config singletons — `OrgDefaults`, `Organisation`, `InvNamingConfig`, `LoyaltyConfig`, `CouponConfig`, `CreditLimitConfig`, `BooksConfig` | `Ticket*` (tickets) |
+| Inventory/tax masters — `GstRate`, `InvUnit`, `InvWarrantyTerm`, `InvCategory`, `InvProductGroup`, `InvBrand`, `InvAttributeMaster`, `StrategyPoint`, `VoucherPrintTemplate` | `UniversalVoucher*` / journal / invoice / payment / stock-ledger (vouchers) |
+| Chart of accounts — `AccountGroup` + `Account` **(GL ledgers only)** | `Person` / `Company` / `Phone` / `Email` / party ledgers (customers) |
+| Spend-tier ladders — `CustomerTierPeriod` + `CustomerTier` | `InvProduct*` (products) |
+| Org structure — `Branch`, `Department` | `Coupon` / `GiftCard` / `LoyaltyEarnRule` / `LoyaltyMilestone` (entangle products + customers — only the **config singletons** above are kept) |
+| RBAC — `Role`, `RolePermission`, `DepartmentPermission`, `Position`, `PositionRole`, staff `User` + `UserPosition` / `UserPermission` (Permission rows themselves stay code-owned by bootstrap) | |
+| POS setup — `PaymentGateway`, `PosCounter`, `PosCounterPaymentAccount`, `PosService` | |
+| Repair pipeline — `Pipeline`, `WorkGroup`, `Work`, `TicketStatus`, `TicketWorker`, status + worker transitions | |
+
+**How it stays portable.** The RBAC / org / pipeline layers use human-assigned
+**string ids** (`R1`, `DEP-ADMIN`, `PIPE-REPAIR` …) that survive a reseed
+unchanged, so their rows and join tables port by id. The Int-autoincrement
+models (accounts, GST, units, categories, counters, gateways) are referenced
+across the snapshot by their **natural key** (account code/name, GST label,
+counter branch+name …); the importer re-resolves each ref to the local id, so
+nothing breaks even on a fresh database.
+
+**Safety.** The overlay is **upsert-only** — it never deletes. Grants pointing
+at permissions no longer present in the current build are dropped (and reported);
+POS rails whose account/counter can't be resolved are skipped (and reported).
+
+**Secrets.** Staff **password hashes are never exported** — the snapshot is
+scrubbed, so it is safe to commit. A user *created* by the overlay gets the
+default password `changeme123` (change it after seeding, and it's reported in
+the run summary); existing users keep their own password untouched. The
+snapshot still carries your real GSTIN / org identity / tier amounts, so commit
+it only to a private repo.
+
+> **Maintenance.** When you add a config table to the schema, add it to
+> `lib/personalSnapshot.ts` (both `exportPersonal` and `importPersonal`) so the
+> personal snapshot stays complete — same commit as the schema change.
 
 ## Helper seed (trade-specific brands)
 
@@ -193,6 +259,7 @@ Future fixtures (dummy customer lists, voucher fixtures, etc.) go here too rathe
 | Add a new dummy script | wire into `package.json` `scripts` and into `seed:dummy-all` |
 | Hard-clean must remove a new dummy table | extend `TRANSACTION_TABLES` / `INVENTORY_MASTERS` / `DUMMY_CONFIG_TABLES` in `hard-clean.ts` |
 | Data moves from a dummy seed into bootstrap | **remove it from `INVENTORY_MASTERS` / `DUMMY_CONFIG_TABLES`** in `hard-clean.ts` — bootstrap data must survive a hard-clean |
+| Add a config table (settings / master / org / RBAC / workflow / POS) | add it to `lib/personalSnapshot.ts` (`exportPersonal` + `importPersonal`) so the personal snapshot stays complete |
 
 > **Schema-and-seed coupling rule:** any commit that changes `prisma/schema/*.prisma` must also update `bootstrap-seed.ts` (production) and the matching `dummy-*.ts` (dev) in the same commit. The dummy scripts are the canonical demo for that schema; if they break after a schema change, future agents have no working reference.
 
