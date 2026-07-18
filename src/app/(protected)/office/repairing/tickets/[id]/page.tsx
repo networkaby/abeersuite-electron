@@ -9,10 +9,11 @@ import {
     Clock, User, Building2, AlertTriangle,
     Printer, Lock, Eye, NotebookPen, ArrowRightLeft,
     Check, X, MessageSquare, RefreshCw, ArrowRight, CornerUpLeft, Flag,
-    GitBranch, ExternalLink, Bug, Truck, ChevronDown,
+    GitBranch, ExternalLink, Bug, Truck, ChevronDown, Receipt,
     type LucideIcon,
 } from "lucide-react";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { statusHasWorkflowRole } from "@/shared/lib/constants/workflow";
 import { timeAgo } from "@/shared/lib/format/timeAgo";
 import { badgeColor } from "@/shared/lib/format/entityColor";
 import Link from "next/link";
@@ -26,6 +27,7 @@ import WarrantyConvertModal from "@/modules/repairing/components/WarrantyConvert
 import TicketOwnershipPanel from "@/modules/repairing/components/TicketOwnershipPanel";
 import PipelineTransferModal from "@/modules/repairing/components/PipelineTransferModal";
 import TicketInvoicesPanel from "@/modules/repairing/components/TicketInvoicesPanel";
+import { editFormUrl } from "@/modules/inventory/components/VoucherActionsMenu";
 import ShippingSlipModal from "@/modules/repairing/components/ShippingSlipModal";
 import BillDetailsPanel, { type BillDraft } from "@/modules/repairing/components/BillDetailsPanel";
 import WorkActions from "@/modules/repairing/components/WorkActions";
@@ -99,6 +101,12 @@ interface Ticket {
         workerId?: string;
         note?: string;
         visibility: string;
+        // Structured record on the log row — slip logs carry their frozen copy;
+        // bill logs carry the linked voucher + payment split.
+        data?: {
+            shippingSlip?: { seq?: number; partyName?: string };
+            bill?: { voucherId: number; voucherRef: string; voucherType: string; status: "full" | "partial" | "credit" };
+        } | null;
         createdAt: string;
         // Actor is a frozen JSON snapshot now (no User FK) — see ActorSnapshot.
         author?: { userName?: string } | null;
@@ -241,18 +249,15 @@ export default function TicketDetailPage() {
         return null;
     })();
 
-    // A shipping slip snapshot already saved on this ticket (context bag) → offer reprint.
-    const hasShippingSlip = !!(
-        ticket.context &&
-        typeof ticket.context === "object" &&
-        (ticket.context as Record<string, unknown>).shippingSlip
-    );
-
-    // "Create Shipping Slip" shows at the send-to-service stage. Gated on the
-    // STATUS label (status-only model) — not the old `escalated` boolean, which
-    // only the legacy Escalate modal sets. Any status named "… Send to Service"
-    // qualifies, so renamed / extra stages keep working.
-    const isSendToService = /send to service/i.test(ticket.ticketStatus.label ?? "");
+    // Frozen shipping-slip history (context bag) — a device may loop through
+    // several service centres, one frozen copy per send. Legacy = single slip.
+    const shippingSlips: { seq?: number; partyName?: string; date?: string }[] = (() => {
+        const c = ticket.context && typeof ticket.context === "object" && !Array.isArray(ticket.context)
+            ? (ticket.context as Record<string, unknown>)
+            : {};
+        if (Array.isArray(c.shippingSlips)) return c.shippingSlips as { seq?: number; partyName?: string; date?: string }[];
+        return c.shippingSlip ? [c.shippingSlip as { seq?: number; partyName?: string; date?: string }] : [];
+    })();
 
     // Ongoing draft bill saved on the ticket (context bag).
     const savedBill =
@@ -262,7 +267,7 @@ export default function TicketDetailPage() {
         undefined;
     const billDraft: BillDraft = {
         products: savedBill?.products ?? [],
-        charges: savedBill?.charges ?? [],
+        services: savedBill?.services ?? [],
     };
 
     return (
@@ -386,8 +391,8 @@ export default function TicketDetailPage() {
                         <BillDetailsPanel
                             ticketId={ticket.id}
                             customerAccountId={ticket.device.account?.id ?? null}
+                            canGenerateBill={statusHasWorkflowRole("readyToBill", ticket.status)}
                             initial={billDraft}
-                            onSaved={fetchTicket}
                         />
 
                         {/* Escalation Info */}
@@ -487,6 +492,25 @@ export default function TicketDetailPage() {
                                                     ) : (
                                                         <p className="mt-1 text-sm text-muted-foreground">{text}</p>
                                                     ))}
+                                                    {/* Slip logs carry their frozen copy — open that exact print. */}
+                                                    {log.data?.shippingSlip && (
+                                                        <Link
+                                                            href={`/shipping-slip/${ticket.id}${log.data.shippingSlip.seq ? `?n=${log.data.shippingSlip.seq}` : ""}`}
+                                                            target="_blank"
+                                                            className="mt-1 inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
+                                                        >
+                                                            <Truck size={12} /> Open shipping slip{log.data.shippingSlip.seq ? ` #${log.data.shippingSlip.seq}` : ""}
+                                                        </Link>
+                                                    )}
+                                                    {/* Bill logs — open the linked voucher. */}
+                                                    {log.data?.bill && editFormUrl(log.data.bill.voucherType, log.data.bill.voucherId) && (
+                                                        <Link
+                                                            href={editFormUrl(log.data.bill.voucherType, log.data.bill.voucherId)!}
+                                                            className="mt-1 inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
+                                                        >
+                                                            <Receipt size={12} /> Open bill {log.data.bill.voucherRef}
+                                                        </Link>
+                                                    )}
                                                 </div>
                                             </div>
                                         );
@@ -660,6 +684,11 @@ export default function TicketDetailPage() {
                             leavePrompt={ticket.ticketStatus.leavePrompt}
                             nextStatuses={ticket.ticketStatus.fromTransitions.map((t) => t.to)}
                             backTarget={backTarget}
+                            forwardBlockedReason={
+                                statusHasWorkflowRole("shipToService", ticket.status) && shippingSlips.length === 0
+                                    ? "Create a shipping slip before moving forward"
+                                    : null
+                            }
                             onChanged={fetchTicket}
                         />
 
@@ -726,13 +755,13 @@ export default function TicketDetailPage() {
                                 )
                             )}
 
-                            {isSendToService && !ticket.ticketStatus.isTerminal && (
+                            {statusHasWorkflowRole("shipToService", ticket.status) && !ticket.ticketStatus.isTerminal && (
                                 <Button onClick={() => setShowShippingSlip(true)} variant="outline" className={actionBtnBase}>
                                     <Truck size={15} /> Create Shipping Slip
                                 </Button>
                             )}
 
-                            {hasShippingSlip && (
+                            {shippingSlips.length > 0 && (
                                 <Link
                                     href={`/shipping-slip/${ticket.id}`}
                                     target="_blank"
@@ -740,6 +769,22 @@ export default function TicketDetailPage() {
                                 >
                                     <Truck size={15} /> Print Shipping Slip
                                 </Link>
+                            )}
+                            {shippingSlips.length > 1 && (
+                                <div className="space-y-1 rounded-md border border-border bg-muted/30 px-3 py-2">
+                                    <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Past sends</p>
+                                    {shippingSlips.map((s, i) => (
+                                        <Link
+                                            key={i}
+                                            href={`/shipping-slip/${ticket.id}?n=${s.seq ?? i + 1}`}
+                                            target="_blank"
+                                            className="flex items-center justify-between gap-2 text-xs text-primary hover:underline"
+                                        >
+                                            <span className="truncate">#{s.seq ?? i + 1} → {s.partyName ?? "—"}</span>
+                                            <span className="shrink-0 text-muted-foreground">{s.date ? formatDate(s.date) : ""}</span>
+                                        </Link>
+                                    ))}
+                                </div>
                             )}
 
                             <Link
@@ -776,6 +821,10 @@ export default function TicketDetailPage() {
                         brand: ticket.device.brand,
                         model: ticket.device.model,
                         problem: ticket.device.problem,
+                    }}
+                    owner={{
+                        name: ticket.device.account?.name ?? "",
+                        phone: ticket.device.account?.phone ?? null,
                     }}
                     onClose={() => setShowShippingSlip(false)}
                     onSaved={fetchTicket}

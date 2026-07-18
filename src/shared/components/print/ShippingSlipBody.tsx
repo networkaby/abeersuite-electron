@@ -18,6 +18,9 @@ export interface ShippingSlipBodyData {
     /** Fallback service-centre name when `party` did not resolve. */
     partyNameFallback: string | null;
     owner:       { name: string; phone: string | null };
+    /** Box label — "Device Owner" (real details) or "Contact (on behalf of
+     *  owner)" when the shop fronts the contact. Defaults to "Device Owner". */
+    ownerLabel?: string;
     device:      { type: string; brand: string; model: string; problem: string };
     accessories: string | null;
     condition:   string | null;
@@ -65,7 +68,7 @@ export function ShippingSlipBody({ data }: { data: ShippingSlipBodyData }) {
                     )}
                 </div>
                 <div style={{ flex: 1, minWidth: 150, border: "1px solid #ccc", borderRadius: 4, padding: 8 }}>
-                    <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 1, color: "#666", marginBottom: 4 }}>Device Owner</div>
+                    <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 1, color: "#666", marginBottom: 4 }}>{data.ownerLabel ?? "Device Owner"}</div>
                     <div style={{ fontWeight: 700 }}>{owner.name}</div>
                     {owner.phone && <div style={{ color: "#555" }}>Ph: {owner.phone}</div>}
                 </div>

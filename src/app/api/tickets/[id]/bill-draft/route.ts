@@ -9,7 +9,9 @@ import { buildActorSnapshot, type ActorSnapshot } from "@/shared/lib/auth/actorS
 // Ongoing "draft bill" for a repair ticket — the pick-list the technician builds
 // while the job runs. Two kinds of lines:
 //   • products — real stock items (become POS cart lines)
-//   • charges  — additional/service charges on an income ledger (become POS charges)
+//   • services — PosService catalogue entries (Settings → POS Services); they
+//     become kind="service" cart lines in POS with their configured GST +
+//     income ledger, exactly like the cashier's "+ Add service charge".
 // Stored as a snapshot on Ticket.context.billDraft. NO stock/ledger impact — the
 // real invoice is generated later via POS (Generate Bill preloads this).
 const productSchema = z.object({
@@ -17,19 +19,22 @@ const productSchema = z.object({
     sku: z.string().trim().default(""),
     name: z.string().trim().default(""),
     qty: z.coerce.number().positive().default(1),
-    salePrice: z.coerce.number().nullable().default(null), // indicative ₹, for display only
+    salePrice: z.coerce.number().nullable().default(null), // indicative ₹, display only
 });
 
-const chargeSchema = z.object({
-    accountId: z.coerce.number().int().positive(),
+const serviceSchema = z.object({
+    serviceId: z.coerce.number().int().positive(),
     name: z.string().trim().default(""),
-    description: z.string().trim().default(""),
-    amount: z.coerce.number().default(0),
+    qty: z.coerce.number().positive().default(1),
+    // Tax-INCLUSIVE ₹ (same convention as PosService.defaultPricePaise);
+    // null = use the catalogue default at billing time.
+    price: z.coerce.number().nullable().default(null),
+    note: z.string().trim().default(""),
 });
 
 const bodySchema = z.object({
     products: z.array(productSchema).default([]),
-    charges: z.array(chargeSchema).default([]),
+    services: z.array(serviceSchema).default([]),
 });
 
 export async function POST(
@@ -57,7 +62,7 @@ export async function POST(
 
         const billDraft = {
             products: data.products,
-            charges: data.charges,
+            services: data.services,
             updatedAt: new Date().toISOString(),
             updatedBy,
         };

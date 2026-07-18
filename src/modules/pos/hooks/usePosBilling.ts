@@ -101,6 +101,8 @@ export function usePosBilling(opts: {
     const charges = usePosDraftStore((s) => s.charges);
     const setCharges = usePosDraftStore((s) => s.setCharges);
     const resetDraft = usePosDraftStore((s) => s.reset);
+    const ticketId = usePosDraftStore((s) => s.ticketId);
+    const setTicketId = usePosDraftStore((s) => s.setTicketId);
 
     // ── Active POS shift ────────────────────────────────────────────────────
     // Mount order:
@@ -519,6 +521,9 @@ export function usePosBilling(opts: {
     };
 
     const onPartyPicked = (p: PickedParty) => {
+        // Manually choosing a customer means this is no longer the preloaded
+        // repair-ticket bill — drop the ticket link so we don't mis-attribute it.
+        setTicketId(null);
         if (p.accountId == null) {
             toast.error(`${p.name} has no ledger account yet`);
             return;
@@ -529,6 +534,7 @@ export function usePosBilling(opts: {
 
     const clearCustomer = () => {
         setSnapshot(null);
+        setTicketId(null);
         partySearchRef.current?.clear();
         partySearchRef.current?.focus();
     };
@@ -651,6 +657,7 @@ export function usePosBilling(opts: {
         setRoundOffStr("");
         setRoundOffManuallyEdited(false);
         setCharges([]);
+        setTicketId(null);
         setAdjustmentsOpen(false);
         setCheckoutOpen(false);
     };
@@ -721,7 +728,7 @@ export function usePosBilling(opts: {
         couponBusy, applyCoupon,
         giftCard, setGiftCard, giftCardCodeStr, setGiftCardCodeStr, gcBusy, applyGiftCard,
         roundOff, autoRoundOff, roundOffStr, setRoundOffStr, roundOffManuallyEdited, setRoundOffManuallyEdited,
-        charges, setCharges, resetDraft, resetAfterSubmit,
+        charges, setCharges, resetDraft, resetAfterSubmit, ticketId,
         // shift
         activeShift, setActiveShift, pendingHandover, setPendingHandover, shiftLoaded,
         shiftOpenDialogOpen, setShiftOpenDialogOpen, returnDialogOpen, setReturnDialogOpen,

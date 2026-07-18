@@ -25,6 +25,12 @@ const slipSchema = z.object({
     accessories: z.string().trim().optional().nullable(),
     condition: z.string().trim().optional().nullable(),
     notes: z.string().trim().optional().nullable(),
+    // Contact box on the printed slip. Default (false) = the SHOP fronts the
+    // contact "on behalf of owner" (name/phone below, falling back to the
+    // print template's shop identity); true = print the real device owner.
+    showOwner: z.boolean().default(false),
+    contactName: z.string().trim().optional().nullable(),
+    contactPhone: z.string().trim().optional().nullable(),
 });
 
 export async function POST(
@@ -64,6 +70,9 @@ export async function POST(
             accessories: data.accessories?.trim() || null,
             condition: data.condition?.trim() || null,
             notes: data.notes?.trim() || null,
+            showOwner: data.showOwner,
+            contactName: data.contactName?.trim() || null,
+            contactPhone: data.contactPhone?.trim() || null,
             createdAt: new Date().toISOString(),
             createdBy,
         };
@@ -74,22 +83,37 @@ export async function POST(
                 ? (ticket.context as Record<string, unknown>)
                 : {};
 
+        // A device may loop through SEVERAL service centres until fixed or given
+        // up — every save appends a FROZEN copy to `shippingSlips[]` (never
+        // edited afterwards); `shippingSlip` stays as the latest for the print
+        // default + legacy readers. Legacy single-slip tickets fold into the list.
+        const prevList: unknown[] = Array.isArray(prevContext.shippingSlips)
+            ? (prevContext.shippingSlips as unknown[])
+            : prevContext.shippingSlip
+                ? [prevContext.shippingSlip]
+                : [];
+        const seq = prevList.length + 1;
+        const frozen = { ...slip, seq };
+
         await prisma.ticket.update({
             where: { id: ticketId },
-            data: { context: { ...prevContext, shippingSlip: slip } },
+            data: { context: { ...prevContext, shippingSlip: frozen, shippingSlips: [...prevList, frozen] } },
         });
 
+        // Timeline entry carries its own frozen copy on the dormant `data`
+        // column — the log row never changes even as later slips are created.
         await prisma.ticketLog.create({
             data: {
                 ticketId,
                 status: ticket.status,
-                note: `Shipping slip created → ${data.partyName}${data.ref?.trim() ? ` (Ref: ${data.ref.trim()})` : ""}`,
+                note: `Shipping slip #${seq} created → ${data.partyName}${data.ref?.trim() ? ` (Ref: ${data.ref.trim()})` : ""}`,
                 visibility: "INTERNAL",
                 author,
+                data: { shippingSlip: frozen },
             },
         });
 
-        return NextResponse.json({ ok: true, slip });
+        return NextResponse.json({ ok: true, slip: frozen });
     } catch (e) {
         return handleApiError(e, "Failed to save shipping slip");
     }

@@ -40,11 +40,15 @@ interface Props {
     leavePrompt?: string | null;
     nextStatuses: StatusTarget[];
     backTarget: { statusId: string; workerId: string | null; label: string } | null;
+    /** When set, FORWARD moves (change stage / close out) are blocked with this
+     *  reason; Back and same-stage hand-offs stay allowed. Used e.g. to force a
+     *  shipping slip before a device can advance past a send-to-service stage. */
+    forwardBlockedReason?: string | null;
     onChanged: () => void;
 }
 
 export default function StatusNav({
-    ticketId, statusId, workerId, isWarranty, started, locked = false, leavePrompt, nextStatuses, backTarget, onChanged,
+    ticketId, statusId, workerId, isWarranty, started, locked = false, leavePrompt, nextStatuses, backTarget, forwardBlockedReason, onChanged,
 }: Props) {
     const [nextSubs, setNextSubs] = useState<SubTarget[]>([]);
     const [pending, setPending] = useState<Pending | null>(null);
@@ -218,7 +222,8 @@ export default function StatusNav({
         <Button
             key={`st-${t.id}`}
             onClick={() => moveStage(t)}
-            disabled={busy}
+            disabled={busy || !!forwardBlockedReason}
+            title={forwardBlockedReason ?? undefined}
             size="sm" variant="outline"
             className="w-full justify-start gap-2 border-primary/40 hover:bg-primary/5"
         >
@@ -232,7 +237,8 @@ export default function StatusNav({
         <Button
             key={`tm-${t.id}`}
             onClick={() => moveStage(t)}
-            disabled={busy}
+            disabled={busy || !!forwardBlockedReason}
+            title={forwardBlockedReason ?? undefined}
             size="sm" variant="outline"
             className="w-full justify-start gap-2 text-muted-foreground"
         >
@@ -268,6 +274,12 @@ export default function StatusNav({
                 </p>
             ) : (
                 <>
+                    {forwardBlockedReason && (forwardStatuses.length > 0 || terminalStatuses.length > 0) && (
+                        <p className="flex items-start gap-1.5 rounded-md border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-700/50 dark:bg-amber-950/40 dark:text-amber-300">
+                            <Flag size={13} className="mt-0.5 shrink-0" />
+                            {forwardBlockedReason} — you can still go back.
+                        </p>
+                    )}
                     {nextSubs.length > 0 && section(
                         "Hand off · request",
                         "Routes the work to another team — ticket stays in this stage.",

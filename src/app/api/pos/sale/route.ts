@@ -9,6 +9,8 @@ import { resolveEffectiveCostMap } from "@/modules/pricing-strategy/lib/resolveC
 import { saleToSpec } from "@/modules/accountancy/lib/voucherMappers";
 import { buildSettlementJson } from "@/shared/lib/accountancy/settlement";
 import { enginePost, engineCreateSpine } from "@/modules/accountancy/lib/transactionEngine";
+import { syncVoucherLink } from "@/modules/accountancy/lib/voucherLinks";
+import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 import { postReceiptVoucher } from "@/modules/accountancy/lib/postReceiptVoucher";
 import { channelToPaymentMethod } from "@/modules/pos/lib/counterTenders";
 import { Prisma, type PaymentMethod } from "@/generated/prisma/client";
@@ -144,6 +146,10 @@ const createSchema = z.object({
     // Convert-to-sale: the source estimate/order this POS sale was rung up from.
     // Stored as refVoucherId so the source flips to "Converted".
     sourceVoucherId: z.number().int().positive().optional(),
+    // Repair ticket this bill was raised from (Generate Bill on the ticket). The
+    // voucher is linked to it (VoucherLink kind=TICKET) so it shows in the
+    // ticket's Invoices panel, and a timeline entry is written on the ticket.
+    ticketId: z.number().int().positive().optional().nullable(),
 }).refine((d) => d.lines.length + d.services.length >= 1, {
     message: "At least one line item or service required",
     path: ["lines"],
@@ -686,6 +692,9 @@ export async function POST(req: Request) {
                 branchId:       activeBranchId,   // 5D-12: branch primary on the spine
                 userId:         user!.id,
             });
+            // Link the bill to the repair ticket it was raised from (if any), so it
+            // surfaces in the ticket's Invoices panel (VoucherLink kind=TICKET).
+            if (body.ticketId) await syncVoucherLink(tx, spineId, "TICKET", body.ticketId);
             const voucher = await tx.voucherDetail.create({
                 data: {
                     // 5D-11/5D-12: type + branch live on the spine (engineCreateSpine set them).
@@ -952,6 +961,48 @@ export async function POST(req: Request) {
             maxWait: 10_000,
         });
         const _tTx = performance.now();
+
+        // Repair-ticket timeline entry — records the bill, its link, and whether
+        // it was paid in full / partly on credit / fully on credit. Best-effort:
+        // a failure here never fails the (already committed) sale.
+        if (body.ticketId) {
+            try {
+                const billTotal = round2(totalAmount);
+                const paid = round2(Math.min(paymentTotal, billTotal));
+                const credit = round2(onCredit);
+                const payStatus = credit <= 0.01 ? "full" : paid <= 0.01 ? "credit" : "partial";
+                const payLabel =
+                    payStatus === "full" ? "Paid in full"
+                    : payStatus === "credit" ? `On credit — ₹${credit.toFixed(2)} due`
+                    : `Partial — paid ₹${paid.toFixed(2)}, ₹${credit.toFixed(2)} on credit`;
+                const t = await prisma.ticket.findUnique({ where: { id: body.ticketId }, select: { status: true } });
+                if (t) {
+                    const author = await buildActorSnapshot(user!.id);
+                    await prisma.ticketLog.create({
+                        data: {
+                            ticketId:   body.ticketId,
+                            status:     t.status,
+                            note:       `Bill ${result.voucherRef} · ₹${billTotal.toFixed(2)} · ${payLabel}`,
+                            visibility: "INTERNAL",
+                            author,
+                            data: {
+                                bill: {
+                                    voucherId:   result.voucherId,
+                                    voucherRef:  result.voucherRef,
+                                    voucherType: "POS",
+                                    total:       billTotal,
+                                    paid,
+                                    onCredit:    credit,
+                                    status:      payStatus,
+                                },
+                            },
+                        },
+                    });
+                }
+            } catch (e) {
+                console.error("[pos sale] ticket timeline log failed", e);
+            }
+        }
 
         const touchedProductIds = body.lines.map((l) => l.productId);
         // Pricing-cache refresh is NOT needed for the receipt response — defer it

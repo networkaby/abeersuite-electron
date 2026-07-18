@@ -297,6 +297,7 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                 giftCardCode: b.giftCard?.code ?? undefined,     // server draws min(balance, total) as a tender
                 collectSurplus: b.overpaid > 0.01,               // accept extra → Receipt voucher (clears dues FIFO, leftover = advance)
                 sourceVoucherId: convertFromRef.current ?? undefined,   // convert-to-sale link → source flips to "Converted"
+                ticketId: b.ticketId ?? undefined,               // repair-ticket link → bill shows on the ticket + timeline
                 charges: validCharges.map((c) => ({
                     accountId: c.accountId as number,
                     description: c.description.trim() || undefined,

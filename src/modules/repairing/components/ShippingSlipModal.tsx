@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { Truck } from "lucide-react";
@@ -18,6 +18,8 @@ interface DeviceInfo { type: string; brand: string; model: string; problem: stri
 interface Props {
     ticketId: number;
     device: DeviceInfo;
+    /** Real device owner — prefills the contact fields when the toggle is on. */
+    owner: { name: string; phone: string | null };
     onClose: () => void;
     onSaved: () => void;
 }
@@ -27,7 +29,7 @@ interface Props {
 // from the ticket and editable. On save we persist a snapshot on the ticket and
 // open the printable A5 slip. Print-only — it never changes the ticket status;
 // the Sending / Waiting / Getting-back stages are configured as normal statuses.
-export default function ShippingSlipModal({ ticketId, device, onClose, onSaved }: Props) {
+export default function ShippingSlipModal({ ticketId, device, owner, onClose, onSaved }: Props) {
     const [party, setParty] = useState<{ accountId: number; name: string } | null>(null);
     const [form, setForm] = useState({
         type: device.type ?? "",
@@ -38,10 +40,43 @@ export default function ShippingSlipModal({ ticketId, device, onClose, onSaved }
         accessories: "",
         condition: "",
         notes: "",
+        // Contact box on the slip — default: shop fronts the contact on behalf
+        // of the owner (privacy); toggle prefills the real owner instead. The
+        // fields stay editable either way; whatever is typed is what prints.
+        showOwner: false,
+        contactName: "",
+        contactPhone: "",
     });
     const [saving, setSaving] = useState(false);
 
     const set = (patch: Partial<typeof form>) => setForm((f) => ({ ...f, ...patch }));
+
+    // Company details from Settings → Organisation — the default contact.
+    const shopRef = useRef<{ name: string; phone: string }>({ name: "", phone: "" });
+    useEffect(() => {
+        let cancelled = false;
+        axios.get<{ brandName?: string | null; phone?: string | null }>("/api/settings/organisation")
+            .then((r) => {
+                if (cancelled) return;
+                shopRef.current = { name: r.data.brandName ?? "", phone: r.data.phone ?? "" };
+                // Seed the default (shop) contact if the user hasn't typed anything yet.
+                setForm((f) => f.showOwner || f.contactName || f.contactPhone
+                    ? f
+                    : { ...f, contactName: shopRef.current.name, contactPhone: shopRef.current.phone });
+            })
+            .catch(() => { /* fields just start blank */ });
+        return () => { cancelled = true; };
+    }, []);
+
+    // Toggle swaps the prefill: owner ↔ shop. Always editable after.
+    const toggleShowOwner = (checked: boolean) => {
+        setForm((f) => ({
+            ...f,
+            showOwner: checked,
+            contactName: checked ? owner.name : shopRef.current.name,
+            contactPhone: checked ? (owner.phone ?? "") : shopRef.current.phone,
+        }));
+    };
 
     const onPicked = (p: PickedParty) => {
         if (p.accountId == null) {
@@ -66,6 +101,9 @@ export default function ShippingSlipModal({ ticketId, device, onClose, onSaved }
                 accessories: form.accessories.trim() || null,
                 condition: form.condition.trim() || null,
                 notes: form.notes.trim() || null,
+                showOwner: form.showOwner,
+                contactName: form.contactName.trim() || null,
+                contactPhone: form.contactPhone.trim() || null,
             });
             toast.success("Shipping slip saved");
 
@@ -84,7 +122,7 @@ export default function ShippingSlipModal({ ticketId, device, onClose, onSaved }
 
     return (
         <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-            <DialogContent className="sm:max-w-lg">
+            <DialogContent className="sm:max-w-5xl max-h-[92vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                         <Truck size={18} /> Create Shipping Slip
@@ -113,14 +151,10 @@ export default function ShippingSlipModal({ ticketId, device, onClose, onSaved }
                         )}
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-3 gap-3">
                         <div className="space-y-1.5">
                             <Label>Device Type</Label>
                             <Input value={form.type} onChange={(e) => set({ type: e.target.value })} />
-                        </div>
-                        <div className="space-y-1.5">
-                            <Label>Service Centre Ref / Job # <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                            <Input value={form.ref} onChange={(e) => set({ ref: e.target.value })} placeholder="e.g. RMA-2291" />
                         </div>
                         <div className="space-y-1.5">
                             <Label>Brand</Label>
@@ -130,27 +164,48 @@ export default function ShippingSlipModal({ ticketId, device, onClose, onSaved }
                             <Label>Model</Label>
                             <Input value={form.model} onChange={(e) => set({ model: e.target.value })} />
                         </div>
-                    </div>
-
-                    <div className="space-y-1.5">
-                        <Label>Reported Problem</Label>
-                        <Textarea value={form.problem} onChange={(e) => set({ problem: e.target.value })} rows={2} />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1.5">
-                            <Label>Accessories Sent <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                            <Label>Ref / Job # <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                            <Input value={form.ref} onChange={(e) => set({ ref: e.target.value })} placeholder="e.g. RMA-2291" />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label>Accessories <span className="text-muted-foreground font-normal">(optional)</span></Label>
                             <Input value={form.accessories} onChange={(e) => set({ accessories: e.target.value })} placeholder="e.g. charger, cover" />
                         </div>
                         <div className="space-y-1.5">
-                            <Label>Physical Condition <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                            <Label>Condition <span className="text-muted-foreground font-normal">(optional)</span></Label>
                             <Input value={form.condition} onChange={(e) => set({ condition: e.target.value })} placeholder="e.g. minor scratches" />
+                        </div>
+                        <div className="col-span-2 space-y-1.5">
+                            <Label>Reported Problem</Label>
+                            <Textarea value={form.problem} onChange={(e) => set({ problem: e.target.value })} rows={3} className="resize-y whitespace-pre-wrap break-words" />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label>Notes <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                            <Textarea value={form.notes} onChange={(e) => set({ notes: e.target.value })} rows={3} placeholder="For the service centre" className="resize-y whitespace-pre-wrap break-words" />
                         </div>
                     </div>
 
-                    <div className="space-y-1.5">
-                        <Label>Notes <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                        <Textarea value={form.notes} onChange={(e) => set({ notes: e.target.value })} rows={2} placeholder="Anything the service centre should know" />
+                    {/* Contact box — toggle prefills owner ↔ company details; always editable */}
+                    <div className="rounded-md border border-border bg-muted/30 p-3">
+                        <div className="flex flex-wrap items-center gap-3">
+                            <label className="flex shrink-0 cursor-pointer items-center gap-2 text-sm select-none">
+                                <input
+                                    type="checkbox"
+                                    checked={form.showOwner}
+                                    onChange={(e) => toggleShowOwner(e.target.checked)}
+                                    className="h-3.5 w-3.5 accent-primary cursor-pointer"
+                                />
+                                Show real owner on slip
+                            </label>
+                            <Input className="h-8 flex-1 min-w-40" value={form.contactName} onChange={(e) => set({ contactName: e.target.value })} placeholder="Contact name" />
+                            <Input className="h-8 w-44" value={form.contactPhone} onChange={(e) => set({ contactPhone: e.target.value })} placeholder="Contact phone" inputMode="tel" />
+                        </div>
+                        <p className="mt-1.5 text-[11px] text-muted-foreground">
+                            {form.showOwner
+                                ? "Prefilled with the customer's details — edit freely; what's typed is what prints."
+                                : "Prefilled with OUR company details (Settings → Organisation) as \"Contact (on behalf of owner)\" — edit freely."}
+                        </p>
                     </div>
                 </div>
 

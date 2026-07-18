@@ -34,7 +34,12 @@ type PosDraftState = {
     roundOffStr: string;
     roundOffManuallyEdited: boolean;
     charges: ChargeRow[];
+    // Repair ticket this draft was preloaded from (Generate Bill). Rides through
+    // to /api/pos/sale so the resulting voucher links back to the ticket. Cleared
+    // by reset() and on a manual customer change (see usePosBilling).
+    ticketId: number | null;
     setSnapshot: (v: SetStateAction<Snapshot | null>) => void;
+    setTicketId: (v: SetStateAction<number | null>) => void;
     setCart: (v: SetStateAction<CartLine[]>) => void;
     setShippingAmtStr: (v: SetStateAction<string>) => void;
     setRoundOffStr: (v: SetStateAction<string>) => void;
@@ -48,7 +53,7 @@ type PosDraftState = {
 
 const initialDraft: Pick<
     PosDraftState,
-    "snapshot" | "cart" | "shippingAmtStr" | "roundOffStr" | "roundOffManuallyEdited" | "charges"
+    "snapshot" | "cart" | "shippingAmtStr" | "roundOffStr" | "roundOffManuallyEdited" | "charges" | "ticketId"
 > = {
     snapshot: null,
     cart: [],
@@ -56,11 +61,13 @@ const initialDraft: Pick<
     roundOffStr: "",
     roundOffManuallyEdited: false,
     charges: [],
+    ticketId: null,
 };
 
 export const usePosDraftStore = create<PosDraftState>((set) => ({
     ...initialDraft,
     setSnapshot: (v) => set((s) => ({ snapshot: applyAction(s.snapshot, v) })),
+    setTicketId: (v) => set((s) => ({ ticketId: applyAction(s.ticketId, v) })),
     setCart: (v) => set((s) => ({ cart: applyAction(s.cart, v) })),
     setShippingAmtStr: (v) => set((s) => ({ shippingAmtStr: applyAction(s.shippingAmtStr, v) })),
     setRoundOffStr: (v) => set((s) => ({ roundOffStr: applyAction(s.roundOffStr, v) })),

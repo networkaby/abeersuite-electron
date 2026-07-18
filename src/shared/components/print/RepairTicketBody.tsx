@@ -67,17 +67,14 @@ export function RepairTicketBody({ data }: { data: RepairTicketBodyData }) {
             <SectionTitle>Problem</SectionTitle>
             <div style={{ lineHeight: 1.5, fontSize: 11 }}>{data.problem}</div>
 
-            {/* Accessories — captured at intake when noted; otherwise a write-in
-                box for the counter to pen in (bag, charger, cover …). */}
+            {/* Accessories — captured at intake when noted; otherwise state
+                plainly that none were received (protects the shop on collection). */}
             <Divider />
             <SectionTitle>Accessories Received</SectionTitle>
             {data.accessories ? (
                 <div style={{ lineHeight: 1.5, fontSize: 11 }}>{data.accessories}</div>
             ) : (
-                <>
-                    <div style={{ fontSize: 9, color: "#777", marginBottom: 3 }}>e.g. bag, charger, cover, SIM</div>
-                    <div style={{ border: "1px solid #999", borderRadius: 3, minHeight: 36 }} />
-                </>
+                <div style={{ fontSize: 11, fontStyle: "italic", color: "#555" }}>No accessories received.</div>
             )}
 
             {data.estimatedCost != null && (

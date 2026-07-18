@@ -26,6 +26,12 @@ type ShippingSlip = {
     accessories: string | null;
     condition: string | null;
     notes: string | null;
+    // Contact box prefs — absent on legacy slips (treated as showOwner: true).
+    showOwner?: boolean;
+    contactName?: string | null;
+    contactPhone?: string | null;
+    /** 1-based position in the frozen shippingSlips[] history. */
+    seq?: number;
     createdAt: string;
     createdBy: string | null;
 };
@@ -35,7 +41,7 @@ export default async function ShippingSlipPage({
     searchParams,
 }: {
     params:        Promise<{ ticketId: string }>;
-    searchParams?: Promise<{ paper?: string; autoprint?: string }>;
+    searchParams?: Promise<{ paper?: string; autoprint?: string; n?: string }>;
 }) {
     const { ticketId } = await params;
     const sp = (await searchParams) ?? {};
@@ -73,7 +79,19 @@ export default async function ShippingSlipPage({
         ticket.context && typeof ticket.context === "object" && !Array.isArray(ticket.context)
             ? (ticket.context as Record<string, unknown>)
             : {};
-    const slip = ctx.shippingSlip as ShippingSlip | undefined;
+    // Frozen history: `shippingSlips[]` holds every send (a device may loop
+    // through several service centres). `?n=<1-based seq>` prints a specific
+    // copy; default = the latest. Legacy tickets have only `shippingSlip`.
+    const slips: ShippingSlip[] = Array.isArray(ctx.shippingSlips)
+        ? (ctx.shippingSlips as ShippingSlip[])
+        : ctx.shippingSlip
+            ? [ctx.shippingSlip as ShippingSlip]
+            : [];
+    const nParam = Number(sp.n);
+    const slip: ShippingSlip | undefined =
+        Number.isInteger(nParam) && nParam >= 1 && nParam <= slips.length
+            ? slips[nParam - 1]
+            : slips[slips.length - 1];
 
     // The device owner (customer) — for reference on the slip.
     const owner = ticket.repair.device.account?.person ?? ticket.repair.device.account?.company;
@@ -106,13 +124,27 @@ export default async function ShippingSlipPage({
         problem: ticket.repair.device.problem,
     };
 
+    // Contact box: by default the SHOP fronts the contact on behalf of the
+    // owner (privacy) — slip contact overrides falling back to the template's
+    // shop identity. `showOwner` prints the real owner. Legacy slips (no flag)
+    // keep their old behaviour of showing the owner.
+    const showOwner = slip?.showOwner ?? true;
+    const shopPhone = template.phoneLine?.replace(/^Ph:\s*/i, "").trim() || null;
+    // The modal saves an explicit (editable) contact for BOTH modes — prefer it;
+    // fall back to the real owner / template shop identity for legacy slips.
+    const contact = {
+        name: slip?.contactName || (showOwner ? ownerName : template.headerLine1 || "—"),
+        phone: slip?.contactPhone || (showOwner ? ownerPhone : shopPhone),
+    };
+    const ownerLabel = showOwner ? "Device Owner" : "Contact (on behalf of owner)";
+
     const ticketNo = `#${String(ticket.id).padStart(4, "0")}`;
 
     const sample: ThermalReceiptSample = {
         reference:  ticketNo,
         date:       formatDate(slip?.date ?? ticket.createdAt),
-        partyName:  ownerName,
-        partyPhone: ownerPhone,
+        partyName:  contact.name,
+        partyPhone: contact.phone,
         lines:      [],
         subtotal:   null,
         taxAmount:  null,
@@ -126,7 +158,8 @@ export default async function ShippingSlipPage({
         ref:               slip?.ref ?? null,
         party,
         partyNameFallback: slip?.partyName ?? null,
-        owner:             { name: ownerName, phone: ownerPhone },
+        owner:             contact,
+        ownerLabel,
         device,
         accessories:       slip?.accessories ?? null,
         condition:         slip?.condition ?? null,
