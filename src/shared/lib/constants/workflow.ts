@@ -27,6 +27,16 @@ export const WORKFLOW_STATUS = {
     shipToService: ["S61", "S62", "S4"] as string[],
 
     /**
+     * Repair pipeline (P1) statuses meaning the device is CURRENTLY out at an
+     * external service centre (sent, awaiting return) → counted on the Repairs
+     * dashboard "At Service Centre" card. Narrower than `shipToService` (which is
+     * "can raise a slip"); this is "physically gone right now". Seed label:
+     *   S62 "Sent To Service"
+     * Adjust these IDs to match your locked "sent, not yet received back" set.
+     */
+    atServiceCentre: ["S62"] as string[],
+
+    /**
      * Repair pipeline (P1) statuses where the job is far enough along to raise
      * the customer's bill → the "Generate Bill" button (opens POS preloaded) is
      * shown. The Bill Details worksheet itself is always editable; only the

@@ -34,34 +34,32 @@ export default function TicketInvoicesPanel({ ticketId }: { ticketId: number }) 
         return () => { cancelled = true; };
     }, [ticketId]);
 
+    // Hide the whole card until there is at least one linked invoice (also while
+    // loading) — no empty-state clutter on tickets that were never billed.
+    if (loading || vouchers.length === 0) return null;
+
     return (
-        <div>
+        <div className="rounded-lg border border-border bg-card p-4 shadow">
             <h2 className="font-semibold text-foreground mb-4 flex items-center gap-2">
                 <Receipt size={16} /> Invoices
             </h2>
-            {loading ? (
-                <p className="text-sm text-muted-foreground">Loading…</p>
-            ) : vouchers.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No invoices linked to this ticket yet. Create one from <Link href="/vouchers/sales/new" className="text-primary underline">Sales</Link> and set the ticket on the voucher.</p>
-            ) : (
-                <ul className="divide-y divide-border text-sm">
-                    {vouchers.map((v) => {
-                        const href = editFormUrl(v.type, v.id);
-                        return (
-                            <li key={v.id} className="flex items-center justify-between py-2">
-                                {href ? (
-                                    <Link href={href} className="font-mono text-primary hover:underline">{v.reference}</Link>
-                                ) : (
-                                    <span className="font-mono text-muted-foreground">{v.reference}</span>
-                                )}
-                                <span className="text-muted-foreground">{new Date(v.date).toLocaleDateString()}</span>
-                                <span className="font-medium">₹{Number(v.totalAmount).toFixed(2)}</span>
-                                <span className="text-xs uppercase tracking-wide text-muted-foreground">{v.status}</span>
-                            </li>
-                        );
-                    })}
-                </ul>
-            )}
+            <ul className="divide-y divide-border text-sm">
+                {vouchers.map((v) => {
+                    const href = editFormUrl(v.type, v.id);
+                    return (
+                        <li key={v.id} className="flex items-center justify-between py-2">
+                            {href ? (
+                                <Link href={href} className="font-mono text-primary hover:underline">{v.reference}</Link>
+                            ) : (
+                                <span className="font-mono text-muted-foreground">{v.reference}</span>
+                            )}
+                            <span className="text-muted-foreground">{new Date(v.date).toLocaleDateString()}</span>
+                            <span className="font-medium">₹{Number(v.totalAmount).toFixed(2)}</span>
+                            <span className="text-xs uppercase tracking-wide text-muted-foreground">{v.status}</span>
+                        </li>
+                    );
+                })}
+            </ul>
         </div>
     );
 }

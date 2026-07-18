@@ -3,7 +3,6 @@
 import { useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -60,9 +59,8 @@ export default function WarrantyConvertModal({ ticketId, isWarranty, warrantySta
     return (
         <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
             <DialogContent className="sm:max-w-md">
-                <DialogHeader className="flex-row items-center justify-between space-y-0">
+                <DialogHeader>
                     <DialogTitle>Warranty Conversion</DialogTitle>
-                    <Button onClick={onClose} variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-foreground"><X size={20} /></Button>
                 </DialogHeader>
                 <div className="space-y-4">
                     {isWarranty && warrantyStatus !== "voided" && (
@@ -80,10 +78,10 @@ export default function WarrantyConvertModal({ ticketId, isWarranty, warrantySta
 
                     <div className="rounded-md border border-border bg-muted px-4 py-3 text-sm text-foreground">
                         {isVoidAction
-                            ? "Warranty will be voided. Worker will switch to SS36 — customer approval required."
+                            ? "Warranty will be voided and recorded. The status does not change — apply any charge normally at billing."
                             : toWarranty
-                            ? "Ticket will be flagged as warranty claim. Worker will switch to SS37 — notify customer no charge."
-                            : "Warranty flag will be removed. Any warranty-only worker steps will be cleared."}
+                            ? "Ticket will be flagged as a warranty claim and the details recorded. The status does not change — give the rebate or a free bill manually at billing."
+                            : "Warranty flag will be removed. The status does not change."}
                     </div>
 
                     {isVoidAction && (

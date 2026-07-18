@@ -31,7 +31,7 @@ export async function POST(req: Request, { params }: Params) {
 
         const ticket = await prisma.ticket.findUnique({
             where: { id: ticketId },
-            select: { repair: { select: { isWarranty: true, warrantyStatus: true } }, workerId: true, ticketWorker: { select: { warrantyScope: true } } },
+            select: { repair: { select: { isWarranty: true } } },
         });
         if (!ticket) return NextResponse.json({ error: "Not found" }, { status: 404 });
         if (!ticket.repair) return NextResponse.json({ error: "Not a repair ticket" }, { status: 400 });
@@ -40,26 +40,13 @@ export async function POST(req: Request, { params }: Params) {
         const toStatus = body.warrantyStatus ?? (toWarranty ? "CLAIMED" : "NONE");
         const voidReason: string | null = body.voidReason ?? null;
 
-        // Clear worker if it won't apply to the new warranty state
-        let clearWorker = false;
-        if (ticket.workerId && ticket.ticketWorker) {
-            const scope = ticket.ticketWorker.warrantyScope;
-            if (scope !== "any") {
-                const scopeMatchesWarranty = scope === "warranty_only" && !toWarranty;
-                const scopeMatchesNonWarranty = scope === "non_warranty_only" && toWarranty;
-                if (scopeMatchesWarranty || scopeMatchesNonWarranty) {
-                    clearWorker = true;
-                }
-            }
-        }
-
-        // Pick bridge worker: SS36 for void, SS37 for warranty confirmation
-        const bridgeWorkerId = voidReason ? "SS36" : (toWarranty ? "SS37" : null);
-
+        // Marking warranty is a PURE RECORD now — it only flags the ticket and
+        // captures the details. It does NOT move the status / worker (the old
+        // SS36 / SS37 bridge is gone). The biller sees the warranty flag and
+        // applies the rebate or a free bill manually in POS.
         const updated = await prisma.ticket.update({
             where: { id: ticketId },
             data: {
-                ...(clearWorker || bridgeWorkerId ? { workerId: bridgeWorkerId } : {}),
                 repair: {
                     update: {
                         isWarranty: toWarranty,

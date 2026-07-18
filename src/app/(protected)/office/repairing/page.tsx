@@ -2,10 +2,11 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { auth } from "@/auth";
 import { badgeColor } from "@/shared/lib/format/entityColor";
 import Link from "next/link";
-import { Wrench, AlertCircle, UserX, Inbox } from "lucide-react";
+import { Wrench, AlertCircle, Inbox } from "lucide-react";
 import { timeAgo } from "@/shared/lib/format/timeAgo";
 import { getRepairPipeline } from "@/modules/repairing/lib/repairPipeline";
 import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
+import { WORKFLOW_STATUS } from "@/shared/lib/constants/workflow";
 
 // TODO(rbac): repairing is temporarily open to all authenticated staff and shows a
 // single shared overview. The old role/permission-keyed dashboards (Admin / Technician
@@ -20,7 +21,7 @@ export default async function RepairingDashboardPage() {
     const pipelineId = pipeline?.id ?? "P1";
     const base = { pipelineId };
 
-    const [statuses, total, open, unassigned, escalated, activeTickets] = await Promise.all([
+    const [statuses, total, open, atServiceCentre, activeTickets] = await Promise.all([
         prisma.ticketStatus.findMany({
             where: { isTerminal: false, OR: [{ pipelineId }, { pipelineId: null }] },
             orderBy: { order: "asc" },
@@ -28,8 +29,10 @@ export default async function RepairingDashboardPage() {
         }),
         prisma.ticket.count({ where: base }),
         prisma.ticket.count({ where: { ...base, ticketStatus: { isTerminal: false } } }),
-        prisma.ticket.count({ where: { ...base, assignedPositionId: null, ticketStatus: { isTerminal: false } } }),
-        prisma.ticket.count({ where: { ...base, repair: { escalated: true }, ticketStatus: { isTerminal: false } } }),
+        // "At service centre" = device currently out, by the new shipping-slip
+        // concept: the ticket sits at a "sent to service" status (workflow
+        // constant), not the retired repair.escalated flag which nothing sets.
+        prisma.ticket.count({ where: { ...base, status: { in: WORKFLOW_STATUS.atServiceCentre }, ticketStatus: { isTerminal: false } } }),
         prisma.ticket.findMany({
             where: { ...base, ticketStatus: { isTerminal: false } },
             orderBy: { updatedAt: "desc" },
@@ -64,8 +67,7 @@ export default async function RepairingDashboardPage() {
 
     const stats = [
         { label: "Open", value: open, icon: Wrench, tone: "text-primary" },
-        { label: "Unassigned", value: unassigned, icon: UserX, tone: unassigned > 0 ? "text-destructive" : "text-foreground" },
-        { label: "At Service Centre", value: escalated, icon: AlertCircle, tone: "text-foreground" },
+        { label: "At Service Centre", value: atServiceCentre, icon: AlertCircle, tone: "text-foreground" },
         { label: "Total", value: total, icon: Inbox, tone: "text-foreground" },
     ];
 
@@ -85,7 +87,7 @@ export default async function RepairingDashboardPage() {
             </div>
 
             {/* Stat cards */}
-            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
                 {stats.map((s) => (
                     <div key={s.label} className="flex items-center gap-4 rounded-lg border border-border bg-card p-5 shadow">
                         <s.icon size={22} className="text-muted-foreground" />
@@ -146,9 +148,6 @@ export default async function RepairingDashboardPage() {
                                             <span className="text-muted-foreground font-normal text-xs ml-2">
                                                 · {device?.brand} {device?.model}
                                             </span>
-                                        </p>
-                                        <p className="text-xs text-muted-foreground mt-0.5">
-                                            {t.assignedPositionId ? "Assigned" : "Unassigned"}
                                         </p>
                                     </div>
                                 </Link>

@@ -22,11 +22,11 @@ import { PRIORITY_META } from "@/utils/constants";
 import TicketEscalation from "@/modules/repairing/components/TicketEscalation";
 import StatusNav from "@/modules/repairing/components/StatusNav";
 import AddNoteModal from "@/modules/repairing/components/AddNoteModal";
-import WarrantyBadge from "@/modules/repairing/components/WarrantyBadge";
+import WarrantyDetailsBadge from "@/modules/repairing/components/WarrantyDetailsBadge";
 import WarrantyConvertModal from "@/modules/repairing/components/WarrantyConvertModal";
-import TicketOwnershipPanel from "@/modules/repairing/components/TicketOwnershipPanel";
 import PipelineTransferModal from "@/modules/repairing/components/PipelineTransferModal";
 import TicketInvoicesPanel from "@/modules/repairing/components/TicketInvoicesPanel";
+import UserAvatar from "@/shared/components/UserAvatar";
 import { editFormUrl } from "@/modules/inventory/components/VoucherActionsMenu";
 import ShippingSlipModal from "@/modules/repairing/components/ShippingSlipModal";
 import BillDetailsPanel, { type BillDraft } from "@/modules/repairing/components/BillDetailsPanel";
@@ -92,8 +92,6 @@ interface Ticket {
         isTerminal: boolean;
         title: string | null;
     }[];
-    primaryOwner?: { id: number; name: string };
-    participants?: { user: { id: number; name: string; role: string }; addedForRole?: string | null }[];
     serviceCenter?: { id: number; name: string };
     logs: {
         id: number;
@@ -109,7 +107,7 @@ interface Ticket {
         } | null;
         createdAt: string;
         // Actor is a frozen JSON snapshot now (no User FK) — see ActorSnapshot.
-        author?: { userName?: string } | null;
+        author?: { userId?: number; userName?: string; avatarUrl?: string | null; positionTitle?: string | null } | null;
         ticketStatus: { label: string; color: string };
         ticketWorker?: { label: string; color: string } | null;
     }[];
@@ -167,7 +165,6 @@ export default function TicketDetailPage() {
     const [savingRef, setSavingRef] = useState(false);
     const { data: session } = useSession();
     const sessionUser = session?.user as { id?: string; permissions?: string[] } | undefined;
-    const currentUserId = Number(sessionUser?.id ?? "0");
     // Dev-only debug surfaces (the raw ticket-context panel). Gated on an admin
     // permission — visible to admins / the super-admin bypass, hidden from staff.
     const perms = sessionUser?.permissions ?? [];
@@ -175,8 +172,23 @@ export default function TicketDetailPage() {
     // TODO(rbac): repairing actions temporarily open to all staff — re-gate on
     // position-based permissions when RBAC is re-wired.
     const canConvertWarranty = true;
-    const canManageOwnership = true;
-    const canTransfer = true;
+    const canTransfer = false; // Pipeline transfer hidden for now (re-enable when needed).
+
+    // Repair tickets are NOT owned/assigned (that system is retired from this UI).
+    // Instead we keep a SOFT record of who contributed — the distinct people who
+    // authored any timeline entry (status moves, works, notes, slips, bills).
+    // TODO(audit): the assign backend (/assign route, assignedPositionId,
+    // participants) is still live for Deals/Tasks — remove during that audit.
+    const contributors = (() => {
+        const seen = new Map<string, { name: string; avatarUrl?: string | null; positionTitle?: string | null }>();
+        for (const l of ticket?.logs ?? []) {
+            const a = l.author;
+            if (!a?.userName) continue;
+            const key = String(a.userId ?? a.userName);
+            if (!seen.has(key)) seen.set(key, { name: a.userName, avatarUrl: a.avatarUrl, positionTitle: a.positionTitle });
+        }
+        return Array.from(seen.values());
+    })();
 
     const saveRef = async () => {
         if (!ticket) return;
@@ -279,22 +291,6 @@ export default function TicketDetailPage() {
             />
             <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
 
-                {/* Warranty banner */}
-                {ticket.isWarranty && (
-                    <div className={`mb-4 flex items-center gap-3 rounded-lg border border-border px-5 py-3 text-sm ${ticket.warrantyStatus === "VOID" ? "bg-destructive/10 text-destructive" :
-                        ticket.warrantyStatus === "ACTIVE" ? "bg-secondary/40 text-foreground" :
-                            "bg-primary/10 text-primary"
-                        }`}>
-                        <WarrantyBadge isWarranty={ticket.isWarranty} warrantyStatus={ticket.warrantyStatus} />
-                        <span className="flex-1">
-                            {ticket.warrantyStatus === "VOID" && ticket.voidReason && `Void reason: ${ticket.voidReason.replace(/_/g, " ")}`}
-                            {ticket.warrantyStatus === "ACTIVE" && "Warranty confirmed — no charge to customer."}
-                            {ticket.warrantyStatus === "CLAIMED" && "Warranty claim in progress."}
-                        </span>
-                        {ticket.warrantyRef && <span className="text-xs opacity-70">Ref: {ticket.warrantyRef}</span>}
-                    </div>
-                )}
-
                 <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
                     {/* Left Column — main */}
                     <div className="min-w-0 space-y-5">
@@ -307,12 +303,14 @@ export default function TicketDetailPage() {
                                     <h1 className="text-2xl font-bold">Ticket #{ticket.id}</h1>
                                     <p className="text-muted-foreground text-sm">Created {formatDateTime(ticket.createdAt)}</p>
                                 </div>
-                                <div className="flex flex-wrap justify-end gap-2">
-                                    {ticket.pipeline && (
-                                        <span className={`rounded-md border border-border px-3 py-1 text-xs font-medium ${ticket.pipeline.color}`}>
-                                            {ticket.pipeline.label}
-                                        </span>
-                                    )}
+                                <div className="flex flex-wrap items-center justify-end gap-2">
+                                    <WarrantyDetailsBadge
+                                        isWarranty={ticket.isWarranty}
+                                        warrantyStatus={ticket.warrantyStatus}
+                                        warrantyRef={ticket.warrantyRef}
+                                        purchaseDate={ticket.purchaseDate}
+                                        voidReason={ticket.voidReason}
+                                    />
                                     <span className={`rounded-md border border-border px-3 py-1 text-xs font-medium ${PRIORITY_META[ticket.priority]?.color ?? ""}`}>
                                         {PRIORITY_META[ticket.priority]?.label ?? ticket.priority}
                                     </span>
@@ -373,16 +371,24 @@ export default function TicketDetailPage() {
                                 </div>
                                 <div className="w-px shrink-0 bg-border" />
                                 <div className="w-52 shrink-0">
-                                    <TicketOwnershipPanel
-                                        embedded
-                                        ticketId={ticket.id}
-                                        primaryOwner={ticket.primaryOwner}
-                                        participants={ticket.participants ?? []}
-                                        currentUserId={currentUserId}
-                                        canManage={canManageOwnership}
-                                        isTerminal={ticket.ticketStatus.isTerminal}
-                                        onChanged={fetchTicket}
-                                    />
+                                    {/* Soft contributor record — no ownership/assignment. */}
+                                    <div className="space-y-2">
+                                        <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                                            <User size={15} /> Contributors
+                                        </h2>
+                                        {contributors.length === 0 ? (
+                                            <p className="text-xs text-muted-foreground">No activity yet.</p>
+                                        ) : (
+                                            <div className="space-y-1.5">
+                                                {contributors.map((c) => (
+                                                    <div key={c.name} className="flex items-center gap-2" title={c.positionTitle ?? undefined}>
+                                                        <UserAvatar avatarUrl={c.avatarUrl} name={c.name} sizePx={22} />
+                                                        <span className="truncate text-xs text-foreground">{c.name}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -476,6 +482,9 @@ export default function TicketDetailPage() {
                                                             {log.visibility === "public"
                                                                 ? <Eye size={11} className="text-primary" aria-label="Public" />
                                                                 : <Lock size={11} aria-label="Internal" />}
+                                                            {log.author?.userName && (
+                                                                <UserAvatar avatarUrl={log.author.avatarUrl} name={log.author.userName} sizePx={18} />
+                                                            )}
                                                             <span>{log.author?.userName ?? "—"}</span>
                                                             <span title={formatDateTime(log.createdAt)}>· {timeAgo(log.createdAt)}</span>
                                                         </span>
@@ -619,8 +628,9 @@ export default function TicketDetailPage() {
                                         failTarget={ticket.ticketWorker.failWorker ?? null}
                                         successStatusTarget={ticket.ticketWorker.successStatus ?? null}
                                         failStatusTarget={ticket.ticketWorker.failStatus ?? null}
-                                        isOwned={!!ticket.primaryOwner}
-                                        isOwnerMe={ticket.primaryOwner?.id === currentUserId}
+                                        // Ownership retired from repair UI: no claim step, anyone can complete.
+                                        isOwned={true}
+                                        isOwnerMe={true}
                                         onChanged={fetchTicket}
                                     />
                                 </div>
@@ -692,10 +702,9 @@ export default function TicketDetailPage() {
                             onChanged={fetchTicket}
                         />
 
-                        {/* Invoices linked to this ticket (tickets are info-only — bill via Invoice.ticketId) */}
-                        <div className="rounded-lg border border-border bg-card p-4 shadow">
-                            <TicketInvoicesPanel ticketId={ticket.id} />
-                        </div>
+                        {/* Invoices linked to this ticket — the panel renders its own
+                            card and hides entirely when nothing is linked yet. */}
+                        <TicketInvoicesPanel ticketId={ticket.id} />
 
                         {/* Actions */}
                         <div className="space-y-2 rounded-lg border border-border bg-card p-4 shadow">

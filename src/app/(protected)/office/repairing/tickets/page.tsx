@@ -37,20 +37,22 @@ interface Ticket {
         problem: string;
         account: { name: string; phone?: string | null } | null;
     };
-    primaryOwner?: { name: string };
-    serviceCenter?: { name: string };
+    // Legacy escalation set a ServiceCenter master; the new shipping-slip flow
+    // stores the centre as a Sundry-Creditor party name on context. Either can
+    // be the "sent to" centre, so the filter reads both (slip wins).
+    serviceCenter?: { name: string } | null;
+    context?: { shippingSlip?: { partyName?: string | null } | null } | null;
 }
-type Technician = { id: number; name: string };
-type ServiceCenter = { id: number; name: string };
 type StatusOption = { id: string; label: string };
 type PriorityOption = { id: string; label: string };
+
+/** The centre a device was sent to — new shipping-slip party first, else the legacy ServiceCenter. */
+const serviceCenterName = (t: Ticket) => t.context?.shippingSlip?.partyName ?? t.serviceCenter?.name ?? null;
 
 export default function TicketsPage() {
     const [tickets, setTickets] = useState<Ticket[]>([]);
     const [filtered, setFiltered] = useState<Ticket[]>([]);
     const [loading, setLoading] = useState(true);
-    const [technicians, setTechnicians] = useState<Technician[]>([]);
-    const [serviceCenters, setServiceCenters] = useState<ServiceCenter[]>([]);
     const [statusOptions, setStatusOptions] = useState<StatusOption[]>([]);
     const [priorityOptions, setPriorityOptions] = useState<PriorityOption[]>([]);
     const [repairPipelineId, setRepairPipelineId] = useState<string | null>(null);
@@ -58,15 +60,12 @@ export default function TicketsPage() {
     const [search, setSearch] = useState("");
     const [statusFilter, setStatusFilter] = useState("");
     const [priorityFilter, setPriorityFilter] = useState("");
-    const [technicianFilter, setTechnicianFilter] = useState("");
     const [serviceCenterFilter, setServiceCenterFilter] = useState("");
     const [dateFrom, setDateFrom] = useState("");
     const [dateTo, setDateTo] = useState("");
     const [warrantyFilter, setWarrantyFilter] = useState("");
 
     useEffect(() => {
-        axios.get("/api/users").then((r) => setTechnicians(r.data));
-        axios.get("/api/service-centers").then((r) => setServiceCenters(r.data));
         axios.get("/api/priorities").then((r) => setPriorityOptions(r.data));
         axios.get("/api/pipelines").then((r) => {
             const repair = r.data.find((p: { name: string }) => p.name === REPAIR_PIPELINE_NAME);
@@ -111,26 +110,31 @@ export default function TicketsPage() {
         }
         if (statusFilter) result = result.filter((t) => t.status === statusFilter);
         if (priorityFilter) result = result.filter((t) => t.priority === priorityFilter);
-        if (technicianFilter) result = result.filter((t) => t.primaryOwner?.name === technicianFilter);
-        if (serviceCenterFilter) result = result.filter((t) => t.serviceCenter?.name === serviceCenterFilter);
+        if (serviceCenterFilter) result = result.filter((t) => serviceCenterName(t) === serviceCenterFilter);
         if (dateFrom) result = result.filter((t) => new Date(t.createdAt) >= new Date(dateFrom));
         if (dateTo) result = result.filter((t) => new Date(t.createdAt) <= new Date(dateTo + "T23:59:59"));
         if (warrantyFilter === "warranty") result = result.filter((t) => t.isWarranty);
         if (warrantyFilter === "non_warranty") result = result.filter((t) => !t.isWarranty);
         // eslint-disable-next-line react-hooks/set-state-in-effect
         setFiltered(result);
-    }, [tickets, search, statusFilter, priorityFilter, technicianFilter, serviceCenterFilter, dateFrom, dateTo, warrantyFilter]);
+    }, [tickets, search, statusFilter, priorityFilter, serviceCenterFilter, dateFrom, dateTo, warrantyFilter]);
 
     const clearFilters = () => {
         setSearch(""); setStatusFilter(""); setPriorityFilter("");
-        setTechnicianFilter(""); setServiceCenterFilter("");
+        setServiceCenterFilter("");
         setDateFrom(""); setDateTo(""); setWarrantyFilter("");
     };
 
     const hasFilters = Boolean(
-        search || statusFilter || priorityFilter || technicianFilter ||
+        search || statusFilter || priorityFilter ||
         serviceCenterFilter || dateFrom || dateTo || warrantyFilter
     );
+
+    // A chosen filter lights up so the user can see at a glance what is applied.
+    const activeCls = (v: string) => (v ? "border-primary/60 text-foreground font-medium" : "");
+
+    // Service-centre options come from the tickets themselves (either flow), not a master list.
+    const serviceCenterOptions = Array.from(new Set(tickets.map(serviceCenterName).filter(Boolean))) as string[];
 
     return (
         <div>
@@ -153,46 +157,40 @@ export default function TicketsPage() {
                     />
                 </div>
 
-                {/* Filter Row */}
+                {/* Filter Row — an active filter (value chosen) lights up with a
+                    primary border + solid text so it stands out from empty ones. */}
                 <div className="flex flex-wrap gap-2 [&>*]:flex-1 [&>*]:min-w-[160px] [&>*]:max-w-[260px]">
                     <Select value={statusFilter || "all"} onValueChange={(value) => setStatusFilter(value === "all" ? "" : value)}>
-                        <SelectTrigger className="w-full"><SelectValue placeholder="All Status" /></SelectTrigger>
+                        <SelectTrigger className={`w-full ${activeCls(statusFilter)}`}><SelectValue placeholder="All Status" /></SelectTrigger>
                         <SelectContent>
                             <SelectItem value="all">All Status</SelectItem>
                             {statusOptions.map((s) => <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>)}
                         </SelectContent>
                     </Select>
                     <Select value={priorityFilter || "all"} onValueChange={(value) => setPriorityFilter(value === "all" ? "" : value)}>
-                        <SelectTrigger className="w-full"><SelectValue placeholder="All Priority" /></SelectTrigger>
+                        <SelectTrigger className={`w-full ${activeCls(priorityFilter)}`}><SelectValue placeholder="All Priority" /></SelectTrigger>
                         <SelectContent>
                             <SelectItem value="all">All Priority</SelectItem>
                             {priorityOptions.map((p) => <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>)}
                         </SelectContent>
                     </Select>
-                    <Select value={technicianFilter || "all"} onValueChange={(value) => setTechnicianFilter(value === "all" ? "" : value)}>
-                        <SelectTrigger className="w-full"><SelectValue placeholder="All Technicians" /></SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Technicians</SelectItem>
-                            {technicians.map((t) => <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>)}
-                        </SelectContent>
-                    </Select>
                     <Select value={serviceCenterFilter || "all"} onValueChange={(value) => setServiceCenterFilter(value === "all" ? "" : value)}>
-                        <SelectTrigger className="w-full"><SelectValue placeholder="All Service Centers" /></SelectTrigger>
+                        <SelectTrigger className={`w-full ${activeCls(serviceCenterFilter)}`}><SelectValue placeholder="All Service Centers" /></SelectTrigger>
                         <SelectContent>
                             <SelectItem value="all">All Service Centers</SelectItem>
-                            {serviceCenters.map((s) => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}
+                            {serviceCenterOptions.map((name) => <SelectItem key={name} value={name}>{name}</SelectItem>)}
                         </SelectContent>
                     </Select>
                     <Select value={warrantyFilter || "all"} onValueChange={(value) => setWarrantyFilter(value === "all" ? "" : value)}>
-                        <SelectTrigger className="w-full"><SelectValue placeholder="All Warranty" /></SelectTrigger>
+                        <SelectTrigger className={`w-full ${activeCls(warrantyFilter)}`}><SelectValue placeholder="All Warranty" /></SelectTrigger>
                         <SelectContent>
                             <SelectItem value="all">All Warranty</SelectItem>
                             <SelectItem value="warranty">Warranty only</SelectItem>
                             <SelectItem value="non_warranty">Non-warranty only</SelectItem>
                         </SelectContent>
                     </Select>
-                    <TallyDateInput value={dateFrom} onValueChange={setDateFrom} />
-                    <TallyDateInput value={dateTo} onValueChange={setDateTo} />
+                    <TallyDateInput value={dateFrom} onValueChange={setDateFrom} placeholder="From date" className={activeCls(dateFrom)} />
+                    <TallyDateInput value={dateTo} onValueChange={setDateTo} placeholder="To date" className={activeCls(dateTo)} />
                 </div>
 
                 {/* Results count + clear */}
@@ -227,7 +225,6 @@ export default function TicketsPage() {
                                 <th className="px-6 py-3 text-left">Problem</th>
                                 <th className="px-6 py-3 text-left">Priority</th>
                                 <th className="px-6 py-3 text-left">Status</th>
-                                <th className="px-6 py-3 text-left">Technician</th>
                                 <th className="px-6 py-3 text-left">Date</th>
                                 <th className="px-6 py-3 text-left">Actions</th>
                             </tr>
@@ -265,12 +262,13 @@ export default function TicketsPage() {
                                             <WarrantyBadge isWarranty={t.isWarranty} warrantyStatus={t.warrantyStatus} />
                                         </div>
                                     </td>
-                                    <td className="px-6 py-4 text-muted-foreground">{t.primaryOwner?.name || "—"}</td>
                                     <td className="px-6 py-4 text-muted-foreground">{formatDate(t.createdAt)}</td>
                                     <td className="px-6 py-4">
-                                        <Link href={`/office/repairing/tickets/${t.id}`} className="inline-flex p-1.5 text-primary hover:bg-primary/10">
-                                            <Eye size={15} />
-                                        </Link>
+                                        <Button asChild variant="outline" size="sm">
+                                            <Link href={`/office/repairing/tickets/${t.id}`}>
+                                                <Eye /> View
+                                            </Link>
+                                        </Button>
                                     </td>
                                 </tr>
                             ))}
