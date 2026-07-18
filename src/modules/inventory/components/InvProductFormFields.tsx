@@ -47,6 +47,8 @@ export type InvProductFormState = {
      *  ean1-3 / upc1-3 fields with a dynamic list. */
     codes: ProductCode[];
     notes: string;
+    /** Cashier must fill the line note before selling this item in POS. */
+    requireSaleNote: boolean;
     isActive: boolean;
     // Pricing — entered in rupees, converted to paise on submit.
     costRupees:  string;
@@ -81,6 +83,7 @@ export const emptyInvProductForm: InvProductFormState = {
     modelNo: "",
     codes: [],
     notes: "",
+    requireSaleNote: false,
     isActive: true,
     costRupees:  "",
     priceRupees: "",
@@ -566,7 +569,12 @@ export function InvProductFormFields({
                         })()}
                     </div>
 
-                    <div className="flex items-center sm:col-span-2">
+                    <div className="flex flex-col gap-2 sm:col-span-2">
+                        <label className="flex items-center gap-2 text-sm">
+                            <input type="checkbox" checked={form.requireSaleNote} onChange={(e) => setForm((f) => ({ ...f, requireSaleNote: e.target.checked }))} />
+                            Require note on sale
+                            <span className="text-xs text-muted-foreground">— cashier must fill the line note (serial / colour / config) before checkout.</span>
+                        </label>
                         <label className="flex items-center gap-2 text-sm">
                             <input type="checkbox" checked={form.isActive} onChange={(e) => setForm((f) => ({ ...f, isActive: e.target.checked }))} />
                             Active

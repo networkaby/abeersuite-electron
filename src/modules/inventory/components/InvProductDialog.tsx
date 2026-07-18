@@ -57,6 +57,7 @@ export type InvProductRow = {
     warrantyTermId: number | null;
     codes: ProductCode[];
     notes: string | null;
+    requireSaleNote: boolean;
     /** Last inward rate (paise) from the ledger walk — read-only on the dialog. PR 3 dropped the costPaise column. */
     lastPurchasePaise?: number | null;
     effectiveSalePricePaise: number | null;
@@ -109,6 +110,7 @@ function rowToForm(p: InvProductRow): InvProductFormState {
         modelNo: p.modelNo ?? "",
         codes: (p.codes ?? []).map((c) => ({ kind: c.kind, value: c.value })),
         notes: p.notes ?? "",
+        requireSaleNote: p.requireSaleNote ?? false,
         isActive: p.isActive,
         // Cost input removed in PR 4 — cost is set via Opening tab (openingRate)
         // or accumulates from purchases. Keep costRupees="" for back-compat with
@@ -291,6 +293,7 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
                 .map((c) => ({ kind: c.kind, value: c.value.trim() }))
                 .filter((c) => c.value !== ""),
             notes: optionalStr(form.notes),
+            requireSaleNote: form.requireSaleNote,
             isActive: form.isActive,
             // costPaise removed in PR 3; no longer sent.
             // The "Sale price" field is the human SAVED sale price (barcode source,

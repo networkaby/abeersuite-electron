@@ -137,6 +137,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                     ? { codes: { deleteMany: {}, create: normalizeProductCodes(b.codes).map((c, i) => ({ kind: c.kind, value: c.value, sortOrder: i })) } }
                     : {}),
                 ...(b.notes !== undefined ? { notes: b.notes } : {}),
+                ...(b.requireSaleNote !== undefined ? { requireSaleNote: b.requireSaleNote } : {}),
                 ...(b.isActive !== undefined ? { isActive: b.isActive } : {}),
                 ...(b.shopSubheading !== undefined ? { shopSubheading: b.shopSubheading } : {}),
                 ...(b.slug !== undefined ? { slug: b.slug } : {}),

@@ -568,6 +568,7 @@ export function usePosBilling(opts: {
                 mrpPaise: p.mrpPaise ?? null,
                 barcodePaise: p.barcodePricePaise ?? null,
                 warrantyLabel,
+                requireSaleNote: p.requireSaleNote ?? false,
                 redeemCapPct: p.redeemCapPct ?? null,
             }];
         });
@@ -703,6 +704,11 @@ export function usePosBilling(opts: {
         return (balanceDue + onCredit) > limit;
     })();
 
+    // True when any cart line flagged requireSaleNote still has a blank note.
+    // Gates the Checkout button (disabled) — the cashier must capture the
+    // serial / colour / config before selling such items.
+    const saleNoteMissing = cart.some((l) => l.requireSaleNote && !l.description.trim());
+
     // Opened-at clock label for the header shift menu (mirrors ActiveShiftBar).
     const shiftOpenedAt = activeShift
         ? new Date(activeShift.openedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
@@ -716,6 +722,7 @@ export function usePosBilling(opts: {
         // product search + cart
         productQuery, setProductQuery, productHighlight, setProductHighlight,
         filteredProducts, cart, setCart, addToCart, setQty, setPrice, setLineDescription, onProductKeyDown,
+        saleNoteMissing,
         // POS services (added from the "+ Add service charge" button, not the search)
         allServices, addServiceToCart,
         // checkout / tenders

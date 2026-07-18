@@ -156,6 +156,7 @@ export async function POST(req: Request) {
                     ? { codes: { create: normalizeProductCodes(b.codes).map((c, i) => ({ kind: c.kind, value: c.value, sortOrder: i })) } }
                     : {}),
                 notes: b.notes ?? null,
+                requireSaleNote: b.requireSaleNote ?? false,
                 isActive: b.isActive ?? true,
                 shopSubheading: b.shopSubheading ?? null,
                 slug: b.slug ?? null,

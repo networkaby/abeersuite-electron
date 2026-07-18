@@ -19,7 +19,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import {
     Plus, Pencil, Trash2, Box, Search, Save, RotateCcw, Wand2,
-    Eye, ListChecks, Filter, RefreshCw, ChevronDown, X,
+    Eye, ListChecks, Filter, RefreshCw, ChevronDown, X, Columns3,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -65,6 +65,8 @@ type Row = {
     name: string;
     namePart: string | null;
     isActive: boolean;
+    /** Cashier must fill the POS line note before selling this item. */
+    requireSaleNote: boolean;
     stock: number | null;
     lowStockThreshold: number;
     modelNo: string | null;
@@ -91,6 +93,7 @@ type Patch = Partial<{
     modelNo: string | null;
     codes: ProductCode[];
     isActive: boolean;
+    requireSaleNote: boolean;
     unitId: number;
     categoryId: number | null;
     groupId: number | null;
@@ -104,7 +107,31 @@ type SortField =
     | "sku" | "name" | "namePart" | "categoryName" | "brandName" | "groupName"
     | "warrantyName" | "unitCode" | "modelNo" | "barcode1" | "stock" | "isActive";
 
-type FilterField = "categoryId" | "brandId" | "groupId" | "warrantyTermId" | "unitId" | "isActive" | "stock";
+type FilterField = "categoryId" | "brandId" | "groupId" | "warrantyTermId" | "unitId" | "isActive" | "stock" | "requireSaleNote";
+
+/// Toggleable data columns (structural columns — row #, select box, actions —
+/// are always shown and not listed here). Order matches the render order.
+type ColId =
+    | "sku" | "name" | "namePart" | "category" | "brand" | "group"
+    | "warranty" | "unit" | "modelNo" | "barcode" | "stock" | "isActive" | "requireSaleNote";
+
+const COLUMNS: { id: ColId; label: string }[] = [
+    { id: "sku",             label: "SKU" },
+    { id: "name",            label: "Name" },
+    { id: "namePart",        label: "Custom" },
+    { id: "category",        label: "Category" },
+    { id: "brand",           label: "Brand" },
+    { id: "group",           label: "Group" },
+    { id: "warranty",        label: "Warranty" },
+    { id: "unit",            label: "Unit" },
+    { id: "modelNo",         label: "Model No" },
+    { id: "barcode",         label: "Barcode" },
+    { id: "stock",           label: "Stock" },
+    { id: "isActive",        label: "Active" },
+    { id: "requireSaleNote", label: "Req. note" },
+];
+const ALL_COL_IDS = COLUMNS.map((c) => c.id);
+const COLS_STORAGE_KEY = "inv-products-visible-cols";
 
 /// Bucket key for the Stock column filter — numeric stock folded into four
 /// coarse states the operator actually filters by ("what's out of stock?").
@@ -159,6 +186,31 @@ export default function InventoryProductsPage() {
     /// Per-column multi-select filters keyed by the row field name. Values are
     /// option ids stringified; "__none__" represents null/missing relations.
     const [colFilters, setColFilters] = useState<Map<FilterField, Set<string>>>(new Map());
+
+    /// Which data columns are visible — user-controlled via the Columns chooser,
+    /// remembered per browser. Unknown/legacy ids are ignored; new columns
+    /// default to visible so a release that adds one doesn't hide it.
+    const [visibleCols, setVisibleCols] = useState<Set<ColId>>(new Set(ALL_COL_IDS));
+    useEffect(() => {
+        try {
+            const raw = localStorage.getItem(COLS_STORAGE_KEY);
+            if (!raw) return;
+            const saved = JSON.parse(raw) as string[];
+            // Start from all-visible, then hide anything the user has hidden — so
+            // a newly added column is shown until they hide it themselves.
+            setVisibleCols(new Set(ALL_COL_IDS.filter((id) => saved.includes(id))));
+        } catch { /* ignore malformed storage */ }
+    }, []);
+    const setColVisible = (id: ColId, on: boolean) => {
+        setVisibleCols((prev) => {
+            const next = new Set(prev);
+            if (on) next.add(id); else next.delete(id);
+            try { localStorage.setItem(COLS_STORAGE_KEY, JSON.stringify([...next])); } catch { /* ignore */ }
+            return next;
+        });
+    };
+    const showCol = (id: ColId) => visibleCols.has(id);
+    const visibleColCount = COLUMNS.filter((c) => visibleCols.has(c.id)).length;
 
     const [dialogOpen, setDialogOpen] = useState(false);
     const [dialogEditId, setDialogEditId] = useState<number | null>(null);
@@ -414,6 +466,24 @@ export default function InventoryProductsPage() {
         toast.success(`Applied to ${selected.size} row${selected.size === 1 ? "" : "s"}`);
     }
 
+    /// Bulk-set a boolean field (e.g. requireSaleNote) on every selected row.
+    /// Boolean sibling of applyToSelected — no name regeneration, no numeric coercion.
+    function applyBoolToSelected(field: keyof Patch, value: boolean) {
+        if (selected.size === 0) {
+            toast.error("Select at least one row first");
+            return;
+        }
+        setDirty((prev) => {
+            const next = new Map(prev);
+            for (const id of selected) {
+                const cur = next.get(id) ?? {};
+                next.set(id, { ...cur, [field]: value });
+            }
+            return next;
+        });
+        toast.success(`Applied to ${selected.size} row${selected.size === 1 ? "" : "s"}`);
+    }
+
     async function save() {
         if (dirty.size === 0) return;
         setSaving(true);
@@ -582,6 +652,10 @@ export default function InventoryProductsPage() {
                             <ListChecks className="size-4" /> Edit cells
                         </button>
                     </div>
+                    <ColumnChooser visible={visibleCols} onToggle={setColVisible} onReset={() => {
+                        setVisibleCols(new Set(ALL_COL_IDS));
+                        try { localStorage.removeItem(COLS_STORAGE_KEY); } catch { /* ignore */ }
+                    }} />
                     <Button type="button" onClick={openNew}>
                         <Plus className="size-4" />
                         New product
@@ -662,6 +736,12 @@ export default function InventoryProductsPage() {
                         <BulkApply label="Warranty" options={warrantyTerms} field="warrantyTermId" onApply={applyToSelected} onCreate={() => createMaster("warranty")} />
                         <BulkApply label="Unit" options={units} field="unitId" onApply={applyToSelected} clearable={false} onCreate={() => createMaster("unit")} />
                         <span className="h-5 w-px bg-border" aria-hidden />
+                        <span className="flex items-center gap-1 text-[11px]">
+                            <span className="text-muted-foreground px-0.5">Req. note</span>
+                            <Button type="button" variant="outline" size="sm" className="h-7 px-2 text-[11px]" onClick={() => applyBoolToSelected("requireSaleNote", true)}>On</Button>
+                            <Button type="button" variant="outline" size="sm" className="h-7 px-2 text-[11px]" onClick={() => applyBoolToSelected("requireSaleNote", false)}>Off</Button>
+                        </span>
+                        <span className="h-5 w-px bg-border" aria-hidden />
                         <button
                             type="button"
                             className="text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline px-1.5"
@@ -692,64 +772,86 @@ export default function InventoryProductsPage() {
                                     </TableHead>
                                 ) : null}
                                 <TableHead className="w-10">#</TableHead>
-                                <TableHead className="w-28"><SortHead field="sku" sort={sort} onSort={cycleSort}>SKU</SortHead></TableHead>
-                                <TableHead className="min-w-64"><SortHead field="name" sort={sort} onSort={cycleSort}>Name</SortHead></TableHead>
-                                <TableHead className="min-w-40"><SortHead field="namePart" sort={sort} onSort={cycleSort}>Custom</SortHead></TableHead>
+                                {showCol("sku") ? <TableHead className="w-28"><SortHead field="sku" sort={sort} onSort={cycleSort}>SKU</SortHead></TableHead> : null}
+                                {showCol("name") ? <TableHead className="min-w-64"><SortHead field="name" sort={sort} onSort={cycleSort}>Name</SortHead></TableHead> : null}
+                                {showCol("namePart") ? <TableHead className="min-w-40"><SortHead field="namePart" sort={sort} onSort={cycleSort}>Custom</SortHead></TableHead> : null}
+                                {showCol("category") ? (
                                 <TableHead className="min-w-44">
                                     <div className="flex items-center gap-1">
                                         <SortHead field="categoryName" sort={sort} onSort={cycleSort}>Category</SortHead>
                                         <ColFilter field="categoryId" options={categories} rows={rows} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} onCreate={() => createMaster("category")} createLabel="category" />
                                     </div>
                                 </TableHead>
+                                ) : null}
+                                {showCol("brand") ? (
                                 <TableHead className="min-w-36">
                                     <div className="flex items-center gap-1">
                                         <SortHead field="brandName" sort={sort} onSort={cycleSort}>Brand</SortHead>
                                         <ColFilter field="brandId" options={brands} rows={rows} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} onCreate={() => createMaster("brand")} createLabel="brand" />
                                     </div>
                                 </TableHead>
+                                ) : null}
+                                {showCol("group") ? (
                                 <TableHead className="min-w-36">
                                     <div className="flex items-center gap-1">
                                         <SortHead field="groupName" sort={sort} onSort={cycleSort}>Group</SortHead>
                                         <ColFilter field="groupId" options={groups} rows={rows} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} onCreate={() => createMaster("group")} createLabel="group" />
                                     </div>
                                 </TableHead>
+                                ) : null}
+                                {showCol("warranty") ? (
                                 <TableHead className="min-w-36">
                                     <div className="flex items-center gap-1">
                                         <SortHead field="warrantyName" sort={sort} onSort={cycleSort}>Warranty</SortHead>
                                         <ColFilter field="warrantyTermId" options={warrantyTerms} rows={rows} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} onCreate={() => createMaster("warranty")} createLabel="warranty term" />
                                     </div>
                                 </TableHead>
+                                ) : null}
+                                {showCol("unit") ? (
                                 <TableHead className="w-24">
                                     <div className="flex items-center gap-1">
                                         <SortHead field="unitCode" sort={sort} onSort={cycleSort}>Unit</SortHead>
                                         <ColFilter field="unitId" options={units} rows={rows} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} onCreate={() => createMaster("unit")} createLabel="unit" />
                                     </div>
                                 </TableHead>
-                                <TableHead className="min-w-32"><SortHead field="modelNo" sort={sort} onSort={cycleSort}>Model No</SortHead></TableHead>
-                                <TableHead className="min-w-36"><SortHead field="barcode1" sort={sort} onSort={cycleSort}>Barcode</SortHead></TableHead>
+                                ) : null}
+                                {showCol("modelNo") ? <TableHead className="min-w-32"><SortHead field="modelNo" sort={sort} onSort={cycleSort}>Model No</SortHead></TableHead> : null}
+                                {showCol("barcode") ? <TableHead className="min-w-36"><SortHead field="barcode1" sort={sort} onSort={cycleSort}>Barcode</SortHead></TableHead> : null}
+                                {showCol("stock") ? (
                                 <TableHead className="w-24 text-right">
                                     <div className="flex items-center justify-end gap-1">
                                         <SortHead field="stock" sort={sort} onSort={cycleSort} align="right">Stock</SortHead>
                                         <ColFilter field="stock" options={[]} rows={rows} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} fixedItems={STOCK_FILTER_ITEMS} align="right" />
                                     </div>
                                 </TableHead>
+                                ) : null}
+                                {showCol("isActive") ? (
                                 <TableHead className="w-20 text-center">
                                     <div className="flex items-center justify-center gap-1">
                                         <SortHead field="isActive" sort={sort} onSort={cycleSort}>Active</SortHead>
                                         <ColFilter field="isActive" options={[]} rows={rows} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} booleanField align="right" />
                                     </div>
                                 </TableHead>
+                                ) : null}
+                                {showCol("requireSaleNote") ? (
+                                <TableHead className="w-24 text-center" title="Cashier must fill the POS line note before selling">
+                                    <div className="flex items-center justify-center gap-1">
+                                        <span>Req. note</span>
+                                        <ColFilter field="requireSaleNote" options={[]} rows={rows} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} booleanField boolLabels={{ trueLabel: "Required", falseLabel: "Not required" }} align="right" />
+                                    </div>
+                                </TableHead>
+                                ) : null}
                                 {!isEdit ? <TableHead className="w-24 text-right"> </TableHead> : null}
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {loading ? (
                                 <TableRow>
-                                    <TableCell colSpan={isEdit ? 14 : 14} className="text-muted-foreground">Loading…</TableCell>
+                                    <TableCell colSpan={visibleColCount + 2} className="text-muted-foreground">Loading…</TableCell>
                                 </TableRow>
                             ) : pageRows.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={isEdit ? 14 : 14} className="text-muted-foreground">
+                                    <TableCell colSpan={visibleColCount + 2} className="text-muted-foreground">
                                         {rows.length === 0 ? "No products yet. Create a unit first, then add a product." : "No products match the search."}
                                     </TableCell>
                                 </TableRow>
@@ -774,9 +876,10 @@ export default function InventoryProductsPage() {
                                                 </TableCell>
                                             ) : null}
                                             <TableCell className="text-muted-foreground text-sm align-top">{pageStart + i + 1}</TableCell>
-                                            <TableCell className="font-mono text-xs align-top whitespace-nowrap">{r.sku}</TableCell>
+                                            {showCol("sku") ? <TableCell className="font-mono text-xs align-top whitespace-nowrap">{r.sku}</TableCell> : null}
 
                                             {/* Name */}
+                                            {showCol("name") ? (
                                             <TableCell className={isEdit ? "min-w-48 align-top whitespace-normal break-words" : "font-medium align-top whitespace-normal break-words"}>
                                                 {isEdit ? (
                                                     <div className="flex items-start gap-1">
@@ -798,8 +901,10 @@ export default function InventoryProductsPage() {
                                                     r.name
                                                 )}
                                             </TableCell>
+                                            ) : null}
 
                                             {/* Custom (namePart) — operator-curated portion that survives regenerate */}
+                                            {showCol("namePart") ? (
                                             <TableCell className={isEdit ? "min-w-40 align-top whitespace-normal break-words" : "text-sm align-top whitespace-normal break-words"}>
                                                 {isEdit ? (
                                                     <Input
@@ -812,8 +917,10 @@ export default function InventoryProductsPage() {
                                                     r.namePart ?? <span className="text-muted-foreground">—</span>
                                                 )}
                                             </TableCell>
+                                            ) : null}
 
                                             {/* Category */}
+                                            {showCol("category") ? (
                                             <TableCell className={isEdit ? "min-w-40 align-top whitespace-normal break-words" : "text-sm align-top whitespace-normal break-words"}>
                                                 {isEdit ? (
                                                     <CellSelect
@@ -826,8 +933,10 @@ export default function InventoryProductsPage() {
                                                     r.category?.name ?? "—"
                                                 )}
                                             </TableCell>
+                                            ) : null}
 
                                             {/* Brand */}
+                                            {showCol("brand") ? (
                                             <TableCell className={isEdit ? "min-w-40 align-top whitespace-normal break-words" : "text-sm align-top whitespace-normal break-words"}>
                                                 {isEdit ? (
                                                     <CellSelect
@@ -840,8 +949,10 @@ export default function InventoryProductsPage() {
                                                     r.brand?.name ?? "—"
                                                 )}
                                             </TableCell>
+                                            ) : null}
 
                                             {/* Group */}
+                                            {showCol("group") ? (
                                             <TableCell className={isEdit ? "min-w-40 align-top whitespace-normal break-words" : "text-sm align-top whitespace-normal break-words"}>
                                                 {isEdit ? (
                                                     <CellSelect
@@ -854,8 +965,10 @@ export default function InventoryProductsPage() {
                                                     r.group?.name ?? "—"
                                                 )}
                                             </TableCell>
+                                            ) : null}
 
                                             {/* Warranty */}
+                                            {showCol("warranty") ? (
                                             <TableCell className={isEdit ? "min-w-40 align-top whitespace-normal break-words" : "text-sm align-top whitespace-normal break-words"}>
                                                 {isEdit ? (
                                                     <CellSelect
@@ -868,8 +981,10 @@ export default function InventoryProductsPage() {
                                                     r.warrantyTerm?.name ?? "—"
                                                 )}
                                             </TableCell>
+                                            ) : null}
 
                                             {/* Unit */}
+                                            {showCol("unit") ? (
                                             <TableCell className={isEdit ? "min-w-28 align-top" : "text-muted-foreground text-sm align-top whitespace-normal break-words"}>
                                                 {isEdit ? (
                                                     <CellSelect
@@ -883,8 +998,10 @@ export default function InventoryProductsPage() {
                                                     r.unit.code
                                                 )}
                                             </TableCell>
+                                            ) : null}
 
                                             {/* Model No */}
+                                            {showCol("modelNo") ? (
                                             <TableCell className={isEdit ? "min-w-32 align-top whitespace-normal break-words" : "text-sm align-top whitespace-normal break-words"}>
                                                 {isEdit ? (
                                                     <Input
@@ -896,8 +1013,10 @@ export default function InventoryProductsPage() {
                                                     r.modelNo ?? "—"
                                                 )}
                                             </TableCell>
+                                            ) : null}
 
                                             {/* Barcode */}
+                                            {showCol("barcode") ? (
                                             <TableCell className={isEdit ? "min-w-32 font-mono align-top whitespace-nowrap" : "font-mono text-sm align-top whitespace-nowrap"}>
                                                 {isEdit ? (
                                                     <Input
@@ -909,8 +1028,10 @@ export default function InventoryProductsPage() {
                                                     primaryBarcode(r.codes) ?? "—"
                                                 )}
                                             </TableCell>
+                                            ) : null}
 
                                             {/* Stock (read-only in both modes — adjusted via vouchers / opening) */}
+                                            {showCol("stock") ? (
                                             <TableCell className="text-right">
                                                 {r.stock == null ? (
                                                     <span className="text-muted-foreground text-xs">—</span>
@@ -921,8 +1042,10 @@ export default function InventoryProductsPage() {
                                                     </span>
                                                 )}
                                             </TableCell>
+                                            ) : null}
 
                                             {/* Active */}
+                                            {showCol("isActive") ? (
                                             <TableCell className="text-center">
                                                 {isEdit ? (
                                                     <Checkbox
@@ -934,6 +1057,22 @@ export default function InventoryProductsPage() {
                                                     !r.isActive ? <Badge variant="outline">inactive</Badge> : <span className="text-muted-foreground text-xs">✓</span>
                                                 )}
                                             </TableCell>
+                                            ) : null}
+
+                                            {/* Require note on sale */}
+                                            {showCol("requireSaleNote") ? (
+                                            <TableCell className="text-center">
+                                                {isEdit ? (
+                                                    <Checkbox
+                                                        checked={val(r, "requireSaleNote") as boolean}
+                                                        onCheckedChange={(v) => patch(r.id, { requireSaleNote: !!v })}
+                                                        aria-label="Require note on sale"
+                                                    />
+                                                ) : (
+                                                    r.requireSaleNote ? <Badge variant="outline">note</Badge> : <span className="text-muted-foreground text-xs">—</span>
+                                                )}
+                                            </TableCell>
+                                            ) : null}
 
                                             {/* Actions — view mode only (full-field edit + delete) */}
                                             {!isEdit ? (
@@ -1037,12 +1176,77 @@ function SortHead({
     );
 }
 
+/// Columns show/hide chooser — a checklist of every toggleable data column.
+/// Choices persist per browser (handled by the parent). Structural columns
+/// (row #, select box, actions) are never listed here.
+function ColumnChooser({
+    visible, onToggle, onReset,
+}: {
+    visible: Set<ColId>;
+    onToggle: (id: ColId, on: boolean) => void;
+    onReset: () => void;
+}) {
+    const [open, setOpen] = useState(false);
+    const wrapRef = useRef<HTMLDivElement | null>(null);
+    useEffect(() => {
+        if (!open) return;
+        function onDocClick(e: MouseEvent) {
+            if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+        }
+        function onKey(e: KeyboardEvent) { if (e.key === "Escape") setOpen(false); }
+        document.addEventListener("mousedown", onDocClick);
+        document.addEventListener("keydown", onKey);
+        return () => {
+            document.removeEventListener("mousedown", onDocClick);
+            document.removeEventListener("keydown", onKey);
+        };
+    }, [open]);
+
+    const hiddenCount = COLUMNS.length - visible.size;
+    return (
+        <div ref={wrapRef} className="relative">
+            <button
+                type="button"
+                onClick={() => setOpen((o) => !o)}
+                className="inline-flex items-center gap-1 rounded-md border border-input px-2 py-1.5 text-sm text-muted-foreground hover:text-foreground"
+                title="Show / hide columns"
+            >
+                <Columns3 className="size-4" /> Columns
+                {hiddenCount > 0 ? <span className="ml-0.5 rounded bg-muted px-1 text-[10px]">{hiddenCount} hidden</span> : null}
+                <ChevronDown className="size-3.5" />
+            </button>
+            {open ? (
+                <div className="absolute right-0 z-30 mt-1 min-w-52 rounded-md border border-border bg-popover text-popover-foreground shadow-md">
+                    <div className="flex items-center justify-between px-2 pt-2 text-xs">
+                        <span className="text-muted-foreground">Columns</span>
+                        <button type="button" className="hover:underline" onClick={onReset}>reset</button>
+                    </div>
+                    <ul className="max-h-72 overflow-auto p-2 space-y-1">
+                        {COLUMNS.map((c) => (
+                            <li key={c.id}>
+                                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={visible.has(c.id)}
+                                        onChange={(e) => onToggle(c.id, e.target.checked)}
+                                    />
+                                    <span className="truncate">{c.label}</span>
+                                </label>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            ) : null}
+        </div>
+    );
+}
+
 /// Per-column multi-select filter. Renders a funnel button that opens a
 /// checklist of unique values from the master list (plus "(none)" if any row
 /// has a null relation). For booleanField (isActive), shows ✓ / inactive.
 function ColFilter({
     field, options, rows, colFilters, onToggle, onClear, booleanField = false,
-    fixedItems, align = "left", onCreate, createLabel,
+    boolLabels, fixedItems, align = "left", onCreate, createLabel,
 }: {
     field: FilterField;
     options: Opt[];
@@ -1051,6 +1255,8 @@ function ColFilter({
     onToggle: (f: FilterField, key: string) => void;
     onClear: (f: FilterField) => void;
     booleanField?: boolean;
+    /** Labels for the true/false rows of a booleanField. Defaults to Active/Inactive. */
+    boolLabels?: { trueLabel: string; falseLabel: string };
     /** Fixed option list (e.g. stock buckets) — replaces the master-derived list. */
     fixedItems?: { key: string; label: string }[];
     /** Popover edge. Right-most columns (Stock / Active) open right-aligned so
@@ -1092,7 +1298,7 @@ function ColFilter({
     const items: { key: string; label: string }[] = fixedItems
         ? fixedItems
         : booleanField
-        ? [{ key: "true", label: "Active" }, { key: "false", label: "Inactive" }]
+        ? [{ key: "true", label: boolLabels?.trueLabel ?? "Active" }, { key: "false", label: boolLabels?.falseLabel ?? "Inactive" }]
         : (() => {
             const list = options.map((o) => ({ key: String(o.id), label: optLabel(o) }));
             // "(none)" only if any row has null for this field

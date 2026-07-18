@@ -53,7 +53,9 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
     const b = usePosBilling({
         onHotkeyConfirm: () => {
             if (isEdit) void generateInvoice(false);
-            else b.openCheckout();
+            // Mirror the disabled Checkout button: silently no-op while a
+            // require-note item still has a blank line note.
+            else if (!b.saleNoteMissing) b.openCheckout();
         },
         partySearchRef,
         productSearchRef,
@@ -445,7 +447,7 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
             partySearchRef={partySearchRef}
             productSearchRef={productSearchRef}
             checkoutSlot={
-                <Button onClick={isEdit ? () => void generateInvoice(false) : b.openCheckout} disabled={b.cart.length === 0 || !b.snapshot?.account || b.submitting} className="h-12 w-full text-base" size="lg">
+                <Button onClick={isEdit ? () => void generateInvoice(false) : b.openCheckout} disabled={b.cart.length === 0 || !b.snapshot?.account || b.submitting || b.saleNoteMissing} className="h-12 w-full text-base" size="lg">
                     <ReceiptIndianRupee size={18} /> {isEdit ? "Update Sale" : "Checkout"}
                     <span className="ml-2 rounded border border-primary-foreground/30 px-1.5 py-px text-[10px] opacity-80">Ctrl ↵</span>
                 </Button>

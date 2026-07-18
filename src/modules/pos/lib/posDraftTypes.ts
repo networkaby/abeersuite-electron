@@ -71,6 +71,9 @@ export type ProductOption = {
     redeemCapPct?: number | null;
     unit?: { code: string };
     warrantyTerm?: { name: string; durationDays: number | null } | null;
+    /// When true, the cashier must fill the line note before checkout. Snapshotted
+    /// onto the cart line at add-to-cart (mirrors warrantyLabel).
+    requireSaleNote?: boolean;
 };
 
 /// One row of /api/pos/services — the active POS service catalogue. Services are
@@ -108,6 +111,9 @@ export type CartLine = {
     /// the customer-facing price ladder (barcode line + "price benefit").
     barcodePaise?: number | null;
     warrantyLabel?: string | null;
+    /// When true this line's note is mandatory — the Checkout button stays
+    /// disabled until `description` is filled. Snapshotted from the product.
+    requireSaleNote?: boolean;
     /// Loyalty redeem-cap override (% redeemable with points; null = global cap).
     /// Snapshotted so the redeem ceiling matches the server's at checkout.
     redeemCapPct?: number | null;

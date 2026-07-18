@@ -274,13 +274,21 @@ export function PosScreenShell({
                                                             <span className="text-[10px] text-muted-foreground/60">—</span>
                                                         )}
                                                     </div>
-                                                    <Input
-                                                        value={l.description}
-                                                        onChange={(e) => b.setLineDescription(l.productId, e.target.value)}
-                                                        onKeyDown={enterToNextProduct}
-                                                        placeholder="Note — colour, config…"
-                                                        className="h-8 text-sm"
-                                                    />
+                                                    {(() => {
+                                                        // Items flagged "require note on sale" must carry a note
+                                                        // (serial / colour / config) — highlight red until filled.
+                                                        const noteMissing = !!l.requireSaleNote && !l.description.trim();
+                                                        return (
+                                                            <Input
+                                                                value={l.description}
+                                                                onChange={(e) => b.setLineDescription(l.productId, e.target.value)}
+                                                                onKeyDown={enterToNextProduct}
+                                                                placeholder={l.requireSaleNote ? "Note required — serial / colour / config…" : "Note — colour, config…"}
+                                                                aria-invalid={noteMissing}
+                                                                className={`h-8 text-sm ${noteMissing ? "border-red-500 focus-visible:ring-red-500" : ""}`}
+                                                            />
+                                                        );
+                                                    })()}
                                                     {isService ? (
                                                         <div className="hidden lg:flex flex-col items-end text-[10px] leading-tight text-muted-foreground">
                                                             <span className="uppercase tracking-wider">{l.taxRate > 0 ? `GST ${l.taxRate}%` : "No tax"}</span>

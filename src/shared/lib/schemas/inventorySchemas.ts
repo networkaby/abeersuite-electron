@@ -118,6 +118,8 @@ export const invProductCreateSchema = z.object({
     groupId: z.number().int().positive().nullish(),
     brandId: z.number().int().positive().nullish(),
     warrantyTermId: z.number().int().positive().nullish(),
+    /// Cashier must fill the line note before selling this item in POS.
+    requireSaleNote: z.boolean().optional().default(false),
     isActive: z.boolean().optional().default(true),
     // Auto-generated from masters via the naming-convention config; user can
     // override. Empty / whitespace → null.
