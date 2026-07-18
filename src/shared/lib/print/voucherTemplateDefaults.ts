@@ -1,16 +1,19 @@
 /**
  * Single source of truth for VoucherPrintTemplate kinds and their defaults.
+ * "Print templates" is the customer-facing name; the model + `kind` PK are a
+ * generic per-document print registry — accountancy vouchers AND the repair-shop
+ * documents (repair ticket, shipping slip) all live here.
  *
  * Used by:
- *   • prisma/seeds/bootstrap-seed.ts        — initial upsert of all 21 rows
+ *   • prisma/seeds/bootstrap-seed.ts        — initial upsert of all 25 rows
  *   • /api/settings/voucher-templates/...   — list-auto-upsert, reset-to-default
- *   • /office/settings/voucher-templates    — UI grouping (Accounting / Inventory)
+ *   • /office/settings/voucher-templates    — UI grouping (Accounting / Inventory / Repair)
  *   • src/shared/lib/print/voucherTemplate.ts — runtime fallback if a row is missing
  *
- * Keep `VOUCHER_TEMPLATE_KIND_GROUPS` aligned with the VoucherType + InvVoucherType
- * enums in prisma/schema/enums.prisma. If you add a kind to either enum, add it
- * here too (the bootstrap seed re-runs upserts so adding a new kind is a one-line
- * change followed by a re-seed).
+ * The accounting/inventory kinds mirror the VoucherType + InvVoucherType enums in
+ * prisma/schema/enums.prisma; the repair kinds are plain string ids with no enum.
+ * If you add a kind, add it here too (the bootstrap seed re-runs upserts so a new
+ * kind is a one-line change followed by a re-seed).
  */
 
 export const ACCOUNTING_VOUCHER_KINDS = [
@@ -42,9 +45,21 @@ export const INVENTORY_VOUCHER_KINDS = [
     "PURCHASE_ORDER",
 ] as const;
 
+// Non-voucher prints that share the same per-kind print-template registry —
+// the repair-shop documents. They are NOT accountancy vouchers; they carry a
+// device / service body instead of a ledger table, but they reuse the same
+// header / address / GSTIN / logo / footer / signature chrome so the shop's
+// branding is configured in ONE place. See /receipt/[id] (repair ticket) and
+// /shipping-slip/[ticketId].
+export const REPAIR_DOCUMENT_KINDS = [
+    "REPAIR_TICKET",
+    "SHIPPING_SLIP",
+] as const;
+
 export const VOUCHER_TEMPLATE_KINDS = [
     ...ACCOUNTING_VOUCHER_KINDS,
     ...INVENTORY_VOUCHER_KINDS,
+    ...REPAIR_DOCUMENT_KINDS,
 ] as const;
 
 export type VoucherTemplateKind = (typeof VOUCHER_TEMPLATE_KINDS)[number];
@@ -52,6 +67,7 @@ export type VoucherTemplateKind = (typeof VOUCHER_TEMPLATE_KINDS)[number];
 export const VOUCHER_TEMPLATE_KIND_GROUPS = {
     accounting: ACCOUNTING_VOUCHER_KINDS,
     inventory: INVENTORY_VOUCHER_KINDS,
+    repair: REPAIR_DOCUMENT_KINDS,
 } as const;
 
 // Human-readable per-kind sub-titles that go into headerLine2 by default.
@@ -81,6 +97,9 @@ const HEADER_LINE_2: Record<VoucherTemplateKind, string> = {
     REJECTION_OUT: "Rejection Out",
     SALES_ORDER: "Sales Order",
     PURCHASE_ORDER: "Purchase Order",
+
+    REPAIR_TICKET: "Job Receipt / Service Ticket",
+    SHIPPING_SLIP: "Shipping Slip / Delivery Challan",
 };
 
 // Voucher kinds that don't have a monetary tax breakdown by their nature.
@@ -93,7 +112,44 @@ const NO_TAX_SUMMARY: ReadonlySet<VoucherTemplateKind> = new Set<VoucherTemplate
     "BRANCH_TRANSFER",
     "REJECTION_IN",
     "REJECTION_OUT",
+    // Repair-shop documents carry no ledger / tax table.
+    "REPAIR_TICKET",
+    "SHIPPING_SLIP",
 ]);
+
+// Repair-shop documents that show customer + staff signature lines by default.
+const WITH_SIGNATURE: ReadonlySet<VoucherTemplateKind> = new Set<VoucherTemplateKind>([
+    "REPAIR_TICKET",
+]);
+
+// Kinds that print a scannable barcode of the voucher number by default — the
+// invoices a customer keeps and may bring back, so a return clerk can scan the
+// slip to pull up the original sale. Applies to both A4 + thermal seeds; the
+// two flags can then be tuned independently per format.
+const BARCODE_KINDS: ReadonlySet<VoucherTemplateKind> = new Set<VoucherTemplateKind>([
+    "SALE",
+    "POS",
+    "SALE_RETURN",
+]);
+
+// Per-kind default footer / terms overrides (blank kinds fall back to the
+// generic footer and empty terms). The repair ticket seeds the shop's standard
+// service terms so they render out-of-the-box AND stay editable on the
+// print-templates settings page.
+const FOOTER_LINE_BY_KIND: Partial<Record<VoucherTemplateKind, string>> = {
+    REPAIR_TICKET: "Thank you for your trust!",
+    SHIPPING_SLIP: "Please return the device with this slip.",
+};
+
+const TERMS_TEXT_BY_KIND: Partial<Record<VoucherTemplateKind, string>> = {
+    REPAIR_TICKET: [
+        "1. Please keep this receipt. It is required for device collection.",
+        "2. Estimated cost may vary after diagnosis.",
+        "3. Uncollected devices after 30 days may incur storage charges.",
+        "4. We are not responsible for data loss during repair.",
+        "5. Warranty void if device is tampered with externally.",
+    ].join("\n"),
+};
 
 // Paper formats. Keep the strings stable — they're persisted in the DB and
 // read by the print route's `?paper=` override.
@@ -131,6 +187,10 @@ const DEFAULT_PAPER_BY_KIND: Record<VoucherTemplateKind, PaperFormat> = {
     REJECTION_OUT: "A4",
     SALES_ORDER: "A4",
     PURCHASE_ORDER: "A4",
+    // Repair ticket prints on the counter thermal roll like a job slip; the
+    // shipping slip is a formal A5/A4 hand-off document.
+    REPAIR_TICKET: "THERMAL_80MM",
+    SHIPPING_SLIP: "A4",
 };
 
 // Per-kind default for the voucher form's "Print after save" toggle
@@ -164,6 +224,10 @@ export const PRINT_AFTER_SAVE_DEFAULT_BY_KIND: Record<VoucherTemplateKind, boole
     REJECTION_OUT: false,
     SALES_ORDER: false,
     PURCHASE_ORDER: false,
+    // Repair documents print from their own screens, not a voucher form — these
+    // toggles are unused for them, kept only to satisfy the exhaustive record.
+    REPAIR_TICKET: false,
+    SHIPPING_SLIP: false,
 };
 
 /** Initial "Print after save" toggle state for a voucher kind (false if unknown). */
@@ -200,6 +264,9 @@ export const THERMAL_DEFAULT_BY_KIND: Record<VoucherTemplateKind, boolean> = {
     REJECTION_OUT:         false,
     SALES_ORDER:           false,
     PURCHASE_ORDER:        false,
+    // Unused for repair documents (they print from their own screens).
+    REPAIR_TICKET:         false,
+    SHIPPING_SLIP:         false,
 };
 
 /** Initial "Thermal" toggle state for a voucher kind (false → browser print). */
@@ -215,14 +282,20 @@ export interface VoucherTemplateDefaults {
     gstinLine: string;
     phoneLine: string;
     logoUrl: string;
-    showLogo: boolean;
-    showAddress: boolean;
-    showGstin: boolean;
-    showPhone: boolean;
-    showTaxSummary: boolean;
-    showMrp: boolean;
-    showSignature: boolean;
-    showQrCode: boolean;
+    // Every element has an A4 flag (base name) + a `…Thermal` flag. The base
+    // names are the A4 values; resolveTemplateForFormat() swaps in the thermal
+    // values for the 80mm slip so the renderers can stay format-agnostic.
+    showLogo: boolean;               showLogoThermal: boolean;
+    showHeaderText: boolean;         showHeaderTextThermal: boolean;   // brand-name line
+    showAddress: boolean;            showAddressThermal: boolean;      // Head-Office address
+    showBranchAddress: boolean;      showBranchAddressThermal: boolean;// issuing-branch address
+    showGstin: boolean;              showGstinThermal: boolean;
+    showPhone: boolean;              showPhoneThermal: boolean;
+    showTaxSummary: boolean;         showTaxSummaryThermal: boolean;
+    showMrp: boolean;                showMrpThermal: boolean;
+    showSignature: boolean;          showSignatureThermal: boolean;
+    showBarcode: boolean;            showBarcodeThermal: boolean;
+    showQrCode: boolean; // dormant (not yet rendered)
     termsText: string;
     footerLine: string;
     signatureLabel: string;
@@ -249,16 +322,20 @@ export function buildVoucherTemplateDefaults(kind: VoucherTemplateKind): Voucher
         gstinLine: "",
         phoneLine: "",
         logoUrl: "",
-        showLogo: false,
-        showAddress: true,
-        showGstin: true,
-        showPhone: true,
-        showTaxSummary: !NO_TAX_SUMMARY.has(kind),
-        showMrp: true,
-        showSignature: false,
+        // A4 (base) + thermal mirror of each default.
+        showLogo: false,                                 showLogoThermal: false,
+        showHeaderText: true,                            showHeaderTextThermal: true,
+        showAddress: true,                               showAddressThermal: true,
+        showBranchAddress: false,                        showBranchAddressThermal: false,
+        showGstin: true,                                 showGstinThermal: true,
+        showPhone: true,                                 showPhoneThermal: true,
+        showTaxSummary: !NO_TAX_SUMMARY.has(kind),       showTaxSummaryThermal: !NO_TAX_SUMMARY.has(kind),
+        showMrp: true,                                   showMrpThermal: true,
+        showSignature: WITH_SIGNATURE.has(kind),         showSignatureThermal: WITH_SIGNATURE.has(kind),
+        showBarcode: BARCODE_KINDS.has(kind),            showBarcodeThermal: BARCODE_KINDS.has(kind),
         showQrCode: false,
-        termsText: "",
-        footerLine: "Thank you · Visit again",
+        termsText: TERMS_TEXT_BY_KIND[kind] ?? "",
+        footerLine: FOOTER_LINE_BY_KIND[kind] ?? "Thank you · Visit again",
         signatureLabel: "Authorised Signatory",
         defaultPaper: DEFAULT_PAPER_BY_KIND[kind],
         paperWidthMm: 80,
@@ -269,4 +346,104 @@ export function buildVoucherTemplateDefaults(kind: VoucherTemplateKind): Voucher
 
 export function isVoucherTemplateKind(value: string): value is VoucherTemplateKind {
     return (VOUCHER_TEMPLATE_KINDS as readonly string[]).includes(value);
+}
+
+/**
+ * Structural shape of a `VoucherPrintTemplate` DB row. Booleans are optional /
+ * nullable so the mapper below tolerates the window before `prisma db push`
+ * adds a newly-introduced column (the value reads back as `undefined`).
+ */
+export type VoucherPrintTemplateRow = {
+    kind: string;
+    headerLine1: string; headerLine2: string; addressBlock: string;
+    gstinLine: string; phoneLine: string; logoUrl: string;
+    showLogo?: boolean | null;                showLogoThermal?: boolean | null;
+    showHeaderText?: boolean | null;          showHeaderTextThermal?: boolean | null;
+    showAddress?: boolean | null;             showAddressThermal?: boolean | null;
+    showBranchAddress?: boolean | null;       showBranchAddressThermal?: boolean | null;
+    showGstin?: boolean | null;               showGstinThermal?: boolean | null;
+    showPhone?: boolean | null;               showPhoneThermal?: boolean | null;
+    showTaxSummary?: boolean | null;          showTaxSummaryThermal?: boolean | null;
+    showMrp?: boolean | null;                 showMrpThermal?: boolean | null;
+    showSignature?: boolean | null;           showSignatureThermal?: boolean | null;
+    showQrCode?: boolean | null;
+    showBarcode?: boolean | null;             showBarcodeThermal?: boolean | null;
+    termsText: string; footerLine: string; signatureLabel: string;
+    defaultPaper: string; paperWidthMm: number; fontFamily: string; fontSizePx: number;
+};
+
+/**
+ * Pure DB-row → VoucherTemplateDefaults mapper. The SINGLE place that shapes a
+ * stored row into the render/edit template — reused by the print routes
+ * (voucherTemplate.ts) and the settings pages so they can never drift. Each
+ * boolean falls back to the kind's canonical default when the column is missing
+ * (`?? fallback.showX` only fires on null/undefined, never on a stored `false`).
+ */
+export function rowToVoucherTemplateDefaults(row: VoucherPrintTemplateRow): VoucherTemplateDefaults {
+    const kind = isVoucherTemplateKind(row.kind) ? row.kind : "SALE";
+    const f = buildVoucherTemplateDefaults(kind);
+    return {
+        kind,
+        headerLine1:  row.headerLine1,
+        headerLine2:  row.headerLine2,
+        addressBlock: row.addressBlock,
+        gstinLine:    row.gstinLine,
+        phoneLine:    row.phoneLine,
+        logoUrl:      row.logoUrl,
+        showLogo:                 row.showLogo                 ?? f.showLogo,
+        showLogoThermal:          row.showLogoThermal          ?? f.showLogoThermal,
+        showHeaderText:           row.showHeaderText           ?? f.showHeaderText,
+        showHeaderTextThermal:    row.showHeaderTextThermal    ?? f.showHeaderTextThermal,
+        showAddress:              row.showAddress              ?? f.showAddress,
+        showAddressThermal:       row.showAddressThermal       ?? f.showAddressThermal,
+        showBranchAddress:        row.showBranchAddress        ?? f.showBranchAddress,
+        showBranchAddressThermal: row.showBranchAddressThermal ?? f.showBranchAddressThermal,
+        showGstin:                row.showGstin                ?? f.showGstin,
+        showGstinThermal:         row.showGstinThermal         ?? f.showGstinThermal,
+        showPhone:                row.showPhone                ?? f.showPhone,
+        showPhoneThermal:         row.showPhoneThermal         ?? f.showPhoneThermal,
+        showTaxSummary:           row.showTaxSummary           ?? f.showTaxSummary,
+        showTaxSummaryThermal:    row.showTaxSummaryThermal    ?? f.showTaxSummaryThermal,
+        showMrp:                  row.showMrp                  ?? f.showMrp,
+        showMrpThermal:           row.showMrpThermal           ?? f.showMrpThermal,
+        showSignature:            row.showSignature            ?? f.showSignature,
+        showSignatureThermal:     row.showSignatureThermal     ?? f.showSignatureThermal,
+        showQrCode:               row.showQrCode               ?? f.showQrCode,
+        showBarcode:              row.showBarcode              ?? f.showBarcode,
+        showBarcodeThermal:       row.showBarcodeThermal       ?? f.showBarcodeThermal,
+        termsText:      row.termsText,
+        footerLine:     row.footerLine,
+        signatureLabel: row.signatureLabel,
+        defaultPaper:   isPaperFormat(row.defaultPaper) ? row.defaultPaper : f.defaultPaper,
+        paperWidthMm:   row.paperWidthMm,
+        fontFamily:     row.fontFamily,
+        fontSizePx:     row.fontSizePx,
+    };
+}
+
+/**
+ * Collapse the A4 + thermal flag pairs down to the single set of `showX` flags
+ * that applies to the given print format. The base `showX` names carry the A4
+ * values; for THERMAL_80MM we swap in each `showXThermal`. Renderers then read
+ * plain `showX` and stay format-agnostic. Call this once, at the point the
+ * paper format is known (ReceiptPreview + the bespoke repair prints).
+ */
+export function resolveTemplateForFormat(
+    t: VoucherTemplateDefaults,
+    format: PaperFormat,
+): VoucherTemplateDefaults {
+    if (format !== "THERMAL_80MM") return t; // base names are already the A4 flags
+    return {
+        ...t,
+        showLogo:          t.showLogoThermal,
+        showHeaderText:    t.showHeaderTextThermal,
+        showAddress:       t.showAddressThermal,
+        showBranchAddress: t.showBranchAddressThermal,
+        showGstin:         t.showGstinThermal,
+        showPhone:         t.showPhoneThermal,
+        showTaxSummary:    t.showTaxSummaryThermal,
+        showMrp:           t.showMrpThermal,
+        showSignature:     t.showSignatureThermal,
+        showBarcode:       t.showBarcodeThermal,
+    };
 }

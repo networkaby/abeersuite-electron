@@ -3,7 +3,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import {
     VOUCHER_TEMPLATE_KINDS,
     buildVoucherTemplateDefaults,
-    isPaperFormat,
+    rowToVoucherTemplateDefaults,
     type VoucherTemplateDefaults,
 } from "@/shared/lib/print/voucherTemplateDefaults";
 import { getOrganisation } from "@/shared/lib/org/getOrganisation";
@@ -23,32 +23,7 @@ export default async function VoucherTemplatesPage() {
     // entries to render).
     const templates: VoucherTemplateDefaults[] = VOUCHER_TEMPLATE_KINDS.map((kind) => {
         const r = byKind.get(kind);
-        if (!r) return buildVoucherTemplateDefaults(kind);
-        const fallback = buildVoucherTemplateDefaults(kind);
-        return {
-            kind,
-            headerLine1:    r.headerLine1,
-            headerLine2:    r.headerLine2,
-            addressBlock:   r.addressBlock,
-            gstinLine:      r.gstinLine,
-            phoneLine:      r.phoneLine,
-            logoUrl:        r.logoUrl,
-            showLogo:       r.showLogo,
-            showAddress:    r.showAddress,
-            showGstin:      r.showGstin,
-            showPhone:      r.showPhone,
-            showTaxSummary: r.showTaxSummary,
-            showMrp:        r.showMrp,
-            showSignature:  r.showSignature,
-            showQrCode:     r.showQrCode,
-            termsText:      r.termsText,
-            footerLine:     r.footerLine,
-            signatureLabel: r.signatureLabel,
-            defaultPaper:   isPaperFormat(r.defaultPaper) ? r.defaultPaper : fallback.defaultPaper,
-            paperWidthMm:   r.paperWidthMm,
-            fontFamily:     r.fontFamily,
-            fontSizePx:     r.fontSizePx,
-        };
+        return r ? rowToVoucherTemplateDefaults(r) : buildVoucherTemplateDefaults(kind);
     });
 
     return (

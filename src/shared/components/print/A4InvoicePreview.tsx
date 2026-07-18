@@ -21,6 +21,7 @@ import type { VoucherTemplateDefaults } from "@/shared/lib/print/voucherTemplate
 import { COMPANY_DETAILS } from "@/utils/constants-company-details";
 import { rupeesInWords } from "@/shared/lib/format/numberToWords";
 import type { ThermalReceiptSample } from "@/shared/components/print/ThermalReceiptPreview";
+import { BarcodeSvg } from "@/modules/inventory/components/BarcodeSvg";
 
 const fmtINR = (n: number) =>
     `Rs. ${n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -197,15 +198,21 @@ function inlineA4Styles(scope: string): string {
 interface InvoiceBodyProps {
     template: VoucherTemplateDefaults;
     sample:   ThermalReceiptSample;
+    /** Custom middle for bespoke documents (repair ticket / shipping slip /
+     *  payment slip). Replaces the invoice meta/lines/totals block; the
+     *  template-driven letterhead + footer chrome stay shared. */
+    body?:    React.ReactNode;
 }
 
-function InvoiceBody({ template, sample }: InvoiceBodyProps) {
+type A4ChromeProps = { template: VoucherTemplateDefaults; sample: ThermalReceiptSample };
+
+/** Template-driven letterhead (logo · brand · address · GSTIN · phone) + banner. */
+function A4Header({ template, sample }: A4ChromeProps) {
     const brand     = template.headerLine1 || COMPANY_DETAILS.brandName;
     const addrLines = template.addressBlock.split("\n").map((l) => l.trim()).filter(Boolean);
-    const grandTotal = sample.total ?? 0;
 
     return (
-        <div className="a4-sheet">
+        <>
             {/* 1 — Letterhead */}
             <div className="header row between" style={{ alignItems: "flex-start" }}>
                 <div className="col">
@@ -215,10 +222,16 @@ function InvoiceBody({ template, sample }: InvoiceBodyProps) {
                             <img src={template.logoUrl} alt="logo" style={{ maxHeight: 56, maxWidth: 160 }} />
                         )}
                         <div>
-                            <div className="brand">{brand}</div>
+                            {template.showHeaderText && <div className="brand">{brand}</div>}
                             {template.showAddress && addrLines.length > 0 && (
                                 <div className="small muted" style={{ marginTop: 3 }}>
                                     {addrLines.map((l, i) => <div key={i}>{l}</div>)}
+                                </div>
+                            )}
+                            {template.showBranchAddress && sample.branchAddress && (
+                                <div className="small muted" style={{ marginTop: 3 }}>
+                                    <span className="bold">Branch: </span>
+                                    {sample.branchAddress.split("\n").filter(Boolean).map((l, i) => <div key={i}>{l}</div>)}
                                 </div>
                             )}
                         </div>
@@ -240,11 +253,20 @@ function InvoiceBody({ template, sample }: InvoiceBodyProps) {
                 </div>
             </div>
 
-            {/* 2 — Title banner */}
+            {/* 2 — Title banner (document type — kept even when the brand-name
+                 text is hidden). */}
             {template.headerLine2 && (
                 <div className="banner">{template.headerLine2}</div>
             )}
+        </>
+    );
+}
 
+/** Default invoice middle — bill-to meta, line items, totals, HSN, amount-in-words. */
+function DefaultA4Middle({ template, sample }: A4ChromeProps) {
+    const grandTotal = sample.total ?? 0;
+    return (
+        <>
             {/* 3 — Bill-To / Invoice-Details */}
             <div className="meta-grid">
                 <div className="meta-card">
@@ -450,7 +472,14 @@ function InvoiceBody({ template, sample }: InvoiceBodyProps) {
             {sample.total !== null && (
                 <div className="words">{rupeesInWords(grandTotal)}</div>
             )}
+        </>
+    );
+}
 
+/** Template-driven footer chrome (notes · terms · signature · footer line · barcode). */
+function A4Footer({ template, sample }: A4ChromeProps) {
+    return (
+        <>
             {/* 7 — Notes + terms + signature + footer */}
             {sample.notes && (
                 <div className="terms"><span className="bold">Notes: </span>{sample.notes}</div>
@@ -468,6 +497,26 @@ function InvoiceBody({ template, sample }: InvoiceBodyProps) {
             {template.footerLine && (
                 <div className="footer-line">{template.footerLine}</div>
             )}
+
+            {/* Scannable voucher number — for pulling up the sale at return time. */}
+            {template.showBarcode && sample.reference && (
+                <div style={{ textAlign: "center", marginTop: 10 }}>
+                    <BarcodeSvg value={sample.reference} height={40} fontSize={13} margin={4} className="barcode" />
+                </div>
+            )}
+        </>
+    );
+}
+
+/** Assembles letterhead + (custom or default) middle + footer chrome, so a
+ *  bespoke document (repair ticket / shipping slip / payment slip) reuses the
+ *  template-driven letterhead + footer and only supplies its own `body`. */
+function InvoiceBody({ template, sample, body }: InvoiceBodyProps) {
+    return (
+        <div className="a4-sheet">
+            <A4Header template={template} sample={sample} />
+            {body ?? <DefaultA4Middle template={template} sample={sample} />}
+            <A4Footer template={template} sample={sample} />
         </div>
     );
 }
@@ -481,6 +530,10 @@ export interface A4InvoicePreviewProps {
     toolbar?:    React.ReactNode;
     /** <head><title> when not in previewMode. */
     docTitle?:   string;
+    /** Custom middle for bespoke documents (repair ticket / shipping slip /
+     *  payment slip). Replaces the invoice meta/lines/totals block; the
+     *  template-driven letterhead + footer chrome stay shared. */
+    body?:       React.ReactNode;
 }
 
 export default function A4InvoicePreview({
@@ -489,6 +542,7 @@ export default function A4InvoicePreview({
     previewMode = false,
     toolbar,
     docTitle,
+    body,
 }: A4InvoicePreviewProps) {
     if (previewMode) {
         return (
@@ -497,7 +551,7 @@ export default function A4InvoicePreview({
                 style={{ maxHeight: 720 }}
             >
                 <style>{inlineA4Styles(`.${A4_PREVIEW_SCOPE_CLASS}`)}</style>
-                <InvoiceBody template={template} sample={sample} />
+                <InvoiceBody template={template} sample={sample} body={body} />
             </div>
         );
     }
@@ -512,7 +566,7 @@ export default function A4InvoicePreview({
             </head>
             <body>
                 {toolbar}
-                <InvoiceBody template={template} sample={sample} />
+                <InvoiceBody template={template} sample={sample} body={body} />
             </body>
         </html>
     );

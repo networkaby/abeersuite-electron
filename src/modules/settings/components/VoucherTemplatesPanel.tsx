@@ -5,12 +5,13 @@ import axios from "axios";
 import { toast } from "sonner";
 import { extractApiError } from "@/shared/lib/api";
 import { parseDigitsInput } from "@/shared/lib/format";
-import { Loader2, RotateCcw, Save, X } from "lucide-react";
+import { Loader2, Maximize2, RotateCcw, Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import ReceiptPreview from "@/shared/components/print/ReceiptPreview";
 import {
     VOUCHER_TEMPLATE_KIND_GROUPS,
@@ -52,6 +53,7 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
     const [selectedKind, setSelectedKind] = useState<VoucherTemplateKind>("SALE");
     // null → follow the kind's `defaultPaper`; otherwise force-preview the chosen format.
     const [previewOverride, setPreviewOverride] = useState<PaperFormat | null>(null);
+    const [expanded, setExpanded] = useState(false);
     const [saving, setSaving] = useState(false);
     const [resetting, setResetting] = useState(false);
 
@@ -63,9 +65,14 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
     const sample = useMemo(() => buildSampleForKind(selectedKind), [selectedKind]);
 
     if (!current || !baseline) {
-        // Should never happen — the page hands us all 21 rows.
+        // Should never happen — the page hands us all rows.
         return <div className="text-sm text-muted-foreground">No templates loaded.</div>;
     }
+
+    // Which paper the preview shows, and the org-merged template both the inline
+    // preview and the full-size popup render.
+    const previewFormat = previewOverride ?? current.defaultPaper;
+    const mergedPreview = mergeTemplateWithOrg(current, organisation);
 
     function setField<K extends keyof VoucherTemplateDefaults>(
         field: K,
@@ -149,15 +156,24 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
                     workingMap={working}
                     savedMap={saved}
                 />
+                <div className="my-2 border-t" />
+                <KindGroup
+                    title="Repair"
+                    kinds={VOUCHER_TEMPLATE_KIND_GROUPS.repair}
+                    selected={selectedKind}
+                    onSelect={setSelectedKind}
+                    workingMap={working}
+                    savedMap={saved}
+                />
             </aside>
 
             {/* Right: editor + preview. Preview column is fixed-width so it
                  doesn't push the form into a sliver when A4 is selected
                  (A4 native = 210mm ≈ 793px). Preview itself fits inside via
                  CSS zoom. ─────────────────────────────────────────────── */}
-            <section className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-4">
+            <section className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_740px] gap-4">
                 {/* Form */}
-                <div className="rounded-lg border bg-card p-4 space-y-4 min-w-0">
+                <div className="rounded-lg border bg-card p-4 space-y-3 min-w-0">
                     <header className="flex items-center justify-between gap-2 flex-wrap">
                         <div>
                             <h2 className="text-sm font-semibold">
@@ -193,7 +209,7 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
                     </header>
 
                     {/* Header fields */}
-                    <fieldset className="space-y-3">
+                    <fieldset className="space-y-2.5">
                         <legend className="text-xs uppercase tracking-wide font-medium text-muted-foreground">
                             Header
                         </legend>
@@ -212,7 +228,7 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
                         </Field>
                         <Field label="Address block" hint="One address line per row. Blank → uses Organisation > Address.">
                             <Textarea
-                                rows={3}
+                                rows={2}
                                 value={current.addressBlock}
                                 onChange={(e) => setField("addressBlock", e.target.value)}
                                 placeholder={organisation.addressLine1 ? `${organisation.addressLine1}\n${[organisation.city, organisation.state, organisation.pinCode].filter(Boolean).join(", ")}` : ""}
@@ -234,11 +250,11 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
                                 />
                             </Field>
                         </div>
-                        <Field label="Logo URL (optional)" hint="Shown above the header if 'Show logo' is on. Blank → uses Organisation > Logo URL.">
+                        <Field label="Logo URL (optional)" hint="Shown above the header if 'Show logo' is on. Blank → Organisation > Logo URL → bundled /logo.svg.">
                             <Input
                                 value={current.logoUrl}
                                 onChange={(e) => setField("logoUrl", e.target.value)}
-                                placeholder={organisation.logoUrl || "https://…"}
+                                placeholder={organisation.logoUrl || "/logo.svg"}
                             />
                         </Field>
                     </fieldset>
@@ -248,19 +264,35 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
                         <legend className="text-xs uppercase tracking-wide font-medium text-muted-foreground">
                             Show / hide
                         </legend>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-2">
-                            <ToggleRow label="Logo"        on={current.showLogo}        onChange={(v) => setField("showLogo", v)} />
-                            <ToggleRow label="Address"     on={current.showAddress}     onChange={(v) => setField("showAddress", v)} />
-                            <ToggleRow label="Phone"       on={current.showPhone}       onChange={(v) => setField("showPhone", v)} />
-                            <ToggleRow label="GSTIN"       on={current.showGstin}       onChange={(v) => setField("showGstin", v)} />
-                            <ToggleRow label="Tax summary" on={current.showTaxSummary}  onChange={(v) => setField("showTaxSummary", v)} />
-                            <ToggleRow label="MRP (struck)" on={current.showMrp}       onChange={(v) => setField("showMrp", v)} />
-                            <ToggleRow label="Signature"   on={current.showSignature}   onChange={(v) => setField("showSignature", v)} />
+                        {/* Every element has an independent A4 (left) + Thermal
+                            (right) toggle — each print format respects its own
+                            template. */}
+                        <div className="grid grid-cols-2 gap-x-6 gap-y-2">
+                            <ToggleRow label="Logo · A4"      on={current.showLogo}        onChange={(v) => setField("showLogo", v)} />
+                            <ToggleRow label="Logo · Thermal" on={current.showLogoThermal} onChange={(v) => setField("showLogoThermal", v)} />
+                            <ToggleRow label="Header text · A4"      on={current.showHeaderText}        onChange={(v) => setField("showHeaderText", v)} />
+                            <ToggleRow label="Header text · Thermal" on={current.showHeaderTextThermal} onChange={(v) => setField("showHeaderTextThermal", v)} />
+                            <ToggleRow label="HO address · A4"      on={current.showAddress}        onChange={(v) => setField("showAddress", v)} />
+                            <ToggleRow label="HO address · Thermal" on={current.showAddressThermal} onChange={(v) => setField("showAddressThermal", v)} />
+                            <ToggleRow label="Branch address · A4"      on={current.showBranchAddress}        onChange={(v) => setField("showBranchAddress", v)} />
+                            <ToggleRow label="Branch address · Thermal" on={current.showBranchAddressThermal} onChange={(v) => setField("showBranchAddressThermal", v)} />
+                            <ToggleRow label="Phone · A4"      on={current.showPhone}        onChange={(v) => setField("showPhone", v)} />
+                            <ToggleRow label="Phone · Thermal" on={current.showPhoneThermal} onChange={(v) => setField("showPhoneThermal", v)} />
+                            <ToggleRow label="GSTIN · A4"      on={current.showGstin}        onChange={(v) => setField("showGstin", v)} />
+                            <ToggleRow label="GSTIN · Thermal" on={current.showGstinThermal} onChange={(v) => setField("showGstinThermal", v)} />
+                            <ToggleRow label="Tax summary · A4"      on={current.showTaxSummary}        onChange={(v) => setField("showTaxSummary", v)} />
+                            <ToggleRow label="Tax summary · Thermal" on={current.showTaxSummaryThermal} onChange={(v) => setField("showTaxSummaryThermal", v)} />
+                            <ToggleRow label="MRP (struck) · A4"      on={current.showMrp}        onChange={(v) => setField("showMrp", v)} />
+                            <ToggleRow label="MRP (struck) · Thermal" on={current.showMrpThermal} onChange={(v) => setField("showMrpThermal", v)} />
+                            <ToggleRow label="Signature · A4"      on={current.showSignature}        onChange={(v) => setField("showSignature", v)} />
+                            <ToggleRow label="Signature · Thermal" on={current.showSignatureThermal} onChange={(v) => setField("showSignatureThermal", v)} />
+                            <ToggleRow label="Barcode · A4"      on={current.showBarcode}        onChange={(v) => setField("showBarcode", v)} />
+                            <ToggleRow label="Barcode · Thermal" on={current.showBarcodeThermal} onChange={(v) => setField("showBarcodeThermal", v)} />
                         </div>
                     </fieldset>
 
                     {/* Footer */}
-                    <fieldset className="space-y-3">
+                    <fieldset className="space-y-2.5">
                         <legend className="text-xs uppercase tracking-wide font-medium text-muted-foreground">
                             Footer
                         </legend>
@@ -272,7 +304,7 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
                         </Field>
                         <Field label="Terms text" hint="Free-form; line breaks preserved.">
                             <Textarea
-                                rows={3}
+                                rows={2}
                                 value={current.termsText}
                                 onChange={(e) => setField("termsText", e.target.value)}
                             />
@@ -286,7 +318,7 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
                     </fieldset>
 
                     {/* Paper */}
-                    <fieldset className="space-y-3">
+                    <fieldset className="space-y-2.5">
                         <legend className="text-xs uppercase tracking-wide font-medium text-muted-foreground">
                             Paper
                         </legend>
@@ -331,46 +363,82 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
                     </fieldset>
                 </div>
 
-                {/* Preview — pinned to its column (xl: 360px); A4 native is
+                {/* Preview — pinned to its column (xl: 480px); A4 native is
                     210mm so we scale it down with CSS zoom to fit. Thermal
-                    (~320px) renders at native size. ─────────────────────── */}
+                    (~320px) renders at native size. Use "Full size" for a
+                    native-scale popup. ─────────────────────────────────── */}
                 <div className="space-y-2 min-w-0">
                     <div className="flex items-center justify-between gap-2 flex-wrap">
                         <p className="text-xs uppercase tracking-wide font-medium text-muted-foreground">
                             Live preview
                         </p>
-                        <div className="flex items-center gap-1 rounded-md border bg-card p-0.5 text-xs">
-                            <PreviewToggle
-                                label="As default"
-                                hint={`Showing ${current.defaultPaper === "A4" ? "A4" : "Thermal"} (default)`}
-                                active={previewOverride === null}
-                                onClick={() => setPreviewOverride(null)}
-                            />
-                            <PreviewToggle
-                                label="A4"
-                                active={previewOverride === "A4"}
-                                onClick={() => setPreviewOverride("A4")}
-                            />
-                            <PreviewToggle
-                                label="Thermal"
-                                active={previewOverride === "THERMAL_80MM"}
-                                onClick={() => setPreviewOverride("THERMAL_80MM")}
-                            />
+                        <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-1 rounded-md border bg-card p-0.5 text-xs">
+                                <PreviewToggle
+                                    label="As default"
+                                    hint={`Showing ${current.defaultPaper === "A4" ? "A4" : "Thermal"} (default)`}
+                                    active={previewOverride === null}
+                                    onClick={() => setPreviewOverride(null)}
+                                />
+                                <PreviewToggle
+                                    label="A4"
+                                    active={previewOverride === "A4"}
+                                    onClick={() => setPreviewOverride("A4")}
+                                />
+                                <PreviewToggle
+                                    label="Thermal"
+                                    active={previewOverride === "THERMAL_80MM"}
+                                    onClick={() => setPreviewOverride("THERMAL_80MM")}
+                                />
+                            </div>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="xs"
+                                onClick={() => setExpanded(true)}
+                                title="Open a full-size preview"
+                            >
+                                <Maximize2 size={13} /> Full size
+                            </Button>
                         </div>
                     </div>
-                    <ScaledPreviewBox format={previewOverride ?? current.defaultPaper}>
+                    <ScaledPreviewBox format={previewFormat}>
                         <ReceiptPreview
-                            format={previewOverride ?? current.defaultPaper}
+                            format={previewFormat}
                             // Merge with Organisation so blank template fields
                             // (no headerLine1, no GSTIN, etc.) fall back to the
                             // org-wide values exactly like the real print route.
-                            template={mergeTemplateWithOrg(current, organisation)}
+                            template={mergedPreview}
                             sample={sample}
                             previewMode
                         />
                     </ScaledPreviewBox>
                 </div>
             </section>
+
+            {/* Full-size preview popup — renders the same slip at native scale
+                (A4 ≈ 793px) inside a scrollable dialog. */}
+            <Dialog open={expanded} onOpenChange={setExpanded}>
+                {/* sm:max-w override beats shadcn's default sm:max-w-lg (512px),
+                    which otherwise clips the A4 (≈793px). */}
+                <DialogContent className="w-[95vw] max-w-[900px] sm:max-w-[900px] p-0 gap-0">
+                    <DialogHeader className="px-5 pt-5 pb-3">
+                        <DialogTitle>
+                            {KIND_LABEL[selectedKind]} — {previewFormat === "A4" ? "A4" : "Thermal 80mm"} preview
+                        </DialogTitle>
+                    </DialogHeader>
+                    <div className="overflow-auto bg-muted/20 px-5 pb-5" style={{ maxHeight: "82vh" }}>
+                        <div className="flex justify-center py-2">
+                            <ReceiptPreview
+                                format={previewFormat}
+                                template={mergedPreview}
+                                sample={sample}
+                                previewMode
+                            />
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
@@ -458,7 +526,7 @@ function Field({
     label, hint, children,
 }: { label: string; hint?: string; children: React.ReactNode }) {
     return (
-        <div className="space-y-1.5">
+        <div className="space-y-1">
             <Label className="text-xs font-medium">{label}</Label>
             {children}
             {hint && <p className="text-[10px] text-muted-foreground">{hint}</p>}
@@ -477,17 +545,18 @@ function ScaledPreviewBox({
 }: { format: PaperFormat; children: React.ReactNode }) {
     if (format === "A4") {
         return (
-            <div className="rounded-md border bg-muted/20 overflow-auto" style={{ maxHeight: 640 }}>
+            <div className="rounded-md border bg-muted/20 overflow-auto" style={{ maxHeight: 720 }}>
                 {/*  zoom shrinks layout box; widely supported in modern Chromium+Webkit
-                     and is now also implemented in Firefox 126+. */}
-                <div style={{ zoom: 0.42 }}>
+                     and is now also implemented in Firefox 126+. A4 native ≈ 793px →
+                     0.90 fits the ~740px preview column. */}
+                <div style={{ zoom: 0.90 }}>
                     {children}
                 </div>
             </div>
         );
     }
     return (
-        <div className="rounded-md border bg-muted/20 overflow-auto" style={{ maxHeight: 640 }}>
+        <div className="rounded-md border bg-muted/20 overflow-auto" style={{ maxHeight: 720 }}>
             <div className="flex justify-center p-2">{children}</div>
         </div>
     );
@@ -497,9 +566,11 @@ function ToggleRow({
     label, on, onChange,
 }: { label: string; on: boolean; onChange: (v: boolean) => void }) {
     return (
-        <label className="flex items-center justify-between gap-2 text-sm cursor-pointer min-w-0">
-            <span className="truncate">{label}</span>
+        // Switch sits immediately before its label so the pairing is unambiguous
+        // (justify-between pushed them to opposite cell edges — read as unrelated).
+        <label className="flex items-center gap-2 text-sm cursor-pointer min-w-0">
             <Switch checked={on} onCheckedChange={onChange} className="shrink-0" />
+            <span className="truncate">{label}</span>
         </label>
     );
 }

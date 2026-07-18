@@ -19,6 +19,7 @@
 
 import type { VoucherTemplateDefaults } from "@/shared/lib/print/voucherTemplateDefaults";
 import { COMPANY_DETAILS } from "@/utils/constants-company-details";
+import { BarcodeSvg } from "@/modules/inventory/components/BarcodeSvg";
 
 export interface ThermalReceiptLine {
     description: string;
@@ -77,6 +78,9 @@ export interface ThermalReceiptSample {
     hsnSummary?: ReceiptHsnRow[] | null;
     /// Buyer GSTIN — printed on the receipt for B2B tax invoices.
     partyGstin?: string | null;
+    /// Issuing-branch address block (multi-line). Rendered only when the
+    /// template's `showBranchAddress` flag is on and this is non-empty.
+    branchAddress?: string | null;
 }
 
 const fmtINR = (n: number) =>
@@ -134,14 +138,19 @@ function inlineStyleFromTemplate(t: VoucherTemplateDefaults, scope: string): str
 interface BodyProps {
     template: VoucherTemplateDefaults;
     sample:   ThermalReceiptSample;
+    /** Custom middle — repair ticket / shipping slip / payment slip supply their
+     *  own device / tender body here. When set, it replaces the invoice
+     *  ref/date/lines/totals block; the template-driven header + footer chrome
+     *  stay shared. */
+    body?:    React.ReactNode;
 }
 
-function ReceiptBody({ template, sample }: BodyProps) {
+/** Template-driven header chrome (logo · brand · address · GSTIN · phone). */
+function ThermalHeader({ template, sample }: { template: VoucherTemplateDefaults; sample: ThermalReceiptSample }) {
     const brand     = template.headerLine1 || COMPANY_DETAILS.brandName;
     const addrLines = template.addressBlock.split("\n").map((l) => l.trim()).filter(Boolean);
-
     return (
-        <div className="receipt">
+        <>
             {template.showLogo && template.logoUrl && (
                 <div className="center" style={{ marginBottom: 4 }}>
                     {/* Plain <img> so this works inside the standalone print HTML
@@ -151,9 +160,11 @@ function ReceiptBody({ template, sample }: BodyProps) {
                 </div>
             )}
 
-            <div className="center" style={{ fontWeight: "bold", fontSize: template.fontSizePx + 2 }}>
-                {brand}
-            </div>
+            {template.showHeaderText && (
+                <div className="center" style={{ fontWeight: "bold", fontSize: template.fontSizePx + 2 }}>
+                    {brand}
+                </div>
+            )}
             {template.headerLine2 && (
                 <div className="center small">{template.headerLine2}</div>
             )}
@@ -164,15 +175,27 @@ function ReceiptBody({ template, sample }: BodyProps) {
                     ))}
                 </div>
             )}
+            {template.showBranchAddress && sample.branchAddress && (
+                <div className="center small">
+                    {sample.branchAddress.split("\n").filter(Boolean).map((line, i) => (
+                        <div key={i}>{line}</div>
+                    ))}
+                </div>
+            )}
             {template.showPhone && template.phoneLine && (
                 <div className="center small">{template.phoneLine}</div>
             )}
             {template.showGstin && template.gstinLine && (
                 <div className="center small">{template.gstinLine}</div>
             )}
+        </>
+    );
+}
 
-            <div className="hr" />
-
+/** Default invoice middle — ref/date/customer meta, line-items table and totals. */
+function DefaultThermalMiddle({ template, sample }: { template: VoucherTemplateDefaults; sample: ThermalReceiptSample }) {
+    return (
+        <>
             <div className="row">
                 <span>{sample.reference}</span>
                 <span>{sample.date}</span>
@@ -287,7 +310,14 @@ function ReceiptBody({ template, sample }: BodyProps) {
                     <div className="small" style={{ whiteSpace: "pre-wrap" }}>{sample.notes}</div>
                 </>
             )}
+        </>
+    );
+}
 
+/** Template-driven footer chrome (terms · signature · footer line · barcode). */
+function ThermalFooter({ template, sample }: { template: VoucherTemplateDefaults; sample: ThermalReceiptSample }) {
+    return (
+        <>
             {template.termsText && (
                 <>
                     <div className="hr" />
@@ -303,6 +333,27 @@ function ReceiptBody({ template, sample }: BodyProps) {
 
             <div className="hr" />
             <div className="center small">{template.footerLine}</div>
+
+            {/* Scannable voucher number — for pulling up the sale at return time. */}
+            {template.showBarcode && sample.reference && (
+                <div className="center" style={{ marginTop: 6 }}>
+                    <BarcodeSvg value={sample.reference} height={30} fontSize={10} margin={2} className="barcode" />
+                </div>
+            )}
+        </>
+    );
+}
+
+/** Assembles header chrome + (custom or default) middle + footer chrome, so a
+ *  bespoke document (repair ticket / shipping slip / payment slip) reuses the
+ *  template-driven header + footer and only supplies its own `body`. */
+function ReceiptBody({ template, sample, body }: BodyProps) {
+    return (
+        <div className="receipt">
+            <ThermalHeader template={template} sample={sample} />
+            <div className="hr" />
+            {body ?? <DefaultThermalMiddle template={template} sample={sample} />}
+            <ThermalFooter template={template} sample={sample} />
         </div>
     );
 }
@@ -317,6 +368,10 @@ export interface ThermalReceiptPreviewProps {
     toolbar?:    React.ReactNode;
     /** Title used in <head><title> when not in previewMode. */
     docTitle?:   string;
+    /** Custom middle for bespoke documents (repair ticket / shipping slip /
+     *  payment slip). When set, replaces the invoice ref/date/lines/totals
+     *  block; the template-driven header + footer chrome stay shared. */
+    body?:       React.ReactNode;
 }
 
 export default function ThermalReceiptPreview({
@@ -325,6 +380,7 @@ export default function ThermalReceiptPreview({
     previewMode = false,
     toolbar,
     docTitle,
+    body,
 }: ThermalReceiptPreviewProps) {
     if (previewMode) {
         return (
@@ -339,7 +395,7 @@ export default function ThermalReceiptPreview({
                 }}
             >
                 <style>{inlineStyleFromTemplate(template, `.${THERMAL_PREVIEW_SCOPE_CLASS}`)}</style>
-                <ReceiptBody template={template} sample={sample} />
+                <ReceiptBody template={template} sample={sample} body={body} />
             </div>
         );
     }
@@ -354,7 +410,7 @@ export default function ThermalReceiptPreview({
             </head>
             <body>
                 {toolbar}
-                <ReceiptBody template={template} sample={sample} />
+                <ReceiptBody template={template} sample={sample} body={body} />
             </body>
         </html>
     );

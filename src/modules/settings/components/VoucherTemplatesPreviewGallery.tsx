@@ -60,6 +60,11 @@ export function VoucherTemplatesPreviewGallery({ templates, organisation }: Prop
                             <option key={k} value={k}>{VOUCHER_KIND_LABEL[k]}</option>
                         ))}
                     </optgroup>
+                    <optgroup label="Repair">
+                        {VOUCHER_TEMPLATE_KIND_GROUPS.repair.map((k) => (
+                            <option key={k} value={k}>{VOUCHER_KIND_LABEL[k]}</option>
+                        ))}
+                    </optgroup>
                 </select>
 
                 <div className="ml-auto flex items-center gap-3 text-xs text-muted-foreground">

@@ -2,13 +2,13 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { notFound } from "next/navigation";
 import { readPartyName } from "@/shared/lib/accountancy/partySnapshot";
 import { readSettlement } from "@/shared/lib/accountancy/settlement";
-import ReceiptButtons from "@/shared/components/ReceiptButtons";
-import ThermalAutoPrint from "@/modules/pos/components/ThermalAutoPrint";
+import PrintToolbar from "@/shared/components/print/PrintToolbar";
 import ReceiptPreview from "@/shared/components/print/ReceiptPreview";
 import type { ThermalReceiptSample, ThermalTaxBreakdown } from "@/shared/components/print/ThermalReceiptPreview";
 import { getVoucherTemplate, resolvePaperFormat } from "@/shared/lib/print/voucherTemplate";
-import { isVoucherTemplateKind } from "@/shared/lib/print/voucherTemplateDefaults";
+import { isVoucherTemplateKind, resolveTemplateForFormat } from "@/shared/lib/print/voucherTemplateDefaults";
 import { getOrganisation } from "@/shared/lib/org/getOrganisation";
+import { formatStructuredAddressBlock } from "@/shared/lib/org/organisationView";
 import { computeGstSplit } from "@/shared/lib/gst/computeGstSplit";
 import { stateNameForCode, isValidStateCode } from "@/shared/lib/gst/indianStates";
 import { computePriceLadder } from "@/modules/pos/lib/priceLadder";
@@ -24,7 +24,7 @@ export default async function PosReceiptPage({
     searchParams,
 }: {
     params:        Promise<{ id: string }>;
-    searchParams?: Promise<{ kind?: string; paper?: string; placeOfSupply?: string }>;
+    searchParams?: Promise<{ kind?: string; paper?: string; placeOfSupply?: string; autoprint?: string }>;
 }) {
     const { id } = await params;
     const sp = (await searchParams) ?? {};
@@ -41,7 +41,12 @@ export default async function PosReceiptPage({
 
     const voucherRow = await prisma.voucherDetail.findUnique({
         where: { id: Number(id) },
-        include: { universalVoucher: { select: { partyAccountId: true, voucherNo: true, date: true } } },   // 5D-4 party + 5D-6 ref + 5D-10 date
+        include: { universalVoucher: { select: {
+            partyAccountId: true, voucherNo: true, date: true,   // 5D-4 party + 5D-6 ref + 5D-10 date
+            // Issuing branch — its address is printed when the template's
+            // `showBranchAddress` flag is on (branch invoices in another GST state).
+            branch: { select: { addressLine1: true, addressLine2: true, city: true, state: true, pinCode: true } },
+        } } },
     });
     if (!voucherRow) notFound();
     // Phase 5 5C: goods lines hang off the spine.
@@ -239,6 +244,9 @@ export default async function PosReceiptPage({
         total:     Number(voucher.totalAmount),
         notes:     null,
         taxBreakdown,
+        branchAddress: voucher.universalVoucher?.branch
+            ? formatStructuredAddressBlock(voucher.universalVoucher.branch) || null
+            : null,
         discounts: ladder
             ? {
                 grossAtTag:   ladder.barcodeTotal,
@@ -260,7 +268,9 @@ export default async function PosReceiptPage({
         date:           voucher.universalVoucher!.date.toISOString(),   // 5D-10: date on spine
         customerName:   partyName,
         customerGstin:  partyGstin,
-        template,
+        // Thermal-resolved template rides along so the bridge has the shop's
+        // current config (logo/header/GSTIN toggles) on every job.
+        template:       resolveTemplateForFormat(template, "THERMAL_80MM"),
         lines: voucher.lines.map((l, i) => {
             const lad = ladder?.lines[i];
             const qty = Number(l.quantity);
@@ -288,14 +298,28 @@ export default async function PosReceiptPage({
         hsnSummary:     ladder?.hsn ?? null,
     } : null;
 
+    // Print rule: POS counter slips fire the combined bridge first (browser
+    // fallback), everything else prints in the browser; both offer the A4 /
+    // thermal picker so each format renders its own template. `?autoprint=0`
+    // (set by a format switch) suppresses the auto-fire.
+    const isThermal = format === "THERMAL_80MM";
+    const autoPrint = sp.autoprint !== "0";
+
     return (
         <ReceiptPreview
             format={format}
             template={template}
             sample={sample}
-            toolbar={posRelayPayload
-                ? <ThermalAutoPrint endpoint="/print/pos" payload={posRelayPayload} />
-                : <ReceiptButtons />}
+            toolbar={
+                <PrintToolbar
+                    bridge={posRelayPayload && isThermal && autoPrint
+                        ? { endpoint: "/print/pos", payload: posRelayPayload }
+                        : undefined}
+                    autoPrint={autoPrint}
+                    showFormatPicker
+                    currentPaper={format}
+                />
+            }
             docTitle={`Invoice ${voucher.universalVoucher?.voucherNo ?? ""}`}
         />
     );

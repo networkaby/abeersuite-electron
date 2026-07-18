@@ -10,6 +10,9 @@
 import type { ThermalReceiptSample } from "@/shared/components/print/ThermalReceiptPreview";
 import type { VoucherTemplateKind } from "@/shared/lib/print/voucherTemplateDefaults";
 
+// Sample issuing-branch address for previewing the "Branch address" toggle.
+const SAMPLE_BRANCH_ADDRESS = "Zone Road, Ward 5\nBongaigaon, Assam, 783380";
+
 export function buildSampleForKind(kind: VoucherTemplateKind): ThermalReceiptSample {
     const today = new Date().toISOString().slice(0, 10);
     const productLines: ThermalReceiptSample["lines"] = [
@@ -50,6 +53,7 @@ export function buildSampleForKind(kind: VoucherTemplateKind): ThermalReceiptSam
                 subtotal: 2694, taxAmount: 484.92, total: 3178.92,
                 notes: null,
                 taxBreakdown: intraBreakdown,
+                branchAddress: SAMPLE_BRANCH_ADDRESS,
             };
         case "POS":
             // Customer COUNTER RECEIPT — the price-hiding "Counter discount" ladder:
@@ -83,6 +87,7 @@ export function buildSampleForKind(kind: VoucherTemplateKind): ThermalReceiptSam
                 hsnSummary: [
                     { hsn: "8471", ratePct: 18, taxable: 1919.49, cgst: 172.76, sgst: 172.75, total: 2265 },
                 ],
+                branchAddress: SAMPLE_BRANCH_ADDRESS,
             };
         case "PURCHASE":
             return {
@@ -210,6 +215,30 @@ export function buildSampleForKind(kind: VoucherTemplateKind): ThermalReceiptSam
                 notes: kind === "POS_ORDER" ? "Counter order — deliver later." : "Quotation — valid 7 days.",
                 taxBreakdown: intraBreakdown,
             };
+        case "REPAIR_TICKET":
+            // Repair-shop job slip — no ledger table; the "lines" stand in for the
+            // device / problem body so the header + footer chrome can be previewed.
+            return {
+                reference: "TKT/0042", date: today,
+                partyName: "Sample Customer", partyPhone: "+91 90000 00000",
+                lines: [
+                    { description: "Device: Apple iPhone 12", quantity: 1, amount: 0 },
+                    { description: "Problem: Screen not turning on", quantity: 1, amount: 0 },
+                ],
+                subtotal: null, taxAmount: null, total: null,
+                notes: "Estimated ₹ 2,500 — subject to diagnosis.",
+            };
+        case "SHIPPING_SLIP":
+            return {
+                reference: "TKT/0042", date: today,
+                partyName: "ABC Service Centre", partyPhone: null,
+                lines: [
+                    { description: "Device: Apple iPhone 12", quantity: 1, amount: 0 },
+                    { description: "Accessories: charger, cover", quantity: 1, amount: 0 },
+                ],
+                subtotal: null, taxAmount: null, total: null,
+                notes: "Please return the device with this slip.",
+            };
     }
 }
 
@@ -237,4 +266,6 @@ export const VOUCHER_KIND_LABEL: Record<VoucherTemplateKind, string> = {
     REJECTION_OUT: "Rejection Out",
     SALES_ORDER: "Sales Order",
     PURCHASE_ORDER: "Purchase Order",
+    REPAIR_TICKET: "Repair Ticket",
+    SHIPPING_SLIP: "Shipping Slip",
 };

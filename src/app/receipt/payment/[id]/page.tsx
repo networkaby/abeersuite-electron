@@ -1,16 +1,38 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { notFound } from "next/navigation";
-import ThermalAutoPrint from "@/modules/pos/components/ThermalAutoPrint";
-import { getOrganisation } from "@/shared/lib/org/getOrganisation";
+import PrintToolbar from "@/shared/components/print/PrintToolbar";
+import ReceiptPreview from "@/shared/components/print/ReceiptPreview";
+import type { ThermalReceiptSample } from "@/shared/components/print/ThermalReceiptPreview";
+import { getVoucherTemplate } from "@/shared/lib/print/voucherTemplate";
+import { isPaperFormat, resolveTemplateForFormat } from "@/shared/lib/print/voucherTemplateDefaults";
 import { formatDateTime } from "@/shared/lib/format/formatDate";
 
-// Thermal (80mm) print page for a GL cash voucher — a RECEIPT (money collected
-// from a party at the counter, the POS "Rcv" flow) or a PAYMENT (cash paid out,
-// the POS "Exp" flow). ReceiptButtons auto-prints on mount. Opened in a new tab
-// from the dialog after the voucher posts.
-export default async function PaymentReceiptPage({ params }: { params: Promise<{ id: string }> }) {
+// Format-neutral money row (renders fine at 80mm and A4 widths). `big` styles
+// the grand-total line. Declared at module scope so it isn't re-created per render.
+function PayRow({ label, value, big }: { label: string; value: React.ReactNode; big?: boolean }) {
+    return (
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 8, margin: "3px 0" }}>
+            <span style={{ color: "#555", fontWeight: big ? 700 : 400, fontSize: big ? 15 : undefined }}>{label}</span>
+            <span style={{ textAlign: "right", fontWeight: big ? 700 : 400, fontSize: big ? 18 : undefined }}>{value}</span>
+        </div>
+    );
+}
+
+// Payment slip for a GL cash voucher — a RECEIPT (money collected from a party
+// at the counter, the POS "Rcv" flow) or a PAYMENT (cash paid out, the "Exp"
+// flow). It is the counter cash slip, so it prints thermal-first: the combined
+// bridge (/print/payment) fires on mount with a browser fallback that offers
+// the A4 / thermal picker — each format rendering its own template.
+export default async function PaymentReceiptPage({
+    params,
+    searchParams,
+}: {
+    params:        Promise<{ id: string }>;
+    searchParams?: Promise<{ paper?: string; autoprint?: string }>;
+}) {
     const { id } = await params;
+    const sp = (await searchParams) ?? {};
 
     // Phase 5 5E: the spine IS the financial voucher. Lines (VoucherGlLine) and the
     // party are scalar/id-only, so account names + the party are enriched via lookups
@@ -37,7 +59,6 @@ export default async function PaymentReceiptPage({ params }: { params: Promise<{
         lines: spine.lines.map((l) => ({ ...l, account: { name: acctById.get(l.accountId)?.name ?? "—" } })),
     };
 
-    const org = await getOrganisation();
     const isReceipt = voucher.type === "RECEIPT";
     const total = voucher.lines.filter((l) => l.type === "DEBIT").reduce((s, l) => s + Number(l.amount), 0);
 
@@ -61,11 +82,21 @@ export default async function PaymentReceiptPage({ params }: { params: Promise<{
         : (debitLine?.account.name ?? "—");
     const modeAccount  = isReceipt ? debitLine?.account.name : creditLine?.account.name;
     const fmtAmt = (n: number) => n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const reference = voucher.voucherNo ?? formatUvNo(voucher.id);
+
+    // Print template (RECEIPT / PAYMENT kind) — header / address / footer.
+    const template = await getVoucherTemplate(voucher.type);
+    // Counter slip → thermal-first; `?paper=` override + the picker can switch.
+    const format = sp.paper && isPaperFormat(sp.paper) ? sp.paper : "THERMAL_80MM";
+    const isThermal = format === "THERMAL_80MM";
+    const autoPrint = sp.autoprint !== "0";
 
     // Relay payload for the thermal bridge (/print/payment). Tender breakdown =
     // the money-side ledgers; the narration carries any arrear/advance note.
+    // `template` = the thermal-resolved template rides along on every job so the
+    // bridge always has the shop's current config (logo/header/GSTIN toggles).
     const relayPayload = {
-        reference:  (voucher.voucherNo ?? formatUvNo(voucher.id)),
+        reference,
         date:       voucher.date.toISOString(),
         party:      counterparty,
         tenders:    tenderLines.map((l) => ({ label: l.account.name, amount: Number(l.amount) })),
@@ -74,85 +105,70 @@ export default async function PaymentReceiptPage({ params }: { params: Promise<{
         title:      isReceipt ? "PAYMENT RECEIPT" : "PAYMENT VOUCHER",
         partyLabel: isReceipt ? "Received from" : "Paid for",
         totalLabel: isReceipt ? "Received" : "Paid",
+        template:   resolveTemplateForFormat(template, "THERMAL_80MM"),
     };
 
+    const sample: ThermalReceiptSample = {
+        reference,
+        date:       formatDateTime(voucher.date),
+        partyName:  counterparty,
+        partyPhone: isReceipt ? partyPhone : null,
+        lines:      [],
+        subtotal:   null,
+        taxAmount:  null,
+        total:      null,
+        notes:      null,
+    };
+
+    const hr = <div style={{ borderTop: "1px dashed #999", margin: "8px 0" }} />;
+
+    const body = (
+        <>
+            <PayRow label="No." value={<b>{reference}</b>} />
+            <PayRow label="Date" value={formatDateTime(voucher.date)} />
+            {hr}
+            <PayRow label={isReceipt ? "Received from" : "Paid for"} value={<b>{counterparty}</b>} />
+            {isReceipt && partyPhone && <PayRow label="Phone" value={partyPhone} />}
+            {isReceipt && tenderLines.length > 1 ? (
+                <>
+                    <PayRow label="Tenders" value="" />
+                    {tenderLines.map((l, i) => (
+                        <PayRow key={i} label={`· ${l.account.name}`} value={`₹${fmtAmt(Number(l.amount))}`} />
+                    ))}
+                </>
+            ) : modeAccount ? (
+                <PayRow label={isReceipt ? "Into" : "From"} value={modeAccount} />
+            ) : null}
+            {voucher.narration && <PayRow label="Note" value={voucher.narration} />}
+            {hr}
+            <PayRow label={isReceipt ? "Received" : "Paid"} value={`₹${fmtAmt(total)}`} big />
+            {hr}
+            {isReceipt && <div style={{ textAlign: "center", fontSize: 11 }}>Received with thanks</div>}
+            <div style={{ marginTop: 24 }}>
+                <div style={{ borderTop: "1px solid #000", paddingTop: 2, fontSize: 9, color: "#555" }}>
+                    {template.signatureLabel}
+                </div>
+            </div>
+        </>
+    );
+
     return (
-        <html>
-            <head>
-                <title>{isReceipt ? "Receipt" : "Payment"} {(voucher.voucherNo ?? formatUvNo(voucher.id))}</title>
-                <style>{`
-          * { margin: 0; padding: 0; box-sizing: border-box; }
-          body { font-family: 'Courier New', monospace; font-size: 12px; width: 80mm; margin: 0 auto; padding: 4mm; background: #fff; color: #000; }
-          .center { text-align: center; }
-          .bold { font-weight: bold; }
-          .large { font-size: 16px; }
-          .xl { font-size: 19px; }
-          .small { font-size: 10px; }
-          .muted { color: #555; }
-          .divider { border-top: 1px dashed #000; margin: 6px 0; }
-          .row { display: flex; justify-content: space-between; gap: 8px; margin: 3px 0; }
-          .row .v { text-align: right; }
-          .signature-line { border-top: 1px solid #000; margin-top: 22px; padding-top: 2px; font-size: 9px; color: #555; }
-          @media print { .no-print { display: none !important; } body { margin: 0; padding: 2mm; } }
-        `}</style>
-            </head>
-            <body>
-                <ThermalAutoPrint endpoint="/print/payment" payload={relayPayload} />
-
-                <div className="center">
-                    <div className="bold large">{org.brandName}</div>
-                    <div className="small muted">{isReceipt ? "PAYMENT RECEIPT" : "PAYMENT VOUCHER"}</div>
-                </div>
-
-                <div className="divider" />
-
-                <div className="row"><span className="muted">No.</span><span className="v bold">{(voucher.voucherNo ?? formatUvNo(voucher.id))}</span></div>
-                <div className="row"><span className="muted">Date</span><span className="v">{formatDateTime(voucher.date)}</span></div>
-
-                <div className="divider" />
-
-                <div className="row">
-                    <span className="muted">{isReceipt ? "Received from" : "Paid for"}</span>
-                    <span className="v bold">{counterparty}</span>
-                </div>
-                {isReceipt && partyPhone && (
-                    <div className="row"><span className="muted">Phone</span><span className="v">{partyPhone}</span></div>
-                )}
-                {isReceipt && tenderLines.length > 1 ? (
-                    <>
-                        <div className="row"><span className="muted">Tenders</span><span className="v" /></div>
-                        {tenderLines.map((l, i) => (
-                            <div className="row" key={i}>
-                                <span className="muted">· {l.account.name}</span>
-                                <span className="v">₹{fmtAmt(Number(l.amount))}</span>
-                            </div>
-                        ))}
-                    </>
-                ) : modeAccount ? (
-                    <div className="row"><span className="muted">{isReceipt ? "Into" : "From"}</span><span className="v">{modeAccount}</span></div>
-                ) : null}
-                {voucher.narration && (
-                    <div className="row"><span className="muted">Note</span><span className="v">{voucher.narration}</span></div>
-                )}
-
-                <div className="divider" />
-
-                <div className="row">
-                    <span className="bold large">{isReceipt ? "Received" : "Paid"}</span>
-                    <span className="v bold xl">₹{fmtAmt(total)}</span>
-                </div>
-
-                <div className="divider" />
-
-                {isReceipt && <div className="center small">Received with thanks</div>}
-
-                <div style={{ marginTop: "24px" }}>
-                    <div className="signature-line">Authorised Signature</div>
-                </div>
-
-                <div className="divider" />
-                <div className="center small muted">{org.brandName}{org.phone ? ` · ${org.phone}` : ""}</div>
-            </body>
-        </html>
+        <ReceiptPreview
+            format={format}
+            template={template}
+            sample={sample}
+            body={body}
+            toolbar={
+                <PrintToolbar
+                    bridge={isThermal && autoPrint
+                        ? { endpoint: "/print/payment", payload: relayPayload }
+                        : undefined}
+                    autoPrint={autoPrint}
+                    showFormatPicker
+                    currentPaper={format}
+                />
+            }
+            docTitle={`${isReceipt ? "Receipt" : "Payment"} ${reference}`}
+        />
     );
 }

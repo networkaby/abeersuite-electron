@@ -9,7 +9,7 @@ import {
     Clock, User, Building2, AlertTriangle,
     Printer, Lock, Eye, NotebookPen, ArrowRightLeft,
     Check, X, MessageSquare, RefreshCw, ArrowRight, CornerUpLeft, Flag,
-    GitBranch, ExternalLink, Bug,
+    GitBranch, ExternalLink, Bug, Truck, ChevronDown,
     type LucideIcon,
 } from "lucide-react";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -26,6 +26,8 @@ import WarrantyConvertModal from "@/modules/repairing/components/WarrantyConvert
 import TicketOwnershipPanel from "@/modules/repairing/components/TicketOwnershipPanel";
 import PipelineTransferModal from "@/modules/repairing/components/PipelineTransferModal";
 import TicketInvoicesPanel from "@/modules/repairing/components/TicketInvoicesPanel";
+import ShippingSlipModal from "@/modules/repairing/components/ShippingSlipModal";
+import BillDetailsPanel, { type BillDraft } from "@/modules/repairing/components/BillDetailsPanel";
 import WorkActions from "@/modules/repairing/components/WorkActions";
 import DevOverridePanel from "@/modules/repairing/components/DevOverridePanel";
 import { resolveTicketSource, type WorkArg } from "@/modules/repairing/lib/ticketSources";
@@ -68,7 +70,7 @@ interface Ticket {
         brand: string;
         model: string;
         problem: string;
-        account: { name: string; phone?: string | null; email?: string | null } | null;
+        account: { id: number; name: string; phone?: string | null; email?: string | null } | null;
     };
     // Soft, unstructured data bag — collected outcome values, spawnedFrom breadcrumb,
     // etc. Shown raw in the dev-only debug panel (no end-user UI yet).
@@ -150,6 +152,8 @@ export default function TicketDetailPage() {
     const [showAddNote, setShowAddNote] = useState(false);
     const [showWarrantyModal, setShowWarrantyModal] = useState(false);
     const [showTransferModal, setShowTransferModal] = useState(false);
+    const [showShippingSlip, setShowShippingSlip] = useState(false);
+    const [showDev, setShowDev] = useState(false);
     const [showRefEdit, setShowRefEdit] = useState(false);
     const [refValue, setRefValue] = useState("");
     const [savingRef, setSavingRef] = useState(false);
@@ -236,6 +240,30 @@ export default function TicketDetailPage() {
         }
         return null;
     })();
+
+    // A shipping slip snapshot already saved on this ticket (context bag) → offer reprint.
+    const hasShippingSlip = !!(
+        ticket.context &&
+        typeof ticket.context === "object" &&
+        (ticket.context as Record<string, unknown>).shippingSlip
+    );
+
+    // "Create Shipping Slip" shows at the send-to-service stage. Gated on the
+    // STATUS label (status-only model) — not the old `escalated` boolean, which
+    // only the legacy Escalate modal sets. Any status named "… Send to Service"
+    // qualifies, so renamed / extra stages keep working.
+    const isSendToService = /send to service/i.test(ticket.ticketStatus.label ?? "");
+
+    // Ongoing draft bill saved on the ticket (context bag).
+    const savedBill =
+        (ticket.context &&
+            typeof ticket.context === "object" &&
+            ((ticket.context as Record<string, unknown>).billDraft as Partial<BillDraft> | undefined)) ||
+        undefined;
+    const billDraft: BillDraft = {
+        products: savedBill?.products ?? [],
+        charges: savedBill?.charges ?? [],
+    };
 
     return (
         <div className="flex h-full flex-col">
@@ -354,6 +382,14 @@ export default function TicketDetailPage() {
                             </div>
                         </div>
 
+                        {/* Ongoing draft bill — stock products + service charges (no ledger impact) */}
+                        <BillDetailsPanel
+                            ticketId={ticket.id}
+                            customerAccountId={ticket.device.account?.id ?? null}
+                            initial={billDraft}
+                            onSaved={fetchTicket}
+                        />
+
                         {/* Escalation Info */}
                         {ticket.escalated && (
                             <div className="rounded-lg border border-border bg-muted p-6">
@@ -462,41 +498,56 @@ export default function TicketDetailPage() {
 
                     {/* Right Column — Actions */}
                     <div className="space-y-4">
-                        {/* DEV (admin-gated): raw Ticket.context — the soft data bag where
-                            collected outcome values + spawnedFrom land. Lets a developer see
-                            the context/outcome flow that has no end-user UI yet. */}
+                        {/* DEV (admin-gated): collapsed by default to save space. One toggle
+                            reveals both the raw Ticket.context bag and the status/worker
+                            override escape-hatch. */}
                         {canDebug && (
-                            <div className="space-y-2 rounded-lg border border-dashed border-amber-400/70 bg-amber-50/50 p-4 dark:border-amber-700/60 dark:bg-amber-950/20">
-                                <h2 className="flex items-center gap-2 text-sm font-semibold text-amber-700 dark:text-amber-300">
-                                    <Bug size={14} /> Ticket context
-                                    <span className="ml-auto rounded bg-amber-200/70 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-800 dark:bg-amber-900/60 dark:text-amber-200">dev</span>
-                                </h2>
-                                {ticket.context && Object.keys(ticket.context).length > 0 ? (
-                                    <div className="space-y-1">
-                                        {Object.entries(ticket.context).map(([k, v]) => (
-                                            <div key={k} className="flex gap-2 text-xs">
-                                                <span className="shrink-0 font-mono text-amber-800/80 dark:text-amber-200/80">{k}</span>
-                                                <span className="min-w-0 flex-1 wrap-break-word text-right font-mono text-foreground">
-                                                    {v === null || v === undefined ? "—" : typeof v === "object" ? JSON.stringify(v) : String(v)}
-                                                </span>
-                                            </div>
-                                        ))}
+                            <div className="rounded-lg border border-dashed border-amber-400/70 bg-amber-50/40 dark:border-amber-700/60 dark:bg-amber-950/10">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowDev((v) => !v)}
+                                    className="flex w-full items-center gap-2 px-4 py-2 text-sm font-semibold text-amber-700 dark:text-amber-300"
+                                    aria-expanded={showDev}
+                                >
+                                    <Bug size={14} /> Dev tools
+                                    <span className="ml-auto flex items-center gap-2">
+                                        <span className="rounded bg-amber-200/70 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-800 dark:bg-amber-900/60 dark:text-amber-200">dev</span>
+                                        <ChevronDown size={14} className={`transition-transform ${showDev ? "rotate-180" : ""}`} />
+                                    </span>
+                                </button>
+                                {showDev && (
+                                    <div className="space-y-3 border-t border-amber-400/40 p-3 dark:border-amber-700/40">
+                                        {/* Raw Ticket.context — the soft data bag where collected
+                                            outcome values + spawnedFrom land. */}
+                                        <div className="space-y-2">
+                                            <h3 className="text-[11px] font-semibold uppercase tracking-wide text-amber-700/90 dark:text-amber-300/90">Ticket context</h3>
+                                            {ticket.context && Object.keys(ticket.context).length > 0 ? (
+                                                <div className="space-y-1">
+                                                    {Object.entries(ticket.context).map(([k, v]) => (
+                                                        <div key={k} className="flex gap-2 text-xs">
+                                                            <span className="shrink-0 font-mono text-amber-800/80 dark:text-amber-200/80">{k}</span>
+                                                            <span className="min-w-0 flex-1 wrap-break-word text-right font-mono text-foreground">
+                                                                {v === null || v === undefined ? "—" : typeof v === "object" ? JSON.stringify(v) : String(v)}
+                                                            </span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <p className="text-xs text-muted-foreground">Empty — no context stored yet.</p>
+                                            )}
+                                        </div>
+                                        {/* Force the ticket onto any (status, worker) pair in its
+                                            pipeline with no routing — escape hatch for a stuck ticket. */}
+                                        <DevOverridePanel
+                                            ticketId={ticket.id}
+                                            pipelineId={ticket.pipelineId}
+                                            currentStatusId={ticket.status}
+                                            currentWorkerId={ticket.workerId ?? null}
+                                            onChanged={fetchTicket}
+                                        />
                                     </div>
-                                ) : (
-                                    <p className="text-xs text-muted-foreground">Empty — no context stored yet.</p>
                                 )}
                             </div>
-                        )}
-                        {/* DEV (admin-gated): force the ticket onto any (status, worker) pair in
-                            its pipeline with no routing — the escape hatch for a stuck ticket. */}
-                        {canDebug && (
-                            <DevOverridePanel
-                                ticketId={ticket.id}
-                                pipelineId={ticket.pipelineId}
-                                currentStatusId={ticket.status}
-                                currentWorkerId={ticket.workerId ?? null}
-                                onChanged={fetchTicket}
-                            />
                         )}
                         {/* TEMP (dev): the "Current work" card duplicates the Work Inbox so we
                             don't navigate between two pages. Hidden to avoid confusion — flip the
@@ -675,6 +726,22 @@ export default function TicketDetailPage() {
                                 )
                             )}
 
+                            {isSendToService && !ticket.ticketStatus.isTerminal && (
+                                <Button onClick={() => setShowShippingSlip(true)} variant="outline" className={actionBtnBase}>
+                                    <Truck size={15} /> Create Shipping Slip
+                                </Button>
+                            )}
+
+                            {hasShippingSlip && (
+                                <Link
+                                    href={`/shipping-slip/${ticket.id}`}
+                                    target="_blank"
+                                    className={`${actionBtnBase} inline-flex`}
+                                >
+                                    <Truck size={15} /> Print Shipping Slip
+                                </Link>
+                            )}
+
                             <Link
                                 href={`/receipt/${ticket.id}`}
                                 target="_blank"
@@ -699,6 +766,19 @@ export default function TicketDetailPage() {
                     ticketId={ticket.id}
                     currentPipelineLabel={ticket.pipeline?.label}
                     onClose={() => { setShowTransferModal(false); fetchTicket(); }}
+                />
+            )}
+            {showShippingSlip && (
+                <ShippingSlipModal
+                    ticketId={ticket.id}
+                    device={{
+                        type: ticket.device.type,
+                        brand: ticket.device.brand,
+                        model: ticket.device.model,
+                        problem: ticket.device.problem,
+                    }}
+                    onClose={() => setShowShippingSlip(false)}
+                    onSaved={fetchTicket}
                 />
             )}
             {showWarrantyModal && (

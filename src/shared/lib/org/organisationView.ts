@@ -109,13 +109,24 @@ export function unpackOrgRow(row: {
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 
-/** Render the address as a multi-line block (one line per non-empty piece). */
+/** Render any structured Indian address as a multi-line block (one line per
+ *  non-empty piece). Shared by the Organisation (HO) address and the per-branch
+ *  address on invoices. */
+export function formatStructuredAddressBlock(a: {
+    addressLine1?: string | null;
+    addressLine2?: string | null;
+    city?:         string | null;
+    state?:        string | null;
+    pinCode?:      string | null;
+    country?:      string | null;
+}): string {
+    const cityLine = [a.city, a.state, a.pinCode].filter(Boolean).join(", ");
+    return [a.addressLine1, a.addressLine2, cityLine, a.country]
+        .filter(Boolean)
+        .join("\n");
+}
+
+/** Render the org (Head-Office) address as a multi-line block. */
 export function formatAddressBlock(org: OrganisationView): string {
-    const cityLine = [org.city, org.state, org.pinCode].filter(Boolean).join(", ");
-    return [
-        org.addressLine1,
-        org.addressLine2,
-        cityLine,
-        org.country,
-    ].filter(Boolean).join("\n");
+    return formatStructuredAddressBlock(org);
 }

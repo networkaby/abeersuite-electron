@@ -3,6 +3,7 @@ import {
     buildVoucherTemplateDefaults,
     isVoucherTemplateKind,
     isPaperFormat,
+    rowToVoucherTemplateDefaults,
     type PaperFormat,
     type VoucherTemplateDefaults,
 } from "@/shared/lib/print/voucherTemplateDefaults";
@@ -24,31 +25,7 @@ async function readVoucherTemplateRaw(kind: string): Promise<VoucherTemplateDefa
     }
     const row = await prisma.voucherPrintTemplate.findUnique({ where: { kind } });
     if (!row) return buildVoucherTemplateDefaults(kind);
-    const fallback = buildVoucherTemplateDefaults(kind);
-    return {
-        kind,
-        headerLine1:    row.headerLine1,
-        headerLine2:    row.headerLine2,
-        addressBlock:   row.addressBlock,
-        gstinLine:      row.gstinLine,
-        phoneLine:      row.phoneLine,
-        logoUrl:        row.logoUrl,
-        showLogo:       row.showLogo,
-        showAddress:    row.showAddress,
-        showGstin:      row.showGstin,
-        showPhone:      row.showPhone,
-        showTaxSummary: row.showTaxSummary,
-        showMrp:        row.showMrp,
-        showSignature:  row.showSignature,
-        showQrCode:     row.showQrCode,
-        termsText:      row.termsText,
-        footerLine:     row.footerLine,
-        signatureLabel: row.signatureLabel,
-        defaultPaper:   isPaperFormat(row.defaultPaper) ? row.defaultPaper : fallback.defaultPaper,
-        paperWidthMm:   row.paperWidthMm,
-        fontFamily:     row.fontFamily,
-        fontSizePx:     row.fontSizePx,
-    };
+    return rowToVoucherTemplateDefaults(row);
 }
 
 /**
