@@ -155,6 +155,12 @@ export type PostVoucherInput = {
             accountId:   number;
             amount:      Prisma.Decimal | number;
             description?: string | null;
+            /// Optional GST carried by this charge (a POS-service row): `amount`
+            /// is the NET income and this tax joins the voucher's tax legs
+            /// (CGST/SGST/IGST split). The charge's gross (net + tax) must be
+            /// included in totalAmount by the caller for the JE to balance.
+            /// Absent/0 = a plain untaxed charge — behaviour unchanged.
+            taxAmount?:  Prisma.Decimal | number | null;
             account?: {
                 normalBalance: "DEBIT" | "CREDIT" | null;
                 group: { type: "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE" | null } | null;
@@ -280,9 +286,17 @@ export async function buildInvVoucherGlLines(
     const taxLegs: TaxLeg[] = [];
     let unledgered = 0; // tax amount that couldn't find a ledger — folds into body
 
-    if (taxAmount > 0) {
+    // GST carried by tax-bearing charge rows (POS services: Cr income NET +
+    // this tax on the voucher's tax legs). 0 for every pre-existing caller —
+    // the split below then runs on voucher.taxAmount exactly as before.
+    const chargesTax = (voucher.charges ?? []).reduce(
+        (s, ch) => s + Math.max(0, toNumber(ch.taxAmount ?? 0)), 0,
+    );
+    const totalTax = taxAmount + chargesTax;
+
+    if (totalTax > 0) {
         const split = computeGstSplit({
-            taxAmount,
+            taxAmount: totalTax,
             sellerStateCode,
             buyerStateCode,
         });

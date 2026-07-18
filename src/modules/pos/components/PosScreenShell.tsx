@@ -10,7 +10,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { Search, ShoppingCart, Plus, Minus, Trash2 } from "lucide-react";
+import { Search, ShoppingCart, Plus, Minus, Trash2, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -54,6 +54,8 @@ export function PosScreenShell({
     /** Mode-specific dialogs (checkout, payment link). */
     children?: React.ReactNode;
 }) {
+    // "+ Add service charge" dropdown (Sale mode) — pick a catalogue service.
+    const [serviceMenuOpen, setServiceMenuOpen] = useState(false);
     return (
         <div className="flex h-full w-full flex-row">
           {/* Main column — everything except the far-right action rail. */}
@@ -232,7 +234,10 @@ export function PosScreenShell({
                                 </div>
                             ) : (
                                 <ul className="divide-y divide-border">
-                                    {b.cart.map((l) => {
+                                    {/* Display order: product lines first, service lines after —
+                                        render-only sort; the underlying cart array is untouched
+                                        so the productId-keyed setters keep working. */}
+                                    {[...b.cart.filter((l) => l.kind !== "service"), ...b.cart.filter((l) => l.kind === "service")].map((l) => {
                                         // Enter on any cart-line input → refocus the product search so the
                                         // cashier can scan the next item without reaching for the mouse.
                                         const enterToNextProduct = (e: React.KeyboardEvent) => {
@@ -243,14 +248,24 @@ export function PosScreenShell({
                                         // sees the same figure the customer's print/display shows, and
                                         // can spot products missing barcode/MRP data at a glance.
                                         const barcode = l.barcodePaise ? l.barcodePaise / 100 : null;
+                                        const isService = l.kind === "service";
+                                        // Line total the customer pays for this row — qty × tax-inclusive price.
+                                        const unitInclusive = l.unitPrice * (1 + (l.taxRate ?? 0) / 100);
+                                        const lineTotal = l.qty * unitInclusive;
                                         return (
-                                            <li key={l.productId} className="px-4 py-2.5">
-                                                {/* Wide layout: name | warranty | note | mrp | qty | price | trash all on one line.
+                                            <li key={l.productId} className={`px-4 py-2.5 ${isService ? "border-l-2 border-l-sky-400 bg-sky-50/60 dark:bg-sky-950/20" : ""}`}>
+                                                {/* Wide layout: name | warranty | note | mrp | qty | price | total | trash all on one line.
                                                     Narrow (<lg) stacks name above and the rest below. */}
-                                                <div className="grid items-center gap-2 lg:grid-cols-[minmax(180px,1.4fr)_70px_minmax(160px,1fr)_130px_auto_110px_auto]">
+                                                <div className="grid items-center gap-2 lg:grid-cols-[minmax(180px,1.4fr)_70px_minmax(160px,1fr)_130px_auto_110px_minmax(90px,auto)_auto]">
                                                     <div className="min-w-0">
                                                         <div className="truncate text-sm font-medium">{l.name}</div>
-                                                        <div className="font-mono text-[10px] text-muted-foreground">{l.sku}</div>
+                                                        {isService ? (
+                                                            <Badge className="mt-0.5 border-transparent bg-sky-100 text-[9px] text-sky-700 dark:bg-sky-900/60 dark:text-sky-300">
+                                                                <Wrench size={9} className="mr-0.5" /> Service
+                                                            </Badge>
+                                                        ) : (
+                                                            <div className="font-mono text-[10px] text-muted-foreground">{l.sku}</div>
+                                                        )}
                                                     </div>
                                                     <div className="hidden lg:flex justify-center">
                                                         {l.warrantyLabel ? (
@@ -266,6 +281,11 @@ export function PosScreenShell({
                                                         placeholder="Note — colour, config…"
                                                         className="h-8 text-sm"
                                                     />
+                                                    {isService ? (
+                                                        <div className="hidden lg:flex flex-col items-end text-[10px] leading-tight text-muted-foreground">
+                                                            <span className="uppercase tracking-wider">{l.taxRate > 0 ? `GST ${l.taxRate}%` : "No tax"}</span>
+                                                        </div>
+                                                    ) : (
                                                     <div className="hidden lg:flex flex-col items-end gap-0.5 text-[10px] leading-tight text-muted-foreground">
                                                         <div className="flex items-center gap-1.5">
                                                             <span className="uppercase tracking-wider">MRP</span>
@@ -276,6 +296,7 @@ export function PosScreenShell({
                                                             <span>{barcode != null ? formatInr(barcode) : "—"}</span>
                                                         </div>
                                                     </div>
+                                                    )}
                                                     <div className="flex items-center gap-1">
                                                         <Button variant="ghost" size="icon-sm" onClick={() => b.setQty(l.productId, l.qty - 1)}><Minus size={12} /></Button>
                                                         <Input
@@ -292,10 +313,12 @@ export function PosScreenShell({
                                                         every edit so calcLineTotals keeps receiving an exclusive
                                                         rate. For tax-free items (taxRate=0) the two values match. */}
                                                     <PriceInput
-                                                        inclusive={l.unitPrice * (1 + (l.taxRate ?? 0) / 100)}
+                                                        inclusive={unitInclusive}
                                                         onCommit={(inc) => b.setPrice(l.productId, inc / (1 + (l.taxRate ?? 0) / 100))}
                                                         onKeyDown={enterToNextProduct}
                                                     />
+                                                    {/* Line total — qty × inclusive price. */}
+                                                    <div className="text-right text-sm font-semibold tabular-nums">{formatInr(lineTotal)}</div>
                                                     <Button variant="ghost" size="icon-sm" onClick={() => b.setQty(l.productId, 0)} title="Remove">
                                                         <Trash2 size={12} className="text-destructive" />
                                                     </Button>
@@ -306,6 +329,55 @@ export function PosScreenShell({
                                 </ul>
                             )}
                         </div>
+
+                        {/* Add service charge — pick a service from the catalogue
+                            (Settings → POS Services). Products come from the scan box
+                            above; services come from here (they have no barcode). Adds a
+                            GL-only service line (income ledger + GST). Sale mode only —
+                            Order / Estimate don't carry service lines yet. */}
+                        {active === "sale" && (
+                            <div className="relative shrink-0 border-t border-border px-4 py-2">
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setServiceMenuOpen((o) => !o)}
+                                    className="h-7 gap-1 px-1.5 text-primary hover:text-primary"
+                                >
+                                    <Wrench size={14} /> Add service charge
+                                </Button>
+                                {serviceMenuOpen && (
+                                    <>
+                                        {/* click-away backdrop */}
+                                        <div className="fixed inset-0 z-10" onClick={() => setServiceMenuOpen(false)} />
+                                        <ul className="absolute bottom-full left-4 z-20 mb-1 max-h-64 w-80 overflow-y-auto rounded-md border border-border bg-popover shadow-lg">
+                                            {b.allServices.length === 0 ? (
+                                                <li className="px-3 py-2 text-xs text-muted-foreground">
+                                                    No services yet — add them in Settings → POS Services.
+                                                </li>
+                                            ) : (
+                                                b.allServices.map((s) => (
+                                                    <li key={s.id}>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => { b.addServiceToCart(s); setServiceMenuOpen(false); }}
+                                                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted"
+                                                        >
+                                                            <Wrench size={12} className="shrink-0 text-sky-600 dark:text-sky-400" />
+                                                            <span className="flex-1 truncate">{s.name}</span>
+                                                            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{s.taxRate > 0 ? `GST ${s.taxRate}%` : "No tax"}</span>
+                                                            <span className="w-14 text-right text-xs text-muted-foreground">
+                                                                {s.defaultPricePaise != null ? `₹${(s.defaultPricePaise / 100).toLocaleString("en-IN")}` : "—"}
+                                                            </span>
+                                                        </button>
+                                                    </li>
+                                                ))
+                                            )}
+                                        </ul>
+                                    </>
+                                )}
+                            </div>
+                        )}
 
                         {/* Totals + checkout — shared PosBillSummary. Checkout button is
                             injected per mode via checkoutSlot. */}
@@ -347,8 +419,6 @@ export function PosScreenShell({
                             gcBusy={b.gcBusy}
                             giftCardApplied={b.giftCardApplied}
                             payableTotal={b.payableTotal}
-                            adjustmentsOpen={b.adjustmentsOpen}
-                            setAdjustmentsOpen={b.setAdjustmentsOpen}
                             shippingAmt={b.shippingAmt}
                             shippingAmtStr={b.shippingAmtStr}
                             setShippingAmtStr={b.setShippingAmtStr}
@@ -358,9 +428,6 @@ export function PosScreenShell({
                             setRoundOffStr={b.setRoundOffStr}
                             roundOffManuallyEdited={b.roundOffManuallyEdited}
                             setRoundOffManuallyEdited={b.setRoundOffManuallyEdited}
-                            charges={b.charges}
-                            setCharges={b.setCharges}
-                            chargeAccounts={b.chargeAccounts}
                             cart={b.cart}
                             checkoutSlot={checkoutSlot}
                         />

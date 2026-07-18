@@ -94,12 +94,26 @@ const chargeSchema = z.object({
     amount:      z.number().refine((n) => Math.abs(n) >= 0.005, "Charge amount must be non-zero"),
 });
 
+// POS-service line (Settings → POS Services catalogue). The client sends only
+// the id + qty + tax-EXCLUSIVE unit price; the server re-resolves the income
+// ledger + GST rate from the catalogue — never trusted from the browser. Posts
+// GL-only (Cr income net + Cr Output GST as a tax-bearing charge); no stock.
+const serviceLineSchema = z.object({
+    serviceId:   z.number().int().positive(),
+    description: z.string().trim().max(200).optional(),
+    quantity:    z.number().positive(),
+    unitPrice:   z.number().min(0),
+});
+
 const createSchema = z.object({
     accountId: z.number().int().positive(),                                       // customer AR account
     issueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     dueDate:   z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     notes:     z.string().trim().optional(),
-    lines:     z.array(lineSchema).min(1, "At least one line item required"),
+    // Goods lines. A sale may also be services-only — the cross-field refine
+    // below enforces "at least one line OR one service".
+    lines:     z.array(lineSchema).default([]),
+    services:  z.array(serviceLineSchema).default([]),
     payments:  z.array(paymentSchema).min(1, "At least one payment line required"),
     shippingAmt: z.number().min(0).default(0),
     roundOff:    z.number().default(0),  // signed
@@ -130,6 +144,9 @@ const createSchema = z.object({
     // Convert-to-sale: the source estimate/order this POS sale was rung up from.
     // Stored as refVoucherId so the source flips to "Converted".
     sourceVoucherId: z.number().int().positive().optional(),
+}).refine((d) => d.lines.length + d.services.length >= 1, {
+    message: "At least one line item or service required",
+    path: ["lines"],
 });
 
 class GlPostFailedError extends Error {
@@ -227,6 +244,45 @@ export async function POST(req: Request) {
             .map((m) => ({ id: m.id, threshold: Number(m.threshold), bonusPoints: m.bonusPoints, label: m.label, issuesCouponTemplateId: m.issuesCouponTemplateId }))
         : [];
 
+    // ── Resolve POS services (server-authoritative ledger + GST rate) ─────
+    // Each service line becomes a TAX-BEARING charge row: Cr income ledger for
+    // the NET, its GST joining the voucher's Output CGST/SGST legs (see
+    // buildInvVoucherGlLines). No stock, no loyalty earn, no coupon base.
+    const serviceIds = [...new Set(body.services.map((s) => s.serviceId))];
+    const serviceById = new Map(
+        (serviceIds.length === 0 ? [] : await prisma.posService.findMany({
+            where:  { id: { in: serviceIds }, isActive: true },
+            select: { id: true, name: true, accountId: true, gstRate: { select: { rate: true } } },
+        })).map((s) => [s.id, s]),
+    );
+    const missingService = body.services.find((s) => !serviceById.has(s.serviceId));
+    if (missingService) {
+        return NextResponse.json(
+            { error: "A service on the bill no longer exists or is inactive. Remove it and retry.", code: "POS_SERVICE_NOT_FOUND" },
+            { status: 422 },
+        );
+    }
+    // Net/tax stay UNROUNDED here — exactly like product lines (calcLineTotals) —
+    // so the server total matches the client's float-for-float and the ±1p
+    // payment guard never trips on multi-line rounding drift. The engine rounds
+    // every GL leg once at the write boundary.
+    const serviceCharges = body.services.map((s) => {
+        const svc = serviceById.get(s.serviceId)!;
+        const rate = svc.gstRate ? Number(svc.gstRate.rate) : 0;
+        const net = s.quantity * s.unitPrice;
+        const tax = (net * rate) / 100;
+        const qtyTag = s.quantity !== 1 ? ` × ${s.quantity}` : "";
+        return {
+            accountId:   svc.accountId,
+            description: `Service: ${svc.name}${s.description ? ` · ${s.description}` : ""}${qtyTag}`,
+            amount:      net,
+            taxAmount:   tax,
+        };
+    });
+    // Customer-facing value of the services (net + GST) — rides chargesNet so
+    // totalAmount, the tier/loyalty floors, and the JE all see the same bill.
+    const serviceGross = serviceCharges.reduce((s, c) => s + c.amount + c.taxAmount, 0);
+
     // ── Validate line items + payment totals ──────────────────────────────
     // goodsValue = pre-tax goods (Σ qty × unit price). grossTaxAmount = the tag GST
     // before any tier discount — drives the loyalty floors + coupon-stacking math.
@@ -266,7 +322,7 @@ export async function POST(req: Request) {
     // min-invoice-to-redeem floors (the bill the customer would pay before any
     // loyalty redemption is applied).
     const manualChargesNet = body.charges.reduce((s, c) => s + c.amount, 0);
-    const invoiceValueGross = goodsValue + grossTaxAmount + body.shippingAmt - tierDiscount + body.roundOff + manualChargesNet;
+    const invoiceValueGross = goodsValue + grossTaxAmount + body.shippingAmt - tierDiscount + body.roundOff + manualChargesNet + serviceGross;
 
     // ── Pre-load loyalty earn context (reads, outside the tx) ──────────────
     // Resolves each line's taxonomy + the earn-rule index (earn multiplier AND
@@ -440,13 +496,16 @@ export async function POST(req: Request) {
     const loyaltyCharge = redemptionRupees > 0 && loyaltyConfig.redeemExpenseAccountId != null
         ? { accountId: loyaltyConfig.redeemExpenseAccountId, description: `Loyalty: ${redeemPoints} pts redeemed`, amount: -redemptionRupees }
         : null;
-    const allCharges = [
+    const allCharges: Array<{ accountId: number; description?: string; amount: number; taxAmount?: number }> = [
         ...body.charges,
+        ...serviceCharges,
         ...(loyaltyCharge ? [loyaltyCharge] : []),
         ...(couponCharge ? [couponCharge] : []),
     ];
 
-    const chargesNet = allCharges.reduce((s, c) => s + c.amount, 0);
+    // chargesNet feeds totalAmount, so tax-bearing rows (services) contribute
+    // their GROSS — the GL splits it back into net (charge leg) + GST (tax legs).
+    const chargesNet = allCharges.reduce((s, c) => s + c.amount + (c.taxAmount ?? 0), 0);
     // Σ per-line pre-tax tier discount — stored as the voucher-level discountAmt so
     // the engine still posts the "Discount Allowed" leg (P&L visibility kept). To keep
     // the JE balanced with NET lines, subtotal is stored GROSS of that discount:
@@ -556,9 +615,15 @@ export async function POST(req: Request) {
     // That crumb is not a real credit balance, but left unrounded it slips past
     // the ±0.01 payment-match guard yet still trips checkCreditLimit's
     // `additionalDebit > 0` test — wrongly rejecting a fully-paid sale to a
-    // zero-credit-limit customer with NO_CREDIT_ALLOWED. Matches the >0.005
-    // epsilon the AR-tender branch below already uses.
-    const onCredit = Math.max(0, round2(totalAmount - paymentTotal));
+    // zero-credit-limit customer with NO_CREDIT_ALLOWED.
+    //
+    // round2 alone is NOT enough: a residue of ~0.005 (common once a GST-bearing
+    // charge is on the bill) rounds UP to 0.01, which is still > 0 and still
+    // trips the guard. The underpay guard above already tolerates a 1-paise
+    // shortfall as "paid in full", so anything within that same ±0.01 tolerance
+    // is a rounding crumb — not an on-credit sale. Zero it to stay consistent.
+    const rawOnCredit = round2(totalAmount - paymentTotal);
+    const onCredit = rawOnCredit > 0.01 ? rawOnCredit : 0;
 
     // POS is always counter-pickup → place of supply = branch state regardless
     // of customer's address (CGST Act §10(1)(c)). Resolve once, outside tx.
@@ -691,7 +756,7 @@ export async function POST(req: Request) {
                 totalAmount: voucher.totalAmount,
                 // Tenders/charges straight from the in-memory input (no DB round-trip).
                 tenders:     tenderPayload.map((t) => ({ accountId: t.accountId, amount: Number(t.amount), method: t.method, reference: t.reference })),
-                charges:     allCharges.map((c) => ({ accountId: c.accountId, amount: Number(c.amount), description: c.description })),
+                charges:     allCharges.map((c) => ({ accountId: c.accountId, amount: Number(c.amount), description: c.description, taxAmount: c.taxAmount ?? null })),
                 sellerStateCode,
                 buyerStateCode: sellerStateCode, // counter pickup → intra-state
             });

@@ -191,6 +191,9 @@ export async function PATCH(req: Request, { params }: Params) {
             accountId:    number;
             description?: string;
             amount:       number;
+            /// GST on a tax-bearing charge (POS-service row) — preserved through
+            /// the edit round-trip so the re-post keeps its tax legs.
+            taxAmount?:   number;
         }[];
         tenders?: {
             accountId: number;
@@ -230,7 +233,9 @@ export async function PATCH(req: Request, { params }: Params) {
             });
             return { ...l, rate, discountAmt: lineDiscountAmt, taxAmount, amount };
         });
-        const chargesNet = (charges ?? []).reduce((s, c) => s + Number(c.amount), 0);
+        // Tax-bearing charges (POS services) count at GROSS — net + their GST —
+        // mirroring /api/pos/sale, so totalAmount still balances the re-posted JE.
+        const chargesNet = (charges ?? []).reduce((s, c) => s + Number(c.amount) + Number(c.taxAmount ?? 0), 0);
         totals = calcVoucherTotals(
             computedLines,
             shippingAmt ?? Number(existing.shippingAmt),

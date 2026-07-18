@@ -11,25 +11,19 @@
 
 import type { Dispatch, SetStateAction } from "react";
 import {
-    ChevronDown, ChevronRight, Award, Plus, Tag, X, Sparkles, CreditCard,
+    Award, Plus, Tag, X, Sparkles, CreditCard,
 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/components/GlAccountCombobox";
 import { formatInr, parseDecimalInput, parseDigitsInput } from "@/shared/lib/format";
-import { newChargeRow, type Snapshot, type CartLine, type ChargeRow, type CouponHit } from "@/modules/pos/lib/posDraftTypes";
+import { type Snapshot, type CartLine, type CouponHit } from "@/modules/pos/lib/posDraftTypes";
 import { type TierResult } from "@/shared/lib/pricing";
 
 type GiftCardState = { id: number; code: string; balance: number };
 
-// Local text-input sanitisers — identical to the ones in the screens (small, pure).
-function parseAmt(s: string): number {
-    const n = Number(s);
-    return Number.isFinite(n) ? n : 0;
-}
+// Local text-input sanitiser — identical to the one in the screens (small, pure).
 function numSignedStr(s: string): string {
     const sign = s.trimStart().startsWith("-") ? "-" : "";
     return sign + parseDecimalInput(s);
@@ -84,9 +78,8 @@ export type PosBillSummaryProps = {
     giftCardApplied: number;
     payableTotal: number;
 
-    // Adjustments (shipping / round-off / charges)
-    adjustmentsOpen: boolean;
-    setAdjustmentsOpen: Dispatch<SetStateAction<boolean>>;
+    // Adjustments (shipping / round-off) — always visible, no toggle. Charges
+    // moved out to the cart area (PosScreenShell).
     shippingAmt: number;
     shippingAmtStr: string;
     setShippingAmtStr: (v: SetStateAction<string>) => void;
@@ -96,9 +89,6 @@ export type PosBillSummaryProps = {
     setRoundOffStr: (v: SetStateAction<string>) => void;
     roundOffManuallyEdited: boolean;
     setRoundOffManuallyEdited: (v: SetStateAction<boolean>) => void;
-    charges: ChargeRow[];
-    setCharges: (v: SetStateAction<ChargeRow[]>) => void;
-    chargeAccounts: GlAccount[];
 
     // Cart + the mode-specific checkout button
     cart: CartLine[];
@@ -113,9 +103,9 @@ export function PosBillSummary({
     couponBlockedLoyalty, couponCodeStr, setCouponCodeStr, applyCoupon, couponBusy,
     giftCard, setGiftCard, giftCardCodeStr, setGiftCardCodeStr, applyGiftCard, gcBusy,
     giftCardApplied, payableTotal,
-    adjustmentsOpen, setAdjustmentsOpen, shippingAmt, shippingAmtStr, setShippingAmtStr,
-    roundOff, autoRoundOff, roundOffStr, setRoundOffStr, roundOffManuallyEdited,
-    setRoundOffManuallyEdited, charges, setCharges, chargeAccounts,
+    shippingAmtStr, setShippingAmtStr,
+    autoRoundOff, roundOffStr, setRoundOffStr, roundOffManuallyEdited,
+    setRoundOffManuallyEdited,
     cart, checkoutSlot,
 }: PosBillSummaryProps) {
     return (
@@ -129,29 +119,6 @@ export function PosBillSummary({
                 middle of this bar so it no longer needs its own row. */}
             <div className="flex items-center gap-3 text-sm">
                 <span>Subtotal</span>
-                {/* Adjustments toggle — inline on the Subtotal line so it
-                    no longer eats its own row. The Shipping / Round-off /
-                    Charges form drops in below when opened. */}
-                {(() => {
-                    const adjustmentsCount =
-                        (shippingAmt > 0 ? 1 : 0) +
-                        (Math.abs(roundOff) >= 0.005 ? 1 : 0) +
-                        charges.filter((c) => c.accountId !== null && Math.abs(parseAmt(c.amount)) >= 0.005).length;
-                    return (
-                        <button
-                            type="button"
-                            onClick={() => setAdjustmentsOpen((o) => !o)}
-                            className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
-                            title="Adjustments — Shipping · Round-off · Charges"
-                        >
-                            {adjustmentsOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                            Adjustments
-                            {adjustmentsCount > 0 && (
-                                <Badge variant="secondary" className="ml-0.5 h-4 px-1.5 text-[10px]">{adjustmentsCount}</Badge>
-                            )}
-                        </button>
-                    );
-                })()}
                 <div className="ml-auto flex items-center gap-3">
                     {tax > 0.005 && (
                         <span className="text-[11px] font-normal tabular-nums text-muted-foreground">
@@ -253,8 +220,9 @@ export function PosBillSummary({
                 );
             })()}
 
-            {/* Coupon + Gift card share one row to save vertical space. */}
-            <div className="flex flex-wrap items-center gap-x-6 gap-y-1">
+            {/* Coupon · Gift card · Shipping · Round-off — one row, split into two
+                groups by a vertical divider (offers | adjustments). */}
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-xs">
                 {/* ── Coupon ────────────────────────────────────────
                 Code entry; the server validates + owns the ₹ value.
                 A non-stackable coupon replaces the tier discount and
@@ -329,103 +297,63 @@ export function PosBillSummary({
                         )}
                     </div>
                 )}
+
+                {/* Divider between the offers group (coupon / gift card) and the
+                    adjustments group (shipping / round-off). Hidden on a narrow
+                    wrap so it never dangles at the start of a wrapped line. */}
+                {snapshot && <div className="hidden h-4 w-px shrink-0 self-center bg-border sm:block" />}
+
+                {/* Shipping */}
+                <div className="flex items-center gap-2">
+                    <Label htmlFor="pos-shipping" className="text-muted-foreground">Shipping</Label>
+                    <Input
+                        id="pos-shipping"
+                        type="text"
+                        inputMode="decimal"
+                        value={shippingAmtStr}
+                        onChange={(e) => setShippingAmtStr(parseDecimalInput(e.target.value))}
+                        placeholder="0.00"
+                        className="h-7 w-24 text-right text-xs"
+                    />
+                </div>
+                {/* Round-off */}
+                <div className="flex items-center gap-2">
+                    <Label htmlFor="pos-roundoff" className="text-muted-foreground">
+                        Round-off
+                        {!roundOffManuallyEdited && Math.abs(autoRoundOff) >= 0.005 && (
+                            <span className="ml-1 text-[10px] text-emerald-600">auto</span>
+                        )}
+                    </Label>
+                    <Input
+                        id="pos-roundoff"
+                        type="text"
+                        inputMode="decimal"
+                        value={
+                            roundOffManuallyEdited
+                                ? roundOffStr
+                                : (Math.abs(autoRoundOff) >= 0.005 ? autoRoundOff.toFixed(2) : "")
+                        }
+                        onChange={(e) => {
+                            setRoundOffManuallyEdited(true);
+                            setRoundOffStr(numSignedStr(e.target.value));
+                        }}
+                        placeholder="auto"
+                        className="h-7 w-24 text-right text-xs"
+                        title="Auto-rounded to whole rupee. Type a value to override; clear to restore auto."
+                        onBlur={(e) => {
+                            // Empty field → back to auto mode.
+                            if (e.target.value.trim() === "") {
+                                setRoundOffManuallyEdited(false);
+                                setRoundOffStr("");
+                            }
+                        }}
+                    />
+                </div>
             </div>
             {giftCardApplied > 0.005 && (
                 <div className="flex items-center justify-between text-xs font-medium">
                     <span className="text-muted-foreground">Pay (after gift card)</span>
                     <span className="tabular-nums">{formatInr(payableTotal)}</span>
-                </div>
-            )}
-
-            {/* Adjustments form — Shipping + Round-off + Charges.
-                Toggled from the inline "Adjustments" control on the
-                Subtotal line above (kept off its own row to save space).
-                Mirrors office SALE (TradingVoucherPage). */}
-            {adjustmentsOpen && (
-                <div className="space-y-2 rounded border border-border/60 bg-muted/30 px-2 py-2">
-                    <div className="grid grid-cols-[1fr_auto] items-center gap-2">
-                        <Label htmlFor="pos-shipping" className="text-xs text-muted-foreground">Shipping</Label>
-                        <Input
-                            id="pos-shipping"
-                            type="text"
-                            inputMode="decimal"
-                            value={shippingAmtStr}
-                            onChange={(e) => setShippingAmtStr(parseDecimalInput(e.target.value))}
-                            placeholder="0.00"
-                            className="h-7 w-28 text-right text-xs"
-                        />
-                    </div>
-                    <div className="grid grid-cols-[1fr_auto] items-center gap-2">
-                        <Label htmlFor="pos-roundoff" className="text-xs text-muted-foreground">
-                            Round-off
-                            {!roundOffManuallyEdited && Math.abs(autoRoundOff) >= 0.005 && (
-                                <span className="ml-1 text-[10px] text-emerald-600">auto</span>
-                            )}
-                        </Label>
-                        <Input
-                            id="pos-roundoff"
-                            type="text"
-                            inputMode="decimal"
-                            value={
-                                roundOffManuallyEdited
-                                    ? roundOffStr
-                                    : (Math.abs(autoRoundOff) >= 0.005 ? autoRoundOff.toFixed(2) : "")
-                            }
-                            onChange={(e) => {
-                                setRoundOffManuallyEdited(true);
-                                setRoundOffStr(numSignedStr(e.target.value));
-                            }}
-                            placeholder="auto"
-                            className="h-7 w-28 text-right text-xs"
-                            title="Auto-rounded to whole rupee. Type a value to override; clear to restore auto."
-                            onBlur={(e) => {
-                                // Empty field → back to auto mode.
-                                if (e.target.value.trim() === "") {
-                                    setRoundOffManuallyEdited(false);
-                                    setRoundOffStr("");
-                                }
-                            }}
-                        />
-                    </div>
-                    <div className="space-y-1.5 border-t border-border/60 pt-2">
-                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Additional charges</p>
-                        {charges.map((c, idx) => (
-                            <div key={c.id} className="grid grid-cols-[1fr_auto_auto] items-center gap-1.5">
-                                <GlAccountCombobox
-                                    value={c.accountId}
-                                    onChange={(acc) => setCharges((rows) => rows.map((r, i) => i === idx ? { ...r, accountId: acc?.id ?? null } : r))}
-                                    accounts={chargeAccounts}
-                                    placeholder="Ledger (e.g. Packing Income)"
-                                    className="h-7 text-xs"
-                                />
-                                <Input
-                                    type="text"
-                                    inputMode="decimal"
-                                    value={c.amount}
-                                    onChange={(e) => setCharges((rows) => rows.map((r, i) => i === idx ? { ...r, amount: numSignedStr(e.target.value) } : r))}
-                                    placeholder="0 (− for opposite)"
-                                    className="h-7 w-24 text-right text-xs"
-                                    title="Positive = Cr (Income); Negative = Dr (Expense / reduces bill)"
-                                />
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon-sm"
-                                    onClick={() => setCharges((rows) => rows.filter((_, i) => i !== idx))}
-                                    title="Remove"
-                                >
-                                    <X size={12} />
-                                </Button>
-                            </div>
-                        ))}
-                        <button
-                            type="button"
-                            onClick={() => setCharges((rows) => [...rows, newChargeRow()])}
-                            className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                        >
-                            + Add charge
-                        </button>
-                    </div>
                 </div>
             )}
 

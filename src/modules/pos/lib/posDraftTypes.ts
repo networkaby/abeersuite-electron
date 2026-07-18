@@ -73,8 +73,27 @@ export type ProductOption = {
     warrantyTerm?: { name: string; durationDays: number | null } | null;
 };
 
+/// One row of /api/pos/services — the active POS service catalogue. Services are
+/// NOT in the product search (they have no barcode); they are added from the
+/// "+ Add service charge" button in the cart area and become kind="service"
+/// cart lines (GL-only on sale — income ledger + GST, never stock).
+export type PosServiceOption = {
+    id: number;
+    name: string;
+    /// GST % from the service's configured GstRate (0 = untaxed).
+    taxRate: number;
+    /// Optional default TAX-INCLUSIVE price (paise); null = cashier types it.
+    defaultPricePaise: number | null;
+};
+
 export type CartLine = {
+    /// Cart-line key. Products carry the real InvProduct id; POS-service lines
+    /// carry −posServiceId (negative, so the two id spaces never collide and
+    /// the productId-keyed qty/price/description setters work unchanged).
     productId: number; sku: string; name: string;
+    /// "service" marks a POS-service line (GL-only — Cr income + Cr GST, no
+    /// stock). Absent/undefined = a normal product line.
+    kind?: "service";
     qty: number; unitPrice: number; description: string;
     /// Snapshotted at add-to-cart time so changing a product's GST later
     /// doesn't retroactively shift prices in an active sale.

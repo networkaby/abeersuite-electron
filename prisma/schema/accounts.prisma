@@ -67,6 +67,8 @@ model Account {
   counterTills             PosCounter[]               @relation("CounterTill")
   // Counter non-cash payment accounts (UPI/Card/gateway…) that settle to this ledger.
   posPaymentAccounts       PosCounterPaymentAccount[] @relation("PosPayAccountLedger")
+  // POS service catalogue rows (Settings → POS Services) whose income posts here.
+  posServices              PosService[]               @relation("PosServiceLedger")
   // Loyalty reverse rels
   loyalty                  LoyaltyAccount?            @relation("AccountLoyalty")
   loyaltyRedeemConfig      LoyaltyConfig[]            @relation("LoyaltyRedeemLedger")

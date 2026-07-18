@@ -24,7 +24,9 @@ import { extractApiError } from "@/shared/lib/api";
 import { formatInr } from "@/shared/lib/format";
 import type { PartySearchAndCreateHandle } from "@/shared/components/PartySearchAndCreate";
 
-type EditMeta = { charges: { accountId: number; description?: string; amount: number }[]; discountAmt: number; discountPct: number | null; shippingAmt: number; roundOff: number };
+// Charge rows carry taxAmount through the edit round-trip — POS-service rows
+// are tax-bearing charges (Cr income net + Cr GST) and must re-post faithfully.
+type EditMeta = { charges: { accountId: number; description?: string; amount: number; taxAmount?: number }[]; discountAmt: number; discountPct: number | null; shippingAmt: number; roundOff: number };
 
 export default function PosScreen({ editId, fromId }: { editId?: number; fromId?: number }) {
     const router = useRouter();
@@ -77,7 +79,7 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                     discountAmt: string | number | null; discountPct: string | number | null;
                     shippingAmt: string | number | null; roundOff: string | number | null;
                     lines: { productId: number; description: string | null; quantity: string | number; rate: string | number; taxRate: string | number; mrpPaise: number | null; savedSalePricePaise: number | null; product: { sku: string; name: string } }[];
-                    charges: { accountId: number; description: string | null; amount: string | number }[];
+                    charges: { accountId: number; description: string | null; amount: string | number; taxAmount?: string | number | null }[];
                 }>(`/api/inventory/vouchers/${editId}`);
                 if (cancelled) return;
                 if (data.type !== "POS" || data.deletedAt || data.status === "CANCELLED") {
@@ -89,7 +91,7 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                 // gift-card rows) + discount / shipping / round-off — re-sent on save so
                 // the total + GL stay faithful while the cashier only adjusts items.
                 editMeta.current = {
-                    charges: data.charges.map((c) => ({ accountId: c.accountId, description: c.description ?? undefined, amount: Number(c.amount) })),
+                    charges: data.charges.map((c) => ({ accountId: c.accountId, description: c.description ?? undefined, amount: Number(c.amount), taxAmount: c.taxAmount != null ? Number(c.taxAmount) : undefined })),
                     discountAmt: data.discountAmt != null ? Number(data.discountAmt) : 0,
                     discountPct: data.discountPct != null ? Number(data.discountPct) : null,
                     shippingAmt: data.shippingAmt != null ? Number(data.shippingAmt) : 0,
@@ -265,7 +267,7 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                 issueDate: today,
                 dueDate: due.toISOString().slice(0, 10),
                 notes: `POS sale (discount ${b.discountPct}%${b.effRedeemPts > 0 ? `, ${b.effRedeemPts} pts redeemed` : ""}${b.appliedCoupon ? `, coupon ${b.appliedCoupon.code ?? b.appliedCoupon.name}` : ""}) | Payments: ${splitSummary}${tail}`,
-                lines: cart.map((l) => ({
+                lines: cart.filter((l) => l.kind !== "service").map((l) => ({
                     productId: l.productId,
                     description: `${l.sku} — ${l.name}${l.description ? ` · ${l.description}` : ""}`,
                     quantity: l.qty,
@@ -274,6 +276,15 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                     // Snapshots for the customer-facing "Today's discount" ladder.
                     mrpPaise: l.mrpPaise ?? null,
                     savedSalePricePaise: l.barcodePaise ?? null,
+                })),
+                // POS-service lines (cart kind="service", productId = −serviceId).
+                // The server re-resolves each service's income ledger + GST rate
+                // and posts them GL-only (no stock) as tax-bearing charge legs.
+                services: cart.filter((l) => l.kind === "service").map((l) => ({
+                    serviceId: -l.productId,
+                    description: l.description.trim() || undefined,
+                    quantity: l.qty,
+                    unitPrice: l.unitPrice,
                 })),
                 payments: paymentsList,
                 shippingAmt: b.shippingAmt,

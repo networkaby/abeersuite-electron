@@ -133,6 +133,35 @@ model PaymentGateway {
   @@map("payment_gateways")
 }
 
+// ── POS Service (Settings-defined sellable service, e.g. "Installation") ─────
+//
+// Admin defines the allowed services under Settings → POS Services: each row
+// names a service, points at the INCOME ledger its net posts to, and carries its
+// own GST rate (default 18% preselected in the UI — customisable per service).
+// In POS the active services appear in the product search (after products) and
+// are added to the cart like products; on sale they post GL-only (Cr income
+// net + Cr Output GST at the service's rate) — no stock movement.
+model PosService {
+  id                Int      @id @default(autoincrement())
+  name              String   @unique
+  // Income ledger credited with the service's NET (pre-tax) value.
+  accountId         Int
+  account           Account  @relation("PosServiceLedger", fields: [accountId], references: [id])
+  // GST rate applied on the service. Null = untaxed service.
+  gstRateId         Int?
+  gstRate           GstRate? @relation("PosServiceGst", fields: [gstRateId], references: [id], onDelete: SetNull)
+  // Optional default TAX-INCLUSIVE price (paise) pre-filled on the cart line;
+  // the cashier can always overtype it. Null = cashier types the price.
+  defaultPricePaise Int?
+  sortOrder         Int      @default(0)
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([isActive, sortOrder])
+  @@map("pos_services")
+}
+
 // ── POS Shift (one cashier's session at one counter) ─────────────────────────
 
 model PosShift {

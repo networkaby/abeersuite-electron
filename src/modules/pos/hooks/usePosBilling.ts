@@ -12,9 +12,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { type GlAccount } from "@/modules/accountancy/components/GlAccountCombobox";
 import { calcVoucherTotals, calcLineTotals } from "@/modules/inventory/lib/stock";
-import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { type PartySearchAndCreateHandle, type PickedParty } from "@/shared/components/PartySearchAndCreate";
 import { type ActiveShift } from "@/modules/pos/components/ActiveShiftBar";
 import { type PendingHandover } from "@/modules/pos/components/HandoverAcceptDialog";
@@ -26,7 +24,7 @@ import { DEFAULT_PAYEE_NAME } from "@/modules/pos/lib/paymentLink";
 import { formatInr, parseDigitsInput, round2 } from "@/shared/lib/format";
 import { resolveTierTitles } from "@/shared/lib/pricing";
 import { usePosDraftStore } from "@/store/posDraftStore";
-import { type Snapshot, type ProductOption, type CartLine, type CouponHit } from "@/modules/pos/lib/posDraftTypes";
+import { type Snapshot, type ProductOption, type PosServiceOption, type CartLine, type CouponHit } from "@/modules/pos/lib/posDraftTypes";
 
 // Text-input sanitiser — same shape as TradingVoucherPage's num.
 // Project rule: no <input type="number">; we keep raw strings in state and
@@ -63,6 +61,9 @@ export function usePosBilling(opts: {
     const [productQuery, setProductQuery] = useState("");
     const [productHighlight, setProductHighlight] = useState(0);
     const [allProducts, setAllProducts] = useState<ProductOption[]>([]);
+    // Active POS-service catalogue (Settings → POS Services) — surfaced in the
+    // same search list AFTER product matches, added to the cart like products.
+    const [allServices, setAllServices] = useState<PosServiceOption[]>([]);
     const cart = usePosDraftStore((s) => s.cart);
     const setCart = usePosDraftStore((s) => s.setCart);
 
@@ -100,7 +101,6 @@ export function usePosBilling(opts: {
     const charges = usePosDraftStore((s) => s.charges);
     const setCharges = usePosDraftStore((s) => s.setCharges);
     const resetDraft = usePosDraftStore((s) => s.reset);
-    const [chargeAccounts, setChargeAccounts] = useState<GlAccount[]>([]);
 
     // ── Active POS shift ────────────────────────────────────────────────────
     // Mount order:
@@ -165,18 +165,12 @@ export function usePosBilling(opts: {
             .catch(() => { /* page is still useful without it */ });
     }, []);
 
-    // Chart-of-accounts for the "+ Add charge" picker. Same filter as
-    // TradingVoucherPage: exclude Cash-in-Hand and Bank Accounts (those are
-    // tender ledgers — POS routes them via the counter map, not via charges).
+    // Load the active POS services once — added via the "+ Add service charge"
+    // button in the cart (not the product search — services have no barcode).
     useEffect(() => {
-        axios.get<GlAccount[]>("/api/accountancy/gl-accounts?includeParties=false")
-            .then((r) => setChargeAccounts(
-                r.data.filter((a) =>
-                    a.group?.name !== ACCOUNT_GROUPS.CASH_IN_HAND &&
-                    a.group?.name !== ACCOUNT_GROUPS.BANK_ACCOUNTS,
-                ),
-            ))
-            .catch(() => setChargeAccounts([]));
+        axios.get<PosServiceOption[]>("/api/pos/services")
+            .then((r) => setAllServices(r.data))
+            .catch(() => { /* page is still useful without them */ });
     }, []);
 
     // Ctrl/Cmd+Enter from anywhere → the screen's confirm action (skip when
@@ -213,6 +207,8 @@ export function usePosBilling(opts: {
 
     // ── Computed ────────────────────────────────────────────────────────────
 
+    // Products only — services have no barcode, so they are NOT scannable/typed
+    // here; they are added from the "+ Add service charge" button in the cart.
     const filteredProducts = useMemo(() => {
         const q = productQuery.trim().toLowerCase();
         if (!q) return [] as ProductOption[];
@@ -310,8 +306,12 @@ export function usePosBilling(opts: {
     // global cap as the per-line default (null → 100%). Mirrors the server's
     // redeemableBaseForCart so the bill total + payment check always agree.
     const globalCapPct = rates?.maxRedeemPctOfBill ?? null;
-    const cartGoods = cart.reduce((s, l) => s + l.qty * l.unitPrice, 0);
-    const maxRedeemableRupees = cartGoods <= 0 ? 0 : cart.reduce((acc, l) => {
+    // Loyalty redeems against GOODS only — service lines stay out of the base,
+    // mirroring the server (earnLines / redeemableBaseForCart see body.lines,
+    // which carry products only).
+    const goodsCart = cart.filter((l) => l.kind !== "service");
+    const cartGoods = goodsCart.reduce((s, l) => s + l.qty * l.unitPrice, 0);
+    const maxRedeemableRupees = cartGoods <= 0 ? 0 : goodsCart.reduce((acc, l) => {
         const lineGoods = l.qty * l.unitPrice;
         const allocated = discountAmount * (lineGoods / cartGoods);
         const net = Math.max(0, lineGoods - allocated);
@@ -423,8 +423,9 @@ export function usePosBilling(opts: {
             tierRupees: discountAmount,
             loyaltyRupees: redemptionRupees,
             // taxRate rides along so the server can gross up its resolved cost to
-            // cost-incl-tax — the PERCENT-coupon base.
-            lines: cart.map((l) => ({ productId: l.productId, qty: l.qty, unitPrice: l.unitPrice, taxRate: l.taxRate })),
+            // cost-incl-tax — the PERCENT-coupon base. Service lines are excluded —
+            // coupons evaluate the goods cart only (mirrors /api/pos/sale).
+            lines: cart.filter((l) => l.kind !== "service").map((l) => ({ productId: l.productId, qty: l.qty, unitPrice: l.unitPrice, taxRate: l.taxRate })),
         });
         return data;
     }
@@ -570,6 +571,28 @@ export function usePosBilling(opts: {
         setTimeout(() => productSearchRef.current?.focus(), 0);
     };
 
+    // Add a POS service (Settings → POS Services) to the cart as a GL-only line
+    // (kind="service"): its default price is TAX-INCLUSIVE, so back-calculate the
+    // pre-tax rate exactly like a product. No barcode / cost / MRP / stock. The
+    // line id is −serviceId so it never collides with a product id, and the same
+    // productId-keyed qty/price setters work unchanged.
+    const addServiceToCart = (svc: PosServiceOption) => {
+        const inclusive = svc.defaultPricePaise ? svc.defaultPricePaise / 100 : 0;
+        const rate = svc.taxRate ?? 0;
+        const price = rate > 0 ? inclusive / (1 + rate / 100) : inclusive;
+        const lineId = -svc.id;
+        setCart((prev) => {
+            const exist = prev.find((l) => l.productId === lineId);
+            if (exist) return prev.map((l) => l.productId === lineId ? { ...l, qty: l.qty + 1 } : l);
+            return [...prev, {
+                productId: lineId, sku: "SVC", name: svc.name, kind: "service" as const,
+                qty: 1, unitPrice: price, description: "",
+                taxRate: rate,
+            }];
+        });
+        setTimeout(() => productSearchRef.current?.focus(), 0);
+    };
+
     const setQty = (productId: number, qty: number) => {
         if (qty <= 0) { setCart((p) => p.filter((l) => l.productId !== productId)); return; }
         setCart((p) => p.map((l) => l.productId === productId ? { ...l, qty } : l));
@@ -686,6 +709,8 @@ export function usePosBilling(opts: {
         // product search + cart
         productQuery, setProductQuery, productHighlight, setProductHighlight,
         filteredProducts, cart, setCart, addToCart, setQty, setPrice, setLineDescription, onProductKeyDown,
+        // POS services (added from the "+ Add service charge" button, not the search)
+        allServices, addServiceToCart,
         // checkout / tenders
         checkoutOpen, setCheckoutOpen, shareOpen, setShareOpen, shareVpa, setShareVpa,
         pay, setPay, splits, setSplits, submitting, setSubmitting, openCheckout,
@@ -696,7 +721,7 @@ export function usePosBilling(opts: {
         couponBusy, applyCoupon,
         giftCard, setGiftCard, giftCardCodeStr, setGiftCardCodeStr, gcBusy, applyGiftCard,
         roundOff, autoRoundOff, roundOffStr, setRoundOffStr, roundOffManuallyEdited, setRoundOffManuallyEdited,
-        charges, setCharges, chargeAccounts, resetDraft, resetAfterSubmit,
+        charges, setCharges, resetDraft, resetAfterSubmit,
         // shift
         activeShift, setActiveShift, pendingHandover, setPendingHandover, shiftLoaded,
         shiftOpenDialogOpen, setShiftOpenDialogOpen, returnDialogOpen, setReturnDialogOpen,

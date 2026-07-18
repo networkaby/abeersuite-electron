@@ -25,6 +25,7 @@ model GstRate {
   products      InvProduct[]      @relation("InvProductGst")
   productGroups InvProductGroup[] @relation("InvProductGroupGst")
   orgDefaults   OrgDefaults[]     @relation("OrgDefaultsGst")
+  posServices   PosService[]      @relation("PosServiceGst")
 }
 
 model InvCategory {

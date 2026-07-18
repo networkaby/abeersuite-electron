@@ -115,6 +115,12 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
         if (!snapshot?.account) { toast.error("Select a customer first"); return; }
         if (cart.length === 0) { toast.error("Cart is empty"); return; }
         if (cart.some((l) => l.unitPrice <= 0)) { toast.error("All lines need a unit price"); return; }
+        // TODO(pos-services): Order/Estimate vouchers don't carry service lines yet —
+        // only the Sale screen posts them. Bridge guard until quotes learn services.
+        if (cart.some((l) => l.kind === "service")) {
+            toast.error(`Service lines work on Sale only for now — remove them to save this ${mode}.`);
+            return;
+        }
 
         // Edit mode → PATCH the existing order's lines + discount (server recomputes
         // exactly like creation). No checkout / advance / print on an edit.

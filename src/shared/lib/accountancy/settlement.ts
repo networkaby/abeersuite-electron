@@ -15,11 +15,15 @@ export type TenderInput = {
     reference?: string | null;
 };
 
-/** One "+ Add Account" charge/income row (signed amount; sign encodes direction). */
+/** One "+ Add Account" charge/income row (signed amount; sign encodes direction).
+ *  `taxAmount` (optional) marks a TAX-BEARING charge — a POS-service row whose
+ *  `amount` is the NET income and whose GST posts on the voucher's tax legs
+ *  (see buildInvVoucherGlLines). Plain charges leave it absent/0. */
 export type ChargeInput = {
     accountId:   number;
     amount:      number;
     description?: string | null;
+    taxAmount?:  number | null;
 };
 
 export type Settlement = { tenders: TenderInput[]; charges: ChargeInput[] };
@@ -46,6 +50,7 @@ export function readSettlement(json: Prisma.JsonValue | null | undefined): Settl
                 accountId:   Number(r.accountId),
                 amount:      Number(r.amount),
                 description: (r.description ?? null) as string | null,
+                taxAmount:   r.taxAmount != null ? Number(r.taxAmount) : null,
             };
         })
         : [];
@@ -68,6 +73,7 @@ export function buildSettlementJson(
             accountId:   c.accountId,
             amount:      Number(c.amount),
             description: c.description?.toString().trim() || null,
+            taxAmount:   c.taxAmount != null && Number(c.taxAmount) !== 0 ? Number(c.taxAmount) : null,
         })),
     };
 }
