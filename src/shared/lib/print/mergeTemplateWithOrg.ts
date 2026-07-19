@@ -20,6 +20,8 @@ const DEFAULT_LOGO_URL = "/logo.svg";
 import type { VoucherTemplateDefaults } from "@/shared/lib/print/voucherTemplateDefaults";
 import {
     formatAddressBlock,
+    formatBankBlock,
+    buildUpiPayLink,
     type OrganisationView,
 } from "@/shared/lib/org/organisationView";
 
@@ -35,6 +37,8 @@ export function mergeTemplateWithOrg(
         phoneLine:    template.phoneLine    || (org.phone ? `Ph: ${org.phone}` : ""),
         emailLine:    template.emailLine    || org.email  || "",
         websiteLine:  template.websiteLine  || org.siteUrl || "",
+        bankDetails:  template.bankDetails  || formatBankBlock(org),
+        bankUpiQr:    template.bankUpiQr    || buildUpiPayLink(org),
         logoUrl:      template.logoUrl      || org.logoUrl || DEFAULT_LOGO_URL,
     };
 }

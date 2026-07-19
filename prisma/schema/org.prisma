@@ -223,6 +223,7 @@ model Organisation {
   identityJson Json @default("{}") // tagline, logoUrl, pan
   addressJson  Json @default("{}") // addressLine1, addressLine2, city, state, pinCode, country
   contactJson  Json @default("{}") // email, supportEmail, phone, whatsapp, siteUrl, hours
+  bankJson     Json @default("{}") // beneficiary, bankName, accountNumber, ifsc, branch, upi
 
   // Audit
   updatedAt   DateTime @updatedAt

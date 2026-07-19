@@ -337,6 +337,10 @@ model VoucherPrintTemplate {
   // at return time.
   showBarcode        Boolean @default(false)
   showBarcodeThermal Boolean @default(false)
+  // Shop's primary bank details (from Organisation.bankJson) — opt-in per kind
+  // so customers can pay in. Off by default; admin enables where wanted.
+  showBank        Boolean @default(false)
+  showBankThermal Boolean @default(false)
 
   // Service Shipping Label meta fields — which lines print on the label's bottom
   // strip. Device defaults OFF (naming contents invites courier theft). A4 flag

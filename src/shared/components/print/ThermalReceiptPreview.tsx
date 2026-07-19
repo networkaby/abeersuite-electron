@@ -18,6 +18,7 @@
  */
 
 import { isSupplierPartyKind, type VoucherTemplateDefaults } from "@/shared/lib/print/voucherTemplateDefaults";
+import { QrSvg } from "@/shared/components/print/QrSvg";
 import { COMPANY_DETAILS } from "@/utils/constants-company-details";
 import { BarcodeSvg } from "@/modules/inventory/components/BarcodeSvg";
 
@@ -131,6 +132,7 @@ function inlineStyleFromTemplate(t: VoucherTemplateDefaults, scope: string): str
         ${s}.sig-line { border-top: 1px solid #000; margin-top: 24px; padding-top: 2px; font-size: ${Math.max(8, t.fontSizePx - 3)}px; color: #555; }
         ${s}.doctitle { font-weight: bold; font-size: ${t.fontSizePx + 1}px; letter-spacing: 1px; text-transform: uppercase; margin-top: 6px; }
         ${s}.disclaimer { font-size: ${Math.max(7, t.fontSizePx - 4)}px; color: #666; font-style: italic; margin-top: 4px; }
+        ${s}.barcode { max-width: 100%; height: auto; margin-inline: auto; }
         @media print {
             ${s}.no-print { display: none !important; }
         }
@@ -327,6 +329,23 @@ function ThermalFooter({ template, sample }: { template: VoucherTemplateDefaults
                 <>
                     <div className="hr" />
                     <div className="terms">{template.termsText}</div>
+                </>
+            )}
+
+            {template.showBank && (template.bankDetails || template.bankUpiQr) && (
+                <>
+                    <div className="hr" />
+                    {template.bankDetails && (
+                        <div className="terms" style={{ whiteSpace: "pre-line" }}>
+                            <b>Bank Details</b>{"\n"}{template.bankDetails}
+                        </div>
+                    )}
+                    {template.bankUpiQr && (
+                        <div className="center" style={{ marginTop: 6 }}>
+                            <QrSvg value={template.bankUpiQr} size={110} />
+                            <div className="small">SCAN TO PAY</div>
+                        </div>
+                    )}
                 </>
             )}
 

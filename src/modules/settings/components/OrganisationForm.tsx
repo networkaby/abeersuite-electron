@@ -164,6 +164,31 @@ export function OrganisationForm({ initial }: Props) {
                     <Input value={form.hours} onChange={(e) => set("hours", e.target.value)} />
                 </Field>
             </Section>
+
+            {/* Bank details — printed on a voucher only when that template's
+                "Bank details" toggle is on (Print Templates settings). */}
+            <Section title="Bank details" description="Primary bank account for customer payments. Prints on vouchers where the 'Bank details' toggle is on.">
+                <Field label="Beneficiary name" hint="Account holder as it should appear on the voucher.">
+                    <Input value={form.bankBeneficiary} onChange={(e) => set("bankBeneficiary", e.target.value)} />
+                </Field>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <Field label="Bank name">
+                        <Input value={form.bankName} onChange={(e) => set("bankName", e.target.value)} />
+                    </Field>
+                    <Field label="Account number">
+                        <Input value={form.bankAccountNumber} onChange={(e) => set("bankAccountNumber", e.target.value)} />
+                    </Field>
+                    <Field label="IFSC">
+                        <Input value={form.bankIfsc} onChange={(e) => set("bankIfsc", e.target.value)} />
+                    </Field>
+                    <Field label="Branch">
+                        <Input value={form.bankBranch} onChange={(e) => set("bankBranch", e.target.value)} />
+                    </Field>
+                </div>
+                <Field label="UPI ID" hint="Optional — e.g. shopname@okhdfcbank.">
+                    <Input value={form.bankUpi} onChange={(e) => set("bankUpi", e.target.value)} />
+                </Field>
+            </Section>
         </div>
     );
 }

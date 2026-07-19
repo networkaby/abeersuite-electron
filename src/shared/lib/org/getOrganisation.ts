@@ -33,6 +33,13 @@ function fallbackFromCompanyDetails(): OrganisationView {
         whatsapp:     COMPANY_DETAILS.contact.whatsapp,
         siteUrl:      COMPANY_DETAILS.siteUrl,
         hours:        COMPANY_DETAILS.hours,
+        // No bank defaults in COMPANY_DETAILS — the admin fills these in Org settings.
+        bankBeneficiary:   "",
+        bankName:          "",
+        bankAccountNumber: "",
+        bankIfsc:          "",
+        bankBranch:        "",
+        bankUpi:           "",
     };
 }
 

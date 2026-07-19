@@ -22,6 +22,7 @@ import { COMPANY_DETAILS } from "@/utils/constants-company-details";
 import { rupeesInWords } from "@/shared/lib/format/numberToWords";
 import type { ThermalReceiptSample } from "@/shared/components/print/ThermalReceiptPreview";
 import { BarcodeSvg } from "@/modules/inventory/components/BarcodeSvg";
+import { QrSvg } from "@/shared/components/print/QrSvg";
 
 const fmtINR = (n: number) =>
     `Rs. ${n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -194,6 +195,7 @@ function inlineA4Styles(scope: string): string {
             font-style: italic;
             color: #777;
         }
+        ${s}.barcode { max-width: 100%; height: auto; margin-inline: auto; }
         @media print {
             ${s}.no-print { display: none !important; }
             ${rootRule} { background: #fff; }
@@ -505,6 +507,25 @@ function A4Footer({ template, sample }: A4ChromeProps) {
             )}
             {template.termsText && (
                 <div className="terms"><span className="bold">Terms &amp; Conditions:</span>{"\n"}{template.termsText}</div>
+            )}
+
+            {/* Bank block — mirrors the shop's retail-invoice layout: heading,
+                then scan-to-pay UPI QR beside the labelled account lines. */}
+            {template.showBank && (template.bankDetails || template.bankUpiQr) && (
+                <div className="terms">
+                    <span className="bold">Bank Details:</span>
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginTop: 4 }}>
+                        {template.bankUpiQr && (
+                            <div style={{ textAlign: "center", flexShrink: 0 }}>
+                                <QrSvg value={template.bankUpiQr} size={84} />
+                                <div style={{ fontSize: 8, letterSpacing: 1 }}>SCAN TO PAY</div>
+                            </div>
+                        )}
+                        {template.bankDetails && (
+                            <div style={{ whiteSpace: "pre-line" }}>{template.bankDetails}</div>
+                        )}
+                    </div>
+                </div>
             )}
 
             {template.showSignature && (

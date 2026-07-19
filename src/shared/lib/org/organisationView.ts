@@ -35,6 +35,14 @@ export interface OrganisationView {
     whatsapp:     string;
     siteUrl:      string;
     hours:        string;
+    // bankJson fields — the shop's primary bank, printed on vouchers (opt-in
+    // per template via the "Bank details" toggle) so customers can pay in.
+    bankBeneficiary:   string;
+    bankName:          string;
+    bankAccountNumber: string;
+    bankIfsc:          string;
+    bankBranch:        string;
+    bankUpi:           string;
 }
 
 // ── JSON blob shapes (DB internal, exported for the API route packer) ────────
@@ -49,6 +57,10 @@ export interface OrgAddressData {
 export interface OrgContactData {
     email: string; supportEmail: string; phone: string;
     whatsapp: string; siteUrl: string; hours: string;
+}
+export interface OrgBankData {
+    beneficiary: string; bankName: string; accountNumber: string;
+    ifsc: string; branch: string; upi: string;
 }
 
 // ── Safe parsers: unknown JSON → typed struct with string fallbacks ───────────
@@ -88,6 +100,17 @@ export function parseContactJson(v: unknown): OrgContactData {
         hours:        s(o.hours),
     };
 }
+export function parseBankJson(v: unknown): OrgBankData {
+    const o = obj(v);
+    return {
+        beneficiary:   s(o.beneficiary),
+        bankName:      s(o.bankName),
+        accountNumber: s(o.accountNumber),
+        ifsc:          s(o.ifsc),
+        branch:        s(o.branch),
+        upi:           s(o.upi),
+    };
+}
 
 // ── Unpack a Prisma Organisation row → flat OrganisationView ─────────────────
 
@@ -95,7 +118,9 @@ export function unpackOrgRow(row: {
     brandName: string; legalName: string;
     gstin: string; gstStateCode: string;
     identityJson: unknown; addressJson: unknown; contactJson: unknown;
+    bankJson?: unknown;
 }): OrganisationView {
+    const bank = parseBankJson(row.bankJson);
     return {
         brandName:    row.brandName,
         legalName:    row.legalName,
@@ -104,6 +129,12 @@ export function unpackOrgRow(row: {
         ...parseIdentityJson(row.identityJson),
         ...parseAddressJson(row.addressJson),
         ...parseContactJson(row.contactJson),
+        bankBeneficiary:   bank.beneficiary,
+        bankName:          bank.bankName,
+        bankAccountNumber: bank.accountNumber,
+        bankIfsc:          bank.ifsc,
+        bankBranch:        bank.branch,
+        bankUpi:           bank.upi,
     };
 }
 
@@ -129,4 +160,25 @@ export function formatStructuredAddressBlock(a: {
 /** Render the org (Head-Office) address as a multi-line block. */
 export function formatAddressBlock(org: OrganisationView): string {
     return formatStructuredAddressBlock(org);
+}
+
+/** Render the shop's primary bank details as a labelled multi-line block,
+ *  matching the shop's existing retail-invoice layout: bank + branch on the
+ *  Name line, then Account No. / IFSC code / Account holder's name. Empty
+ *  → "" so the renderer can hide the whole section. */
+export function formatBankBlock(org: OrganisationView): string {
+    const nameLine = [org.bankName, org.bankBranch].filter(Boolean).join(", ");
+    return [
+        nameLine              && `Name: ${nameLine}`,
+        org.bankAccountNumber && `Account No.: ${org.bankAccountNumber}`,
+        org.bankIfsc          && `IFSC code: ${org.bankIfsc}`,
+        org.bankBeneficiary   && `Account holder's name: ${org.bankBeneficiary}`,
+    ].filter(Boolean).join("\n");
+}
+
+/** UPI deep link for the shop's scan-to-pay QR (or "" when no UPI id). */
+export function buildUpiPayLink(org: OrganisationView): string {
+    if (!org.bankUpi) return "";
+    const payee = org.bankBeneficiary || org.brandName;
+    return `upi://pay?pa=${encodeURIComponent(org.bankUpi)}&pn=${encodeURIComponent(payee)}&cu=INR`;
 }

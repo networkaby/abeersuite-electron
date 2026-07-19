@@ -37,6 +37,8 @@ export const voucherTemplateUpdateSchema = z.object({
     showQrCode:               z.boolean().optional(),
     showBarcode:              z.boolean().optional(),
     showBarcodeThermal:       z.boolean().optional(),
+    showBank:                 z.boolean().optional(),
+    showBankThermal:          z.boolean().optional(),
 
     // Service Shipping Label meta fields (Sheet · Thermal 80mm · Tl 100×50mm).
     showTicket:               z.boolean().optional(),

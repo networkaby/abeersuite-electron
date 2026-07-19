@@ -32,6 +32,14 @@ export const organisationUpdateSchema = z.object({
     whatsapp:     txt(40),
     siteUrl:      txt(200),
     hours:        txt(120),
+
+    // Primary bank details (printed on vouchers when the template opts in).
+    bankBeneficiary:   txt(160),
+    bankName:          txt(120),
+    bankAccountNumber: txt(40),
+    bankIfsc:          txt(20),
+    bankBranch:        txt(120),
+    bankUpi:           txt(120),
 });
 
 export type OrganisationUpdateInput = z.infer<typeof organisationUpdateSchema>;

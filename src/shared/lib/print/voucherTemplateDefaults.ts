@@ -300,11 +300,14 @@ export interface VoucherTemplateDefaults {
     addressBlock: string;
     gstinLine: string;
     phoneLine: string;
-    // Shop email + website — DERIVED ONLY: filled from the Organisation (contact)
-    // at merge time, never persisted. Optional + absent from the builder/mapper
-    // so they never reach a Prisma write (they are not DB columns).
+    // Shop email + website + bank block — DERIVED ONLY: filled from the
+    // Organisation (contact / bank) at merge time, never persisted. Optional +
+    // absent from the builder/mapper so they never reach a Prisma write (they
+    // are not DB columns).
     emailLine?: string;
     websiteLine?: string;
+    bankDetails?: string; // labelled multi-line block; blank hides the section
+    bankUpiQr?: string;   // upi://pay deep link for the scan-to-pay QR; blank hides it
     logoUrl: string;
     // Every element has an A4 flag (base name) + a `…Thermal` flag. The base
     // names are the A4 values; resolveTemplateForFormat() swaps in the thermal
@@ -319,6 +322,7 @@ export interface VoucherTemplateDefaults {
     showMrp: boolean;                showMrpThermal: boolean;
     showSignature: boolean;          showSignatureThermal: boolean;
     showBarcode: boolean;            showBarcodeThermal: boolean;
+    showBank: boolean;               showBankThermal: boolean;   // shop bank details block
     showQrCode: boolean; // dormant (not yet rendered)
     // Service Shipping Label meta fields (bottom strip). Base flag = A4/A5/A6
     // sheets; Thermal = 80mm roll; Tl = Thermal Label 100×50 (die-cut). Ignored
@@ -372,6 +376,7 @@ export function buildVoucherTemplateDefaults(kind: VoucherTemplateKind): Voucher
         showMrp: true,                                   showMrpThermal: true,
         showSignature: WITH_SIGNATURE.has(kind),         showSignatureThermal: WITH_SIGNATURE.has(kind),
         showBarcode: BARCODE_KINDS.has(kind),            showBarcodeThermal: BARCODE_KINDS.has(kind),
+        showBank: false,                                 showBankThermal: false,
         showQrCode: false,
         // Label meta — device hidden by default (theft), the rest shown.
         showTicket: true,                                showTicketThermal: true,          showTicketTl: true,
@@ -434,6 +439,7 @@ export type VoucherPrintTemplateRow = {
     showSignature?: boolean | null;           showSignatureThermal?: boolean | null;
     showQrCode?: boolean | null;
     showBarcode?: boolean | null;             showBarcodeThermal?: boolean | null;
+    showBank?: boolean | null;                showBankThermal?: boolean | null;
     // Label meta fields — optional so reads tolerate the pre-`db push` window.
     showTicket?: boolean | null;              showTicketThermal?: boolean | null;              showTicketTl?: boolean | null;
     showDate?: boolean | null;                showDateThermal?: boolean | null;                showDateTl?: boolean | null;
@@ -489,6 +495,8 @@ export function rowToVoucherTemplateDefaults(row: VoucherPrintTemplateRow): Vouc
         showQrCode:               row.showQrCode               ?? f.showQrCode,
         showBarcode:              row.showBarcode              ?? f.showBarcode,
         showBarcodeThermal:       row.showBarcodeThermal       ?? f.showBarcodeThermal,
+        showBank:                 row.showBank                 ?? f.showBank,
+        showBankThermal:          row.showBankThermal          ?? f.showBankThermal,
         showTicket:               row.showTicket               ?? f.showTicket,
         showTicketThermal:        row.showTicketThermal        ?? f.showTicketThermal,
         showTicketTl:             row.showTicketTl             ?? f.showTicketTl,
@@ -547,6 +555,7 @@ export function resolveTemplateForFormat(
         showMrp:           t.showMrpThermal,
         showSignature:     t.showSignatureThermal,
         showBarcode:       t.showBarcodeThermal,
+        showBank:          t.showBankThermal,
         showSentBy:        t.showSentByThermal,
         showReceivedBy:    t.showReceivedByThermal,
         showPreparedBy:    t.showPreparedByThermal,

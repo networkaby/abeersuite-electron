@@ -62,6 +62,13 @@ export function BarcodeSvg({
             });
             errEl.style.display = "none";
             svg.style.display = "block";
+            // JsBarcode sets width/height but no viewBox, so CSS `max-width`
+            // would CLIP instead of scale. Mirror the rendered size into a
+            // viewBox so narrow containers (80mm thermal slips) can shrink the
+            // barcode proportionally. Rendering is unchanged where it fits.
+            const w = svg.getAttribute("width");
+            const h = svg.getAttribute("height");
+            if (w && h) svg.setAttribute("viewBox", `0 0 ${parseFloat(w)} ${parseFloat(h)}`);
         } catch {
             svg.style.display = "none";
             errEl.style.display = "inline";

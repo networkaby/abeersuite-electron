@@ -10,6 +10,7 @@ import {
     parseIdentityJson,
     parseAddressJson,
     parseContactJson,
+    parseBankJson,
     type OrganisationView,
 } from "@/shared/lib/org/organisationView";
 
@@ -80,6 +81,7 @@ export async function PATCH(req: NextRequest) {
             identityJson: { tagline: merged.tagline, logoUrl: merged.logoUrl, pan: merged.pan } satisfies ReturnType<typeof parseIdentityJson>,
             addressJson:  { addressLine1: merged.addressLine1, addressLine2: merged.addressLine2, city: merged.city, state: merged.state, pinCode: merged.pinCode, country: merged.country } satisfies ReturnType<typeof parseAddressJson>,
             contactJson:  { email: merged.email, supportEmail: merged.supportEmail, phone: merged.phone, whatsapp: merged.whatsapp, siteUrl: merged.siteUrl, hours: merged.hours } satisfies ReturnType<typeof parseContactJson>,
+            bankJson:     { beneficiary: merged.bankBeneficiary, bankName: merged.bankName, accountNumber: merged.bankAccountNumber, ifsc: merged.bankIfsc, branch: merged.bankBranch, upi: merged.bankUpi } satisfies ReturnType<typeof parseBankJson>,
             updatedById:  user.id || null,
         },
     });
