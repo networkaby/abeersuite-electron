@@ -113,6 +113,25 @@ interface Ticket {
     }[];
 }
 
+// A stored service-slip record in the ticket's context bag. The latest one is
+// editable in place until `locked` (set when the device is sent to service).
+type SlipRecord = {
+    seq?: number;
+    partyAccountId?: number;
+    partyName?: string;
+    ref?: string | null;
+    date?: string;
+    device?: { type: string; brand: string; model: string; problem: string };
+    accessories?: string | null;
+    condition?: string | null;
+    notes?: string | null;
+    showOwner?: boolean;
+    contactName?: string | null;
+    contactPhone?: string | null;
+    locked?: boolean;
+    sentAt?: string;
+};
+
 type LogKind = "success" | "fail" | "note" | "entered" | "advanced" | "retry" | "revert" | "system";
 
 // System-generated notes that aren't outcomes/entries — shown muted in the timeline.
@@ -262,15 +281,22 @@ export default function TicketDetailPage() {
         return null;
     })();
 
-    // Frozen shipping-slip history (context bag) — a device may loop through
-    // several service centres, one frozen copy per send. Legacy = single slip.
-    const shippingSlips: { seq?: number; partyName?: string; date?: string }[] = (() => {
+    // Shipping-slip history (context bag) — a device may loop through several
+    // service centres, one copy per send. The latest is editable in place ONLY
+    // until it's sent (locked on entry to a "Sent To Service" status); a later
+    // re-escalation then starts a fresh slip. Legacy = single slip.
+    const shippingSlips: SlipRecord[] = (() => {
         const c = ticket.context && typeof ticket.context === "object" && !Array.isArray(ticket.context)
             ? (ticket.context as Record<string, unknown>)
             : {};
-        if (Array.isArray(c.shippingSlips)) return c.shippingSlips as { seq?: number; partyName?: string; date?: string }[];
-        return c.shippingSlip ? [c.shippingSlip as { seq?: number; partyName?: string; date?: string }] : [];
+        if (Array.isArray(c.shippingSlips)) return c.shippingSlips as SlipRecord[];
+        return c.shippingSlip ? [c.shippingSlip as SlipRecord] : [];
     })();
+    const latestSlip = shippingSlips[shippingSlips.length - 1];
+    // The latest slip is editable while we're still at the send stage and it
+    // hasn't been committed (locked) by a send yet.
+    const slipEditable =
+        !!latestSlip && !latestSlip.locked && statusHasWorkflowRole("shipToService", ticket.status);
 
     // Ongoing draft bill saved on the ticket (context bag).
     const savedBill =
@@ -776,7 +802,7 @@ export default function TicketDetailPage() {
 
                             {statusHasWorkflowRole("shipToService", ticket.status) && !ticket.ticketStatus.isTerminal && (
                                 <Button onClick={() => setShowShippingSlip(true)} variant="outline" className={actionBtnBase}>
-                                    <Truck size={15} /> Create Service Slip
+                                    <Truck size={15} /> {slipEditable ? "Edit Service Slip" : "Create Service Slip"}
                                 </Button>
                             )}
 
@@ -854,6 +880,18 @@ export default function TicketDetailPage() {
                         name: ticket.device.account?.name ?? "",
                         phone: ticket.device.account?.phone ?? null,
                     }}
+                    existing={slipEditable && latestSlip?.partyAccountId != null ? {
+                        partyAccountId: latestSlip.partyAccountId,
+                        partyName:      latestSlip.partyName ?? "",
+                        ref:            latestSlip.ref ?? null,
+                        device:         latestSlip.device ?? { type: "", brand: "", model: "", problem: "" },
+                        accessories:    latestSlip.accessories ?? null,
+                        condition:      latestSlip.condition ?? null,
+                        notes:          latestSlip.notes ?? null,
+                        showOwner:      latestSlip.showOwner,
+                        contactName:    latestSlip.contactName ?? null,
+                        contactPhone:   latestSlip.contactPhone ?? null,
+                    } : null}
                     onClose={() => setShowShippingSlip(false)}
                     onSaved={fetchTicket}
                 />

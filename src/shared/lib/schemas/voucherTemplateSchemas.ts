@@ -55,6 +55,16 @@ export const voucherTemplateUpdateSchema = z.object({
     showFooterThermal:        z.boolean().optional(),
     showFooterTl:             z.boolean().optional(),
 
+    // Service Slip sign-off rows (A4 base + thermal).
+    showSentBy:               z.boolean().optional(),
+    showSentByThermal:        z.boolean().optional(),
+    showReceivedBy:           z.boolean().optional(),
+    showReceivedByThermal:    z.boolean().optional(),
+    showPreparedBy:           z.boolean().optional(),
+    showPreparedByThermal:    z.boolean().optional(),
+    showFindings:             z.boolean().optional(),
+    showFindingsThermal:      z.boolean().optional(),
+
     termsText:      txt(1000),
     footerLine:     txt(200),
     signatureLabel: txt(80),

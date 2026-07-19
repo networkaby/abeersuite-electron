@@ -41,7 +41,6 @@ export const SAMPLE_SHIPPING_SLIP: ShippingSlipBodyData = {
     device:            { type: "Laptop", brand: "Dell", model: "XPS 13", problem: "Screen not turning on." },
     accessories:       "charger, sleeve",
     condition:         "minor scratches on lid",
-    notes:             null,
     hasSlip:           true,
     preparedBy:        "Admin",
 };
@@ -282,7 +281,8 @@ export function buildSampleForKind(kind: VoucherTemplateKind): ThermalReceiptSam
                     { description: "Accessories: charger, cover", quantity: 1, amount: 0 },
                 ],
                 subtotal: null, taxAmount: null, total: null,
-                notes: "Please return the device with this slip.",
+                // No chrome "Notes" line on the slip — the real route sends null too.
+                notes: null,
             };
         case "SERVICE_SHIPPING_LABEL":
             return {

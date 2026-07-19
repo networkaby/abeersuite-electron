@@ -6,7 +6,7 @@
 //
 //   1. Thermal print ALWAYS tries the combined bridge (relay on :9191) first.
 //   2. On bridge offline / failure → fall back to the browser print dialog.
-//   3. The browser fallback offers a FORMAT PICKER (A4 / thermal 80 / 72).
+//   3. The browser fallback offers a FORMAT PICKER (A4 / thermal 80mm).
 //   4. Each format re-renders through its own template (via ?paper=/?width=,
 //      resolved server-side by the page → ReceiptPreview).
 //
@@ -17,16 +17,38 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { Button } from "@/components/ui/button";
 
 const RELAY = "http://localhost:9191";
 
-// Format picker options. `value` encodes "<paper>|<width>" so the 72mm thermal
-// variant (same PaperFormat, narrower width) is distinct from the standard 80mm.
+// Self-contained toolbar styling. This bar lives inside a STANDALONE print
+// document (its own <html>, no app chrome / shadcn), so it carries its own
+// inline styles rather than Tailwind utilities — inspired by the shipping-label
+// toolbar's clean look, but deliberately its own (not shared) implementation.
+const BAR: React.CSSProperties = {
+    display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10,
+    padding: "10px 14px", background: "#fff", borderBottom: "1px solid #ddd",
+    position: "sticky", top: 0, zIndex: 10, marginBottom: 18,
+    fontFamily: "Arial, 'Helvetica Neue', sans-serif",
+};
+const BTN: React.CSSProperties = {
+    fontSize: 13, lineHeight: 1.2, padding: "7px 14px", border: "1px solid #ccc",
+    borderRadius: 7, background: "#fff", color: "#111", cursor: "pointer",
+};
+const BTN_PRIMARY: React.CSSProperties = { ...BTN, background: "#111", color: "#fff", borderColor: "#111" };
+const BTN_GHOST: React.CSSProperties = { ...BTN, border: "1px solid transparent", color: "#555" };
+const SEG_WRAP: React.CSSProperties = { display: "inline-flex", border: "1px solid #ccc", borderRadius: 7, overflow: "hidden" };
+const segBtn = (active: boolean, first: boolean): React.CSSProperties => ({
+    fontSize: 13, lineHeight: 1.2, padding: "7px 14px", border: 0,
+    borderLeft: first ? 0 : "1px solid #ddd",
+    background: active ? "#111" : "#fff", color: active ? "#fff" : "#333", cursor: "pointer",
+});
+const STATUS = (color: string): React.CSSProperties => ({ fontSize: 12, color });
+
+// Format picker options. `value` encodes "<paper>|<width>"; width is left blank
+// (the 72mm variant was dropped — 80mm is the single thermal width).
 const FORMAT_OPTIONS = [
-    { value: "A4|",             label: "A4" },
-    { value: "THERMAL_80MM|",   label: "Thermal 80mm" },
-    { value: "THERMAL_80MM|72", label: "Thermal 72mm" },
+    { value: "A4|",           label: "A4" },
+    { value: "THERMAL_80MM|", label: "Thermal 80mm" },
 ] as const;
 
 export type BridgeEndpoint = "/print/pos" | "/print/payment" | "/print/voucher";
@@ -132,40 +154,46 @@ export default function PrintToolbar({
     const pickerVisible = showFormatPicker && status === "browser";
 
     return (
-        <div className="no-print mb-3 flex items-center gap-2">
-            {pickerVisible && (
-                <select
-                    value={currentValue}
-                    onChange={(e) => onFormatChange(e.target.value)}
-                    aria-label="Paper format"
-                    className="h-8 rounded-md border border-input bg-background px-2 text-sm"
-                >
-                    {FORMAT_OPTIONS.map((o) => (
-                        <option key={o.value} value={o.value}>{o.label}</option>
-                    ))}
-                </select>
-            )}
-
+        <div className="no-print" style={BAR}>
             {bridge && (
-                <Button onClick={() => void runThermal()} size="sm" disabled={status === "trying"}>
+                <button
+                    type="button"
+                    onClick={() => void runThermal()}
+                    disabled={status === "trying"}
+                    style={{ ...BTN_PRIMARY, opacity: status === "trying" ? 0.6 : 1 }}
+                >
                     🖨️ Print (thermal)
-                </Button>
+                </button>
             )}
-            <Button
-                onClick={() => window.print()}
-                size="sm"
-                variant={bridge ? "outline" : "default"}
-            >
+            <button type="button" onClick={() => window.print()} style={bridge ? BTN : BTN_PRIMARY}>
                 {bridge ? "Print in browser" : "🖨️ Print"}
-            </Button>
-            <Button onClick={() => window.close()} size="sm" variant="ghost">
-                ✕ Close
-            </Button>
+            </button>
 
-            {status === "trying"  && <span className="text-xs text-muted-foreground">Sending to thermal printer…</span>}
-            {status === "thermal" && <span className="text-xs text-green-600">✓ Sent to thermal printer</span>}
+            {pickerVisible && (
+                <div role="group" aria-label="Paper format" style={SEG_WRAP}>
+                    {FORMAT_OPTIONS.map((o, i) => (
+                        <button
+                            key={o.value}
+                            type="button"
+                            onClick={() => onFormatChange(o.value)}
+                            aria-pressed={o.value === currentValue}
+                            style={segBtn(o.value === currentValue, i === 0)}
+                        >
+                            {o.label}
+                        </button>
+                    ))}
+                </div>
+            )}
+
+            <button type="button" onClick={() => window.close()} style={BTN_GHOST}>
+                ✕ Close
+            </button>
+
+            <span style={{ flex: 1 }} />
+            {status === "trying"  && <span style={STATUS("#666")}>Sending to thermal printer…</span>}
+            {status === "thermal" && <span style={STATUS("#16a34a")}>✓ Sent to thermal printer</span>}
             {bridge && status === "browser" && (
-                <span className="text-xs text-amber-600">Relay offline — using browser print</span>
+                <span style={STATUS("#d97706")}>Relay offline — using browser print</span>
             )}
         </div>
     );

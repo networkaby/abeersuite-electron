@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { z } from "zod";
 import { Priority } from "@/generated/prisma/enums";
+import { Prisma } from "@/generated/prisma/client";
+import { statusHasWorkflowRole } from "@/shared/lib/constants/workflow";
 import { resolvedUserFromSession } from "@/shared/lib/auth/permissions";
 import { passesWorkGate } from "@/modules/repairing/lib/workGate";
 import { findEntryWorker } from "@/modules/repairing/lib/entryWorker";
@@ -136,7 +138,7 @@ export async function PUT(
         const { id } = await params;
         const scopedTicket = await prisma.ticket.findUnique({
             where: { id: Number(id) },
-            select: { id: true, status: true },
+            select: { id: true, status: true, context: true },
         });
         if (!scopedTicket) return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
 
@@ -186,6 +188,27 @@ export async function PUT(
                 ...(Object.keys(repairData).length ? { repair: { update: repairData } } : {}),
             },
         });
+
+        // Lock the latest service slip once the device is physically sent — i.e.
+        // the ticket enters an `atServiceCentre` status (S65 "Sent To Service").
+        // A locked slip can no longer be edited; a later re-escalation to S62
+        // starts a fresh slip. Skipped on undo/back (that's not a real send).
+        if (body.status && !("restoreWorkerId" in body) && statusHasWorkflowRole("atServiceCentre", body.status)) {
+            const ctx =
+                scopedTicket.context && typeof scopedTicket.context === "object" && !Array.isArray(scopedTicket.context)
+                    ? (scopedTicket.context as Record<string, unknown>)
+                    : {};
+            const list = Array.isArray(ctx.shippingSlips) ? [...(ctx.shippingSlips as Record<string, unknown>[])] : [];
+            const last = list[list.length - 1];
+            if (last && !last.locked) {
+                const locked = { ...last, locked: true, sentAt: new Date().toISOString() };
+                list[list.length - 1] = locked;
+                await prisma.ticket.update({
+                    where: { id: ticket.id },
+                    data: { context: { ...ctx, shippingSlip: locked, shippingSlips: list } as Prisma.InputJsonValue },
+                });
+            }
+        }
 
         if (body.status) {
             if ("restoreWorkerId" in body) {

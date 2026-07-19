@@ -15,11 +15,27 @@ import { PartySearchAndCreate, type PickedParty } from "@/shared/components/Part
 
 interface DeviceInfo { type: string; brand: string; model: string; problem: string; }
 
+/** The latest slip's stored values — passed in to EDIT it in place. */
+export interface ExistingSlip {
+    partyAccountId: number;
+    partyName: string;
+    ref: string | null;
+    device: DeviceInfo;
+    accessories: string | null;
+    condition: string | null;
+    notes: string | null;
+    showOwner?: boolean;
+    contactName?: string | null;
+    contactPhone?: string | null;
+}
+
 interface Props {
     ticketId: number;
     device: DeviceInfo;
     /** Real device owner — prefills the contact fields when the toggle is on. */
     owner: { name: string; phone: string | null };
+    /** When set, the modal edits this slip in place instead of creating a new one. */
+    existing?: ExistingSlip | null;
     onClose: () => void;
     onSaved: () => void;
 }
@@ -29,24 +45,41 @@ interface Props {
 // from the ticket and editable. On save we persist a snapshot on the ticket and
 // open the printable A5 slip. Print-only — it never changes the ticket status;
 // the Sending / Waiting / Getting-back stages are configured as normal statuses.
-export default function ShippingSlipModal({ ticketId, device, owner, onClose, onSaved }: Props) {
-    const [party, setParty] = useState<{ accountId: number; name: string } | null>(null);
-    const [form, setForm] = useState({
-        type: device.type ?? "",
-        brand: device.brand ?? "",
-        model: device.model ?? "",
-        problem: device.problem ?? "",
-        ref: "",
-        accessories: "",
-        condition: "",
-        notes: "",
-        // Contact box on the slip — default: shop fronts the contact on behalf
-        // of the owner (privacy); toggle prefills the real owner instead. The
-        // fields stay editable either way; whatever is typed is what prints.
-        showOwner: false,
-        contactName: "",
-        contactPhone: "",
-    });
+export default function ShippingSlipModal({ ticketId, device, owner, existing, onClose, onSaved }: Props) {
+    const isEdit = !!existing;
+    const [party, setParty] = useState<{ accountId: number; name: string } | null>(
+        existing ? { accountId: existing.partyAccountId, name: existing.partyName } : null,
+    );
+    const [form, setForm] = useState(() => existing
+        ? {
+            type: existing.device.type ?? "",
+            brand: existing.device.brand ?? "",
+            model: existing.device.model ?? "",
+            problem: existing.device.problem ?? "",
+            ref: existing.ref ?? "",
+            accessories: existing.accessories ?? "",
+            condition: existing.condition ?? "",
+            notes: existing.notes ?? "",
+            showOwner: existing.showOwner ?? false,
+            contactName: existing.contactName ?? "",
+            contactPhone: existing.contactPhone ?? "",
+        }
+        : {
+            type: device.type ?? "",
+            brand: device.brand ?? "",
+            model: device.model ?? "",
+            problem: device.problem ?? "",
+            ref: "",
+            accessories: "",
+            condition: "",
+            notes: "",
+            // Contact box on the slip — default: shop fronts the contact on behalf
+            // of the owner (privacy); toggle prefills the real owner instead. The
+            // fields stay editable either way; whatever is typed is what prints.
+            showOwner: false,
+            contactName: "",
+            contactPhone: "",
+        });
     const [saving, setSaving] = useState(false);
 
     const set = (patch: Partial<typeof form>) => setForm((f) => ({ ...f, ...patch }));
@@ -60,13 +93,14 @@ export default function ShippingSlipModal({ ticketId, device, owner, onClose, on
                 if (cancelled) return;
                 shopRef.current = { name: r.data.brandName ?? "", phone: r.data.phone ?? "" };
                 // Seed the default (shop) contact if the user hasn't typed anything yet.
-                setForm((f) => f.showOwner || f.contactName || f.contactPhone
+                // On edit we keep exactly what the slip stored (even if blank).
+                setForm((f) => isEdit || f.showOwner || f.contactName || f.contactPhone
                     ? f
                     : { ...f, contactName: shopRef.current.name, contactPhone: shopRef.current.phone });
             })
             .catch(() => { /* fields just start blank */ });
         return () => { cancelled = true; };
-    }, []);
+    }, [isEdit]);
 
     // Toggle swaps the prefill: owner ↔ shop. Always editable after.
     const toggleShowOwner = (checked: boolean) => {
@@ -93,7 +127,7 @@ export default function ShippingSlipModal({ ticketId, device, owner, onClose, on
         }
         setSaving(true);
         try {
-            await axios.post(`/api/tickets/${ticketId}/shipping-slip`, {
+            const payload = {
                 partyAccountId: party.accountId,
                 partyName: party.name,
                 ref: form.ref.trim() || null,
@@ -104,17 +138,20 @@ export default function ShippingSlipModal({ ticketId, device, owner, onClose, on
                 showOwner: form.showOwner,
                 contactName: form.contactName.trim() || null,
                 contactPhone: form.contactPhone.trim() || null,
-            });
-            toast.success("Service slip saved");
+            };
+            const url = `/api/tickets/${ticketId}/shipping-slip`;
+            if (isEdit) await axios.put(url, payload);
+            else await axios.post(url, payload);
+            toast.success(isEdit ? "Service slip updated" : "Service slip saved");
 
-            // Print the slip (page auto-fires the print dialog on load).
+            // Open the (updated) slip — the page auto-fires the print dialog on load.
             window.open(`/shipping-slip/${ticketId}`, "_blank");
 
             onSaved();
             onClose();
         } catch (err) {
             const msg = axios.isAxiosError(err) ? err.response?.data?.error : null;
-            toast.error(msg ?? "Failed to save service slip");
+            toast.error(msg ?? (isEdit ? "Failed to update service slip" : "Failed to save service slip"));
         } finally {
             setSaving(false);
         }
@@ -125,11 +162,12 @@ export default function ShippingSlipModal({ ticketId, device, owner, onClose, on
             <DialogContent className="sm:max-w-5xl max-h-[92vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
-                        <Truck size={18} /> Create Service Slip
+                        <Truck size={18} /> {isEdit ? "Edit Service Slip" : "Create Service Slip"}
                     </DialogTitle>
                     <DialogDescription>
-                        Send the device to a service centre. Pick or create the service centre
-                        (a Sundry Creditor), check the device details, then save &amp; print.
+                        {isEdit
+                            ? "Correct this slip before the device is sent. Changes overwrite the current slip and are logged on the timeline."
+                            : "Send the device to a service centre. Pick or create the service centre (a Sundry Creditor), check the device details, then save & print."}
                     </DialogDescription>
                 </DialogHeader>
 
@@ -212,7 +250,7 @@ export default function ShippingSlipModal({ ticketId, device, owner, onClose, on
                 <DialogFooter>
                     <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
                     <Button onClick={handleSave} disabled={saving || !party}>
-                        <Truck size={15} /> {saving ? "Saving…" : "Save & Print"}
+                        <Truck size={15} /> {saving ? "Saving…" : isEdit ? "Save Changes & Print" : "Save & Print"}
                     </Button>
                 </DialogFooter>
             </DialogContent>

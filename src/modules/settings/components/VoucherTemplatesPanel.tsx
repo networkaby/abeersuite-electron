@@ -18,6 +18,7 @@ import { ShippingSlipBody } from "@/shared/components/print/ShippingSlipBody";
 import ShippingLabel from "@/shared/components/print/ShippingLabel";
 import {
     VOUCHER_TEMPLATE_KIND_GROUPS,
+    resolveTemplateForFormat,
     type VoucherTemplateDefaults,
     type VoucherTemplateKind,
     type PaperFormat,
@@ -92,6 +93,15 @@ const LABEL_FIELD_ELEMENTS: { label: string; a4: BoolTemplateKey; thermal: BoolT
     { label: "Footer (handle-with-care)", a4: "showFooter", thermal: "showFooterThermal", tl: "showFooterTl" },
 ];
 
+// Service Slip sign-off rows — a switch per format (A4 · Thermal) like the
+// Show/hide table above.
+const SLIP_SIGNOFF_ELEMENTS: { label: string; a4: BoolTemplateKey; thermal: BoolTemplateKey }[] = [
+    { label: "Received by (Service Centre)",   a4: "showReceivedBy", thermal: "showReceivedByThermal" },
+    { label: "Sent by (Shop)",                 a4: "showSentBy",     thermal: "showSentByThermal" },
+    { label: "Prepared by (name line)",        a4: "showPreparedBy", thermal: "showPreparedByThermal" },
+    { label: "Findings & note (Service Centre use)", a4: "showFindings", thermal: "showFindingsThermal" },
+];
+
 // The bespoke documents (repair ticket / shipping slip) have no line-items
 // table, tax, barcode or issuing branch — hide those toggles for them.
 const BESPOKE_HIDDEN_ELEMENTS = new Set<BoolTemplateKey>([
@@ -143,9 +153,25 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
     // Bespoke documents carry their OWN body (not the invoice line-items layout),
     // so preview the real body and drop the phantom line-items sample. Their
     // Show/Hide table also hides the toggles that don't apply.
+    const isSlip = selectedKind === "SHIPPING_SLIP";
+    // Sign-off flags follow the previewed format (A4 vs 80mm) so toggling either
+    // column updates the live preview.
+    const slipFlags = resolveTemplateForFormat(current, previewFormat);
     const bespokeBody =
         selectedKind === "REPAIR_TICKET" ? <RepairTicketBody data={SAMPLE_REPAIR_TICKET} /> :
-        selectedKind === "SHIPPING_SLIP" ? <ShippingSlipBody data={SAMPLE_SHIPPING_SLIP} /> :
+        isSlip ? (
+            <ShippingSlipBody
+                thermal={previewFormat === "THERMAL_80MM"}
+                data={{
+                    ...SAMPLE_SHIPPING_SLIP,
+                    showSentBy:     slipFlags.showSentBy,
+                    showReceivedBy: slipFlags.showReceivedBy,
+                    showPreparedBy: slipFlags.showPreparedBy,
+                    showFindings:   slipFlags.showFindings,
+                    sentByLabel:    current.signatureLabel,
+                }}
+            />
+        ) :
         null;
 
     // The shipping label is its OWN postcard document (not the letterhead chrome),
@@ -171,9 +197,14 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
     const previewSample = bespokeBody
         ? { ...sample, lines: [], subtotal: null, taxAmount: null, total: null, discounts: null, hsnSummary: null }
         : sample;
-    const visibleElements = BESPOKE_KINDS.has(selectedKind)
-        ? SHOW_HIDE_ELEMENTS.filter((e) => !BESPOKE_HIDDEN_ELEMENTS.has(e.a4))
-        : SHOW_HIDE_ELEMENTS;
+    const visibleElements = (() => {
+        if (!BESPOKE_KINDS.has(selectedKind)) return SHOW_HIDE_ELEMENTS;
+        const hidden = new Set(BESPOKE_HIDDEN_ELEMENTS);
+        // The slip has its own Sent/Received/Prepared toggles, so drop the
+        // generic Signature row for it (it never drove the slip anyway).
+        if (isSlip) hidden.add("showSignature");
+        return SHOW_HIDE_ELEMENTS.filter((e) => !hidden.has(e.a4));
+    })();
 
     function setField<K extends keyof VoucherTemplateDefaults>(
         field: K,
@@ -417,6 +448,40 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
                         })()}
                     </fieldset>
 
+                    {/* Service Slip sign-off rows — each toggles independently. */}
+                    {isSlip && (
+                        <fieldset className="space-y-2">
+                            <legend className="text-xs uppercase tracking-wide font-medium text-muted-foreground">
+                                Sign-off
+                            </legend>
+                            <div className="rounded-md border overflow-hidden">
+                                <div className="grid grid-cols-[1fr_3.5rem_3.5rem] items-center gap-x-2 border-b bg-muted/40 px-3 py-1.5 text-[10px] uppercase tracking-wide font-medium text-muted-foreground">
+                                    <span>Element</span>
+                                    <span className="text-center">A4</span>
+                                    <span className="text-center">Thermal</span>
+                                </div>
+                                {SLIP_SIGNOFF_ELEMENTS.map((el) => (
+                                    <div
+                                        key={el.a4}
+                                        className="grid grid-cols-[1fr_3.5rem_3.5rem] items-center gap-x-2 border-b px-3 py-1.5 text-sm last:border-0"
+                                    >
+                                        <span className="truncate">{el.label}</span>
+                                        <Switch
+                                            className="justify-self-center"
+                                            checked={current[el.a4]}
+                                            onCheckedChange={(v) => setField(el.a4, v)}
+                                        />
+                                        <Switch
+                                            className="justify-self-center"
+                                            checked={current[el.thermal]}
+                                            onCheckedChange={(v) => setField(el.thermal, v)}
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                        </fieldset>
+                    )}
+
                     {/* Footer — the label prints only the footer line (its bottom
                         strip); terms / signature / disclaimer are voucher-only. */}
                     <fieldset className="space-y-2.5">
@@ -438,7 +503,7 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
                                         onChange={(e) => setField("termsText", e.target.value)}
                                     />
                                 </Field>
-                                <Field label="Signature label">
+                                <Field label="Signature label" hint={isSlip ? "The shop's signature line on the slip (e.g. \"Sent by (Shop)\")." : undefined}>
                                     <Input
                                         value={current.signatureLabel}
                                         onChange={(e) => setField("signatureLabel", e.target.value)}

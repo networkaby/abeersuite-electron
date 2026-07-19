@@ -6,6 +6,7 @@ import { z } from "zod";
 import { resolvedUserFromSession } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { buildActorSnapshot, type ActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
+import { statusHasWorkflowRole } from "@/shared/lib/constants/workflow";
 
 // Simplified "send device to a service centre" slip. Rather than a new table,
 // the slip is stored as a snapshot on the existing Ticket.context JSON bag under
@@ -117,5 +118,97 @@ export async function POST(
         return NextResponse.json({ ok: true, slip: frozen });
     } catch (e) {
         return handleApiError(e, "Failed to save shipping slip");
+    }
+}
+
+// Edit the LATEST slip in place — allowed only while the device hasn't been sent
+// yet: the ticket must still be at the send stage (`shipToService` role, S62) and
+// the latest slip must not be locked (locking happens on entry to S65). Keeps the
+// slip's identity (seq / createdAt / createdBy) and stamps editedAt / editedBy.
+export async function PUT(
+    req: Request,
+    { params }: { params: Promise<{ id: string }> },
+) {
+    try {
+        const session = await auth();
+        if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        const resolvedUser = resolvedUserFromSession(session);
+
+        const { id } = await params;
+        const ticketId = Number(id);
+        const ticket = await prisma.ticket.findUnique({
+            where: { id: ticketId },
+            select: { id: true, status: true, context: true },
+        });
+        if (!ticket) return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
+
+        const { data, error } = await validateRequest(req, slipSchema);
+        if (error) return error;
+
+        const prevContext =
+            ticket.context && typeof ticket.context === "object" && !Array.isArray(ticket.context)
+                ? (ticket.context as Record<string, unknown>)
+                : {};
+        const list: Record<string, unknown>[] = Array.isArray(prevContext.shippingSlips)
+            ? [...(prevContext.shippingSlips as Record<string, unknown>[])]
+            : prevContext.shippingSlip
+                ? [prevContext.shippingSlip as Record<string, unknown>]
+                : [];
+        const last = list[list.length - 1];
+        if (!last) return NextResponse.json({ error: "No service slip to edit" }, { status: 404 });
+        if (last.locked) {
+            return NextResponse.json({ error: "This slip was already sent and can no longer be edited" }, { status: 409 });
+        }
+        if (!statusHasWorkflowRole("shipToService", ticket.status)) {
+            return NextResponse.json({ error: "The slip can only be edited while the ticket is at the send stage" }, { status: 409 });
+        }
+
+        const author = await buildActorSnapshot(resolvedUser.id);
+        const editedBy = (author as unknown as ActorSnapshot).userName ?? null;
+
+        // Overwrite the editable fields; preserve the slip's identity + creation stamps.
+        const updated = {
+            ...last,
+            partyAccountId: data.partyAccountId,
+            partyName: data.partyName,
+            ref: data.ref?.trim() || null,
+            date: data.date?.trim() || (last.date as string) || new Date().toISOString(),
+            device: {
+                type: data.device.type ?? "",
+                brand: data.device.brand ?? "",
+                model: data.device.model ?? "",
+                problem: data.device.problem ?? "",
+            },
+            accessories: data.accessories?.trim() || null,
+            condition: data.condition?.trim() || null,
+            notes: data.notes?.trim() || null,
+            showOwner: data.showOwner,
+            contactName: data.contactName?.trim() || null,
+            contactPhone: data.contactPhone?.trim() || null,
+            editedAt: new Date().toISOString(),
+            editedBy,
+        };
+        list[list.length - 1] = updated;
+
+        await prisma.ticket.update({
+            where: { id: ticketId },
+            data: { context: { ...prevContext, shippingSlip: updated, shippingSlips: list } as Prisma.InputJsonValue },
+        });
+
+        const seq = (updated.seq as number | undefined) ?? list.length;
+        await prisma.ticketLog.create({
+            data: {
+                ticketId,
+                status: ticket.status,
+                note: `Shipping slip #${seq} edited → ${data.partyName}${data.ref?.trim() ? ` (Ref: ${data.ref.trim()})` : ""}`,
+                visibility: "INTERNAL",
+                author,
+                data: { shippingSlip: updated },
+            },
+        });
+
+        return NextResponse.json({ ok: true, slip: updated });
+    } catch (e) {
+        return handleApiError(e, "Failed to edit shipping slip");
     }
 }

@@ -150,6 +150,13 @@ const FOOTER_LINE_BY_KIND: Partial<Record<VoucherTemplateKind, string>> = {
 
 const DEFAULT_DISCLAIMER_LINE = "This is a computer-generated document and does not require a signature.";
 
+// Per-kind signature-label overrides. On the service slip the label IS the
+// shop's signature line ("Sent by (Shop)"); other kinds use the generic
+// "Authorised Signatory".
+const SIGNATURE_LABEL_BY_KIND: Partial<Record<VoucherTemplateKind, string>> = {
+    SHIPPING_SLIP: "Sent by (Shop)",
+};
+
 const TERMS_TEXT_BY_KIND: Partial<Record<VoucherTemplateKind, string>> = {
     REPAIR_TICKET: [
         "1. Please keep this receipt. It is required for device collection.",
@@ -316,6 +323,12 @@ export interface VoucherTemplateDefaults {
     showRef: boolean;                showRefThermal: boolean;                showRefTl: boolean;
     showDevice: boolean;             showDeviceThermal: boolean;             showDeviceTl: boolean;   // OFF by default — theft risk
     showFooter: boolean;             showFooterThermal: boolean;             showFooterTl: boolean;
+    // Service Slip sign-off rows — each independently toggleable, per format
+    // (A4 base + Thermal). Ignored by every other kind. On by default.
+    showSentBy: boolean;             showSentByThermal: boolean;
+    showReceivedBy: boolean;         showReceivedByThermal: boolean;
+    showPreparedBy: boolean;         showPreparedByThermal: boolean;
+    showFindings: boolean;           showFindingsThermal: boolean;   // findings box + return note
     termsText: string;
     footerLine: string;
     signatureLabel: string;
@@ -361,9 +374,14 @@ export function buildVoucherTemplateDefaults(kind: VoucherTemplateKind): Voucher
         showRef: true,                                   showRefThermal: true,             showRefTl: true,
         showDevice: false,                               showDeviceThermal: false,         showDeviceTl: false,
         showFooter: true,                                showFooterThermal: true,          showFooterTl: true,
+        // Slip sign-off rows — all shown by default (A4 + thermal mirror).
+        showSentBy: true,                                showSentByThermal: true,
+        showReceivedBy: true,                            showReceivedByThermal: true,
+        showPreparedBy: true,                            showPreparedByThermal: true,
+        showFindings: true,                              showFindingsThermal: true,
         termsText: TERMS_TEXT_BY_KIND[kind] ?? "",
         footerLine: FOOTER_LINE_BY_KIND[kind] ?? "Thank you · Visit again",
-        signatureLabel: "Authorised Signatory",
+        signatureLabel: SIGNATURE_LABEL_BY_KIND[kind] ?? "Authorised Signatory",
         disclaimerLine: DEFAULT_DISCLAIMER_LINE,
         defaultPaper: DEFAULT_PAPER_BY_KIND[kind],
         paperWidthMm: 80,
@@ -402,6 +420,11 @@ export type VoucherPrintTemplateRow = {
     showRef?: boolean | null;                 showRefThermal?: boolean | null;                 showRefTl?: boolean | null;
     showDevice?: boolean | null;              showDeviceThermal?: boolean | null;              showDeviceTl?: boolean | null;
     showFooter?: boolean | null;              showFooterThermal?: boolean | null;              showFooterTl?: boolean | null;
+    // Slip sign-off rows — optional so reads tolerate the pre-`db push` window.
+    showSentBy?: boolean | null;              showSentByThermal?: boolean | null;
+    showReceivedBy?: boolean | null;          showReceivedByThermal?: boolean | null;
+    showPreparedBy?: boolean | null;          showPreparedByThermal?: boolean | null;
+    showFindings?: boolean | null;            showFindingsThermal?: boolean | null;
     termsText: string; footerLine: string; signatureLabel: string;
     disclaimerLine?: string | null; // guards the window before `prisma db push` adds the column
     defaultPaper: string; paperWidthMm: number; fontFamily: string; fontSizePx: number;
@@ -461,6 +484,14 @@ export function rowToVoucherTemplateDefaults(row: VoucherPrintTemplateRow): Vouc
         showFooter:               row.showFooter               ?? f.showFooter,
         showFooterThermal:        row.showFooterThermal        ?? f.showFooterThermal,
         showFooterTl:             row.showFooterTl             ?? f.showFooterTl,
+        showSentBy:               row.showSentBy               ?? f.showSentBy,
+        showSentByThermal:        row.showSentByThermal        ?? f.showSentByThermal,
+        showReceivedBy:           row.showReceivedBy           ?? f.showReceivedBy,
+        showReceivedByThermal:    row.showReceivedByThermal    ?? f.showReceivedByThermal,
+        showPreparedBy:           row.showPreparedBy           ?? f.showPreparedBy,
+        showPreparedByThermal:    row.showPreparedByThermal    ?? f.showPreparedByThermal,
+        showFindings:             row.showFindings             ?? f.showFindings,
+        showFindingsThermal:      row.showFindingsThermal      ?? f.showFindingsThermal,
         termsText:      row.termsText,
         footerLine:     row.footerLine,
         signatureLabel: row.signatureLabel,
@@ -496,5 +527,9 @@ export function resolveTemplateForFormat(
         showMrp:           t.showMrpThermal,
         showSignature:     t.showSignatureThermal,
         showBarcode:       t.showBarcodeThermal,
+        showSentBy:        t.showSentByThermal,
+        showReceivedBy:    t.showReceivedByThermal,
+        showPreparedBy:    t.showPreparedByThermal,
+        showFindings:      t.showFindingsThermal,
     };
 }

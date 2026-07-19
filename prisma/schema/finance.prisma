@@ -358,6 +358,19 @@ model VoucherPrintTemplate {
   showFooterThermal Boolean @default(true)
   showFooterTl      Boolean @default(true)
 
+  // Service Slip sign-off + notes. Each toggles independently, per format (A4
+  // base flag + Thermal flag) like the other print elements.
+  showSentBy            Boolean @default(true)
+  showSentByThermal     Boolean @default(true)
+  showReceivedBy        Boolean @default(true)
+  showReceivedByThermal Boolean @default(true)
+  showPreparedBy        Boolean @default(true)
+  showPreparedByThermal Boolean @default(true)
+  // The "for Service Centre use" part — findings write-area + the
+  // return-with-device note — one toggle.
+  showFindings          Boolean @default(true)
+  showFindingsThermal   Boolean @default(true)
+
   // Footer
   termsText      String @default("")
   footerLine     String @default("Thank you · Visit again")

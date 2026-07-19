@@ -72,6 +72,8 @@ export default async function ShippingSlipPage({
     // Print Templates settings page (SHIPPING_SLIP kind).
     const template = await getVoucherTemplate("SHIPPING_SLIP");
     const format = resolvePaperFormat(template, sp.paper);
+    // Sign-off flags apply per format (A4 vs 80mm) — resolve once for the body.
+    const resolved = resolveTemplateForFormat(template, format);
     const isThermal = format === "THERMAL_80MM";
     const autoPrint = sp.autoprint !== "0";
 
@@ -163,11 +165,15 @@ export default async function ShippingSlipPage({
         device,
         accessories:       slip?.accessories ?? null,
         condition:         slip?.condition ?? null,
-        notes:             slip?.notes ?? null,
         hasSlip:           !!slip,
         preparedBy:        slip?.createdBy ?? null,
+        showSentBy:        resolved.showSentBy,
+        showReceivedBy:    resolved.showReceivedBy,
+        showPreparedBy:    resolved.showPreparedBy,
+        showFindings:      resolved.showFindings,
+        sentByLabel:       resolved.signatureLabel,
     };
-    const body = <ShippingSlipBody data={bodyData} />;
+    const body = <ShippingSlipBody data={bodyData} thermal={isThermal} />;
 
     return (
         <ReceiptPreview
