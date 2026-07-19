@@ -228,9 +228,10 @@ export default function TicketDetailPage() {
 
     const actionBtnBase = "w-full border border-border py-2 text-sm flex items-center justify-center gap-2 transition-colors hover:bg-muted rounded-md";
 
-    // Work is "in progress" when the ticket has an owner AND an active work worker.
+    // Work is "in progress" when the current worker carries an active Work step.
+    // (Ownership is retired from this UI, so there's no owner gate any more.)
     // When true: StatusNav is locked, all Actions except Add Note are locked.
-    const workInProgress = !!ticket.primaryOwner && !!ticket.ticketWorker?.work;
+    const workInProgress = !!ticket.ticketWorker?.work;
 
     // Single "Back" = true undo — the previous *resting* (status, worker) pair
     // from history. Single pass over logs (newest first), returning the first that:
@@ -589,8 +590,8 @@ export default function TicketDetailPage() {
                             <div className="space-y-3 rounded-lg border border-border bg-card p-4 shadow">
                                 <h2 className="text-sm font-semibold text-foreground">Current work</h2>
                                 <div className="flex flex-wrap items-center gap-2">
-                                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${ticket.primaryOwner ? "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300" : "bg-muted text-muted-foreground"}`}>
-                                        {ticket.primaryOwner ? "In progress" : "To do"}
+                                    <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                                        In progress
                                     </span>
                                     <span className={`rounded-md px-2 py-0.5 text-xs font-medium ${badgeColor(ticket.ticketWorker.work.color).className}`} style={badgeColor(ticket.ticketWorker.work.color).style}>
                                         {ticket.ticketWorker.work.label}
@@ -689,7 +690,7 @@ export default function TicketDetailPage() {
                             statusId={ticket.status}
                             workerId={ticket.workerId ?? null}
                             isWarranty={ticket.isWarranty}
-                            started={!!ticket.primaryOwner}
+                            started={workInProgress}
                             locked={workInProgress}
                             leavePrompt={ticket.ticketStatus.leavePrompt}
                             nextStatuses={ticket.ticketStatus.fromTransitions.map((t) => t.to)}
