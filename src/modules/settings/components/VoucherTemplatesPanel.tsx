@@ -158,7 +158,7 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
     // column updates the live preview.
     const slipFlags = resolveTemplateForFormat(current, previewFormat);
     const bespokeBody =
-        selectedKind === "REPAIR_TICKET" ? <RepairTicketBody data={SAMPLE_REPAIR_TICKET} /> :
+        selectedKind === "REPAIR_TICKET" ? <RepairTicketBody data={SAMPLE_REPAIR_TICKET} thermal={previewFormat === "THERMAL_80MM"} /> :
         isSlip ? (
             <ShippingSlipBody
                 thermal={previewFormat === "THERMAL_80MM"}
@@ -664,6 +664,7 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
                                     sample={previewSample}
                                     body={bespokeBody}
                                     previewMode
+                                    previewFill
                                 />
                             )}
                         </div>

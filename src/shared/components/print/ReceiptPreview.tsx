@@ -32,6 +32,10 @@ export interface ReceiptPreviewProps {
     template:     VoucherTemplateDefaults;
     sample:       ThermalReceiptSample;
     previewMode?: boolean;
+    /** In previewMode, let the preview grow to its natural height instead of
+     *  scrolling inside its own box — the host (e.g. the full-size modal)
+     *  supplies the single scroll container. Avoids a nested double scrollbar. */
+    previewFill?: boolean;
     toolbar?:     React.ReactNode;
     docTitle?:    string;
     /** Custom middle for bespoke documents. When set, replaces the invoice
@@ -44,6 +48,7 @@ export default function ReceiptPreview({
     template,
     sample,
     previewMode,
+    previewFill,
     toolbar,
     docTitle,
     body,
@@ -57,6 +62,7 @@ export default function ReceiptPreview({
                 template={t}
                 sample={sample}
                 previewMode={previewMode}
+                previewFill={previewFill}
                 toolbar={toolbar}
                 docTitle={docTitle}
                 body={body}
@@ -68,6 +74,7 @@ export default function ReceiptPreview({
             template={t}
             sample={sample}
             previewMode={previewMode}
+            previewFill={previewFill}
             toolbar={toolbar}
             docTitle={docTitle}
             body={body}

@@ -94,7 +94,7 @@ export default async function ReceiptPage({
         priority:      ticket.priority,
         createdBy:     createdByName,
     };
-    const body = <RepairTicketBody data={bodyData} />;
+    const body = <RepairTicketBody data={bodyData} thermal={isThermal} />;
 
     return (
         <ReceiptPreview

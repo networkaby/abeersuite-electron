@@ -536,6 +536,9 @@ export interface A4InvoicePreviewProps {
     sample:      ThermalReceiptSample;
     /** True → returns just the sheet (for in-page preview). False → full HTML document. */
     previewMode?: boolean;
+    /** previewMode: grow to natural height (host owns the scroll) instead of
+     *  scrolling inside its own maxHeight box. Prevents a nested double scroll. */
+    previewFill?: boolean;
     /** Inserted before the sheet inside <body>. Used by the print route for the Print/Close toolbar. */
     toolbar?:    React.ReactNode;
     /** <head><title> when not in previewMode. */
@@ -550,6 +553,7 @@ export default function A4InvoicePreview({
     template,
     sample,
     previewMode = false,
+    previewFill = false,
     toolbar,
     docTitle,
     body,
@@ -557,8 +561,8 @@ export default function A4InvoicePreview({
     if (previewMode) {
         return (
             <div
-                className={`${A4_PREVIEW_SCOPE_CLASS} bg-white text-black border border-border shadow-sm overflow-auto`}
-                style={{ maxHeight: 720 }}
+                className={`${A4_PREVIEW_SCOPE_CLASS} bg-white text-black border border-border shadow-sm${previewFill ? "" : " overflow-auto"}`}
+                style={previewFill ? undefined : { maxHeight: 720 }}
             >
                 <style>{inlineA4Styles(`.${A4_PREVIEW_SCOPE_CLASS}`)}</style>
                 <InvoiceBody template={template} sample={sample} body={body} />

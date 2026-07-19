@@ -371,6 +371,9 @@ export interface ThermalReceiptPreviewProps {
     sample:      ThermalReceiptSample;
     /** When true, returns just the body fragment (for in-page preview). */
     previewMode?: boolean;
+    /** previewMode: grow to natural height (host owns the scroll) instead of
+     *  scrolling inside its own maxHeight box. Prevents a nested double scroll. */
+    previewFill?: boolean;
     /** Inserted inside the <body> ahead of the receipt — used by the print
      *  route to drop in the Print/Close toolbar. Ignored in previewMode. */
     toolbar?:    React.ReactNode;
@@ -386,6 +389,7 @@ export default function ThermalReceiptPreview({
     template,
     sample,
     previewMode = false,
+    previewFill = false,
     toolbar,
     docTitle,
     body,
@@ -393,13 +397,13 @@ export default function ThermalReceiptPreview({
     if (previewMode) {
         return (
             <div
-                className={`${THERMAL_PREVIEW_SCOPE_CLASS} border border-border bg-white text-black overflow-auto`}
+                className={`${THERMAL_PREVIEW_SCOPE_CLASS} border border-border bg-white text-black${previewFill ? "" : " overflow-auto"}`}
                 style={{
                     width:      `${template.paperWidthMm * 4}px`,
                     fontFamily: template.fontFamily,
                     fontSize:   `${template.fontSizePx}px`,
                     padding:    12,
-                    maxHeight:  600,
+                    ...(previewFill ? {} : { maxHeight: 600 }),
                 }}
             >
                 <style>{inlineStyleFromTemplate(template, `.${THERMAL_PREVIEW_SCOPE_CLASS}`)}</style>

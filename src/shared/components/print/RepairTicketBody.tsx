@@ -40,7 +40,9 @@ function InfoRow({ label, value, bold }: { label: string; value: React.ReactNode
     );
 }
 
-export function RepairTicketBody({ data }: { data: RepairTicketBodyData }) {
+// ── Thermal — 80mm roll strip (the ticket's default format) ──────────────────
+// Sections stack down the roll, label/value justified to the two edges.
+function ThermalTicket({ data }: { data: RepairTicketBodyData }) {
     const { customer, device } = data;
     return (
         <>
@@ -89,4 +91,74 @@ export function RepairTicketBody({ data }: { data: RepairTicketBodyData }) {
             {data.createdBy && <InfoRow label="Created by" value={data.createdBy} />}
         </>
     );
+}
+
+// ── A4 — its own wide-page design (NOT the thermal strip stretched) ──────────
+// Ticket + date on one line, Customer/Device as side-by-side boxes, Problem and
+// Accessories full width, then a meta strip (estimate · priority · created by).
+const A4_BOX: React.CSSProperties = { flex: 1, minWidth: 150, border: "1px solid #ccc", borderRadius: 4, padding: 8 };
+const A4_BOX_TITLE: React.CSSProperties = { fontSize: 10, textTransform: "uppercase", letterSpacing: 1, color: "#666", marginBottom: 4 };
+
+function A4Row({ label, value, bold }: { label: string; value: React.ReactNode; bold?: boolean }) {
+    return (
+        <div style={{ display: "flex", gap: 8, margin: "2px 0" }}>
+            <span style={{ color: "#555", minWidth: 52 }}>{label}</span>
+            <span style={{ fontWeight: bold ? 700 : 400 }}>{value}</span>
+        </div>
+    );
+}
+
+function A4Ticket({ data }: { data: RepairTicketBodyData }) {
+    const { customer, device } = data;
+    return (
+        <>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, margin: "4px 0" }}>
+                <span style={{ fontSize: 18, fontWeight: 700, letterSpacing: 1.5 }}>{data.ticketNo}</span>
+                <span style={{ color: "#555" }}>{data.date}</span>
+            </div>
+
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 8 }}>
+                <div style={A4_BOX}>
+                    <div style={A4_BOX_TITLE}>Customer</div>
+                    <A4Row label="Name" value={customer.name ?? "—"} bold />
+                    <A4Row label="Phone" value={customer.phone ?? "—"} />
+                    {customer.email && <A4Row label="Email" value={customer.email} />}
+                </div>
+                <div style={A4_BOX}>
+                    <div style={A4_BOX_TITLE}>Device</div>
+                    <A4Row label="Type" value={device.type} />
+                    <A4Row label="Brand" value={device.brand} />
+                    <A4Row label="Model" value={device.model} />
+                </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 12 }}>
+                <div style={A4_BOX}>
+                    <div style={A4_BOX_TITLE}>Reported Problem</div>
+                    <div style={{ lineHeight: 1.5 }}>{data.problem}</div>
+                </div>
+                <div style={A4_BOX}>
+                    <div style={A4_BOX_TITLE}>Accessories Received</div>
+                    {data.accessories
+                        ? <div style={{ lineHeight: 1.5 }}>{data.accessories}</div>
+                        : <div style={{ fontStyle: "italic", color: "#555" }}>No accessories received.</div>}
+                </div>
+            </div>
+
+            {/* Meta strip — estimate / priority / created-by across the width. */}
+            <div style={{ display: "flex", gap: "2.5em", flexWrap: "wrap", borderTop: "1px solid #ddd", marginTop: 14, paddingTop: 8 }}>
+                {data.estimatedCost != null && (
+                    <span><span style={{ color: "#555" }}>Estimated Cost</span> <b>₹ {data.estimatedCost}</b></span>
+                )}
+                <span><span style={{ color: "#555" }}>Priority</span> <b>{data.priority}</b></span>
+                {data.createdBy && <span><span style={{ color: "#555" }}>Created by</span> {data.createdBy}</span>}
+            </div>
+        </>
+    );
+}
+
+// Two bespoke layouts — the A4 page and the 80mm strip are different documents
+// by design (per the house rule: never stretch the thermal layout onto A4).
+export function RepairTicketBody({ data, thermal = false }: { data: RepairTicketBodyData; thermal?: boolean }) {
+    return thermal ? <ThermalTicket data={data} /> : <A4Ticket data={data} />;
 }
