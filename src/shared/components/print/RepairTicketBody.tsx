@@ -112,9 +112,9 @@ function A4Ticket({ data }: { data: RepairTicketBodyData }) {
     const { customer, device } = data;
     return (
         <>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, margin: "4px 0" }}>
-                <span style={{ fontSize: 18, fontWeight: 700, letterSpacing: 1.5 }}>{data.ticketNo}</span>
-                <span style={{ color: "#555" }}>{data.date}</span>
+            <div style={{ textAlign: "center", margin: "6px 0 2px" }}>
+                <div style={{ fontSize: 30, fontWeight: 800, letterSpacing: 2 }}>{data.ticketNo}</div>
+                <div style={{ fontSize: 11, color: "#555", marginTop: 2 }}>{data.date}</div>
             </div>
 
             <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 8 }}>

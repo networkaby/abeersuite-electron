@@ -300,6 +300,11 @@ export interface VoucherTemplateDefaults {
     addressBlock: string;
     gstinLine: string;
     phoneLine: string;
+    // Shop email + website — DERIVED ONLY: filled from the Organisation (contact)
+    // at merge time, never persisted. Optional + absent from the builder/mapper
+    // so they never reach a Prisma write (they are not DB columns).
+    emailLine?: string;
+    websiteLine?: string;
     logoUrl: string;
     // Every element has an A4 flag (base name) + a `…Thermal` flag. The base
     // names are the A4 values; resolveTemplateForFormat() swaps in the thermal
@@ -392,6 +397,21 @@ export function buildVoucherTemplateDefaults(kind: VoucherTemplateKind): Voucher
 
 export function isVoucherTemplateKind(value: string): value is VoucherTemplateKind {
     return (VOUCHER_TEMPLATE_KINDS as readonly string[]).includes(value);
+}
+
+// Vouchers whose party is a SUPPLIER (vendor) rather than a customer — the
+// print's party box is labelled "Supplier" instead of "Bill To" / "Customer".
+const SUPPLIER_PARTY_KINDS: ReadonlySet<VoucherTemplateKind> = new Set<VoucherTemplateKind>([
+    "PURCHASE",
+    "PURCHASE_RETURN",
+    "PURCHASE_ORDER",
+    "GRN",
+    "REJECTION_OUT",
+]);
+
+/** True when the voucher's party is a supplier (purchase-side document). */
+export function isSupplierPartyKind(kind: string): boolean {
+    return isVoucherTemplateKind(kind) && SUPPLIER_PARTY_KINDS.has(kind);
 }
 
 /**

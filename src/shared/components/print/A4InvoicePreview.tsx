@@ -17,7 +17,7 @@
  * per line yet — see "Out of scope" in the plan).
  */
 
-import type { VoucherTemplateDefaults } from "@/shared/lib/print/voucherTemplateDefaults";
+import { isSupplierPartyKind, type VoucherTemplateDefaults } from "@/shared/lib/print/voucherTemplateDefaults";
 import { COMPANY_DETAILS } from "@/utils/constants-company-details";
 import { rupeesInWords } from "@/shared/lib/format/numberToWords";
 import type { ThermalReceiptSample } from "@/shared/components/print/ThermalReceiptPreview";
@@ -257,6 +257,18 @@ function A4Header({ template, sample }: A4ChromeProps) {
                             <span>{template.phoneLine}</span>
                         </div>
                     )}
+                    {template.showPhone && template.emailLine && (
+                        <div className="small">
+                            <span className="muted">Email: </span>
+                            <span>{template.emailLine}</span>
+                        </div>
+                    )}
+                    {template.showPhone && template.websiteLine && (
+                        <div className="small">
+                            <span className="muted">Web: </span>
+                            <span>{template.websiteLine}</span>
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -277,7 +289,7 @@ function DefaultA4Middle({ template, sample }: A4ChromeProps) {
             {/* 3 — Bill-To / Invoice-Details */}
             <div className="meta-grid">
                 <div className="meta-card">
-                    <div className="label">Bill To</div>
+                    <div className="label">{isSupplierPartyKind(template.kind) ? "Supplier" : "Bill To"}</div>
                     <div className="bold">{sample.partyName ?? "Walk-in"}</div>
                     {sample.partyPhone && <div className="small muted">{sample.partyPhone}</div>}
                 </div>

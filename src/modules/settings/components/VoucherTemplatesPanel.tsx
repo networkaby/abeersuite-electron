@@ -269,8 +269,8 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
 
     return (
         <div className="grid grid-cols-1 lg:grid-cols-[200px_minmax(0,1fr)] gap-4">
-            {/* Left: kind list ─────────────────────────────────────────── */}
-            <aside className="rounded-lg border bg-card p-2 h-fit max-h-[80vh] overflow-y-auto">
+            {/* Left: kind list — stays pinned while the form/preview scroll. */}
+            <aside className="rounded-lg border bg-card p-2 self-start max-h-[calc(100vh-90px)] overflow-y-auto lg:sticky lg:top-2">
                 <KindGroup
                     title="Accounting"
                     kinds={VOUCHER_TEMPLATE_KIND_GROUPS.accounting}
@@ -570,11 +570,11 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
                     )}
                 </div>
 
-                {/* Preview — pinned to its column (xl: 480px); A4 native is
-                    210mm so we scale it down with CSS zoom to fit. Thermal
-                    (~320px) renders at native size. Use "Full size" for a
+                {/* Preview — sticks in view while the config form scrolls (xl+);
+                    A4 native is 210mm so we scale it down with CSS zoom to fit.
+                    Thermal (~320px) renders at native size. Use "Full size" for a
                     native-scale popup. ─────────────────────────────────── */}
-                <div className="space-y-2 min-w-0">
+                <div className="space-y-2 min-w-0 xl:sticky xl:top-2 xl:self-start">
                     <div className="flex items-center justify-between gap-2 flex-wrap">
                         <p className="text-xs uppercase tracking-wide font-medium text-muted-foreground">
                             Live preview
@@ -636,6 +636,7 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
                                 sample={previewSample}
                                 body={bespokeBody}
                                 previewMode
+                                previewFill
                             />
                         </ScaledPreviewBox>
                     )}
@@ -777,7 +778,7 @@ function ScaledPreviewBox({
 }: { format: PaperFormat; children: React.ReactNode }) {
     if (format === "A4") {
         return (
-            <div className="rounded-md border bg-muted/20 overflow-auto" style={{ maxHeight: 720 }}>
+            <div className="rounded-md border bg-muted/20 overflow-auto max-h-[calc(100vh-150px)]">
                 {/*  zoom shrinks layout box; widely supported in modern Chromium+Webkit
                      and is now also implemented in Firefox 126+. A4 native ≈ 793px →
                      0.90 fits the ~740px preview column. */}
@@ -788,7 +789,7 @@ function ScaledPreviewBox({
         );
     }
     return (
-        <div className="rounded-md border bg-muted/20 overflow-auto" style={{ maxHeight: 720 }}>
+        <div className="rounded-md border bg-muted/20 overflow-auto max-h-[calc(100vh-150px)]">
             <div className="flex justify-center p-2">{children}</div>
         </div>
     );

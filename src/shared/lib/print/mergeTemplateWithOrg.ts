@@ -33,6 +33,8 @@ export function mergeTemplateWithOrg(
         addressBlock: template.addressBlock || formatAddressBlock(org),
         gstinLine:    template.gstinLine    || (org.gstin ? `GSTIN: ${org.gstin}` : ""),
         phoneLine:    template.phoneLine    || (org.phone ? `Ph: ${org.phone}` : ""),
+        emailLine:    template.emailLine    || org.email  || "",
+        websiteLine:  template.websiteLine  || org.siteUrl || "",
         logoUrl:      template.logoUrl      || org.logoUrl || DEFAULT_LOGO_URL,
     };
 }

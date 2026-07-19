@@ -17,7 +17,7 @@
  * the print route to ship to the browser.
  */
 
-import type { VoucherTemplateDefaults } from "@/shared/lib/print/voucherTemplateDefaults";
+import { isSupplierPartyKind, type VoucherTemplateDefaults } from "@/shared/lib/print/voucherTemplateDefaults";
 import { COMPANY_DETAILS } from "@/utils/constants-company-details";
 import { BarcodeSvg } from "@/modules/inventory/components/BarcodeSvg";
 
@@ -184,6 +184,12 @@ function ThermalHeader({ template, sample }: { template: VoucherTemplateDefaults
             {template.showPhone && template.phoneLine && (
                 <div className="center small">{template.phoneLine}</div>
             )}
+            {template.showPhone && template.emailLine && (
+                <div className="center small">{template.emailLine}</div>
+            )}
+            {template.showPhone && template.websiteLine && (
+                <div className="center small">{template.websiteLine}</div>
+            )}
             {template.showGstin && template.gstinLine && (
                 <div className="center small">{template.gstinLine}</div>
             )}
@@ -200,7 +206,7 @@ function DefaultThermalMiddle({ template, sample }: { template: VoucherTemplateD
                 <span>{sample.date}</span>
             </div>
             <div className="row">
-                <span>Customer:</span>
+                <span>{isSupplierPartyKind(template.kind) ? "Supplier:" : "Customer:"}</span>
                 <span>{sample.partyName ?? "Walk-in"}</span>
             </div>
             {sample.partyPhone && (

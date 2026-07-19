@@ -121,7 +121,7 @@ export function ShippingSlipBody({ data, thermal = false }: { data: ShippingSlip
             {/* Signature row — Received by (Service Centre) and Sent by (Shop) on
                 the same line, each with its own independent toggle. */}
             {(showReceivedBy || showSentBy) && (
-                <div style={{ display: "flex", flexDirection: thermal ? "column" : "row", justifyContent: "space-between", gap: thermal ? 26 : 24, marginTop: thermal ? 30 : 40 }}>
+                <div style={{ display: "flex", flexDirection: thermal ? "column" : "row", justifyContent: "space-between", gap: thermal ? 26 : 24, marginTop: thermal ? 44 : 72 }}>
                     {showReceivedBy && <div style={thermal ? SIGN_COL_THERMAL : SIGN_COL}>Received by / Service Centre</div>}
                     {showSentBy && <div style={thermal ? SIGN_COL_THERMAL : SIGN_COL}>{data.sentByLabel?.trim() || "Sent by (Shop)"}</div>}
                 </div>
