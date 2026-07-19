@@ -125,8 +125,9 @@ export function buildSampleForKind(kind: VoucherTemplateKind): ThermalReceiptSam
                         { label: "Shipping", amount: 50 },
                     ],
                     total: 735,
-                    savingsTotal: 1135,
-                    savingsPct: 33,
+                    // Saving from MRP = MRP total (3400) − Grand Total (2315).
+                    savingsTotal: 1085,
+                    savingsPct: 32,
                 },
                 hsnSummary: [
                     { hsn: "8471", ratePct: 18, taxable: 1919.49, cgst: 172.76, sgst: 172.75, total: 2265 },
@@ -163,13 +164,19 @@ export function buildSampleForKind(kind: VoucherTemplateKind): ThermalReceiptSam
             };
         case "RECEIPT":
         case "PAYMENT":
+            // Money vouchers render the receipt-book middle: the line description
+            // becomes the "by ___" instrument, notes become "towards ___".
             return {
                 reference: kind === "RECEIPT" ? "RV/26-27/0091" : "PV/26-27/0073",
                 date: today,
                 partyName: kind === "RECEIPT" ? "Walk-in" : "Acme Distributors",
                 partyPhone: null,
-                lines: cashLine, subtotal: null, taxAmount: null, total: 5000,
-                notes: kind === "RECEIPT" ? "Against bill #SV/26-27/0017" : null,
+                lines: [{ description: kind === "RECEIPT" ? "Cash" : "Bank Transfer", quantity: 1, amount: 5000 }],
+                subtotal: null, taxAmount: null, total: 5000,
+                notes: kind === "RECEIPT" ? "Against bill #SV/26-27/0017" : "Against bill #PV/26-27/0008",
+                // Party ledger strip: customer owes Dr, supplier is owed Cr.
+                balanceBefore: kind === "RECEIPT" ? "Rs. 12,315.00 Dr" : "Rs. 27,712.00 Cr",
+                balanceAfter:  kind === "RECEIPT" ? "Rs. 7,315.00 Dr"  : "Rs. 22,712.00 Cr",
             };
         case "CONTRA":
             return {
@@ -187,10 +194,13 @@ export function buildSampleForKind(kind: VoucherTemplateKind): ThermalReceiptSam
             };
         case "CREDIT_NOTE":
         case "DEBIT_NOTE":
+            // Credit note → issued TO a customer; debit note → raised AGAINST a
+            // supplier. The party box relabels via isSupplierPartyKind(DEBIT_NOTE).
             return {
                 reference: kind === "CREDIT_NOTE" ? "CRN/26-27/0002" : "DRN/26-27/0002",
                 date: today,
-                partyName: "Sample Party", partyPhone: null,
+                partyName: kind === "CREDIT_NOTE" ? "Sample Customer" : "Acme Distributors",
+                partyPhone: null,
                 lines: cashLine, subtotal: null, taxAmount: null, total: 5000, notes: null,
             };
         case "GRN":

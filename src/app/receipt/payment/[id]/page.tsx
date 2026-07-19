@@ -7,17 +7,9 @@ import type { ThermalReceiptSample } from "@/shared/components/print/ThermalRece
 import { getVoucherTemplate } from "@/shared/lib/print/voucherTemplate";
 import { isPaperFormat, resolveTemplateForFormat } from "@/shared/lib/print/voucherTemplateDefaults";
 import { formatDateTime } from "@/shared/lib/format/formatDate";
-
-// Format-neutral money row (renders fine at 80mm and A4 widths). `big` styles
-// the grand-total line. Declared at module scope so it isn't re-created per render.
-function PayRow({ label, value, big }: { label: string; value: React.ReactNode; big?: boolean }) {
-    return (
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 8, margin: "3px 0" }}>
-            <span style={{ color: "#555", fontWeight: big ? 700 : 400, fontSize: big ? 15 : undefined }}>{label}</span>
-            <span style={{ textAlign: "right", fontWeight: big ? 700 : 400, fontSize: big ? 18 : undefined }}>{value}</span>
-        </div>
-    );
-}
+import { balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
+import { ledgerStatusFilterUv } from "@/modules/accountancy/lib/aggregateLedger";
+import { defaultNormalBalanceForGroupType } from "@/modules/accountancy/lib/groupNature";
 
 // Payment slip for a GL cash voucher — a RECEIPT (money collected from a party
 // at the counter, the POS "Rcv" flow) or a PAYMENT (cash paid out, the "Exp"
@@ -73,16 +65,58 @@ export default async function PaymentReceiptPage({
         : voucher.lines.filter((l) => l.type === "CREDIT");
 
     // RECEIPT: money INTO the debit (till), FROM the party (credit).
-    // PAYMENT: money FOR the debit (expense), FROM the credit (till).
+    // PAYMENT: money FOR the debit (expense), FROM the credit (till) — but when
+    // the voucher names a party (supplier payment), "Paid to <supplier>" beats
+    // the expense-ledger name.
     const owner       = voucher.partyAccount?.person ?? voucher.partyAccount?.company ?? null;
     const partyName   = owner?.name ?? voucher.partyAccount?.name ?? null;
     const partyPhone  = owner?.phones[0]?.phone ?? null;
     const counterparty = isReceipt
         ? (partyName ?? creditLine?.account.name ?? "—")
-        : (debitLine?.account.name ?? "—");
-    const modeAccount  = isReceipt ? debitLine?.account.name : creditLine?.account.name;
+        : (partyName ?? debitLine?.account.name ?? "—");
     const fmtAmt = (n: number) => n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const reference = voucher.voucherNo ?? formatUvNo(voucher.id);
+
+    // ── Party ledger balance before/after this voucher ────────────────────────
+    // Only when the voucher names a party with a ledger account (walk-ins have
+    // none). "After" = opening + every POSTED line on the account; "before" =
+    // that minus this voucher's own effect — robust even when printed later.
+    let balanceBefore: string | null = null;
+    let balanceAfter:  string | null = null;
+    if (voucher.partyAccountId != null) {
+        const acct = await prisma.account.findUnique({
+            where:  { id: voucher.partyAccountId },
+            select: {
+                normalBalance: true, openingBalance: true, openingBalanceType: true,
+                group: { select: { type: true } },
+            },
+        });
+        if (acct) {
+            const nb = acct.normalBalance
+                ?? (acct.group?.type ? defaultNormalBalanceForGroupType(acct.group.type) : "DEBIT");
+            const allLines = await prisma.voucherGlLine.findMany({
+                where:  { accountId: voucher.partyAccountId, universalVoucher: ledgerStatusFilterUv() },
+                select: { type: true, amount: true },
+            });
+            let after = allLines.reduce((bal, l) => bal + balanceDelta(nb, l.type, toNumber(l.amount)), 0);
+            if (acct.openingBalance && acct.openingBalanceType) {
+                after += balanceDelta(nb, acct.openingBalanceType, toNumber(acct.openingBalance));
+            }
+            const own = voucher.lines
+                .filter((l) => l.accountId === voucher.partyAccountId)
+                .reduce((bal, l) => bal + balanceDelta(nb, l.type, toNumber(l.amount)), 0);
+            const before = after - own;
+            // Positive = the account's normal side (customer Dr / supplier Cr).
+            const fmtBal = (n: number) => {
+                const side = n >= 0
+                    ? (nb === "DEBIT" ? "Dr" : "Cr")
+                    : (nb === "DEBIT" ? "Cr" : "Dr");
+                return `Rs. ${fmtAmt(Math.abs(n))} ${side}`;
+            };
+            balanceBefore = fmtBal(before);
+            balanceAfter  = fmtBal(after);
+        }
+    }
 
     // Print template (RECEIPT / PAYMENT kind) — header / address / footer.
     const template = await getVoucherTemplate(voucher.type);
@@ -108,56 +142,30 @@ export default async function PaymentReceiptPage({
         template:   resolveTemplateForFormat(template, "THERMAL_80MM"),
     };
 
+    // A4 renders the receipt-book middle (MoneyReceiptMiddle) from this sample:
+    // tender lines → "by ___", narration → "towards ___", total → boxed amount.
     const sample: ThermalReceiptSample = {
         reference,
         date:       formatDateTime(voucher.date),
         partyName:  counterparty,
         partyPhone: isReceipt ? partyPhone : null,
-        lines:      [],
+        lines:      tenderLines.map((l) => ({ description: l.account.name, quantity: 1, amount: Number(l.amount) })),
         subtotal:   null,
         taxAmount:  null,
-        total:      null,
-        notes:      null,
+        total,
+        notes:      voucher.narration ?? null,
+        balanceBefore,
+        balanceAfter,
     };
 
-    const hr = <div style={{ borderTop: "1px dashed #999", margin: "8px 0" }} />;
-
-    const body = (
-        <>
-            <PayRow label="No." value={<b>{reference}</b>} />
-            <PayRow label="Date" value={formatDateTime(voucher.date)} />
-            {hr}
-            <PayRow label={isReceipt ? "Received from" : "Paid for"} value={<b>{counterparty}</b>} />
-            {isReceipt && partyPhone && <PayRow label="Phone" value={partyPhone} />}
-            {isReceipt && tenderLines.length > 1 ? (
-                <>
-                    <PayRow label="Tenders" value="" />
-                    {tenderLines.map((l, i) => (
-                        <PayRow key={i} label={`· ${l.account.name}`} value={`₹${fmtAmt(Number(l.amount))}`} />
-                    ))}
-                </>
-            ) : modeAccount ? (
-                <PayRow label={isReceipt ? "Into" : "From"} value={modeAccount} />
-            ) : null}
-            {voucher.narration && <PayRow label="Note" value={voucher.narration} />}
-            {hr}
-            <PayRow label={isReceipt ? "Received" : "Paid"} value={`₹${fmtAmt(total)}`} big />
-            {hr}
-            {isReceipt && <div style={{ textAlign: "center", fontSize: 11 }}>Received with thanks</div>}
-            <div style={{ marginTop: 24 }}>
-                <div style={{ borderTop: "1px solid #000", paddingTop: 2, fontSize: 9, color: "#555" }}>
-                    {template.signatureLabel}
-                </div>
-            </div>
-        </>
-    );
-
+    // No bespoke body — both formats render their built-in money middles from
+    // `sample` (A4: MoneyReceiptMiddle receipt-book prose; thermal:
+    // MoneyThermalMiddle cash slip), so preview and real print stay identical.
     return (
         <ReceiptPreview
             format={format}
             template={template}
             sample={sample}
-            body={body}
             toolbar={
                 <PrintToolbar
                     bridge={isThermal && autoPrint

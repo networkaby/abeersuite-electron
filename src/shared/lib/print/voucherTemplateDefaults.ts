@@ -126,6 +126,8 @@ const NO_TAX_SUMMARY: ReadonlySet<VoucherTemplateKind> = new Set<VoucherTemplate
 // Repair-shop documents that show customer + staff signature lines by default.
 const WITH_SIGNATURE: ReadonlySet<VoucherTemplateKind> = new Set<VoucherTemplateKind>([
     "REPAIR_TICKET",
+    // Cash paid out needs proof it reached the payee — the receiver signs.
+    "PAYMENT",
 ]);
 
 // Kinds that print a scannable barcode of the voucher number by default — the
@@ -151,10 +153,13 @@ const FOOTER_LINE_BY_KIND: Partial<Record<VoucherTemplateKind, string>> = {
 const DEFAULT_DISCLAIMER_LINE = "This is a computer-generated document and does not require a signature.";
 
 // Per-kind signature-label overrides. On the service slip the label IS the
-// shop's signature line ("Sent by (Shop)"); other kinds use the generic
-// "Authorised Signatory".
+// shop's signature line ("Sent by (Shop)"); on a payment voucher it's the
+// PAYEE acknowledging cash received — proof of payment, not the shop's own
+// sign-off — so it must not default to "Authorised Signatory". Other kinds
+// use that generic label.
 const SIGNATURE_LABEL_BY_KIND: Partial<Record<VoucherTemplateKind, string>> = {
     SHIPPING_SLIP: "Sent by (Shop)",
+    PAYMENT: "Receiver's Signature",
 };
 
 const TERMS_TEXT_BY_KIND: Partial<Record<VoucherTemplateKind, string>> = {
@@ -412,6 +417,9 @@ const SUPPLIER_PARTY_KINDS: ReadonlySet<VoucherTemplateKind> = new Set<VoucherTe
     "PURCHASE_ORDER",
     "GRN",
     "REJECTION_OUT",
+    // A debit note is raised AGAINST a supplier (purchase-side claim); a credit
+    // note is issued TO a customer (sales-side), so only DEBIT_NOTE is here.
+    "DEBIT_NOTE",
 ]);
 
 /** True when the voucher's party is a supplier (purchase-side document). */

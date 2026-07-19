@@ -21,6 +21,7 @@ import { isSupplierPartyKind, type VoucherTemplateDefaults } from "@/shared/lib/
 import { QrSvg } from "@/shared/components/print/QrSvg";
 import { COMPANY_DETAILS } from "@/utils/constants-company-details";
 import { BarcodeSvg } from "@/modules/inventory/components/BarcodeSvg";
+import { rupeesInWords } from "@/shared/lib/format/numberToWords";
 
 export interface ThermalReceiptLine {
     description: string;
@@ -79,6 +80,11 @@ export interface ThermalReceiptSample {
     hsnSummary?: ReceiptHsnRow[] | null;
     /// Buyer GSTIN — printed on the receipt for B2B tax invoices.
     partyGstin?: string | null;
+    /// Party ledger balance around a money voucher (RECEIPT/PAYMENT slips),
+    /// preformatted with Dr/Cr (e.g. "Rs. 7,315.00 Dr"). Null/absent → hidden
+    /// (walk-in customers have no ledger account).
+    balanceBefore?: string | null;
+    balanceAfter?:  string | null;
     /// Issuing-branch address block (multi-line). Rendered only when the
     /// template's `showBranchAddress` flag is on and this is non-empty.
     branchAddress?: string | null;
@@ -200,6 +206,74 @@ function ThermalHeader({ template, sample }: { template: VoucherTemplateDefaults
 }
 
 /** Default invoice middle — ref/date/customer meta, line-items table and totals. */
+// Money vouchers get the cash-slip middle below instead of the goods Item/Qty
+// table — a ₹5,000 cash receipt is not a sale. Deliberately bespoke; do NOT
+// fold back into DefaultThermalMiddle. (Mirrors MoneyReceiptMiddle on A4.)
+const MONEY_RECEIPT_KINDS = new Set(["RECEIPT", "PAYMENT"]);
+
+/** Bespoke 80mm middle for money vouchers — party, tender(s), big
+ *  RECEIVED/PAID amount with words, and the party balance strip. */
+function MoneyThermalMiddle({ template, sample }: { template: VoucherTemplateDefaults; sample: ThermalReceiptSample }) {
+    const isPayment = template.kind === "PAYMENT";
+    const total  = sample.total ?? 0;
+    const modes  = sample.lines.filter((l) => l.description.trim());
+    return (
+        <>
+            <div className="row">
+                <span>{sample.reference}</span>
+                <span>{sample.date}</span>
+            </div>
+            <div className="hr" />
+            <div className="row">
+                <span>{isPayment ? "Paid to:" : "Received from:"}</span>
+                <span><b>{sample.partyName ?? "Walk-in"}</b></span>
+            </div>
+            {sample.partyPhone && (
+                <div className="row">
+                    <span></span>
+                    <span>{sample.partyPhone}</span>
+                </div>
+            )}
+            {modes.length === 1 && (
+                <div className="row">
+                    <span>By:</span>
+                    <span>{modes[0].description}</span>
+                </div>
+            )}
+            {modes.length > 1 && modes.map((l, i) => (
+                <div key={i} className="row">
+                    <span>{i === 0 ? "By:" : ""} {l.description}</span>
+                    <span>{fmtINR(l.amount)}</span>
+                </div>
+            ))}
+            {sample.notes && <div className="small" style={{ marginTop: 2 }}>Towards: {sample.notes}</div>}
+            <div className="hr" />
+            <div className="row total">
+                <span>{isPayment ? "PAID" : "RECEIVED"}</span>
+                <span>{fmtINR(total)}</span>
+            </div>
+            <div className="center small" style={{ marginTop: 2 }}>{rupeesInWords(total)}</div>
+            {(sample.balanceBefore || sample.balanceAfter) && (
+                <>
+                    <div className="hr" />
+                    {sample.balanceBefore && (
+                        <div className="row">
+                            <span>Balance before</span>
+                            <span>{sample.balanceBefore}</span>
+                        </div>
+                    )}
+                    {sample.balanceAfter && (
+                        <div className="row">
+                            <span><b>Balance after</b></span>
+                            <span><b>{sample.balanceAfter}</b></span>
+                        </div>
+                    )}
+                </>
+            )}
+        </>
+    );
+}
+
 function DefaultThermalMiddle({ template, sample }: { template: VoucherTemplateDefaults; sample: ThermalReceiptSample }) {
     return (
         <>
@@ -385,7 +459,9 @@ function ReceiptBody({ template, sample, body }: BodyProps) {
             {template.headerLine2 && (
                 <div className="center doctitle" style={{ marginTop: 0, marginBottom: 6 }}>{template.headerLine2}</div>
             )}
-            {body ?? <DefaultThermalMiddle template={template} sample={sample} />}
+            {body ?? (MONEY_RECEIPT_KINDS.has(template.kind)
+                ? <MoneyThermalMiddle template={template} sample={sample} />
+                : <DefaultThermalMiddle template={template} sample={sample} />)}
             <ThermalFooter template={template} sample={sample} />
         </div>
     );

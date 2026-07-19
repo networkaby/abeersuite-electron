@@ -122,12 +122,39 @@ function inlineA4Styles(scope: string): string {
         ${s}.totals {
             display: flex;
             justify-content: flex-end;
+            align-items: flex-start;
+            gap: 20px;
             margin-top: 8px;
         }
         ${s}.totals-box {
             min-width: 280px;
             border: 1px solid #c8c8c8;
             border-radius: 2px;
+        }
+        /* Today's-discount itemisation parked left of the ladder; the ladder
+           collapses these to one highlighted "Special Discount" row. Below it,
+           the MRP saving (vs sticker) sits in its own green box. */
+        ${s}.disc-detail { flex: 1; padding: 2px 0 0 2px; font-size: 11px; color: #555; }
+        ${s}.disc-detail-h {
+            text-transform: uppercase; letter-spacing: 1px;
+            color: #999; font-size: 10px; margin-bottom: 4px;
+        }
+        ${s}.disc-detail-row {
+            display: flex; justify-content: space-between;
+            max-width: 260px; padding: 1.5px 0;
+        }
+        /* Box hugs the single-line caption (fit-content) so the "MRP … − you
+           pay …" note stays on one row instead of wrapping. */
+        ${s}.mrp-save {
+            width: fit-content; max-width: 360px; margin-top: 12px; padding: 9px 14px;
+            background: #eafaf1; border: 1px solid #a7e0c4; border-radius: 3px;
+        }
+        ${s}.mrp-save-top {
+            display: flex; justify-content: space-between; gap: 24px;
+            color: #047857; font-weight: 700; font-size: 13px;
+        }
+        ${s}.mrp-save-note {
+            font-size: 10px; color: #5a9c7e; margin-top: 2px; white-space: nowrap;
         }
         ${s}.totals-box .trow {
             display: flex;
@@ -140,6 +167,13 @@ function inlineA4Styles(scope: string): string {
             background: #f4f4f4;
             font-weight: 700;
             font-size: 13px;
+        }
+        /* The special (today's) discount — the reduction vs the regular price —
+           highlighted so it reads as the headline offer on the ladder. */
+        ${s}.totals-box .trow.special {
+            background: #fff3d9;
+            font-weight: 700;
+            color: #8a5a00;
         }
         ${s}table.hsn {
             width: 100%;
@@ -196,6 +230,36 @@ function inlineA4Styles(scope: string): string {
             color: #777;
         }
         ${s}.barcode { max-width: 100%; height: auto; margin-inline: auto; }
+        /* Money-receipt middle (RECEIPT / PAYMENT) — receipt-book prose with
+           dotted fill-ins and a boxed amount. */
+        ${s}.mr-meta {
+            display: flex; justify-content: space-between;
+            margin: 2px 0 14px; font-size: 11px;
+        }
+        ${s}.mr-prose { font-size: 13px; line-height: 2.5; }
+        ${s}.mr-fill {
+            font-weight: 700; border-bottom: 1px dotted #999; padding: 0 8px;
+        }
+        ${s}.mr-fill.mr-normal { font-weight: 400; }
+        ${s}.mr-amt-row {
+            display: flex; justify-content: space-between;
+            align-items: flex-end; gap: 24px; margin-top: 20px;
+        }
+        ${s}.mr-amt-box {
+            border: 2px solid #111; border-radius: 3px;
+            padding: 8px 18px; font-size: 18px; font-weight: 700;
+        }
+        /* Party ledger strip — outstanding before this voucher, this amount,
+           outstanding after. Only for parties with a ledger account. */
+        ${s}.mr-bal { min-width: 230px; font-size: 11px; }
+        ${s}.mr-bal-row {
+            display: flex; justify-content: space-between;
+            gap: 16px; padding: 2px 0;
+        }
+        ${s}.mr-bal-row.grand {
+            border-top: 1px solid #111; font-weight: 700; font-size: 12px;
+            margin-top: 2px; padding-top: 3px;
+        }
         @media print {
             ${s}.no-print { display: none !important; }
             ${rootRule} { background: #fff; }
@@ -283,6 +347,80 @@ function A4Header({ template, sample }: A4ChromeProps) {
     );
 }
 
+// Money vouchers get the receipt-book middle below instead of the goods
+// invoice table — a ₹5,000 cash receipt is not a sale and shouldn't look
+// like one. Deliberately bespoke; do NOT fold back into DefaultA4Middle.
+const MONEY_RECEIPT_KINDS = new Set(["RECEIPT", "PAYMENT"]);
+
+/** Bespoke middle for money vouchers — classic receipt-book prose
+ *  ("Received with thanks from ___ the sum of Rupees ___") with dotted
+ *  fill-ins and a boxed amount. Letterhead + footer chrome stay shared. */
+function MoneyReceiptMiddle({ template, sample }: A4ChromeProps) {
+    const isPayment = template.kind === "PAYMENT";
+    const total = sample.total ?? 0;
+    // "by" = the payment instrument line(s) on the voucher (Cash / UPI / Bank).
+    // A split tender lists each with its amount.
+    const modes = sample.lines.filter((l) => l.description.trim());
+    const byText = modes.length > 1
+        ? modes.map((l) => `${l.description} (${fmtINR(l.amount)})`).join(", ")
+        : modes[0]?.description ?? "";
+    return (
+        <>
+            <div className="mr-meta">
+                <div>
+                    <span className="muted">{isPayment ? "Voucher No.: " : "Receipt No.: "}</span>
+                    <span className="bold">{sample.reference}</span>
+                </div>
+                <div>
+                    <span className="muted">Date: </span>
+                    <span className="bold">{sample.date}</span>
+                </div>
+            </div>
+
+            <div className="mr-prose">
+                <div>
+                    {isPayment ? "Paid to" : "Received with thanks from"}
+                    {" "}<span className="mr-fill">{sample.partyName ?? "Walk-in"}</span>
+                    {sample.partyPhone && <span className="small muted"> ({sample.partyPhone})</span>}
+                </div>
+                <div>
+                    the sum of Rupees <span className="mr-fill">{rupeesInWords(total).replace(/^Rupees /, "")}</span>
+                </div>
+                {(byText || sample.notes) && (
+                    <div>
+                        {byText && <>by <span className="mr-fill">{byText}</span></>}
+                        {sample.notes && <>{byText ? " towards " : "towards "}<span className="mr-fill mr-normal">{sample.notes}</span></>}
+                    </div>
+                )}
+            </div>
+
+            <div className="mr-amt-row">
+                <div className="mr-amt-box">{fmtINR(total)}</div>
+                {(sample.balanceBefore || sample.balanceAfter) && (
+                    <div className="mr-bal">
+                        {sample.balanceBefore && (
+                            <div className="mr-bal-row">
+                                <span className="muted">Balance Before</span>
+                                <span>{sample.balanceBefore}</span>
+                            </div>
+                        )}
+                        <div className="mr-bal-row">
+                            <span className="muted">{isPayment ? "This Payment" : "This Receipt"}</span>
+                            <span>&minus; {fmtINR(total)}</span>
+                        </div>
+                        {sample.balanceAfter && (
+                            <div className="mr-bal-row grand">
+                                <span>Balance After</span>
+                                <span>{sample.balanceAfter}</span>
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
+        </>
+    );
+}
+
 /** Default invoice middle — bill-to meta, line items, totals, HSN, amount-in-words. */
 function DefaultA4Middle({ template, sample }: A4ChromeProps) {
     const grandTotal = sample.total ?? 0;
@@ -344,29 +482,64 @@ function DefaultA4Middle({ template, sample }: A4ChromeProps) {
             </table>
 
             {/* 5 — Totals box */}
-            {sample.discounts ? (
-                /* ── "Today's discount" ladder (C density) ─────────────────── */
+            {sample.discounts ? (() => {
+                /* ── Two savings, kept distinct ─────────────────────────────────
+                   • Special Discount (vs the regular/barcode price) — real money
+                     off; collapsed to one highlighted ladder row, itemised left.
+                   • Saving from MRP (vs the sticker) — MRP total − Grand Total;
+                     informational, in its own green box. It already contains the
+                     special discount, so it is NOT a ladder row. ─────────────── */
+                const d = sample.discounts;
+                const grandTotal = sample.total ?? (d.grossAtTag - d.total);
+                const mrpValue   = grandTotal + d.savingsTotal;
+                return (
                 <div className="totals">
+                    {(d.rows.length > 0 || d.savingsTotal > 0.005) && (
+                        <div className="disc-detail">
+                            {d.rows.length > 0 && (
+                                <>
+                                    <div className="disc-detail-h">Today&rsquo;s Discount</div>
+                                    {d.rows.map((r, i) => (
+                                        <div key={i} className="disc-detail-row">
+                                            <span>{r.label}</span>
+                                            <span>&minus; {fmtINR(r.amount)}</span>
+                                        </div>
+                                    ))}
+                                </>
+                            )}
+                            {d.savingsTotal > 0.005 && (
+                                <div className="mrp-save">
+                                    <div className="mrp-save-top">
+                                        <span>Saving from MRP</span>
+                                        <span>{fmtINR(d.savingsTotal)}</span>
+                                    </div>
+                                    <div className="mrp-save-note">
+                                        MRP {fmtINR(mrpValue)} &minus; you pay {fmtINR(grandTotal)} ({d.savingsPct}% off MRP)
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
                     <div className="totals-box">
                         <div className="trow">
                             <span className="muted">Gross</span>
-                            <span>{fmtINR(sample.discounts.grossAtTag)}</span>
+                            <span>{fmtINR(d.grossAtTag)}</span>
                         </div>
-                        {sample.discounts.rows.map((d, i) => (
-                            <div key={i} className="trow">
-                                <span className="muted">{d.label}</span>
-                                <span>&minus; {fmtINR(d.amount)}</span>
+                        {d.total > 0.005 && (
+                            <div className="trow special">
+                                <span>Special Discount</span>
+                                <span>&minus; {fmtINR(d.total)}</span>
                             </div>
-                        ))}
-                        {(sample.discounts.charges ?? []).map((c, i) => (
+                        )}
+                        {(d.charges ?? []).map((c, i) => (
                             <div key={`c${i}`} className="trow">
                                 <span className="muted">{c.label}</span>
                                 <span>{c.amount < 0 ? "−" : "+"} {fmtINR(Math.abs(c.amount))}</span>
                             </div>
                         ))}
                         <div className="trow grand">
-                            <span>Total</span>
-                            <span>{fmtINR(sample.total ?? (sample.discounts.grossAtTag - sample.discounts.total))}</span>
+                            <span>Grand Total</span>
+                            <span>{fmtINR(grandTotal)}</span>
                         </div>
                         {/* GST is included in the inclusive amounts above — note, not a row.
                             The HSN/SAC table below gives the full rate-wise breakup. */}
@@ -377,15 +550,10 @@ function DefaultA4Middle({ template, sample }: A4ChromeProps) {
                                 <div className="trow"><span className="muted">incl. {inter ? "GST (IGST)" : "GST (CGST+SGST)"}</span><span>{fmtINR(tax)}</span></div>
                             ) : null;
                         })()}
-                        {sample.discounts.savingsTotal > 0 && (
-                            <div className="trow grand" style={{ color: "#047857" }}>
-                                <span>You saved</span>
-                                <span>{fmtINR(sample.discounts.savingsTotal)} ({sample.discounts.savingsPct}%)</span>
-                            </div>
-                        )}
                     </div>
                 </div>
-            ) : (sample.subtotal !== null || sample.total !== null) && (
+                );
+            })() : (sample.subtotal !== null || sample.total !== null) && (
                 <div className="totals">
                     <div className="totals-box">
                         {template.showTaxSummary && sample.subtotal !== null && (
@@ -555,10 +723,13 @@ function A4Footer({ template, sample }: A4ChromeProps) {
  *  bespoke document (repair ticket / shipping slip / payment slip) reuses the
  *  template-driven letterhead + footer and only supplies its own `body`. */
 function InvoiceBody({ template, sample, body }: InvoiceBodyProps) {
+    const middle = body ?? (MONEY_RECEIPT_KINDS.has(template.kind)
+        ? <MoneyReceiptMiddle template={template} sample={sample} />
+        : <DefaultA4Middle template={template} sample={sample} />);
     return (
         <div className="a4-sheet">
             <A4Header template={template} sample={sample} />
-            {body ?? <DefaultA4Middle template={template} sample={sample} />}
+            {middle}
             <A4Footer template={template} sample={sample} />
         </div>
     );
