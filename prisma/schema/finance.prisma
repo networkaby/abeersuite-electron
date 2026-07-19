@@ -338,6 +338,26 @@ model VoucherPrintTemplate {
   showBarcode        Boolean @default(false)
   showBarcodeThermal Boolean @default(false)
 
+  // Service Shipping Label meta fields — which lines print on the label's bottom
+  // strip. Device defaults OFF (naming contents invites courier theft). A4 flag
+  // covers the A4/A5/A6 sheet sizes; the Thermal flag covers the 80mm roll.
+  // Base flag = A4/A5/A6 sheets · Thermal = 80mm roll · Tl = Thermal Label 100×50.
+  showTicket        Boolean @default(true)
+  showTicketThermal Boolean @default(true)
+  showTicketTl      Boolean @default(true)
+  showDate          Boolean @default(true)
+  showDateThermal   Boolean @default(true)
+  showDateTl        Boolean @default(true)
+  showRef           Boolean @default(true)
+  showRefThermal    Boolean @default(true)
+  showRefTl         Boolean @default(true)
+  showDevice        Boolean @default(false)
+  showDeviceThermal Boolean @default(false)
+  showDeviceTl      Boolean @default(false)
+  showFooter        Boolean @default(true)
+  showFooterThermal Boolean @default(true)
+  showFooterTl      Boolean @default(true)
+
   // Footer
   termsText      String @default("")
   footerLine     String @default("Thank you · Visit again")

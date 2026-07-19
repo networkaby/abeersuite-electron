@@ -4,7 +4,7 @@ import { formatDate } from "@/shared/lib/format/formatDate";
 import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
 import { getVoucherTemplate } from "@/shared/lib/print/voucherTemplate";
 import { COMPANY_DETAILS } from "@/utils/constants-company-details";
-import ShippingLabel, { type ShippingLabelData, type LabelSize } from "@/shared/components/print/ShippingLabel";
+import ShippingLabel, { type ShippingLabelData, type LabelSize, type LabelFieldFlags } from "@/shared/components/print/ShippingLabel";
 
 // Packet address label for a device sent to a service centre — its own postcard
 // document (SERVICE_SHIPPING_LABEL template kind, customisable in Settings →
@@ -28,7 +28,8 @@ export default async function ShippingLabelPage({
 }) {
     const { ticketId } = await params;
     const sp = (await searchParams) ?? {};
-    const initialSize: LabelSize = sp.size === "A4" || sp.size === "A5" ? sp.size : "A6";
+    const initialSize: LabelSize =
+        sp.size === "A4" || sp.size === "A5" || sp.size === "THERMAL" || sp.size === "TL100x50" ? sp.size : "A6";
 
     const ticket = await prisma.ticket.findUnique({
         where: { id: Number(ticketId) },
@@ -94,5 +95,14 @@ export default async function ShippingLabelPage({
         footer:   template.footerLine?.trim() || null,
     };
 
-    return <ShippingLabel data={data} autoPrint={sp.autoprint !== "0"} initialSize={initialSize} />;
+    // Which meta lines print — from the template (per format).
+    const fields: LabelFieldFlags = {
+        showTicket: template.showTicket,   showTicketThermal: template.showTicketThermal,   showTicketTl: template.showTicketTl,
+        showDate:   template.showDate,     showDateThermal:   template.showDateThermal,     showDateTl:   template.showDateTl,
+        showRef:    template.showRef,      showRefThermal:    template.showRefThermal,      showRefTl:    template.showRefTl,
+        showDevice: template.showDevice,   showDeviceThermal: template.showDeviceThermal,   showDeviceTl: template.showDeviceTl,
+        showFooter: template.showFooter,   showFooterThermal: template.showFooterThermal,   showFooterTl: template.showFooterTl,
+    };
+
+    return <ShippingLabel data={data} autoPrint={sp.autoprint !== "0"} initialSize={initialSize} fields={fields} />;
 }

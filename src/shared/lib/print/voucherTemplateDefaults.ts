@@ -308,6 +308,14 @@ export interface VoucherTemplateDefaults {
     showSignature: boolean;          showSignatureThermal: boolean;
     showBarcode: boolean;            showBarcodeThermal: boolean;
     showQrCode: boolean; // dormant (not yet rendered)
+    // Service Shipping Label meta fields (bottom strip). Base flag = A4/A5/A6
+    // sheets; Thermal = 80mm roll; Tl = Thermal Label 100×50 (die-cut). Ignored
+    // by every other kind.
+    showTicket: boolean;             showTicketThermal: boolean;             showTicketTl: boolean;
+    showDate: boolean;               showDateThermal: boolean;               showDateTl: boolean;
+    showRef: boolean;                showRefThermal: boolean;                showRefTl: boolean;
+    showDevice: boolean;             showDeviceThermal: boolean;             showDeviceTl: boolean;   // OFF by default — theft risk
+    showFooter: boolean;             showFooterThermal: boolean;             showFooterTl: boolean;
     termsText: string;
     footerLine: string;
     signatureLabel: string;
@@ -347,6 +355,12 @@ export function buildVoucherTemplateDefaults(kind: VoucherTemplateKind): Voucher
         showSignature: WITH_SIGNATURE.has(kind),         showSignatureThermal: WITH_SIGNATURE.has(kind),
         showBarcode: BARCODE_KINDS.has(kind),            showBarcodeThermal: BARCODE_KINDS.has(kind),
         showQrCode: false,
+        // Label meta — device hidden by default (theft), the rest shown.
+        showTicket: true,                                showTicketThermal: true,          showTicketTl: true,
+        showDate: true,                                  showDateThermal: true,            showDateTl: true,
+        showRef: true,                                   showRefThermal: true,             showRefTl: true,
+        showDevice: false,                               showDeviceThermal: false,         showDeviceTl: false,
+        showFooter: true,                                showFooterThermal: true,          showFooterTl: true,
         termsText: TERMS_TEXT_BY_KIND[kind] ?? "",
         footerLine: FOOTER_LINE_BY_KIND[kind] ?? "Thank you · Visit again",
         signatureLabel: "Authorised Signatory",
@@ -382,6 +396,12 @@ export type VoucherPrintTemplateRow = {
     showSignature?: boolean | null;           showSignatureThermal?: boolean | null;
     showQrCode?: boolean | null;
     showBarcode?: boolean | null;             showBarcodeThermal?: boolean | null;
+    // Label meta fields — optional so reads tolerate the pre-`db push` window.
+    showTicket?: boolean | null;              showTicketThermal?: boolean | null;              showTicketTl?: boolean | null;
+    showDate?: boolean | null;                showDateThermal?: boolean | null;                showDateTl?: boolean | null;
+    showRef?: boolean | null;                 showRefThermal?: boolean | null;                 showRefTl?: boolean | null;
+    showDevice?: boolean | null;              showDeviceThermal?: boolean | null;              showDeviceTl?: boolean | null;
+    showFooter?: boolean | null;              showFooterThermal?: boolean | null;              showFooterTl?: boolean | null;
     termsText: string; footerLine: string; signatureLabel: string;
     disclaimerLine?: string | null; // guards the window before `prisma db push` adds the column
     defaultPaper: string; paperWidthMm: number; fontFamily: string; fontSizePx: number;
@@ -426,6 +446,21 @@ export function rowToVoucherTemplateDefaults(row: VoucherPrintTemplateRow): Vouc
         showQrCode:               row.showQrCode               ?? f.showQrCode,
         showBarcode:              row.showBarcode              ?? f.showBarcode,
         showBarcodeThermal:       row.showBarcodeThermal       ?? f.showBarcodeThermal,
+        showTicket:               row.showTicket               ?? f.showTicket,
+        showTicketThermal:        row.showTicketThermal        ?? f.showTicketThermal,
+        showTicketTl:             row.showTicketTl             ?? f.showTicketTl,
+        showDate:                 row.showDate                 ?? f.showDate,
+        showDateThermal:          row.showDateThermal          ?? f.showDateThermal,
+        showDateTl:               row.showDateTl               ?? f.showDateTl,
+        showRef:                  row.showRef                  ?? f.showRef,
+        showRefThermal:           row.showRefThermal           ?? f.showRefThermal,
+        showRefTl:                row.showRefTl                ?? f.showRefTl,
+        showDevice:               row.showDevice               ?? f.showDevice,
+        showDeviceThermal:        row.showDeviceThermal        ?? f.showDeviceThermal,
+        showDeviceTl:             row.showDeviceTl             ?? f.showDeviceTl,
+        showFooter:               row.showFooter               ?? f.showFooter,
+        showFooterThermal:        row.showFooterThermal        ?? f.showFooterThermal,
+        showFooterTl:             row.showFooterTl             ?? f.showFooterTl,
         termsText:      row.termsText,
         footerLine:     row.footerLine,
         signatureLabel: row.signatureLabel,

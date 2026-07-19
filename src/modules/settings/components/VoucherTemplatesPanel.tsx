@@ -82,6 +82,16 @@ const SHOW_HIDE_ELEMENTS: { label: string; a4: BoolTemplateKey; thermal: BoolTem
     { label: "Barcode",        a4: "showBarcode",       thermal: "showBarcodeThermal" },
 ];
 
+// Service Shipping Label meta fields — its own row set with a switch per format:
+// Sheet (A4/A5/A6) · Thermal (80mm) · TL (Thermal Label 100×50).
+const LABEL_FIELD_ELEMENTS: { label: string; a4: BoolTemplateKey; thermal: BoolTemplateKey; tl: BoolTemplateKey }[] = [
+    { label: "Ticket",            a4: "showTicket", thermal: "showTicketThermal", tl: "showTicketTl" },
+    { label: "Date",              a4: "showDate",   thermal: "showDateThermal",   tl: "showDateTl" },
+    { label: "Ref",               a4: "showRef",    thermal: "showRefThermal",    tl: "showRefTl" },
+    { label: "Device (theft risk)", a4: "showDevice", thermal: "showDeviceThermal", tl: "showDeviceTl" },
+    { label: "Footer (handle-with-care)", a4: "showFooter", thermal: "showFooterThermal", tl: "showFooterTl" },
+];
+
 // The bespoke documents (repair ticket / shipping slip) have no line-items
 // table, tax, barcode or issuing branch — hide those toggles for them.
 const BESPOKE_HIDDEN_ELEMENTS = new Set<BoolTemplateKey>([
@@ -108,6 +118,7 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
     const [selectedKind, setSelectedKind] = useState<VoucherTemplateKind>("SALE");
     // null → follow the kind's `defaultPaper`; otherwise force-preview the chosen format.
     const [previewOverride, setPreviewOverride] = useState<PaperFormat | null>(null);
+    const [labelPreviewFormat, setLabelPreviewFormat] = useState<"sheet" | "thermal" | "tl">("sheet");
     const [expanded, setExpanded] = useState(false);
     const [saving, setSaving] = useState(false);
     const [resetting, setResetting] = useState(false);
@@ -148,6 +159,14 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
             phone:   mergedPreview.phoneLine?.replace(/^Ph:\s*/i, "").trim() || SAMPLE_SHIPPING_LABEL.from.phone,
         },
         footer: mergedPreview.footerLine?.trim() || SAMPLE_SHIPPING_LABEL.footer,
+    };
+    // Field visibility flags fed to the label preview so the Fields toggles show live.
+    const labelFields = {
+        showTicket: mergedPreview.showTicket,   showTicketThermal: mergedPreview.showTicketThermal,   showTicketTl: mergedPreview.showTicketTl,
+        showDate:   mergedPreview.showDate,     showDateThermal:   mergedPreview.showDateThermal,     showDateTl:   mergedPreview.showDateTl,
+        showRef:    mergedPreview.showRef,      showRefThermal:    mergedPreview.showRefThermal,      showRefTl:    mergedPreview.showRefTl,
+        showDevice: mergedPreview.showDevice,   showDeviceThermal: mergedPreview.showDeviceThermal,   showDeviceTl: mergedPreview.showDeviceTl,
+        showFooter: mergedPreview.showFooter,   showFooterThermal: mergedPreview.showFooterThermal,   showFooterTl: mergedPreview.showFooterTl,
     };
     const previewSample = bespokeBody
         ? { ...sample, lines: [], subtotal: null, taxAmount: null, total: null, discounts: null, hsnSummary: null }
@@ -290,25 +309,30 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
                         </div>
                     </header>
 
-                    {/* Header fields */}
+                    {/* Header fields. The shipping label is a bare address card —
+                        it only reads the From identity (name/address/phone) and the
+                        footer line, so every other voucher-chrome field is hidden
+                        for it rather than shown dead. */}
                     <fieldset className="space-y-2.5">
                         <legend className="text-xs uppercase tracking-wide font-medium text-muted-foreground">
-                            Header
+                            {isLabel ? "From (sender)" : "Header"}
                         </legend>
-                        <Field label="Header line 1 (brand name)" hint="Blank → uses Organisation > Brand name.">
+                        <Field label={isLabel ? "Shop name" : "Header line 1 (brand name)"} hint="Blank → uses Organisation > Brand name.">
                             <Input
                                 value={current.headerLine1}
                                 onChange={(e) => setField("headerLine1", e.target.value)}
                                 placeholder={organisation.brandName}
                             />
                         </Field>
-                        <Field label="Header line 2 (sub-title)">
-                            <Input
-                                value={current.headerLine2}
-                                onChange={(e) => setField("headerLine2", e.target.value)}
-                            />
-                        </Field>
-                        <Field label="Address block" hint="One address line per row. Blank → uses Organisation > Address.">
+                        {!isLabel && (
+                            <Field label="Header line 2 (sub-title)">
+                                <Input
+                                    value={current.headerLine2}
+                                    onChange={(e) => setField("headerLine2", e.target.value)}
+                                />
+                            </Field>
+                        )}
+                        <Field label={isLabel ? "Shop address" : "Address block"} hint="One address line per row. Blank → uses Organisation > Address.">
                             <Textarea
                                 rows={2}
                                 value={current.addressBlock}
@@ -317,46 +341,56 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
                             />
                         </Field>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            <Field label="Phone line" hint="Blank → uses Organisation > Phone.">
+                            <Field label={isLabel ? "Shop phone" : "Phone line"} hint="Blank → uses Organisation > Phone.">
                                 <Input
                                     value={current.phoneLine}
                                     onChange={(e) => setField("phoneLine", e.target.value)}
                                     placeholder={organisation.phone ? `Ph: ${organisation.phone}` : ""}
                                 />
                             </Field>
-                            <Field label="GSTIN line" hint="Blank → uses Organisation > GSTIN.">
+                            {!isLabel && (
+                                <Field label="GSTIN line" hint="Blank → uses Organisation > GSTIN.">
+                                    <Input
+                                        value={current.gstinLine}
+                                        onChange={(e) => setField("gstinLine", e.target.value)}
+                                        placeholder={organisation.gstin ? `GSTIN: ${organisation.gstin}` : ""}
+                                    />
+                                </Field>
+                            )}
+                        </div>
+                        {!isLabel && (
+                            <Field label="Logo URL (optional)" hint="Shown above the header if 'Show logo' is on. Blank → Organisation > Logo URL → bundled /logo.svg.">
                                 <Input
-                                    value={current.gstinLine}
-                                    onChange={(e) => setField("gstinLine", e.target.value)}
-                                    placeholder={organisation.gstin ? `GSTIN: ${organisation.gstin}` : ""}
+                                    value={current.logoUrl}
+                                    onChange={(e) => setField("logoUrl", e.target.value)}
+                                    placeholder={organisation.logoUrl || "/logo.svg"}
                                 />
                             </Field>
-                        </div>
-                        <Field label="Logo URL (optional)" hint="Shown above the header if 'Show logo' is on. Blank → Organisation > Logo URL → bundled /logo.svg.">
-                            <Input
-                                value={current.logoUrl}
-                                onChange={(e) => setField("logoUrl", e.target.value)}
-                                placeholder={organisation.logoUrl || "/logo.svg"}
-                            />
-                        </Field>
+                        )}
                     </fieldset>
 
-                    {/* Toggles — one row per element, an independent A4 + Thermal
-                        switch each, so every print format respects its own set. */}
+                    {/* Toggles — one row per element, an independent switch per format.
+                        The label has THREE (Sheet · Thermal · TL 100×50) since it prints
+                        to all three; vouchers have two (A4 · Thermal). Same switch table,
+                        different rows + column count. */}
                     <fieldset className="space-y-2">
                         <legend className="text-xs uppercase tracking-wide font-medium text-muted-foreground">
-                            Show / hide
+                            {isLabel ? "Fields" : "Show / hide"}
                         </legend>
+                        {(() => {
+                        const cols = isLabel ? "grid-cols-[1fr_3.25rem_3.25rem_3.25rem]" : "grid-cols-[1fr_3.5rem_3.5rem]";
+                        return (
                         <div className="rounded-md border overflow-hidden">
-                            <div className="grid grid-cols-[1fr_3.5rem_3.5rem] items-center gap-x-3 border-b bg-muted/40 px-3 py-1.5 text-[10px] uppercase tracking-wide font-medium text-muted-foreground">
-                                <span>Element</span>
-                                <span className="text-center">A4</span>
+                            <div className={`grid ${cols} items-center gap-x-2 border-b bg-muted/40 px-3 py-1.5 text-[10px] uppercase tracking-wide font-medium text-muted-foreground`}>
+                                <span>{isLabel ? "Field" : "Element"}</span>
+                                <span className="text-center">{isLabel ? "Sheet" : "A4"}</span>
                                 <span className="text-center">Thermal</span>
+                                {isLabel && <span className="text-center">TL 100×50</span>}
                             </div>
-                            {visibleElements.map((el) => (
+                            {(isLabel ? LABEL_FIELD_ELEMENTS : visibleElements).map((el) => (
                                 <div
                                     key={el.label}
-                                    className="grid grid-cols-[1fr_3.5rem_3.5rem] items-center gap-x-3 border-b px-3 py-1.5 text-sm last:border-0"
+                                    className={`grid ${cols} items-center gap-x-2 border-b px-3 py-1.5 text-sm last:border-0`}
                                 >
                                     <span className="truncate">{el.label}</span>
                                     <Switch
@@ -369,44 +403,60 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
                                         checked={current[el.thermal]}
                                         onCheckedChange={(v) => setField(el.thermal, v)}
                                     />
+                                    {isLabel && "tl" in el && (
+                                        <Switch
+                                            className="justify-self-center"
+                                            checked={current[el.tl]}
+                                            onCheckedChange={(v) => setField(el.tl, v)}
+                                        />
+                                    )}
                                 </div>
                             ))}
                         </div>
+                        );
+                        })()}
                     </fieldset>
 
-                    {/* Footer */}
+                    {/* Footer — the label prints only the footer line (its bottom
+                        strip); terms / signature / disclaimer are voucher-only. */}
                     <fieldset className="space-y-2.5">
                         <legend className="text-xs uppercase tracking-wide font-medium text-muted-foreground">
                             Footer
                         </legend>
-                        <Field label="Footer line">
+                        <Field label="Footer line" hint={isLabel ? "Printed on the label's bottom strip, e.g. handling instructions." : undefined}>
                             <Input
                                 value={current.footerLine}
                                 onChange={(e) => setField("footerLine", e.target.value)}
                             />
                         </Field>
-                        <Field label="Terms text" hint="Free-form; line breaks preserved.">
-                            <Textarea
-                                rows={2}
-                                value={current.termsText}
-                                onChange={(e) => setField("termsText", e.target.value)}
-                            />
-                        </Field>
-                        <Field label="Signature label">
-                            <Input
-                                value={current.signatureLabel}
-                                onChange={(e) => setField("signatureLabel", e.target.value)}
-                            />
-                        </Field>
-                        <Field label="Disclaimer line" hint="Printed at the very bottom, below the footer line. Blank hides it.">
-                            <Input
-                                value={current.disclaimerLine}
-                                onChange={(e) => setField("disclaimerLine", e.target.value)}
-                            />
-                        </Field>
+                        {!isLabel && (
+                            <>
+                                <Field label="Terms text" hint="Free-form; line breaks preserved.">
+                                    <Textarea
+                                        rows={2}
+                                        value={current.termsText}
+                                        onChange={(e) => setField("termsText", e.target.value)}
+                                    />
+                                </Field>
+                                <Field label="Signature label">
+                                    <Input
+                                        value={current.signatureLabel}
+                                        onChange={(e) => setField("signatureLabel", e.target.value)}
+                                    />
+                                </Field>
+                                <Field label="Disclaimer line" hint="Printed at the very bottom, below the footer line. Blank hides it.">
+                                    <Input
+                                        value={current.disclaimerLine}
+                                        onChange={(e) => setField("disclaimerLine", e.target.value)}
+                                    />
+                                </Field>
+                            </>
+                        )}
                     </fieldset>
 
-                    {/* Paper */}
+                    {/* Paper — irrelevant for the label: it picks its own A4/A5/A6
+                        (and qty) on the print page, and has no thermal mode yet. */}
+                    {!isLabel && (
                     <fieldset className="space-y-2.5">
                         <legend className="text-xs uppercase tracking-wide font-medium text-muted-foreground">
                             Paper
@@ -452,6 +502,7 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
                             </Field>
                         </div>
                     </fieldset>
+                    )}
                 </div>
 
                 {/* Preview — pinned to its column (xl: 480px); A4 native is
@@ -464,24 +515,36 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
                             Live preview
                         </p>
                         <div className="flex items-center gap-1.5">
-                            <div className="flex items-center gap-1 rounded-md border bg-card p-0.5 text-xs">
-                                <PreviewToggle
-                                    label="As default"
-                                    hint={`Showing ${current.defaultPaper === "A4" ? "A4" : "Thermal"} (default)`}
-                                    active={previewOverride === null}
-                                    onClick={() => setPreviewOverride(null)}
-                                />
-                                <PreviewToggle
-                                    label="A4"
-                                    active={previewOverride === "A4"}
-                                    onClick={() => setPreviewOverride("A4")}
-                                />
-                                <PreviewToggle
-                                    label="Thermal"
-                                    active={previewOverride === "THERMAL_80MM"}
-                                    onClick={() => setPreviewOverride("THERMAL_80MM")}
-                                />
-                            </div>
+                            {/* The label previews each of its formats — Sheet (A6 card),
+                                Thermal (80mm strip), 100×50 (DT die-cut); vouchers
+                                pick A4/Thermal/default. */}
+                            {isLabel && (
+                                <div className="flex items-center gap-1 rounded-md border bg-card p-0.5 text-xs">
+                                    <PreviewToggle label="Sheet" active={labelPreviewFormat === "sheet"} onClick={() => setLabelPreviewFormat("sheet")} />
+                                    <PreviewToggle label="Thermal" active={labelPreviewFormat === "thermal"} onClick={() => setLabelPreviewFormat("thermal")} />
+                                    <PreviewToggle label="TL 100×50" active={labelPreviewFormat === "tl"} onClick={() => setLabelPreviewFormat("tl")} />
+                                </div>
+                            )}
+                            {!isLabel && (
+                                <div className="flex items-center gap-1 rounded-md border bg-card p-0.5 text-xs">
+                                    <PreviewToggle
+                                        label="As default"
+                                        hint={`Showing ${current.defaultPaper === "A4" ? "A4" : "Thermal"} (default)`}
+                                        active={previewOverride === null}
+                                        onClick={() => setPreviewOverride(null)}
+                                    />
+                                    <PreviewToggle
+                                        label="A4"
+                                        active={previewOverride === "A4"}
+                                        onClick={() => setPreviewOverride("A4")}
+                                    />
+                                    <PreviewToggle
+                                        label="Thermal"
+                                        active={previewOverride === "THERMAL_80MM"}
+                                        onClick={() => setPreviewOverride("THERMAL_80MM")}
+                                    />
+                                </div>
+                            )}
                             <Button
                                 type="button"
                                 variant="outline"
@@ -495,7 +558,7 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
                     </div>
                     {isLabel ? (
                         <div className="flex justify-center rounded-md bg-muted/20 p-4">
-                            <ShippingLabel data={labelData} previewMode />
+                            <ShippingLabel data={labelData} previewMode previewFormat={labelPreviewFormat} fields={labelFields} />
                         </div>
                     ) : (
                         <ScaledPreviewBox format={previewFormat}>
@@ -528,7 +591,7 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
                     <div className="overflow-auto bg-muted/20 px-5 pb-5" style={{ maxHeight: "82vh" }}>
                         <div className="flex justify-center py-2">
                             {isLabel ? (
-                                <ShippingLabel data={labelData} previewMode />
+                                <ShippingLabel data={labelData} previewMode previewFormat={labelPreviewFormat} fields={labelFields} />
                             ) : (
                                 <ReceiptPreview
                                     format={previewFormat}
