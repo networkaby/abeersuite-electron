@@ -86,7 +86,7 @@ export function ShippingSlipBody({ data }: { data: ShippingSlipBodyData }) {
 
             {!data.hasSlip && (
                 <p style={{ color: "#555", textAlign: "center", fontSize: 11, marginTop: 8 }}>
-                    No shipping slip saved for this ticket yet — showing the ticket&apos;s device details.
+                    No service slip saved for this ticket yet — showing the ticket&apos;s device details.
                 </p>
             )}
 

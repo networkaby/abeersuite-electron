@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import ReceiptPreview from "@/shared/components/print/ReceiptPreview";
 import { RepairTicketBody } from "@/shared/components/print/RepairTicketBody";
 import { ShippingSlipBody } from "@/shared/components/print/ShippingSlipBody";
+import ShippingLabel from "@/shared/components/print/ShippingLabel";
 import {
     VOUCHER_TEMPLATE_KIND_GROUPS,
     type VoucherTemplateDefaults,
@@ -28,6 +29,7 @@ import {
     VOUCHER_KIND_LABEL as KIND_LABEL,
     SAMPLE_REPAIR_TICKET,
     SAMPLE_SHIPPING_SLIP,
+    SAMPLE_SHIPPING_LABEL,
 } from "@/modules/settings/lib/voucherTemplateSamples";
 
 interface Props {
@@ -85,7 +87,7 @@ const SHOW_HIDE_ELEMENTS: { label: string; a4: BoolTemplateKey; thermal: BoolTem
 const BESPOKE_HIDDEN_ELEMENTS = new Set<BoolTemplateKey>([
     "showTaxSummary", "showMrp", "showBarcode", "showBranchAddress",
 ]);
-const BESPOKE_KINDS = new Set<VoucherTemplateKind>(["REPAIR_TICKET", "SHIPPING_SLIP"]);
+const BESPOKE_KINDS = new Set<VoucherTemplateKind>(["REPAIR_TICKET", "SHIPPING_SLIP", "SERVICE_SHIPPING_LABEL"]);
 
 export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props) {
     const byKind = useMemo(() => {
@@ -134,6 +136,19 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
         selectedKind === "REPAIR_TICKET" ? <RepairTicketBody data={SAMPLE_REPAIR_TICKET} /> :
         selectedKind === "SHIPPING_SLIP" ? <ShippingSlipBody data={SAMPLE_SHIPPING_SLIP} /> :
         null;
+
+    // The shipping label is its OWN postcard document (not the letterhead chrome),
+    // so it previews standalone. Feed the live-edited shop identity as the From.
+    const isLabel = selectedKind === "SERVICE_SHIPPING_LABEL";
+    const labelData = {
+        ...SAMPLE_SHIPPING_LABEL,
+        from: {
+            name:    mergedPreview.headerLine1 || SAMPLE_SHIPPING_LABEL.from.name,
+            address: mergedPreview.addressBlock?.trim() || SAMPLE_SHIPPING_LABEL.from.address,
+            phone:   mergedPreview.phoneLine?.replace(/^Ph:\s*/i, "").trim() || SAMPLE_SHIPPING_LABEL.from.phone,
+        },
+        footer: mergedPreview.footerLine?.trim() || SAMPLE_SHIPPING_LABEL.footer,
+    };
     const previewSample = bespokeBody
         ? { ...sample, lines: [], subtotal: null, taxAmount: null, total: null, discounts: null, hsnSummary: null }
         : sample;
@@ -478,18 +493,24 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
                             </Button>
                         </div>
                     </div>
-                    <ScaledPreviewBox format={previewFormat}>
-                        <ReceiptPreview
-                            format={previewFormat}
-                            // Merge with Organisation so blank template fields
-                            // (no headerLine1, no GSTIN, etc.) fall back to the
-                            // org-wide values exactly like the real print route.
-                            template={mergedPreview}
-                            sample={previewSample}
-                            body={bespokeBody}
-                            previewMode
-                        />
-                    </ScaledPreviewBox>
+                    {isLabel ? (
+                        <div className="flex justify-center rounded-md bg-muted/20 p-4">
+                            <ShippingLabel data={labelData} previewMode />
+                        </div>
+                    ) : (
+                        <ScaledPreviewBox format={previewFormat}>
+                            <ReceiptPreview
+                                format={previewFormat}
+                                // Merge with Organisation so blank template fields
+                                // (no headerLine1, no GSTIN, etc.) fall back to the
+                                // org-wide values exactly like the real print route.
+                                template={mergedPreview}
+                                sample={previewSample}
+                                body={bespokeBody}
+                                previewMode
+                            />
+                        </ScaledPreviewBox>
+                    )}
                 </div>
             </section>
 
@@ -506,13 +527,17 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
                     </DialogHeader>
                     <div className="overflow-auto bg-muted/20 px-5 pb-5" style={{ maxHeight: "82vh" }}>
                         <div className="flex justify-center py-2">
-                            <ReceiptPreview
-                                format={previewFormat}
-                                template={mergedPreview}
-                                sample={previewSample}
-                                body={bespokeBody}
-                                previewMode
-                            />
+                            {isLabel ? (
+                                <ShippingLabel data={labelData} previewMode />
+                            ) : (
+                                <ReceiptPreview
+                                    format={previewFormat}
+                                    template={mergedPreview}
+                                    sample={previewSample}
+                                    body={bespokeBody}
+                                    previewMode
+                                />
+                            )}
                         </div>
                     </div>
                 </DialogContent>

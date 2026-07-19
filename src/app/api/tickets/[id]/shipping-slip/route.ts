@@ -1,4 +1,5 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { Prisma } from "@/generated/prisma/client";
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { z } from "zod";
@@ -97,7 +98,7 @@ export async function POST(
 
         await prisma.ticket.update({
             where: { id: ticketId },
-            data: { context: { ...prevContext, shippingSlip: frozen, shippingSlips: [...prevList, frozen] } },
+            data: { context: { ...prevContext, shippingSlip: frozen, shippingSlips: [...prevList, frozen] } as Prisma.InputJsonValue },
         });
 
         // Timeline entry carries its own frozen copy on the dormant `data`

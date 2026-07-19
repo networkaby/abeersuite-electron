@@ -4,6 +4,7 @@
 
 - Read this file completely.
 - Use the project vocabulary and simple Indian English in all communication.
+- all printable document should be customizable in print template
 - Before making changes:
   1. Explain your understanding.
   2. Create a plan.
@@ -43,7 +44,7 @@ When old and new conflict:
 
 Bridges must be obvious (comment, `TODO`, or `PROJECT_BRAIN.md` note) and removed once the new concept wins.
 
-\*reduce permission gate. be flexible to allow. respect role page permissions no additional restriction needed.
+reduce permission gate. be flexible to allow. respect role page permissions no additional restriction needed.
 
 ---
 

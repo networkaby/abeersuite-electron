@@ -54,6 +54,10 @@ export const INVENTORY_VOUCHER_KINDS = [
 export const REPAIR_DOCUMENT_KINDS = [
     "REPAIR_TICKET",
     "SHIPPING_SLIP",
+    // Packet address label for a device sent to a service centre (To = centre,
+    // From = shop letterhead). Named for "service" so a future
+    // DELIVERY_SHIPPING_LABEL (product delivery) can sit beside it.
+    "SERVICE_SHIPPING_LABEL",
 ] as const;
 
 export const VOUCHER_TEMPLATE_KINDS = [
@@ -99,7 +103,8 @@ const HEADER_LINE_2: Record<VoucherTemplateKind, string> = {
     PURCHASE_ORDER: "Purchase Order",
 
     REPAIR_TICKET: "Job Receipt / Service Ticket",
-    SHIPPING_SLIP: "Shipping Slip / Delivery Challan",
+    SHIPPING_SLIP: "Service Slip / Delivery Challan",
+    SERVICE_SHIPPING_LABEL: "Service Shipping Label",
 };
 
 // Voucher kinds that don't have a monetary tax breakdown by their nature.
@@ -115,6 +120,7 @@ const NO_TAX_SUMMARY: ReadonlySet<VoucherTemplateKind> = new Set<VoucherTemplate
     // Repair-shop documents carry no ledger / tax table.
     "REPAIR_TICKET",
     "SHIPPING_SLIP",
+    "SERVICE_SHIPPING_LABEL",
 ]);
 
 // Repair-shop documents that show customer + staff signature lines by default.
@@ -139,6 +145,7 @@ const BARCODE_KINDS: ReadonlySet<VoucherTemplateKind> = new Set<VoucherTemplateK
 const FOOTER_LINE_BY_KIND: Partial<Record<VoucherTemplateKind, string>> = {
     REPAIR_TICKET: "Thank you for your trust!",
     SHIPPING_SLIP: "Please return the device with this slip.",
+    SERVICE_SHIPPING_LABEL: "Handle with care · Fragile electronics",
 };
 
 const DEFAULT_DISCLAIMER_LINE = "This is a computer-generated document and does not require a signature.";
@@ -193,6 +200,7 @@ const DEFAULT_PAPER_BY_KIND: Record<VoucherTemplateKind, PaperFormat> = {
     // shipping slip is a formal A5/A4 hand-off document.
     REPAIR_TICKET: "THERMAL_80MM",
     SHIPPING_SLIP: "A4",
+    SERVICE_SHIPPING_LABEL: "A4",
 };
 
 // Per-kind default for the voucher form's "Print after save" toggle
@@ -230,6 +238,7 @@ export const PRINT_AFTER_SAVE_DEFAULT_BY_KIND: Record<VoucherTemplateKind, boole
     // toggles are unused for them, kept only to satisfy the exhaustive record.
     REPAIR_TICKET: false,
     SHIPPING_SLIP: false,
+    SERVICE_SHIPPING_LABEL: false,
 };
 
 /** Initial "Print after save" toggle state for a voucher kind (false if unknown). */
@@ -269,6 +278,7 @@ export const THERMAL_DEFAULT_BY_KIND: Record<VoucherTemplateKind, boolean> = {
     // Unused for repair documents (they print from their own screens).
     REPAIR_TICKET:         false,
     SHIPPING_SLIP:         false,
+    SERVICE_SHIPPING_LABEL: false,
 };
 
 /** Initial "Thermal" toggle state for a voucher kind (false → browser print). */

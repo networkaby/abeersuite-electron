@@ -502,15 +502,24 @@ export default function TicketDetailPage() {
                                                     ) : (
                                                         <p className="mt-1 text-sm text-muted-foreground">{text}</p>
                                                     ))}
-                                                    {/* Slip logs carry their frozen copy — open that exact print. */}
+                                                    {/* Slip logs carry their frozen copy — open the service slip or the packet label. */}
                                                     {log.data?.shippingSlip && (
-                                                        <Link
-                                                            href={`/shipping-slip/${ticket.id}${log.data.shippingSlip.seq ? `?n=${log.data.shippingSlip.seq}` : ""}`}
-                                                            target="_blank"
-                                                            className="mt-1 inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
-                                                        >
-                                                            <Truck size={12} /> Open shipping slip{log.data.shippingSlip.seq ? ` #${log.data.shippingSlip.seq}` : ""}
-                                                        </Link>
+                                                        <div className="mt-1 flex flex-wrap items-center gap-3">
+                                                            <Link
+                                                                href={`/shipping-slip/${ticket.id}${log.data.shippingSlip.seq ? `?n=${log.data.shippingSlip.seq}` : ""}`}
+                                                                target="_blank"
+                                                                className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
+                                                            >
+                                                                <Truck size={12} /> Open service slip{log.data.shippingSlip.seq ? ` #${log.data.shippingSlip.seq}` : ""}
+                                                            </Link>
+                                                            <Link
+                                                                href={`/shipping-label/${ticket.id}${log.data.shippingSlip.seq ? `?n=${log.data.shippingSlip.seq}` : ""}`}
+                                                                target="_blank"
+                                                                className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
+                                                            >
+                                                                <Printer size={12} /> Label
+                                                            </Link>
+                                                        </div>
                                                     )}
                                                     {/* Bill logs — open the linked voucher. */}
                                                     {log.data?.bill && editFormUrl(log.data.bill.voucherType, log.data.bill.voucherId) && (
@@ -697,7 +706,7 @@ export default function TicketDetailPage() {
                             backTarget={backTarget}
                             forwardBlockedReason={
                                 statusHasWorkflowRole("shipToService", ticket.status) && shippingSlips.length === 0
-                                    ? "Create a shipping slip before moving forward"
+                                    ? "Create a service slip before moving forward"
                                     : null
                             }
                             onChanged={fetchTicket}
@@ -767,18 +776,27 @@ export default function TicketDetailPage() {
 
                             {statusHasWorkflowRole("shipToService", ticket.status) && !ticket.ticketStatus.isTerminal && (
                                 <Button onClick={() => setShowShippingSlip(true)} variant="outline" className={actionBtnBase}>
-                                    <Truck size={15} /> Create Shipping Slip
+                                    <Truck size={15} /> Create Service Slip
                                 </Button>
                             )}
 
                             {shippingSlips.length > 0 && (
-                                <Link
-                                    href={`/shipping-slip/${ticket.id}`}
-                                    target="_blank"
-                                    className={`${actionBtnBase} inline-flex`}
-                                >
-                                    <Truck size={15} /> Print Shipping Slip
-                                </Link>
+                                <>
+                                    <Link
+                                        href={`/shipping-slip/${ticket.id}`}
+                                        target="_blank"
+                                        className={`${actionBtnBase} inline-flex`}
+                                    >
+                                        <Truck size={15} /> Print Service Slip
+                                    </Link>
+                                    <Link
+                                        href={`/shipping-label/${ticket.id}`}
+                                        target="_blank"
+                                        className={`${actionBtnBase} inline-flex`}
+                                    >
+                                        <Printer size={15} /> Print Shipping Label
+                                    </Link>
+                                </>
                             )}
                             {shippingSlips.length > 1 && (
                                 <div className="space-y-1 rounded-md border border-border bg-muted/30 px-3 py-2">

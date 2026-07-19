@@ -11,6 +11,7 @@ import type { ThermalReceiptSample } from "@/shared/components/print/ThermalRece
 import type { VoucherTemplateKind } from "@/shared/lib/print/voucherTemplateDefaults";
 import type { RepairTicketBodyData } from "@/shared/components/print/RepairTicketBody";
 import type { ShippingSlipBodyData } from "@/shared/components/print/ShippingSlipBody";
+import type { ShippingLabelData } from "@/shared/components/print/ShippingLabel";
 
 // Sample issuing-branch address for previewing the "Branch address" toggle.
 const SAMPLE_BRANCH_ADDRESS = "Zone Road, Ward 5\nBongaigaon, Assam, 783380";
@@ -43,6 +44,18 @@ export const SAMPLE_SHIPPING_SLIP: ShippingSlipBodyData = {
     notes:             null,
     hasSlip:           true,
     preparedBy:        "Admin",
+};
+
+// From is filled live from the edited template in the preview; these are just
+// placeholder sender lines so the fixture stands alone.
+export const SAMPLE_SHIPPING_LABEL: ShippingLabelData = {
+    from:     { name: "Network Service", address: "Main Road\nBongaigaon, Assam", phone: "88769 96969" },
+    to:       { name: "ABC Service Centre", address: "Zone Road, Ward 5\nBongaigaon, Assam, 783380", phone: "90000 00000" },
+    ticketNo: "#0042",
+    date:     "18 Jul 2026",
+    ref:      "RMA-2291",
+    device:   "Dell XPS 13 (Laptop)",
+    footer:   "Handle with care · Fragile electronics",
 };
 
 export function buildSampleForKind(kind: VoucherTemplateKind): ThermalReceiptSample {
@@ -271,6 +284,14 @@ export function buildSampleForKind(kind: VoucherTemplateKind): ThermalReceiptSam
                 subtotal: null, taxAmount: null, total: null,
                 notes: "Please return the device with this slip.",
             };
+        case "SERVICE_SHIPPING_LABEL":
+            return {
+                reference: "TKT/0042", date: today,
+                partyName: "ABC Service Centre", partyPhone: "90000 00000",
+                lines: [],
+                subtotal: null, taxAmount: null, total: null,
+                notes: null,
+            };
     }
 }
 
@@ -299,5 +320,6 @@ export const VOUCHER_KIND_LABEL: Record<VoucherTemplateKind, string> = {
     SALES_ORDER: "Sales Order",
     PURCHASE_ORDER: "Purchase Order",
     REPAIR_TICKET: "Repair Ticket",
-    SHIPPING_SLIP: "Shipping Slip",
+    SHIPPING_SLIP: "Service Slip",
+    SERVICE_SHIPPING_LABEL: "Service Shipping Label",
 };

@@ -105,7 +105,7 @@ export default function ShippingSlipModal({ ticketId, device, owner, onClose, on
                 contactName: form.contactName.trim() || null,
                 contactPhone: form.contactPhone.trim() || null,
             });
-            toast.success("Shipping slip saved");
+            toast.success("Service slip saved");
 
             // Print the slip (page auto-fires the print dialog on load).
             window.open(`/shipping-slip/${ticketId}`, "_blank");
@@ -114,7 +114,7 @@ export default function ShippingSlipModal({ ticketId, device, owner, onClose, on
             onClose();
         } catch (err) {
             const msg = axios.isAxiosError(err) ? err.response?.data?.error : null;
-            toast.error(msg ?? "Failed to save shipping slip");
+            toast.error(msg ?? "Failed to save service slip");
         } finally {
             setSaving(false);
         }
@@ -125,7 +125,7 @@ export default function ShippingSlipModal({ ticketId, device, owner, onClose, on
             <DialogContent className="sm:max-w-5xl max-h-[92vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
-                        <Truck size={18} /> Create Shipping Slip
+                        <Truck size={18} /> Create Service Slip
                     </DialogTitle>
                     <DialogDescription>
                         Send the device to a service centre. Pick or create the service centre

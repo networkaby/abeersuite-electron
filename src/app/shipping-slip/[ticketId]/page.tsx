@@ -182,7 +182,7 @@ export default async function ShippingSlipPage({
                             endpoint: "/print/voucher",
                             payload:  {
                                 kind:     "SHIPPING_SLIP",
-                                title:    `Shipping slip ${ticketNo}`,
+                                title:    `Service slip ${ticketNo}`,
                                 sample,
                                 template: resolveTemplateForFormat(template, "THERMAL_80MM"),
                             },
@@ -193,7 +193,7 @@ export default async function ShippingSlipPage({
                     currentPaper={format}
                 />
             }
-            docTitle={`Shipping Slip - Ticket ${ticketNo}`}
+            docTitle={`Service Slip - Ticket ${ticketNo}`}
         />
     );
 }
