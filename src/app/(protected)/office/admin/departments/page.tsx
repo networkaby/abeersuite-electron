@@ -380,8 +380,12 @@ function PoolEditor({
     const q = search.trim().toLowerCase();
     // Sidebar top-level modules (Contacts, Inventory, CRM…) — the dept declares
     // which modules it can see; child links are gated per role on the Role page.
+    // Skip modules with no links (e.g. Delivery, still a placeholder): they pool
+    // nothing, so their checkbox — `[].every(...)` is true — would stick ticked
+    // and toggle nothing. They reappear here automatically once they gain a link.
     const sidebarRows = SIDEBAR_MODULES.filter(
-        m => m.pooled && (!q || m.label.toLowerCase().includes(q) || m.key.includes(q) || "sidebar module".includes(q)),
+        m => m.pooled && m.childPermissionIds.length > 0
+            && (!q || m.label.toLowerCase().includes(q) || m.key.includes(q) || "sidebar module".includes(q)),
     );
     // Vouchers grouped by economic nature (GL / Trading / Inventory / Optional).
     const voucherRows = VOUCHER_MATRIX.filter(
