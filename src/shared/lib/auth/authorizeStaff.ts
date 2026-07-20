@@ -155,7 +155,28 @@ export async function authorizeStaffCredentials(
     });
     for (const o of overrides) {
         if (o.type === "GRANT") effective.add(o.permissionId);
-        else effective.delete(o.permissionId);
+    }
+
+    // CRUD ladder — a higher action implies the lower ones on the SAME resource:
+    // delete ⇒ edit ⇒ create. So a role granted just Delete (or Edit) also passes
+    // create/edit checks, and admins needn't tick all three separately. Keyed on
+    // the LAST id segment, so voucher gates (finance:voucher:<action>:<kind>) and
+    // any non-CRUD id are left untouched. Expanding here (not in hasPermission)
+    // means the client `perms.includes(...)` and the server checks agree.
+    const CRUD_IMPLIES: Record<string, readonly string[]> = {
+        delete: ["edit", "create"],
+        edit: ["create"],
+    };
+    for (const id of [...effective]) {
+        const i = id.lastIndexOf(":");
+        if (i < 0) continue;
+        const lower = CRUD_IMPLIES[id.slice(i + 1)];
+        if (lower) for (const action of lower) effective.add(`${id.slice(0, i)}:${action}`);
+    }
+
+    // Explicit DENY overrides win last — even against an implied grant.
+    for (const o of overrides) {
+        if (o.type !== "GRANT") effective.delete(o.permissionId);
     }
 
     // Rank = max rank across user's role + every held Position's roleTemplate.
