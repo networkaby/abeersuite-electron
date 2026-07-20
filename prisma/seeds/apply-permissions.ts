@@ -10,10 +10,13 @@
  *
  * Workflow for adding a permission:
  *   1. Add it to `src/shared/lib/constants/permissions.ts` (the PERMISSIONS const)
- *      AND `prisma/seeds/bootstrap-seed.ts` (the PERMISSIONS array) — the seed
- *      stays the source of truth for a future full reseed.
+ *      AND `prisma/seeds/lib/codeOwnedCatalog.ts` (the shared catalog both
+ *      bootstraps import) — the catalog stays the source of truth for a reseed.
  *   2. Mirror the same rows into ADDITIONS below.
  *   3. Run `pnpm seed:apply-permissions`.
+ *      (Or simply run `pnpm prisma db seed` — the personal bootstrap now applies
+ *      the whole catalog non-destructively; this script remains as the minimal
+ *      "just these rows" alternative.)
  * After the change ships and the DB is applied, ADDITIONS may be cleared (it is a
  * scratchpad, not a record — the seed is the record).
  */

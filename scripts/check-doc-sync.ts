@@ -10,7 +10,7 @@
  *                                   mismatches but pass on narrative-only drift.
  *
  * What this checks (mechanical, no LLM needed):
- *   1. Permission-key parity — `permissions.ts` constants vs `bootstrap-seed.ts` inserts.
+ *   1. Permission-key parity — `permissions.ts` constants vs the `codeOwnedCatalog.ts` catalog.
  *   2. File-path validity — `src/...` / `prisma/...` paths cited in docs actually exist on disk.
  *   3. Module-doc freshness — each `docs/modules/<m>.md` vs the last commit touching the matching source folders.
  *
@@ -57,10 +57,12 @@ let mechanicalDrift = 0;   // strict mode fails on these
 let narrativeDrift = 0;    // strict mode allows these
 
 // ─── 1. Permission key parity ───────────────────────────────────────────────
-header("1. Permission keys: permissions.ts ↔ bootstrap-seed.ts");
+header("1. Permission keys: permissions.ts ↔ codeOwnedCatalog.ts");
 
 const constantsRel = "src/shared/lib/constants/permissions.ts";
-const seedRel = "prisma/seeds/bootstrap-seed.ts";
+// The permission catalog moved out of bootstrap-seed.ts into the shared
+// code-owned module (both bootstraps import it) — parse the catalog there.
+const seedRel = "prisma/seeds/lib/codeOwnedCatalog.ts";
 let constantsSrc = read(constantsRel);
 const seedSrc = read(seedRel);
 
@@ -71,7 +73,7 @@ const constantsKeys = new Set(
 );
 
 const seedKeys = new Set<string>();
-const permRangeMatch = seedSrc.match(/const PERMISSIONS[\s\S]*?\] as const;/);
+const permRangeMatch = seedSrc.match(/const PERMISSION_CATALOG[\s\S]*?\n\];/);
 if (permRangeMatch) {
     for (const m of permRangeMatch[0].matchAll(/id:\s*"([a-z][a-z0-9_:-]+)"/g)) {
         if (m[1].includes(":")) seedKeys.add(m[1]);
@@ -85,7 +87,7 @@ if (inConstantsOnly.length === 0 && inSeedOnly.length === 0) {
     ok(`${constantsKeys.size} permission keys match across both files.`);
 } else {
     if (inConstantsOnly.length > 0) {
-        warn(`${inConstantsOnly.length} keys in permissions.ts but NOT in bootstrap-seed.ts:`);
+        warn(`${inConstantsOnly.length} keys in permissions.ts but NOT in codeOwnedCatalog.ts:`);
         inConstantsOnly.forEach((k) => console.log(`     - ${k}`));
         mechanicalDrift += inConstantsOnly.length;
     }
@@ -111,7 +113,7 @@ if (inConstantsOnly.length === 0 && inSeedOnly.length === 0) {
                 mechanicalDrift += inSeedOnly.length;
             }
         } else {
-            warn(`${inSeedOnly.length} keys in bootstrap-seed.ts but NOT in permissions.ts:`);
+            warn(`${inSeedOnly.length} keys in codeOwnedCatalog.ts but NOT in permissions.ts:`);
             inSeedOnly.forEach((k) => console.log(`     - ${k}`));
             console.log(`     ${ANSI.dim}(run with --fix to add them to permissions.ts)${ANSI.reset}`);
             mechanicalDrift += inSeedOnly.length;

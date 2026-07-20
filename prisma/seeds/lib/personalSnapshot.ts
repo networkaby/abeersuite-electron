@@ -474,7 +474,15 @@ export async function importPersonal(prisma: Db, snap: PersonalSnapshot): Promis
     if (s.booksConfig) await put(prisma.booksConfig, { id: s.booksConfig.id ?? 1 }, s.booksConfig);
     count("singletons", Object.values(s).filter(Boolean).length);
 
-    for (const t of snap.voucherPrintTemplates) await put(prisma.voucherPrintTemplate, { kind: t.kind }, t);
+    // VoucherPrintTemplate's PK is `kind` (no `id` column), so the generic put()
+    // helper (findFirst-by-id) can't be used — upsert on the real key directly.
+    for (const t of snap.voucherPrintTemplates) {
+        await prisma.voucherPrintTemplate.upsert({
+            where: { kind: t.kind },
+            update: omit(t, ["kind"]),
+            create: t as any,
+        });
+    }
     count("voucherPrintTemplates", snap.voucherPrintTemplates.length);
 
     // ── Phase 4: org structure ──

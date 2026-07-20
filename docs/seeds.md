@@ -4,9 +4,9 @@ All seed scripts and their fixture data live under `prisma/seeds/`.
 
 ```
 prisma/seeds/
-├─ bootstrap-seed.ts            PRODUCTION — single source of truth for setup (RBAC seeds only R1)
+├─ bootstrap-seed.ts            GENERIC — new-client installer (demo world; run via `pnpm seed:generic`)
 ├─ export-personal.ts           PERSONAL — reverse-create YOUR config snapshot from the live DB
-├─ personal-bootstrap.ts        PERSONAL — generic bootstrap + overlay your snapshot
+├─ personal-bootstrap.ts        PERSONAL — what `pnpm prisma db seed` runs: code-owned catalog + your snapshot (self-complete)
 ├─ helper-brands.ts             HELPER — trade-specific brand master (InvBrand)
 ├─ helper-inventory-masters.ts  HELPER — trade-specific masters (categories, HSN/GST groups)
 ├─ helper-roles.ts              HELPER — trade-specific starter roles (R2–R7, non-system / admin-editable)
@@ -23,28 +23,40 @@ prisma/seeds/
 ├─ lib/
 │  ├─ purgeDemo.ts       SHARED — transaction table list + purge steps for the demo cleaners
 │  ├─ positionSeedSync.ts SHARED — upsert a position + its role-template links
+│  ├─ codeOwnedCatalog.ts SHARED — code-owned data both bootstraps use: the permission catalog, XOR CHECK constraints, voucher series. ADD NEW PERMISSIONS HERE.
 │  ├─ personalSnapshot.ts SHARED — export/import engine for the personal snapshot
-│  └─ personalSnapshotPath.ts SHARED — on-disk path of the git-ignored snapshot
+│  └─ personalSnapshotPath.ts SHARED — on-disk path of the snapshot (git-tracked in this private repo)
 └─ data/
    └─ demoCatalogSeed.ts FIXTURE — hardcoded product list used by dummy-shop
 ```
 
-## Production seed
+## The official seed — `pnpm prisma db seed` = PERSONAL
 
-The official Prisma seed is wired in [`prisma.config.ts`](../prisma.config.ts):
+The Prisma seed wired in [`prisma.config.ts`](../prisma.config.ts) is the
+**personal bootstrap**, not the generic installer:
 
 ```ts
-migrations: { seed: "pnpm exec tsx prisma/seeds/bootstrap-seed.ts" }
+migrations: { seed: "pnpm exec tsx prisma/seeds/personal-bootstrap.ts" }
 ```
-
-Run on a fresh database:
 
 ```bash
 pnpm prisma db push       # 1. apply schema
-pnpm prisma db seed       # 2. runs bootstrap-seed.ts
+pnpm prisma db seed       # 2. personal bootstrap: code-owned catalog + your snapshot (upsert-only)
 ```
 
-`bootstrap-seed.ts` is **idempotent** — safe to re-run. It seeds:
+It is **non-destructive** (upsert-only; its only delete is pruning permissions
+retired from code), so re-running it on the live DB re-asserts your config
+without touching transactions. The dev loop is **capture → edit → seed** (see
+the Personal bootstrap section below).
+
+## Generic bootstrap — the new-client installer
+
+`bootstrap-seed.ts` runs via `pnpm seed:generic` and is ONLY for a brand-new
+client with no captured config: it creates the generic demo world (baseline GST
+18%, ₹, demo Organisation, starter tier ladder …). **Do not run it during
+normal development** — re-running it resets tuned settings back to generic.
+
+`bootstrap-seed.ts` is **idempotent** — safe to re-run on a fresh install. It seeds:
 
 - **RBAC** — **1 role** (`R1` Admin, the only `isSystem` role; homed in the all-access `DEP-ADMIN` department so its Role Matrix shows the full permission list), 130+ permissions, R1's RolePermission grants. Permissions include a **per-kind voucher gate** for every hand-created voucher kind — GL kinds in the `finance:voucher:<action>:<kind>` namespace, inventory kinds in `inventory:voucher:<action>:<kind>` — generated from `src/shared/lib/auth/voucherMatrix.ts` so the mapping never drifts. The other starter roles (`R2`–`R7`) are trade-specific and live in `helper-roles.ts` (see below); admins build the rest from the Role Matrix.
 - **Workflow** — 6 pipelines, 49 ticket statuses, 7 worker groups, 38 workers, transitions
@@ -59,31 +71,37 @@ pnpm prisma db seed       # 2. runs bootstrap-seed.ts
 
 > Production deployments run `pnpm prisma db seed` (mandatory) then, for this trade, `pnpm seed:helper-brands`, `pnpm seed:helper-inventory` and `pnpm seed:helper-roles`. Do not run any `dummy-*` script in production.
 
-## Personal bootstrap — YOUR install vs a new client
+## Personal bootstrap — self-complete restore of YOUR install
 
-`bootstrap-seed.ts` is the **new-client installer**: generic, code-driven, kept in
-sync with the schema. Because it is idempotent it re-seeds baseline values (GST
-18%, ₹, the starter tier ladder, the demo Organisation …), so re-running it on
-your own install resets the settings you tuned.
+The personal bootstrap does **not** run the generic installer. It stands up a
+working install from two sources and nothing else:
 
-The **personal bootstrap** keeps the two concerns apart. You capture the
-configured state of *your* install to a snapshot, then replay it on top of a
-fresh generic bootstrap. Generic keeps evolving for new clients; your snapshot
-restores *your* real config, and stays fresh because you regenerate it from
-live data.
+1. **Code-owned catalog** (`lib/codeOwnedCatalog.ts`) — the permission catalog
+   (upsert + prune of retired ids), the Phone/Email XOR CHECK constraints, and
+   the voucher numbering series. Exactly the three things the snapshot
+   deliberately never carries because they belong to the code.
+2. **Your snapshot** (`data/personal.local.json`) — every piece of real config.
+3. **R1 top-up** — R1 (Admin) is granted any catalog permission it doesn't
+   already hold, so code-added permissions reach the admin role without waiting
+   for a re-capture.
+
+The dev loop — **capture → edit → seed**:
 
 ```bash
 # 1. Capture — "reverse create" your snapshot from the live DB (READ-ONLY).
-#    Re-run any time you change settings.
+#    Re-run any time you change settings in the UI.
 pnpm seed:personal:capture      # → prisma/seeds/data/personal.local.json
 
-# 2. Seed your install — generic bootstrap, then overlay your real config.
-pnpm seed:personal              # runs bootstrap-seed.ts as a subprocess, then the overlay
-pnpm seed:personal --overlay-only   # skip bootstrap; just re-apply your config
+# 2. (optional) Hand-edit the snapshot JSON.
+
+# 3. Seed — re-apply catalog + snapshot. Non-destructive; safe on the live DB.
+pnpm prisma db seed             # or: pnpm seed:personal
+pnpm seed:personal --overlay-only   # skip the catalog step; overlay only
 ```
 
-`--overlay-only` is the quick fix for *"I ran `pnpm prisma db seed` and it reset
-my settings"* — it re-applies your snapshot without a full rebuild.
+After a **hard reset** (fresh DB before go-live): `pnpm prisma db push`, then
+`pnpm prisma db seed` — the client's full config comes back with zero generic
+demo clutter. Reset staff passwords after (new users get `changeme123`).
 
 **Scope — "everything except tickets, vouchers, customers, products".**
 
@@ -94,7 +112,7 @@ my settings"* — it re-applies your snapshot without a full rebuild.
 | Chart of accounts — `AccountGroup` + `Account` **(GL ledgers only)** | `Person` / `Company` / `Phone` / `Email` / party ledgers (customers) |
 | Spend-tier ladders — `CustomerTierPeriod` + `CustomerTier` | `InvProduct*` (products) |
 | Org structure — `Branch`, `Department` | `Coupon` / `GiftCard` / `LoyaltyEarnRule` / `LoyaltyMilestone` (entangle products + customers — only the **config singletons** above are kept) |
-| RBAC — `Role`, `RolePermission`, `DepartmentPermission`, `Position`, `PositionRole`, staff `User` + `UserPosition` / `UserPermission` (Permission rows themselves stay code-owned by bootstrap) | |
+| RBAC — `Role`, `RolePermission`, `DepartmentPermission`, `Position`, `PositionRole`, staff `User` + `UserPosition` / `UserPermission` (Permission rows themselves stay code-owned — `lib/codeOwnedCatalog.ts`) | |
 | POS setup — `PaymentGateway`, `PosCounter`, `PosCounterPaymentAccount`, `PosService` | |
 | Repair pipeline — `Pipeline`, `WorkGroup`, `Work`, `TicketStatus`, `TicketWorker`, status + worker transitions | |
 

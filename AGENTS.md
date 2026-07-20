@@ -87,28 +87,48 @@ Naming:
 
 Read `docs/seeds.md` before modifying seeds.
 
-- `bootstrap-seed.ts` is the source of truth for production master data.
+Two bootstraps, different jobs:
+
+- `personal-bootstrap.ts` — **what `pnpm prisma db seed` runs.** Self-complete restore of OUR configuration: code-owned catalog (`lib/codeOwnedCatalog.ts`) + the captured snapshot (`data/personal.local.json`). Upsert-only, non-destructive — safe on the live DB.
+- `bootstrap-seed.ts` — the generic NEW-CLIENT installer (`pnpm seed:generic`). Creates the generic demo world. **Never run it during normal development** — it resets config to generic.
 - `hard-clean.ts` removes only dummy/helper data. Never delete bootstrap data.
 
-If `prisma/schema/*.prisma` changes, update in the same commit:
+The dev loop is **capture → edit → seed**:
 
-- `bootstrap-seed.ts`
-- Affected `dummy-*.ts`
-- `hard-clean.ts` (if needed)
+1. Configure in the UI (or edit `personal.local.json` directly).
+2. `pnpm seed:personal:capture` — snapshot the live config.
+3. `pnpm prisma db seed` — re-apply it any time.
+
+**THE RULE — on EVERY change to schema, permissions, master data, or config, the agent does all three, in the same commit:**
+
+> **Why:** the two bootstraps are CLIENT tools — a client runs `pnpm seed:generic` once at install and `pnpm prisma db seed` (personal) at go-live/reset. The developer's own DB never needs a full seed to land one change; a full seed costs the developer (slow, hundreds of remote upserts). So: keep both bootstraps correct for clients, and apply the developer's own DB delta with a **temporary tsx script**.
+
+1. **Update generic bootstrap** — `lib/codeOwnedCatalog.ts` for permission **definitions** (single source; both bootstraps import it) and `bootstrap-seed.ts` if generic demo content is affected.
+2. **Update personal bootstrap** — `data/personal.local.json` for permission **grants** and our real config (R1 is auto-topped-up with new catalog permissions by the personal seed, so catalog-only additions need no manual grant edit); `lib/personalSnapshot.ts` if a NEW config table was added (export + import).
+3. **Apply to the DB with a targeted script — never a full seed.** Full `pnpm prisma db seed` costs the DB (hundreds of remote upserts) and is NOT how a single change lands. Instead:
+   - Permissions → `pnpm seed:apply-permissions` (edit its `ADDITIONS` list first).
+   - Anything else → write a small one-off tsx script on the same pattern (connect like `apply-permissions.ts`, upsert just the changed rows, idempotent), run it, then delete or keep it as the next scratchpad.
+
+Also update affected `dummy-*.ts` and `hard-clean.ts` (if needed).
+
+Full `pnpm prisma db seed` (personal restore) is reserved for: a hard reset, recovering a drifted DB, or explicitly re-asserting the whole config — not for landing individual changes.
 
 Always keep these working:
 
 ```bash
 pnpm prisma db seed
+pnpm seed:generic
 pnpm seed:dummy-all
 ```
 
 Master data:
 
-- Universal → `bootstrap-seed.ts`
+- Code-owned (permissions, voucher series, DB CHECK constraints) → `lib/codeOwnedCatalog.ts`
+- Universal demo defaults → `bootstrap-seed.ts`
 - Trade-specific → `helper-inventory-masters.ts`
+- Our real config → `data/personal.local.json` (git-tracked; passwords are never captured)
 
-If the dev database becomes inconsistent, fix the seeds first, then reset and reseed.
+If the dev database becomes inconsistent, fix the seeds first, then reset and reseed (`pnpm prisma db seed`).
 
 ---
 

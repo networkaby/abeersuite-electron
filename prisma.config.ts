@@ -10,6 +10,10 @@ export default defineConfig({
     url: (process.env.DIRECT_URL ?? process.env.DATABASE_URL)!,
   },
   migrations: {
-    seed: "pnpm exec tsx prisma/seeds/bootstrap-seed.ts",
+    // `pnpm prisma db seed` = PERSONAL bootstrap (code-owned catalog + your
+    // captured config; upsert-only, non-destructive). The generic new-client
+    // installer moved to `pnpm seed:generic` — run it only to build the demo
+    // world on a fresh install with no snapshot.
+    seed: "pnpm exec tsx prisma/seeds/personal-bootstrap.ts",
   },
 });
