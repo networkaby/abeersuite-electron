@@ -838,7 +838,7 @@ export function SidebarVisibilitySection({
 
     // Leaves wrap in a row; parents render their own chip then an indented block of
     // their children (recursive), so sub-nav shows nested with its own checkboxes.
-    const renderLevel = (nodes: SidebarChildRow[], scopeKey: string) => {
+    const renderLevel = (nodes: SidebarChildRow[], scopeKey: string, trailing?: React.ReactNode) => {
         const leaves = nodes.filter((n) => !n.children?.length);
         const parents = nodes.filter((n) => n.children?.length);
         // One table per EXPANDED row at THIS level, even if several leaves here map
@@ -854,7 +854,12 @@ export function SidebarVisibilitySection({
         }
         return (
             <div className="space-y-1.5">
-                {leaves.length > 0 && <div className="flex flex-wrap items-start gap-1.5">{leaves.map((n) => chip(n, scopeKey))}</div>}
+                {(leaves.length > 0 || trailing) && (
+                    <div className="flex flex-wrap items-start gap-1.5">
+                        {leaves.map((n) => chip(n, scopeKey))}
+                        {trailing}
+                    </div>
+                )}
                 {expandedRowsAtLevel.map((row) => (
                     <SharedPermissionMatrix
                         key={row.key}
@@ -921,11 +926,10 @@ export function SidebarVisibilitySection({
                                         {countLinks(mod.children)} links
                                     </span>
                                 </div>
-                                {renderLevel(mod.children, mod.key)}
-                                {showModToggle && (
-                                    <div className="mt-1.5 flex flex-wrap items-start gap-1.5">
-                                        {extraToggleChip(modToggle!)}
-                                    </div>
+                                {renderLevel(
+                                    mod.children,
+                                    mod.key,
+                                    showModToggle ? extraToggleChip(modToggle!) : undefined,
                                 )}
                             </div>
                         );
