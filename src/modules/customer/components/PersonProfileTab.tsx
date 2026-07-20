@@ -47,23 +47,32 @@ export default function PersonProfileTab({ detail, canEditCustomer, canManageUse
                 }}
                 onSaved={onSaved}
             />
-            <AccountCreditLimitCard
-                key={`cl-${detail.id}`}
-                accountId={detail.accountId}
-                initialLimit={detail.creditLimit}
-                canEdit={canEditCustomer}
-                onSaved={onSaved}
-            />
-            <AccountClassificationCard
-                key={`grp-${detail.id}`}
-                accountId={detail.accountId}
-                personId={detail.id}
-                personName={detail.name}
-                groupName={detail.accountGroupName ?? null}
-                canEdit={canEditCustomer}
-                onSaved={onSaved}
-                onConverted={onConverted}
-            />
+            {/* Credit limit + account group + convert are edit-class actions.
+                Keep both cards visible to everyone, but disable them (grey,
+                non-interactive) for anyone without Contacts edit rights —
+                better than hiding so the classification stays readable. */}
+            <fieldset
+                disabled={!canEditCustomer}
+                className={`min-w-0 space-y-6 border-0 p-0 ${canEditCustomer ? "" : "opacity-60"}`}
+            >
+                <AccountCreditLimitCard
+                    key={`cl-${detail.id}`}
+                    accountId={detail.accountId}
+                    initialLimit={detail.creditLimit}
+                    canEdit
+                    onSaved={onSaved}
+                />
+                <AccountClassificationCard
+                    key={`grp-${detail.id}`}
+                    accountId={detail.accountId}
+                    personId={detail.id}
+                    personName={detail.name}
+                    groupName={detail.accountGroupName ?? null}
+                    canEdit
+                    onSaved={onSaved}
+                    onConverted={onConverted}
+                />
+            </fieldset>
             <DevicesMiniGrid devices={detail.devices} />
             {canManageUsers && <CustomerEmergencyPasswordResetCard customerId={detail.id} />}
         </div>
