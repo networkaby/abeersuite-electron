@@ -111,6 +111,9 @@ export default async function ReceiptPage({
                                 kind:     "REPAIR_TICKET",
                                 title:    `Ticket ${ticketNo}`,
                                 sample,
+                                // Device / problem / estimate body — the bridge
+                                // renders it (sample.lines is empty for a ticket).
+                                body:     bodyData,
                                 template: resolveTemplateForFormat(template, "THERMAL_80MM"),
                             },
                         }

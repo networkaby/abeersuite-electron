@@ -190,6 +190,9 @@ export default async function ShippingSlipPage({
                                 kind:     "SHIPPING_SLIP",
                                 title:    `Service slip ${ticketNo}`,
                                 sample,
+                                // To/owner/device sign-off body — the bridge
+                                // renders it (sample.lines is empty for a slip).
+                                body:     bodyData,
                                 template: resolveTemplateForFormat(template, "THERMAL_80MM"),
                             },
                         }
