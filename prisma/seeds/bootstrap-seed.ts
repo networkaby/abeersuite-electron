@@ -795,7 +795,21 @@ async function main() {
         ids.map((permissionId) => ({ roleId, permissionId })),
     );
     await prisma.rolePermission.createMany({ data: grants, skipDuplicates: true });
-    console.log(`      ✓ ${ROLES.length} roles · ${PERMISSIONS.length} permissions · ${grants.length} grants\n`);
+
+    // Prune retired permissions. The catalog was upsert-only, so every id ever
+    // removed from the code lingered in the table (and cluttered the Department
+    // pool picker). Delete anything not in the current catalog — except the
+    // runtime work:/workgroup: ids a gated Work / WorkGroup mints (kept by
+    // reference so we never depend on the prefix). Cascade FKs drop the dead
+    // role / user / department grants automatically.
+    const keepIds = new Set(PERMISSIONS.map((p) => p.id));
+    const workRefs = await prisma.$queryRaw<{ permissionId: string }[]>`
+        SELECT "permissionId" FROM "Work"      WHERE "permissionId" IS NOT NULL
+        UNION
+        SELECT "permissionId" FROM "WorkGroup" WHERE "permissionId" IS NOT NULL`;
+    for (const r of workRefs) keepIds.add(r.permissionId);
+    const pruned = await prisma.permission.deleteMany({ where: { id: { notIn: [...keepIds] } } });
+    console.log(`      ✓ ${ROLES.length} roles · ${PERMISSIONS.length} permissions · ${grants.length} grants · pruned ${pruned.count} retired\n`);
 
     // ── Section 2: Workflow ────────────────────────────────────────────
     console.log("[2/7] Workflow — Pipelines, Statuses, Workers, Transitions");
