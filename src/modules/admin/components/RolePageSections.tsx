@@ -43,6 +43,7 @@ import {
     toSharedMatrixRow,
     SIDEBAR_LINK_MATRIX_ROW_KEY,
     SIDEBAR_LINK_EXTRA_TOGGLE,
+    MODULE_EXTRA_TOGGLE,
     type WorkRow,
     type WorkGroupRow,
     type Department,
@@ -706,6 +707,40 @@ export function SidebarVisibilitySection({
         return rowKey ? MATRIX_ROWS.find((row) => row.key === rowKey) : undefined;
     };
 
+    // A single yes/no capability chip (extra toggle) — shared by the per-link
+    // toggles (rendered beside a chip) and the module-level toggle (rendered on
+    // its own row after a module's links).
+    const extraToggleChip = (toggle: { id: string; label: string }) => {
+        const on = selected.has(toggle.id);
+        const changed = on !== original.has(toggle.id);
+        return (
+            <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => onTogglePerm(toggle.id)}
+                title={toggle.id}
+                className={[
+                    "h-auto items-center gap-1.5 rounded-md border px-2 py-1 text-left transition-colors",
+                    on
+                        ? "border-primary bg-primary/10 text-foreground hover:bg-primary/15"
+                        : "border-border hover:border-primary/60 hover:bg-primary/5",
+                    changed ? "ring-2 ring-primary/20" : "",
+                ].join(" ")}
+            >
+                <span
+                    className={[
+                        "flex h-4 w-4 shrink-0 items-center justify-center rounded border",
+                        on ? "border-primary bg-primary text-primary-foreground" : "border-border",
+                    ].join(" ")}
+                >
+                    {on && <Check size={10} strokeWidth={3} />}
+                </span>
+                <span className="text-[11px] font-medium leading-tight">{toggle.label}</span>
+            </Button>
+        );
+    };
+
     // Gate per MODULE, not per link: a module is offered if the department pool
     // carries ANY of its links (all-access pools offer everything; Workspace is
     // always offered). Once offered, EVERY current link from constants shows — so
@@ -796,36 +831,7 @@ export function SidebarVisibilitySection({
                 {/* Single extra yes/no capability on top of "can see this page" (e.g.
                     Tax Classification's edit grant) — only offered once the link
                     itself is ticked. */}
-                {extraToggle && isOn && (() => {
-                    const extraOn = selected.has(extraToggle.id);
-                    const extraChanged = extraOn !== original.has(extraToggle.id);
-                    return (
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => onTogglePerm(extraToggle.id)}
-                            title={extraToggle.id}
-                            className={[
-                                "h-auto items-center gap-1.5 rounded-md border px-2 py-1 text-left transition-colors",
-                                extraOn
-                                    ? "border-primary bg-primary/10 text-foreground hover:bg-primary/15"
-                                    : "border-border hover:border-primary/60 hover:bg-primary/5",
-                                extraChanged ? "ring-2 ring-primary/20" : "",
-                            ].join(" ")}
-                        >
-                            <span
-                                className={[
-                                    "flex h-4 w-4 shrink-0 items-center justify-center rounded border",
-                                    extraOn ? "border-primary bg-primary text-primary-foreground" : "border-border",
-                                ].join(" ")}
-                            >
-                                {extraOn && <Check size={10} strokeWidth={3} />}
-                            </span>
-                            <span className="text-[11px] font-medium leading-tight">{extraToggle.label}</span>
-                        </Button>
-                    );
-                })()}
+                {extraToggle && isOn && extraToggleChip(extraToggle)}
             </div>
         );
     };
@@ -901,17 +907,29 @@ export function SidebarVisibilitySection({
                 </div>
 
                 <div className="space-y-2">
-                    {modules.map((mod) => (
-                        <div key={mod.key} className="overflow-hidden rounded-lg border border-border bg-card px-3 py-2.5">
-                            <div className="mb-1.5 flex items-center gap-2">
-                                <span className="text-[11px] font-bold uppercase tracking-wider text-foreground">{mod.label}</span>
-                                <span className="text-[10px] text-muted-foreground">
-                                    {countLinks(mod.children)} links
-                                </span>
+                    {modules.map((mod) => {
+                        // A module-wide capability toggle (e.g. Contacts → show suppliers)
+                        // renders on its own row after the links, once ANY of its trigger
+                        // links is ticked — so it reads as spanning the module, not one link.
+                        const modToggle = MODULE_EXTRA_TOGGLE[mod.key];
+                        const showModToggle = !!modToggle && modToggle.showWhenAnyLinkId.some((id) => selected.has(id));
+                        return (
+                            <div key={mod.key} className="overflow-hidden rounded-lg border border-border bg-card px-3 py-2.5">
+                                <div className="mb-1.5 flex items-center gap-2">
+                                    <span className="text-[11px] font-bold uppercase tracking-wider text-foreground">{mod.label}</span>
+                                    <span className="text-[10px] text-muted-foreground">
+                                        {countLinks(mod.children)} links
+                                    </span>
+                                </div>
+                                {renderLevel(mod.children, mod.key)}
+                                {showModToggle && (
+                                    <div className="mt-2 flex flex-wrap items-start gap-1.5 border-t border-border pt-2">
+                                        {extraToggleChip(modToggle!)}
+                                    </div>
+                                )}
                             </div>
-                            {renderLevel(mod.children, mod.key)}
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             </CardContent>
         </Card>

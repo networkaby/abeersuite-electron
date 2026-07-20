@@ -543,16 +543,28 @@ export const SIDEBAR_LINK_EXTRA_TOGGLE: Record<string, { id: string; label: stri
         id: "pricing:labels:apply",
         label: "Can apply & print",
     },
-    // Contacts — one extra toggle beyond seeing the list: whether suppliers
-    // (Sundry Creditors) show alongside customers. Absent → the role browses
-    // customers only. Hung on the Person link (the always-present Contacts link);
-    // the grant is module-wide and filters both the Person and Companies lists.
-    [sidebarChildPermissionId("customers", "person")]: {
-        id: "customers:view:creditors",
-        label: "Show suppliers (creditors) in Person & Companies",
-    },
     // Retention pages are plain create/edit/delete matrices (no extra toggle) —
     // changing the discount / balance is part of "Edit", not a separate control.
+};
+
+// A MODULE-level extra toggle: one yes/no capability that spans the whole module
+// rather than a single link, so it renders on its own after the module's links
+// (not tucked beside one chip). Shown once ANY of its `showWhenAnyLinkId` links
+// is ticked. Contacts → "Show suppliers (creditors)" filters BOTH the Person and
+// Companies lists, so it belongs to neither link alone.
+export const MODULE_EXTRA_TOGGLE: Record<string, {
+    id: string;
+    label: string;
+    showWhenAnyLinkId: string[];
+}> = {
+    customers: {
+        id: "customers:view:creditors",
+        label: "Show suppliers (creditors)",
+        showWhenAnyLinkId: [
+            sidebarChildPermissionId("customers", "person"),
+            sidebarChildPermissionId("customers", "companies"),
+        ],
+    },
 };
 
 export function roleToForm(role: Role): RoleForm {

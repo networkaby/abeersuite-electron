@@ -8,7 +8,7 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { getDepartmentPool } from "@/shared/lib/auth/departmentPool";
 import { revokeRoleSessions } from "@/shared/lib/auth/revokeSessions";
 import { SIDEBAR_MODULES } from "@/shared/lib/auth/sidebarModules";
-import { SIDEBAR_LINK_GRANULAR_IDS, SIDEBAR_LINK_EXTRA_TOGGLE } from "@/modules/admin/lib/roleMatrixConfig";
+import { SIDEBAR_LINK_GRANULAR_IDS, SIDEBAR_LINK_EXTRA_TOGGLE, MODULE_EXTRA_TOGGLE } from "@/modules/admin/lib/roleMatrixConfig";
 
 // Permissions the Role editor assigns role-direct, never department-pooled:
 // Works (`work:*`), POS operations (`pos:*` — vouchers + shift/till), and the
@@ -74,9 +74,20 @@ export async function PUT(
                     .map(([, toggle]) => toggle.id)
             )
             : null;
+        // Module-level toggles (Contacts → show suppliers): unlocked once ANY of
+        // the module's trigger links is pooled — same principle as the per-link
+        // extra toggles above.
+        const unlockedModuleExtra = allowed
+            ? new Set(
+                Object.values(MODULE_EXTRA_TOGGLE)
+                    .filter((t) => t.showWhenAnyLinkId.some((id) => allowed.has(id)))
+                    .map((t) => t.id)
+            )
+            : null;
         const permissionIds = allowed
             ? data.permissionIds.filter((id) =>
-                allowed.has(id) || isUnpooled(id) || unlockedGranular!.has(id) || unlockedExtra!.has(id))
+                allowed.has(id) || isUnpooled(id) || unlockedGranular!.has(id)
+                || unlockedExtra!.has(id) || unlockedModuleExtra!.has(id))
             : data.permissionIds;
 
         // Replace full permission set for this role
