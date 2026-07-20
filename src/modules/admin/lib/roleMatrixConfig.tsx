@@ -549,7 +549,7 @@ export const SIDEBAR_LINK_EXTRA_TOGGLE: Record<string, { id: string; label: stri
     // the grant is module-wide and filters both the Person and Companies lists.
     [sidebarChildPermissionId("customers", "person")]: {
         id: "customers:view:creditors",
-        label: "Show suppliers (creditors)",
+        label: "Show suppliers (creditors) in Person & Companies",
     },
     // Retention pages are plain create/edit/delete matrices (no extra toggle) —
     // changing the discount / balance is part of "Edit", not a separate control.
