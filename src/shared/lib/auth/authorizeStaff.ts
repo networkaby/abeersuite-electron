@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { timingSafeEqual } from "crypto";
 import { isStaffEmailDomainAllowed } from "@/shared/lib/auth/staffEmailAllowlist";
 import { isLoginBlocked, recordLoginFailure, clearLoginFailures } from "@/shared/lib/auth/loginRateLimit";
+import { crudImpliedByGrant } from "@/shared/lib/auth/crudLadder";
 
 export type StaffAuthUser = {
     id: string;
@@ -157,21 +158,12 @@ export async function authorizeStaffCredentials(
         if (o.type === "GRANT") effective.add(o.permissionId);
     }
 
-    // CRUD ladder — a higher action implies the lower ones on the SAME resource:
-    // delete ⇒ edit ⇒ create. So a role granted just Delete (or Edit) also passes
-    // create/edit checks, and admins needn't tick all three separately. Keyed on
-    // the LAST id segment, so voucher gates (finance:voucher:<action>:<kind>) and
-    // any non-CRUD id are left untouched. Expanding here (not in hasPermission)
-    // means the client `perms.includes(...)` and the server checks agree.
-    const CRUD_IMPLIES: Record<string, readonly string[]> = {
-        delete: ["edit", "create"],
-        edit: ["create"],
-    };
+    // CRUD ladder — delete ⇒ edit ⇒ create on the same resource (shared helper;
+    // the Role editor cascades its ticks with the same rules). Expanding here
+    // (not in hasPermission) means the client `perms.includes(...)` and the
+    // server checks agree.
     for (const id of [...effective]) {
-        const i = id.lastIndexOf(":");
-        if (i < 0) continue;
-        const lower = CRUD_IMPLIES[id.slice(i + 1)];
-        if (lower) for (const action of lower) effective.add(`${id.slice(0, i)}:${action}`);
+        for (const lower of crudImpliedByGrant(id)) effective.add(lower);
     }
 
     // Explicit DENY overrides win last — even against an implied grant.

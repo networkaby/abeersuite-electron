@@ -11,6 +11,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { PermissionMatrix as SharedPermissionMatrix, type MatrixRow } from "@/shared/components/PermissionMatrix";
+import { crudImpliedByGrant, crudDependentsOnRevoke } from "@/shared/lib/auth/crudLadder";
 import {
     VOUCHER_COLUMN_GROUPS,
     VOUCHER_ROWS_BY_GROUP,
@@ -266,13 +267,19 @@ export default function RolePage() {
 
     const handleDiscardPermissions = () => setSelected(new Set(original));
 
+    // CRUD ladder cascade — mirrors the session expansion (crudLadder.ts):
+    // ticking Delete auto-ticks Edit + Create; unticking a lower action also
+    // unticks the highers that imply it (else the boxes would lie about what a
+    // holder actually gets). Non-CRUD ids toggle alone.
     const togglePerm = (id: string) => {
         setSelected((prev) => {
             const next = new Set(prev);
             if (next.has(id)) {
                 next.delete(id);
+                for (const higher of crudDependentsOnRevoke(id)) next.delete(higher);
             } else {
                 next.add(id);
+                for (const lower of crudImpliedByGrant(id)) next.add(lower);
             }
             return next;
         });
