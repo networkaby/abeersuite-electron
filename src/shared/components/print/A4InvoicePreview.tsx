@@ -78,6 +78,12 @@ function inlineA4Styles(scope: string): string {
             padding: 6px 0;
             margin: 14px 0 12px;
         }
+        /* Deposit / handover slip — plain centred heading, no boxed border. */
+        ${s}.banner.banner-plain {
+            border: 0;
+            padding: 0;
+            margin: 12px 0 10px;
+        }
         ${s}.meta-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -260,6 +266,68 @@ function inlineA4Styles(scope: string): string {
             border-top: 1px solid #111; font-weight: 700; font-size: 12px;
             margin-top: 2px; padding-top: 3px;
         }
+        /* Bank deposit slip (CONTRA cash → bank) — pay-in slip with blank
+           denomination boxes and a depositor counterfoil the bank stamps. */
+        ${s}.ds-bank {
+            border: 1px solid #111; border-radius: 2px;
+            padding: 6px 12px; margin-bottom: 10px;
+        }
+        ${s}.ds-bank .brow { display: flex; padding: 2px 0; font-size: 11px; }
+        ${s}.ds-bank .brow .l { width: 110px; color: #555; flex-shrink: 0; }
+        ${s}table.ds-denoms {
+            width: 100%; border-collapse: collapse; font-size: 11px;
+        }
+        ${s}table.ds-denoms th, ${s}table.ds-denoms td {
+            border: 1px solid #c8c8c8; padding: 4px 8px;
+        }
+        ${s}table.ds-denoms th {
+            border-color: #111; background: #f4f4f4; font-weight: 600;
+            font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px;
+        }
+        ${s}table.ds-denoms td.cnt { width: 70px; }
+        ${s}table.ds-denoms td.amt { width: 90px; text-align: right; }
+        ${s}table.ds-denoms tr.tot td { border-top: 2px solid #111; font-weight: 700; }
+        ${s}.ds-amt-box {
+            border: 2px solid #111; border-radius: 3px;
+            text-align: center; padding: 8px 12px;
+        }
+        ${s}.ds-amt-box .cap {
+            font-size: 9px; color: #666; text-transform: uppercase; letter-spacing: 0.6px;
+        }
+        ${s}.ds-amt-box .val { font-size: 18px; font-weight: 700; }
+        ${s}.ds-fill { border-bottom: 1px dotted #999; padding: 0 8px; }
+        ${s}.ds-sigs {
+            display: flex; justify-content: space-between; margin-top: 56px;
+        }
+        ${s}.ds-sig {
+            width: 170px; text-align: center; border-top: 1px solid #111;
+            padding-top: 4px; font-size: 10px; color: #555;
+        }
+        ${s}.ds-cut {
+            display: flex; align-items: center; gap: 10px;
+            margin: 16px 0; color: #999; font-size: 9px; letter-spacing: 1px;
+        }
+        ${s}.ds-cut::before, ${s}.ds-cut::after {
+            content: ""; flex: 1; border-top: 1.5px dashed #999;
+        }
+        ${s}.ds-foil { border: 1.5px solid #111; border-radius: 2px; padding: 8px 12px; }
+        ${s}.ds-foil-h {
+            display: flex; justify-content: space-between;
+            font-size: 10px; margin-bottom: 4px;
+        }
+        ${s}.ds-foil-h .t { font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
+        ${s}.ds-foil .brow { display: flex; padding: 1.5px 0; font-size: 11px; }
+        ${s}.ds-foil .brow .l { width: 110px; color: #555; flex-shrink: 0; }
+        ${s}.ds-stamp-row {
+            display: flex; justify-content: space-between;
+            align-items: flex-end; gap: 20px; margin-top: 10px;
+        }
+        ${s}.ds-stamp-note { font-size: 9px; color: #666; max-width: 250px; }
+        ${s}.ds-stamp {
+            border: 1px dashed #999; width: 170px; height: 58px;
+            display: flex; align-items: center; justify-content: center;
+            text-align: center; font-size: 9.5px; color: #888;
+        }
         @media print {
             ${s}.no-print { display: none !important; }
             ${rootRule} { background: #fff; }
@@ -339,9 +407,12 @@ function A4Header({ template, sample }: A4ChromeProps) {
             </div>
 
             {/* 2 — Title banner (document type — kept even when the brand-name
-                 text is hidden). */}
+                 text is hidden). The deposit / handover slip drops the boxed
+                 border and shows a plain centred heading instead. */}
             {template.headerLine2 && (
-                <div className="banner">{template.headerLine2}</div>
+                <div className={`banner${DEPOSIT_SLIP_KINDS.has(template.kind) ? " banner-plain" : ""}`}>
+                    {template.headerLine2}
+                </div>
             )}
         </>
     );
@@ -351,6 +422,12 @@ function A4Header({ template, sample }: A4ChromeProps) {
 // invoice table — a ₹5,000 cash receipt is not a sale and shouldn't look
 // like one. Deliberately bespoke; do NOT fold back into DefaultA4Middle.
 const MONEY_RECEIPT_KINDS = new Set(["RECEIPT", "PAYMENT"]);
+
+// Contra print variants that render the bespoke denomination slip: BANK_DEPOSIT
+// carries the bank pay-in slip, CASH_HANDOVER the cash→cash handover slip. Both
+// go through DepositSlipMiddle, which branches on `sample.depositSlip.mode`.
+// Plain CONTRA is NOT here — it keeps the neutral journal table.
+const DEPOSIT_SLIP_KINDS = new Set(["BANK_DEPOSIT", "CASH_HANDOVER"]);
 
 /** Bespoke middle for money vouchers — classic receipt-book prose
  *  ("Received with thanks from ___ the sum of Rupees ___") with dotted
@@ -417,6 +494,274 @@ function MoneyReceiptMiddle({ template, sample }: A4ChromeProps) {
                     </div>
                 )}
             </div>
+        </>
+    );
+}
+
+/** Bespoke middle for a Cash → Bank CONTRA — a bank pay-in slip. Top portion
+ *  goes to the bank with the cash (blank denomination boxes filled by pen);
+ *  the counterfoil below the cut line is the depositor's copy, which the
+ *  teller stamps and signs and hands back as proof of deposit. */
+function DepositSlipMiddle({ sample }: A4ChromeProps) {
+    const slip  = sample.depositSlip!;
+    const voucherTotal = sample.total ?? 0;
+    // Captured mode (denomJson saved on the voucher): print FILLED — only the
+    // non-zero note rows plus the cheque list. Pen-fill mode (capture off):
+    // notes get blank count boxes; coins/small change collapse to one row
+    // (same as a real pay-in slip, which lists notes and a single coins line).
+    const counted  = slip.counted && (slip.counted.notes.length || slip.counted.cheques.length)
+        ? slip.counted : null;
+    // The pay-in slip reflects only the PHYSICAL deposit — cash counted + cheques.
+    // Any non-cash, non-cheque source (a wallet/UPI settlement) stays on the
+    // voucher but off the slip, so the amount can be below the voucher total.
+    // Blank pen-fill mode has no breakdown, so it falls back to the voucher total.
+    const cashTotal   = counted ? counted.notes.reduce((s, n) => s + n.denom * n.count, 0) : 0;
+    const chequeTotal = counted ? counted.cheques.reduce((s, c) => s + c.amount, 0) : 0;
+    const total = counted ? cashTotal + chequeTotal : voucherTotal;
+    const words = rupeesInWords(total);
+    const notes    = slip.denominations.filter((d) => d >= 10);
+    const hasCoins = slip.denominations.some((d) => d < 10);
+    const bankLine = [slip.bankName, slip.branch].filter(Boolean).join(", ");
+    const fmtNum   = (n: number) => n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    // "handover" = cash → cash (an internal transfer between tills/vault). No
+    // bank block, no bank-acknowledgment counterfoil — just a from/to record
+    // with handed-by / received-by signatures.
+    const isHandover = slip.mode === "handover";
+    const byLabel = isHandover ? "Handed over by" : "Deposited by";
+    return (
+        <>
+            {/* Title comes from the customizable banner (template.headerLine2) in
+                A4Header — no hardcoded title here. On a bank deposit the voucher
+                number is internal, so it sits ONLY on the depositor's counterfoil;
+                the bank copy carries just the date. The handover slip has no
+                counterfoil, so it keeps the voucher number on the face. */}
+            <div className="mr-meta">
+                {isHandover && (
+                    <div>
+                        <span className="muted">Voucher No.: </span>
+                        <span className="bold">{sample.reference}</span>
+                    </div>
+                )}
+                <div style={isHandover ? undefined : { marginLeft: "auto" }}>
+                    <span className="muted">Date: </span>
+                    <span className="bold">{sample.date}</span>
+                </div>
+            </div>
+
+            <div className="ds-bank">
+                {isHandover ? (
+                    <>
+                        {slip.fromLedger && <div className="brow"><span className="l">From Ledger</span><span className="bold">{slip.fromLedger}</span></div>}
+                        {slip.toLedger   && <div className="brow"><span className="l">To Ledger</span><span className="bold">{slip.toLedger}</span></div>}
+                    </>
+                ) : (
+                    <>
+                        {bankLine         && <div className="brow"><span className="l">Bank</span><span className="bold">{bankLine}</span></div>}
+                        {slip.accountName && <div className="brow"><span className="l">A/C Name</span><span>{slip.accountName}</span></div>}
+                        {slip.accountNo   && <div className="brow"><span className="l">A/C No</span><span>{slip.accountNo}</span></div>}
+                        {slip.ifsc        && <div className="brow"><span className="l">IFSC</span><span>{slip.ifsc}</span></div>}
+                        {slip.pan         && <div className="brow"><span className="l">Depositor&rsquo;s PAN</span><span>{slip.pan}</span></div>}
+                        {slip.fromLedger  && <div className="brow"><span className="l">From Ledger</span><span>{slip.fromLedger}</span></div>}
+                    </>
+                )}
+            </div>
+
+            <div className="row" style={{ gap: 16, alignItems: "flex-start" }}>
+                <div className="col">
+                    {counted ? (
+                        <>
+                            {counted.notes.length > 0 && (
+                                <table className="ds-denoms">
+                                    <thead>
+                                        <tr><th>Note</th><th style={{ textAlign: "center" }}>&times; Count</th><th style={{ textAlign: "right" }}>Amount</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        {counted.notes.map((n) => (
+                                            <tr key={n.denom}>
+                                                <td>{n.denom.toLocaleString("en-IN")}</td>
+                                                <td className="cnt" style={{ textAlign: "center" }}>{n.count}</td>
+                                                <td className="amt">{fmtNum(n.denom * n.count)}</td>
+                                            </tr>
+                                        ))}
+                                        <tr className="tot">
+                                            <td>Cash Total</td>
+                                            <td className="cnt" style={{ textAlign: "center" }}>{counted.notes.reduce((s, n) => s + n.count, 0)}</td>
+                                            <td className="amt">{fmtNum(counted.notes.reduce((s, n) => s + n.denom * n.count, 0))}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            )}
+                            {counted.cheques.length > 0 && (
+                                <table className="ds-denoms" style={{ marginTop: counted.notes.length ? 8 : 0 }}>
+                                    <thead>
+                                        <tr><th>Cheque (drawer &middot; no.)</th><th style={{ textAlign: "right" }}>Amount</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        {counted.cheques.map((c, i) => (
+                                            <tr key={i}>
+                                                <td>{c.account ? `${c.account} · ${c.no}` : c.no}</td>
+                                                <td className="amt">{fmtNum(c.amount)}</td>
+                                            </tr>
+                                        ))}
+                                        {counted.cheques.length > 1 && (
+                                            <tr className="tot">
+                                                <td>Cheques Total</td>
+                                                <td className="amt">{fmtNum(counted.cheques.reduce((s, c) => s + c.amount, 0))}</td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            )}
+                        </>
+                    ) : (
+                        <table className="ds-denoms">
+                            <thead>
+                                <tr><th>Note</th><th style={{ textAlign: "center" }}>&times; Count</th><th style={{ textAlign: "right" }}>Amount</th></tr>
+                            </thead>
+                            <tbody>
+                                {notes.map((d) => (
+                                    <tr key={d}><td>{d.toLocaleString("en-IN")}</td><td className="cnt" /><td className="amt" /></tr>
+                                ))}
+                                {hasCoins && <tr><td>Coins / small</td><td className="cnt" /><td className="amt" /></tr>}
+                                <tr className="tot"><td>Total</td><td className="cnt" /><td className="amt">{fmtNum(total)}</td></tr>
+                            </tbody>
+                        </table>
+                    )}
+                </div>
+                <div className="col">
+                    <div className="ds-amt-box">
+                        <div className="cap">{isHandover ? "Amount Handed Over" : "Amount Deposited"}</div>
+                        <div className="val">{fmtINR(total)}</div>
+                    </div>
+                    <div style={{ marginTop: 10, lineHeight: 1.9 }}>
+                        Rupees <span className="ds-fill" style={{ fontStyle: "italic" }}>{words.replace(/^Rupees /, "")}</span>
+                    </div>
+                    <div style={{ marginTop: 10 }}>
+                        {byLabel} <span className="ds-fill">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>
+                    </div>
+                    {/* Narration is internal — kept on the handover slip for
+                        context, dropped from the bank copy (the bank doesn't need it). */}
+                    {isHandover && sample.notes && (
+                        <div className="small muted" style={{ marginTop: 8 }}>
+                            Narration: {sample.notes}
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {isHandover ? (
+                /* Cash → cash is an internal handover: both parties sign, no
+                   cut-off counterfoil, no bank acknowledgment. */
+                <div className="ds-sigs">
+                    <div className="ds-sig">Handed over by (Signature)</div>
+                    <div className="ds-sig">Received by (Signature)</div>
+                </div>
+            ) : (
+                <>
+                    <div className="ds-sigs">
+                        <div className="ds-sig">Depositor&rsquo;s Signature</div>
+                        <div className="ds-sig">Bank Seal / Acknowledgment</div>
+                    </div>
+
+                    <div className="ds-cut">&#9986; CUT HERE</div>
+
+                    {/* Counterfoil — the depositor's copy. The bank stamps + signs
+                        the dashed box and returns it; the office staples it to the
+                        voucher. */}
+                    <div className="ds-foil">
+                        <div className="ds-foil-h">
+                            <span className="t">Depositor&rsquo;s Copy — Bank Acknowledgment</span>
+                            <span className="muted">{sample.reference} &middot; {sample.date}</span>
+                        </div>
+                        {(bankLine || slip.accountNo) && (
+                            <div className="brow">
+                                <span className="l">Bank &middot; A/C</span>
+                                <span>{[bankLine, slip.accountNo].filter(Boolean).join(" · ")}</span>
+                            </div>
+                        )}
+                        <div className="brow">
+                            <span className="l">Amount</span>
+                            <span className="bold">{fmtINR(total)} ({words})</span>
+                        </div>
+                        <div className="brow">
+                            <span className="l">Deposited by</span>
+                            <span className="ds-fill">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>
+                        </div>
+                        <div className="ds-stamp-row">
+                            <div className="ds-stamp-note">
+                                Received the above amount for deposit. Valid with the bank&rsquo;s stamp and signature.
+                            </div>
+                            <div className="ds-stamp">Bank&rsquo;s Stamp<br />&amp; Signature</div>
+                        </div>
+                    </div>
+                </>
+            )}
+        </>
+    );
+}
+
+// Journal-style GL vouchers (plain Contra, Journal) — a double-entry document,
+// not a sale. They print a Particulars · Debit · Credit ledger table, never the
+// goods qty/rate table.
+const JOURNAL_KINDS = new Set(["CONTRA", "JOURNAL"]);
+
+/** Bespoke middle for journal-style GL vouchers — ref/date + a
+ *  Particulars · Debit · Credit table with a balancing total. */
+function JournalMiddle({ sample }: A4ChromeProps) {
+    const lines = sample.lines;
+    // A line with no explicit side falls on the debit column.
+    const totalDr = lines.filter((l) => l.entryType !== "CREDIT").reduce((s, l) => s + l.amount, 0);
+    const totalCr = lines.filter((l) => l.entryType === "CREDIT").reduce((s, l) => s + l.amount, 0);
+    const grand   = sample.total ?? totalDr;
+    return (
+        <>
+            <div className="mr-meta">
+                <div>
+                    <span className="muted">Voucher No.: </span>
+                    <span className="bold">{sample.reference}</span>
+                </div>
+                <div>
+                    <span className="muted">Date: </span>
+                    <span className="bold">{sample.date}</span>
+                </div>
+            </div>
+
+            <table className="lines">
+                <thead>
+                    <tr>
+                        <th style={{ textAlign: "center" }}>#</th>
+                        <th>Particulars</th>
+                        <th style={{ textAlign: "right" }}>Debit</th>
+                        <th style={{ textAlign: "right" }}>Credit</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {lines.map((l, i) => {
+                        const isCr = l.entryType === "CREDIT";
+                        return (
+                            <tr key={i}>
+                                <td className="sn">{i + 1}</td>
+                                <td>{isCr ? <span style={{ paddingLeft: 16 }}>{l.description}</span> : l.description}</td>
+                                <td className="amt">{isCr ? "" : fmtINR(l.amount)}</td>
+                                <td className="amt">{isCr ? fmtINR(l.amount) : ""}</td>
+                            </tr>
+                        );
+                    })}
+                    <tr>
+                        <td className="sn" />
+                        <td className="bold">Total</td>
+                        <td className="amt bold" style={{ background: "#f4f4f4" }}>{fmtINR(totalDr)}</td>
+                        <td className="amt bold" style={{ background: "#f4f4f4" }}>{fmtINR(totalCr)}</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            {sample.notes && (
+                <div className="terms"><span className="bold">Narration: </span>{sample.notes}</div>
+            )}
+            {sample.total !== null && (
+                <div className="words">{rupeesInWords(grand)}</div>
+            )}
         </>
     );
 }
@@ -723,9 +1068,14 @@ function A4Footer({ template, sample }: A4ChromeProps) {
  *  bespoke document (repair ticket / shipping slip / payment slip) reuses the
  *  template-driven letterhead + footer and only supplies its own `body`. */
 function InvoiceBody({ template, sample, body }: InvoiceBodyProps) {
-    const middle = body ?? (MONEY_RECEIPT_KINDS.has(template.kind)
-        ? <MoneyReceiptMiddle template={template} sample={sample} />
-        : <DefaultA4Middle template={template} sample={sample} />);
+    const middle = body
+        ?? (DEPOSIT_SLIP_KINDS.has(template.kind) && sample.depositSlip
+            ? <DepositSlipMiddle template={template} sample={sample} />
+            : MONEY_RECEIPT_KINDS.has(template.kind)
+            ? <MoneyReceiptMiddle template={template} sample={sample} />
+            : JOURNAL_KINDS.has(template.kind)
+            ? <JournalMiddle template={template} sample={sample} />
+            : <DefaultA4Middle template={template} sample={sample} />);
     return (
         <div className="a4-sheet">
             <A4Header template={template} sample={sample} />

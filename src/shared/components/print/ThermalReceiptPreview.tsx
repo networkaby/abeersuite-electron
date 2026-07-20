@@ -31,6 +31,9 @@ export interface ThermalReceiptLine {
     /// when set, the A4 "C" density shows a struck MRP next to the line.
     mrp?:        number | null;
     barcode?:    number | null;
+    /// GL side, set for journal-style vouchers (Contra / Journal) so they render
+    /// a Particulars · Debit · Credit table instead of the goods qty/rate table.
+    entryType?:  "DEBIT" | "CREDIT";
 }
 
 /// Customer-facing "Today's discount" ladder (display only). When present on the
@@ -60,6 +63,38 @@ export type ThermalTaxBreakdown =
     | { kind: "INTRA"; cgst: number; sgst: number; placeOfSupplyName: string | null }
     | { kind: "INTER"; igst: number; placeOfSupplyName: string | null };
 
+/// Bank pay-in slip data for a Cash → Bank CONTRA. When present, the A4
+/// renderer swaps the journal table for a deposit slip (bank block, blank
+/// denomination boxes, depositor counterfoil the bank stamps and returns).
+/// Bank fields come from Organisation.bankJson; denominations from
+/// OrgDefaults.cashDenominationsJson.
+export interface DepositSlipInfo {
+    /// "deposit" = cash → bank (bank block + counterfoil the bank stamps).
+    /// "handover" = cash → cash (from/to ledgers + handed-by / received-by sigs,
+    /// no bank block, no counterfoil). Both share the denomination worksheet.
+    mode:          "deposit" | "handover";
+    bankName:      string | null;
+    branch:        string | null;
+    accountName:   string | null;
+    accountNo:     string | null;
+    ifsc:          string | null;
+    /// Depositor's PAN (org PAN) — banks ask for it on large cash deposits.
+    pan?:          string | null;
+    /// Credit-side (source) ledger, e.g. "Cash in Hand" — where the cash came from.
+    fromLedger:    string | null;
+    /// Debit-side (destination) ledger — used in handover mode, e.g. "Vault".
+    toLedger?:     string | null;
+    /// Note denominations to print as blank count boxes, high → low. Used only
+    /// when `counted` is absent (denomination capture was off — pen-fill mode).
+    denominations: number[];
+    /// Captured breakdown (UniversalVoucher.denomJson). When present the slip
+    /// prints FILLED: only non-zero note rows, plus a cheque-details section.
+    counted?: {
+        notes:   { denom: number; count: number }[];   // high → low, count > 0
+        cheques: { no: string; amount: number; account?: string }[];
+    } | null;
+}
+
 export interface ThermalReceiptSample {
     reference: string;          // voucher / invoice number
     date:      string;          // ISO date or display date
@@ -85,6 +120,9 @@ export interface ThermalReceiptSample {
     /// (walk-in customers have no ledger account).
     balanceBefore?: string | null;
     balanceAfter?:  string | null;
+    /// Bank pay-in slip block (CONTRA cash → bank only). Null/absent → the
+    /// contra keeps the generic journal-style print.
+    depositSlip?: DepositSlipInfo | null;
     /// Issuing-branch address block (multi-line). Rendered only when the
     /// template's `showBranchAddress` flag is on and this is non-empty.
     branchAddress?: string | null;
@@ -132,6 +170,9 @@ function inlineStyleFromTemplate(t: VoucherTemplateDefaults, scope: string): str
         ${s}.lines th { font-weight: normal; border-bottom: 1px dashed #000; }
         ${s}.lines .qty { text-align: right; width: 38px; }
         ${s}.lines .amt { text-align: right; width: 70px; }
+        /* Denomination table — wider, right-padded count column so the count and
+           amount don't crowd together. */
+        ${s}.denom-lines .qty { width: 54px; padding-right: 16px; }
         ${s}.total  { font-weight: bold; font-size: ${t.fontSizePx + 1}px; }
         ${s}.small  { font-size: ${Math.max(8, t.fontSizePx - 2)}px; }
         ${s}.terms  { font-size: ${Math.max(8, t.fontSizePx - 3)}px; color: #444; line-height: 1.5; white-space: pre-wrap; }
@@ -210,6 +251,12 @@ function ThermalHeader({ template, sample }: { template: VoucherTemplateDefaults
 // table — a ₹5,000 cash receipt is not a sale. Deliberately bespoke; do NOT
 // fold back into DefaultThermalMiddle. (Mirrors MoneyReceiptMiddle on A4.)
 const MONEY_RECEIPT_KINDS = new Set(["RECEIPT", "PAYMENT"]);
+
+// Contra print variants rendering the bespoke denomination slip — BANK_DEPOSIT
+// (cash → bank) and CASH_HANDOVER (cash → cash). Both go through
+// DepositThermalMiddle, which branches on `sample.depositSlip.mode`. Plain CONTRA
+// is NOT here — it keeps the neutral journal table. (Mirrors A4 DEPOSIT_SLIP_KINDS.)
+const DEPOSIT_SLIP_KINDS = new Set(["BANK_DEPOSIT", "CASH_HANDOVER"]);
 
 /** Bespoke 80mm middle for money vouchers — party, tender(s), big
  *  RECEIVED/PAID amount with words, and the party balance strip. */
@@ -448,6 +495,145 @@ function ThermalFooter({ template, sample }: { template: VoucherTemplateDefaults
 /** Assembles header chrome + (custom or default) middle + footer chrome, so a
  *  bespoke document (repair ticket / shipping slip / payment slip) reuses the
  *  template-driven header + footer and only supplies its own `body`. */
+// Bespoke 80mm middle for a Contra deposit / handover. A thermal print is NOT
+// accepted at the bank counter — it's a WORKSHEET the carrier fills the bank's
+// own pay-in slip from (deposit) or a handover record (cash → cash). Shows the
+// bank/ledger block + the denomination breakdown (filled when captured, blank
+// pen-fill rows otherwise) + cheque list + total.
+function DepositThermalMiddle({ sample }: { sample: ThermalReceiptSample }) {
+    const slip  = sample.depositSlip!;
+    const isHandover = slip.mode === "handover";
+    const voucherTotal = sample.total ?? 0;
+    const counted = slip.counted && (slip.counted.notes.length || slip.counted.cheques.length)
+        ? slip.counted : null;
+    const notes    = slip.denominations.filter((d) => d >= 10);
+    const hasCoins = slip.denominations.some((d) => d < 10);
+    const bankLine = [slip.bankName, slip.branch].filter(Boolean).join(", ");
+    // Denomination amounts print WITHOUT the "Rs." prefix — on an 80mm roll the
+    // prefix pushes the number onto a second line. Currency is clear from the
+    // "Rs." total below. nowrap keeps each amount on one right-aligned line.
+    const fmtNum = (n: number) => n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const cashTotal   = counted ? counted.notes.reduce((s, n) => s + n.denom * n.count, 0) : 0;
+    const chequeTotal = counted ? counted.cheques.reduce((s, c) => s + c.amount, 0) : 0;
+    // Slip = physical deposit (cash + cheques); pen-fill mode → voucher total.
+    const total = counted ? cashTotal + chequeTotal : voucherTotal;
+    return (
+        <>
+            {/* Title comes from the customizable doctitle (template.headerLine2)
+                in ReceiptBody — no hardcoded title here. */}
+            {!isHandover && (
+                <div className="center small">Worksheet — fill the bank&rsquo;s own slip from this</div>
+            )}
+            <div className="hr" />
+            <div className="row"><span>{sample.reference}</span><span>{sample.date}</span></div>
+            <div className="hr" />
+            {isHandover ? (
+                <>
+                    {slip.fromLedger && <div className="row"><span>From</span><span>{slip.fromLedger}</span></div>}
+                    {slip.toLedger   && <div className="row"><span>To</span><span>{slip.toLedger}</span></div>}
+                </>
+            ) : (
+                <>
+                    {bankLine       && <div className="row"><span>Bank</span><span style={{ textAlign: "right" }}>{bankLine}</span></div>}
+                    {slip.accountNo && <div className="row"><span>A/C</span><span>{slip.accountNo}</span></div>}
+                    {slip.ifsc      && <div className="row"><span>IFSC</span><span>{slip.ifsc}</span></div>}
+                    {slip.pan       && <div className="row"><span>PAN</span><span>{slip.pan}</span></div>}
+                    {slip.fromLedger && <div className="row"><span>From</span><span>{slip.fromLedger}</span></div>}
+                </>
+            )}
+            <div className="hr" />
+            {counted ? (
+                <>
+                    <table className="lines denom-lines">
+                        <thead><tr><th>Note</th><th className="qty">Cnt</th><th className="amt">Amount</th></tr></thead>
+                        <tbody>
+                            {counted.notes.map((n) => (
+                                <tr key={n.denom}>
+                                    <td>{n.denom} &times;</td>
+                                    <td className="qty">{n.count}</td>
+                                    <td className="amt" style={{ whiteSpace: "nowrap" }}>{fmtNum(n.denom * n.count)}</td>
+                                </tr>
+                            ))}
+                            {counted.notes.length > 0 && (
+                                <tr>
+                                    <td style={{ borderTop: "1px solid #000" }}><b>Cash</b></td>
+                                    <td className="qty" style={{ borderTop: "1px solid #000" }}><b>{counted.notes.reduce((s, n) => s + n.count, 0)}</b></td>
+                                    <td className="amt" style={{ borderTop: "1px solid #000", whiteSpace: "nowrap" }}><b>{fmtNum(cashTotal)}</b></td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                    {counted.cheques.length > 0 && (
+                        <>
+                            <div className="small" style={{ marginTop: 4 }}>Cheques:</div>
+                            {counted.cheques.map((c, i) => (
+                                <div className="row" key={i}>
+                                    <span>{c.account ? `${c.account} · ${c.no}` : c.no}</span>
+                                    <span>{fmtINR(c.amount)}</span>
+                                </div>
+                            ))}
+                        </>
+                    )}
+                </>
+            ) : (
+                <table className="lines denom-lines">
+                    <thead><tr><th>Note</th><th className="qty">Cnt</th><th className="amt">Amount</th></tr></thead>
+                    <tbody>
+                        {notes.map((d) => (
+                            <tr key={d}><td>{d} &times;</td><td className="qty">____</td><td className="amt">_______</td></tr>
+                        ))}
+                        {hasCoins && <tr><td>Coins</td><td className="qty">____</td><td className="amt">_______</td></tr>}
+                    </tbody>
+                </table>
+            )}
+            <div className="hr" />
+            <div className="row total">
+                <span>{isHandover ? "HANDED OVER" : "DEPOSIT"}</span>
+                <span>{fmtINR(total)}</span>
+            </div>
+            <div className="center small" style={{ marginTop: 2 }}>{rupeesInWords(total)}</div>
+            {isHandover ? (
+                <div className="row" style={{ marginTop: 26 }}>
+                    <span className="sig-line" style={{ width: "45%" }}>Handed over by</span>
+                    <span className="sig-line" style={{ width: "45%" }}>Received by</span>
+                </div>
+            ) : (
+                <div className="sig-line">Depositor&rsquo;s Signature</div>
+            )}
+        </>
+    );
+}
+
+// Journal-style GL vouchers (plain Contra, Journal) — a double-entry document.
+// Prints each ledger leg as "Account Dr/Cr … amount" + a balancing total, never
+// the goods Item/Qty table. (Mirrors JournalMiddle on A4.)
+const JOURNAL_KINDS = new Set(["CONTRA", "JOURNAL"]);
+
+function JournalThermalMiddle({ sample }: { sample: ThermalReceiptSample }) {
+    const lines   = sample.lines;
+    const totalDr = lines.filter((l) => l.entryType !== "CREDIT").reduce((s, l) => s + l.amount, 0);
+    const grand   = sample.total ?? totalDr;
+    return (
+        <>
+            <div className="row"><span>{sample.reference}</span><span>{sample.date}</span></div>
+            <div className="hr" />
+            {lines.map((l, i) => {
+                const isCr = l.entryType === "CREDIT";
+                return (
+                    <div className="row" key={i}>
+                        <span>{isCr ? "  " : ""}{l.description} <b>{isCr ? "Cr" : "Dr"}</b></span>
+                        <span>{fmtINR(l.amount)}</span>
+                    </div>
+                );
+            })}
+            <div className="hr" />
+            <div className="row total"><span>Total</span><span>{fmtINR(totalDr)}</span></div>
+            <div className="center small" style={{ marginTop: 2 }}>{rupeesInWords(grand)}</div>
+            {sample.notes && <div className="small" style={{ marginTop: 4 }}>Narration: {sample.notes}</div>}
+        </>
+    );
+}
+
 function ReceiptBody({ template, sample, body }: BodyProps) {
     return (
         <div className="receipt">
@@ -455,12 +641,18 @@ function ReceiptBody({ template, sample, body }: BodyProps) {
             <div className="hr" />
             {/* Document title — below the divider, sitting right above the ticket
                 no / ref that the body opens with, so it reads as the heading of
-                what follows rather than a small line lost in the identity block. */}
+                what follows rather than a small line lost in the identity block.
+                Customizable via template.headerLine2 for every kind, including the
+                Contra deposit / handover slip. */}
             {template.headerLine2 && (
                 <div className="center doctitle" style={{ marginTop: 0, marginBottom: 6 }}>{template.headerLine2}</div>
             )}
-            {body ?? (MONEY_RECEIPT_KINDS.has(template.kind)
+            {body ?? (DEPOSIT_SLIP_KINDS.has(template.kind) && sample.depositSlip
+                ? <DepositThermalMiddle sample={sample} />
+                : MONEY_RECEIPT_KINDS.has(template.kind)
                 ? <MoneyThermalMiddle template={template} sample={sample} />
+                : JOURNAL_KINDS.has(template.kind)
+                ? <JournalThermalMiddle sample={sample} />
                 : <DefaultThermalMiddle template={template} sample={sample} />)}
             <ThermalFooter template={template} sample={sample} />
         </div>

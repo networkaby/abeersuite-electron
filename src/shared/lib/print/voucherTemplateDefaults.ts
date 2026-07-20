@@ -17,7 +17,16 @@
  */
 
 export const ACCOUNTING_VOUCHER_KINDS = [
+    // CONTRA is the PLAIN contra print (bank ↔ cash withdrawal, uncounted cash
+    // moves) — a neutral journal. Its two richer outputs are print-only variants
+    // below, each on its own customizable template. All three are the SAME
+    // voucher TYPE in the DB (CONTRA); buildGlSample() picks the print kind.
     "CONTRA",
+    // Cash → Bank pay-in slip (bank block, PAN, depositor counterfoil).
+    "BANK_DEPOSIT",
+    // Cash → Cash handover between the shop's own cash points (till → vault,
+    // counter → head office) — from/to ledgers + handed-by/received-by sigs.
+    "CASH_HANDOVER",
     "PAYMENT",
     "RECEIPT",
     "CREDIT_NOTE",
@@ -78,6 +87,8 @@ export const VOUCHER_TEMPLATE_KIND_GROUPS = {
 // Kept verbose for clarity on a thermal slip — admin can shorten via the UI.
 const HEADER_LINE_2: Record<VoucherTemplateKind, string> = {
     CONTRA: "Contra Voucher",
+    BANK_DEPOSIT: "Bank Deposit Slip",
+    CASH_HANDOVER: "Cash Handover Slip",
     PAYMENT: "Payment Voucher",
     RECEIPT: "Receipt Voucher",
     CREDIT_NOTE: "Credit Note",
@@ -111,6 +122,8 @@ const HEADER_LINE_2: Record<VoucherTemplateKind, string> = {
 // We start them with showTaxSummary=false so the seeded preview matches reality.
 const NO_TAX_SUMMARY: ReadonlySet<VoucherTemplateKind> = new Set<VoucherTemplateKind>([
     "CONTRA",
+    "BANK_DEPOSIT",
+    "CASH_HANDOVER",
     "JOURNAL",
     "MANUFACTURING_JOURNAL",
     "PHYSICAL_STOCK",
@@ -186,6 +199,8 @@ export function isPaperFormat(value: string): value is PaperFormat {
 // settings page.
 const DEFAULT_PAPER_BY_KIND: Record<VoucherTemplateKind, PaperFormat> = {
     CONTRA: "A4",
+    BANK_DEPOSIT: "A4",
+    CASH_HANDOVER: "A4",
     PAYMENT: "A4",
     RECEIPT: "A4",
     CREDIT_NOTE: "A4",
@@ -222,6 +237,8 @@ const DEFAULT_PAPER_BY_KIND: Record<VoucherTemplateKind, PaperFormat> = {
 // form. POS / online channels manage their own printing and ignore this map.
 export const PRINT_AFTER_SAVE_DEFAULT_BY_KIND: Record<VoucherTemplateKind, boolean> = {
     CONTRA: false,
+    BANK_DEPOSIT: false,
+    CASH_HANDOVER: false,
     PAYMENT: false,
     RECEIPT: true,
     CREDIT_NOTE: false,
@@ -265,6 +282,8 @@ export function printAfterSaveDefault(kind: string): boolean {
 // the user can still flip it per voucher on the form. POS / online ignore this.
 export const THERMAL_DEFAULT_BY_KIND: Record<VoucherTemplateKind, boolean> = {
     CONTRA:                false,
+    BANK_DEPOSIT:          false,
+    CASH_HANDOVER:         false,
     PAYMENT:               true,
     RECEIPT:               true,
     CREDIT_NOTE:           false,

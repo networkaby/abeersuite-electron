@@ -7,6 +7,20 @@ import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
+// Bank-ledger particulars (ledgers under the Bank groups) — printed on the
+// Contra deposit slip. All-blank → stored as null. (Kept local: route files
+// may only export handlers; the [id] route carries its own copy, like lineSchema.)
+const bankJsonSchema = z.object({
+    bankName:      z.string().trim().max(120).default(""),
+    branch:        z.string().trim().max(120).default(""),
+    accountNumber: z.string().trim().max(40).default(""),
+    ifsc:          z.string().trim().max(20).default(""),
+    beneficiary:   z.string().trim().max(120).default(""),
+});
+
+const emptyBank = (b: z.infer<typeof bankJsonSchema>): boolean =>
+    !b.bankName && !b.branch && !b.accountNumber && !b.ifsc && !b.beneficiary;
+
 const createSchema = z.object({
     name:        z.string().trim().min(1).max(200),
     groupId:     z.number().int().positive().nullish(),
@@ -14,6 +28,7 @@ const createSchema = z.object({
     description: z.string().trim().max(1000).nullish(),
     normalBalance: z.enum(["DEBIT", "CREDIT"]).optional(),
     sortOrder:   z.number().int().min(0).max(9999).optional(),
+    bankJson:    bankJsonSchema.nullish(),
 });
 
 // GET /api/accountancy/ledgers
@@ -88,6 +103,7 @@ export async function POST(req: Request) {
                 code:          body.code ?? null,
                 description:   body.description ?? null,
                 normalBalance: body.normalBalance ?? null,
+                ...(body.bankJson && !emptyBank(body.bankJson) ? { bankJson: body.bankJson } : {}),
             },
         });
         return NextResponse.json(account, { status: 201 });

@@ -1,4 +1,5 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { Prisma } from "@/generated/prisma/client";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
@@ -8,12 +9,26 @@ import { parseIdParam } from "@/shared/lib/api";
 import { pickDefined } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
+// Bank-ledger particulars — same shape as the create route (kept local: route
+// files may only export handlers). All-blank or null clears the stored value.
+const bankJsonSchema = z.object({
+    bankName:      z.string().trim().max(120).default(""),
+    branch:        z.string().trim().max(120).default(""),
+    accountNumber: z.string().trim().max(40).default(""),
+    ifsc:          z.string().trim().max(20).default(""),
+    beneficiary:   z.string().trim().max(120).default(""),
+});
+
+const emptyBank = (b: z.infer<typeof bankJsonSchema>): boolean =>
+    !b.bankName && !b.branch && !b.accountNumber && !b.ifsc && !b.beneficiary;
+
 const updateSchema = z.object({
     name:        z.string().trim().min(1).max(200).optional(),
     groupId:     z.number().int().positive().nullable().optional(),
     code:        z.string().trim().max(32).nullable().optional(),
     description: z.string().trim().max(1000).nullable().optional(),
     isActive:    z.boolean().optional(),
+    bankJson:    bankJsonSchema.nullable().optional(),
 });
 
 // PATCH /api/accountancy/ledgers/[id]
@@ -37,13 +52,19 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     try {
         const account = await prisma.account.update({
             where: { id },
-            data: pickDefined({
-                name: body.name,
-                groupId: body.groupId,
-                code: body.code,
-                description: body.description,
-                isActive: body.isActive,
-            }),
+            data: {
+                ...pickDefined({
+                    name: body.name,
+                    groupId: body.groupId,
+                    code: body.code,
+                    description: body.description,
+                    isActive: body.isActive,
+                }),
+                // undefined = untouched; null / all-blank clears the stored value.
+                ...(body.bankJson !== undefined
+                    ? { bankJson: body.bankJson && !emptyBank(body.bankJson) ? body.bankJson : Prisma.DbNull }
+                    : {}),
+            },
             include: { group: { select: { id: true, name: true } } },
         });
         return NextResponse.json(account);

@@ -62,7 +62,7 @@ Sessions revoke instantly on grant changes: mutating routes bump `tokensValidFro
 
 There is **one** general-ledger representation: the **`UniversalVoucher` spine** + its GL lines. Every voucher kind — GL (payment/receipt/contra/credit-note/debit-note/journal) and inventory (sale/purchase/POS/estimate/order/GRN/challan/…) — is a single `UniversalVoucher` row.
 
-- **`UniversalVoucher`** (`finance.prisma`) — the header/anchor: `type` (spans all kinds), `status`, `binding` (`REGULAR` = real transaction with GL/stock, `OPTIONAL` = non-binding document like estimate/order), `date`, `branchId`, `partyAccountId`, `voucherNo` (per-kind series number), creator. The global number is the row `id` (`UV-<id>` via `formatUvNo`).
+- **`UniversalVoucher`** (`finance.prisma`) — the header/anchor: `type` (spans all kinds), `status`, `binding` (`REGULAR` = real transaction with GL/stock, `OPTIONAL` = non-binding document like estimate/order), `date`, `branchId`, `partyAccountId`, `voucherNo` (per-kind series number), creator. The global number is the row `id` (`UV-<id>` via `formatUvNo`). `denomJson` (nullable) holds a contra's final cash-denomination + cheque breakdown for the bank-deposit / cash-handover slip (print-only capture, not a GL leg).
 - **`VoucherGlLine`** — the Dr/Cr postings, each tagged by `VoucherGlRole` (body / tax / tender / charge / round-off). Tender legs (cash/bank/AR) are GL lines, not a separate table.
 - **`VoucherDetail`** (`inventory.prisma`) — a 1:1 sidecar holding only cosmetic/print fields (frozen party JSON, GST/place-of-supply, printed totals, settlement JSON, return links). *(This is the model formerly named `InvVoucher`.)*
 - **`VoucherInventoryLine`** + **`InvStockLedger`** — the goods lines and stock movements. The mere existence of inventory lines ⇒ it's an inventory voucher (no discriminator).
@@ -76,7 +76,7 @@ There is **one** general-ledger representation: the **`UniversalVoucher` spine**
 
 `engineCreateSpine` mints the draft header up front (document anchor) so goods lines hang off it before posting. Closing stock / COGS is **not** posted per voucher — it's computed live at report time (Tally-style). Opening-balance mismatches route to a system **Suspense** ledger so the trial balance always balances.
 
-**The `Account` is the bridge.** Party ledgers (`accounts.prisma`: `AccountGroup` → `Account`) are the one durable link between the protected accounting core and the disposable workflow. The GL posting path, balances, and reports (BS / P&L / Day Book / Trial Balance) are a **protected surface** — verify with the parity harness and confirm before changing the math (see PROJECT_BRAIN.md).
+**The `Account` is the bridge.** Party ledgers (`accounts.prisma`: `AccountGroup` → `Account`) are the one durable link between the protected accounting core and the disposable workflow. Bank-group ledgers carry `Account.bankJson` (bank name / branch / A-C no / IFSC / holder) that prints on the contra deposit slip. The GL posting path, balances, and reports (BS / P&L / Day Book / Trial Balance) are a **protected surface** — verify with the parity harness and confirm before changing the math (see PROJECT_BRAIN.md).
 
 ---
 
@@ -165,10 +165,10 @@ src/shared/
    ├─ api/       validateRequest, parsePagination, handleApiError, opaque-id gen
    ├─ auth/      permissions, permissionScope, posVoucherMatrix, voucherMatrix, sidebarModules,
    │             authorizeStaff/Portal, departmentPool, revokeSessions, loginRateLimit
-   ├─ accountancy/ settlement, partySnapshot, checkCreditLimit, voucherBinding, outstandings
+   ├─ accountancy/ settlement, partySnapshot, checkCreditLimit, voucherBinding, outstandings, denomJson
    ├─ format/    moneyInr (paise), round2, formatDate, numberWords
    ├─ prisma/    prismaClient singleton
-   └─ print/     voucher/receipt templates
+   └─ print/     voucher/receipt templates (A4 + thermal), per-kind bespoke bodies — bank deposit slip, cash handover slip, money receipt, journal (Dr/Cr), invoice
 ```
 
 - **Boundary rule:** code goes in `src/shared/` only if used by ≥2 modules (or from `src/app/`); otherwise `src/modules/<m>/{lib,hooks,components}/`.

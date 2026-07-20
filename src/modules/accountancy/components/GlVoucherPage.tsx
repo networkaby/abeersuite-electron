@@ -18,6 +18,7 @@ import {
     DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { fmt, JOURNAL_STATUS_COLORS } from "@/utils/constants";
 import { parseAmount, isAmountChars } from "@/utils/numberInput";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
@@ -41,6 +42,8 @@ import { numberToIndianWords } from "@/shared/lib/format/numberWords";
 import { round2 } from "@/shared/lib/format/moneyInr";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
+import { getOrgDefaults } from "@/shared/lib/orgDefaults";
+import { parseDenomJson, type DenomJson } from "@/shared/lib/accountancy/denomJson";
 
 // ── Loaded voucher shape (used in edit mode) ────────────────────────────────
 
@@ -62,6 +65,8 @@ type LoadedVoucher = {
     partyAccountId: number | null;
     partyAccount:   { id: number; code: string | null; name: string } | null;
     lines:          LoadedLine[];
+    /** Contra deposit-slip capture (final combined breakdown) — see denomJson.ts. */
+    denomJson?:     unknown;
 };
 
 // Normalized line for dirty-check comparison.
@@ -211,10 +216,75 @@ type Row = {
     accountId: number | null;
     amount:    string;
     note:      string;
+    // Cheque number — required when this is a cheque row. Cheque-ness is DERIVED,
+    // not toggled: when depositing to a bank (denomination on, Transfer-to = bank),
+    // a Cash Transfer-from is counted by notes and a BANK Transfer-from is a cheque
+    // (you can't hand another bank's balance at the counter). See isChequeRow().
+    chequeNo?: string;
 };
 
 let rowSeq = 0;
 const newRow = (): Row => ({ id: ++rowSeq, accountId: null, amount: "", note: "" });
+
+// ── Contra denomination capture ─────────────────────────────────────────────
+// While the "Denomination details" box is ticked (auto-on when Transfer-to is
+// a bank), each CASH "Transfer from" row gets a note-counting panel in the side
+// space and its amount is LOCKED to the counted total. A CHEQUE is a separate
+// Transfer-from row marked with the "Cheque" toggle (its ledger = the drawer's
+// account, its amount typed). At save the cash notes merge note-wise and the
+// cheque rows collect into ONE final DenomJson stored on the spine.
+
+type RowDenom = { counts: Record<number, string> };  // denomination → count (input string)
+const emptyRowDenom = (): RowDenom => ({ counts: {} });
+const FALLBACK_DENOMS = [500, 200, 100, 50, 20, 10, 5, 2, 1];
+
+const rowDenomTotal = (d: RowDenom): number =>
+    Object.entries(d.counts).reduce((s, [den, c]) => s + Number(den) * (parseInt(c || "0", 10) || 0), 0);
+
+/** One cash row's note-counting panel — counts per denomination + running total. */
+function DenomPanel({ title, denomList, value, onChange }: {
+    title:     string;
+    denomList: number[];
+    value:     RowDenom;
+    onChange:  (updater: (d: RowDenom) => RowDenom) => void;
+}) {
+    return (
+        <div className="rounded-md border border-border bg-card p-3 space-y-2 shadow-sm">
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">{title}</p>
+            <table className="w-full text-xs">
+                <tbody>
+                    {denomList.map((d) => {
+                        const c = parseInt(value.counts[d] || "0", 10) || 0;
+                        return (
+                            <tr key={d}>
+                                <td className="w-16 py-0.5 pr-2 text-right font-mono tabular-nums text-muted-foreground">{d} &times;</td>
+                                <td className="w-16 py-0.5">
+                                    <Input
+                                        value={value.counts[d] ?? ""}
+                                        inputMode="numeric"
+                                        placeholder="0"
+                                        onChange={(e) => {
+                                            const v = e.target.value;
+                                            if (/^\d*$/.test(v)) onChange((dd) => ({ ...dd, counts: { ...dd.counts, [d]: v } }));
+                                        }}
+                                        className="h-6 text-right text-xs font-mono"
+                                    />
+                                </td>
+                                <td className="py-0.5 pl-2 text-right font-mono tabular-nums text-muted-foreground">
+                                    {c > 0 ? fmt(d * c) : ""}
+                                </td>
+                            </tr>
+                        );
+                    })}
+                </tbody>
+            </table>
+            <div className="flex justify-between border-t border-border pt-1.5 text-xs font-medium">
+                <span>Total</span>
+                <span className="font-mono tabular-nums">₹ {fmt(rowDenomTotal(value))}</span>
+            </div>
+        </div>
+    );
+}
 
 // ── Component ───────────────────────────────────────────────────────────────
 
@@ -309,10 +379,43 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
 
     const [rows, setRows] = useState<Row[]>([newRow()]);
 
+    // ── Contra deposit-slip capture ─────────────────────────────────────────
+    const isContra = kind === "CONTRA";
+    const [denomOn, setDenomOn]     = useState(false);
+    const [denomList, setDenomList] = useState<number[]>(FALLBACK_DENOMS);
+    const [rowDenoms, setRowDenoms] = useState<Record<number, RowDenom>>({});
+    // Cheques loaded from a saved voucher, awaiting the accounts list so they can
+    // be matched back onto their Transfer-from rows (drawer + amount).
+    const [pendingCheques, setPendingCheques] = useState<DenomJson["cheques"] | null>(null);
+
     const accountById = new Map<number, GlAccount>(accounts.map((a) => [a.id, a]));
     const topAccounts = accounts.filter(copy.topFilter);
     const rowAccounts = accounts.filter(copy.rowFilter);
     const topAccount  = effectiveTopAccountId ? accountById.get(effectiveTopAccountId) : undefined;
+
+    const topIsBank  = isContra && topAccount?.group?.name === ACCOUNT_GROUPS.BANK_ACCOUNTS;
+    const isCashAcct = (a?: GlAccount) => a?.group?.name === ACCOUNT_GROUPS.CASH_IN_HAND;
+    // Cash "Transfer from" rows — each gets its own side panel while capture is on.
+    const cashRows = isContra && denomOn
+        ? rows.filter((r) => isCashAcct(r.accountId ? accountById.get(r.accountId) : undefined))
+        : [];
+    const showDenomPanels = cashRows.length > 0;
+    // At least one Transfer-from is cash → this contra moves physical cash, so
+    // the denomination option is meaningful (deposit to bank, or cash handover).
+    // A bank → cash withdrawal has no cash source and doesn't offer it.
+    const hasCashSource = isContra && rows.some((r) => isCashAcct(r.accountId ? accountById.get(r.accountId) : undefined));
+    const showDenomToggle = topIsBank || hasCashSource;
+
+    // Depositing to a bank with denomination on: a Cash Transfer-from is counted
+    // by notes; a BANK Transfer-from is DEFINITELY a cheque (you can't hand
+    // another bank's balance at the counter), so it demands a cheque number.
+    const isChequeRow = (r: Row): boolean => {
+        if (!(isContra && denomOn && topIsBank) || r.accountId == null) return false;
+        const acct = accountById.get(r.accountId);
+        return acct != null && !isCashAcct(acct);
+    };
+    // Every cheque row must carry a cheque number before the voucher can save.
+    const chequesComplete = rows.every((r) => !isChequeRow(r) || (r.chequeNo ?? "").trim().length > 0);
 
     const rowsTotal = rows.reduce((s, r) => s + parseAmount(r.amount), 0);
     const topTotal  = rowsTotal;  // top side auto-derives from particulars sum
@@ -320,7 +423,22 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
         && rows.every((r) => r.accountId !== null && parseAmount(r.amount) > 0)
         && !!effectiveTopAccountId
         // top account can't equal any particulars account (would self-balance)
-        && rows.every((r) => r.accountId !== effectiveTopAccountId);
+        && rows.every((r) => r.accountId !== effectiveTopAccountId)
+        && chequesComplete;
+
+    // Org's note/coin list for the denomination panels (same as shift close).
+    useEffect(() => {
+        if (!isContra) return;
+        getOrgDefaults()
+            .then((od) => setDenomList(od.cashDenominationsJson?.length ? od.cashDenominationsJson : FALLBACK_DENOMS))
+            .catch(() => setDenomList(FALLBACK_DENOMS));
+    }, [isContra]);
+
+    // Transfer-to is a bank → denomination capture auto-ticks (user can untick);
+    // switching the destination off a bank unticks it again.
+    useEffect(() => {
+        if (isContra) setDenomOn(topIsBank);
+    }, [isContra, topIsBank]);
 
     useEffect(() => {
         axios.get<GlAccount[]>("/api/accountancy/gl-accounts?includeParties=true")
@@ -383,16 +501,33 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
                 const rowLines = v.lines.filter((l) => l.type === copy.rowSide);
 
                 if (topLine) setTopLedgerId(topLine.accountId);
-                setRows(
-                    rowLines.length > 0
-                        ? rowLines.map((l) => ({
-                            id:        ++rowSeq,
-                            accountId: l.accountId,
-                            amount:    String(Number(l.amount)),
-                            note:      l.description ?? "",
-                        }))
-                        : [newRow()],
-                );
+                const mappedRows = rowLines.length > 0
+                    ? rowLines.map((l) => ({
+                        id:        ++rowSeq,
+                        accountId: l.accountId,
+                        amount:    String(Number(l.amount)),
+                        note:      l.description ?? "",
+                    }))
+                    : [newRow()];
+                setRows(mappedRows);
+
+                // Contra: reload the saved capture. Notes are combined-only, so
+                // they prefill the FIRST cash row's panel (single-cash-row deposit
+                // is the normal case). Cheques need the accounts list to match
+                // rows by drawer, which may load after this — so stash them and let
+                // a dedicated effect re-mark the rows once accounts are ready.
+                if (kind === "CONTRA") {
+                    const saved = parseDenomJson(v.denomJson);
+                    if (saved && mappedRows.length > 0) {
+                        setDenomOn(true);
+                        setRowDenoms({
+                            [mappedRows[0].id]: {
+                                counts: Object.fromEntries(Object.entries(saved.notes).map(([k, c]) => [k, String(c)])),
+                            },
+                        });
+                        setPendingCheques(saved.cheques);
+                    }
+                }
 
                 // Snapshot original for dirty-check
                 originalSnapshotRef.current = {
@@ -409,12 +544,87 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
             .catch(() => toast.error("Failed to load voucher"))
             .finally(() => { if (!cancelled) setLoading(false); });
         return () => { cancelled = true; };
-    }, [isEditing, voucherId, copy.topSide, copy.rowSide, reloadCounter]);
+    }, [isEditing, voucherId, kind, copy.topSide, copy.rowSide, reloadCounter]);
+
+    // Re-mark cheque rows once BOTH the saved cheques and the accounts list are
+    // available (they load independently). Match each cheque to a row by drawer
+    // account (when stored) and amount, then clear the pending list.
+    useEffect(() => {
+        if (pendingCheques == null || pendingCheques.length === 0 || accounts.length === 0) return;
+        const byId = new Map(accounts.map((a) => [a.id, a]));
+        setRows((rs) => {
+            const used = new Set<number>();
+            return rs.map((r) => {
+                const acct = r.accountId != null ? byId.get(r.accountId) : undefined;
+                // Only bank (non-cash) rows carry cheques; cash rows are notes.
+                if (acct == null || isCashAcct(acct)) return r;
+                const acctName = acct.name;
+                const idx = pendingCheques.findIndex((c, i) =>
+                    !used.has(i)
+                    && Math.abs((parseAmount(r.amount) || 0) - c.amount) < 0.005
+                    && (c.account == null || c.account === acctName));
+                if (idx < 0) return r;
+                used.add(idx);
+                return { ...r, chequeNo: pendingCheques[idx].no };
+            });
+        });
+        setPendingCheques(null);
+    }, [pendingCheques, accounts]);
 
     const updateRow = (id: number, patch: Partial<Row>) =>
         setRows((rs) => rs.map((r) => (r.id === id ? { ...r, ...patch } : r)));
     const addRow = () => setRows((rs) => [...rs, newRow()]);
     const removeRow = (id: number) => setRows((rs) => (rs.length <= 1 ? rs : rs.filter((r) => r.id !== id)));
+
+    // Panel edit → the cash row's amount follows the counted total (locked).
+    const setRowDenom = (rowId: number, updater: (d: RowDenom) => RowDenom) => {
+        const next = updater(rowDenoms[rowId] ?? emptyRowDenom());
+        setRowDenoms((prev) => ({ ...prev, [rowId]: next }));
+        const total = rowDenomTotal(next);
+        updateRow(rowId, { amount: total > 0 ? String(round2(total)) : "" });
+        isDirtyRef.current = true;
+    };
+
+    // Checkbox toggle: turning capture ON re-locks every cash row's amount to
+    // its panel total; turning it OFF frees plain typing (amounts stay put).
+    const toggleDenom = (on: boolean) => {
+        setDenomOn(on);
+        if (on) {
+            for (const r of rows) {
+                const acct = r.accountId ? accountById.get(r.accountId) : undefined;
+                if (!isCashAcct(acct)) continue;
+                const total = rowDenomTotal(rowDenoms[r.id] ?? emptyRowDenom());
+                updateRow(r.id, { amount: total > 0 ? String(round2(total)) : "" });
+            }
+        }
+    };
+
+    // Merge the capture into the FINAL combined breakdown stored on the spine:
+    // note counts from the CASH rows' panels (summed note-wise) + one entry per
+    // CHEQUE row (drawer account · cheque no · amount). Null when capture is off
+    // or nothing was entered → print falls back to the blank pen-fill slip.
+    const buildDenomPayload = (): DenomJson | null => {
+        if (!isContra || !denomOn) return null;
+        const notes: Record<string, number> = {};
+        const cheques: { no: string; amount: number; account?: string }[] = [];
+        for (const r of rows) {
+            const acct = r.accountId ? accountById.get(r.accountId) : undefined;
+            if (isCashAcct(acct)) {
+                const d = rowDenoms[r.id];
+                if (!d) continue;
+                for (const [den, c] of Object.entries(d.counts)) {
+                    const cnt = parseInt(c || "0", 10) || 0;
+                    if (cnt > 0) notes[den] = (notes[den] ?? 0) + cnt;
+                }
+            } else if (isChequeRow(r)) {
+                const amt = parseAmount(r.amount) || 0;
+                if ((r.chequeNo ?? "").trim() && amt > 0) {
+                    cheques.push({ no: r.chequeNo!.trim(), amount: amt, account: acct?.name });
+                }
+            }
+        }
+        return Object.keys(notes).length || cheques.length ? { notes, cheques } : null;
+    };
 
     // Open the saved voucher's print page in a new tab — thermal auto-fire (like
     // POS) or the browser print page, per the Thermal toggle.
@@ -422,6 +632,10 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
         window.open(voucherPrintPageHref("gl", id, { thermal }), "_blank", "noopener");
 
     const submit = async (postAfterSave: boolean, print = false) => {
+        if (!chequesComplete) {
+            toast.error("Enter the cheque number for each bank Transfer-from row.");
+            return;
+        }
         if (!balanced) {
             toast.error("Pick the top account and at least one particulars row with an amount.");
             return;
@@ -460,6 +674,8 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
                     date,
                     narration: narration.trim() || undefined,
                     lines:     allLines,
+                    // Contra: null clears a stale capture when the box is unticked.
+                    ...(isContra ? { denomJson: buildDenomPayload() } : {}),
                 });
                 toast.success(`${copy.title} ${loadedVoucher?.reference ?? ""} updated`);
                 if (print) openReceipt(voucherId);
@@ -482,6 +698,7 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
                     date,
                     narration: narration.trim() || undefined,
                     lines:     allLines,
+                    ...(isContra ? { denomJson: buildDenomPayload() } : {}),
                 },
             );
             if (postAfterSave) {
@@ -499,6 +716,7 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
             setTopParty(null);
             partyPickerRef.current?.clear();
             setRows([newRow()]);
+            setRowDenoms({});
             setDate(toIsoDate(new Date()));
             isDirtyRef.current = false;
             // Refresh the voucher-number preview so the next entry shows the
@@ -545,9 +763,12 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
                 }
             />
 
-            {/* Body — Tally-finish: two columns (Particulars wide / Amount right) */}
+            {/* Body — Tally-finish: two columns (Particulars wide / Amount right).
+                Contra denomination capture docks its counting panels in the free
+                space beside the form (one panel per cash Transfer-from row). */}
             <div className="flex-1 overflow-y-auto px-8 py-6">
-                <div className="max-w-3xl mx-auto space-y-6">
+                <div className={`mx-auto flex items-start gap-8 ${showDenomPanels ? "max-w-6xl" : "max-w-3xl"}`}>
+                <div className="min-w-0 flex-1 space-y-6">
 
                     {/* Top side — single first line. Dr/Cr prefix in grey, then picker, then amount. */}
                     <div className="space-y-2">
@@ -592,6 +813,22 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
                                     />
                                 )}
                                 <BalanceHint account={topAccount} />
+                                {/* Denomination capture — offered whenever the contra
+                                    moves physical cash (deposit to bank, or a cash-to-
+                                    cash handover). Ticked → cash amounts come from the
+                                    denomination panels, not plain typing. Auto-ticks
+                                    for a bank deposit; opt-in for a cash handover. */}
+                                {showDenomToggle && (
+                                    <label className="mt-2 flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+                                        <Checkbox
+                                            checked={denomOn}
+                                            onCheckedChange={(v) => toggleDenom(v === true)}
+                                        />
+                                        {topIsBank
+                                            ? "Denomination details — cash amounts locked to the counted total; unticked prints a blank pen-fill slip"
+                                            : "Denomination details — count the cash and print a handover slip; unticked keeps a plain voucher"}
+                                    </label>
+                                )}
                             </div>
                             <div className="pt-6 text-right font-mono tabular-nums text-sm">
                                 {topTotal > 0 ? `₹ ${fmt(topTotal)}` : <span className="text-muted-foreground/40">—</span>}
@@ -614,13 +851,25 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
                             <tbody>
                                 {rows.map((row, i) => {
                                     const acct = row.accountId ? accountById.get(row.accountId) : undefined;
+                                    // Capture on + cash source → the amount comes from
+                                    // the side panel, plain typing is off.
+                                    const denomLocked = isContra && denomOn && isCashAcct(acct);
                                     return (
                                         <tr key={row.id} className="border-t border-border/40 align-top">
                                             <td className="px-1 py-2 text-xs text-muted-foreground tabular-nums">{i + 1}</td>
                                             <td className="px-2 py-2">
                                                 <GlAccountCombobox
                                                     value={row.accountId}
-                                                    onChange={(a) => updateRow(row.id, { accountId: a?.id ?? null })}
+                                                    onChange={(a) => {
+                                                        // Switching onto a cash ledger while capture is
+                                                        // on re-locks the amount to that row's panel.
+                                                        const lockNow = isContra && denomOn && isCashAcct(a ?? undefined);
+                                                        const total = lockNow ? rowDenomTotal(rowDenoms[row.id] ?? emptyRowDenom()) : null;
+                                                        updateRow(row.id, {
+                                                            accountId: a?.id ?? null,
+                                                            ...(lockNow ? { amount: total && total > 0 ? String(round2(total)) : "" } : {}),
+                                                        });
+                                                    }}
                                                     accounts={rowAccounts}
                                                     placeholder={copy.rowPlaceholder}
                                                 />
@@ -631,13 +880,29 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
                                                     placeholder="Note (optional)"
                                                     className="h-7 text-xs mt-1"
                                                 />
+                                                {/* Bank Transfer-from in a deposit = a cheque. No toggle:
+                                                    it credits this row's ledger and prints in the slip's
+                                                    cheque section, with a REQUIRED cheque number. */}
+                                                {isChequeRow(row) && (
+                                                    <div className="mt-1 flex items-center gap-2">
+                                                        <span className="text-[11px] text-muted-foreground whitespace-nowrap">Cheque no.<span className="text-destructive"> *</span></span>
+                                                        <Input
+                                                            value={row.chequeNo ?? ""}
+                                                            onChange={(e) => updateRow(row.id, { chequeNo: e.target.value })}
+                                                            placeholder="e.g. 483920"
+                                                            className={`h-7 text-xs flex-1${(row.chequeNo ?? "").trim() ? "" : " border-destructive/60"}`}
+                                                        />
+                                                    </div>
+                                                )}
                                             </td>
                                             <td className="px-2 py-2">
                                                 <Input
                                                     type="text"
                                                     inputMode="decimal"
                                                     value={row.amount}
-                                                    placeholder="0.00"
+                                                    placeholder={denomLocked ? "Via denoms →" : "0.00"}
+                                                    disabled={denomLocked}
+                                                    title={denomLocked ? "Amount follows the denomination panel" : undefined}
                                                     onChange={(e) => {
                                                         if (isAmountChars(e.target.value)) {
                                                             updateRow(row.id, { amount: e.target.value });
@@ -711,6 +976,23 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
                             </p>
                         )}
                     </div>
+                </div>
+
+                {/* Denomination panels — one per cash Transfer-from row; the
+                    combined result is what the deposit slip prints. */}
+                {showDenomPanels && (
+                    <aside className="w-[300px] shrink-0 space-y-4 sticky top-0">
+                        {cashRows.map((r) => (
+                            <DenomPanel
+                                key={r.id}
+                                title={`${r.accountId ? (accountById.get(r.accountId)?.name ?? "Cash") : "Cash"} — Denominations`}
+                                denomList={denomList}
+                                value={rowDenoms[r.id] ?? emptyRowDenom()}
+                                onChange={(updater) => setRowDenom(r.id, updater)}
+                            />
+                        ))}
+                    </aside>
+                )}
                 </div>
             </div>
 

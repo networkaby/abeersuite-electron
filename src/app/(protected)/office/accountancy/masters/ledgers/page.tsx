@@ -31,7 +31,41 @@ interface LedgerRow {
     companyId: number | null;
     groupId: number | null;
     balance: number;
+    /** Bank-ledger particulars (Bank-group ledgers only) — printed on the
+     *  Contra deposit slip. */
+    bankJson: unknown;
 }
+
+// Bank particulars are shown only for ledgers under a Bank group (seeded
+// "Bank Accounts" / "Bank OD A/c").
+const isBankGroupName = (name?: string | null): boolean =>
+    (name ?? "").toLowerCase().includes("bank");
+
+type BankFields = { bankName: string; branch: string; accountNumber: string; ifsc: string; beneficiary: string };
+const EMPTY_BANK: BankFields = { bankName: "", branch: "", accountNumber: "", ifsc: "", beneficiary: "" };
+const hasBankData = (b: BankFields): boolean =>
+    !!(b.bankName || b.branch || b.accountNumber || b.ifsc || b.beneficiary);
+
+function parseBank(v: unknown): BankFields {
+    if (v == null || typeof v !== "object" || Array.isArray(v)) return { ...EMPTY_BANK };
+    const o = v as Record<string, unknown>;
+    const s = (x: unknown): string => (typeof x === "string" ? x : "");
+    return {
+        bankName:      s(o.bankName),
+        branch:        s(o.branch),
+        accountNumber: s(o.accountNumber),
+        ifsc:          s(o.ifsc),
+        beneficiary:   s(o.beneficiary),
+    };
+}
+
+const BANK_FIELD_LABELS: { key: keyof BankFields; label: string; placeholder: string }[] = [
+    { key: "bankName",      label: "Bank Name",           placeholder: "State Bank of India" },
+    { key: "branch",        label: "Branch",              placeholder: "Fancy Bazar Branch" },
+    { key: "accountNumber", label: "A/C No",              placeholder: "38124567890" },
+    { key: "ifsc",          label: "IFSC",                placeholder: "SBIN0000123" },
+    { key: "beneficiary",   label: "A/C Holder’s Name", placeholder: "Firm name as per bank" },
+];
 
 interface GroupNode {
     id: number;
@@ -122,11 +156,13 @@ export default function LedgersPage() {
     const [newForm, setNewForm] = useState({
         name: "", groupId: NONE, description: "",
     });
+    const [newBank, setNewBank] = useState<BankFields>(EMPTY_BANK);
 
-    // Inline ledger edit (name + parent group)
+    // Inline ledger edit (name + parent group + bank particulars)
     const [editLedgerId, setEditLedgerId]   = useState<number | null>(null);
     const [editName, setEditName]           = useState("");
     const [editGroupId, setEditGroupId]     = useState<number | null>(null);
+    const [editBank, setEditBank]           = useState<BankFields>(EMPTY_BANK);
     const [savingLedger, setSavingLedger]   = useState(false);
 
     const load = useCallback(() => {
@@ -160,15 +196,20 @@ export default function LedgersPage() {
         setEditLedgerId(l.id);
         setEditName(l.name);
         setEditGroupId(l.groupId);
+        setEditBank(parseBank(l.bankJson));
     };
 
     const saveLedger = async (id: number) => {
         if (!editName.trim()) { toast.error("Name is required"); return; }
         setSavingLedger(true);
+        const editGroupIsBank = isBankGroupName(allFlat.find((g) => g.id === editGroupId)?.name);
         try {
             await axios.patch(`/api/accountancy/ledgers/${id}`, {
                 name:    editName.trim(),
                 groupId: editGroupId,
+                // Bank-group ledgers carry their particulars; moving a ledger
+                // out of the Bank group clears them.
+                bankJson: editGroupIsBank && hasBankData(editBank) ? editBank : null,
             });
             toast.success("Ledger updated");
             setEditLedgerId(null);
@@ -196,16 +237,19 @@ export default function LedgersPage() {
     const addLedger = async () => {
         if (!newForm.name.trim()) { toast.error("Name is required"); return; }
         setSaving(true);
+        const newGroupIsBank = isBankGroupName(allFlat.find((g) => String(g.id) === newForm.groupId)?.name);
         try {
             // normalBalance is left unset → inherited from the group's nature.
             await axios.post("/api/accountancy/ledgers", {
                 name:          newForm.name.trim(),
                 groupId:       newForm.groupId !== NONE ? Number(newForm.groupId) : null,
                 description:   newForm.description.trim() || null,
+                ...(newGroupIsBank && hasBankData(newBank) ? { bankJson: newBank } : {}),
             });
             toast.success("Ledger created");
             setShowAdd(false);
             setNewForm({ name: "", groupId: NONE, description: "" });
+            setNewBank(EMPTY_BANK);
             load();
         } catch (err: unknown) {
             const msg = axios.isAxiosError(err) ? err.response?.data?.error : "Failed";
@@ -285,6 +329,25 @@ export default function LedgersPage() {
                             />
                         </div>
                     </div>
+                    {/* Bank particulars — only for ledgers under a Bank group;
+                        printed on the Contra deposit slip. */}
+                    {isBankGroupName(allFlat.find((g) => String(g.id) === newForm.groupId)?.name) && (
+                        <div className="space-y-3 rounded-md border border-border bg-muted/30 p-4">
+                            <p className="text-sm font-medium text-foreground">Bank Details <span className="font-normal text-muted-foreground">— printed on the deposit slip</span></p>
+                            <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
+                                {BANK_FIELD_LABELS.map(({ key, label, placeholder }) => (
+                                    <div key={key} className="space-y-1.5">
+                                        <Label>{label}</Label>
+                                        <Input
+                                            value={newBank[key]}
+                                            onChange={(e) => setNewBank((b) => ({ ...b, [key]: e.target.value }))}
+                                            placeholder={placeholder}
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                     <div className="flex gap-2 justify-end">
                         <Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button>
                         <Button onClick={addLedger} disabled={saving}>
@@ -440,6 +503,20 @@ export default function LedgersPage() {
                                                         onChange={setEditGroupId}
                                                         groups={allFlat}
                                                     />
+                                                    {/* Bank particulars — Bank-group ledgers only. */}
+                                                    {isBankGroupName(allFlat.find((g) => g.id === editGroupId)?.name) && (
+                                                        <div className="space-y-1.5 rounded-md border border-border bg-muted/30 p-2">
+                                                            {BANK_FIELD_LABELS.map(({ key, label, placeholder }) => (
+                                                                <Input
+                                                                    key={key}
+                                                                    value={editBank[key]}
+                                                                    onChange={(e) => setEditBank((b) => ({ ...b, [key]: e.target.value }))}
+                                                                    placeholder={`${label} — ${placeholder}`}
+                                                                    className="h-7 text-xs"
+                                                                />
+                                                            ))}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             ) : (
                                                 <div className="flex items-center gap-2">

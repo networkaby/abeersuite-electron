@@ -5,6 +5,7 @@ import { requireAuth, requireVoucherPermission } from "@/shared/lib/auth/permiss
 import { resolveActiveBranchId, COMBINED_BRANCH, BranchAccessError } from "@/shared/lib/auth/activeBranch";
 import { z } from "zod";
 import { isBalanced } from "@/modules/accountancy/lib/balance";
+import { parseDenomJson } from "@/shared/lib/accountancy/denomJson";
 import { engineCreateVoucher } from "@/modules/accountancy/lib/transactionEngine";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
@@ -17,12 +18,24 @@ const lineSchema = z.object({
     description: z.string().trim().optional(),
 });
 
+// Contra deposit-slip capture — the FINAL combined breakdown (notes counts +
+// cheque list), stored once on the spine (UniversalVoucher.denomJson).
+const denomJsonSchema = z.object({
+    notes:   z.record(z.string(), z.number().int().min(0)),
+    cheques: z.array(z.object({
+        no:      z.string().trim().min(1),
+        amount:  z.number().positive(),
+        account: z.string().trim().optional(),
+    })),
+});
+
 const createSchema = z.object({
     type:           z.enum(["CONTRA", "PAYMENT", "RECEIPT", "CREDIT_NOTE", "DEBIT_NOTE"]),
     date:           z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD"),
     narration:      z.string().trim().optional(),
     partyAccountId: z.number().int().positive().optional(),
     lines:          z.array(lineSchema).min(2, "At least 2 lines required"),
+    denomJson:      denomJsonSchema.nullable().optional(),
 });
 
 // GET /api/accountancy/vouchers?type=CONTRA&status=DRAFT&includeDeleted=1
@@ -123,8 +136,8 @@ export async function POST(req: Request) {
     try {
         // Create a DRAFT financial transaction via the Transaction Engine
         // (engine computes totalAmount + reference; posting is a separate step).
-        const voucher = await prisma.$transaction((tx) =>
-            engineCreateVoucher(tx, {
+        const voucher = await prisma.$transaction(async (tx) => {
+            const v = await engineCreateVoucher(tx, {
                 type:           body.type,
                 date:           new Date(body.date),
                 userId:         user!.id,
@@ -133,8 +146,14 @@ export async function POST(req: Request) {
                 partyAccountId: body.partyAccountId ?? null,
                 branchId,
                 post:           false,
-            }),
-        );
+            });
+            // Deposit-slip capture (CONTRA only) — drop empty/zero-only payloads.
+            const denom = body.type === "CONTRA" ? parseDenomJson(body.denomJson) : null;
+            if (denom) {
+                await tx.universalVoucher.update({ where: { id: v.id }, data: { denomJson: denom } });
+            }
+            return v;
+        });
         return NextResponse.json(voucher, { status: 201 });
     } catch (e) {
         return handleApiError(e, "Failed to create voucher");

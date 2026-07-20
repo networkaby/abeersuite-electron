@@ -1,5 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { Prisma } from "@/generated/prisma/client";
 import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
+import { parseDenomJson } from "@/shared/lib/accountancy/denomJson";
 import { NextResponse } from "next/server";
 import { requireAuth, userCanVoucher } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
@@ -58,11 +60,23 @@ const lineSchema = z.object({
     description: z.string().trim().optional(),
 });
 
+// Contra deposit-slip capture — same shape as the create route; the FINAL
+// combined breakdown stored once on the spine. `null` clears a saved capture.
+const denomJsonSchema = z.object({
+    notes:   z.record(z.string(), z.number().int().min(0)),
+    cheques: z.array(z.object({
+        no:      z.string().trim().min(1),
+        amount:  z.number().positive(),
+        account: z.string().trim().optional(),
+    })),
+});
+
 const patchSchema = z.object({
     date:           z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD"),
     narration:      z.string().trim().optional(),
     partyAccountId: z.number().int().positive().optional(),
     lines:          z.array(lineSchema).min(2, "At least 2 lines required"),
+    denomJson:      denomJsonSchema.nullable().optional(),
 });
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -147,13 +161,16 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 }
             }
 
-            // Update the spine header.
+            // Update the spine header. denomJson: undefined = leave untouched;
+            // null or an empty/zero-only payload clears the saved capture.
+            const denom = body.denomJson === undefined ? undefined : parseDenomJson(body.denomJson);
             await tx.universalVoucher.update({
                 where: { id: voucherId },
                 data:  {
                     date:           new Date(body.date),
                     partyAccountId: body.partyAccountId ?? null,
                     ...(body.narration ? { narration: body.narration, description: body.narration } : {}),
+                    ...(denom !== undefined ? { denomJson: denom ?? Prisma.DbNull } : {}),
                 },
             });
         }, { timeout: 30_000, maxWait: 10_000 });

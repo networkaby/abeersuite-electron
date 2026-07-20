@@ -27,6 +27,9 @@ type LedgerRow = {
     companyId: number | null;
     groupId: number | null;
     balance: number;
+    /** Bank-ledger particulars (Bank-group ledgers only) — edited on the
+     *  masters Ledgers page, printed on the Contra deposit slip. */
+    bankJson: unknown;
 };
 
 type FlatGroup = {
@@ -130,6 +133,7 @@ export async function GET(req: Request) {
                 select: {
                     id: true, name: true, code: true, normalBalance: true,
                     isActive: true, personId: true, companyId: true, groupId: true,
+                    bankJson: true,
                 },
             }),
             loadNormalBalanceMap(),

@@ -81,6 +81,11 @@ model UniversalVoucher {
   date                      DateTime                   @db.Date
   description               String
   narration                 String?
+  // Contra deposit-slip capture — the FINAL combined breakdown of what goes to
+  // the bank (not per-line; GL lines stay plain amounts). Null → not captured;
+  // the printed slip falls back to blank pen-fill boxes.
+  // Shape: { notes: { "500": 10, ... }, cheques: [{ no: "483920", amount: 12500 }] }
+  denomJson                 Json?
   status                    VoucherStatus              @default(DRAFT)
   // Phase 5 5D-9: REGULAR (real txn: GL/stock) vs OPTIONAL (non-binding document:
   // estimate/order/quote, no GL/stock). Derived from `type` at creation.

@@ -179,17 +179,94 @@ export function buildSampleForKind(kind: VoucherTemplateKind): ThermalReceiptSam
                 balanceAfter:  kind === "RECEIPT" ? "Rs. 7,315.00 Dr"  : "Rs. 22,712.00 Cr",
             };
         case "CONTRA":
+            // Plain contra (no denomination slip) — a bank ↔ cash movement that
+            // isn't a formal deposit or a counted handover. Renders the neutral
+            // Particulars · Debit · Credit journal table. buildGlSample() routes
+            // cash→bank to BANK_DEPOSIT and counted cash→cash to CASH_HANDOVER;
+            // everything else stays here.
+            return {
+                reference: "CV/26-27/0004", date: today,
+                partyName: null, partyPhone: null,
+                lines: [
+                    { description: "Cash-in-Hand",     quantity: 1, amount: 20000, entryType: "DEBIT" },
+                    { description: "SBI Bank A/c",      quantity: 1, amount: 20000, entryType: "CREDIT" },
+                ],
+                subtotal: null, taxAmount: null, total: 20000,
+                notes: "Cash withdrawn from bank",
+            };
+        case "BANK_DEPOSIT":
+            // Cash → Bank deposit: the depositSlip block makes the A4 preview
+            // render the bank pay-in slip (blank denomination boxes + depositor
+            // counterfoil). Real prints fill this from Organisation.bankJson +
+            // OrgDefaults.cashDenominationsJson in buildGlSample().
             return {
                 reference: "CV/26-27/0004", date: today,
                 partyName: null, partyPhone: null,
                 lines: [{ description: "Cash → Bank transfer", quantity: 1, amount: 50000 }],
-                subtotal: null, taxAmount: null, total: 50000, notes: null,
+                subtotal: null, taxAmount: null, total: 50000,
+                notes: "Day's cash deposited",
+                depositSlip: {
+                    mode:        "deposit",
+                    bankName:    "State Bank of India",
+                    branch:      "Fancy Bazar Branch",
+                    accountName: "Sample Enterprise",
+                    accountNo:   "3812 4567 8901",
+                    ifsc:        "SBIN0000123",
+                    pan:         "ABCDE1234F",
+                    fromLedger:  "Cash in Hand",
+                    denominations: [500, 200, 100, 50, 20, 10, 5, 2, 1],
+                    // Captured breakdown → the preview shows the FILLED slip
+                    // (zero-count notes are skipped; cheques listed bill-wise).
+                    // Cash 500×70 + 200×20 + 100×35 = 42,500 + cheque 7,500 =
+                    // 50,000 = Amount Deposited.
+                    counted: {
+                        notes: [
+                            { denom: 500, count: 70 },
+                            { denom: 200, count: 20 },
+                            { denom: 100, count: 35 },
+                        ],
+                        cheques: [{ no: "483920", amount: 7500, account: "PhonePe A/c" }],
+                    },
+                },
+            };
+        case "CASH_HANDOVER":
+            // Cash → Cash handover (till → head office): the handover-mode
+            // depositSlip makes the preview render the internal handover slip
+            // (from/to ledgers + handed-by/received-by sigs, no bank block, no
+            // counterfoil). Real prints fill this in buildGlSample() when a
+            // cash→cash contra was saved with a counted breakdown.
+            return {
+                reference: "CV/26-27/0011", date: today,
+                partyName: null, partyPhone: null,
+                lines: [{ description: "Cash handover", quantity: 1, amount: 42500 }],
+                subtotal: null, taxAmount: null, total: 42500,
+                notes: "End-of-day cash to head office",
+                depositSlip: {
+                    mode:        "handover",
+                    bankName: null, branch: null, accountName: null, accountNo: null, ifsc: null, pan: null,
+                    fromLedger:  "Cash — Counter 1",
+                    toLedger:    "Cash — Head Office",
+                    denominations: [500, 200, 100, 50, 20, 10, 5, 2, 1],
+                    // 500×70 + 200×20 + 100×35 = 42,500. Handovers are notes-only
+                    // (no cheque section).
+                    counted: {
+                        notes: [
+                            { denom: 500, count: 70 },
+                            { denom: 200, count: 20 },
+                            { denom: 100, count: 35 },
+                        ],
+                        cheques: [],
+                    },
+                },
             };
         case "JOURNAL":
             return {
                 reference: "JV/26-27/0012", date: today,
                 partyName: null, partyPhone: null,
-                lines: [{ description: "Depreciation entry", quantity: 1, amount: 12500 }],
+                lines: [
+                    { description: "Depreciation A/c",   quantity: 1, amount: 12500, entryType: "DEBIT" },
+                    { description: "Fixed Assets A/c",   quantity: 1, amount: 12500, entryType: "CREDIT" },
+                ],
                 subtotal: null, taxAmount: null, total: 12500, notes: "Period: Apr-2026",
             };
         case "CREDIT_NOTE":
@@ -307,6 +384,8 @@ export function buildSampleForKind(kind: VoucherTemplateKind): ThermalReceiptSam
 
 export const VOUCHER_KIND_LABEL: Record<VoucherTemplateKind, string> = {
     CONTRA: "Contra",
+    BANK_DEPOSIT: "Bank Deposit",
+    CASH_HANDOVER: "Cash Handover",
     PAYMENT: "Payment",
     RECEIPT: "Receipt",
     CREDIT_NOTE: "Credit Note",

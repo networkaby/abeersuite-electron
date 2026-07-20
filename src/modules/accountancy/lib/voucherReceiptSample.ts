@@ -11,6 +11,9 @@ import {
 import { toNumber } from "@/modules/accountancy/lib/balance";
 import { loadEstimateDiscountVisibility } from "@/shared/lib/pos/estimateDiscountVisibility";
 import { readPartyName } from "@/shared/lib/accountancy/partySnapshot";
+import { getOrganisation } from "@/shared/lib/org/getOrganisation";
+import { parseBankJson } from "@/shared/lib/org/organisationView";
+import { parseDenomJson } from "@/shared/lib/accountancy/denomJson";
 
 // ── Cross-source receipt sample builder ─────────────────────────────────────
 //
@@ -32,6 +35,14 @@ export interface VoucherReceiptData {
 }
 
 const isoDate = (d: Date): string => d.toISOString().slice(0, 10);
+
+/** Org's configured note/coin list (high → low) for the deposit-slip pen-fill
+ *  rows, with a sane India fallback. */
+function resolveDenoms(raw: unknown): number[] {
+    return Array.isArray(raw) && raw.every((d) => typeof d === "number") && raw.length
+        ? (raw as number[])
+        : [500, 200, 100, 50, 20, 10, 5, 2, 1];
+}
 
 /** Resolve a party display name from an Account's linked Person/Company. */
 function partyFromAccount(account: {
@@ -143,9 +154,10 @@ async function buildGlSample(id: number): Promise<VoucherReceiptData> {
     const lineAcctIds = [...new Set(spine.lines.map((l) => l.accountId))];
     const [partyAcct, lineAccts] = await Promise.all([
         spine.partyAccountId != null ? prisma.account.findUnique({ where: { id: spine.partyAccountId }, select: partyAccountSelect }) : Promise.resolve(null),
-        lineAcctIds.length ? prisma.account.findMany({ where: { id: { in: lineAcctIds } }, select: { id: true, name: true } }) : Promise.resolve([]),
+        lineAcctIds.length ? prisma.account.findMany({ where: { id: { in: lineAcctIds } }, select: { id: true, name: true, bankJson: true, group: { select: { name: true } } } }) : Promise.resolve([]),
     ]);
-    const nameById = new Map(lineAccts.map((a) => [a.id, a.name]));
+    const nameById  = new Map(lineAccts.map((a) => [a.id, a.name]));
+    const acctById  = new Map(lineAccts.map((a) => [a.id, a]));
     const v = {
         ...spine,
         partyAccount: partyAcct,
@@ -163,10 +175,14 @@ async function buildGlSample(id: number): Promise<VoucherReceiptData> {
         partyName:  party.name,
         partyPhone: party.phone,
         partyGstin: party.gstin,
+        // Journal-style lines carry the GL side; the renderer shows a
+        // Particulars · Debit · Credit table (Contra / Journal) rather than
+        // "Account (Dr)" text in a qty/rate row.
         lines: v.lines.map((l) => ({
-            description: `${l.account.name} (${l.type === "DEBIT" ? "Dr" : "Cr"})`,
+            description: l.account.name,
             quantity:    1,
             amount:      toNumber(l.amount),
+            entryType:   l.type,
         })),
         subtotal:  null,
         taxAmount: null,
@@ -174,8 +190,82 @@ async function buildGlSample(id: number): Promise<VoucherReceiptData> {
         notes:     v.narration?.trim() || null,
     };
 
-    const kind = isVoucherTemplateKind(v.type) ? v.type : "JOURNAL";
-    return { kind, sample, docTitle: `${v.type} ${(v.voucherNo ?? formatUvNo(v.id))}` };
+    // CONTRA slips — swap the journal table for a bespoke denomination slip:
+    //   • cash → bank  → Bank Deposit Slip (bank block + depositor counterfoil).
+    //     Always shown (blank pen-fill when no capture) since a deposit needs a slip.
+    //   • cash → cash  → Cash Handover Slip (from/to + handed-by/received-by sigs).
+    //     Shown ONLY when denominations were captured; a plain internal transfer
+    //     with no count keeps the journal table.
+    if (v.type === "CONTRA") {
+        const isBankAcct = (a?: { group?: { name: string | null } | null }) =>
+            (a?.group?.name ?? "").toLowerCase().includes("bank");
+        const bankAcct = v.lines
+            .filter((l) => l.type === "DEBIT")
+            .map((l) => acctById.get(l.accountId))
+            .find(isBankAcct);
+        // Captured breakdown (final combined, saved on the spine) → filled slip.
+        const denom = parseDenomJson(v.denomJson);
+        const countedFromDenom = denom ? {
+            notes: Object.entries(denom.notes)
+                .map(([d, count]) => ({ denom: Number(d), count }))
+                .sort((a, b) => b.denom - a.denom),
+            cheques: denom.cheques,
+        } : null;
+        const fromLedger = v.lines.filter((l) => l.type === "CREDIT")
+            .map((l) => nameById.get(l.accountId) ?? "—").join(", ") || null;
+        const toLedger = v.lines.filter((l) => l.type === "DEBIT")
+            .map((l) => nameById.get(l.accountId) ?? "—").join(", ") || null;
+
+        if (bankAcct) {
+            const [org, od] = await Promise.all([
+                getOrganisation(),
+                prisma.orgDefaults.findUnique({ where: { id: 1 }, select: { cashDenominationsJson: true } }),
+            ]);
+            const denominations = resolveDenoms(od?.cashDenominationsJson);
+            // Bank particulars: the destination ledger's own bankJson wins;
+            // any blank field falls back to the org's primary bank details.
+            const acctBank = parseBankJson(bankAcct.bankJson);
+            sample.depositSlip = {
+                mode:        "deposit",
+                bankName:    acctBank.bankName      || org.bankName          || null,
+                branch:      acctBank.branch        || org.bankBranch        || null,
+                accountName: acctBank.beneficiary   || org.bankBeneficiary   || org.brandName || null,
+                accountNo:   acctBank.accountNumber || org.bankAccountNumber || null,
+                ifsc:        acctBank.ifsc          || org.bankIfsc          || null,
+                pan:         org.pan                || null,
+                fromLedger,
+                denominations,
+                counted:     countedFromDenom,
+            };
+        } else if (denom) {
+            // cash → cash with a captured count → internal handover slip.
+            const od = await prisma.orgDefaults.findUnique({ where: { id: 1 }, select: { cashDenominationsJson: true } });
+            sample.depositSlip = {
+                mode:        "handover",
+                bankName: null, branch: null, accountName: null, accountNo: null, ifsc: null, pan: null,
+                fromLedger,
+                toLedger,
+                denominations: resolveDenoms(od?.cashDenominationsJson),
+                counted:     countedFromDenom,
+            };
+        }
+    }
+
+    // A cash→bank deposit and a cash→cash handover are both CONTRA rows in the
+    // DB, but each prints on its own print-only template (BANK_DEPOSIT /
+    // CASH_HANDOVER) so it gets the right chrome, title, and layout. A plain
+    // contra keeps the neutral CONTRA template. Everything else keeps its type.
+    const slipMode = sample.depositSlip?.mode;
+    const kind: VoucherTemplateKind =
+        slipMode === "deposit"        ? "BANK_DEPOSIT"
+      : slipMode === "handover"       ? "CASH_HANDOVER"
+      : isVoucherTemplateKind(v.type) ? v.type
+      : "JOURNAL";
+    const docLabel = slipMode === "deposit" ? "Bank Deposit"
+        : slipMode === "handover" ? "Cash Handover"
+        : v.type;
+    const docTitle = `${docLabel} ${(v.voucherNo ?? formatUvNo(v.id))}`;
+    return { kind, sample, docTitle };
 }
 
 // ── Journal entry (GL spine row) ────────────────────────────────────────────
@@ -205,9 +295,10 @@ async function buildJeSample(id: number): Promise<VoucherReceiptData> {
         partyName:  null,
         partyPhone: null,
         lines: v.lines.map((l) => ({
-            description: `${nameById.get(l.accountId) ?? "—"} (${l.type === "DEBIT" ? "Dr" : "Cr"})`,
+            description: nameById.get(l.accountId) ?? "—",
             quantity:    1,
             amount:      toNumber(l.amount),
+            entryType:   l.type,
         })),
         subtotal:  null,
         taxAmount: null,

@@ -47,6 +47,12 @@ model Account {
   // because every Person and every Company gets exactly one Account row.
   creditLimit Decimal? @db.Decimal(14, 2)
 
+  // Bank-ledger details — set only on ledgers under the "Bank Accounts" /
+  // "Bank OD A/c" groups; printed on the Contra deposit slip so each bank
+  // account carries its own particulars. Shape mirrors Organisation.bankJson:
+  // { bankName, branch, accountNumber, ifsc, beneficiary }
+  bankJson Json?
+
   // Tally-style opening balance — entered on the master, dated at booksBeginningFrom.
   // Imbalance across all accounts auto-parks to the seeded "Difference in Opening Balances" suspense ledger.
   openingBalance     Decimal?   @db.Decimal(14, 2)
