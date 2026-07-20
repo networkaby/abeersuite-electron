@@ -55,6 +55,8 @@ export default function PrinterSettingsPage() {
     const [latestVersion, setLatestVersion] = useState<string | null>(null);
     const [config, setConfig] = useState<RelayConfig>(DEFAULT);
     // The counter this PC is bound to (server-side, keyed by config.deviceId).
+    // Read only inside the parked "Counter lock" card below (currently commented out).
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const [boundCounter, setBoundCounter] = useState<{ id: number; name: string } | null>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -156,6 +158,8 @@ export default function PrinterSettingsPage() {
         }
     };
 
+    // Bound to the parked "Counter lock" card below (currently commented out).
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const forgetCounter = async () => {
         if (!config.deviceId) return;
         try {

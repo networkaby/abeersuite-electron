@@ -195,7 +195,7 @@ export async function PUT(
             data: { context: { ...prevContext, shippingSlip: updated, shippingSlips: list } as Prisma.InputJsonValue },
         });
 
-        const seq = (updated.seq as number | undefined) ?? list.length;
+        const seq = (last.seq as number | undefined) ?? list.length;
         await prisma.ticketLog.create({
             data: {
                 ticketId,

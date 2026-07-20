@@ -64,8 +64,10 @@ function NumberField({
 }
 
 // Boolean-valued keys of the template — the show/hide switches operate on these.
+// `-?` strips the optional modifier so optional props (emailLine, bankDetails, …)
+// resolve to `never` and are dropped, instead of leaking `undefined` into the union.
 type BoolTemplateKey = {
-    [K in keyof VoucherTemplateDefaults]: VoucherTemplateDefaults[K] extends boolean ? K : never;
+    [K in keyof VoucherTemplateDefaults]-?: VoucherTemplateDefaults[K] extends boolean ? K : never;
 }[keyof VoucherTemplateDefaults];
 
 // One row per print element; each has an independent A4 + thermal flag so a
@@ -419,7 +421,11 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
                                 <span className="text-center">Thermal</span>
                                 {isLabel && <span className="text-center">TL 100×50</span>}
                             </div>
-                            {(isLabel ? LABEL_FIELD_ELEMENTS : visibleElements).map((el) => (
+                            {/* One typed row shape (tl optional) so the ternary is a single
+                                array type — mapping a union of arrays would degrade el.tl to unknown. */}
+                            {((isLabel ? LABEL_FIELD_ELEMENTS : visibleElements) as {
+                                label: string; a4: BoolTemplateKey; thermal: BoolTemplateKey; tl?: BoolTemplateKey;
+                            }[]).map((el) => (
                                 <div
                                     key={el.label}
                                     className={`grid ${cols} items-center gap-x-2 border-b px-3 py-1.5 text-sm last:border-0`}
@@ -435,11 +441,11 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
                                         checked={current[el.thermal]}
                                         onCheckedChange={(v) => setField(el.thermal, v)}
                                     />
-                                    {isLabel && "tl" in el && (
+                                    {isLabel && el.tl && (
                                         <Switch
                                             className="justify-self-center"
                                             checked={current[el.tl]}
-                                            onCheckedChange={(v) => setField(el.tl, v)}
+                                            onCheckedChange={(v) => setField(el.tl!, v)}
                                         />
                                     )}
                                 </div>
