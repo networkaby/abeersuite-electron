@@ -685,6 +685,24 @@ async function upsertLedger(
         );
         groupId = rows[0]?.id ?? null;
     }
+    // Code is the stable identity. If a ledger already holds this code — even
+    // under a different name (admins rename the seeded "Bank Account" to their
+    // real bank, etc.) — that row IS this ledger: backfill a missing group only,
+    // never rename, never re-insert (which would trip Account_code_key).
+    if (code) {
+        const { rows: byCode } = await pool.query<{ id: number; "groupId": number | null }>(
+            `SELECT id, "groupId" FROM "Account"
+             WHERE code = $1 AND "personId" IS NULL AND "companyId" IS NULL
+             LIMIT 1`,
+            [code],
+        );
+        if (byCode[0]) {
+            if (byCode[0].groupId === null && groupId !== null) {
+                await pool.query(`UPDATE "Account" SET "groupId" = $1 WHERE id = $2`, [groupId, byCode[0].id]);
+            }
+            return;
+        }
+    }
     const { rows } = await pool.query<{ id: number; "groupId": number | null; code: string | null }>(
         `SELECT id, "groupId", code FROM "Account"
          WHERE LOWER(name) = LOWER($1)
