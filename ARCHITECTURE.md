@@ -183,6 +183,6 @@ src/shared/
 - Keep middleware in `src/proxy.ts` (never `middleware.ts`).
 - Some columns were added via `prisma db push` with no migration recorded — generate migrations before a production deploy.
 - **Production DB is in use** — check impact on seeds, APIs, and UI before removing anything (AGENTS.md).
-- Seeds: `bootstrap-seed.ts` (production master data), `helper-*.ts` (trade-specific), `dummy-*.ts` (demo), `hard-clean.ts` (reset to bootstrap). See `docs/seeds.md`.
+- Seeds: `pnpm prisma db seed` runs `personal-bootstrap.ts` (production restore = code-owned catalog from `lib/codeOwnedCatalog.ts` + the captured `data/personal.local.json` snapshot; upsert-only). `bootstrap-seed.ts` is the generic new-client installer (`pnpm seed:generic`). `helper-*.ts` (trade-specific), `dummy-*.ts` (demo), `hard-clean.ts` (reset to bootstrap). See `docs/seeds.md`.
 - Razorpay needs `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` / `RAZORPAY_WEBHOOK_SECRET`.
 - Protected surfaces (POS/GL posting, Balance Sheet, P&L, Day Book, accounting math): treat as append-only/verified — run the parity harness and confirm before changing (see PROJECT_BRAIN.md "protected" notes).

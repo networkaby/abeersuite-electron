@@ -1,24 +1,22 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requireAuth } from "@/shared/lib/auth/permissions";
-import { buildTicketReadScopeWhere } from "@/modules/repairing/lib/ticketScope";
 import { handleApiError } from "@/shared/lib/api";
 
 // GET /api/search-slno?q=...
 export async function GET(req: Request) {
-    const { user, response } = await requireAuth();
+    const { response } = await requireAuth();
     if (response) return response;
 
     try {
         const { searchParams } = new URL(req.url);
         const q = searchParams.get("q")?.trim() ?? "";
-        const scopeWhere = buildTicketReadScopeWhere(user);
 
         // SLno/device search only applies to repair tickets (device + slno live on the
-        // TicketRepair detail).
+        // TicketRepair detail). Visibility is flat (all staff see all tickets) —
+        // per-scope read filtering was retired with the repair RBAC re-wire.
         const where = {
             AND: [
-                ...(scopeWhere ? [scopeWhere] : []),
                 q
                     ? {
                         repair: {

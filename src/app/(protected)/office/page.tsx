@@ -46,8 +46,8 @@ export default async function OfficePage() {
 
     // Which briefing cards to render — gated by PERMISSION, not department.
     // `hasPermissionWithScope` short-circuits true on admin:bypass and accepts
-    // any scope at or above the one named, so a holder of e.g. tickets:view:org
-    // still matches the tickets:view:own gate below.
+    // any scope at or above the one named (e.g. a holder of `users:edit:org`
+    // still matches a `users:edit:own` gate).
     const can = (permissionId: string) => hasPermissionWithScope(user.permissions, permissionId);
 
     const showAdmin    = isAdmin || can("users:edit") || can("settings:manage") || can("roles:edit");

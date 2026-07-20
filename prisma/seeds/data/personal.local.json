@@ -1,7 +1,7 @@
 {
   "_meta": {
     "version": 1,
-    "exportedAt": "2026-07-20T15:15:41.553Z",
+    "exportedAt": "2026-07-20T16:48:45.958Z",
     "note": "Personal config snapshot — everything except tickets, vouchers, customers, products."
   },
   "singletons": {
@@ -378,27 +378,71 @@
   ],
   "invBrands": [
     {
-      "name": "Acer",
+      "name": "Hola",
       "isActive": true
     },
     {
-      "name": "AMD",
+      "name": "iBall",
       "isActive": true
     },
     {
-      "name": "Apple",
+      "name": "Intex",
       "isActive": true
     },
     {
-      "name": "Asus",
+      "name": "Logitech",
       "isActive": true
     },
     {
-      "name": "Dell",
+      "name": "Luminous",
       "isActive": true
     },
     {
-      "name": "Gigabyte",
+      "name": "Microtek",
+      "isActive": true
+    },
+    {
+      "name": "Nvidia",
+      "isActive": true
+    },
+    {
+      "name": "Stanley",
+      "isActive": true
+    },
+    {
+      "name": "Zebronics",
+      "isActive": true
+    },
+    {
+      "name": "Generic",
+      "isActive": true
+    },
+    {
+      "name": "Special",
+      "isActive": true
+    },
+    {
+      "name": "Kodak",
+      "isActive": true
+    },
+    {
+      "name": "EVM",
+      "isActive": true
+    },
+    {
+      "name": "Lapcare",
+      "isActive": true
+    },
+    {
+      "name": "Prodot",
+      "isActive": true
+    },
+    {
+      "name": "Bindal",
+      "isActive": true
+    },
+    {
+      "name": "Coconut",
       "isActive": true
     },
     {
@@ -590,75 +634,31 @@
       "isActive": true
     },
     {
+      "name": "Acer",
+      "isActive": true
+    },
+    {
+      "name": "AMD",
+      "isActive": true
+    },
+    {
+      "name": "Apple",
+      "isActive": true
+    },
+    {
+      "name": "Asus",
+      "isActive": true
+    },
+    {
+      "name": "Dell",
+      "isActive": true
+    },
+    {
+      "name": "Gigabyte",
+      "isActive": true
+    },
+    {
       "name": "Boat",
-      "isActive": true
-    },
-    {
-      "name": "Hola",
-      "isActive": true
-    },
-    {
-      "name": "iBall",
-      "isActive": true
-    },
-    {
-      "name": "Intex",
-      "isActive": true
-    },
-    {
-      "name": "Logitech",
-      "isActive": true
-    },
-    {
-      "name": "Luminous",
-      "isActive": true
-    },
-    {
-      "name": "Microtek",
-      "isActive": true
-    },
-    {
-      "name": "Nvidia",
-      "isActive": true
-    },
-    {
-      "name": "Stanley",
-      "isActive": true
-    },
-    {
-      "name": "Zebronics",
-      "isActive": true
-    },
-    {
-      "name": "Generic",
-      "isActive": true
-    },
-    {
-      "name": "Special",
-      "isActive": true
-    },
-    {
-      "name": "Kodak",
-      "isActive": true
-    },
-    {
-      "name": "EVM",
-      "isActive": true
-    },
-    {
-      "name": "Lapcare",
-      "isActive": true
-    },
-    {
-      "name": "Prodot",
-      "isActive": true
-    },
-    {
-      "name": "Bindal",
-      "isActive": true
-    },
-    {
-      "name": "Coconut",
       "isActive": true
     }
   ],
@@ -760,14 +760,6 @@
       "parentName": "Memory Card"
     },
     {
-      "name": "SSD",
-      "isActive": true,
-      "gstRateId": null,
-      "hsnCode": null,
-      "taxability": null,
-      "parentName": null
-    },
-    {
       "name": "NVME",
       "isActive": true,
       "gstRateId": null,
@@ -776,28 +768,12 @@
       "parentName": "SSD"
     },
     {
-      "name": "Memory Card",
-      "isActive": true,
-      "gstRateId": null,
-      "hsnCode": null,
-      "taxability": null,
-      "parentName": null
-    },
-    {
       "name": "Sata SSD",
       "isActive": true,
       "gstRateId": null,
       "hsnCode": null,
       "taxability": null,
       "parentName": "SSD"
-    },
-    {
-      "name": "Printer Consumables",
-      "isActive": true,
-      "gstRateId": null,
-      "hsnCode": null,
-      "taxability": null,
-      "parentName": null
     },
     {
       "name": "Toner",
@@ -824,14 +800,6 @@
       "parentName": "Printer Consumables"
     },
     {
-      "name": "Computer Cables",
-      "isActive": true,
-      "gstRateId": null,
-      "hsnCode": null,
-      "taxability": null,
-      "parentName": null
-    },
-    {
       "name": "USB Cable",
       "isActive": true,
       "gstRateId": null,
@@ -846,14 +814,6 @@
       "hsnCode": null,
       "taxability": null,
       "parentName": "Computer Cables"
-    },
-    {
-      "name": "Papers",
-      "isActive": true,
-      "gstRateId": null,
-      "hsnCode": null,
-      "taxability": null,
-      "parentName": null
     },
     {
       "name": "Copier Paper",
@@ -886,22 +846,6 @@
       "hsnCode": null,
       "taxability": null,
       "parentName": "Papers"
-    },
-    {
-      "name": "Tank Printer",
-      "isActive": true,
-      "gstRateId": null,
-      "hsnCode": null,
-      "taxability": null,
-      "parentName": null
-    },
-    {
-      "name": "CCTV",
-      "isActive": true,
-      "gstRateId": null,
-      "hsnCode": null,
-      "taxability": null,
-      "parentName": null
     },
     {
       "name": "HD CCTV",
@@ -950,6 +894,62 @@
       "hsnCode": null,
       "taxability": null,
       "parentName": "IP CCTV"
+    },
+    {
+      "name": "SSD",
+      "isActive": true,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "parentName": null
+    },
+    {
+      "name": "Memory Card",
+      "isActive": true,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "parentName": null
+    },
+    {
+      "name": "Printer Consumables",
+      "isActive": true,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "parentName": null
+    },
+    {
+      "name": "Computer Cables",
+      "isActive": true,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "parentName": null
+    },
+    {
+      "name": "Papers",
+      "isActive": true,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "parentName": null
+    },
+    {
+      "name": "Tank Printer",
+      "isActive": true,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "parentName": null
+    },
+    {
+      "name": "CCTV",
+      "isActive": true,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "parentName": null
     }
   ],
   "invAttributeMasters": [],
@@ -966,195 +966,6 @@
     }
   ],
   "voucherPrintTemplates": [
-    {
-      "kind": "SALE_RETURN",
-      "headerLine1": "",
-      "headerLine2": "Sale Return",
-      "addressBlock": "",
-      "gstinLine": "",
-      "phoneLine": "",
-      "logoUrl": "",
-      "showLogo": true,
-      "showLogoThermal": false,
-      "showHeaderText": false,
-      "showHeaderTextThermal": true,
-      "showAddress": true,
-      "showAddressThermal": true,
-      "showBranchAddress": false,
-      "showBranchAddressThermal": false,
-      "showGstin": true,
-      "showGstinThermal": true,
-      "showPhone": true,
-      "showPhoneThermal": true,
-      "showTaxSummary": true,
-      "showTaxSummaryThermal": true,
-      "showMrp": true,
-      "showMrpThermal": true,
-      "showSignature": true,
-      "showSignatureThermal": false,
-      "showQrCode": false,
-      "showBarcode": true,
-      "showBarcodeThermal": false,
-      "showBank": true,
-      "showBankThermal": false,
-      "showTicket": true,
-      "showTicketThermal": true,
-      "showTicketTl": true,
-      "showDate": true,
-      "showDateThermal": true,
-      "showDateTl": true,
-      "showRef": true,
-      "showRefThermal": true,
-      "showRefTl": true,
-      "showDevice": false,
-      "showDeviceThermal": false,
-      "showDeviceTl": false,
-      "showFooter": true,
-      "showFooterThermal": true,
-      "showFooterTl": true,
-      "showSentBy": true,
-      "showSentByThermal": true,
-      "showReceivedBy": true,
-      "showReceivedByThermal": true,
-      "showPreparedBy": true,
-      "showPreparedByThermal": true,
-      "showFindings": true,
-      "showFindingsThermal": true,
-      "termsText": "",
-      "footerLine": "Thank you · Visit again",
-      "signatureLabel": "Authorised Signatory",
-      "disclaimerLine": "This is a computer-generated document and does not require a signature.",
-      "defaultPaper": "A4",
-      "paperWidthMm": 80,
-      "fontFamily": "Courier New, monospace",
-      "fontSizePx": 12
-    },
-    {
-      "kind": "MANUFACTURING_JOURNAL",
-      "headerLine1": "",
-      "headerLine2": "Manufacturing Journal",
-      "addressBlock": "",
-      "gstinLine": "",
-      "phoneLine": "",
-      "logoUrl": "",
-      "showLogo": true,
-      "showLogoThermal": false,
-      "showHeaderText": false,
-      "showHeaderTextThermal": true,
-      "showAddress": true,
-      "showAddressThermal": true,
-      "showBranchAddress": false,
-      "showBranchAddressThermal": false,
-      "showGstin": true,
-      "showGstinThermal": true,
-      "showPhone": true,
-      "showPhoneThermal": true,
-      "showTaxSummary": false,
-      "showTaxSummaryThermal": false,
-      "showMrp": true,
-      "showMrpThermal": true,
-      "showSignature": false,
-      "showSignatureThermal": false,
-      "showQrCode": false,
-      "showBarcode": false,
-      "showBarcodeThermal": false,
-      "showBank": false,
-      "showBankThermal": false,
-      "showTicket": true,
-      "showTicketThermal": true,
-      "showTicketTl": true,
-      "showDate": true,
-      "showDateThermal": true,
-      "showDateTl": true,
-      "showRef": true,
-      "showRefThermal": true,
-      "showRefTl": true,
-      "showDevice": false,
-      "showDeviceThermal": false,
-      "showDeviceTl": false,
-      "showFooter": true,
-      "showFooterThermal": true,
-      "showFooterTl": true,
-      "showSentBy": true,
-      "showSentByThermal": true,
-      "showReceivedBy": true,
-      "showReceivedByThermal": true,
-      "showPreparedBy": true,
-      "showPreparedByThermal": true,
-      "showFindings": true,
-      "showFindingsThermal": true,
-      "termsText": "",
-      "footerLine": "",
-      "signatureLabel": "Authorised Signatory",
-      "disclaimerLine": "This is a computer-generated document and does not require a signature.",
-      "defaultPaper": "A4",
-      "paperWidthMm": 80,
-      "fontFamily": "Courier New, monospace",
-      "fontSizePx": 12
-    },
-    {
-      "kind": "PHYSICAL_STOCK",
-      "headerLine1": "",
-      "headerLine2": "Physical Stock Voucher",
-      "addressBlock": "",
-      "gstinLine": "",
-      "phoneLine": "",
-      "logoUrl": "",
-      "showLogo": true,
-      "showLogoThermal": false,
-      "showHeaderText": false,
-      "showHeaderTextThermal": true,
-      "showAddress": true,
-      "showAddressThermal": true,
-      "showBranchAddress": false,
-      "showBranchAddressThermal": false,
-      "showGstin": true,
-      "showGstinThermal": true,
-      "showPhone": true,
-      "showPhoneThermal": true,
-      "showTaxSummary": false,
-      "showTaxSummaryThermal": false,
-      "showMrp": true,
-      "showMrpThermal": true,
-      "showSignature": false,
-      "showSignatureThermal": false,
-      "showQrCode": false,
-      "showBarcode": false,
-      "showBarcodeThermal": false,
-      "showBank": false,
-      "showBankThermal": false,
-      "showTicket": true,
-      "showTicketThermal": true,
-      "showTicketTl": true,
-      "showDate": true,
-      "showDateThermal": true,
-      "showDateTl": true,
-      "showRef": true,
-      "showRefThermal": true,
-      "showRefTl": true,
-      "showDevice": false,
-      "showDeviceThermal": false,
-      "showDeviceTl": false,
-      "showFooter": true,
-      "showFooterThermal": true,
-      "showFooterTl": true,
-      "showSentBy": true,
-      "showSentByThermal": true,
-      "showReceivedBy": true,
-      "showReceivedByThermal": true,
-      "showPreparedBy": true,
-      "showPreparedByThermal": true,
-      "showFindings": true,
-      "showFindingsThermal": true,
-      "termsText": "",
-      "footerLine": "Thank you · Visit again",
-      "signatureLabel": "Authorised Signatory",
-      "disclaimerLine": "This is a computer-generated document and does not require a signature.",
-      "defaultPaper": "A4",
-      "paperWidthMm": 80,
-      "fontFamily": "Courier New, monospace",
-      "fontSizePx": 12
-    },
     {
       "kind": "BRANCH_TRANSFER",
       "headerLine1": "",
@@ -1177,69 +988,6 @@
       "showPhoneThermal": true,
       "showTaxSummary": false,
       "showTaxSummaryThermal": false,
-      "showMrp": true,
-      "showMrpThermal": true,
-      "showSignature": true,
-      "showSignatureThermal": false,
-      "showQrCode": false,
-      "showBarcode": true,
-      "showBarcodeThermal": false,
-      "showBank": true,
-      "showBankThermal": false,
-      "showTicket": true,
-      "showTicketThermal": true,
-      "showTicketTl": true,
-      "showDate": true,
-      "showDateThermal": true,
-      "showDateTl": true,
-      "showRef": true,
-      "showRefThermal": true,
-      "showRefTl": true,
-      "showDevice": false,
-      "showDeviceThermal": false,
-      "showDeviceTl": false,
-      "showFooter": true,
-      "showFooterThermal": true,
-      "showFooterTl": true,
-      "showSentBy": true,
-      "showSentByThermal": true,
-      "showReceivedBy": true,
-      "showReceivedByThermal": true,
-      "showPreparedBy": true,
-      "showPreparedByThermal": true,
-      "showFindings": true,
-      "showFindingsThermal": true,
-      "termsText": "",
-      "footerLine": "Thank you · Visit again",
-      "signatureLabel": "Authorised Signatory",
-      "disclaimerLine": "This is a computer-generated document and does not require a signature.",
-      "defaultPaper": "A4",
-      "paperWidthMm": 80,
-      "fontFamily": "Courier New, monospace",
-      "fontSizePx": 12
-    },
-    {
-      "kind": "CHALLAN",
-      "headerLine1": "",
-      "headerLine2": "Delivery Challan",
-      "addressBlock": "",
-      "gstinLine": "",
-      "phoneLine": "",
-      "logoUrl": "",
-      "showLogo": true,
-      "showLogoThermal": false,
-      "showHeaderText": false,
-      "showHeaderTextThermal": true,
-      "showAddress": true,
-      "showAddressThermal": true,
-      "showBranchAddress": false,
-      "showBranchAddressThermal": false,
-      "showGstin": true,
-      "showGstinThermal": true,
-      "showPhone": true,
-      "showPhoneThermal": true,
-      "showTaxSummary": true,
-      "showTaxSummaryThermal": true,
       "showMrp": true,
       "showMrpThermal": true,
       "showSignature": true,
@@ -2164,6 +1912,258 @@
       "fontSizePx": 12
     },
     {
+      "kind": "MANUFACTURING_JOURNAL",
+      "headerLine1": "",
+      "headerLine2": "Manufacturing Journal",
+      "addressBlock": "",
+      "gstinLine": "",
+      "phoneLine": "",
+      "logoUrl": "",
+      "showLogo": true,
+      "showLogoThermal": false,
+      "showHeaderText": false,
+      "showHeaderTextThermal": true,
+      "showAddress": true,
+      "showAddressThermal": true,
+      "showBranchAddress": false,
+      "showBranchAddressThermal": false,
+      "showGstin": true,
+      "showGstinThermal": true,
+      "showPhone": true,
+      "showPhoneThermal": true,
+      "showTaxSummary": false,
+      "showTaxSummaryThermal": false,
+      "showMrp": true,
+      "showMrpThermal": true,
+      "showSignature": false,
+      "showSignatureThermal": false,
+      "showQrCode": false,
+      "showBarcode": false,
+      "showBarcodeThermal": false,
+      "showBank": false,
+      "showBankThermal": false,
+      "showTicket": true,
+      "showTicketThermal": true,
+      "showTicketTl": true,
+      "showDate": true,
+      "showDateThermal": true,
+      "showDateTl": true,
+      "showRef": true,
+      "showRefThermal": true,
+      "showRefTl": true,
+      "showDevice": false,
+      "showDeviceThermal": false,
+      "showDeviceTl": false,
+      "showFooter": true,
+      "showFooterThermal": true,
+      "showFooterTl": true,
+      "showSentBy": true,
+      "showSentByThermal": true,
+      "showReceivedBy": true,
+      "showReceivedByThermal": true,
+      "showPreparedBy": true,
+      "showPreparedByThermal": true,
+      "showFindings": true,
+      "showFindingsThermal": true,
+      "termsText": "",
+      "footerLine": "",
+      "signatureLabel": "Authorised Signatory",
+      "disclaimerLine": "This is a computer-generated document and does not require a signature.",
+      "defaultPaper": "A4",
+      "paperWidthMm": 80,
+      "fontFamily": "Courier New, monospace",
+      "fontSizePx": 12
+    },
+    {
+      "kind": "CHALLAN",
+      "headerLine1": "",
+      "headerLine2": "Delivery Challan",
+      "addressBlock": "",
+      "gstinLine": "",
+      "phoneLine": "",
+      "logoUrl": "",
+      "showLogo": true,
+      "showLogoThermal": false,
+      "showHeaderText": false,
+      "showHeaderTextThermal": true,
+      "showAddress": true,
+      "showAddressThermal": true,
+      "showBranchAddress": false,
+      "showBranchAddressThermal": false,
+      "showGstin": true,
+      "showGstinThermal": true,
+      "showPhone": true,
+      "showPhoneThermal": true,
+      "showTaxSummary": true,
+      "showTaxSummaryThermal": true,
+      "showMrp": true,
+      "showMrpThermal": true,
+      "showSignature": true,
+      "showSignatureThermal": false,
+      "showQrCode": false,
+      "showBarcode": true,
+      "showBarcodeThermal": false,
+      "showBank": true,
+      "showBankThermal": false,
+      "showTicket": true,
+      "showTicketThermal": true,
+      "showTicketTl": true,
+      "showDate": true,
+      "showDateThermal": true,
+      "showDateTl": true,
+      "showRef": true,
+      "showRefThermal": true,
+      "showRefTl": true,
+      "showDevice": false,
+      "showDeviceThermal": false,
+      "showDeviceTl": false,
+      "showFooter": true,
+      "showFooterThermal": true,
+      "showFooterTl": true,
+      "showSentBy": true,
+      "showSentByThermal": true,
+      "showReceivedBy": true,
+      "showReceivedByThermal": true,
+      "showPreparedBy": true,
+      "showPreparedByThermal": true,
+      "showFindings": true,
+      "showFindingsThermal": true,
+      "termsText": "",
+      "footerLine": "Thank you · Visit again",
+      "signatureLabel": "Authorised Signatory",
+      "disclaimerLine": "This is a computer-generated document and does not require a signature.",
+      "defaultPaper": "A4",
+      "paperWidthMm": 80,
+      "fontFamily": "Courier New, monospace",
+      "fontSizePx": 12
+    },
+    {
+      "kind": "SALE_RETURN",
+      "headerLine1": "",
+      "headerLine2": "Sale Return",
+      "addressBlock": "",
+      "gstinLine": "",
+      "phoneLine": "",
+      "logoUrl": "",
+      "showLogo": true,
+      "showLogoThermal": false,
+      "showHeaderText": false,
+      "showHeaderTextThermal": true,
+      "showAddress": true,
+      "showAddressThermal": true,
+      "showBranchAddress": false,
+      "showBranchAddressThermal": false,
+      "showGstin": true,
+      "showGstinThermal": true,
+      "showPhone": true,
+      "showPhoneThermal": true,
+      "showTaxSummary": true,
+      "showTaxSummaryThermal": true,
+      "showMrp": true,
+      "showMrpThermal": true,
+      "showSignature": true,
+      "showSignatureThermal": false,
+      "showQrCode": false,
+      "showBarcode": true,
+      "showBarcodeThermal": false,
+      "showBank": true,
+      "showBankThermal": false,
+      "showTicket": true,
+      "showTicketThermal": true,
+      "showTicketTl": true,
+      "showDate": true,
+      "showDateThermal": true,
+      "showDateTl": true,
+      "showRef": true,
+      "showRefThermal": true,
+      "showRefTl": true,
+      "showDevice": false,
+      "showDeviceThermal": false,
+      "showDeviceTl": false,
+      "showFooter": true,
+      "showFooterThermal": true,
+      "showFooterTl": true,
+      "showSentBy": true,
+      "showSentByThermal": true,
+      "showReceivedBy": true,
+      "showReceivedByThermal": true,
+      "showPreparedBy": true,
+      "showPreparedByThermal": true,
+      "showFindings": true,
+      "showFindingsThermal": true,
+      "termsText": "",
+      "footerLine": "Thank you · Visit again",
+      "signatureLabel": "Authorised Signatory",
+      "disclaimerLine": "This is a computer-generated document and does not require a signature.",
+      "defaultPaper": "A4",
+      "paperWidthMm": 80,
+      "fontFamily": "Courier New, monospace",
+      "fontSizePx": 12
+    },
+    {
+      "kind": "PHYSICAL_STOCK",
+      "headerLine1": "",
+      "headerLine2": "Physical Stock Voucher",
+      "addressBlock": "",
+      "gstinLine": "",
+      "phoneLine": "",
+      "logoUrl": "",
+      "showLogo": true,
+      "showLogoThermal": false,
+      "showHeaderText": false,
+      "showHeaderTextThermal": true,
+      "showAddress": true,
+      "showAddressThermal": true,
+      "showBranchAddress": false,
+      "showBranchAddressThermal": false,
+      "showGstin": true,
+      "showGstinThermal": true,
+      "showPhone": true,
+      "showPhoneThermal": true,
+      "showTaxSummary": false,
+      "showTaxSummaryThermal": false,
+      "showMrp": true,
+      "showMrpThermal": true,
+      "showSignature": false,
+      "showSignatureThermal": false,
+      "showQrCode": false,
+      "showBarcode": false,
+      "showBarcodeThermal": false,
+      "showBank": false,
+      "showBankThermal": false,
+      "showTicket": true,
+      "showTicketThermal": true,
+      "showTicketTl": true,
+      "showDate": true,
+      "showDateThermal": true,
+      "showDateTl": true,
+      "showRef": true,
+      "showRefThermal": true,
+      "showRefTl": true,
+      "showDevice": false,
+      "showDeviceThermal": false,
+      "showDeviceTl": false,
+      "showFooter": true,
+      "showFooterThermal": true,
+      "showFooterTl": true,
+      "showSentBy": true,
+      "showSentByThermal": true,
+      "showReceivedBy": true,
+      "showReceivedByThermal": true,
+      "showPreparedBy": true,
+      "showPreparedByThermal": true,
+      "showFindings": true,
+      "showFindingsThermal": true,
+      "termsText": "",
+      "footerLine": "Thank you · Visit again",
+      "signatureLabel": "Authorised Signatory",
+      "disclaimerLine": "This is a computer-generated document and does not require a signature.",
+      "defaultPaper": "A4",
+      "paperWidthMm": 80,
+      "fontFamily": "Courier New, monospace",
+      "fontSizePx": 12
+    },
+    {
       "kind": "POS_ESTIMATE",
       "headerLine1": "",
       "headerLine2": "Estimate / Quotation",
@@ -2542,6 +2542,69 @@
       "fontSizePx": 12
     },
     {
+      "kind": "ESTIMATE",
+      "headerLine1": "",
+      "headerLine2": "Estimate / Quotation",
+      "addressBlock": "",
+      "gstinLine": "",
+      "phoneLine": "",
+      "logoUrl": "",
+      "showLogo": true,
+      "showLogoThermal": false,
+      "showHeaderText": false,
+      "showHeaderTextThermal": true,
+      "showAddress": true,
+      "showAddressThermal": true,
+      "showBranchAddress": false,
+      "showBranchAddressThermal": false,
+      "showGstin": true,
+      "showGstinThermal": true,
+      "showPhone": true,
+      "showPhoneThermal": true,
+      "showTaxSummary": true,
+      "showTaxSummaryThermal": true,
+      "showMrp": true,
+      "showMrpThermal": true,
+      "showSignature": true,
+      "showSignatureThermal": false,
+      "showQrCode": false,
+      "showBarcode": false,
+      "showBarcodeThermal": false,
+      "showBank": true,
+      "showBankThermal": false,
+      "showTicket": true,
+      "showTicketThermal": true,
+      "showTicketTl": true,
+      "showDate": true,
+      "showDateThermal": true,
+      "showDateTl": true,
+      "showRef": true,
+      "showRefThermal": true,
+      "showRefTl": true,
+      "showDevice": false,
+      "showDeviceThermal": false,
+      "showDeviceTl": false,
+      "showFooter": true,
+      "showFooterThermal": true,
+      "showFooterTl": true,
+      "showSentBy": true,
+      "showSentByThermal": true,
+      "showReceivedBy": true,
+      "showReceivedByThermal": true,
+      "showPreparedBy": true,
+      "showPreparedByThermal": true,
+      "showFindings": true,
+      "showFindingsThermal": true,
+      "termsText": "1. This estimate is valid for 15 days from the date of issue.\n2. Prices are subject to change without prior notice.\n3. Delivery and installation charges, if any, are extra unless specified.\n4. Warranty, if applicable, will be as per the manufacturer's policy.",
+      "footerLine": "Feel free to call us at 8876996996 for any assistance. Thank you. Visit Again!",
+      "signatureLabel": "Authorised Signatory",
+      "disclaimerLine": "This is a computer-generated document and does not require a signature.",
+      "defaultPaper": "A4",
+      "paperWidthMm": 80,
+      "fontFamily": "Courier New, monospace",
+      "fontSizePx": 12
+    },
+    {
       "kind": "SALE",
       "headerLine1": "",
       "headerLine2": "Tax Invoice",
@@ -2666,85 +2729,50 @@
       "paperWidthMm": 80,
       "fontFamily": "Courier New, monospace",
       "fontSizePx": 12
-    },
-    {
-      "kind": "ESTIMATE",
-      "headerLine1": "",
-      "headerLine2": "Estimate / Quotation",
-      "addressBlock": "",
-      "gstinLine": "",
-      "phoneLine": "",
-      "logoUrl": "",
-      "showLogo": true,
-      "showLogoThermal": false,
-      "showHeaderText": false,
-      "showHeaderTextThermal": true,
-      "showAddress": true,
-      "showAddressThermal": true,
-      "showBranchAddress": false,
-      "showBranchAddressThermal": false,
-      "showGstin": true,
-      "showGstinThermal": true,
-      "showPhone": true,
-      "showPhoneThermal": true,
-      "showTaxSummary": true,
-      "showTaxSummaryThermal": true,
-      "showMrp": true,
-      "showMrpThermal": true,
-      "showSignature": true,
-      "showSignatureThermal": false,
-      "showQrCode": false,
-      "showBarcode": false,
-      "showBarcodeThermal": false,
-      "showBank": true,
-      "showBankThermal": false,
-      "showTicket": true,
-      "showTicketThermal": true,
-      "showTicketTl": true,
-      "showDate": true,
-      "showDateThermal": true,
-      "showDateTl": true,
-      "showRef": true,
-      "showRefThermal": true,
-      "showRefTl": true,
-      "showDevice": false,
-      "showDeviceThermal": false,
-      "showDeviceTl": false,
-      "showFooter": true,
-      "showFooterThermal": true,
-      "showFooterTl": true,
-      "showSentBy": true,
-      "showSentByThermal": true,
-      "showReceivedBy": true,
-      "showReceivedByThermal": true,
-      "showPreparedBy": true,
-      "showPreparedByThermal": true,
-      "showFindings": true,
-      "showFindingsThermal": true,
-      "termsText": "1. This estimate is valid for 15 days from the date of issue.\n2. Prices are subject to change without prior notice.\n3. Delivery and installation charges, if any, are extra unless specified.\n4. Warranty, if applicable, will be as per the manufacturer's policy.",
-      "footerLine": "Feel free to call us at 8876996996 for any assistance. Thank you. Visit Again!",
-      "signatureLabel": "Authorised Signatory",
-      "disclaimerLine": "This is a computer-generated document and does not require a signature.",
-      "defaultPaper": "A4",
-      "paperWidthMm": 80,
-      "fontFamily": "Courier New, monospace",
-      "fontSizePx": 12
     }
   ],
   "accountGroups": [
+    {
+      "name": "Deposits (Asset)",
+      "type": "ASSET",
+      "sortOrder": 20,
+      "isActive": true,
+      "parentName": "Current Assets"
+    },
+    {
+      "name": "Loans & Advances (Asset)",
+      "type": "ASSET",
+      "sortOrder": 30,
+      "isActive": true,
+      "parentName": "Current Assets"
+    },
+    {
+      "name": "Sundry Debtors",
+      "type": "ASSET",
+      "sortOrder": 40,
+      "isActive": true,
+      "parentName": "Current Assets"
+    },
+    {
+      "name": "Cash-in-Hand",
+      "type": "ASSET",
+      "sortOrder": 50,
+      "isActive": true,
+      "parentName": "Current Assets"
+    },
+    {
+      "name": "Bank Accounts",
+      "type": "ASSET",
+      "sortOrder": 60,
+      "isActive": true,
+      "parentName": "Current Assets"
+    },
     {
       "name": "Capital Account",
       "type": "LIABILITY",
       "sortOrder": 10,
       "isActive": true,
       "parentName": null
-    },
-    {
-      "name": "Additional Purchase Cost",
-      "type": "EXPENSE",
-      "sortOrder": 0,
-      "isActive": true,
-      "parentName": "Direct Expenses"
     },
     {
       "name": "Loans (Liability)",
@@ -2845,6 +2873,13 @@
       "parentName": null
     },
     {
+      "name": "Additional Purchase Cost",
+      "type": "EXPENSE",
+      "sortOrder": 0,
+      "isActive": true,
+      "parentName": "Direct Expenses"
+    },
+    {
       "name": "Reserves & Surplus",
       "type": "LIABILITY",
       "sortOrder": 10,
@@ -2899,44 +2934,509 @@
       "sortOrder": 10,
       "isActive": true,
       "parentName": "Current Assets"
-    },
-    {
-      "name": "Deposits (Asset)",
-      "type": "ASSET",
-      "sortOrder": 20,
-      "isActive": true,
-      "parentName": "Current Assets"
-    },
-    {
-      "name": "Loans & Advances (Asset)",
-      "type": "ASSET",
-      "sortOrder": 30,
-      "isActive": true,
-      "parentName": "Current Assets"
-    },
-    {
-      "name": "Sundry Debtors",
-      "type": "ASSET",
-      "sortOrder": 40,
-      "isActive": true,
-      "parentName": "Current Assets"
-    },
-    {
-      "name": "Cash-in-Hand",
-      "type": "ASSET",
-      "sortOrder": 50,
-      "isActive": true,
-      "parentName": "Current Assets"
-    },
-    {
-      "name": "Bank Accounts",
-      "type": "ASSET",
-      "sortOrder": 60,
-      "isActive": true,
-      "parentName": "Current Assets"
     }
   ],
   "accounts": [
+    {
+      "name": "SBI CC A/c 873",
+      "code": "1010",
+      "normalBalance": "DEBIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Bank Accounts"
+      },
+      "creditLimit": null,
+      "bankJson": {
+        "ifsc": "SBIN0008462",
+        "branch": "Abhayapuri",
+        "bankName": "State Bank of India",
+        "beneficiary": "Network Service",
+        "accountNumber": "33605435873"
+      },
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "parentName": null
+    },
+    {
+      "name": "Cash",
+      "code": "1000",
+      "normalBalance": "DEBIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Cash-in-Hand"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "parentName": null
+    },
+    {
+      "name": "Other Revenue",
+      "code": "4900",
+      "normalBalance": "CREDIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Indirect Incomes"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "parentName": null
+    },
+    {
+      "name": "Tools & Equipment",
+      "code": "6300",
+      "normalBalance": "DEBIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Direct Expenses"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "parentName": null
+    },
+    {
+      "name": "Miscellaneous Expense",
+      "code": "6900",
+      "normalBalance": "DEBIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Indirect Expenses"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "parentName": null
+    },
+    {
+      "name": "Gift Card Liability",
+      "code": null,
+      "normalBalance": "CREDIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Current Liabilities"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "parentName": null
+    },
+    {
+      "name": "Carriage Inward",
+      "code": null,
+      "normalBalance": "DEBIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Additional Purchase Cost"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "parentName": null
+    },
+    {
+      "name": "Advertisement",
+      "code": null,
+      "normalBalance": "DEBIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Indirect Expenses"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "parentName": null
+    },
+    {
+      "name": "Commission Paid",
+      "code": null,
+      "normalBalance": "DEBIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Indirect Expenses"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "parentName": null
+    },
+    {
+      "name": "Plant & Machinery",
+      "code": null,
+      "normalBalance": "DEBIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Fixed Assets"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "parentName": null
+    },
+    {
+      "name": "Advance to Suppliers",
+      "code": null,
+      "normalBalance": "DEBIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Loans & Advances (Asset)"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "parentName": null
+    },
+    {
+      "name": "Salary & Wages",
+      "code": "6200",
+      "normalBalance": "DEBIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Indirect Expenses"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "parentName": null
+    },
+    {
+      "name": "Cash – Counter 2 New Room – Head Office",
+      "code": null,
+      "normalBalance": "DEBIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Cash-in-Hand"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "parentName": null
+    },
+    {
+      "name": "Accounts Receivable",
+      "code": "1100",
+      "normalBalance": "DEBIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Sundry Debtors"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "parentName": null
+    },
+    {
+      "name": "Capital",
+      "code": "3000",
+      "normalBalance": "CREDIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Capital Account"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "parentName": null
+    },
+    {
+      "name": "IGST",
+      "code": null,
+      "normalBalance": "CREDIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Duties & Taxes"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "parentName": null
+    },
+    {
+      "name": "Petty Cash",
+      "code": null,
+      "normalBalance": "DEBIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Cash-in-Hand"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "parentName": null
+    },
+    {
+      "name": "Purchase A/c",
+      "code": null,
+      "normalBalance": "DEBIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Purchase Accounts"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "parentName": null
+    },
+    {
+      "name": "Tea & Donation Exp",
+      "code": null,
+      "normalBalance": null,
+      "description": "Daily Tea and Donation Exp",
+      "isActive": true,
+      "groupId": {
+        "name": "Indirect Expenses"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "parentName": null
+    },
+    {
+      "name": "Walk-in Cash Customer",
+      "code": "CASH-WALKIN",
+      "normalBalance": "DEBIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Sundry Debtors"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "parentName": null
+    },
+    {
+      "name": "Profit & Loss A/c",
+      "code": null,
+      "normalBalance": "CREDIT",
+      "description": null,
+      "isActive": true,
+      "groupId": null,
+      "creditLimit": null,
+      "bankJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "parentName": null
+    },
+    {
+      "name": "Drawings",
+      "code": null,
+      "normalBalance": "DEBIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Capital Account"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "parentName": null
+    },
+    {
+      "name": "Retained Earnings",
+      "code": "3100",
+      "normalBalance": "CREDIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Reserves & Surplus"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "parentName": null
+    },
+    {
+      "name": "Sales Returns",
+      "code": null,
+      "normalBalance": "DEBIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Sales Accounts"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "parentName": null
+    },
+    {
+      "name": "Purchase Returns",
+      "code": null,
+      "normalBalance": "CREDIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Purchase Accounts"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "parentName": null
+    },
+    {
+      "name": "Parts Revenue",
+      "code": "4100",
+      "normalBalance": "CREDIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Sales Accounts"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "parentName": null
+    },
+    {
+      "name": "Shop Sales Revenue",
+      "code": "4150",
+      "normalBalance": "CREDIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Sales Accounts"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "parentName": null
+    },
+    {
+      "name": "UTGST",
+      "code": null,
+      "normalBalance": "CREDIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Duties & Taxes"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "parentName": null
+    },
+    {
+      "name": "Accounts Payable",
+      "code": "2000",
+      "normalBalance": "CREDIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Sundry Creditors"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "parentName": null
+    },
+    {
+      "name": "TDS",
+      "code": null,
+      "normalBalance": "CREDIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Duties & Taxes"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "parentName": null
+    },
+    {
+      "name": "Tax Payable",
+      "code": "2100",
+      "normalBalance": "CREDIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Duties & Taxes"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "parentName": null
+    },
     {
       "name": "Discount Allowed",
       "code": null,
@@ -3050,38 +3550,6 @@
       "parentName": null
     },
     {
-      "name": "TDS",
-      "code": null,
-      "normalBalance": "CREDIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Duties & Taxes"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
-      "name": "Tax Payable",
-      "code": "2100",
-      "normalBalance": "CREDIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Duties & Taxes"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
       "name": "Professional Tax",
       "code": null,
       "normalBalance": "CREDIT",
@@ -3178,92 +3646,6 @@
       "parentName": null
     },
     {
-      "name": "SBI CC A/c 873",
-      "code": "1010",
-      "normalBalance": "DEBIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Bank Accounts"
-      },
-      "creditLimit": null,
-      "bankJson": {
-        "ifsc": "SBIN0008462",
-        "branch": "Abhayapuri",
-        "bankName": "State Bank of India",
-        "beneficiary": "Network Service",
-        "accountNumber": "33605435873"
-      },
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
-      "name": "Cash",
-      "code": "1000",
-      "normalBalance": "DEBIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Cash-in-Hand"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
-      "name": "Cash – Vault – Head Office",
-      "code": null,
-      "normalBalance": "DEBIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Cash-in-Hand"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
-      "name": "Cash – Counter 1 Old Room – Head Office",
-      "code": null,
-      "normalBalance": "DEBIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Cash-in-Hand"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
-      "name": "Accrued Expenses",
-      "code": "2200",
-      "normalBalance": "CREDIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Provisions"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
       "name": "Provision for Tax",
       "code": null,
       "normalBalance": "CREDIT",
@@ -3303,22 +3685,6 @@
       "isActive": true,
       "groupId": {
         "name": "Reserves & Surplus"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
-      "name": "Other Revenue",
-      "code": "4900",
-      "normalBalance": "CREDIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Indirect Incomes"
       },
       "creditLimit": null,
       "bankJson": null,
@@ -3392,22 +3758,6 @@
       "parentName": null
     },
     {
-      "name": "Tools & Equipment",
-      "code": "6300",
-      "normalBalance": "DEBIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Direct Expenses"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
       "name": "Repair & Maintenance",
       "code": null,
       "normalBalance": "DEBIT",
@@ -3458,22 +3808,6 @@
     {
       "name": "Utilities Expense",
       "code": "6100",
-      "normalBalance": "DEBIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Indirect Expenses"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
-      "name": "Miscellaneous Expense",
-      "code": "6900",
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -3552,22 +3886,6 @@
       "parentName": null
     },
     {
-      "name": "Gift Card Liability",
-      "code": null,
-      "normalBalance": "CREDIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Current Liabilities"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
       "name": "Gift Card Breakage",
       "code": null,
       "normalBalance": "CREDIT",
@@ -3600,13 +3918,13 @@
       "parentName": null
     },
     {
-      "name": "Carriage Inward",
+      "name": "Cash – Vault – Head Office",
       "code": null,
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
       "groupId": {
-        "name": "Additional Purchase Cost"
+        "name": "Cash-in-Hand"
       },
       "creditLimit": null,
       "bankJson": null,
@@ -3616,29 +3934,13 @@
       "parentName": null
     },
     {
-      "name": "Bank Charges",
+      "name": "Cash – Counter 1 Old Room – Head Office",
       "code": null,
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
       "groupId": {
-        "name": "Indirect Expenses"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
-      "name": "Audit Fees",
-      "code": null,
-      "normalBalance": "DEBIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Indirect Expenses"
+        "name": "Cash-in-Hand"
       },
       "creditLimit": null,
       "bankJson": null,
@@ -3664,7 +3966,7 @@
       "parentName": null
     },
     {
-      "name": "Postage & Courier",
+      "name": "Bank Charges",
       "code": null,
       "normalBalance": "DEBIT",
       "description": null,
@@ -3680,7 +3982,7 @@
       "parentName": null
     },
     {
-      "name": "Advertisement",
+      "name": "Postage & Courier",
       "code": null,
       "normalBalance": "DEBIT",
       "description": null,
@@ -3760,22 +4062,6 @@
       "parentName": null
     },
     {
-      "name": "Commission Paid",
-      "code": null,
-      "normalBalance": "DEBIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Indirect Expenses"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
       "name": "Furniture & Fixtures",
       "code": null,
       "normalBalance": "DEBIT",
@@ -3809,22 +4095,6 @@
     },
     {
       "name": "Office Equipment",
-      "code": null,
-      "normalBalance": "DEBIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Fixed Assets"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
-      "name": "Plant & Machinery",
       "code": null,
       "normalBalance": "DEBIT",
       "description": null,
@@ -3904,22 +4174,6 @@
       "parentName": null
     },
     {
-      "name": "Advance to Suppliers",
-      "code": null,
-      "normalBalance": "DEBIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Loans & Advances (Asset)"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
       "name": "TDS Receivable",
       "code": null,
       "normalBalance": "DEBIT",
@@ -3984,22 +4238,6 @@
       "parentName": null
     },
     {
-      "name": "Salary & Wages",
-      "code": "6200",
-      "normalBalance": "DEBIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Indirect Expenses"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
       "name": "Prepaid Expenses",
       "code": "1300",
       "normalBalance": "DEBIT",
@@ -4048,22 +4286,6 @@
       "parentName": null
     },
     {
-      "name": "Cash – Counter 2 New Room – Head Office",
-      "code": null,
-      "normalBalance": "DEBIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Cash-in-Hand"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
       "name": "PhonePe",
       "code": null,
       "normalBalance": null,
@@ -4096,74 +4318,10 @@
       "parentName": null
     },
     {
-      "name": "Petty Cash",
+      "name": "Audit Fees",
       "code": null,
       "normalBalance": "DEBIT",
       "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Cash-in-Hand"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
-      "name": "Accounts Receivable",
-      "code": "1100",
-      "normalBalance": "DEBIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Sundry Debtors"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
-      "name": "Accounts Payable",
-      "code": "2000",
-      "normalBalance": "CREDIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Sundry Creditors"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
-      "name": "Purchase A/c",
-      "code": null,
-      "normalBalance": "DEBIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Purchase Accounts"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
-      "name": "Tea & Donation Exp",
-      "code": null,
-      "normalBalance": null,
-      "description": "Daily Tea and Donation Exp",
       "isActive": true,
       "groupId": {
         "name": "Indirect Expenses"
@@ -4176,171 +4334,13 @@
       "parentName": null
     },
     {
-      "name": "Walk-in Cash Customer",
-      "code": "CASH-WALKIN",
-      "normalBalance": "DEBIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Sundry Debtors"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
-      "name": "Profit & Loss A/c",
-      "code": null,
-      "normalBalance": "CREDIT",
-      "description": null,
-      "isActive": true,
-      "groupId": null,
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
-      "name": "Capital",
-      "code": "3000",
+      "name": "Accrued Expenses",
+      "code": "2200",
       "normalBalance": "CREDIT",
       "description": null,
       "isActive": true,
       "groupId": {
-        "name": "Capital Account"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
-      "name": "Drawings",
-      "code": null,
-      "normalBalance": "DEBIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Capital Account"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
-      "name": "Retained Earnings",
-      "code": "3100",
-      "normalBalance": "CREDIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Reserves & Surplus"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
-      "name": "Sales Returns",
-      "code": null,
-      "normalBalance": "DEBIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Sales Accounts"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
-      "name": "Purchase Returns",
-      "code": null,
-      "normalBalance": "CREDIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Purchase Accounts"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
-      "name": "IGST",
-      "code": null,
-      "normalBalance": "CREDIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Duties & Taxes"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
-      "name": "Parts Revenue",
-      "code": "4100",
-      "normalBalance": "CREDIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Sales Accounts"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
-      "name": "Shop Sales Revenue",
-      "code": "4150",
-      "normalBalance": "CREDIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Sales Accounts"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
-      "name": "UTGST",
-      "code": null,
-      "normalBalance": "CREDIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Duties & Taxes"
+        "name": "Provisions"
       },
       "creditLimit": null,
       "bankJson": null,
@@ -4787,6 +4787,514 @@
     {
       "roleId": "R1",
       "permissionId": "tickets:delete"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "finance:voucher:post:payment"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "finance:voucher:post:receipt"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "finance:voucher:post:contra"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "inventory:voucher:post:sale"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "inventory:voucher:post:purchase"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "inventory:voucher:post:sale-return"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "inventory:voucher:post:purchase-return"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "inventory:voucher:post:grn"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "inventory:voucher:post:manufacturing-journal"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "inventory:voucher:post:rejection-in"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "inventory:voucher:post:rejection-out"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "inventory:voucher:post:estimate"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "inventory:voucher:post:sales-order"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "inventory:voucher:post:purchase-order"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:workspace:pos"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "pos:voucher:create:expense"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "pos:voucher:create:receipt"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "pos:voucher:create:estimate"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "pos:voucher:create:order"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "pos:voucher:create:sale-return"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "pos:voucher:create:sale"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "pos:shift:open"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "pos:shift:close"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "pos:shift:drop"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:workspace:work-flow"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:workspace:inbox"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:pos:shift-reports"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:pos:counters"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "pos:shift:force-close"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:customers:person"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:customers:companies"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "customers:view:creditors"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:repair:all-repair"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:accountancy:daybook"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:accountancy:pending-inventory"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:accountancy:stock-summary"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "customers:edit"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:accountancy:account-ledger"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:accountancy:bank-book"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:accountancy:cash-book"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:accountancy:loans-book"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:accountancy:balance-sheet"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:accountancy:profit-loss-a-c"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:accountancy:financial-insights"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:accountancy:trial-balance"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:accountancy:receivables"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:accountancy:payables"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:accountancy:cash-flow"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:accountancy:fund-flow"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:accountancy:ratio-analysis"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:accountancy:statistics"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:accountancy:bank-reconciliation"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:accountancy:masters"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:accountancy:account-groups"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:accountancy:ledgers"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:accountancy:chart-of-accounts"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:accountancy:opening-balance"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "accountancy:masters:edit"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "products:edit"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:inventory:products"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:inventory:masters"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:inventory:brands"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:inventory:units"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:inventory:categories"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:inventory:groups"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:inventory:warranty-terms"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:inventory:attribute-masters"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:inventory:gst-rates"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:inventory:boms"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "inventory:masters:edit"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:inventory:item-ledger"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:crm:deals"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:orders:orders-board"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:orders:delivery"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:orders:refunds"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:e-commerce:orders"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:e-commerce:products"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:administration:work-board"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:retention:coupons"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:retention:gift-cards"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "coupons:edit"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:retention:loyalty"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:retention:spend-tiers"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "tiers:edit"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "loyalty:edit"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "gift-cards:edit"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:pricing-strategy:strategies"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "pricing:strategy:set"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:pricing-strategy:costing"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "pricing:costing:manage"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:pricing-strategy:needs-attention"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:pricing-strategy:update-print-labels"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "pricing:labels:apply"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:compliance:outward-supplies"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:compliance:inward-supplies"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:compliance:net-gst-liability"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:compliance:hsn-summary"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:compliance:tax-classification"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "compliance:tax:edit"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:admin:users"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "users:create"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:admin:org-chart"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:admin:role"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "roles:create"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:admin:branches"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "branches:create"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:admin:departments"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "departments:create"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:admin:positions"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "positions:create"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:admin:pos-counters"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "pos-counters:edit"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:settings:organisation"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:settings:org-defaults"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:settings:e-commerce"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:settings:payment-methods"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:settings:workflow"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:settings:naming-convention"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:settings:year-ending"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:settings:customer-tools"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:settings:customer-import"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:settings:item-import"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:settings:downloads"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:settings:backup-restore"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:settings:voucher-templates"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:settings:qr-display"
+    },
+    {
+      "roleId": "R4",
+      "permissionId": "ui:sidebar:settings:thermal-printer"
     },
     {
       "roleId": "R1",
@@ -6543,6 +7051,13 @@
       "parentPositionId": null
     },
     {
+      "id": "POS-SYSADMIN",
+      "title": "System Administrator",
+      "branchId": null,
+      "departmentId": "DEP-ADMIN",
+      "parentPositionId": null
+    },
+    {
       "id": "SALE-COUNTER",
       "title": "Counter Manager",
       "branchId": "BR-HQ",
@@ -6555,13 +7070,6 @@
       "branchId": "BR-HQ",
       "departmentId": "DEP-SALES",
       "parentPositionId": "BM-HQ"
-    },
-    {
-      "id": "POS-SYSADMIN",
-      "title": "System Administrator",
-      "branchId": null,
-      "departmentId": "DEP-ADMIN",
-      "parentPositionId": null
     }
   ],
   "positionRoles": [
@@ -6586,23 +7094,6 @@
     {
       "name": "Akramul Jakir",
       "email": "akramul@networkservice.in",
-      "role": null,
-      "title": null,
-      "scope": "OWN",
-      "avatarUrl": null,
-      "coverUrl": null,
-      "phone": null,
-      "birthday": null,
-      "bio": null,
-      "linkedIn": null,
-      "twitter": null,
-      "instagram": null,
-      "facebook": null,
-      "managerEmail": null
-    },
-    {
-      "name": "Rakesh Biswash",
-      "email": "rakesh@networkservice.in",
       "role": null,
       "title": null,
       "scope": "OWN",
@@ -6654,6 +7145,23 @@
     {
       "name": "Prokash Karmakar",
       "email": "prokash@networkservice.in",
+      "role": null,
+      "title": null,
+      "scope": "OWN",
+      "avatarUrl": null,
+      "coverUrl": null,
+      "phone": null,
+      "birthday": null,
+      "bio": null,
+      "linkedIn": null,
+      "twitter": null,
+      "instagram": null,
+      "facebook": null,
+      "managerEmail": null
+    },
+    {
+      "name": "Rakesh Biswash",
+      "email": "rakesh@networkservice.in",
       "role": null,
       "title": null,
       "scope": "OWN",
@@ -7048,541 +7556,9 @@
       "entityType": "deal"
     }
   ],
-  "workGroups": [
-    {
-      "id": "G1",
-      "label": "Calling",
-      "color": "#3A40C7",
-      "order": 1,
-      "permissionId": null
-    },
-    {
-      "id": "G2",
-      "label": "Repairing",
-      "color": "#B5EE39",
-      "order": 2,
-      "permissionId": null
-    },
-    {
-      "id": "G3",
-      "label": "Admin",
-      "color": "#E591FF",
-      "order": 3,
-      "permissionId": null
-    },
-    {
-      "id": "G4",
-      "label": "Parts & Courier",
-      "color": "#A9F642",
-      "order": 4,
-      "permissionId": null
-    },
-    {
-      "id": "G5",
-      "label": "Orders",
-      "color": "#1364F6",
-      "order": 5,
-      "permissionId": null
-    }
-  ],
-  "works": [
-    {
-      "id": "W1",
-      "label": "Tele Calling",
-      "color": "#AC5F53",
-      "order": 1,
-      "groupId": "G1",
-      "successLabel": "Reachable",
-      "failLabel": "Unreachable",
-      "prompt": "Add alternative number of customer if you know",
-      "startLabel": "Make a call",
-      "successPopup": false,
-      "failPopup": false,
-      "kind": "human",
-      "toolType": null,
-      "toolConfig": {},
-      "args": [
-        {
-          "key": "number",
-          "label": "Call number",
-          "source": "customer.phone"
-        },
-        {
-          "on": "fail",
-          "key": "reason",
-          "kind": "text",
-          "label": "Reason",
-          "source": "user"
-        }
-      ],
-      "permissionId": "work:W1"
-    },
-    {
-      "id": "W2",
-      "label": "Repairing",
-      "color": "#1B598A",
-      "order": 2,
-      "groupId": "G2",
-      "successLabel": "Fixed",
-      "failLabel": "Can't fix",
-      "prompt": null,
-      "startLabel": null,
-      "successPopup": false,
-      "failPopup": false,
-      "kind": "human",
-      "toolType": null,
-      "toolConfig": {},
-      "args": [],
-      "permissionId": null
-    },
-    {
-      "id": "W3",
-      "label": "Admin Approval",
-      "color": "#CCD8F2",
-      "order": 3,
-      "groupId": "G3",
-      "successLabel": "Approved",
-      "failLabel": "Rejected",
-      "prompt": null,
-      "startLabel": null,
-      "successPopup": false,
-      "failPopup": false,
-      "kind": "human",
-      "toolType": null,
-      "toolConfig": {},
-      "args": [],
-      "permissionId": null
-    },
-    {
-      "id": "W4",
-      "label": "Order Parts",
-      "color": "#C64F33",
-      "order": 4,
-      "groupId": "G4",
-      "successLabel": "Ordered",
-      "failLabel": "Unavailable",
-      "prompt": null,
-      "startLabel": null,
-      "successPopup": false,
-      "failPopup": false,
-      "kind": "human",
-      "toolType": null,
-      "toolConfig": {},
-      "args": [
-        {
-          "key": "part",
-          "kind": "text",
-          "label": "Part needed",
-          "source": "user"
-        }
-      ],
-      "permissionId": null
-    },
-    {
-      "id": "W5",
-      "label": "Waiting & Follow Up",
-      "color": "#4E82DE",
-      "order": 5,
-      "groupId": "G1",
-      "successLabel": null,
-      "failLabel": null,
-      "prompt": null,
-      "startLabel": null,
-      "successPopup": false,
-      "failPopup": false,
-      "kind": "human",
-      "toolType": null,
-      "toolConfig": {},
-      "args": [],
-      "permissionId": null
-    },
-    {
-      "id": "W6",
-      "label": "Escalated To EC",
-      "color": "#EE5DF7",
-      "order": 6,
-      "groupId": "G3",
-      "successLabel": null,
-      "failLabel": null,
-      "prompt": null,
-      "startLabel": null,
-      "successPopup": false,
-      "failPopup": false,
-      "kind": "human",
-      "toolType": null,
-      "toolConfig": {},
-      "args": [],
-      "permissionId": null
-    },
-    {
-      "id": "W7",
-      "label": "Incoming Courier",
-      "color": "#9A8EC5",
-      "order": 7,
-      "groupId": "G4",
-      "successLabel": "Received",
-      "failLabel": "Lost",
-      "prompt": null,
-      "startLabel": null,
-      "successPopup": false,
-      "failPopup": false,
-      "kind": "human",
-      "toolType": null,
-      "toolConfig": {},
-      "args": [
-        {
-          "on": "success",
-          "key": "tracking",
-          "kind": "text",
-          "label": "Tracking #",
-          "source": "user"
-        },
-        {
-          "on": "fail",
-          "key": "lost_reason",
-          "kind": "text",
-          "label": "Lost reason",
-          "source": "user"
-        }
-      ],
-      "permissionId": null
-    },
-    {
-      "id": "W8",
-      "label": "Order",
-      "color": "#87BA87",
-      "order": 8,
-      "groupId": "G5",
-      "successLabel": null,
-      "failLabel": null,
-      "prompt": null,
-      "startLabel": null,
-      "successPopup": false,
-      "failPopup": false,
-      "kind": "human",
-      "toolType": null,
-      "toolConfig": {},
-      "args": [],
-      "permissionId": null
-    },
-    {
-      "id": "W9",
-      "label": "IMEI Lookup",
-      "color": "#7A55E6",
-      "order": 9,
-      "groupId": null,
-      "successLabel": "Opened",
-      "failLabel": "Blocked",
-      "prompt": null,
-      "startLabel": null,
-      "successPopup": false,
-      "failPopup": false,
-      "kind": "auto",
-      "toolType": "open_tab",
-      "toolConfig": {
-        "outputs": {
-          "openedUrl": "lookup_url"
-        },
-        "bindings": {
-          "url": {
-            "mode": "fixed",
-            "value": "https://www.imei.info"
-          }
-        }
-      },
-      "args": [],
-      "permissionId": null
-    }
-  ],
+  "workGroups": [],
+  "works": [],
   "ticketStatuses": [
-    {
-      "id": "S45",
-      "label": "Packing",
-      "color": "bg-indigo-100 text-indigo-700",
-      "order": 4,
-      "isTerminal": false,
-      "isEntryPoint": false,
-      "actionLabel": "Start Packing",
-      "warrantyScope": "any",
-      "leavePrompt": null,
-      "announceOnEntry": false,
-      "etaText": null,
-      "workId": null,
-      "startWorkerId": null,
-      "pipelineId": "P7"
-    },
-    {
-      "id": "S49",
-      "label": "Returned",
-      "color": "bg-red-100 text-red-600",
-      "order": 8,
-      "isTerminal": true,
-      "isEntryPoint": false,
-      "actionLabel": "Mark Returned",
-      "warrantyScope": "any",
-      "leavePrompt": null,
-      "announceOnEntry": false,
-      "etaText": null,
-      "workId": null,
-      "startWorkerId": null,
-      "pipelineId": "P7"
-    },
-    {
-      "id": "S28",
-      "label": "Done",
-      "color": "bg-green-100 text-green-600",
-      "order": 5,
-      "isTerminal": true,
-      "isEntryPoint": false,
-      "actionLabel": null,
-      "warrantyScope": "any",
-      "leavePrompt": null,
-      "announceOnEntry": false,
-      "etaText": null,
-      "workId": null,
-      "startWorkerId": null,
-      "pipelineId": "P4"
-    },
-    {
-      "id": "S53",
-      "label": "In Transit",
-      "color": "bg-purple-100 text-purple-700",
-      "order": 4,
-      "isTerminal": false,
-      "isEntryPoint": false,
-      "actionLabel": "Mark In Transit",
-      "warrantyScope": "any",
-      "leavePrompt": null,
-      "announceOnEntry": false,
-      "etaText": null,
-      "workId": null,
-      "startWorkerId": null,
-      "pipelineId": "P8"
-    },
-    {
-      "id": "S54",
-      "label": "Out for Delivery",
-      "color": "bg-amber-100 text-amber-700",
-      "order": 5,
-      "isTerminal": false,
-      "isEntryPoint": false,
-      "actionLabel": "Out for Delivery",
-      "warrantyScope": "any",
-      "leavePrompt": null,
-      "announceOnEntry": false,
-      "etaText": null,
-      "workId": null,
-      "startWorkerId": null,
-      "pipelineId": "P8"
-    },
-    {
-      "id": "S3",
-      "label": "Repairing",
-      "color": "bg-blue-100 text-blue-700",
-      "order": 3,
-      "isTerminal": false,
-      "isEntryPoint": false,
-      "actionLabel": null,
-      "warrantyScope": "any",
-      "leavePrompt": null,
-      "announceOnEntry": false,
-      "etaText": null,
-      "workId": null,
-      "startWorkerId": "SS45",
-      "pipelineId": "P1"
-    },
-    {
-      "id": "S35",
-      "label": "Lead",
-      "color": "bg-gray-100 text-gray-600",
-      "order": 1,
-      "isTerminal": false,
-      "isEntryPoint": true,
-      "actionLabel": null,
-      "warrantyScope": "any",
-      "leavePrompt": null,
-      "announceOnEntry": false,
-      "etaText": null,
-      "workId": null,
-      "startWorkerId": null,
-      "pipelineId": "P6"
-    },
-    {
-      "id": "S46",
-      "label": "Dispatched",
-      "color": "bg-purple-100 text-purple-700",
-      "order": 5,
-      "isTerminal": false,
-      "isEntryPoint": false,
-      "actionLabel": "Mark Dispatched",
-      "warrantyScope": "any",
-      "leavePrompt": null,
-      "announceOnEntry": false,
-      "etaText": null,
-      "workId": null,
-      "startWorkerId": null,
-      "pipelineId": "P7"
-    },
-    {
-      "id": "S55",
-      "label": "Delivered",
-      "color": "bg-green-100 text-green-700",
-      "order": 6,
-      "isTerminal": true,
-      "isEntryPoint": false,
-      "actionLabel": "Mark Delivered",
-      "warrantyScope": "any",
-      "leavePrompt": null,
-      "announceOnEntry": false,
-      "etaText": null,
-      "workId": null,
-      "startWorkerId": null,
-      "pipelineId": "P8"
-    },
-    {
-      "id": "S29",
-      "label": "Idea",
-      "color": "bg-gray-100 text-gray-600",
-      "order": 1,
-      "isTerminal": false,
-      "isEntryPoint": true,
-      "actionLabel": null,
-      "warrantyScope": "any",
-      "leavePrompt": null,
-      "announceOnEntry": false,
-      "etaText": null,
-      "workId": null,
-      "startWorkerId": null,
-      "pipelineId": "P5"
-    },
-    {
-      "id": "S36",
-      "label": "Contacted",
-      "color": "bg-blue-100 text-blue-600",
-      "order": 2,
-      "isTerminal": false,
-      "isEntryPoint": false,
-      "actionLabel": null,
-      "warrantyScope": "any",
-      "leavePrompt": null,
-      "announceOnEntry": false,
-      "etaText": null,
-      "workId": null,
-      "startWorkerId": null,
-      "pipelineId": "P6"
-    },
-    {
-      "id": "S40",
-      "label": "Won",
-      "color": "bg-green-100 text-green-700",
-      "order": 6,
-      "isTerminal": true,
-      "isEntryPoint": false,
-      "actionLabel": null,
-      "warrantyScope": "any",
-      "leavePrompt": null,
-      "announceOnEntry": false,
-      "etaText": null,
-      "workId": null,
-      "startWorkerId": null,
-      "pipelineId": "P6"
-    },
-    {
-      "id": "S37",
-      "label": "Qualified",
-      "color": "bg-teal-100 text-teal-600",
-      "order": 3,
-      "isTerminal": false,
-      "isEntryPoint": false,
-      "actionLabel": null,
-      "warrantyScope": "any",
-      "leavePrompt": null,
-      "announceOnEntry": false,
-      "etaText": null,
-      "workId": null,
-      "startWorkerId": null,
-      "pipelineId": "P6"
-    },
-    {
-      "id": "S41",
-      "label": "Lost",
-      "color": "bg-red-100 text-red-600",
-      "order": 7,
-      "isTerminal": true,
-      "isEntryPoint": false,
-      "actionLabel": null,
-      "warrantyScope": "any",
-      "leavePrompt": null,
-      "announceOnEntry": false,
-      "etaText": null,
-      "workId": null,
-      "startWorkerId": null,
-      "pipelineId": "P6"
-    },
-    {
-      "id": "S4",
-      "label": "Escalated -Visit",
-      "color": "bg-orange-100 text-orange-700",
-      "order": 5,
-      "isTerminal": false,
-      "isEntryPoint": false,
-      "actionLabel": null,
-      "warrantyScope": "any",
-      "leavePrompt": null,
-      "announceOnEntry": false,
-      "etaText": null,
-      "workId": null,
-      "startWorkerId": "SS47",
-      "pipelineId": "P1"
-    },
-    {
-      "id": "S5",
-      "label": "Received Back",
-      "color": "bg-purple-100 text-purple-700",
-      "order": 5,
-      "isTerminal": false,
-      "isEntryPoint": false,
-      "actionLabel": null,
-      "warrantyScope": "any",
-      "leavePrompt": null,
-      "announceOnEntry": false,
-      "etaText": null,
-      "workId": null,
-      "startWorkerId": null,
-      "pipelineId": "P1"
-    },
-    {
-      "id": "S50",
-      "label": "To Dispatch",
-      "color": "bg-gray-100 text-gray-600",
-      "order": 1,
-      "isTerminal": false,
-      "isEntryPoint": true,
-      "actionLabel": null,
-      "warrantyScope": "any",
-      "leavePrompt": null,
-      "announceOnEntry": false,
-      "etaText": null,
-      "workId": null,
-      "startWorkerId": null,
-      "pipelineId": "P8"
-    },
-    {
-      "id": "S9",
-      "label": "Cancelled",
-      "color": "bg-gray-100 text-gray-400",
-      "order": 9,
-      "isTerminal": true,
-      "isEntryPoint": false,
-      "actionLabel": null,
-      "warrantyScope": "any",
-      "leavePrompt": null,
-      "announceOnEntry": false,
-      "etaText": null,
-      "workId": null,
-      "startWorkerId": null,
-      "pipelineId": "P1"
-    },
     {
       "id": "S18",
       "label": "Contacted",
@@ -7648,12 +7624,12 @@
       "pipelineId": "P1"
     },
     {
-      "id": "S57",
-      "label": "Requested",
-      "color": "bg-gray-100 text-gray-600",
-      "order": 1,
+      "id": "S6",
+      "label": "Ready",
+      "color": "bg-green-100 text-green-700",
+      "order": 6,
       "isTerminal": false,
-      "isEntryPoint": true,
+      "isEntryPoint": false,
       "actionLabel": null,
       "warrantyScope": "any",
       "leavePrompt": null,
@@ -7661,38 +7637,6 @@
       "etaText": null,
       "workId": null,
       "startWorkerId": null,
-      "pipelineId": "P9"
-    },
-    {
-      "id": "S1",
-      "label": "Received",
-      "color": "bg-gray-100 text-gray-600",
-      "order": 1,
-      "isTerminal": false,
-      "isEntryPoint": true,
-      "actionLabel": null,
-      "warrantyScope": "any",
-      "leavePrompt": "Confirm the device and accessories are logged before moving on.",
-      "announceOnEntry": false,
-      "etaText": null,
-      "workId": null,
-      "startWorkerId": "SS38",
-      "pipelineId": "P1"
-    },
-    {
-      "id": "S2",
-      "label": "Diagnosing",
-      "color": "bg-yellow-100 text-yellow-700",
-      "order": 2,
-      "isTerminal": false,
-      "isEntryPoint": false,
-      "actionLabel": null,
-      "warrantyScope": "any",
-      "leavePrompt": null,
-      "announceOnEntry": true,
-      "etaText": "2 days",
-      "workId": null,
-      "startWorkerId": "SS1",
       "pipelineId": "P1"
     },
     {
@@ -7744,6 +7688,22 @@
       "pipelineId": "P3"
     },
     {
+      "id": "S41",
+      "label": "Lost",
+      "color": "bg-red-100 text-red-600",
+      "order": 7,
+      "isTerminal": true,
+      "isEntryPoint": false,
+      "actionLabel": null,
+      "warrantyScope": "any",
+      "leavePrompt": null,
+      "announceOnEntry": false,
+      "etaText": null,
+      "workId": null,
+      "startWorkerId": null,
+      "pipelineId": "P6"
+    },
+    {
       "id": "S24",
       "label": "Open",
       "color": "bg-gray-100 text-gray-600",
@@ -7790,22 +7750,6 @@
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P4"
-    },
-    {
-      "id": "S51",
-      "label": "Carrier Assigned",
-      "color": "bg-blue-100 text-blue-700",
-      "order": 2,
-      "isTerminal": false,
-      "isEntryPoint": false,
-      "actionLabel": "Assign Carrier",
-      "warrantyScope": "any",
-      "leavePrompt": null,
-      "announceOnEntry": false,
-      "etaText": null,
-      "workId": null,
-      "startWorkerId": null,
-      "pipelineId": "P8"
     },
     {
       "id": "S56",
@@ -8080,22 +8024,6 @@
       "pipelineId": "P7"
     },
     {
-      "id": "S6",
-      "label": "Ready",
-      "color": "bg-green-100 text-green-700",
-      "order": 6,
-      "isTerminal": false,
-      "isEntryPoint": false,
-      "actionLabel": null,
-      "warrantyScope": "any",
-      "leavePrompt": null,
-      "announceOnEntry": false,
-      "etaText": null,
-      "workId": null,
-      "startWorkerId": "SS29",
-      "pipelineId": "P1"
-    },
-    {
       "id": "S16",
       "label": "Closed",
       "color": "bg-gray-100 text-gray-400",
@@ -8144,11 +8072,11 @@
       "pipelineId": "P7"
     },
     {
-      "id": "S8",
-      "label": "Closed - No Fix",
-      "color": "bg-red-100 text-red-600",
-      "order": 8,
-      "isTerminal": true,
+      "id": "S4",
+      "label": "Escalated -Visit",
+      "color": "bg-orange-100 text-orange-700",
+      "order": 5,
+      "isTerminal": false,
       "isEntryPoint": false,
       "actionLabel": null,
       "warrantyScope": "any",
@@ -8156,7 +8084,23 @@
       "announceOnEntry": false,
       "etaText": null,
       "workId": null,
-      "startWorkerId": "SS32",
+      "startWorkerId": null,
+      "pipelineId": "P1"
+    },
+    {
+      "id": "S5",
+      "label": "Received Back",
+      "color": "bg-purple-100 text-purple-700",
+      "order": 5,
+      "isTerminal": false,
+      "isEntryPoint": false,
+      "actionLabel": null,
+      "warrantyScope": "any",
+      "leavePrompt": null,
+      "announceOnEntry": false,
+      "etaText": null,
+      "workId": null,
+      "startWorkerId": null,
       "pipelineId": "P1"
     },
     {
@@ -8174,6 +8118,22 @@
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P7"
+    },
+    {
+      "id": "S50",
+      "label": "To Dispatch",
+      "color": "bg-gray-100 text-gray-600",
+      "order": 1,
+      "isTerminal": false,
+      "isEntryPoint": true,
+      "actionLabel": null,
+      "warrantyScope": "any",
+      "leavePrompt": null,
+      "announceOnEntry": false,
+      "etaText": null,
+      "workId": null,
+      "startWorkerId": null,
+      "pipelineId": "P8"
     },
     {
       "id": "S39",
@@ -8224,10 +8184,10 @@
       "pipelineId": "P5"
     },
     {
-      "id": "S61",
-      "label": "Need Help",
-      "color": "bg-gray-100 text-gray-600",
-      "order": 4,
+      "id": "S3",
+      "label": "Repairing",
+      "color": "bg-blue-100 text-blue-700",
+      "order": 3,
       "isTerminal": false,
       "isEntryPoint": false,
       "actionLabel": null,
@@ -8236,7 +8196,7 @@
       "announceOnEntry": false,
       "etaText": null,
       "workId": null,
-      "startWorkerId": "SS48",
+      "startWorkerId": null,
       "pipelineId": "P1"
     },
     {
@@ -8334,1343 +8294,297 @@
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P4"
-    }
-  ],
-  "ticketWorkers": [
-    {
-      "id": "SS46",
-      "label": "Need 3rd Party Help",
-      "publicLabel": null,
-      "color": "#B31C0F",
-      "order": 46,
-      "statusId": "S3",
-      "triggerMap": {
-        "S3": "S61"
-      },
-      "actionLabel": null,
-      "autoRevertOnClear": true,
-      "transitionNote": null,
-      "skipNoteOnEntry": false,
-      "requireNoteOnEntry": false,
-      "entryQuestion": null,
-      "entryArgs": [],
-      "warrantyScope": "any",
-      "successWorkerId": null,
-      "failWorkerId": null,
-      "successStatusId": null,
-      "failStatusId": null,
-      "retrySchedule": [],
-      "spawnPipelineId": null,
-      "parentSignal": null,
-      "actions": [],
-      "workId": null,
-      "pipelineId": "P1"
     },
     {
-      "id": "SS27",
-      "label": "Shipped Back to Us",
-      "publicLabel": null,
-      "color": "#30F93C",
-      "order": 27,
-      "statusId": "S4",
-      "triggerMap": {},
-      "actionLabel": null,
-      "autoRevertOnClear": true,
-      "transitionNote": null,
-      "skipNoteOnEntry": false,
-      "requireNoteOnEntry": false,
-      "entryQuestion": null,
-      "entryArgs": [],
-      "warrantyScope": "any",
-      "successWorkerId": null,
-      "failWorkerId": null,
-      "successStatusId": null,
-      "failStatusId": null,
-      "retrySchedule": [],
-      "spawnPipelineId": null,
-      "parentSignal": null,
-      "actions": [],
-      "workId": null,
-      "pipelineId": "P1"
-    },
-    {
-      "id": "SS54",
-      "label": "Calling: Customer to Bring Accessories 2nd Attempt",
-      "publicLabel": "Calling: Customer to Bring Accessories",
-      "color": "#E3DF07",
-      "order": 23,
-      "statusId": "S2",
-      "triggerMap": {},
-      "actionLabel": "Calling: Customer to Bring Accessories",
-      "autoRevertOnClear": true,
-      "transitionNote": null,
-      "skipNoteOnEntry": false,
-      "requireNoteOnEntry": false,
-      "entryQuestion": null,
-      "entryArgs": [],
-      "warrantyScope": "any",
-      "successWorkerId": "SS55",
-      "failWorkerId": "SS53",
-      "successStatusId": null,
-      "failStatusId": null,
-      "retrySchedule": [
-        {
-          "unit": "minute",
-          "every": 60,
-          "times": 1
-        },
-        {
-          "unit": "hour",
-          "every": 6,
-          "times": 2
-        },
-        {
-          "unit": "day",
-          "every": 1,
-          "times": 3
-        },
-        {
-          "unit": "week",
-          "every": 1,
-          "times": 3
-        },
-        {
-          "unit": "month",
-          "every": 1,
-          "times": 3
-        },
-        {
-          "unit": "year",
-          "every": 1,
-          "times": 2
-        }
-      ],
-      "spawnPipelineId": null,
-      "parentSignal": null,
-      "actions": [],
-      "workId": "W1",
-      "pipelineId": "P1"
-    },
-    {
-      "id": "SS52",
-      "label": "End Wait",
-      "publicLabel": null,
-      "color": "#649DDB",
-      "order": 52,
-      "statusId": "S3",
-      "triggerMap": {},
-      "actionLabel": null,
-      "autoRevertOnClear": true,
-      "transitionNote": null,
-      "skipNoteOnEntry": false,
-      "requireNoteOnEntry": false,
-      "entryQuestion": null,
-      "entryArgs": [],
-      "warrantyScope": "any",
-      "successWorkerId": "SS45",
-      "failWorkerId": "SS51",
-      "successStatusId": null,
-      "failStatusId": null,
-      "retrySchedule": [],
-      "spawnPipelineId": null,
-      "parentSignal": null,
-      "actions": [],
-      "workId": "W5",
-      "pipelineId": "P1"
-    },
-    {
-      "id": "SS48",
-      "label": "Find Help and Call Log",
-      "publicLabel": null,
-      "color": "#62C4E0",
-      "order": 48,
-      "statusId": "S61",
-      "triggerMap": {},
-      "actionLabel": null,
-      "autoRevertOnClear": true,
-      "transitionNote": null,
-      "skipNoteOnEntry": false,
-      "requireNoteOnEntry": false,
-      "entryQuestion": null,
-      "entryArgs": [],
-      "warrantyScope": "any",
-      "successWorkerId": null,
-      "failWorkerId": null,
-      "successStatusId": null,
-      "failStatusId": null,
-      "retrySchedule": [],
-      "spawnPipelineId": null,
-      "parentSignal": null,
-      "actions": [],
-      "workId": null,
-      "pipelineId": "P1"
-    },
-    {
-      "id": "SS55",
-      "label": "Waiting: Customer to Bring Accessories 2nd Attempt",
-      "publicLabel": null,
-      "color": "#BF2159",
-      "order": 25,
-      "statusId": "S2",
-      "triggerMap": {},
-      "actionLabel": null,
-      "autoRevertOnClear": true,
-      "transitionNote": null,
-      "skipNoteOnEntry": false,
-      "requireNoteOnEntry": false,
-      "entryQuestion": null,
-      "entryArgs": [],
-      "warrantyScope": "any",
-      "successWorkerId": "SS1",
-      "failWorkerId": "SS56",
-      "successStatusId": null,
-      "failStatusId": null,
-      "retrySchedule": [
-        {
-          "unit": "day",
-          "every": 1,
-          "times": 3
-        }
-      ],
-      "spawnPipelineId": null,
-      "parentSignal": null,
-      "actions": [],
-      "workId": "W5",
-      "pipelineId": "P1"
-    },
-    {
-      "id": "SS25",
-      "label": "Being Repaired",
-      "publicLabel": null,
-      "color": "#A6499F",
-      "order": 25,
-      "statusId": "S4",
-      "triggerMap": {},
-      "actionLabel": null,
-      "autoRevertOnClear": true,
-      "transitionNote": null,
-      "skipNoteOnEntry": false,
-      "requireNoteOnEntry": false,
-      "entryQuestion": null,
-      "entryArgs": [],
-      "warrantyScope": "any",
-      "successWorkerId": null,
-      "failWorkerId": null,
-      "successStatusId": null,
-      "failStatusId": null,
-      "retrySchedule": [],
-      "spawnPipelineId": null,
-      "parentSignal": null,
-      "actions": [],
-      "workId": null,
-      "pipelineId": "P1"
-    },
-    {
-      "id": "SS56",
-      "label": "Calling: Customer to Bring Accessories 3rd Attempt",
-      "publicLabel": "Calling: Customer to Bring Accessories",
-      "color": "#A27938",
-      "order": 26,
-      "statusId": "S2",
-      "triggerMap": {},
-      "actionLabel": "Calling: Customer to Bring Accessories",
-      "autoRevertOnClear": true,
-      "transitionNote": null,
-      "skipNoteOnEntry": false,
-      "requireNoteOnEntry": false,
-      "entryQuestion": null,
-      "entryArgs": [],
-      "warrantyScope": "any",
-      "successWorkerId": "SS57",
-      "failWorkerId": "SS53",
-      "successStatusId": null,
-      "failStatusId": null,
-      "retrySchedule": [
-        {
-          "unit": "minute",
-          "every": 60,
-          "times": 1
-        },
-        {
-          "unit": "hour",
-          "every": 6,
-          "times": 2
-        },
-        {
-          "unit": "day",
-          "every": 1,
-          "times": 3
-        },
-        {
-          "unit": "week",
-          "every": 1,
-          "times": 3
-        },
-        {
-          "unit": "month",
-          "every": 1,
-          "times": 3
-        },
-        {
-          "unit": "year",
-          "every": 1,
-          "times": 2
-        }
-      ],
-      "spawnPipelineId": null,
-      "parentSignal": null,
-      "actions": [],
-      "workId": "W1",
-      "pipelineId": "P1"
-    },
-    {
-      "id": "SS26",
-      "label": "Service Centre Delayed",
-      "publicLabel": null,
-      "color": "#A356AA",
-      "order": 26,
-      "statusId": "S4",
-      "triggerMap": {},
-      "actionLabel": null,
-      "autoRevertOnClear": true,
-      "transitionNote": null,
-      "skipNoteOnEntry": false,
-      "requireNoteOnEntry": false,
-      "entryQuestion": null,
-      "entryArgs": [],
-      "warrantyScope": "any",
-      "successWorkerId": null,
-      "failWorkerId": null,
-      "successStatusId": null,
-      "failStatusId": null,
-      "retrySchedule": [],
-      "spawnPipelineId": null,
-      "parentSignal": null,
-      "actions": [],
-      "workId": null,
-      "pipelineId": "P1"
-    },
-    {
-      "id": "SS28",
-      "label": "Received by Us",
-      "publicLabel": null,
-      "color": "#CA36E5",
-      "order": 28,
-      "statusId": "S4",
-      "triggerMap": {
-        "S4": "S5"
-      },
-      "actionLabel": null,
-      "autoRevertOnClear": true,
-      "transitionNote": null,
-      "skipNoteOnEntry": false,
-      "requireNoteOnEntry": false,
-      "entryQuestion": null,
-      "entryArgs": [],
-      "warrantyScope": "any",
-      "successWorkerId": null,
-      "failWorkerId": null,
-      "successStatusId": null,
-      "failStatusId": null,
-      "retrySchedule": [],
-      "spawnPipelineId": null,
-      "parentSignal": null,
-      "actions": [],
-      "workId": null,
-      "pipelineId": "P1"
-    },
-    {
-      "id": "SS45",
-      "label": "Working",
-      "publicLabel": null,
-      "color": "#2B5A79",
+      "id": "S1",
+      "label": "Received",
+      "color": "bg-gray-100 text-gray-600",
       "order": 1,
-      "statusId": "S3",
-      "triggerMap": {},
+      "isTerminal": false,
+      "isEntryPoint": true,
       "actionLabel": null,
-      "autoRevertOnClear": true,
-      "transitionNote": null,
-      "skipNoteOnEntry": false,
-      "requireNoteOnEntry": false,
-      "entryQuestion": null,
-      "entryArgs": [],
       "warrantyScope": "any",
-      "successWorkerId": null,
-      "failWorkerId": null,
-      "successStatusId": null,
-      "failStatusId": null,
-      "retrySchedule": [],
-      "spawnPipelineId": null,
-      "parentSignal": null,
-      "actions": [],
+      "leavePrompt": "Confirm the device and accessories are logged before moving on.",
+      "announceOnEntry": false,
+      "etaText": null,
       "workId": null,
+      "startWorkerId": null,
       "pipelineId": "P1"
     },
     {
-      "id": "SS29",
-      "label": "Customer Notified",
-      "publicLabel": null,
-      "color": "#2FFC74",
-      "order": 29,
-      "statusId": "S6",
-      "triggerMap": {},
+      "id": "S61",
+      "label": "Need Help",
+      "color": "bg-gray-100 text-gray-600",
+      "order": 4,
+      "isTerminal": false,
+      "isEntryPoint": false,
       "actionLabel": null,
-      "autoRevertOnClear": true,
-      "transitionNote": null,
-      "skipNoteOnEntry": false,
-      "requireNoteOnEntry": false,
-      "entryQuestion": null,
-      "entryArgs": [],
       "warrantyScope": "any",
-      "successWorkerId": null,
-      "failWorkerId": null,
-      "successStatusId": null,
-      "failStatusId": null,
-      "retrySchedule": [],
-      "spawnPipelineId": null,
-      "parentSignal": null,
-      "actions": [],
+      "leavePrompt": null,
+      "announceOnEntry": false,
+      "etaText": null,
       "workId": null,
+      "startWorkerId": null,
       "pipelineId": "P1"
     },
     {
-      "id": "SS57",
-      "label": "Waiting: Customer to Bring Accessories 3rd Attempt",
-      "publicLabel": null,
-      "color": "#B07953",
-      "order": 27,
-      "statusId": "S2",
-      "triggerMap": {},
-      "actionLabel": null,
-      "autoRevertOnClear": true,
-      "transitionNote": null,
-      "skipNoteOnEntry": false,
-      "requireNoteOnEntry": false,
-      "entryQuestion": null,
-      "entryArgs": [],
-      "warrantyScope": "any",
-      "successWorkerId": "SS1",
-      "failWorkerId": "SS53",
-      "successStatusId": null,
-      "failStatusId": null,
-      "retrySchedule": [
-        {
-          "unit": "year",
-          "every": 2,
-          "times": 1
-        }
-      ],
-      "spawnPipelineId": null,
-      "parentSignal": null,
-      "actions": [],
-      "workId": "W5",
-      "pipelineId": "P1"
-    },
-    {
-      "id": "SS30",
-      "label": "Reminder Sent",
-      "publicLabel": null,
-      "color": "#0F58AF",
-      "order": 30,
-      "statusId": "S6",
-      "triggerMap": {},
-      "actionLabel": null,
-      "autoRevertOnClear": true,
-      "transitionNote": null,
-      "skipNoteOnEntry": false,
-      "requireNoteOnEntry": false,
-      "entryQuestion": null,
-      "entryArgs": [],
-      "warrantyScope": "any",
-      "successWorkerId": null,
-      "failWorkerId": null,
-      "successStatusId": null,
-      "failStatusId": null,
-      "retrySchedule": [],
-      "spawnPipelineId": null,
-      "parentSignal": null,
-      "actions": [],
-      "workId": null,
-      "pipelineId": "P1"
-    },
-    {
-      "id": "SS39",
-      "label": "Start",
-      "publicLabel": null,
-      "color": "#B5D575",
+      "id": "S51",
+      "label": "Carrier Assigned",
+      "color": "bg-blue-100 text-blue-700",
       "order": 2,
-      "statusId": "S1",
-      "triggerMap": {
-        "S1": "S2"
-      },
-      "actionLabel": null,
-      "autoRevertOnClear": true,
-      "transitionNote": null,
-      "skipNoteOnEntry": false,
-      "requireNoteOnEntry": false,
-      "entryQuestion": null,
-      "entryArgs": [],
+      "isTerminal": false,
+      "isEntryPoint": false,
+      "actionLabel": "Assign Carrier",
       "warrantyScope": "any",
-      "successWorkerId": null,
-      "failWorkerId": null,
-      "successStatusId": null,
-      "failStatusId": null,
-      "retrySchedule": [],
-      "spawnPipelineId": null,
-      "parentSignal": null,
-      "actions": [],
+      "leavePrompt": null,
+      "announceOnEntry": false,
+      "etaText": null,
       "workId": null,
+      "startWorkerId": null,
+      "pipelineId": "P8"
+    },
+    {
+      "id": "S8",
+      "label": "Closed - No Fix",
+      "color": "bg-red-100 text-red-600",
+      "order": 8,
+      "isTerminal": true,
+      "isEntryPoint": false,
+      "actionLabel": null,
+      "warrantyScope": "any",
+      "leavePrompt": null,
+      "announceOnEntry": false,
+      "etaText": null,
+      "workId": null,
+      "startWorkerId": null,
       "pipelineId": "P1"
     },
     {
-      "id": "SS51",
-      "label": "Parts Not Avilable - Close",
-      "publicLabel": null,
-      "color": "#BF2EFC",
-      "order": 100,
-      "statusId": "S3",
-      "triggerMap": {
-        "S3": "S8"
-      },
-      "actionLabel": null,
-      "autoRevertOnClear": true,
-      "transitionNote": null,
-      "skipNoteOnEntry": false,
-      "requireNoteOnEntry": false,
-      "entryQuestion": null,
-      "entryArgs": [],
+      "id": "S45",
+      "label": "Packing",
+      "color": "bg-indigo-100 text-indigo-700",
+      "order": 4,
+      "isTerminal": false,
+      "isEntryPoint": false,
+      "actionLabel": "Start Packing",
       "warrantyScope": "any",
-      "successWorkerId": null,
-      "failWorkerId": null,
-      "successStatusId": null,
-      "failStatusId": null,
-      "retrySchedule": [],
-      "spawnPipelineId": null,
-      "parentSignal": null,
-      "actions": [],
+      "leavePrompt": null,
+      "announceOnEntry": false,
+      "etaText": null,
       "workId": null,
-      "pipelineId": "P1"
+      "startWorkerId": null,
+      "pipelineId": "P7"
     },
     {
-      "id": "SS31",
-      "label": "Uncollected - Action Needed",
-      "publicLabel": null,
-      "color": "#76806D",
-      "order": 31,
-      "statusId": "S6",
-      "triggerMap": {},
-      "actionLabel": null,
-      "autoRevertOnClear": true,
-      "transitionNote": null,
-      "skipNoteOnEntry": false,
-      "requireNoteOnEntry": false,
-      "entryQuestion": null,
-      "entryArgs": [],
+      "id": "S49",
+      "label": "Returned",
+      "color": "bg-red-100 text-red-600",
+      "order": 8,
+      "isTerminal": true,
+      "isEntryPoint": false,
+      "actionLabel": "Mark Returned",
       "warrantyScope": "any",
-      "successWorkerId": null,
-      "failWorkerId": null,
-      "successStatusId": null,
-      "failStatusId": null,
-      "retrySchedule": [],
-      "spawnPipelineId": null,
-      "parentSignal": null,
-      "actions": [],
+      "leavePrompt": null,
+      "announceOnEntry": false,
+      "etaText": null,
       "workId": null,
-      "pipelineId": "P1"
+      "startWorkerId": null,
+      "pipelineId": "P7"
     },
     {
-      "id": "SS38",
-      "label": "New Repair Wating",
-      "publicLabel": null,
-      "color": "#2D988C",
+      "id": "S28",
+      "label": "Done",
+      "color": "bg-green-100 text-green-600",
+      "order": 5,
+      "isTerminal": true,
+      "isEntryPoint": false,
+      "actionLabel": null,
+      "warrantyScope": "any",
+      "leavePrompt": null,
+      "announceOnEntry": false,
+      "etaText": null,
+      "workId": null,
+      "startWorkerId": null,
+      "pipelineId": "P4"
+    },
+    {
+      "id": "S53",
+      "label": "In Transit",
+      "color": "bg-purple-100 text-purple-700",
+      "order": 4,
+      "isTerminal": false,
+      "isEntryPoint": false,
+      "actionLabel": "Mark In Transit",
+      "warrantyScope": "any",
+      "leavePrompt": null,
+      "announceOnEntry": false,
+      "etaText": null,
+      "workId": null,
+      "startWorkerId": null,
+      "pipelineId": "P8"
+    },
+    {
+      "id": "S54",
+      "label": "Out for Delivery",
+      "color": "bg-amber-100 text-amber-700",
+      "order": 5,
+      "isTerminal": false,
+      "isEntryPoint": false,
+      "actionLabel": "Out for Delivery",
+      "warrantyScope": "any",
+      "leavePrompt": null,
+      "announceOnEntry": false,
+      "etaText": null,
+      "workId": null,
+      "startWorkerId": null,
+      "pipelineId": "P8"
+    },
+    {
+      "id": "S35",
+      "label": "Lead",
+      "color": "bg-gray-100 text-gray-600",
       "order": 1,
-      "statusId": "S1",
-      "triggerMap": {},
-      "actionLabel": "Dear Technician, Accept or Reject this ticket as per device condition, down waste time !! ",
-      "autoRevertOnClear": true,
-      "transitionNote": null,
-      "skipNoteOnEntry": false,
-      "requireNoteOnEntry": false,
-      "entryQuestion": null,
-      "entryArgs": [],
-      "warrantyScope": "any",
-      "successWorkerId": "SS39",
-      "failWorkerId": "SS40",
-      "successStatusId": null,
-      "failStatusId": null,
-      "retrySchedule": [],
-      "spawnPipelineId": null,
-      "parentSignal": null,
-      "actions": [],
-      "workId": "W2",
-      "pipelineId": "P1"
-    },
-    {
-      "id": "SS40",
-      "label": "Reject",
-      "publicLabel": null,
-      "color": "#20DF66",
-      "order": 3,
-      "statusId": "S1",
-      "triggerMap": {
-        "S1": "S8"
-      },
+      "isTerminal": false,
+      "isEntryPoint": true,
       "actionLabel": null,
-      "autoRevertOnClear": true,
-      "transitionNote": null,
-      "skipNoteOnEntry": false,
-      "requireNoteOnEntry": false,
-      "entryQuestion": null,
-      "entryArgs": [],
       "warrantyScope": "any",
-      "successWorkerId": null,
-      "failWorkerId": null,
-      "successStatusId": null,
-      "failStatusId": null,
-      "retrySchedule": [],
-      "spawnPipelineId": null,
-      "parentSignal": null,
-      "actions": [],
+      "leavePrompt": null,
+      "announceOnEntry": false,
+      "etaText": null,
       "workId": null,
-      "pipelineId": "P1"
+      "startWorkerId": null,
+      "pipelineId": "P6"
     },
     {
-      "id": "SS10",
-      "label": "Need Parts",
-      "publicLabel": null,
-      "color": "#B5D345",
-      "order": 11,
-      "statusId": "S3",
-      "triggerMap": {},
-      "actionLabel": "Hi, Dear Manager, Service need 3rd Party Help. Should we proceed or Reject and close ?",
-      "autoRevertOnClear": true,
-      "transitionNote": null,
-      "skipNoteOnEntry": false,
-      "requireNoteOnEntry": false,
-      "entryQuestion": null,
-      "entryArgs": [],
-      "warrantyScope": "any",
-      "successWorkerId": "SS58",
-      "failWorkerId": "SS51",
-      "successStatusId": null,
-      "failStatusId": null,
-      "retrySchedule": [
-        {
-          "unit": "hour",
-          "every": 3,
-          "times": 100
-        }
-      ],
-      "spawnPipelineId": null,
-      "parentSignal": null,
-      "actions": [],
-      "workId": "W6",
-      "pipelineId": "P1"
-    },
-    {
-      "id": "SS58",
-      "label": "Order Parts",
-      "publicLabel": null,
-      "color": "#7B180E",
-      "order": 12,
-      "statusId": "S3",
-      "triggerMap": {},
-      "actionLabel": "Dear Purchase Manager, Please order the item need for complete the repair  . ",
-      "autoRevertOnClear": true,
-      "transitionNote": null,
-      "skipNoteOnEntry": false,
-      "requireNoteOnEntry": false,
-      "entryQuestion": null,
-      "entryArgs": [],
-      "warrantyScope": "any",
-      "successWorkerId": "SS50",
-      "failWorkerId": "SS51",
-      "successStatusId": null,
-      "failStatusId": null,
-      "retrySchedule": [
-        {
-          "unit": "hour",
-          "every": 3,
-          "times": 100
-        }
-      ],
-      "spawnPipelineId": null,
-      "parentSignal": null,
-      "actions": [],
-      "workId": "W4",
-      "pipelineId": "P1"
-    },
-    {
-      "id": "SS50",
-      "label": "Waiting for parts",
-      "publicLabel": null,
-      "color": "#5ABE34",
-      "order": 13,
-      "statusId": "S3",
-      "triggerMap": {},
-      "actionLabel": null,
-      "autoRevertOnClear": true,
-      "transitionNote": null,
-      "skipNoteOnEntry": false,
-      "requireNoteOnEntry": false,
-      "entryQuestion": null,
-      "entryArgs": [],
-      "warrantyScope": "any",
-      "successWorkerId": "SS52",
-      "failWorkerId": "SS50",
-      "successStatusId": null,
-      "failStatusId": null,
-      "retrySchedule": [],
-      "spawnPipelineId": null,
-      "parentSignal": null,
-      "actions": [],
-      "workId": "W5",
-      "pipelineId": "P1"
-    },
-    {
-      "id": "SS43",
-      "label": "Calling: Customer to Bring Accessories",
-      "publicLabel": "Calling: Customer to Bring Accessories",
-      "color": "#8E22C8",
-      "order": 21,
-      "statusId": "S2",
-      "triggerMap": {},
-      "actionLabel": "Calling: Customer to Bring Accessories",
-      "autoRevertOnClear": true,
-      "transitionNote": null,
-      "skipNoteOnEntry": false,
-      "requireNoteOnEntry": false,
-      "entryQuestion": null,
-      "entryArgs": [],
-      "warrantyScope": "any",
-      "successWorkerId": "SS2",
-      "failWorkerId": "SS53",
-      "successStatusId": null,
-      "failStatusId": null,
-      "retrySchedule": [
-        {
-          "unit": "minute",
-          "every": 60,
-          "times": 1
-        },
-        {
-          "unit": "hour",
-          "every": 6,
-          "times": 2
-        },
-        {
-          "unit": "day",
-          "every": 1,
-          "times": 3
-        },
-        {
-          "unit": "week",
-          "every": 1,
-          "times": 3
-        },
-        {
-          "unit": "month",
-          "every": 1,
-          "times": 3
-        },
-        {
-          "unit": "year",
-          "every": 1,
-          "times": 2
-        }
-      ],
-      "spawnPipelineId": null,
-      "parentSignal": null,
-      "actions": [],
-      "workId": "W1",
-      "pipelineId": "P1"
-    },
-    {
-      "id": "SS32",
-      "label": "Beyond Economical Repair",
-      "publicLabel": null,
-      "color": "#ACF8BC",
-      "order": 32,
-      "statusId": "S8",
-      "triggerMap": {},
-      "actionLabel": null,
-      "autoRevertOnClear": true,
-      "transitionNote": null,
-      "skipNoteOnEntry": false,
-      "requireNoteOnEntry": false,
-      "entryQuestion": null,
-      "entryArgs": [],
-      "warrantyScope": "any",
-      "successWorkerId": null,
-      "failWorkerId": null,
-      "successStatusId": null,
-      "failStatusId": null,
-      "retrySchedule": [],
-      "spawnPipelineId": null,
-      "parentSignal": null,
-      "actions": [],
-      "workId": null,
-      "pipelineId": "P1"
-    },
-    {
-      "id": "SS33",
-      "label": "Customer Informed",
-      "publicLabel": null,
-      "color": "#E4B44F",
-      "order": 33,
-      "statusId": "S8",
-      "triggerMap": {},
-      "actionLabel": null,
-      "autoRevertOnClear": true,
-      "transitionNote": null,
-      "skipNoteOnEntry": false,
-      "requireNoteOnEntry": false,
-      "entryQuestion": null,
-      "entryArgs": [],
-      "warrantyScope": "any",
-      "successWorkerId": null,
-      "failWorkerId": null,
-      "successStatusId": null,
-      "failStatusId": null,
-      "retrySchedule": [],
-      "spawnPipelineId": null,
-      "parentSignal": null,
-      "actions": [],
-      "workId": null,
-      "pipelineId": "P1"
-    },
-    {
-      "id": "SS34",
-      "label": "Collecting Unrepaired",
-      "publicLabel": null,
-      "color": "#5BB64F",
-      "order": 34,
-      "statusId": "S8",
-      "triggerMap": {
-        "S8": "S7"
-      },
-      "actionLabel": null,
-      "autoRevertOnClear": true,
-      "transitionNote": null,
-      "skipNoteOnEntry": false,
-      "requireNoteOnEntry": false,
-      "entryQuestion": null,
-      "entryArgs": [],
-      "warrantyScope": "any",
-      "successWorkerId": null,
-      "failWorkerId": null,
-      "successStatusId": null,
-      "failStatusId": null,
-      "retrySchedule": [],
-      "spawnPipelineId": null,
-      "parentSignal": null,
-      "actions": [],
-      "workId": null,
-      "pipelineId": "P1"
-    },
-    {
-      "id": "SS35",
-      "label": "Scrapped with Consent",
-      "publicLabel": null,
-      "color": "#81D211",
-      "order": 35,
-      "statusId": "S8",
-      "triggerMap": {},
-      "actionLabel": null,
-      "autoRevertOnClear": true,
-      "transitionNote": null,
-      "skipNoteOnEntry": false,
-      "requireNoteOnEntry": false,
-      "entryQuestion": null,
-      "entryArgs": [],
-      "warrantyScope": "any",
-      "successWorkerId": null,
-      "failWorkerId": null,
-      "successStatusId": null,
-      "failStatusId": null,
-      "retrySchedule": [],
-      "spawnPipelineId": null,
-      "parentSignal": null,
-      "actions": [],
-      "workId": null,
-      "pipelineId": "P1"
-    },
-    {
-      "id": "SS36",
-      "label": "Warranty Voided - Customer Approval Needed",
-      "publicLabel": null,
-      "color": "#FE04E9",
-      "order": 36,
-      "statusId": null,
-      "triggerMap": {},
-      "actionLabel": "Call customer - warranty void, confirm paid repair",
-      "autoRevertOnClear": true,
-      "transitionNote": null,
-      "skipNoteOnEntry": false,
-      "requireNoteOnEntry": false,
-      "entryQuestion": null,
-      "entryArgs": [],
-      "warrantyScope": "any",
-      "successWorkerId": null,
-      "failWorkerId": null,
-      "successStatusId": null,
-      "failStatusId": null,
-      "retrySchedule": [],
-      "spawnPipelineId": null,
-      "parentSignal": null,
-      "actions": [],
-      "workId": "W1",
-      "pipelineId": "P1"
-    },
-    {
-      "id": "SS37",
-      "label": "Confirmed Under Warranty - Proceeding",
-      "publicLabel": null,
-      "color": "#439CEA",
-      "order": 37,
-      "statusId": null,
-      "triggerMap": {},
-      "actionLabel": "Inform customer - covered under warranty, no charge",
-      "autoRevertOnClear": true,
-      "transitionNote": null,
-      "skipNoteOnEntry": false,
-      "requireNoteOnEntry": false,
-      "entryQuestion": null,
-      "entryArgs": [],
-      "warrantyScope": "any",
-      "successWorkerId": null,
-      "failWorkerId": null,
-      "successStatusId": null,
-      "failStatusId": null,
-      "retrySchedule": [],
-      "spawnPipelineId": null,
-      "parentSignal": null,
-      "actions": [],
-      "workId": "W1",
-      "pipelineId": "P1"
-    },
-    {
-      "id": "SS3",
-      "label": "Unreachable: Customer Info",
-      "publicLabel": null,
-      "color": "#9DE56C",
-      "order": 12,
-      "statusId": "S2",
-      "triggerMap": {
-        "S2": "S8"
-      },
-      "actionLabel": "Dear Tele Caller, Please Call the Customer Reason given in Note !!",
-      "autoRevertOnClear": true,
-      "transitionNote": null,
-      "skipNoteOnEntry": false,
-      "requireNoteOnEntry": false,
-      "entryQuestion": null,
-      "entryArgs": [],
-      "warrantyScope": "any",
-      "successWorkerId": "SS4",
-      "failWorkerId": "SS3",
-      "successStatusId": null,
-      "failStatusId": null,
-      "retrySchedule": [],
-      "spawnPipelineId": null,
-      "parentSignal": null,
-      "actions": [],
-      "workId": null,
-      "pipelineId": "P1"
-    },
-    {
-      "id": "SS4",
-      "label": "Customer Responded",
-      "publicLabel": null,
-      "color": "#336953",
-      "order": 13,
-      "statusId": "S2",
-      "triggerMap": {},
-      "actionLabel": "Dear Technician, Customer Responded if Happy Start Work Again, if Not Happy Close the Ticket !!",
-      "autoRevertOnClear": true,
-      "transitionNote": null,
-      "skipNoteOnEntry": false,
-      "requireNoteOnEntry": false,
-      "entryQuestion": null,
-      "entryArgs": [],
-      "warrantyScope": "any",
-      "successWorkerId": "SS1",
-      "failWorkerId": "SS3",
-      "successStatusId": null,
-      "failStatusId": null,
-      "retrySchedule": [],
-      "spawnPipelineId": null,
-      "parentSignal": null,
-      "actions": [],
-      "workId": "W2",
-      "pipelineId": "P1"
-    },
-    {
-      "id": "SS2",
-      "label": "Waiting: Customer to Bring Accessories",
-      "publicLabel": null,
-      "color": "#0788BD",
-      "order": 22,
-      "statusId": "S2",
-      "triggerMap": {},
-      "actionLabel": null,
-      "autoRevertOnClear": true,
-      "transitionNote": null,
-      "skipNoteOnEntry": false,
-      "requireNoteOnEntry": false,
-      "entryQuestion": null,
-      "entryArgs": [],
-      "warrantyScope": "any",
-      "successWorkerId": "SS1",
-      "failWorkerId": "SS54",
-      "successStatusId": null,
-      "failStatusId": null,
-      "retrySchedule": [
-        {
-          "unit": "day",
-          "every": 1,
-          "times": 3
-        }
-      ],
-      "spawnPipelineId": null,
-      "parentSignal": null,
-      "actions": [],
-      "workId": "W5",
-      "pipelineId": "P1"
-    },
-    {
-      "id": "SS1",
-      "label": "Working",
-      "publicLabel": null,
-      "color": "#A0B974",
-      "order": 1,
-      "statusId": "S2",
-      "triggerMap": {},
-      "actionLabel": null,
-      "autoRevertOnClear": true,
-      "transitionNote": null,
-      "skipNoteOnEntry": false,
-      "requireNoteOnEntry": false,
-      "entryQuestion": null,
-      "entryArgs": [],
-      "warrantyScope": "any",
-      "successWorkerId": null,
-      "failWorkerId": null,
-      "successStatusId": null,
-      "failStatusId": null,
-      "retrySchedule": [],
-      "spawnPipelineId": null,
-      "parentSignal": null,
-      "actions": [],
-      "workId": null,
-      "pipelineId": "P1"
-    },
-    {
-      "id": "SS47",
-      "label": "Call Log",
-      "publicLabel": null,
-      "color": "#C8FDE9",
-      "order": 1,
-      "statusId": "S4",
-      "triggerMap": {},
-      "actionLabel": null,
-      "autoRevertOnClear": true,
-      "transitionNote": null,
-      "skipNoteOnEntry": false,
-      "requireNoteOnEntry": false,
-      "entryQuestion": null,
-      "entryArgs": [],
-      "warrantyScope": "any",
-      "successWorkerId": null,
-      "failWorkerId": null,
-      "successStatusId": null,
-      "failStatusId": null,
-      "retrySchedule": [],
-      "spawnPipelineId": null,
-      "parentSignal": null,
-      "actions": [],
-      "workId": null,
-      "pipelineId": "P1"
-    },
-    {
-      "id": "SS18",
-      "label": "Engineer Visit Requested",
-      "publicLabel": null,
-      "color": "#964020",
-      "order": 18,
-      "statusId": "S4",
-      "triggerMap": {},
-      "actionLabel": null,
-      "autoRevertOnClear": true,
-      "transitionNote": null,
-      "skipNoteOnEntry": false,
-      "requireNoteOnEntry": false,
-      "entryQuestion": null,
-      "entryArgs": [],
-      "warrantyScope": "any",
-      "successWorkerId": null,
-      "failWorkerId": null,
-      "successStatusId": null,
-      "failStatusId": null,
-      "retrySchedule": [],
-      "spawnPipelineId": null,
-      "parentSignal": null,
-      "actions": [],
-      "workId": null,
-      "pipelineId": "P1"
-    },
-    {
-      "id": "SS19",
-      "label": "Engineer Visit Scheduled",
-      "publicLabel": null,
-      "color": "#5DFA50",
-      "order": 19,
-      "statusId": "S4",
-      "triggerMap": {},
-      "actionLabel": null,
-      "autoRevertOnClear": true,
-      "transitionNote": null,
-      "skipNoteOnEntry": false,
-      "requireNoteOnEntry": false,
-      "entryQuestion": null,
-      "entryArgs": [],
-      "warrantyScope": "any",
-      "successWorkerId": null,
-      "failWorkerId": null,
-      "successStatusId": null,
-      "failStatusId": null,
-      "retrySchedule": [],
-      "spawnPipelineId": null,
-      "parentSignal": null,
-      "actions": [],
-      "workId": null,
-      "pipelineId": "P1"
-    },
-    {
-      "id": "SS20",
-      "label": "Engineer On-Site",
-      "publicLabel": null,
-      "color": "#BA2E9E",
-      "order": 20,
-      "statusId": "S4",
-      "triggerMap": {},
-      "actionLabel": null,
-      "autoRevertOnClear": true,
-      "transitionNote": null,
-      "skipNoteOnEntry": false,
-      "requireNoteOnEntry": false,
-      "entryQuestion": null,
-      "entryArgs": [],
-      "warrantyScope": "any",
-      "successWorkerId": null,
-      "failWorkerId": null,
-      "successStatusId": null,
-      "failStatusId": null,
-      "retrySchedule": [],
-      "spawnPipelineId": null,
-      "parentSignal": null,
-      "actions": [],
-      "workId": null,
-      "pipelineId": "P1"
-    },
-    {
-      "id": "SS21",
-      "label": "Engineer Work Complete",
-      "publicLabel": null,
-      "color": "#5FF247",
-      "order": 21,
-      "statusId": "S4",
-      "triggerMap": {
-        "S4": "S3"
-      },
-      "actionLabel": null,
-      "autoRevertOnClear": true,
-      "transitionNote": null,
-      "skipNoteOnEntry": false,
-      "requireNoteOnEntry": false,
-      "entryQuestion": null,
-      "entryArgs": [],
-      "warrantyScope": "any",
-      "successWorkerId": null,
-      "failWorkerId": null,
-      "successStatusId": null,
-      "failStatusId": null,
-      "retrySchedule": [],
-      "spawnPipelineId": null,
-      "parentSignal": null,
-      "actions": [],
-      "workId": null,
-      "pipelineId": "P1"
-    },
-    {
-      "id": "SS22",
-      "label": "Pending Despatch",
-      "publicLabel": null,
-      "color": "#CC8EF3",
-      "order": 22,
-      "statusId": "S4",
-      "triggerMap": {},
-      "actionLabel": null,
-      "autoRevertOnClear": true,
-      "transitionNote": null,
-      "skipNoteOnEntry": false,
-      "requireNoteOnEntry": false,
-      "entryQuestion": null,
-      "entryArgs": [],
-      "warrantyScope": "any",
-      "successWorkerId": null,
-      "failWorkerId": null,
-      "successStatusId": null,
-      "failStatusId": null,
-      "retrySchedule": [],
-      "spawnPipelineId": null,
-      "parentSignal": null,
-      "actions": [],
-      "workId": null,
-      "pipelineId": "P1"
-    },
-    {
-      "id": "SS23",
+      "id": "S46",
       "label": "Dispatched",
-      "publicLabel": null,
-      "color": "#81C278",
-      "order": 23,
-      "statusId": "S4",
-      "triggerMap": {},
-      "actionLabel": null,
-      "autoRevertOnClear": true,
-      "transitionNote": null,
-      "skipNoteOnEntry": false,
-      "requireNoteOnEntry": false,
-      "entryQuestion": null,
-      "entryArgs": [],
+      "color": "bg-purple-100 text-purple-700",
+      "order": 5,
+      "isTerminal": false,
+      "isEntryPoint": false,
+      "actionLabel": "Mark Dispatched",
       "warrantyScope": "any",
-      "successWorkerId": null,
-      "failWorkerId": null,
-      "successStatusId": null,
-      "failStatusId": null,
-      "retrySchedule": [],
-      "spawnPipelineId": null,
-      "parentSignal": null,
-      "actions": [],
+      "leavePrompt": null,
+      "announceOnEntry": false,
+      "etaText": null,
       "workId": null,
+      "startWorkerId": null,
+      "pipelineId": "P7"
+    },
+    {
+      "id": "S55",
+      "label": "Delivered",
+      "color": "bg-green-100 text-green-700",
+      "order": 6,
+      "isTerminal": true,
+      "isEntryPoint": false,
+      "actionLabel": "Mark Delivered",
+      "warrantyScope": "any",
+      "leavePrompt": null,
+      "announceOnEntry": false,
+      "etaText": null,
+      "workId": null,
+      "startWorkerId": null,
+      "pipelineId": "P8"
+    },
+    {
+      "id": "S29",
+      "label": "Idea",
+      "color": "bg-gray-100 text-gray-600",
+      "order": 1,
+      "isTerminal": false,
+      "isEntryPoint": true,
+      "actionLabel": null,
+      "warrantyScope": "any",
+      "leavePrompt": null,
+      "announceOnEntry": false,
+      "etaText": null,
+      "workId": null,
+      "startWorkerId": null,
+      "pipelineId": "P5"
+    },
+    {
+      "id": "S36",
+      "label": "Contacted",
+      "color": "bg-blue-100 text-blue-600",
+      "order": 2,
+      "isTerminal": false,
+      "isEntryPoint": false,
+      "actionLabel": null,
+      "warrantyScope": "any",
+      "leavePrompt": null,
+      "announceOnEntry": false,
+      "etaText": null,
+      "workId": null,
+      "startWorkerId": null,
+      "pipelineId": "P6"
+    },
+    {
+      "id": "S40",
+      "label": "Won",
+      "color": "bg-green-100 text-green-700",
+      "order": 6,
+      "isTerminal": true,
+      "isEntryPoint": false,
+      "actionLabel": null,
+      "warrantyScope": "any",
+      "leavePrompt": null,
+      "announceOnEntry": false,
+      "etaText": null,
+      "workId": null,
+      "startWorkerId": null,
+      "pipelineId": "P6"
+    },
+    {
+      "id": "S37",
+      "label": "Qualified",
+      "color": "bg-teal-100 text-teal-600",
+      "order": 3,
+      "isTerminal": false,
+      "isEntryPoint": false,
+      "actionLabel": null,
+      "warrantyScope": "any",
+      "leavePrompt": null,
+      "announceOnEntry": false,
+      "etaText": null,
+      "workId": null,
+      "startWorkerId": null,
+      "pipelineId": "P6"
+    },
+    {
+      "id": "S9",
+      "label": "Cancelled",
+      "color": "bg-gray-100 text-gray-400",
+      "order": 9,
+      "isTerminal": true,
+      "isEntryPoint": false,
+      "actionLabel": null,
+      "warrantyScope": "any",
+      "leavePrompt": null,
+      "announceOnEntry": false,
+      "etaText": null,
+      "workId": null,
+      "startWorkerId": null,
       "pipelineId": "P1"
     },
     {
-      "id": "SS24",
-      "label": "Received by Service Centre",
-      "publicLabel": null,
-      "color": "#C681B0",
-      "order": 24,
-      "statusId": "S4",
-      "triggerMap": {},
+      "id": "S57",
+      "label": "Requested",
+      "color": "bg-gray-100 text-gray-600",
+      "order": 1,
+      "isTerminal": false,
+      "isEntryPoint": true,
       "actionLabel": null,
-      "autoRevertOnClear": true,
-      "transitionNote": null,
-      "skipNoteOnEntry": false,
-      "requireNoteOnEntry": false,
-      "entryQuestion": null,
-      "entryArgs": [],
       "warrantyScope": "any",
-      "successWorkerId": null,
-      "failWorkerId": null,
-      "successStatusId": null,
-      "failStatusId": null,
-      "retrySchedule": [],
-      "spawnPipelineId": null,
-      "parentSignal": null,
-      "actions": [],
+      "leavePrompt": null,
+      "announceOnEntry": false,
+      "etaText": null,
       "workId": null,
-      "pipelineId": "P1"
-    },
-    {
-      "id": "SS53",
-      "label": "move to scrap",
-      "publicLabel": null,
-      "color": "#819DA0",
-      "order": 31,
-      "statusId": "S2",
-      "triggerMap": {
-        "S2": "S63"
-      },
-      "actionLabel": null,
-      "autoRevertOnClear": true,
-      "transitionNote": null,
-      "skipNoteOnEntry": false,
-      "requireNoteOnEntry": false,
-      "entryQuestion": null,
-      "entryArgs": [],
-      "warrantyScope": "any",
-      "successWorkerId": null,
-      "failWorkerId": null,
-      "successStatusId": null,
-      "failStatusId": null,
-      "retrySchedule": [],
-      "spawnPipelineId": null,
-      "parentSignal": null,
-      "actions": [],
-      "workId": null,
-      "pipelineId": "P1"
-    },
-    {
-      "id": "SS42",
-      "label": "Calling: Customer Info",
-      "publicLabel": null,
-      "color": "#2D914F",
-      "order": 11,
-      "statusId": "S2",
-      "triggerMap": {},
-      "actionLabel": "Dear Tele Caller, Please Call the Customer Reason given in Note !!",
-      "autoRevertOnClear": true,
-      "transitionNote": null,
-      "skipNoteOnEntry": false,
-      "requireNoteOnEntry": false,
-      "entryQuestion": null,
-      "entryArgs": [],
-      "warrantyScope": "any",
-      "successWorkerId": "SS4",
-      "failWorkerId": "SS3",
-      "successStatusId": null,
-      "failStatusId": null,
-      "retrySchedule": [
-        {
-          "unit": "minute",
-          "every": 60,
-          "times": 1
-        },
-        {
-          "unit": "hour",
-          "every": 6,
-          "times": 2
-        },
-        {
-          "unit": "day",
-          "every": 1,
-          "times": 3
-        },
-        {
-          "unit": "week",
-          "every": 1,
-          "times": 3
-        },
-        {
-          "unit": "month",
-          "every": 1,
-          "times": 3
-        },
-        {
-          "unit": "year",
-          "every": 1,
-          "times": 2
-        }
-      ],
-      "spawnPipelineId": null,
-      "parentSignal": null,
-      "actions": [],
-      "workId": "W1",
-      "pipelineId": "P1"
+      "startWorkerId": null,
+      "pipelineId": "P9"
     }
   ],
+  "ticketWorkers": [],
   "statusTransitions": [
     {
       "fromStatusId": "S42",
@@ -9849,102 +8763,9 @@
       "toStatusId": "S7"
     },
     {
-      "fromStatusId": "S2",
-      "toStatusId": "S3"
-    },
-    {
-      "fromStatusId": "S2",
-      "toStatusId": "S9"
-    },
-    {
       "fromStatusId": "S3",
       "toStatusId": "S61"
     }
   ],
-  "workerTransitions": [
-    {
-      "fromWorkerId": "SS18",
-      "toWorkerId": "SS19"
-    },
-    {
-      "fromWorkerId": "SS19",
-      "toWorkerId": "SS20"
-    },
-    {
-      "fromWorkerId": "SS20",
-      "toWorkerId": "SS21"
-    },
-    {
-      "fromWorkerId": "SS22",
-      "toWorkerId": "SS23"
-    },
-    {
-      "fromWorkerId": "SS23",
-      "toWorkerId": "SS24"
-    },
-    {
-      "fromWorkerId": "SS24",
-      "toWorkerId": "SS25"
-    },
-    {
-      "fromWorkerId": "SS25",
-      "toWorkerId": "SS26"
-    },
-    {
-      "fromWorkerId": "SS25",
-      "toWorkerId": "SS27"
-    },
-    {
-      "fromWorkerId": "SS26",
-      "toWorkerId": "SS27"
-    },
-    {
-      "fromWorkerId": "SS27",
-      "toWorkerId": "SS28"
-    },
-    {
-      "fromWorkerId": "SS2",
-      "toWorkerId": "SS1"
-    },
-    {
-      "fromWorkerId": "SS1",
-      "toWorkerId": "SS42"
-    },
-    {
-      "fromWorkerId": "SS1",
-      "toWorkerId": "SS43"
-    },
-    {
-      "fromWorkerId": "SS29",
-      "toWorkerId": "SS30"
-    },
-    {
-      "fromWorkerId": "SS30",
-      "toWorkerId": "SS31"
-    },
-    {
-      "fromWorkerId": "SS32",
-      "toWorkerId": "SS33"
-    },
-    {
-      "fromWorkerId": "SS33",
-      "toWorkerId": "SS34"
-    },
-    {
-      "fromWorkerId": "SS33",
-      "toWorkerId": "SS35"
-    },
-    {
-      "fromWorkerId": "SS50",
-      "toWorkerId": "SS45"
-    },
-    {
-      "fromWorkerId": "SS45",
-      "toWorkerId": "SS10"
-    },
-    {
-      "fromWorkerId": "SS45",
-      "toWorkerId": "SS46"
-    }
-  ]
+  "workerTransitions": []
 }

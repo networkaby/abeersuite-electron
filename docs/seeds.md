@@ -269,7 +269,8 @@ Future fixtures (dummy customer lists, voucher fixtures, etc.) go here too rathe
 | Change | Update |
 |---|---|
 | Add / rename / drop a column on a **Prisma model** | `bootstrap-seed.ts` AND any `dummy-*.ts` that writes to the table — same commit as the schema change |
-| Add a new permission / role / pipeline / status / worker | `bootstrap-seed.ts` |
+| Add a new **permission** | `lib/codeOwnedCatalog.ts` (definition — both bootstraps import it) + mirror the constant in `src/shared/lib/constants/permissions.ts` + the grant in `data/personal.local.json`. Apply to the DB with `pnpm seed:apply-permissions`, not a full seed. |
+| Add a new role / pipeline / status / worker | `bootstrap-seed.ts` (generic) + `data/personal.local.json` (our config) |
 | Add a new account group or default GL ledger | `bootstrap-seed.ts` |
 | Add a new tax / payment method / business invariant | `bootstrap-seed.ts` |
 | Add a new demo user / customer / product type | the relevant `dummy-*.ts` |

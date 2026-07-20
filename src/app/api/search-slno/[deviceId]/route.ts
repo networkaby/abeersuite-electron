@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requireAuth } from "@/shared/lib/auth/permissions";
-import { buildTicketReadScopeWhere } from "@/modules/repairing/lib/ticketScope";
 import { handleApiError } from "@/shared/lib/api";
 import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
 
@@ -9,7 +8,7 @@ export async function GET(
     _: Request,
     { params }: { params: Promise<{ deviceId: string }> }
 ) {
-    const { user, response } = await requireAuth();
+    const { response } = await requireAuth();
     if (response) return response;
 
     try {
@@ -19,12 +18,12 @@ export async function GET(
             return NextResponse.json({ error: "Invalid device id" }, { status: 400 });
         }
 
-        const scopeWhere = buildTicketReadScopeWhere(user);
+        // Visibility is flat (all staff see all tickets) — per-scope read filtering
+        // was retired with the repair RBAC re-wire.
         const tickets = await prisma.ticket.findMany({
             where: {
                 AND: [
                     { repair: { deviceId: id } },
-                    ...(scopeWhere ? [scopeWhere] : []),
                 ],
             },
             orderBy: { createdAt: "desc" },

@@ -81,8 +81,9 @@ export async function GET(req: Request) {
     try {
         const { searchParams } = new URL(req.url);
         const pipelineId = searchParams.get("pipelineId");
-        // TODO(rbac): scope filtering temporarily removed — any authenticated staff
-        // sees all tickets. Re-add buildTicketReadScopeWhere when RBAC is re-wired.
+        // Visibility is flat — any authenticated staff sees all tickets. Per-scope
+        // read filtering (own/department/branch) was retired with the repair RBAC
+        // re-wire; re-introduce a scope helper here if it comes back.
         const where = pipelineId ? { pipelineId } : {};
 
         const tickets = await prisma.ticket.findMany({
