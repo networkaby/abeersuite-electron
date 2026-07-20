@@ -65,8 +65,7 @@ export default function PersonProfileTab({ detail, canEditCustomer, canManageUse
                 <AccountClassificationCard
                     key={`grp-${detail.id}`}
                     accountId={detail.accountId}
-                    personId={detail.id}
-                    personName={detail.name}
+                    party={{ type: "person", id: detail.id, name: detail.name }}
                     groupName={detail.accountGroupName ?? null}
                     canEdit
                     onSaved={onSaved}

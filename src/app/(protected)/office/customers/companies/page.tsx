@@ -56,6 +56,7 @@ interface CompanyDetail {
     id: number;
     accountId: number;
     creditLimit: string | null;
+    accountGroupName: string | null;
     name: string;
     phone: string | null;
     email: string | null;
@@ -327,6 +328,7 @@ export default function CompaniesPage() {
                                         detail={detail}
                                         canEditCompany={canEditCompany}
                                         onSaved={refetchDetail}
+                                        onConverted={(personId) => router.push(`/office/customers/all?personId=${personId}`)}
                                     />
                                 )}
 

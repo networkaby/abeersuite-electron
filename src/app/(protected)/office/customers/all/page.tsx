@@ -72,6 +72,7 @@ type CompanyDetail = {
     id: number;
     accountId: number;
     creditLimit: string | null;
+    accountGroupName: string | null;
     name: string;
     phone: string | null;
     email: string | null;
@@ -535,6 +536,7 @@ export default function AllCustomersPage() {
                                     detail={companyDetail}
                                     canEditCompany={canEditCustomer}
                                     onSaved={refetchCompanyDetail}
+                                    onConverted={(personId) => setSelected({ kind: "person", id: personId })}
                                 />
                             )}
 

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Tags, Building2, ArrowRightLeft, Loader2 } from "lucide-react";
+import { Tags, Building2, User, ArrowRightLeft, Loader2 } from "lucide-react";
 import { extractApiError } from "@/shared/lib/api";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { Button } from "@/components/ui/button";
@@ -23,26 +23,33 @@ const GROUPS = [
     { name: ACCOUNT_GROUPS.SUNDRY_CREDITORS, label: "Supplier", hint: "Sundry Creditors" },
 ] as const;
 
+type PartyKind = "person" | "company";
+
 interface Props {
     accountId: number;
-    /** Person id — the source for a Person → Company conversion. */
-    personId: number;
-    personName: string;
+    /** The party this ledger belongs to — drives the conversion direction. */
+    party: { type: PartyKind; id: number; name: string };
     /** Current group name from the API (null when the ledger has no group). */
     groupName: string | null;
     canEdit: boolean;
     /** Re-fetch the detail after a group change. */
     onSaved: () => void;
-    /** Navigate to the freshly-created company after a conversion. */
-    onConverted: (companyId: number) => void;
+    /** Navigate to the freshly-created party (the opposite type) after a conversion. */
+    onConverted: (newId: number) => void;
 }
 
 export default function AccountClassificationCard({
-    accountId, personId, personName, groupName, canEdit, onSaved, onConverted,
+    accountId, party, groupName, canEdit, onSaved, onConverted,
 }: Props) {
     const [savingGroup, setSavingGroup] = useState<string | null>(null);
     const [confirmConvert, setConfirmConvert] = useState(false);
     const [converting, setConverting] = useState(false);
+
+    // A person converts to a company and vice-versa — one card, both directions.
+    const toCompany = party.type === "person";
+    const direction = toCompany ? "personToCompany" : "companyToPerson";
+    const targetLabel = toCompany ? "company" : "person";
+    const TargetIcon = toCompany ? Building2 : User;
 
     const changeGroup = async (name: string) => {
         if (name === groupName || savingGroup) return;
@@ -62,15 +69,15 @@ export default function AccountClassificationCard({
         setConverting(true);
         try {
             const res = await axios.post<{ newId: number }>("/api/customer-tools/convert", {
-                direction: "personToCompany",
-                sourceId: personId,
+                direction,
+                sourceId: party.id,
             });
-            toast.success(`${personName} is now a company`);
+            toast.success(`${party.name} is now a ${targetLabel}`);
             setConfirmConvert(false);
             onConverted(res.data.newId);
         } catch (e) {
             // 409 = conversion blocked (open orders, already converted, …).
-            toast.error(extractApiError(e, "Could not convert to company"));
+            toast.error(extractApiError(e, `Could not convert to ${targetLabel}`));
         } finally {
             setConverting(false);
         }
@@ -118,18 +125,18 @@ export default function AccountClassificationCard({
                     )}
                 </div>
 
-                {/* ── Convert to company ── */}
+                {/* ── Convert to the opposite party type ── */}
                 {canEdit && (
                     <div className="space-y-2 border-t pt-4">
                         <div className="flex items-center gap-2">
-                            <Building2 size={15} className="text-primary" />
+                            <TargetIcon size={15} className="text-primary" />
                             <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                                Convert to company
+                                Convert to {targetLabel}
                             </p>
                         </div>
                         <p className="text-sm text-muted-foreground">
-                            Turn this person into a company. The ledger, balance, tickets and
-                            devices stay attached — only the contact type changes.
+                            Turn this {party.type} into a {targetLabel}. The ledger, balance, tickets
+                            and devices stay attached — only the contact type changes.
                         </p>
                         <Button
                             type="button"
@@ -137,7 +144,7 @@ export default function AccountClassificationCard({
                             variant="outline"
                             onClick={() => setConfirmConvert(true)}
                         >
-                            <ArrowRightLeft size={14} /> Convert to company
+                            <ArrowRightLeft size={14} /> Convert to {targetLabel}
                         </Button>
                     </div>
                 )}
@@ -146,12 +153,11 @@ export default function AccountClassificationCard({
             <Dialog open={confirmConvert} onOpenChange={(o) => !converting && setConfirmConvert(o)}>
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader>
-                        <DialogTitle>Convert {personName} to a company?</DialogTitle>
+                        <DialogTitle>Convert {party.name} to a {targetLabel}?</DialogTitle>
                         <DialogDescription>
-                            The account and its full history move to a new company record. The old
-                            person entry is retired to the Customer Tools trash. Person-only links
-                            (companies this person is a contact at) are dropped. This can&apos;t be
-                            undone from here.
+                            The account and its full history move to a new {targetLabel} record. The
+                            old {party.type} entry is retired to the Customer Tools trash. Contact
+                            links are dropped. This can&apos;t be undone from here.
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter>

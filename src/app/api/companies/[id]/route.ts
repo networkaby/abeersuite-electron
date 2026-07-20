@@ -35,6 +35,7 @@ export async function GET(
         include: {
             account: {
                 include: {
+                    group: { select: { id: true, name: true } },
                     devices: {
                         include: {
                             repairs: {
@@ -84,6 +85,8 @@ export async function GET(
         ...company,
         accountId: company.account!.id,
         creditLimit: company.account!.creditLimit,
+        accountGroupId: company.account!.group?.id ?? null,
+        accountGroupName: company.account!.group?.name ?? null,
         devices: company.account!.devices.map((d) => ({
             ...d,
             tickets: d.repairs
