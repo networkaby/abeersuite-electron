@@ -31,6 +31,7 @@
     "seed:purge-demo": "pnpm seed:purge-demo-contacts && pnpm seed:purge-demo-products",
     "seed:hard-clean": "tsx prisma/seeds/hard-clean.ts",
     "seed:recompute-balances": "tsx prisma/seeds/recompute-balances.ts",
+    "seed:apply-permissions": "tsx prisma/seeds/apply-permissions.ts",
     "seed:check-docs": "tsx scripts/check-doc-sync.ts",
     "seed:fix-docs": "tsx scripts/check-doc-sync.ts --fix",
     "precommit": "tsx scripts/check-doc-sync.ts --strict",

@@ -8,7 +8,7 @@ import { WORKFLOW_STATUS } from "@/shared/lib/constants/workflow";
 // Where every open device physically is — the ones still IN HAND at the shop and
 // the ones OUT at a service centre, grouped by the latest shipping-slip party.
 // Reached from the Repairs dashboard "In hand" / "At Service Centre" cards.
-export default async function ServiceCentresPage() {
+export default async function DeviceLocationPage() {
     const pipeline = await getRepairPipeline(prisma);
     const pipelineId = pipeline?.id ?? "P1";
 
@@ -76,7 +76,7 @@ export default async function ServiceCentresPage() {
     const outCount = tickets.length - inHand.length;
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 p-4">
             <div>
                 <Link href="/office/repairing" className="mb-1 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
                     <ArrowLeft size={12} /> Repairs
@@ -121,8 +121,8 @@ function pendingLabel(iso: string | null): { text: string; cls: string } | null 
     const cls = days >= 7
         ? "bg-red-600 text-white"
         : days >= 3
-        ? "bg-amber-500 text-white"
-        : "bg-muted text-foreground";
+            ? "bg-amber-500 text-white"
+            : "bg-muted text-foreground";
     return { text, cls };
 }
 

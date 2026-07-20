@@ -20,6 +20,13 @@ const ticketUpdateSchema = z.object({
     status: z.string().trim().optional(),
     priority: z.nativeEnum(Priority).optional(),
     notes: z.string().optional(),
+    // Device fields (edit form) — live on the ticket's own RepairDevice (1:1 via
+    // TicketRepair, created fresh per ticket, so editing them affects only this ticket).
+    deviceType: z.string().trim().min(1).optional(),
+    brand: z.string().trim().min(1).optional(),
+    model: z.string().trim().min(1).optional(),
+    problem: z.string().trim().min(1).optional(),
+    accessories: z.string().optional(),
     accessInfo: z.string().optional(),
     estimatedCost: z.preprocess(
         (value) => value === "" ? null : value,
@@ -164,8 +171,18 @@ export async function PUT(
 
         const author = await buildActorSnapshot(userId);
 
+        // Device fields live on the ticket's RepairDevice (repair.device, 1:1).
+        const deviceData = {
+            ...(body.deviceType !== undefined && { type: body.deviceType }),
+            ...(body.brand !== undefined      && { brand: body.brand }),
+            ...(body.model !== undefined      && { model: body.model }),
+            ...(body.problem !== undefined    && { problem: body.problem }),
+        };
+
         // Repair-detail fields live on TicketRepair now; core fields on Ticket.
         const repairData = {
+            ...(Object.keys(deviceData).length ? { device: { update: deviceData } } : {}),
+            ...(body.accessories !== undefined  && { accessories: body.accessories || null }),
             ...(body.accessInfo !== undefined   && { accessInfo: body.accessInfo }),
             ...(body.estimatedCost !== undefined && { estimatedCost: body.estimatedCost ? Number(body.estimatedCost) : null }),
             ...(body.escalated !== undefined    && { escalated: body.escalated }),

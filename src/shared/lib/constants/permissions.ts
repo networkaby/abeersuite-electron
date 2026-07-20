@@ -84,6 +84,14 @@ export const PERMISSIONS = {
     TIERS_EDIT:                         "tiers:edit",
     TIERS_DELETE:                       "tiers:delete",
 
+    // Repair — the ticket resource (All Repair list + ticket page). View rides the
+    // repair sidebar link; these granular keys gate the create / edit / delete
+    // actions on a ticket. Flat (no branch radius) — a ticket is worked by whoever
+    // holds the write id, matching the current "open to all staff" repair posture.
+    TICKETS_CREATE:                     "tickets:create",
+    TICKETS_EDIT:                       "tickets:edit",
+    TICKETS_DELETE:                     "tickets:delete",
+
     // Inventory module pages — Products (the catalog) and Masters (the 8 setup
     // tables, gated together). View rides the sidebar link; these granular keys are
     // the gates on the CRUD routes. Product tax fields are carved out separately as

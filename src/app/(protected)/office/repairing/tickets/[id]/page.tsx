@@ -9,7 +9,7 @@ import {
     Clock, User, Building2, AlertTriangle,
     Printer, Lock, Eye, NotebookPen, ArrowRightLeft,
     Check, X, MessageSquare, RefreshCw, ArrowRight, CornerUpLeft, Flag,
-    GitBranch, ExternalLink, Bug, Truck, ChevronDown, Receipt,
+    GitBranch, ExternalLink, Bug, Truck, ChevronDown, Receipt, Pencil,
     type LucideIcon,
 } from "lucide-react";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -29,6 +29,7 @@ import TicketInvoicesPanel from "@/modules/repairing/components/TicketInvoicesPa
 import UserAvatar from "@/shared/components/UserAvatar";
 import { editFormUrl } from "@/modules/inventory/components/VoucherActionsMenu";
 import ShippingSlipModal from "@/modules/repairing/components/ShippingSlipModal";
+import EditTicketModal from "@/modules/repairing/components/EditTicketModal";
 import BillDetailsPanel, { type BillDraft } from "@/modules/repairing/components/BillDetailsPanel";
 import WorkActions from "@/modules/repairing/components/WorkActions";
 import DevOverridePanel from "@/modules/repairing/components/DevOverridePanel";
@@ -47,6 +48,7 @@ interface Ticket {
     priority: string;
     notes?: string;
     accessInfo?: string;
+    accessories?: string;
     estimatedCost?: number;
     escalated: boolean;
     escalatedAt?: string;
@@ -178,6 +180,7 @@ export default function TicketDetailPage() {
     const [showWarrantyModal, setShowWarrantyModal] = useState(false);
     const [showTransferModal, setShowTransferModal] = useState(false);
     const [showShippingSlip, setShowShippingSlip] = useState(false);
+    const [showEdit, setShowEdit] = useState(false);
     const [showDev, setShowDev] = useState(false);
     const [showRefEdit, setShowRefEdit] = useState(false);
     const [refValue, setRefValue] = useState("");
@@ -188,6 +191,9 @@ export default function TicketDetailPage() {
     // permission — visible to admins / the super-admin bypass, hidden from staff.
     const perms = sessionUser?.permissions ?? [];
     const canDebug = perms.includes(PERMISSIONS.ADMIN_BYPASS) || perms.includes(PERMISSIONS.SETTINGS_MANAGE);
+    // Edit-ticket action is gated on tickets:edit (admin bypass passes) — the same
+    // grant surfaced by the role page's Tickets CRUD row.
+    const canEditTicket = perms.includes(PERMISSIONS.ADMIN_BYPASS) || perms.includes(PERMISSIONS.TICKETS_EDIT);
     // TODO(rbac): repairing actions temporarily open to all staff — re-gate on
     // position-based permissions when RBAC is re-wired.
     const canConvertWarranty = true;
@@ -746,6 +752,12 @@ export default function TicketDetailPage() {
                         <div className="space-y-2 rounded-lg border border-border bg-card p-4 shadow">
                             <h2 className="font-semibold text-foreground mb-3 text-sm">Actions</h2>
 
+                            {canEditTicket && !ticket.ticketStatus.isTerminal && (
+                                <Button onClick={() => setShowEdit(true)} variant="outline" className={actionBtnBase} disabled={workInProgress}>
+                                    <Pencil size={15} /> Edit Ticket
+                                </Button>
+                            )}
+
                             <Button onClick={() => setShowAddNote(true)} variant="outline" className={actionBtnBase}>
                                 <NotebookPen size={15} /> Add Note
                             </Button>
@@ -859,6 +871,24 @@ export default function TicketDetailPage() {
             )}
             {showAddNote && (
                 <AddNoteModal ticketId={ticket.id} onClose={() => { setShowAddNote(false); fetchTicket(); }} />
+            )}
+            {showEdit && (
+                <EditTicketModal
+                    ticketId={ticket.id}
+                    initial={{
+                        deviceType: ticket.device.type ?? "",
+                        brand: ticket.device.brand ?? "",
+                        model: ticket.device.model ?? "",
+                        problem: ticket.device.problem ?? "",
+                        accessories: ticket.accessories ?? "",
+                        priority: ticket.priority,
+                        accessInfo: ticket.accessInfo ?? "",
+                        estimatedCost: ticket.estimatedCost != null ? String(ticket.estimatedCost) : "",
+                        notes: ticket.notes ?? "",
+                    }}
+                    onClose={() => setShowEdit(false)}
+                    onSaved={fetchTicket}
+                />
             )}
             {showTransferModal && (
                 <PipelineTransferModal

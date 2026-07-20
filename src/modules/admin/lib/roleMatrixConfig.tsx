@@ -203,8 +203,21 @@ export const MATRIX_ROWS: {
     module: string;
     cells: Partial<Record<MatrixColumnKey, MatrixPermissionCell>>;
 }[] = [
-        // Repair (Tickets / Ticket Ownership / Warranty / Assignments) rows removed —
-        // the repair permission layer is being rebuilt the new sidebar-link + CRUD way.
+        // Repair — the ticket resource, rebuilt the new sidebar-link + CRUD way:
+        // one flat create/edit/delete set (tickets:*) surfaced under the "All Repair"
+        // link. Tickets carry no branch radius (open to all staff), so the own/branch/
+        // org cells all resolve to the same flat id, like Contacts.
+        {
+            key: "tickets",
+            label: "Tickets",
+            module: "repair",
+            cells: {
+                viewOwn: "tickets:create", viewBranch: "tickets:create", viewOrg: "tickets:create",
+                create: "tickets:create",
+                editOwn: "tickets:edit", editBranch: "tickets:edit", editOrg: "tickets:edit",
+                deleteOwn: "tickets:delete", deleteBranch: "tickets:delete", deleteOrg: "tickets:delete",
+            },
+        },
         {
             key: "users",
             label: "Users",
@@ -453,6 +466,8 @@ export const toSharedMatrixRow = (row: (typeof MATRIX_ROWS)[number]): MatrixRow 
 // (same look as the voucher matrices) so a role's "Users" link and its actual
 // create/view/edit/delete grant sit in one place.
 export const SIDEBAR_LINK_MATRIX_ROW_KEY: Record<string, string> = {
+    // Repair — the "All Repair" link expands the ticket create/edit/delete matrix.
+    [sidebarChildPermissionId("repair", "all-repair")]: "tickets",
     [sidebarChildPermissionId("admin", "users")]: "users",
     [sidebarChildPermissionId("admin", "role")]: "roles",
     [sidebarChildPermissionId("admin", "branches")]: "branches",

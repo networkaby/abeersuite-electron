@@ -57,6 +57,7 @@ import {
     CreditCard,
     Gift,
     Trash2,
+    MapPin,
 } from "lucide-react";
 
 // Keys match the Priority enum: LOW | MEDIUM | HIGH | URGENT
@@ -210,6 +211,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         ],
         children: [
             { label: "All Repair", icon: ClipboardList, href: "/office/repairing/tickets", pipelineRef: "default" },
+            { label: "Device Location", icon: MapPin, href: "/office/repairing/device-location" },
             // { label: "Service Centers", icon: Building2, href: "/office/repairing/service-centers" },
 
         ],

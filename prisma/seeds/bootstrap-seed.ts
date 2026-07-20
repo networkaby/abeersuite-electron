@@ -254,6 +254,12 @@ const PERMISSIONS = [
     { id: "tiers:edit", label: "Edit spend tiers", module: "crm", description: "Edit customer spending tiers." },
     { id: "tiers:delete", label: "Delete spend tiers", module: "crm", description: "Delete customer spending tiers." },
 
+    // repair — the ticket resource (All Repair list + ticket page). View rides the
+    // repair sidebar link; these gate the create / edit / delete actions on a ticket.
+    { id: "tickets:create", label: "Create tickets", module: "repair", description: "Open new repair tickets (the Repair + intake)." },
+    { id: "tickets:edit", label: "Edit tickets", module: "repair", description: "Edit a repair ticket's device, problem, priority, cost and notes." },
+    { id: "tickets:delete", label: "Delete tickets", module: "repair", description: "Delete a repair ticket." },
+
     // ecommerce — online storefront catalog & orders
 
     // administration — internal work board (pipeline-based todos on the P4 pipeline)
