@@ -923,7 +923,7 @@ export function SidebarVisibilitySection({
                                 </div>
                                 {renderLevel(mod.children, mod.key)}
                                 {showModToggle && (
-                                    <div className="mt-2 flex flex-wrap items-start gap-1.5 border-t border-border pt-2">
+                                    <div className="mt-1.5 flex flex-wrap items-start gap-1.5">
                                         {extraToggleChip(modToggle!)}
                                     </div>
                                 )}
