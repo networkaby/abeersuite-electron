@@ -1,5 +1,6 @@
 import type { ModuleChild, ModuleSection, ModuleCreateAction, ButtonBarAction } from "./constants";
 import { VOUCHER_CREATE_PERMISSION_BY_ACTION } from "./constants";
+import { crudSatisfied } from "@/shared/lib/auth/crudLadder";
 
 // Shared module/action visibility gate — used by the Sidebar (which modules to
 // list), the ButtonBar, and the All-Create-Actions dialog so all three agree on
@@ -13,17 +14,19 @@ export function createActionPermission(action: ModuleCreateAction | ButtonBarAct
 }
 
 // True if the user may perform this create action (no perm ⇒ open; admin passes).
+// Uses crudSatisfied so a higher stored rung (post/cancel/delete) implies create —
+// sessions carry only the highest rung, so a plain includes() would hide the "+".
 export function canDoCreateAction(
     action: ModuleCreateAction | ButtonBarAction,
     permissions: string[],
     isAdmin: boolean,
 ): boolean {
     const perm = createActionPermission(action);
-    return !perm || isAdmin || permissions.includes(perm);
+    return !perm || isAdmin || crudSatisfied(permissions, perm);
 }
 
 export function canViewModuleChild(child: ModuleChild, permissions: string[], isAdmin: boolean): boolean {
-    return !child.permission || isAdmin || permissions.includes(child.permission);
+    return !child.permission || isAdmin || crudSatisfied(permissions, child.permission);
 }
 
 // A module is worth showing only if the user can actually open something in it:
@@ -42,6 +45,6 @@ function moduleHasVisibleLink(items: ModuleChild[], permissions: string[], isAdm
 // "no permission ⇒ always visible" rule that leaked ungated modules to everyone.
 export function canViewModule(mod: ModuleSection, permissions: string[], isAdmin: boolean): boolean {
     if (isAdmin) return true;
-    if (mod.permission) return permissions.includes(mod.permission);
+    if (mod.permission) return crudSatisfied(permissions, mod.permission);
     return moduleHasVisibleLink(mod.children, permissions, isAdmin);
 }

@@ -92,6 +92,15 @@ export const PERMISSIONS = {
     TICKETS_EDIT:                       "tickets:edit",
     TICKETS_DELETE:                     "tickets:delete",
 
+    // CRM / Administration quick-create gates — control whether the "New Deal +" /
+    // "New Task +" quick action shows in the bar (and its Role Quick Actions tick).
+    // UI-visibility gates only, matching the ungated-→-gated move for these actions.
+    DEALS_CREATE:                       "deals:create",
+    TASKS_CREATE:                       "tasks:create",
+    // Gate for the "More +" quick action (opens the all-create-actions dialog).
+    // Behaves like a create action — its own tick in the role's Quick Actions.
+    QUICK_ACTIONS_MORE:                 "quick-actions:more",
+
     // Inventory module pages — Products (the catalog) and Masters (the 8 setup
     // tables, gated together). View rides the sidebar link; these granular keys are
     // the gates on the CRUD routes. Product tax fields are carved out separately as

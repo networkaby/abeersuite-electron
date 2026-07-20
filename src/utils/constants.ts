@@ -23,6 +23,7 @@ import {
     Ruler,
     Tag,
     LayoutGrid,
+    Grid2x2,
     Calendar,
     Clock,
     Inbox,
@@ -100,7 +101,7 @@ export type ModuleCreateAction = {
     href?: string;
     /** Open the href in a new browser tab. */
     newTab?: boolean;
-    action?: "new-ticket" | "new-person" | "new-company" | "new-journal-voucher" | "new-debit-note" | "new-contra" | "new-payment" | "new-receipt" | "new-credit-note" | "new-sale" | "new-purchase" | "new-sale-return" | "new-purchase-return" | "new-estimate" | "new-sales-order" | "new-purchase-order" | "new-grn" | "new-challan" | "new-manufacturing-journal" | "new-physical-stock" | "new-branch-transfer" | "new-rejection-in" | "new-rejection-out";
+    action?: "more" | "new-ticket" | "new-person" | "new-company" | "new-journal-voucher" | "new-debit-note" | "new-contra" | "new-payment" | "new-receipt" | "new-credit-note" | "new-sale" | "new-purchase" | "new-sale-return" | "new-purchase-return" | "new-estimate" | "new-sales-order" | "new-purchase-order" | "new-grn" | "new-challan" | "new-manufacturing-journal" | "new-physical-stock" | "new-branch-transfer" | "new-rejection-in" | "new-rejection-out";
     pipelineRef?: "default";
     permission?: string | null;
     disabled?: boolean;
@@ -207,7 +208,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         // pathPrefixes: ["/office/repairing/tickets", "/office/repairing/service-centers", "/office/repairing/dashboard"],
         pathPrefixes: ["/office/repairing"],
         createActions: [
-            { label: "Repair +", subtitle: "Open repair intake", icon: Wrench, variant: "default", action: "new-ticket", pipelineRef: "default" },
+            { label: "Repair +", subtitle: "Open repair intake", icon: Wrench, variant: "default", action: "new-ticket", pipelineRef: "default", permission: "tickets:create" },
         ],
         children: [
             { label: "All Repair", icon: ClipboardList, href: "/office/repairing/tickets", pipelineRef: "default" },
@@ -384,7 +385,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         dashboardHref: "/office/crm/deals",
         pathPrefixes: ["/office/crm"],
         createActions: [
-            { label: "New Deal +", subtitle: "Add a deal to the pipeline", icon: Network, variant: "default", href: "/office/crm/deals?new=1" },
+            { label: "New Deal +", subtitle: "Add a deal to the pipeline", icon: Network, variant: "default", href: "/office/crm/deals?new=1", permission: "deals:create" },
         ],
         children: [
             { label: "Deals", icon: ClipboardList, href: "/office/crm/deals" },
@@ -527,7 +528,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         dashboardHref: "/office/administration",
         pathPrefixes: ["/office/administration"],
         createActions: [
-            { label: "New Task +", subtitle: "Add an internal work item", icon: ListChecks, variant: "default", href: "/office/administration?new=1" },
+            { label: "New Task +", subtitle: "Add an internal work item", icon: ListChecks, variant: "default", href: "/office/administration?new=1", permission: "tasks:create" },
         ],
         children: [
             { label: "Work Board", icon: ListChecks, href: "/office/administration" },
@@ -706,14 +707,16 @@ export const VOUCHER_CREATE_PERMISSION_BY_ACTION: Record<string, string> = Objec
 );
 
 export const BUTTON_BAR_ACTIONS: ButtonBarAction[] = [
+    // "More +" opens the all-create-actions dialog. Gated like any create action
+    // (own permission → tick in the role's Quick Actions), rendered first.
+    { label: "More +", subtitle: "All create actions", icon: Grid2x2, variant: "outline", action: "more", permission: "quick-actions:more" },
     {
         label: "Repair +", subtitle: "Open repair intake", icon: Wrench, variant: "default",
         action: "new-ticket",
         pipelineRef: "default",
+        permission: "tickets:create",
     },
-
-
-    // { label: "POS", subtitle: "Open POS register", icon: Monitor, variant: "default", href: "/vouchers/pos/new", newTab: true, permission: "pos:shift:open" },
+    { label: "POS", subtitle: "Open POS register", icon: Monitor, variant: "default", href: "/vouchers/pos/new", newTab: true, permission: "pos:shift:open" },
     //"/vouchers/pos/orders"
     //"/vouchers/pos/estimates"
     { label: "Sale +", subtitle: "New Sale Invoice", icon: Receipt, variant: "default", action: "new-sale" },
@@ -737,5 +740,9 @@ export const BUTTON_BAR_ACTIONS: ButtonBarAction[] = [
     { label: "Rejection In +", subtitle: "New rejection in", icon: PackageX, variant: "outline", action: "new-rejection-in" },
     { label: "Rejection Out +", subtitle: "New rejection out", icon: PackageX, variant: "outline", action: "new-rejection-out" },
 
-
+    // Links from other modules — folded in so the bar is one complete, always-on set.
+    { label: "Person +", subtitle: "Create a new person", icon: Users, variant: "outline", action: "new-person", permission: "customers:create" },
+    { label: "Companies +", subtitle: "Create a new company", icon: Building2, variant: "outline", action: "new-company", permission: "customers:create" },
+    { label: "New Deal +", subtitle: "Add a deal to the pipeline", icon: Network, variant: "outline", href: "/office/crm/deals?new=1", permission: "deals:create" },
+    { label: "New Task +", subtitle: "Add an internal work item", icon: ListChecks, variant: "outline", href: "/office/administration?new=1", permission: "tasks:create" },
 ];

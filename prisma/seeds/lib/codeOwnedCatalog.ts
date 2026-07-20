@@ -172,6 +172,13 @@ export const PERMISSION_CATALOG: PermissionSeed[] = [
     { id: "tickets:create", label: "Create tickets", module: "repair", description: "Open new repair tickets (the Repair + intake)." },
     { id: "tickets:edit", label: "Edit tickets", module: "repair", description: "Edit a repair ticket's device, problem, priority, cost and notes." },
     { id: "tickets:delete", label: "Delete tickets", module: "repair", description: "Delete a repair ticket." },
+
+    // crm / administration — quick-create gates for the "New Deal +" / "New Task +"
+    // actions. UI-visibility only (gate the "+" in the Quick Actions bar / its tick);
+    // the deals and work-board pages themselves ride their sidebar links.
+    { id: "deals:create", label: "Create deals", module: "crm", description: "Add a deal to the CRM pipeline (the New Deal + quick action)." },
+    { id: "tasks:create", label: "Create tasks", module: "administration", description: "Add an internal work item on the Administration board (the New Task + quick action)." },
+    { id: "quick-actions:more", label: "Show More + quick action", module: "core", description: "Show the More + button in the Quick Actions bar (opens the all-create-actions dialog)." },
 ];
 
 // ── XOR CHECK constraints (raw DDL — cannot live in the snapshot) ──────────

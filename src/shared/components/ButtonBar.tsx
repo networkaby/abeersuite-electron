@@ -6,11 +6,10 @@ import { usePanelStore } from "@/store/panelStore";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import axios from "axios";
-import { PanelRightClose, PanelRightOpen, Grid2x2 } from "lucide-react";
+import { PanelRightClose, PanelRightOpen } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { BUTTON_BAR_ACTIONS, MODULE_SECTIONS, type ModuleCreateAction } from "@/utils/constants";
-import { getActiveModule } from "@/utils/active-module";
-import { canViewModule, canDoCreateAction } from "@/utils/module-access";
+import { BUTTON_BAR_ACTIONS, type ModuleCreateAction } from "@/utils/constants";
+import { canDoCreateAction } from "@/utils/module-access";
 import { useQuickTicketStore } from "@/store/quickTicketStore";
 import { useCreateDialogStore } from "@/store/createDialogStore";
 // GL vouchers now use full-page routes opened in a new tab — no dialog stores needed.
@@ -133,13 +132,6 @@ export default function ButtonBar({ user }: { user?: UserType }) {
     const isAdmin = permissions.includes(PERMISSIONS.ADMIN_BYPASS);
     const canDo = (a: ModuleCreateAction | typeof BUTTON_BAR_ACTIONS[number]) => canDoCreateAction(a, permissions, isAdmin);
 
-    const activeModule = getActiveModule(pathname);
-    const createActions = activeModule?.createActions ?? null;
-
-    // Module create actions — gated by each action's effective permission (per-kind
-    // voucher CREATE key for vouchers, else the action's own permission).
-    const visibleActions = (createActions ?? []).filter(canDo);
-
     useEffect(() => {
         axios
             .get<Pipeline[]>("/api/pipelines")
@@ -155,7 +147,9 @@ export default function ButtonBar({ user }: { user?: UserType }) {
 
     const handleAction = (action: ModuleCreateAction) => {
         if (action.disabled) return;
-        if (action.action === "new-ticket" && action.pipelineRef === "default" && defaultPipeline) {
+        if (action.action === "more") {
+            setMoreOpen(true);
+        } else if (action.action === "new-ticket" && action.pipelineRef === "default" && defaultPipeline) {
             setInitialPipelineId(defaultPipeline.id);
             openQuickTicket(true);
         } else if (action.action === "new-person") {
@@ -165,10 +159,13 @@ export default function ButtonBar({ user }: { user?: UserType }) {
         }
     };
 
-    const headerLabel = activeModule ? activeModule.label : "Quick Actions";
+    // Permanently visible bar: the action list never switches to module-specific
+    // nav when a module is opened. One global set on every page, so the header is
+    // a fixed label rather than the active module's name.
+    const headerLabel = "Quick Actions";
 
-    // For universal (no active module) fall back to BUTTON_BAR_ACTIONS rendered as
-    // ModuleCreateAction shape — gated by permission, same as module actions.
+    // The single always-on list — BUTTON_BAR_ACTIONS rendered as ModuleCreateAction
+    // shape, gated by permission (respects the Role editor ticks via crudSatisfied).
     const universalActions: ModuleCreateAction[] = BUTTON_BAR_ACTIONS
         .filter(canDo)
         .map((a) => ({
@@ -184,14 +181,9 @@ export default function ButtonBar({ user }: { user?: UserType }) {
             disabled: a.disabled,
         }));
 
-    const actions = activeModule ? visibleActions : universalActions;
-
-    // "More +" opens the all-create-actions dialog, which lists actions from
-    // modules the user can view. Hide it when that dialog would be empty, so a
-    // zero-permission / unappointed user gets a truly empty action bar.
-    const moreHasContent = MODULE_SECTIONS.some(
-        (m) => canViewModule(m, permissions, isAdmin) && (m.createActions ?? []).some(canDo),
-    );
+    // "More +" is now a normal gated entry in `actions` (permission quick-actions:more),
+    // so it renders and hides through the same canDo filter as every other action.
+    const actions = universalActions;
 
     return (
         <>
@@ -279,24 +271,7 @@ export default function ButtonBar({ user }: { user?: UserType }) {
                     {/* Action buttons — sidebar-style: flat rows, deep highlight when active */}
                     <ScrollArea className="flex-1 min-h-0">
                         <div className="space-y-0.5 p-2">
-                            {/* More + button — first, but only when there are actions to show */}
-                            {moreHasContent && (
-                                <button
-                                    type="button"
-                                    title={collapsed ? "More actions" : "More — all create actions"}
-                                    onClick={() => setMoreOpen(true)}
-                                    className={[
-                                        "flex h-auto w-full items-center rounded-lg text-sm font-medium transition-all duration-150",
-                                        collapsed ? "justify-center px-2 py-2" : "gap-3 px-3 py-2",
-                                        "text-muted-foreground hover:bg-muted hover:text-foreground",
-                                    ].join(" ")}
-                                >
-                                    <Grid2x2 size={17} className="shrink-0" />
-                                    {!collapsed && <span className="truncate text-left">More +</span>}
-                                </button>
-                            )}
-
-                            {/* Module-specific or universal create actions */}
+                            {/* Global create actions — includes the gated "More +" (first entry). */}
                             {actions.map((action) => {
                                 const Icon = action.icon;
                                 const resolvedHref = action.href ?? (action.action ? ACTION_HREFS[action.action] : undefined);
