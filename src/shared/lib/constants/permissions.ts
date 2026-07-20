@@ -24,6 +24,11 @@ export const PERMISSIONS = {
     CUSTOMERS_CREATE:                   "customers:create",
     CUSTOMERS_EDIT:                     "customers:edit",
     CUSTOMERS_DELETE:                   "customers:delete",
+    // Show suppliers (Sundry Creditors) in the Contacts lists. Absent → a role
+    // browses customers (Sundry Debtors) only; suppliers are filtered out of the
+    // Person / Companies lists. UI-only filter — the party-lookup path (repair
+    // service slips, vouchers) is never filtered.
+    CUSTOMERS_VIEW_CREDITORS:           "customers:view:creditors",
 
     // Finance — per-kind GL voucher gates: finance:voucher:<action>:<kind>.
     // The trailing segment is the VoucherType (kebab-case), NOT a scope — a

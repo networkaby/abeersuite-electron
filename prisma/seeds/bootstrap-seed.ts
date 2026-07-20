@@ -108,6 +108,7 @@ const PERMISSIONS = [
     { id: "customers:create", label: "Create customers", module: "customers", description: "Create Person / Company records." },
     { id: "customers:edit", label: "Edit customers", module: "customers", description: "Edit any Person / Company record (no branch limit)." },
     { id: "customers:delete", label: "Delete customers", module: "customers", description: "Delete any Person / Company record (no branch limit)." },
+    { id: "customers:view:creditors", label: "Show suppliers (creditors)", module: "customers", description: "See parties in the Sundry Creditors group in the Contacts lists. Absent → the role browses customers (Sundry Debtors) only. UI-only filter; the party-lookup path is never filtered." },
 
     // Repair (tickets + assignments) permission layer removed — being rebuilt the
     // new way (sidebar-link + CRUD matrix), like accountancy / inventory.

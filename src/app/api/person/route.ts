@@ -148,6 +148,11 @@ export async function GET(req: Request) {
     const group = searchParams.get("group")?.trim() || undefined;
     // Opt-in: also search address + email per token (Front Office helper search).
     const wide = searchParams.get("wide") === "1";
+    // Browse-only supplier filter — a role without `customers:view:creditors`
+    // passes this to drop parties in the Sundry Creditors group. Applied to the
+    // browse list ONLY; the lookup path below is never filtered so party pickers
+    // (repair service slips, vouchers) still find suppliers.
+    const hideCreditors = searchParams.get("hideCreditors") === "1";
     const { take, page } = parsePagination(searchParams);
 
     try {
@@ -159,6 +164,10 @@ export async function GET(req: Request) {
         const persons = await prisma.person.findMany({
             where: {
                 isActive: true,
+                // Exclude only Sundry Creditors; debtors and un-grouped stay in.
+                ...(hideCreditors
+                    ? { NOT: { account: { is: { group: { is: { name: ACCOUNT_GROUPS.SUNDRY_CREDITORS } } } } } }
+                    : {}),
                 ...(q ? {
                     OR: [
                         { name: { contains: q, mode: "insensitive" } },

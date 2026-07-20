@@ -114,15 +114,20 @@ export default function AllCustomersPage() {
     const canManageUsers = perms.includes(PERMISSIONS.USERS_EDIT) || perms.includes(PERMISSIONS.ADMIN_BYPASS);
     const canEditCustomer = perms.includes(PERMISSIONS.CUSTOMERS_EDIT) || perms.includes(PERMISSIONS.ADMIN_BYPASS);
     const canManageLoyalty = perms.includes(PERMISSIONS.LOYALTY_EDIT) || perms.includes(PERMISSIONS.ADMIN_BYPASS);
+    // Without this grant both lists hide suppliers (Sundry Creditors) — customers only.
+    const canSeeCreditors = perms.includes(PERMISSIONS.CUSTOMERS_VIEW_CREDITORS) || perms.includes(PERMISSIONS.ADMIN_BYPASS);
 
     // Server-side search across both lists. The old in-browser filter only saw
     // the first page of people the API returned, so matches beyond it vanished.
     const debouncedSearch = useDebouncedValue(search, 300);
     useEffect(() => {
-        const params = debouncedSearch.trim() ? { q: debouncedSearch.trim() } : undefined;
+        const params = {
+            ...(debouncedSearch.trim() ? { q: debouncedSearch.trim() } : {}),
+            ...(canSeeCreditors ? {} : { hideCreditors: 1 }),
+        };
         axios.get<PersonRow[]>("/api/person", { params }).then((res) => setPeople(res.data)).catch(() => setPeople([]));
         axios.get<CompanyRow[]>("/api/companies", { params }).then((res) => setCompanies(res.data)).catch(() => setCompanies([]));
-    }, [debouncedSearch]);
+    }, [debouncedSearch, canSeeCreditors]);
 
     // Pre-select a row from URL query params on mount.  Day Book / register
     // tables link here as /office/customers/all?personId=<id> or ?companyId=<id>

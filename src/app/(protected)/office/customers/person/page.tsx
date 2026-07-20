@@ -97,6 +97,8 @@ export default function CustomersPage() {
     const canManageUsers = perms.includes(PERMISSIONS.USERS_EDIT) || perms.includes(PERMISSIONS.ADMIN_BYPASS);
     const canManageLoyalty = perms.includes(PERMISSIONS.LOYALTY_EDIT) || perms.includes(PERMISSIONS.ADMIN_BYPASS);
     const canEditCustomer = perms.includes(PERMISSIONS.CUSTOMERS_EDIT) || perms.includes(PERMISSIONS.ADMIN_BYPASS);
+    // Without this grant the list hides suppliers (Sundry Creditors) — customers only.
+    const canSeeCreditors = perms.includes(PERMISSIONS.CUSTOMERS_VIEW_CREDITORS) || perms.includes(PERMISSIONS.ADMIN_BYPASS);
 
     const router = useRouter();
 
@@ -108,13 +110,16 @@ export default function CustomersPage() {
     const loadList = useCallback(async (q: string) => {
         try {
             const response = await axios.get<CustomerListItem[]>("/api/person", {
-                params: q ? { q } : undefined,
+                params: {
+                    ...(q ? { q } : {}),
+                    ...(canSeeCreditors ? {} : { hideCreditors: 1 }),
+                },
             });
             setCustomers(response.data);
         } catch {
             toast.error("Failed to load customers");
         }
-    }, []);
+    }, [canSeeCreditors]);
 
     useEffect(() => { loadList(debouncedSearch.trim()); }, [loadList, debouncedSearch]);
 

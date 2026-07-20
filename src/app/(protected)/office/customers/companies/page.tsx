@@ -81,6 +81,8 @@ export default function CompaniesPage() {
     const canManageLoyalty = perms.includes(PERMISSIONS.LOYALTY_EDIT) || perms.includes(PERMISSIONS.ADMIN_BYPASS);
     // Companies share the Contacts (customers:*) permission set — see role page.
     const canEditCompany = perms.includes(PERMISSIONS.CUSTOMERS_EDIT) || perms.includes(PERMISSIONS.ADMIN_BYPASS);
+    // Without this grant the list hides suppliers (Sundry Creditors) — customers only.
+    const canSeeCreditors = perms.includes(PERMISSIONS.CUSTOMERS_VIEW_CREDITORS) || perms.includes(PERMISSIONS.ADMIN_BYPASS);
     const [companies, setCompanies] = useState<CompanyListItem[]>([]);
     const [search, setSearch] = useState("");
     const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -102,13 +104,16 @@ export default function CompaniesPage() {
     const loadList = useCallback(async (q: string) => {
         try {
             const response = await axios.get<CompanyListItem[]>("/api/companies", {
-                params: q ? { q } : undefined,
+                params: {
+                    ...(q ? { q } : {}),
+                    ...(canSeeCreditors ? {} : { hideCreditors: 1 }),
+                },
             });
             setCompanies(response.data);
         } catch {
             toast.error("Failed to load companies");
         }
-    }, []);
+    }, [canSeeCreditors]);
 
     useEffect(() => { loadList(debouncedSearch.trim()); }, [loadList, debouncedSearch]);
 

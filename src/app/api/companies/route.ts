@@ -23,11 +23,17 @@ export async function GET(req: Request) {
 
     const { searchParams } = new URL(req.url);
     const q = searchParams.get("q")?.trim();
+    // A role without `customers:view:creditors` passes this to hide suppliers
+    // (Sundry Creditors) from the browse list — debtors and un-grouped stay in.
+    const hideCreditors = searchParams.get("hideCreditors") === "1";
 
     try {
         const companies = await prisma.company.findMany({
             where: {
                 isActive: true,
+                ...(hideCreditors
+                    ? { NOT: { account: { is: { group: { is: { name: ACCOUNT_GROUPS.SUNDRY_CREDITORS } } } } } }
+                    : {}),
                 ...(q ? {
                     OR: [
                         { name: { contains: q, mode: "insensitive" } },

@@ -543,6 +543,14 @@ export const SIDEBAR_LINK_EXTRA_TOGGLE: Record<string, { id: string; label: stri
         id: "pricing:labels:apply",
         label: "Can apply & print",
     },
+    // Contacts — one extra toggle beyond seeing the list: whether suppliers
+    // (Sundry Creditors) show alongside customers. Absent → the role browses
+    // customers only. Hung on the Person link (the always-present Contacts link);
+    // the grant is module-wide and filters both the Person and Companies lists.
+    [sidebarChildPermissionId("customers", "person")]: {
+        id: "customers:view:creditors",
+        label: "Show suppliers (creditors)",
+    },
     // Retention pages are plain create/edit/delete matrices (no extra toggle) —
     // changing the discount / balance is part of "Edit", not a separate control.
 };
