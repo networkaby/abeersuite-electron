@@ -1,44 +1,64 @@
-// CRUD ladder — a higher action implies the lower ones on the SAME resource:
-// delete ⇒ edit ⇒ create. Only the HIGHEST rung is ever stored (DB grants and
-// the session/JWT carry one id per resource, not three); lowers are implied at
-// check time. Single source for every side of the contract:
-//   • hasPermissionWithScope passes an edit/create check when a higher rung is
-//     held (server routes + client checks share it),
-//   • authorizeStaff normalizes the effective set (drops stored lowers) so
-//     legacy triads stop riding the JWT,
-//   • the Role editor expands on load / normalizes on save, so ticking Delete
-//     shows Edit + Create ticked but persists just customers:delete.
-// Matching is on the LAST id segment only, so per-kind voucher gates
-// (finance:voucher:<action>:<kind>), ui:sidebar:* links, and one-off toggles
-// are never touched.
+// Permission ladders — a higher action implies the lower ones on the SAME
+// resource, so ONLY the highest rung is ever stored (DB grants + session/JWT
+// carry one id per resource) and the lowers are implied at check time.
+//
+// Three families, detected from the id shape:
+//   • resource CRUD   <base>:create|edit|delete            create ⇒ edit ⇒ delete
+//   • office voucher   <ns>:voucher:<action>:<kind>          create ⇒ post ⇒ cancel ⇒ delete
+//   • POS voucher      pos:voucher:<action>:<kind>           create ⇒ cancel ⇒ delete   (no post)
+// ("cancel" is the Cancel/Edit column.) Everything else — ui:sidebar:*, one-off
+// toggles, reads — has no ladder and is left untouched.
+//
+// Single source consumed by: hasPermissionWithScope (check-time implication,
+// shared by server routes + client pages), authorizeStaff (normalize the JWT),
+// the Role editor (expand on load / normalize on save), and canDoPosVoucher.
 
-const LADDER = ["create", "edit", "delete"] as const;
+const RESOURCE_ORDER = ["create", "edit", "delete"] as const;
+const VOUCHER_ORDER = ["create", "post", "cancel", "delete"] as const;
+const POS_VOUCHER_ORDER = ["create", "cancel", "delete"] as const;
 
-function splitCrud(id: string): { base: string; idx: number } | null {
+// A resolved ladder: every rung id low→high, plus this id's index in it.
+type Ladder = { ids: string[]; idx: number };
+
+function parseLadder(id: string): Ladder | null {
+    const parts = id.split(":");
+
+    // Voucher family: <ns>:voucher:<action>:<kind…>
+    if (parts.length >= 4 && parts[1] === "voucher") {
+        const [ns, , action] = parts;
+        const kind = parts.slice(3).join(":");
+        const order = ns === "pos" ? POS_VOUCHER_ORDER : VOUCHER_ORDER;
+        const idx = (order as readonly string[]).indexOf(action);
+        if (idx < 0) return null;
+        return { ids: order.map((a) => `${ns}:voucher:${a}:${kind}`), idx };
+    }
+
+    // Resource CRUD: <base…>:<create|edit|delete>
     const i = id.lastIndexOf(":");
     if (i < 0) return null;
-    const idx = (LADDER as readonly string[]).indexOf(id.slice(i + 1));
-    return idx >= 0 ? { base: id.slice(0, i), idx } : null;
+    const idx = (RESOURCE_ORDER as readonly string[]).indexOf(id.slice(i + 1));
+    if (idx < 0) return null;
+    const base = id.slice(0, i);
+    return { ids: RESOURCE_ORDER.map((a) => `${base}:${a}`), idx };
 }
 
-/** Lower actions a grant confers: delete → [edit, create]; edit → [create]. */
+/** Lower actions a grant confers (to auto-tick / for reference). */
 export function crudImpliedByGrant(id: string): string[] {
-    const p = splitCrud(id);
-    if (!p) return [];
-    return LADDER.slice(0, p.idx).map((a) => `${p.base}:${a}`);
+    const l = parseLadder(id);
+    return l ? l.ids.slice(0, l.idx) : [];
 }
 
-/** Higher actions that imply this one (to revoke together): create → [edit, delete]. */
+/** Higher actions that imply this one (to revoke together / satisfy a check). */
 export function crudDependentsOnRevoke(id: string): string[] {
-    const p = splitCrud(id);
-    if (!p) return [];
-    return LADDER.slice(p.idx + 1).map((a) => `${p.base}:${a}`);
+    const l = parseLadder(id);
+    return l ? l.ids.slice(l.idx + 1) : [];
 }
 
 /** True when `id` is held directly OR implied by a higher rung in the set. */
-export function crudSatisfied(permissions: ReadonlySet<string>, id: string): boolean {
-    if (permissions.has(id)) return true;
-    return crudDependentsOnRevoke(id).some((higher) => permissions.has(higher));
+export function crudSatisfied(permissions: ReadonlySet<string> | readonly string[], id: string): boolean {
+    const set = Array.isArray(permissions) ? new Set(permissions) : permissions as ReadonlySet<string>;
+    if (set.has(id)) return true;
+    return crudDependentsOnRevoke(id).some((higher) => set.has(higher));
 }
 
 /** Strip lowers implied by a higher rung present in the set — what gets STORED

@@ -1,4 +1,5 @@
 import { VOUCHER_MATRIX, type VoucherAction } from "@/shared/lib/auth/voucherMatrix";
+import { crudSatisfied } from "@/shared/lib/auth/crudLadder";
 import type { VoucherType, InvVoucherType } from "@/generated/prisma/client";
 
 /**
@@ -89,8 +90,13 @@ export function canDoPosVoucher(
     isAdmin = false,
 ): boolean {
     if (isAdmin) return true;
-    const has = (id: string | null) => !!id && (Array.isArray(held) ? held.includes(id) : held.has(id));
-    return has(posVoucherPermissionId(action, kind)) || has(officeEquivalentPosPermission(kind, action));
+    // crudSatisfied honours the ladder on both families: a POS delete grant
+    // covers cancel/create; an office delete/cancel/post grant covers the lower
+    // office-equivalent action (office ⊇ POS).
+    const set = Array.isArray(held) ? new Set(held) : held;
+    const office = officeEquivalentPosPermission(kind, action);
+    return crudSatisfied(set, posVoucherPermissionId(action, kind))
+        || (!!office && crudSatisfied(set, office));
 }
 
 const ACTION_LABEL: Record<PosAction, string> =

@@ -16,30 +16,27 @@ import type { VoucherType, InvVoucherType } from "@/generated/prisma/client";
  * later phase — until then the inventory routes fall back to the generic
  * `inventory:edit/voucher:*` keys (see requiredVoucherPermission).
  *
- * Six matrix actions. The first two are read-access, enforced in report/list
- * views ("next depth" once the module nav is visible); the last four are the
- * write lifecycle, enforced by the voucher route guards:
- *   • view    — see this kind's rows in a report / list.
- *   • open    — open a voucher of this kind to see its details.
- *   • create  — make a new voucher.
+ * Four write-lifecycle actions, enforced by the voucher route guards. They form
+ * a ladder — a higher rung implies the lowers (see crudLadder.ts), so only the
+ * highest granted rung is stored/carried:
+ *   • create  — make a new voucher (draft).
  *   • post    — DRAFT → POSTED (applies stock + GL).
  *   • cancel  — cancel + edit + (future) convert-to-draft. One eligibility.
  *   • delete  — the single removal (recoverable from the Recycle Bin).
- * No own/branch/org scope (not enforced per kind for vouchers).
+ * Read access (view/open) is NOT gated per kind — reads are default-open; seeing
+ * the rows rides the module sidebar nav. No own/branch/org scope either.
  *
  * POS / online channel variants (POS, POS_ORDER, ONLINE_ORDER, ONLINE_INVOICE)
  * are intentionally NOT here — they are gated by their channel (pos:shift:* /
  * the online order flow), not hand-created from the voucher menu.
  */
 
-// The write actions enforced by the voucher route guards (unchanged).
+// The write actions enforced by the voucher route guards — also the matrix
+// columns (view/open retired: reads are default-open). A create⇒post⇒cancel⇒
+// delete ladder (crudLadder.ts) means only the highest granted rung is stored.
 export type VoucherAction = "create" | "post" | "cancel" | "delete";
-// All matrix columns = read access (view/open) + the write actions.
-export type VoucherMatrixAction = "view" | "open" | VoucherAction;
 
-export const VOUCHER_ACTIONS: { key: VoucherMatrixAction; label: string }[] = [
-    { key: "view",   label: "View" },
-    { key: "open",   label: "Open" },
+export const VOUCHER_ACTIONS: { key: VoucherAction; label: string }[] = [
     { key: "create", label: "Create" },
     { key: "post",   label: "Post" },
     { key: "cancel", label: "Cancel / edit" },
@@ -63,8 +60,7 @@ export const VOUCHER_GROUPS: { key: VoucherGroupKey; label: string }[] = [
     { key: "optional",  label: "Optional vouchers" },
 ];
 
-// Raw rows carry only the four write-action ids (matching the existing constants);
-// view/open ids are derived from the create id below (`<ns>:voucher:view:<slug>`).
+// Rows carry the four write-action ids (matching the existing constants).
 interface RawVoucherRow {
     type:   VoucherType | InvVoucherType;
     label:  string;
@@ -78,7 +74,7 @@ export interface VoucherMatrixRow {
     label:  string;
     group:  VoucherGroupKey;
     module: "finance" | "inventory";
-    perms:  Record<VoucherMatrixAction, string>;
+    perms:  Record<VoucherAction, string>;
 }
 
 // ── Accounting (GL) kinds — finance:voucher:<action>:<kind> ──────────────────
@@ -178,24 +174,11 @@ const INV_ROWS: RawVoucherRow[] = INV_KINDS.map((k) => ({
     },
 }));
 
-// Derive the read-access ids (view/open) from the create id, so every kind gets
-// `<ns>:voucher:view:<slug>` and `:open:<slug>` without restating them per row.
-function withReadActions(r: RawVoucherRow): VoucherMatrixRow {
-    return {
-        ...r,
-        perms: {
-            view: r.perms.create.replace(":create:", ":view:"),
-            open: r.perms.create.replace(":create:", ":open:"),
-            ...r.perms,
-        },
-    };
-}
-
 /** Every hand-created voucher kind (GL + inventory), in display order. */
-export const VOUCHER_MATRIX: VoucherMatrixRow[] = [...GL_ROWS, ...INV_ROWS].map(withReadActions);
+export const VOUCHER_MATRIX: VoucherMatrixRow[] = [...GL_ROWS, ...INV_ROWS];
 
 /** GL-only view — kept for callers that only deal with accountancy vouchers. */
-export const GL_VOUCHER_MATRIX: VoucherMatrixRow[] = GL_ROWS.map(withReadActions);
+export const GL_VOUCHER_MATRIX: VoucherMatrixRow[] = GL_ROWS;
 
 const ROW_BY_TYPE = new Map<VoucherType | InvVoucherType, VoucherMatrixRow>(
     VOUCHER_MATRIX.map((r) => [r.type, r]),
@@ -224,30 +207,27 @@ export function requiredVoucherPermission(
 }
 
 // ── Seed helper ──────────────────────────────────────────────────────────────
-const SEED_TEXT: Record<VoucherMatrixAction, (label: string) => { label: string; description: string }> = {
-    view:   (l) => ({ label: `View ${l} (lists)`,  description: `See ${l} vouchers in reports and lists.` }),
-    open:   (l) => ({ label: `Open ${l}`,          description: `Open a ${l} voucher to see its details.` }),
-    create: (l) => ({ label: `Create ${l}`,        description: `Create a ${l} voucher.` }),
-    post:   (l) => ({ label: `Post ${l}`,          description: `Post a ${l} voucher (applies stock + GL).` }),
-    cancel: (l) => ({ label: `Cancel / edit ${l}`, description: `Cancel, edit, or revert a ${l} voucher.` }),
-    delete: (l) => ({ label: `Delete ${l}`,        description: `Remove a ${l} voucher (recoverable from the Recycle Bin).` }),
+const SEED_TEXT: Record<VoucherAction, (label: string) => { label: string; description: string }> = {
+    create: (l) => ({ label: `Create ${l}`,        description: `Create a ${l} voucher (draft).` }),
+    post:   (l) => ({ label: `Post ${l}`,          description: `Post a ${l} voucher (applies stock + GL). Implies Create.` }),
+    cancel: (l) => ({ label: `Cancel / edit ${l}`, description: `Cancel, edit, or revert a ${l} voucher. Implies Post + Create.` }),
+    delete: (l) => ({ label: `Delete ${l}`,        description: `Remove a ${l} voucher (recoverable from the Recycle Bin). Implies Cancel + Post + Create.` }),
 };
 
 /**
- * Permission rows for the voucher matrix, for the bootstrap seed:
- *   • the NEW read-access ids (view / open) for EVERY kind — GL and inventory,
- *   • the inventory write ids (create/post/cancel/delete) from the matrix.
- * The GL write ids are seeded explicitly in bootstrap-seed.ts (already enforced),
- * so they are not repeated here. Generated from the matrix so nothing drifts.
+ * Permission rows for the voucher matrix, for the bootstrap seed: the INVENTORY
+ * write ids (create/post/cancel/delete). The GL write ids are seeded explicitly
+ * in bootstrap-seed.ts (already enforced), so they are not repeated here. View /
+ * open ids were retired (reads are default-open). Generated so nothing drifts.
  */
 export function voucherPermissionSeeds(): { id: string; label: string; module: string; description: string }[] {
-    return VOUCHER_MATRIX.flatMap((r) => {
-        const actions: VoucherMatrixAction[] = r.module === "inventory"
-            ? ["view", "open", "create", "post", "cancel", "delete"]
-            : ["view", "open"];
-        return actions.map((a) => {
-            const text = SEED_TEXT[a](r.label);
-            return { id: r.perms[a], label: text.label, module: r.module, description: text.description };
-        });
-    });
+    const actions: VoucherAction[] = ["create", "post", "cancel", "delete"];
+    return VOUCHER_MATRIX.flatMap((r) =>
+        r.module === "inventory"
+            ? actions.map((a) => {
+                const text = SEED_TEXT[a](r.label);
+                return { id: r.perms[a], label: text.label, module: r.module, description: text.description };
+            })
+            : [],
+    );
 }
