@@ -3,16 +3,26 @@ import { NextResponse } from "next/server";
 import { requireAuth, hasPermission } from "@/shared/lib/auth/permissions";
 import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { z } from "zod";
-import { validateRequest, handleApiError } from "@/shared/lib/api";
+import { validateRequest, handleApiError, pickDefined } from "@/shared/lib/api";
 
 type Params = { params: Promise<{ id: string }> };
 
-// Only `creditLimit` is editable here for now. null = no credit (cash-only),
-// 0 behaves identically, a positive value grants that much credit headroom.
+// Party-ledger edits reachable from the Contacts profile. `creditLimit`:
+// null = no credit (cash-only), 0 behaves identically, a positive value grants
+// that much credit headroom. `accountGroup` flips the ledger between Sundry
+// Debtors (customer) and Sundry Creditors (supplier) — resolved to a groupId
+// server-side so the client never needs the group's primary key.
 const updateSchema = z.object({
-    creditLimit: z.number().min(0).nullable(),
-});
+    creditLimit: z.number().min(0).nullable().optional(),
+    accountGroup: z
+        .enum([ACCOUNT_GROUPS.SUNDRY_DEBTORS, ACCOUNT_GROUPS.SUNDRY_CREDITORS])
+        .optional(),
+}).refine(
+    (d) => d.creditLimit !== undefined || d.accountGroup !== undefined,
+    { message: "Nothing to update" },
+);
 
 // GET /api/accounts/[id] — single ledger account
 export async function GET(_: Request, { params }: Params) {
@@ -88,14 +98,30 @@ export async function PATCH(req: Request, { params }: Params) {
     const { data, error } = await validateRequest(req, updateSchema);
     if (error) return error;
 
+    // Resolve the group name → id when the caller is reclassifying the party.
+    let groupId: number | undefined;
+    if (data.accountGroup !== undefined) {
+        const group = await prisma.accountGroup.findFirst({
+            where: { name: data.accountGroup },
+            select: { id: true },
+        });
+        if (!group) {
+            return NextResponse.json(
+                { error: `Group "${data.accountGroup}" not found` },
+                { status: 400 },
+            );
+        }
+        groupId = group.id;
+    }
+
     try {
         const updated = await prisma.account.update({
             where: { id: accountId },
-            data: { creditLimit: data.creditLimit },
-            select: { id: true, creditLimit: true },
+            data: pickDefined({ creditLimit: data.creditLimit, groupId }),
+            select: { id: true, creditLimit: true, groupId: true },
         });
         return NextResponse.json(updated);
     } catch (e) {
-        return handleApiError(e, "Failed to update credit limit");
+        return handleApiError(e, "Failed to update account");
     }
 }

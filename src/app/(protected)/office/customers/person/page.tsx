@@ -61,6 +61,7 @@ interface CustomerDetail {
     id: number;
     accountId: number;
     creditLimit: string | null;
+    accountGroupName: string | null;
     name: string;
     phone: string | null;
     email: string | null;
@@ -345,6 +346,7 @@ export default function CustomersPage() {
                                         canEditCustomer={canEditCustomer}
                                         canManageUsers={canManageUsers}
                                         onSaved={refetchDetail}
+                                        onConverted={(companyId) => router.push(`/office/customers/all?companyId=${companyId}`)}
                                     />
                                 )}
 

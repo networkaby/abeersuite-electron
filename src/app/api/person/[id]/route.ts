@@ -34,6 +34,7 @@ export async function GET(
             emails: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }] },
             account: {
                 include: {
+                    group: { select: { id: true, name: true } },
                     devices: {
                         include: {
                             // A device's repair tickets hang off TicketRepair now.
@@ -75,6 +76,8 @@ export async function GET(
         email: person.emails[0]?.email ?? null,
         accountId: person.account!.id,
         creditLimit: person.account!.creditLimit,
+        accountGroupId: person.account!.group?.id ?? null,
+        accountGroupName: person.account!.group?.name ?? null,
         // Flatten each device's repair tickets back to the old device.tickets shape
         // (core ticket + status + repair fields), newest first.
         devices: person.account!.devices.map((d) => ({

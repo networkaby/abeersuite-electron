@@ -3,6 +3,7 @@
 import type { ComponentProps } from "react";
 import PersonProfileEdit from "./PersonProfileEdit";
 import AccountCreditLimitCard from "./AccountCreditLimitCard";
+import AccountClassificationCard from "./AccountClassificationCard";
 import DevicesMiniGrid from "./DevicesMiniGrid";
 import CustomerEmergencyPasswordResetCard from "./CustomerEmergencyPasswordResetCard";
 
@@ -18,6 +19,7 @@ interface Props {
         id: number;
         accountId: number;
         creditLimit: string | null;
+        accountGroupName?: string | null;
         name: string;
         address: string | null;
         phones: ProfileData["phones"];
@@ -27,9 +29,11 @@ interface Props {
     canEditCustomer: boolean;
     canManageUsers: boolean;
     onSaved: () => void;
+    /** Navigate to the new company after a Person → Company conversion. */
+    onConverted: (companyId: number) => void;
 }
 
-export default function PersonProfileTab({ detail, canEditCustomer, canManageUsers, onSaved }: Props) {
+export default function PersonProfileTab({ detail, canEditCustomer, canManageUsers, onSaved, onConverted }: Props) {
     return (
         <div className="space-y-6">
             <PersonProfileEdit
@@ -49,6 +53,16 @@ export default function PersonProfileTab({ detail, canEditCustomer, canManageUse
                 initialLimit={detail.creditLimit}
                 canEdit={canEditCustomer}
                 onSaved={onSaved}
+            />
+            <AccountClassificationCard
+                key={`grp-${detail.id}`}
+                accountId={detail.accountId}
+                personId={detail.id}
+                personName={detail.name}
+                groupName={detail.accountGroupName ?? null}
+                canEdit={canEditCustomer}
+                onSaved={onSaved}
+                onConverted={onConverted}
             />
             <DevicesMiniGrid devices={detail.devices} />
             {canManageUsers && <CustomerEmergencyPasswordResetCard customerId={detail.id} />}

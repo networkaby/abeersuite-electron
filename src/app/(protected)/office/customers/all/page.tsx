@@ -56,6 +56,7 @@ type PersonDetail = {
     id: number;
     accountId: number;
     creditLimit: string | null;
+    accountGroupName: string | null;
     name: string;
     phone: string | null;
     email: string | null;
@@ -395,6 +396,7 @@ export default function AllCustomersPage() {
                                     canEditCustomer={canEditCustomer}
                                     canManageUsers={canManageUsers}
                                     onSaved={refetchPersonDetail}
+                                    onConverted={(companyId) => setSelected({ kind: "company", id: companyId })}
                                 />
                             )}
 
