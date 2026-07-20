@@ -68,6 +68,15 @@ export const QUICK_ACTION_OPTIONS: { permission: string; label: string; icon: Lu
     return out;
 })();
 
+// Workspace/universal permissions — offerable to ANY role regardless of the
+// department pool (like the Workspace sidebar items: Inbox, Work Flow, POS).
+// The Role Matrix lens always includes these so they can be granted in any
+// department. Module-scoped actions (deals:create, tasks:create, vouchers) are
+// NOT here — those stay pool-gated to the departments that carry their module.
+export const POOL_EXEMPT_PERMISSION_IDS = new Set<string>([
+    "quick-actions:more",
+]);
+
 export interface Permission {
     id: string;
     label: string;

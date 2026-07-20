@@ -16,6 +16,7 @@ import {
     VOUCHER_COLUMN_GROUPS,
     VOUCHER_ROWS_BY_GROUP,
     POS_BLOCK_SHIFT_IDS,
+    POOL_EXEMPT_PERMISSION_IDS,
     EMPTY_ROLE,
     NO_COPY_ROLE,
     roleToForm,
@@ -141,7 +142,7 @@ export default function RolePage() {
     // department pool. A currently-granted permission is always shown (so nothing
     // granted is ever hidden), even in the defensive case it sits outside the pool.
     const inLens = useCallback(
-        (id: string) => poolIds === null || poolIds.has(id) || selected.has(id),
+        (id: string) => POOL_EXEMPT_PERMISSION_IDS.has(id) || poolIds === null || poolIds.has(id) || selected.has(id),
         [poolIds, selected],
     );
 
