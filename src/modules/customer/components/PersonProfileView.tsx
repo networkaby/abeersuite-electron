@@ -5,6 +5,7 @@ import { ArrowLeft, User, Building2, Smartphone, Eye, ArrowRight } from "lucide-
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { auth } from "@/auth";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
 import CustomerLinkPanel from "@/modules/customer/components/CustomerLinkPanel";
 import CustomerEmergencyPasswordResetCard from "@/modules/customer/components/CustomerEmergencyPasswordResetCard";
@@ -17,7 +18,7 @@ type Props = {
 export default async function PersonProfileView({ personId, backHref = "/office/customers" }: Props) {
     const session = await auth();
     const permissions = ((session?.user as { permissions?: string[] } | undefined)?.permissions ?? []);
-    const canEmergencyReset = permissions.includes(PERMISSIONS.USERS_EDIT) || permissions.includes(PERMISSIONS.ADMIN_BYPASS);
+    const canEmergencyReset = hasPermissionWithScope(permissions, PERMISSIONS.USERS_EDIT);
 
     const person = await prisma.person.findUnique({
         where: { id: personId },

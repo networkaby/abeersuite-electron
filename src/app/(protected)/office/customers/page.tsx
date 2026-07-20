@@ -2,18 +2,16 @@ import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
-import { hasModuleNavAccess } from "@/shared/lib/auth/permissionScope";
+import { hasModuleNavAccess, hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import ContactsWorkspace from "@/modules/customer/components/ContactsWorkspace";
 
 export default async function ContactsPage() {
     const session = await auth();
     const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
-    const isAdmin = permissions.includes(PERMISSIONS.ADMIN_BYPASS);
     const canView = hasModuleNavAccess(permissions, "customers");
     if (!canView) redirect("/office/work-flow-inbox");
-    const canEdit =
-        isAdmin ||
-        permissions.includes(PERMISSIONS.CUSTOMERS_EDIT);
+    // Covers bypass + the CRUD ladder (customers:delete implies edit).
+    const canEdit = hasPermissionWithScope(permissions, PERMISSIONS.CUSTOMERS_EDIT);
 
     const [positionRows, creditConfig] = await Promise.all([
         prisma.position.findMany({

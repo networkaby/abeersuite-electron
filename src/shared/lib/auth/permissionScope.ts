@@ -1,3 +1,5 @@
+import { crudSatisfied } from "@/shared/lib/auth/crudLadder";
+
 export type PermissionScope = "own" | "department" | "branch" | "org";
 
 const SCOPE_ORDER: PermissionScope[] = ["own", "department", "branch", "org"];
@@ -50,6 +52,9 @@ export function hasPermissionWithScope(
     const permissions = new Set(permissionsInput);
     if (allowAdminBypass && permissions.has("admin:bypass")) return true;
     if (permissions.has(permissionId)) return true;
+    // CRUD ladder: only the highest rung is stored/carried — an edit/create
+    // check passes when a higher rung on the same resource is held.
+    if (crudSatisfied(permissions, permissionId)) return true;
 
     const parts = permissionId.split(":");
     if (parts.length === 3 && isScope(parts[2])) {

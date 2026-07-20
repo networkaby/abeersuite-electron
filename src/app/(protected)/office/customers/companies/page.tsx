@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { useDebouncedValue } from "@/shared/hooks";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { initials } from "@/modules/customer/lib/initials";
 import { phoneError, emailError } from "@/shared/components/PartySearchAndCreate";
 import type { CustomerDevice } from "@/modules/customer/lib/customerTypes";
@@ -78,11 +79,13 @@ export default function CompaniesPage() {
     const router = useRouter();
     const { data: session } = useSession();
     const perms = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
-    const canManageLoyalty = perms.includes(PERMISSIONS.LOYALTY_EDIT) || perms.includes(PERMISSIONS.ADMIN_BYPASS);
+    // hasPermissionWithScope covers admin:bypass AND the CRUD ladder (only the
+    // highest rung is stored — e.g. customers:delete implies edit).
+    const canManageLoyalty = hasPermissionWithScope(perms, PERMISSIONS.LOYALTY_EDIT);
     // Companies share the Contacts (customers:*) permission set — see role page.
-    const canEditCompany = perms.includes(PERMISSIONS.CUSTOMERS_EDIT) || perms.includes(PERMISSIONS.ADMIN_BYPASS);
+    const canEditCompany = hasPermissionWithScope(perms, PERMISSIONS.CUSTOMERS_EDIT);
     // Without this grant the list hides suppliers (Sundry Creditors) — customers only.
-    const canSeeCreditors = perms.includes(PERMISSIONS.CUSTOMERS_VIEW_CREDITORS) || perms.includes(PERMISSIONS.ADMIN_BYPASS);
+    const canSeeCreditors = hasPermissionWithScope(perms, PERMISSIONS.CUSTOMERS_VIEW_CREDITORS);
     const [companies, setCompanies] = useState<CompanyListItem[]>([]);
     const [search, setSearch] = useState("");
     const [selectedId, setSelectedId] = useState<number | null>(null);

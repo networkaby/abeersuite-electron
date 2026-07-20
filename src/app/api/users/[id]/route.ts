@@ -7,6 +7,7 @@ import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 
 const PROFILE_SELECT = {
     id:          true,
@@ -147,9 +148,7 @@ export async function PUT(
 
     const isSelf  = caller.id === userId;
     // Editing another user needs users:edit (or the users:manage umbrella / bypass).
-    const isAdmin = caller.permissions.includes(PERMISSIONS.USERS_EDIT)
-        || caller.permissions.includes(PERMISSIONS.USERS_EDIT)
-        || caller.permissions.includes(PERMISSIONS.ADMIN_BYPASS);
+    const isAdmin = hasPermissionWithScope(caller.permissions, PERMISSIONS.USERS_EDIT);
 
     if (!isSelf && !isAdmin) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });

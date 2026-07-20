@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { useDebouncedValue } from "@/shared/hooks";
 import { LoyaltyPanel } from "@/modules/loyalty/components/LoyaltyPanel";
 import { formatDate } from "@/shared/lib/format/formatDate";
@@ -111,11 +112,13 @@ export default function AllCustomersPage() {
     const [companyLinkKey, setCompanyLinkKey] = useState(0);
 
     const perms = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
-    const canManageUsers = perms.includes(PERMISSIONS.USERS_EDIT) || perms.includes(PERMISSIONS.ADMIN_BYPASS);
-    const canEditCustomer = perms.includes(PERMISSIONS.CUSTOMERS_EDIT) || perms.includes(PERMISSIONS.ADMIN_BYPASS);
-    const canManageLoyalty = perms.includes(PERMISSIONS.LOYALTY_EDIT) || perms.includes(PERMISSIONS.ADMIN_BYPASS);
+    // hasPermissionWithScope covers admin:bypass AND the CRUD ladder (only the
+    // highest rung is stored — e.g. customers:delete implies edit).
+    const canManageUsers = hasPermissionWithScope(perms, PERMISSIONS.USERS_EDIT);
+    const canEditCustomer = hasPermissionWithScope(perms, PERMISSIONS.CUSTOMERS_EDIT);
+    const canManageLoyalty = hasPermissionWithScope(perms, PERMISSIONS.LOYALTY_EDIT);
     // Without this grant both lists hide suppliers (Sundry Creditors) — customers only.
-    const canSeeCreditors = perms.includes(PERMISSIONS.CUSTOMERS_VIEW_CREDITORS) || perms.includes(PERMISSIONS.ADMIN_BYPASS);
+    const canSeeCreditors = hasPermissionWithScope(perms, PERMISSIONS.CUSTOMERS_VIEW_CREDITORS);
 
     // Server-side search across both lists. The old in-browser filter only saw
     // the first page of people the API returned, so matches beyond it vanished.

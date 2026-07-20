@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import { timingSafeEqual } from "crypto";
 import { isStaffEmailDomainAllowed } from "@/shared/lib/auth/staffEmailAllowlist";
 import { isLoginBlocked, recordLoginFailure, clearLoginFailures } from "@/shared/lib/auth/loginRateLimit";
-import { crudImpliedByGrant } from "@/shared/lib/auth/crudLadder";
+import { crudDependentsOnRevoke, normalizeCrudGrants } from "@/shared/lib/auth/crudLadder";
 
 export type StaffAuthUser = {
     id: string;
@@ -158,18 +158,19 @@ export async function authorizeStaffCredentials(
         if (o.type === "GRANT") effective.add(o.permissionId);
     }
 
-    // CRUD ladder — delete ⇒ edit ⇒ create on the same resource (shared helper;
-    // the Role editor cascades its ticks with the same rules). Expanding here
-    // (not in hasPermission) means the client `perms.includes(...)` and the
-    // server checks agree.
-    for (const id of [...effective]) {
-        for (const lower of crudImpliedByGrant(id)) effective.add(lower);
+    // Explicit DENY wins last. Denying a rung also drops the highers that imply
+    // it — otherwise check-time implication (hasPermissionWithScope) would
+    // resurrect the denied action through the surviving higher grant.
+    for (const o of overrides) {
+        if (o.type === "GRANT") continue;
+        effective.delete(o.permissionId);
+        for (const higher of crudDependentsOnRevoke(o.permissionId)) effective.delete(higher);
     }
 
-    // Explicit DENY overrides win last — even against an implied grant.
-    for (const o of overrides) {
-        if (o.type !== "GRANT") effective.delete(o.permissionId);
-    }
+    // CRUD ladder: carry only the HIGHEST rung per resource — lowers are implied
+    // at check time — so the session/JWT stays small even where legacy role
+    // grants still store full create/edit/delete triads.
+    const normalized = normalizeCrudGrants(effective);
 
     // Rank = max rank across user's role + every held Position's roleTemplate.
     let rank = user.userRole?.rank ?? 0;
@@ -249,7 +250,7 @@ export async function authorizeStaffCredentials(
         email: user.email,
         role: user.role,
         roles,
-        permissions: [...effective],
+        permissions: [...normalized],
         rank,
         scope: user.scope,
         roleLabel,

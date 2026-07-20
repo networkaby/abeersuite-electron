@@ -12,6 +12,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth, requireAnyPermission } from "@/shared/lib/auth/permissions";
 import { resolveActiveBranchId, BranchAccessError } from "@/shared/lib/auth/activeBranch";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { auth } from "@/auth";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { z } from "zod";
@@ -24,14 +25,10 @@ export async function GET(req: NextRequest) {
         const session = await auth();
         const sessionPerms = (session?.user as { permissions?: string[] })?.permissions ?? [];
         // Seeded admins don't carry admin:bypass (env-super-admin only). Viewing the
-        // admin counter list is allowed for anyone who can act on counters — the
-        // umbrella `pos-counters:manage` or any of create/edit/delete.
-        const canManageCounters =
-            sessionPerms.includes(PERMISSIONS.POS_COUNTERS_EDIT) ||
-            sessionPerms.includes(PERMISSIONS.POS_COUNTERS_CREATE) ||
-            sessionPerms.includes(PERMISSIONS.POS_COUNTERS_EDIT) ||
-            sessionPerms.includes(PERMISSIONS.POS_COUNTERS_DELETE) ||
-            sessionPerms.includes(PERMISSIONS.ADMIN_BYPASS);
+        // admin counter list is allowed for anyone who can act on counters — any
+        // of create/edit/delete. Checking the LOWEST rung covers all three (the
+        // CRUD ladder implies create from edit/delete) plus admin:bypass.
+        const canManageCounters = hasPermissionWithScope(sessionPerms, PERMISSIONS.POS_COUNTERS_CREATE);
 
         const { searchParams } = new URL(req.url);
         const scope = searchParams.get("scope");

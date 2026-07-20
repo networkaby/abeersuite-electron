@@ -11,7 +11,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { PermissionMatrix as SharedPermissionMatrix, type MatrixRow } from "@/shared/components/PermissionMatrix";
-import { crudImpliedByGrant, crudDependentsOnRevoke } from "@/shared/lib/auth/crudLadder";
+import { crudImpliedByGrant, crudDependentsOnRevoke, expandCrudGrants, normalizeCrudGrants } from "@/shared/lib/auth/crudLadder";
 import {
     VOUCHER_COLUMN_GROUPS,
     VOUCHER_ROWS_BY_GROUP,
@@ -95,7 +95,9 @@ export default function RolePage() {
 
     useEffect(() => {
         if (!activeRole) return;
-        const granted = new Set(activeRole.permissions.map((permission) => permission.permissionId));
+        // Only the highest CRUD rung is STORED (customers:delete alone) — expand
+        // for display so Edit + Create show ticked; save normalizes back down.
+        const granted = expandCrudGrants(activeRole.permissions.map((permission) => permission.permissionId));
         setSelected(granted);
         setOriginal(new Set(granted));
         setRoleForm(roleToForm(activeRole));
@@ -253,7 +255,10 @@ export default function RolePage() {
         setSavingPerms(true);
         try {
             await axios.put(`/api/roles/${activeRole.id}/permissions`, {
-                permissionIds: [...selected],
+                // Persist only the highest CRUD rung per resource — ticked lowers
+                // are implied at check time, so storing them would just bloat
+                // grants + the session token.
+                permissionIds: [...normalizeCrudGrants(selected)],
             });
             setOriginal(new Set(selected));
             toast.success("Permissions saved");
