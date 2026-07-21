@@ -24,6 +24,25 @@ export async function spawnDelivery(ref: OrderRef): Promise<void> {
     const pipeline = await getDeliveryPipeline();
     const entry = pipeline?.statuses.find((s) => s.isEntryPoint) ?? pipeline?.statuses[0];
     if (!pipeline || !entry) return;
+
+    // A shop order carries the courier the customer chose at checkout + the
+    // shipping address + the charge they paid — inherit them onto the delivery.
+    // An inv (counter/office) order has no such choice, so fall back to OWN_BOY.
+    let carrier = "OWN_BOY";
+    let addressJson: unknown = null;
+    let chargeToCustomerPaise = 0;
+    if (ref.source === "shop") {
+        const order = await prisma.ticketOrder.findUnique({
+            where: { ticketId: ref.id },
+            select: { courier: true, shippingAddress: true, shippingChargePaise: true },
+        });
+        if (order) {
+            carrier = order.courier ?? "OWN_BOY";
+            addressJson = order.shippingAddress ?? null;
+            chargeToCustomerPaise = order.shippingChargePaise ?? 0;
+        }
+    }
+
     await prisma.ticket.create({
         data: {
             pipelineId: pipeline.id,
@@ -32,7 +51,9 @@ export async function spawnDelivery(ref: OrderRef): Promise<void> {
                 create: {
                     orderSource: ref.source,
                     orderId: ref.id,
-                    carrier: "OWN_BOY", // default in-house delivery boy; rate-shop is Phase 4b
+                    carrier,
+                    addressJson: addressJson ?? undefined,
+                    chargeToCustomerPaise,
                 },
             },
         },

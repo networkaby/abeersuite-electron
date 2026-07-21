@@ -81,6 +81,7 @@ export interface PersonalSnapshot {
     userPositions: Row[];
     userPermissions: Row[];
     paymentGateways: Row[];
+    deliveryMethods: Row[];
     posCounters: Row[];
     posPaymentAccounts: Row[];
     posServices: Row[];
@@ -320,6 +321,9 @@ export async function exportPersonal(prisma: Db): Promise<PersonalSnapshot> {
     const userPositions = (await prisma.userPosition.findMany()).map((up) => externalize(omit(up, ["createdAt"]), { userId: "user" }, idx));
     const userPermissions = (await prisma.userPermission.findMany()).map((up) => externalize(omit(up, ["id", "createdAt"]), { userId: "user" }, idx));
 
+    // ── Delivery methods (courier options offered at checkout — config only) ──
+    const deliveryMethods = (await prisma.deliveryMethod.findMany()).map((m) => omit(m, ["id", "createdAt", "updatedAt"]));
+
     // ── POS setup ──
     const paymentGateways = (await prisma.paymentGateway.findMany()).map((g) => omit(g, ["id", "createdAt", "updatedAt"]));
     const posCounters = (await prisma.posCounter.findMany()).map((c) => {
@@ -349,7 +353,7 @@ export async function exportPersonal(prisma: Db): Promise<PersonalSnapshot> {
         tierPeriods,
         branches, departments,
         roles, rolePermissions, departmentPermissions, positions, positionRoles, users, userPositions, userPermissions,
-        paymentGateways, posCounters, posPaymentAccounts, posServices,
+        paymentGateways, deliveryMethods, posCounters, posPaymentAccounts, posServices,
         pipelines, workGroups, works, ticketStatuses, ticketWorkers, statusTransitions, workerTransitions,
     };
 }
@@ -575,6 +579,12 @@ export async function importPersonal(prisma: Db, snap: PersonalSnapshot): Promis
     // ── Phase 7: POS setup ──
     for (const g of snap.paymentGateways) await put(prisma.paymentGateway, { provider: g.provider, displayName: g.displayName }, g);
     count("paymentGateways", snap.paymentGateways.length);
+
+    // Delivery methods (courier options). Keyed by kind+displayName; guard older
+    // snapshots taken before this field existed.
+    const deliveryMethods = snap.deliveryMethods ?? [];
+    for (const m of deliveryMethods) await put(prisma.deliveryMethod, { kind: m.kind, displayName: m.displayName }, m);
+    count("deliveryMethods", deliveryMethods.length);
     idx = await buildRefIndex(prisma); // gateways now resolvable
     for (const c of snap.posCounters) {
         const data = internalize(c, { tillAccountId: "account" }, idx);

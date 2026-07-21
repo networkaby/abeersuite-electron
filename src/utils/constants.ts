@@ -449,14 +449,11 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         dashboardHref: "",
         pathPrefixes: [""],
         children: [
-            // { label: "Overview", icon: ChartArea, href: "/office/roadmap/delivery" },
-            // { label: "Shipments", icon: Package, href: "/office/roadmap/delivery/shipments" },
-            // { label: "Couriers", icon: Building2, href: "/office/roadmap/delivery/couriers" },
+            // Live: the Delivery board (P8) is under Orders → Delivery
+            // (/office/orders/delivery); courier config (Shiprocket / Custom / Local
+            // boy) is under Settings → Couriers (/office/settings/couriers).
+            // Still roadmap:
             // { label: "Proof of delivery", icon: FileText, href: "/office/roadmap/delivery/pod" },
-
-            //shiprocket integrati
-            //Local Courier Integration
-
         ],
     },
 
@@ -603,6 +600,7 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     { label: "Org Defaults", href: "/office/settings/org-defaults", icon: Settings, permission: "settings:manage" },
     { label: "E-Commerce", href: "/office/settings/ecommerce", icon: ShoppingCart, permission: "settings:manage" },
     { label: "Payment Methods", href: "/office/settings/payment-methods", icon: CreditCard, permission: "settings:manage" },
+    { label: "Couriers", href: "/office/settings/couriers", icon: Truck, permission: "settings:manage" },
     { label: "POS Services", href: "/office/settings/pos-services", icon: Wrench, permission: "settings:manage" },
     { label: "Credit Limit", href: "/office/settings/credit-limit", icon: Calculator, permission: "settings:manage" },
     { label: "Workflow", href: "/office/settings/workflow", icon: Workflow, permission: "settings:manage" },

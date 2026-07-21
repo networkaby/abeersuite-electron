@@ -61,6 +61,9 @@ export default function ProductForm({
         initial?.stock === null || initial?.stock === undefined ? "" : String(initial.stock)
     );
     const [lowStockThreshold, setLowStockThreshold] = useState(String(initial?.lowStockThreshold ?? 5));
+    const [weightGrams, setWeightGrams] = useState<string>(
+        initial?.weightGrams == null ? "" : String(initial.weightGrams)
+    );
     const [isListedInShop, setIsListedInShop] = useState(initial?.isListedInShop ?? true);
     const [allowBackorder, setAllowBackorder] = useState(initial?.allowBackorder ?? false);
     const [isActive, setIsActive] = useState(initial?.isActive ?? true);
@@ -90,6 +93,7 @@ export default function ProductForm({
         setGalleryUrls(initial.galleryUrls ?? []);
         setStock(initial.stock === null || initial.stock === undefined ? "" : String(initial.stock));
         setLowStockThreshold(String(initial.lowStockThreshold ?? 5));
+        setWeightGrams(initial.weightGrams == null ? "" : String(initial.weightGrams));
         setIsListedInShop(initial.isListedInShop ?? true);
         setAllowBackorder(initial.allowBackorder ?? false);
         setIsActive(initial.isActive ?? true);
@@ -140,6 +144,7 @@ export default function ProductForm({
         groupId: initial?.groupId ?? null,
         brandId: initial?.brandId ?? null,
         warrantyTermId: initial?.warrantyTermId ?? null,
+        weightGrams: weightGrams.trim() === "" ? null : parseInt(weightGrams, 10),
         brandName: initial?.brandName ?? null,
         groupName: initial?.groupName ?? null,
         shopCategory: shopCategory.trim() || null,
@@ -170,6 +175,7 @@ export default function ProductForm({
             specs,
             stock: stock.trim() === "" ? null : parseInt(stock, 10),
             lowStockThreshold: parseInt(lowStockThreshold, 10) || 5,
+            weightGrams: weightGrams.trim() === "" ? null : parseInt(weightGrams, 10),
             // Never send "listed" for a product that isn't shop-ready (server 422s).
             isListedInShop: listedEffective,
             allowBackorder,
@@ -258,6 +264,15 @@ export default function ProductForm({
                         <Label>Low-stock threshold</Label>
                         <Input value={lowStockThreshold} onChange={(e) => setLowStockThreshold(e.target.value)} inputMode="numeric" />
                     </div>
+                </div>
+                <div className="grid gap-2">
+                    <Label>Shipping weight (grams)</Label>
+                    <Input
+                        value={weightGrams}
+                        onChange={(e) => setWeightGrams(e.target.value)}
+                        inputMode="numeric"
+                        placeholder="e.g. 500 — used to rate couriers at checkout"
+                    />
                 </div>
                 <div className="rounded-lg border border-border p-3 space-y-2">
                     <div className="flex items-center justify-between">

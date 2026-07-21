@@ -23,7 +23,7 @@ The project is almost complete. Now we are focusing on:
 
 Important:
 
-- Production DB in use
+- demo db , full reset allowed
 
 Guidelines:
 
@@ -89,7 +89,7 @@ Read `docs/seeds.md` before modifying seeds.
 
 Two bootstraps, different jobs:
 
-- `personal-bootstrap.ts` — **what `pnpm prisma db seed` runs.** Self-complete restore of OUR configuration: code-owned catalog (`lib/codeOwnedCatalog.ts`) + the captured snapshot (`data/personal.local.json`). Upsert-only, non-destructive — safe on the live DB.
+- `personal-bootstrap.ts` — **what** `pnpm prisma db seed` **runs.** Self-complete restore of OUR configuration: code-owned catalog (`lib/codeOwnedCatalog.ts`) + the captured snapshot (`data/personal.local.json`). Upsert-only, non-destructive — safe on the live DB.
 - `bootstrap-seed.ts` — the generic NEW-CLIENT installer (`pnpm seed:generic`). Creates the generic demo world. **Never run it during normal development** — it resets config to generic.
 - `hard-clean.ts` removes only dummy/helper data. Never delete bootstrap data.
 
@@ -106,8 +106,9 @@ The dev loop is **capture → edit → seed**:
 1. **Update generic bootstrap** — `lib/codeOwnedCatalog.ts` for permission **definitions** (single source; both bootstraps import it) and `bootstrap-seed.ts` if generic demo content is affected.
 2. **Update personal bootstrap** — `data/personal.local.json` for permission **grants** and our real config (R1 is auto-topped-up with new catalog permissions by the personal seed, so catalog-only additions need no manual grant edit); `lib/personalSnapshot.ts` if a NEW config table was added (export + import).
 3. **Apply to the DB with a targeted script — never a full seed.** Full `pnpm prisma db seed` costs the DB (hundreds of remote upserts) and is NOT how a single change lands. Instead:
-   - Permissions → `pnpm seed:apply-permissions` (edit its `ADDITIONS` list first).
-   - Anything else → write a small one-off tsx script on the same pattern (connect like `apply-permissions.ts`, upsert just the changed rows, idempotent), run it, then delete or keep it as the next scratchpad.
+
+- Permissions → `pnpm seed:apply-permissions` (edit its `ADDITIONS` list first).
+- Anything else → write a small one-off tsx script on the same pattern (connect like `apply-permissions.ts`, upsert just the changed rows, idempotent), run it, then delete or keep it as the next scratchpad.
 
 Also update affected `dummy-*.ts` and `hard-clean.ts` (if needed).
 

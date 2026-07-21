@@ -16,6 +16,8 @@ export type ShopProductAdmin = ShopProductPublic & {
     groupId: number | null;
     brandId: number | null;
     warrantyTermId: number | null;
+    /** Shipping weight of one unit in grams (null = unset → quote uses fallback). */
+    weightGrams: number | null;
     /** Resolved brand / product-group display names (null when unset). */
     brandName: string | null;
     groupName: string | null;
@@ -51,6 +53,7 @@ export function invProductToAdmin(
         groupId: p.groupId,
         brandId: p.brandId,
         warrantyTermId: p.warrantyTermId,
+        weightGrams: p.weightGrams ?? null,
         brandName: p.brand?.name ?? null,
         groupName: p.group?.name ?? null,
         shopCategory: p.shopCategory,

@@ -33,6 +33,7 @@ const patchSchema = z.object({
     specs: z.record(z.string(), z.string()).optional(),
     stock: z.coerce.number().int().min(0).optional().nullable(),
     lowStockThreshold: z.coerce.number().int().min(0).optional(),
+    weightGrams: z.coerce.number().int().min(0).max(1_000_000).optional().nullable(),
     isListedInShop: z.boolean().optional(),
     allowBackorder: z.boolean().optional(),
     isActive: z.boolean().optional(),
@@ -109,6 +110,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
         if (specsJson !== undefined) data.specsJson = specsJson;
         if (b.stock !== undefined) data.stock = b.stock;
         if (b.lowStockThreshold !== undefined) data.lowStockThreshold = b.lowStockThreshold;
+        if (b.weightGrams !== undefined) data.weightGrams = b.weightGrams;
         if (b.allowBackorder !== undefined) data.allowBackorder = b.allowBackorder;
         if (b.isActive !== undefined) data.isActive = b.isActive;
 

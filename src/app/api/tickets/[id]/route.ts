@@ -190,7 +190,7 @@ export async function PUT(
             ...(body.expectedReturn !== undefined && { expectedReturn: body.expectedReturn ? new Date(body.expectedReturn) : null }),
             ...(body.receivedBackAt !== undefined && { receivedBackAt: body.receivedBackAt ? new Date(body.receivedBackAt) : null }),
             ...(body.externalRef !== undefined  && { externalRef: body.externalRef || null }),
-            ...(body.serviceCenterId !== undefined && { serviceCenterId: body.serviceCenterId ? Number(body.serviceCenterId) : null }),
+            ...(body.serviceCenterId !== undefined && { serviceCenter: body.serviceCenterId ? { connect: { id: Number(body.serviceCenterId) } } : { disconnect: true } }),
             ...(body.isWarranty !== undefined   && { isWarranty: Boolean(body.isWarranty) }),
             ...(body.warrantyRef !== undefined  && { warrantyRef: body.warrantyRef || null }),
             ...(body.purchaseDate !== undefined && { purchaseDate: body.purchaseDate ? new Date(body.purchaseDate) : null }),
@@ -199,7 +199,7 @@ export async function PUT(
         const ticket = await prisma.ticket.update({
             where: { id: Number(id) },
             data: {
-                ...(body.status !== undefined   && { status: body.status }),
+                ...(body.status !== undefined   && { ticketStatus: { connect: { id: body.status } } }),
                 ...(body.priority !== undefined && { priority: body.priority }),
                 ...(body.notes !== undefined    && { notes: body.notes }),
                 ...(Object.keys(repairData).length ? { repair: { update: repairData } } : {}),

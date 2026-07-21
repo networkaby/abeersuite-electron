@@ -1320,6 +1320,33 @@ async function main() {
     });
     console.log("      ✓ StrategyPoint BASE row present\n");
 
+    // ── Section 17: Delivery methods (courier options at checkout) ────────────
+    // Three couriers the storefront offers; the customer picks one at checkout and
+    // its rate becomes the order's shipping charge. create-only per kind so an
+    // admin's rate edits (Settings → Couriers) survive a reseed.
+    //   CUSTOM    – a manually-run courier, flat ₹99 (free above ₹5,000).
+    //   OWN_BOY   – in-house delivery boy; starts with no pincodes (admin adds the
+    //               serviceable list), flat ₹49.
+    //   SHIPROCKET – live API rates; seeded INACTIVE until creds + pickup are set.
+    console.log("[17/17] Delivery methods (courier options)");
+    const DELIVERY_METHOD_DEFAULTS: {
+        kind: string;
+        displayName: string;
+        isActive: boolean;
+        sortOrder: number;
+        configJson: Prisma.InputJsonValue;
+    }[] = [
+        { kind: "OWN_BOY", displayName: "Local delivery", isActive: true, sortOrder: 0, configJson: { pincodes: [], flatPaise: 4900, freeAbovePaise: 0 } },
+        { kind: "CUSTOM", displayName: "Standard courier", isActive: true, sortOrder: 1, configJson: { flatPaise: 9900, freeAbovePaise: 500000 } },
+        { kind: "SHIPROCKET", displayName: "Shiprocket", isActive: false, sortOrder: 2, configJson: { pickupLocation: "Primary", pickupPincode: "", defaultItemWeightGrams: 500, length: 15, breadth: 15, height: 10 } },
+    ];
+    let dmCreated = 0;
+    for (const m of DELIVERY_METHOD_DEFAULTS) {
+        const exists = await prisma.deliveryMethod.findFirst({ where: { kind: m.kind }, select: { id: true } });
+        if (!exists) { await prisma.deliveryMethod.create({ data: m }); dmCreated++; }
+    }
+    console.log(`      ✓ ${DELIVERY_METHOD_DEFAULTS.length} delivery methods ensured (${dmCreated} new)\n`);
+
     console.log("━━━ Bootstrap complete ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     console.log("    Log in at /staff/login as admin@networkservice.in / admin123");
     console.log("    Run `pnpm seed:dummy-all` to populate demo data, or skip for a clean prod start.\n");

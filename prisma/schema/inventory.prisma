@@ -177,21 +177,21 @@ model InvProduct {
   /// operator curate values like "1.5M Special", "Compatible", "m100"
   /// once and have the regenerate button rebuild the full name around
   /// it instead of clobbering it. null = nothing.
-  namePart       String?
-  unitId         Int
-  categoryId     Int?
-  groupId        Int?
-  brandId        Int?
-  warrantyTermId Int?
-  modelNo        String?
-  notes          String?
+  namePart        String?
+  unitId          Int
+  categoryId      Int?
+  groupId         Int?
+  brandId         Int?
+  warrantyTermId  Int?
+  modelNo         String?
+  notes           String?
   /// When true, the cashier MUST fill the line note before selling this item
   /// (POS). For items where a serial / colour / config must be captured on the
   /// bill. Snapshotted onto the POS cart line at add-to-cart.
-  requireSaleNote Boolean @default(false)
-  isActive       Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  requireSaleNote Boolean  @default(false)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   // ── Ecommerce / storefront fields (null = not listed in shop) ──────────────
   /// URL-safe handle for /shop/product/[handle]
@@ -227,6 +227,11 @@ model InvProduct {
   /// Per-product override of the org out-of-stock policy: when true the shop
   /// accepts orders for this product even at zero stock (backorder / procure later).
   allowBackorder          Boolean @default(false)
+  /// Shipping weight of ONE unit, in grams. Drives the courier rate at checkout
+  /// (Shiprocket serviceability is priced by parcel weight) — the order parcel
+  /// weight is Σ(weightGrams × qty). null = unknown; the quote falls back to the
+  /// delivery method's configured default item weight.
+  weightGrams             Int?
 
   // ── Pricing strategy (cost basis + per-item overrides) ─────────────────────
   /// Per-item cost-basis method consumed by the pricing-strategy resolver +

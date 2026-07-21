@@ -95,12 +95,29 @@ export const manualUpiProvider: PaymentGatewayProvider = {
     available: true,
 };
 
+/// Demo online gateway — no real API and no keys. When it's the active online
+/// gateway, storefront checkout offers "Pay online (Demo)" and the confirmation
+/// page shows a floating "Simulate payment success" button that fires the same
+/// success signal a real webhook would (marks the order paid + confirms it). Lets
+/// the full paid-order → fulfilment flow be demoed end-to-end without a live PSP.
+export const demoProvider: PaymentGatewayProvider = {
+    id: "demo",
+    label: "Demo gateway (simulate)",
+    kind: "GATEWAY",
+    envVars: { test: [], live: [] },
+    supportsOnline: true,
+    supportsCounter: false,
+    configFields: [],
+    available: true,
+};
+
 /// All known providers, in display order. Append PayU / PayPal here later — no
 /// migration needed (PaymentGateway.provider is a plain string keyed to this list).
 export const PAYMENT_GATEWAY_PROVIDERS: PaymentGatewayProvider[] = [
     razorpayProvider,
     cashfreeProvider,
     manualUpiProvider,
+    demoProvider,
 ];
 
 export const GATEWAY_PROVIDER_IDS: string[] = PAYMENT_GATEWAY_PROVIDERS.map((p) => p.id);

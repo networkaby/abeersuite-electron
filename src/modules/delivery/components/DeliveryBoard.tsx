@@ -4,18 +4,23 @@ import { useCallback, useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { extractApiError } from "@/shared/lib/api";
-import { Loader2, RefreshCw, Truck, Pencil } from "lucide-react";
+import { Loader2, RefreshCw, Truck, Pencil, HandCoins } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 
 interface Stage { id: string; label: string; color: string; order: number; isTerminal: boolean; isEntryPoint: boolean }
-interface DeliveryCard { id: number; statusId: string | null; carrier: string | null; awb: string | null; trackingUrl: string | null; orderRef: string; customer: string | null; createdAt: string }
+interface DeliveryCard {
+    id: number; statusId: string | null; carrier: string | null; awb: string | null; trackingUrl: string | null;
+    chargeToCustomerPaise: number; costToCarrierPaise: number; orderRef: string; customer: string | null;
+    codToCollectPaise: number; createdAt: string;
+}
 
-const CARRIERS = ["OWN_BOY", "PICKUP", "SHIPROCKET", "DTDC", "MARUTI"] as const;
+const CARRIERS = ["OWN_BOY", "CUSTOM", "SHIPROCKET", "PICKUP"] as const;
 const CARRIER_LABEL: Record<string, string> = {
-    SHIPROCKET: "Shiprocket", DTDC: "DTDC", MARUTI: "Maruti", OWN_BOY: "Own boy", PICKUP: "Pickup",
+    SHIPROCKET: "Shiprocket", CUSTOM: "Custom courier", OWN_BOY: "Local boy", PICKUP: "Pickup",
 };
 
 export function DeliveryBoard() {
@@ -24,12 +29,53 @@ export function DeliveryBoard() {
     const [loading, setLoading] = useState(true);
     const [dragged, setDragged] = useState<DeliveryCard | null>(null);
     const [editing, setEditing] = useState<DeliveryCard | null>(null);
-    const [form, setForm] = useState<{ carrier: string; awb: string; trackingUrl: string }>({ carrier: "", awb: "", trackingUrl: "" });
+    const [form, setForm] = useState<{ carrier: string; awb: string; trackingUrl: string; chargeRupees: string; costRupees: string }>({ carrier: "", awb: "", trackingUrl: "", chargeRupees: "", costRupees: "" });
     const [saving, setSaving] = useState(false);
+    const [srBusy, setSrBusy] = useState(false);
+    const [srLabelUrl, setSrLabelUrl] = useState<string | null>(null);
 
     function openEdit(d: DeliveryCard) {
-        setForm({ carrier: d.carrier ?? "", awb: d.awb ?? "", trackingUrl: d.trackingUrl ?? "" });
+        setForm({
+            carrier: d.carrier ?? "",
+            awb: d.awb ?? "",
+            trackingUrl: d.trackingUrl ?? "",
+            chargeRupees: d.chargeToCustomerPaise ? String(d.chargeToCustomerPaise / 100) : "",
+            costRupees: d.costToCarrierPaise ? String(d.costToCarrierPaise / 100) : "",
+        });
+        setSrLabelUrl(null);
         setEditing(d);
+    }
+
+    // Create the Shiprocket shipment (order → AWB → pickup → label) for this delivery.
+    async function pushShiprocket() {
+        if (!editing) return;
+        setSrBusy(true);
+        try {
+            const { data } = await axios.post<{ awb: string; labelUrl: string | null; trackingUrl: string }>(`/api/deliveries/${editing.id}/shiprocket`);
+            toast.success(`Shiprocket AWB ${data.awb} assigned`);
+            setForm((f) => ({ ...f, awb: data.awb, trackingUrl: data.trackingUrl }));
+            setSrLabelUrl(data.labelUrl);
+            load();
+        } catch (e) {
+            toast.error(extractApiError(e, "Shiprocket push failed"));
+        } finally {
+            setSrBusy(false);
+        }
+    }
+
+    // Pull the latest Shiprocket status and move the delivery stage if it advanced.
+    async function refreshTracking() {
+        if (!editing) return;
+        setSrBusy(true);
+        try {
+            const { data } = await axios.post<{ currentStatus: string | null }>(`/api/deliveries/${editing.id}/shiprocket/track`);
+            toast.success(data.currentStatus ? `Status: ${data.currentStatus}` : "Tracking refreshed");
+            load();
+        } catch (e) {
+            toast.error(extractApiError(e, "Couldn't refresh tracking"));
+        } finally {
+            setSrBusy(false);
+        }
     }
     async function saveEdit() {
         if (!editing) return;
@@ -39,6 +85,8 @@ export function DeliveryBoard() {
                 carrier: form.carrier || null,
                 awb: form.awb,
                 trackingUrl: form.trackingUrl,
+                chargeToCustomerPaise: Math.round((parseFloat(form.chargeRupees) || 0) * 100),
+                costToCarrierPaise: Math.round((parseFloat(form.costRupees) || 0) * 100),
             });
             toast.success("Delivery updated");
             setEditing(null);
@@ -111,6 +159,11 @@ export function DeliveryBoard() {
                                         </div>
                                         <div className="mt-0.5 truncate font-medium">{d.customer ?? "Walk-in"}</div>
                                         {d.awb && <div className="text-[10px] text-muted-foreground">AWB {d.awb}</div>}
+                                        {d.codToCollectPaise > 0 && (
+                                            <div className="mt-1 inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-500/15 dark:text-amber-300">
+                                                <HandCoins size={10} /> Collect {formatRupeesFromPaise(d.codToCollectPaise)}
+                                            </div>
+                                        )}
                                         <button
                                             type="button"
                                             onClick={(e) => { e.stopPropagation(); openEdit(d); }}
@@ -158,6 +211,43 @@ export function DeliveryBoard() {
                             <div className="mb-1 text-xs font-medium text-muted-foreground">Tracking URL</div>
                             <Input value={form.trackingUrl} onChange={(e) => setForm((f) => ({ ...f, trackingUrl: e.target.value }))} placeholder="https://…" className="h-9" />
                         </div>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <div className="mb-1 text-xs font-medium text-muted-foreground">Charged to customer (₹)</div>
+                                <Input value={form.chargeRupees} inputMode="decimal" onChange={(e) => setForm((f) => ({ ...f, chargeRupees: e.target.value }))} placeholder="0" className="h-9" />
+                            </div>
+                            <div>
+                                <div className="mb-1 text-xs font-medium text-muted-foreground">Cost to carrier (₹)</div>
+                                <Input value={form.costRupees} inputMode="decimal" onChange={(e) => setForm((f) => ({ ...f, costRupees: e.target.value }))} placeholder="0" className="h-9" />
+                            </div>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">Carrier cost is decision-support only — it doesn&apos;t post to the ledger.</p>
+
+                        {form.carrier === "SHIPROCKET" && (
+                            <div className="rounded-md border border-border bg-muted/30 p-2.5 space-y-2">
+                                <div className="text-xs font-medium">Shiprocket</div>
+                                {form.awb ? (
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <Button type="button" size="sm" variant="outline" onClick={() => void refreshTracking()} disabled={srBusy}>
+                                            <RefreshCw size={13} /> {srBusy ? "Working…" : "Refresh tracking"}
+                                        </Button>
+                                        {form.trackingUrl && (
+                                            <a href={form.trackingUrl} target="_blank" rel="noreferrer" className="text-xs text-primary underline">Track</a>
+                                        )}
+                                        {srLabelUrl && (
+                                            <a href={srLabelUrl} target="_blank" rel="noreferrer" className="text-xs text-primary underline">Label PDF</a>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <div className="space-y-1.5">
+                                        <Button type="button" size="sm" onClick={() => void pushShiprocket()} disabled={srBusy}>
+                                            <Truck size={13} /> {srBusy ? "Pushing…" : "Push to Shiprocket"}
+                                        </Button>
+                                        <p className="text-[11px] text-muted-foreground">Creates the shipment, assigns an AWB, schedules pickup and fetches the label.</p>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
                     <DialogFooter>
                         <Button variant="ghost" onClick={() => setEditing(null)} disabled={saving}>Cancel</Button>

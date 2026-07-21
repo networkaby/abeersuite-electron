@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import { useShopCartStore } from "@/store/external/shopCartStore";
 import { useShopWishlistStore } from "@/store/external/shopWishlistStore";
 import { useShopCompareStore } from "@/store/external/shopCompareStore";
@@ -24,6 +25,9 @@ export default function ShopHeader() {
     const cartCount = useShopCartStore((s) => s.lines.reduce((a, l) => a + l.quantity, 0));
     const wishCount = useShopWishlistStore((s) => s.productIds.length);
     const compareCount = useShopCompareStore((s) => s.productIds.length);
+    // Hide "Sign in" once a customer is logged in — show an account link instead.
+    const { status } = useSession();
+    const authenticated = status === "authenticated";
 
     return (
         <header className="sticky top-0 z-50 border-b border-border/80 bg-background/85 backdrop-blur-md supports-backdrop-filter:bg-background/70 pt-[env(safe-area-inset-top,0px)]">
@@ -56,9 +60,11 @@ export default function ShopHeader() {
                                 <DropdownMenuItem asChild>
                                     <Link href="/portal">Customer portal</Link>
                                 </DropdownMenuItem>
-                                <DropdownMenuItem asChild>
-                                    <Link href="/login">Sign in</Link>
-                                </DropdownMenuItem>
+                                {!authenticated ? (
+                                    <DropdownMenuItem asChild>
+                                        <Link href="/login">Sign in</Link>
+                                    </DropdownMenuItem>
+                                ) : null}
                             </DropdownMenuContent>
                         </DropdownMenu>
                         <Link
@@ -74,7 +80,9 @@ export default function ShopHeader() {
 
                     <div className="flex shrink-0 items-center justify-end gap-0.5 sm:gap-1">
                         <Button variant="ghost" size="sm" className="hidden h-9 touch-manipulation sm:inline-flex" asChild>
-                            <Link href="/login">Sign in</Link>
+                            <Link href={authenticated ? "/portal" : "/login"}>
+                                {authenticated ? "My account" : "Sign in"}
+                            </Link>
                         </Button>
                         <Button variant="ghost" asChild className={iconBtn} aria-label="Wishlist">
                             <Link href="/shop/wishlist" className="text-foreground">

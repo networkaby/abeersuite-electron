@@ -42,17 +42,17 @@ model Person {
   /// §10(1)(c). Must be a valid 2-char Indian state code.
   shippingStateCode String?
 
-  account          Account? // enforced at app level; FK lives on Account.personId
-  companies        PersonCompany[]
-  portalCredential PersonPortalCredential?
-  socialProfile    CustomerSocialProfile?  @relation("PersonSocialProfile")
-  sentConnections     SocialConnection[]   @relation("ConnectionRequester")
-  receivedConnections SocialConnection[]   @relation("ConnectionAddressee")
-  dealTickets      TicketDeal[] // deals (Ticket flavour "deal") linked to this person
-  orderTickets     TicketOrder[] // orders (Ticket flavour "order") linked to this person
-  owner            Position?               @relation("PersonOwnerPosition", fields: [ownerPositionId], references: [id])
-  phones           Phone[]
-  emails           Email[]
+  account             Account? // enforced at app level; FK lives on Account.personId
+  companies           PersonCompany[]
+  portalCredential    PersonPortalCredential?
+  socialProfile       CustomerSocialProfile?  @relation("PersonSocialProfile")
+  sentConnections     SocialConnection[]      @relation("ConnectionRequester")
+  receivedConnections SocialConnection[]      @relation("ConnectionAddressee")
+  dealTickets         TicketDeal[] // deals (Ticket flavour "deal") linked to this person
+  orderTickets        TicketOrder[] // orders (Ticket flavour "order") linked to this person
+  owner               Position?               @relation("PersonOwnerPosition", fields: [ownerPositionId], references: [id])
+  phones              Phone[]
+  emails              Email[]
 
   // Set when this row was soft-deleted via the Person↔Company converter
   // (see /office/settings/customer-tools). Pure audit trail — admins can

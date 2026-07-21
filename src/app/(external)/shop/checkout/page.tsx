@@ -7,14 +7,26 @@ import Link from "next/link";
 import ShopRemoteImage from "@/modules/external/shop/ShopRemoteImage";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useShopCartStore } from "@/store/external/shopCartStore";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import type { ShopProductPublic } from "@/shared/lib/shop/productPublic";
 import { productPath } from "@/shared/lib/shop/productPublic";
 import { Badge } from "@/components/ui/badge";
-import { Lock, ShieldCheck } from "lucide-react";
+import { Lock, ShieldCheck, Loader2, Truck, CreditCard, HandCoins } from "lucide-react";
 import PortalAccountSwitcher from "@/modules/external/portal/PortalAccountSwitcher";
 import { usePortalAccountStore } from "@/store/external/portalAccountStore";
+
+type ShippingOption = {
+    methodId: number;
+    kind: "SHIPROCKET" | "CUSTOM" | "OWN_BOY";
+    label: string;
+    amountPaise: number;
+    etaText: string | null;
+};
+
+const EMPTY_ADDRESS = { name: "", phone: "", line1: "", line2: "", city: "", state: "", pincode: "" };
 
 export default function ShopCheckoutPage() {
     const router = useRouter();
@@ -26,9 +38,18 @@ export default function ShopCheckoutPage() {
     const [products, setProducts] = useState<ShopProductPublic[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
-    // Config-only: which online gateway is configured (display name only, no keys).
-    // The live charge is not wired yet — this just informs the customer it's coming.
-    const [onlineGateway, setOnlineGateway] = useState<string | null>(null);
+    // The active online gateway (if any) — enables the "Pay online" rail.
+    const [onlineGateway, setOnlineGateway] = useState<{ provider: string; displayName: string } | null>(null);
+    const [payMethod, setPayMethod] = useState<"COD" | "ONLINE">("COD");
+
+    const [address, setAddress] = useState(EMPTY_ADDRESS);
+    const setField = (k: keyof typeof EMPTY_ADDRESS) => (v: string) => setAddress((a) => ({ ...a, [k]: v }));
+
+    // Live courier quote for the entered pincode + cart.
+    const [options, setOptions] = useState<ShippingOption[]>([]);
+    const [quoting, setQuoting] = useState(false);
+    const [quoteError, setQuoteError] = useState("");
+    const [selectedMethodId, setSelectedMethodId] = useState<number | null>(null);
 
     useEffect(() => {
         axios
@@ -37,7 +58,7 @@ export default function ShopCheckoutPage() {
             .catch(() => setProducts([]));
         axios
             .get<{ online: { provider: string; displayName: string } | null }>("/api/shop/payment-config")
-            .then((r) => setOnlineGateway(r.data.online?.displayName ?? null))
+            .then((r) => setOnlineGateway(r.data.online ?? null))
             .catch(() => setOnlineGateway(null));
     }, []);
 
@@ -51,8 +72,58 @@ export default function ShopCheckoutPage() {
         return t;
     }, [lines, byId]);
 
-    const shippingEstimate = total > 0 ? (total >= 500000 ? 0 : 9900) : 0;
-    const grand = total + shippingEstimate;
+    const pincodeValid = /^\d{6}$/u.test(address.pincode);
+
+    // Fetch courier options whenever the pincode becomes valid (or the cart changes).
+    useEffect(() => {
+        if (!pincodeValid || lines.length === 0) {
+            setOptions([]);
+            setSelectedMethodId(null);
+            return;
+        }
+        let cancelled = false;
+        setQuoting(true);
+        setQuoteError("");
+        axios
+            .post<{ options: ShippingOption[] }>("/api/shop/shipping/quote", {
+                pincode: address.pincode,
+                lines,
+                cod: true,
+            })
+            .then((r) => {
+                if (cancelled) return;
+                const opts = r.data.options ?? [];
+                setOptions(opts);
+                setSelectedMethodId(opts.length > 0 ? opts[0].methodId : null);
+                if (opts.length === 0) setQuoteError("No courier serves this pincode yet.");
+            })
+            .catch(() => {
+                if (cancelled) return;
+                setOptions([]);
+                setSelectedMethodId(null);
+                setQuoteError("Could not fetch delivery options. Check the pincode.");
+            })
+            .finally(() => {
+                if (!cancelled) setQuoting(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [address.pincode, pincodeValid, lines]);
+
+    const selected = options.find((o) => o.methodId === selectedMethodId) ?? null;
+    const shipping = selected?.amountPaise ?? 0;
+    const grand = total + shipping;
+
+    const addressComplete =
+        address.name.trim() &&
+        address.phone.trim().length >= 6 &&
+        address.line1.trim() &&
+        address.city.trim() &&
+        address.state.trim() &&
+        pincodeValid;
+
+    const canPlace = !!activeAccountId && !!addressComplete && !!selected && !loading;
 
     const submit = async () => {
         setLoading(true);
@@ -63,12 +134,25 @@ export default function ShopCheckoutPage() {
                 setLoading(false);
                 return;
             }
-            // Pay-on-Delivery: create the order (lands on the orders pipeline) and
-            // go straight to confirmation. Payment is collected on delivery.
-            // TODO(payment-gateway): branch to an online gateway when one is live.
-            const { data: order } = await axios.post<{ id: number; totalPaise: number }>("/api/shop/orders", {
+            if (!selected) {
+                setError("Choose a delivery option.");
+                setLoading(false);
+                return;
+            }
+            const { data: order } = await axios.post<{ id: number }>("/api/shop/orders", {
                 lines,
                 accountId: activeAccountId,
+                shippingAddress: {
+                    name: address.name.trim(),
+                    phone: address.phone.trim(),
+                    line1: address.line1.trim(),
+                    line2: address.line2.trim() || null,
+                    city: address.city.trim(),
+                    state: address.state.trim(),
+                    pincode: address.pincode.trim(),
+                },
+                deliveryMethodId: selected.methodId,
+                paymentMethod: payMethod,
             });
             clear();
             router.push(`/shop/order/${order.id}`);
@@ -112,12 +196,156 @@ export default function ShopCheckoutPage() {
                             <PortalAccountSwitcher />
                             {accountOptions.length === 0 && !accountLoading ? (
                                 <p className="text-sm text-muted-foreground">
-                                    No active portal profile found. Please sign in to the customer portal first.
-                                    {" "}
+                                    No active portal profile found. Please sign in to the customer portal first.{" "}
                                     <Link href="/login" className="text-primary underline">
                                         Sign in
                                     </Link>
                                 </p>
+                            ) : null}
+                        </CardContent>
+                    </Card>
+
+                    <Card className="border-border/80 shadow-sm">
+                        <CardHeader>
+                            <CardTitle className="text-lg">Delivery address</CardTitle>
+                        </CardHeader>
+                        <CardContent className="grid gap-4 sm:grid-cols-2">
+                            <div className="grid gap-2">
+                                <Label>Full name</Label>
+                                <Input value={address.name} onChange={(e) => setField("name")(e.target.value)} />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label>Phone</Label>
+                                <Input value={address.phone} onChange={(e) => setField("phone")(e.target.value)} inputMode="tel" />
+                            </div>
+                            <div className="grid gap-2 sm:col-span-2">
+                                <Label>Address line 1</Label>
+                                <Input value={address.line1} onChange={(e) => setField("line1")(e.target.value)} />
+                            </div>
+                            <div className="grid gap-2 sm:col-span-2">
+                                <Label>Address line 2 (optional)</Label>
+                                <Input value={address.line2} onChange={(e) => setField("line2")(e.target.value)} />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label>City</Label>
+                                <Input value={address.city} onChange={(e) => setField("city")(e.target.value)} />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label>State</Label>
+                                <Input value={address.state} onChange={(e) => setField("state")(e.target.value)} />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label>Pincode</Label>
+                                <Input
+                                    value={address.pincode}
+                                    onChange={(e) => setField("pincode")(e.target.value.replace(/\D/gu, "").slice(0, 6))}
+                                    inputMode="numeric"
+                                    placeholder="6-digit"
+                                />
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="border-border/80 shadow-sm">
+                        <CardHeader>
+                            <CardTitle className="text-lg flex items-center gap-2">
+                                <Truck className="size-5" /> Delivery method
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                            {!pincodeValid ? (
+                                <p className="text-sm text-muted-foreground">
+                                    Enter a valid pincode to see delivery options and charges.
+                                </p>
+                            ) : quoting ? (
+                                <p className="text-sm text-muted-foreground flex items-center gap-2">
+                                    <Loader2 className="size-4 animate-spin" /> Fetching couriers…
+                                </p>
+                            ) : quoteError ? (
+                                <p className="text-sm text-destructive">{quoteError}</p>
+                            ) : (
+                                <ul className="space-y-2">
+                                    {options.map((o) => {
+                                        const active = o.methodId === selectedMethodId;
+                                        return (
+                                            <li key={o.methodId}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setSelectedMethodId(o.methodId)}
+                                                    className={`flex w-full items-center justify-between rounded-lg border px-4 py-3 text-left transition ${
+                                                        active
+                                                            ? "border-primary ring-1 ring-primary bg-primary/5"
+                                                            : "border-border hover:border-primary/50"
+                                                    }`}
+                                                >
+                                                    <span className="min-w-0">
+                                                        <span className="block text-sm font-medium">{o.label}</span>
+                                                        {o.etaText ? (
+                                                            <span className="block text-xs text-muted-foreground">
+                                                                Est. {o.etaText}
+                                                            </span>
+                                                        ) : null}
+                                                    </span>
+                                                    <span className="text-sm font-semibold tabular-nums shrink-0">
+                                                        {o.amountPaise === 0 ? (
+                                                            <Badge variant="secondary">FREE</Badge>
+                                                        ) : (
+                                                            formatRupeesFromPaise(o.amountPaise)
+                                                        )}
+                                                    </span>
+                                                </button>
+                                            </li>
+                                        );
+                                    })}
+                                </ul>
+                            )}
+                        </CardContent>
+                    </Card>
+
+                    <Card className="border-border/80 shadow-sm">
+                        <CardHeader>
+                            <CardTitle className="text-lg flex items-center gap-2">
+                                <CreditCard className="size-5" /> Payment
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-2">
+                            <button
+                                type="button"
+                                onClick={() => setPayMethod("COD")}
+                                className={`flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-left transition ${
+                                    payMethod === "COD"
+                                        ? "border-primary ring-1 ring-primary bg-primary/5"
+                                        : "border-border hover:border-primary/50"
+                                }`}
+                            >
+                                <HandCoins className="size-5 shrink-0" />
+                                <span>
+                                    <span className="block text-sm font-medium">Cash on delivery</span>
+                                    <span className="block text-xs text-muted-foreground">Pay when your order arrives.</span>
+                                </span>
+                            </button>
+                            {onlineGateway ? (
+                                <button
+                                    type="button"
+                                    onClick={() => setPayMethod("ONLINE")}
+                                    className={`flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-left transition ${
+                                        payMethod === "ONLINE"
+                                            ? "border-primary ring-1 ring-primary bg-primary/5"
+                                            : "border-border hover:border-primary/50"
+                                    }`}
+                                >
+                                    <CreditCard className="size-5 shrink-0" />
+                                    <span>
+                                        <span className="block text-sm font-medium">
+                                            Pay online · {onlineGateway.displayName}
+                                        </span>
+                                        <span className="block text-xs text-muted-foreground">
+                                            {onlineGateway.provider === "demo"
+                                                ? "Demo gateway — simulate the payment on the next screen."
+                                                : "Pay securely online."}
+                                        </span>
+                                    </span>
+                                </button>
                             ) : null}
                         </CardContent>
                     </Card>
@@ -155,9 +383,7 @@ export default function ShopCheckoutPage() {
                                             <p className="text-xs text-muted-foreground mt-0.5">Qty {l.quantity}</p>
                                         </div>
                                         <p className="text-sm font-semibold tabular-nums shrink-0">
-                                            {p
-                                                ? formatRupeesFromPaise(p.pricePaise * l.quantity)
-                                                : ""}
+                                            {p ? formatRupeesFromPaise(p.pricePaise * l.quantity) : ""}
                                         </p>
                                     </li>
                                 );
@@ -169,12 +395,16 @@ export default function ShopCheckoutPage() {
                             <span className="tabular-nums font-medium">{formatRupeesFromPaise(total)}</span>
                         </div>
                         <div className="flex justify-between text-sm">
-                            <span className="text-muted-foreground">Shipping (est.)</span>
+                            <span className="text-muted-foreground">
+                                Shipping{selected ? ` · ${selected.label}` : ""}
+                            </span>
                             <span className="tabular-nums font-medium">
-                                {shippingEstimate === 0 ? (
+                                {!selected ? (
+                                    <span className="text-muted-foreground">—</span>
+                                ) : shipping === 0 ? (
                                     <Badge variant="secondary">FREE</Badge>
                                 ) : (
-                                    formatRupeesFromPaise(shippingEstimate)
+                                    formatRupeesFromPaise(shipping)
                                 )}
                             </span>
                         </div>
@@ -189,17 +419,20 @@ export default function ShopCheckoutPage() {
                             type="button"
                             size="lg"
                             className="w-full rounded-full gap-2 shadow-md"
-                            disabled={loading || !activeAccountId}
+                            disabled={!canPlace}
                             onClick={() => void submit()}
                         >
                             <Lock className="size-4" />
-                            {loading ? "Placing order…" : "Place COD order"}
+                            {loading
+                                ? "Placing order…"
+                                : payMethod === "ONLINE"
+                                  ? "Place order & pay online"
+                                  : "Place COD order"}
                         </Button>
                         <p className="text-[11px] text-center text-muted-foreground leading-relaxed">
-                            Pay on delivery — you’ll pay the courier when your order arrives.
-                            {onlineGateway
-                                ? ` Online payment via ${onlineGateway} is coming soon.`
-                                : " Online payment options are coming soon."}
+                            {payMethod === "ONLINE"
+                                ? "You’ll complete payment on the next screen."
+                                : `Pay on delivery — you’ll pay ${selected ? "the courier" : ""} when your order arrives.`}
                         </p>
                     </CardFooter>
                 </Card>

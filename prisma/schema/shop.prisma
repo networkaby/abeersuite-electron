@@ -38,3 +38,28 @@ enum ShopOutOfStockPolicy {
 // An ecommerce order is now a Ticket on the "order" pipeline — see `TicketOrder` /
 // `TicketOrderLine` (tickets.prisma). The `ShopOrderStatus` / `ShopPaymentMethod`
 // enums below survive because `TicketOrder` still uses them (Razorpay webhook compat).
+
+// ── Delivery method (courier options offered at checkout) ───────────────────
+// Config-only table, same shape as PaymentGateway (pos.prisma). One row per
+// courier the storefront offers; the customer picks one at checkout and its rate
+// is added to the bill as the shipping charge.
+//   kind = "SHIPROCKET" – live rate via the Shiprocket serviceability API
+//          (priced by parcel weight + delivery pincode); no stored rate.
+//          configJson: { pickupLocation, defaultItemWeightGrams, length, breadth, height }
+//   kind = "CUSTOM"     – manually-run courier; admin sets the rate on its own
+//          settings page. configJson: { flatPaise, freeAbovePaise? }
+//   kind = "OWN_BOY"    – in-house delivery boy; offered only for the listed
+//          pincodes. configJson: { pincodes: string[], flatPaise, freeAbovePaise? }
+model DeliveryMethod {
+  id          Int      @id @default(autoincrement())
+  kind        String // "SHIPROCKET" | "CUSTOM" | "OWN_BOY"
+  displayName String
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  configJson  Json     @default("{}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([kind])
+  @@map("delivery_methods")
+}

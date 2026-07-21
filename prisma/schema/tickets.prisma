@@ -102,7 +102,7 @@ model TicketRepair {
 
   estimatedCost  Float?
   accessInfo     String?
-  accessories    String?   // items received with the device (bag, charger, cover …)
+  accessories    String? // items received with the device (bag, charger, cover …)
   expectedReturn DateTime?
   receivedBackAt DateTime?
   externalRef    String?
@@ -171,11 +171,15 @@ model TicketOrder {
   shippingName    String?
   shippingAddress Json?
 
-  totalPaise        Int     @default(0)
-  razorpayOrderId   String? @unique
-  razorpayPaymentId String?
-  courier           String?
-  trackingNumber    String?
+  totalPaise          Int     @default(0)
+  // Shipping charge the customer picked at checkout (paise). The chosen courier
+  // is stored in `courier` (kind: SHIPROCKET | CUSTOM | OWN_BOY). Grand total on
+  // the bill = totalPaise (goods) + shippingChargePaise. GL posting stays manual.
+  shippingChargePaise Int     @default(0)
+  razorpayOrderId     String? @unique
+  razorpayPaymentId   String?
+  courier             String?
+  trackingNumber      String?
 
   paidAt      DateTime?
   packedAt    DateTime?
@@ -212,12 +216,16 @@ model TicketDelivery {
   orderSource String // "inv" | "shop"
   orderId     Int
 
-  carrier               String? // SHIPROCKET | DTDC | MARUTI | OWN_BOY | PICKUP
+  carrier               String? // SHIPROCKET | CUSTOM | OWN_BOY | PICKUP
   awb                   String?
   trackingUrl           String?
   addressJson           Json?
   chargeToCustomerPaise Int     @default(0)
   costToCarrierPaise    Int     @default(0)
+  // Shiprocket handles, set when the shipment is pushed to Shiprocket. Needed to
+  // assign AWB, fetch the label, and schedule pickup. null for CUSTOM / OWN_BOY.
+  shiprocketOrderId     String?
+  shipmentId            String?
 
   @@index([orderSource, orderId])
 }

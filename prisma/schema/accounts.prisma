@@ -145,9 +145,9 @@ enum TierCurrentSaleScope {
 }
 
 model CustomerTierPeriod {
-  id        Int            @id @default(autoincrement())
+  id               Int                  @id @default(autoincrement())
   /// The title awarded in this period, e.g. "Best of the month" / "Best of the quarter".
-  name      String
+  name             String
   /// Whether the bill on the counter (before discount) is added on top of this period's
   /// posted spend, and for whom. Needs fromDay = 0 (the current sale is today, and a
   /// bracket starting further back does not contain it) UNLESS currentSaleOnly is set,
@@ -163,17 +163,17 @@ model CustomerTierPeriod {
   /// to NEW is not enough on its own: the bracket is ungated, so a returning customer with
   /// posted spend in that day range would still collect the title. With no bracket there is
   /// nothing to leak — a customer the scope excludes scores 0 and earns nothing.
-  currentSaleOnly Boolean @default(false)
+  currentSaleOnly  Boolean              @default(false)
   /// Start of the bracket in days-ago, inclusive. 0 = today. Ignored when currentSaleOnly.
-  fromDay   Int            @default(0)
+  fromDay          Int                  @default(0)
   /// End of the bracket in days-ago, exclusive. Must be greater than fromDay.
   /// e.g. fromDay 30 + toDay 90 = "the 30-to-90-days-ago slice".
-  toDay     Int            @default(180)
-  enabled   Boolean        @default(true)
-  sortOrder Int            @default(0)
-  levels    CustomerTier[]
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
+  toDay            Int                  @default(180)
+  enabled          Boolean              @default(true)
+  sortOrder        Int                  @default(0)
+  levels           CustomerTier[]
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
 
   @@index([enabled])
 }
@@ -182,25 +182,25 @@ model CustomerTierPeriod {
 /// the auto-discount % it earns. NOT loyalty-points related (it posts to "Discount
 /// Allowed"). Fully admin-managed: rename, add/remove, enable/disable, edit threshold + %.
 model CustomerTier {
-  id          Int      @id @default(autoincrement())
+  id          Int                 @id @default(autoincrement())
   name        String // display name + POS badge label (e.g. Bronze / Gold / VIP)
   /// Spend (₹) inside the parent period's bracket required to reach this level.
-  minSpend    Decimal  @db.Decimal(14, 2)
+  minSpend    Decimal             @db.Decimal(14, 2)
   /// Automatic discount % applied on pre-GST goods at this level. Periods apply
   /// INDEPENDENTLY: a customer holding titles in several periods gets the SUM of their
   /// percentages (clamped to 100). Brackets are what keep that honest — tile them and
   /// each rupee is counted once.
-  discountPct Decimal  @db.Decimal(5, 2)
-  enabled     Boolean  @default(true)
-  sortOrder   Int      @default(0)
+  discountPct Decimal             @db.Decimal(5, 2)
+  enabled     Boolean             @default(true)
+  sortOrder   Int                 @default(0)
   /// TODO(bridge): nullable only so the existing production level rows survive the
   /// `db push` that introduces periods. bootstrap-seed backfills orphans onto the
   /// default period; tighten to required once production is backfilled. A level with
   /// no period is inert — the POS snapshot only reads levels through their period.
   periodId    Int?
   period      CustomerTierPeriod? @relation(fields: [periodId], references: [id], onDelete: Cascade)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
 
   @@index([enabled])
   @@index([periodId])

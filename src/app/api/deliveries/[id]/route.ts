@@ -5,7 +5,7 @@ import { handleApiError } from "@/shared/lib/api";
 
 // PATCH /api/deliveries/[id] — update carrier / AWB / tracking / amounts.
 // Every dispatch option is a "carrier", including the in-house boy and pickup.
-const CARRIERS = ["SHIPROCKET", "DTDC", "MARUTI", "OWN_BOY", "PICKUP"];
+const CARRIERS = ["SHIPROCKET", "CUSTOM", "OWN_BOY", "PICKUP"];
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { response } = await requireAuth();

@@ -319,33 +319,33 @@ model VoucherPrintTemplate {
   // matching `…Thermal` flag, so a shop can show something on the A4 invoice
   // but hide it on the 80mm counter slip (or vice-versa). One
   // `resolveTemplateForFormat()` picks the right flag per print format.
-  showLogo        Boolean @default(false)
-  showLogoThermal Boolean @default(false)
-  showHeaderText        Boolean @default(true) // brand-name line; off when the logo already shows the name
-  showHeaderTextThermal Boolean @default(true)
-  showAddress       Boolean @default(true)  // Head-Office (Organisation) address block
-  showAddressThermal Boolean @default(true)
-  showBranchAddress Boolean @default(false) // issuing-branch address (voucher-backed prints only)
+  showLogo                 Boolean @default(false)
+  showLogoThermal          Boolean @default(false)
+  showHeaderText           Boolean @default(true) // brand-name line; off when the logo already shows the name
+  showHeaderTextThermal    Boolean @default(true)
+  showAddress              Boolean @default(true) // Head-Office (Organisation) address block
+  showAddressThermal       Boolean @default(true)
+  showBranchAddress        Boolean @default(false) // issuing-branch address (voucher-backed prints only)
   showBranchAddressThermal Boolean @default(false)
-  showGstin        Boolean @default(true)
-  showGstinThermal Boolean @default(true)
-  showPhone        Boolean @default(true)
-  showPhoneThermal Boolean @default(true)
-  showTaxSummary        Boolean @default(true)
-  showTaxSummaryThermal Boolean @default(true)
-  showMrp        Boolean @default(true) // struck-through MRP on the customer price ladder (POS/SALE)
-  showMrpThermal Boolean @default(true)
-  showSignature        Boolean @default(false)
-  showSignatureThermal Boolean @default(false)
-  showQrCode     Boolean @default(false) // dormant (not yet rendered)
+  showGstin                Boolean @default(true)
+  showGstinThermal         Boolean @default(true)
+  showPhone                Boolean @default(true)
+  showPhoneThermal         Boolean @default(true)
+  showTaxSummary           Boolean @default(true)
+  showTaxSummaryThermal    Boolean @default(true)
+  showMrp                  Boolean @default(true) // struck-through MRP on the customer price ladder (POS/SALE)
+  showMrpThermal           Boolean @default(true)
+  showSignature            Boolean @default(false)
+  showSignatureThermal     Boolean @default(false)
+  showQrCode               Boolean @default(false) // dormant (not yet rendered)
   // Scannable CODE128 of the voucher number — helps look up the original sale
   // at return time.
-  showBarcode        Boolean @default(false)
-  showBarcodeThermal Boolean @default(false)
+  showBarcode              Boolean @default(false)
+  showBarcodeThermal       Boolean @default(false)
   // Shop's primary bank details (from Organisation.bankJson) — opt-in per kind
   // so customers can pay in. Off by default; admin enables where wanted.
-  showBank        Boolean @default(false)
-  showBankThermal Boolean @default(false)
+  showBank                 Boolean @default(false)
+  showBankThermal          Boolean @default(false)
 
   // Service Shipping Label meta fields — which lines print on the label's bottom
   // strip. Device defaults OFF (naming contents invites courier theft). A4 flag
