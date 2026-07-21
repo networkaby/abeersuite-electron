@@ -13,6 +13,20 @@ const patchSchema = z.object({
     configJson: z.record(z.string(), z.unknown()).optional(),
 });
 
+export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+    const { response } = await requireAuth();
+    if (response) return response;
+    const id = Number((await ctx.params).id);
+    if (!Number.isInteger(id) || id < 1) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+    try {
+        const method = await prisma.deliveryMethod.findUnique({ where: { id } });
+        if (!method) return NextResponse.json({ error: "Not found" }, { status: 404 });
+        return NextResponse.json({ method });
+    } catch (e) {
+        return handleApiError(e, "Failed to load courier");
+    }
+}
+
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
     const { response } = await requireAuth();
     if (response) return response;

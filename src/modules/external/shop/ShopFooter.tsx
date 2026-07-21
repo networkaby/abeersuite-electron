@@ -1,8 +1,25 @@
+"use client";
+
 import Link from "next/link";
-import { Package, Mail, MapPin } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { Package, Mail, MapPin, ShieldCheck } from "lucide-react";
 import { COMPANY_DETAILS } from "@/utils/constants-company-details";
 
 export default function ShopFooter() {
+    const pathname = usePathname();
+
+    // Distraction-free checkout: no link farm — just a slim trust line.
+    if (pathname === "/shop/checkout") {
+        return (
+            <footer className="mt-auto border-t border-border/60 py-6 text-center text-xs text-muted-foreground">
+                <span className="inline-flex items-center gap-1.5">
+                    <ShieldCheck className="size-3.5 text-emerald-600" />
+                    Secure checkout · Prices in {COMPANY_DETAILS.currencySymbol} · © {new Date().getFullYear()} {COMPANY_DETAILS.brandName}
+                </span>
+            </footer>
+        );
+    }
+
     const addressLine = [
         COMPANY_DETAILS.address.line1,
         COMPANY_DETAILS.address.line2,

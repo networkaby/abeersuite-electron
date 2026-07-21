@@ -7,7 +7,9 @@ export default function ExternalRootShell({ children }: { children: React.ReactN
     return (
         <SessionProvider>
             {children}
-            <Toaster position="top-center" richColors closeButton />
+            {/* bottom-center — top-center collides with the sticky shop/portal
+                header (backdrop-blur bleeds through the toast on overlap). */}
+            <Toaster position="bottom-center" richColors closeButton />
         </SessionProvider>
     );
 }

@@ -52,7 +52,7 @@ enum ShopOutOfStockPolicy {
 //          pincodes. configJson: { pincodes: string[], flatPaise, freeAbovePaise? }
 model DeliveryMethod {
   id          Int      @id @default(autoincrement())
-  kind        String // "SHIPROCKET" | "CUSTOM" | "OWN_BOY"
+  kind        String // "SHIPROCKET" | "SHIPWAY" | "CUSTOM" | "OWN_BOY"
   displayName String
   isActive    Boolean  @default(true)
   sortOrder   Int      @default(0)

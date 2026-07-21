@@ -18,6 +18,10 @@ export type ShopProductAdmin = ShopProductPublic & {
     warrantyTermId: number | null;
     /** Shipping weight of one unit in grams (null = unset → quote uses fallback). */
     weightGrams: number | null;
+    /** Parcel dimensions of one unit (cm) — drive volumetric weight. */
+    lengthCm: number | null;
+    breadthCm: number | null;
+    heightCm: number | null;
     /** Resolved brand / product-group display names (null when unset). */
     brandName: string | null;
     groupName: string | null;
@@ -54,6 +58,9 @@ export function invProductToAdmin(
         brandId: p.brandId,
         warrantyTermId: p.warrantyTermId,
         weightGrams: p.weightGrams ?? null,
+        lengthCm: p.lengthCm ?? null,
+        breadthCm: p.breadthCm ?? null,
+        heightCm: p.heightCm ?? null,
         brandName: p.brand?.name ?? null,
         groupName: p.group?.name ?? null,
         shopCategory: p.shopCategory,

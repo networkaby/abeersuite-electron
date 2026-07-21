@@ -7,6 +7,7 @@ import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
 import { barcodeTagPaise } from "@/shared/lib/pricing/barcodePrice";
 import { quoteShipping } from "@/modules/delivery/lib/shippingQuote";
 import { loadDeliveryMethod, type ShiprocketConfig } from "@/modules/delivery/lib/deliveryMethods";
+import { chargeableUnitGrams } from "@/modules/delivery/lib/chargeableWeight";
 
 // Public storefront read: given a delivery pincode + cart, return the courier
 // options and their rates. Subtotal + parcel weight are computed server-side so
@@ -16,6 +17,8 @@ const DEFAULT_ITEM_WEIGHT_GRAMS = 500;
 
 const quoteSchema = z.object({
     pincode: z.string().trim().regex(/^\d{6}$/u, "Enter a valid 6-digit pincode"),
+    state: z.string().trim().max(60).optional(),
+    neighbourhood: z.string().trim().max(120).optional(),
     cod: z.boolean().optional(),
     lines: z
         .array(
@@ -57,11 +60,14 @@ export async function POST(req: Request) {
             const unitPricePaise =
                 barcodeTagPaise(p.savedSalePricePaise, p.mrpPaise, bands) ?? p.effectiveSalePricePaise ?? 0;
             subtotalPaise += unitPricePaise * l.quantity;
-            weightGrams += (p.weightGrams ?? fallbackWeight) * l.quantity;
+            // Couriers bill on max(actual, volumetric) — use the chargeable weight.
+            weightGrams += chargeableUnitGrams(p, fallbackWeight) * l.quantity;
         }
 
         const options = await quoteShipping({
             deliveryPincode: pincode,
+            deliveryState: data.state,
+            deliveryNeighbourhood: data.neighbourhood,
             subtotalPaise,
             weightGrams,
             cod: cod ?? true,

@@ -44,6 +44,7 @@ export default async function ShopOrderConfirmationPage({
             totalPaise: true,
             shippingChargePaise: true,
             courier: true,
+            shippingAddress: true,
             trackingNumber: true,
             shippingName: true,
             lines: { include: { product: { select: { name: true } } } },
@@ -57,6 +58,11 @@ export default async function ShopOrderConfirmationPage({
             </main>
         );
     }
+
+    // Friendly courier name the customer picked (the service/courier), falling
+    // back to the raw kind for older orders.
+    const courierLabel =
+        (order.shippingAddress as { courierService?: string } | null)?.courierService ?? order.courier ?? null;
 
     // Delivery card for this order (P8), if one has been spawned.
     const delivery = await prisma.ticketDelivery.findFirst({
@@ -107,7 +113,7 @@ export default async function ShopOrderConfirmationPage({
                     </li>
                 ))}
                 <li className="flex justify-between gap-2 border-t border-border pt-1 mt-1 text-muted-foreground">
-                    <span>Shipping{order.courier ? ` · ${order.courier}` : ""}</span>
+                    <span>Shipping{courierLabel ? ` · ${courierLabel}` : ""}</span>
                     <span>{order.shippingChargePaise === 0 ? "FREE" : formatRupeesFromPaise(order.shippingChargePaise)}</span>
                 </li>
             </ul>

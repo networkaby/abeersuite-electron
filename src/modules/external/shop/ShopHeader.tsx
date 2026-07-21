@@ -1,19 +1,21 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useShopCartStore } from "@/store/external/shopCartStore";
 import { useShopWishlistStore } from "@/store/external/shopWishlistStore";
 import { useShopCompareStore } from "@/store/external/shopCompareStore";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Package, Heart, GitCompare, ShoppingBag, Menu } from "lucide-react";
+import { Package, Heart, GitCompare, ShoppingBag, Menu, UserRound, ShieldCheck } from "lucide-react";
 import ShopSearchBar from "./ShopSearchBar";
 import { COMPANY_DETAILS } from "@/utils/constants-company-details";
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
+    DropdownMenuLabel,
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -25,9 +27,35 @@ export default function ShopHeader() {
     const cartCount = useShopCartStore((s) => s.lines.reduce((a, l) => a + l.quantity, 0));
     const wishCount = useShopWishlistStore((s) => s.productIds.length);
     const compareCount = useShopCompareStore((s) => s.productIds.length);
-    // Hide "Sign in" once a customer is logged in — show an account link instead.
-    const { status } = useSession();
+    // Hide "Sign in" once a customer is logged in — show their name instead.
+    const { data: session, status } = useSession();
     const authenticated = status === "authenticated";
+    const customerName = (session?.user as { name?: string } | undefined)?.name ?? null;
+    // Return to the current page after signing in (not the portal default).
+    const pathname = usePathname();
+    const loginHref = `/login?callbackUrl=${encodeURIComponent(pathname || "/shop")}`;
+
+    // Distraction-free checkout: strip search, wishlist/compare, nav and cart —
+    // keep only the brand + a "secure checkout" cue so the customer stays focused.
+    const isCheckout = pathname === "/shop/checkout";
+    if (isCheckout) {
+        return (
+            <header className="sticky top-0 z-50 border-b border-border/80 bg-background/85 backdrop-blur-md supports-backdrop-filter:bg-background/70 pt-[env(safe-area-inset-top,0px)]">
+                <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
+                    <Link href="/" className="flex min-w-0 items-center gap-2 font-bold text-base leading-tight tracking-tight sm:text-lg">
+                        <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary">
+                            <Package className="size-5" />
+                        </span>
+                        <span className="truncate">{COMPANY_DETAILS.brandName}</span>
+                    </Link>
+                    <span className="inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-muted-foreground sm:text-sm">
+                        <ShieldCheck className="size-4 text-emerald-600" />
+                        Secure checkout
+                    </span>
+                </div>
+            </header>
+        );
+    }
 
     return (
         <header className="sticky top-0 z-50 border-b border-border/80 bg-background/85 backdrop-blur-md supports-backdrop-filter:bg-background/70 pt-[env(safe-area-inset-top,0px)]">
@@ -47,6 +75,14 @@ export default function ShopHeader() {
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="start" className="w-56">
+                                {authenticated && customerName ? (
+                                    <>
+                                        <DropdownMenuLabel className="flex items-center gap-2 truncate">
+                                            <UserRound className="size-4 shrink-0" /> {customerName}
+                                        </DropdownMenuLabel>
+                                        <DropdownMenuSeparator />
+                                    </>
+                                ) : null}
                                 <DropdownMenuItem asChild>
                                     <Link href="/">Home</Link>
                                 </DropdownMenuItem>
@@ -62,7 +98,7 @@ export default function ShopHeader() {
                                 </DropdownMenuItem>
                                 {!authenticated ? (
                                     <DropdownMenuItem asChild>
-                                        <Link href="/login">Sign in</Link>
+                                        <Link href={loginHref}>Sign in</Link>
                                     </DropdownMenuItem>
                                 ) : null}
                             </DropdownMenuContent>
@@ -79,10 +115,15 @@ export default function ShopHeader() {
                     </div>
 
                     <div className="flex shrink-0 items-center justify-end gap-0.5 sm:gap-1">
-                        <Button variant="ghost" size="sm" className="hidden h-9 touch-manipulation sm:inline-flex" asChild>
-                            <Link href={authenticated ? "/portal" : "/login"}>
-                                {authenticated ? "My account" : "Sign in"}
-                            </Link>
+                        <Button variant="ghost" size="sm" className="hidden h-9 max-w-[11rem] touch-manipulation sm:inline-flex" asChild>
+                            {authenticated ? (
+                                <Link href="/portal" className="inline-flex items-center gap-1.5 min-w-0">
+                                    <UserRound className="size-4 shrink-0" />
+                                    <span className="truncate">{customerName ?? "My account"}</span>
+                                </Link>
+                            ) : (
+                                <Link href={loginHref}>Sign in</Link>
+                            )}
                         </Button>
                         <Button variant="ghost" asChild className={iconBtn} aria-label="Wishlist">
                             <Link href="/shop/wishlist" className="text-foreground">
@@ -127,9 +168,13 @@ export default function ShopHeader() {
                     <Button variant="ghost" size="sm" className="touch-manipulation" asChild>
                         <Link href="/shop">All products</Link>
                     </Button>
-                    <Button variant="ghost" size="sm" className="touch-manipulation" asChild>
-                        <Link href="/portal">Portal</Link>
-                    </Button>
+                    {/* When logged in, the account button (top-right) already links to the
+                        portal — don't show a second Portal link. */}
+                    {!authenticated ? (
+                        <Button variant="ghost" size="sm" className="touch-manipulation" asChild>
+                            <Link href="/portal">Portal</Link>
+                        </Button>
+                    ) : null}
                 </nav>
 
                 <ShopSearchBar className="order-last w-full min-w-0 md:order-0 md:mx-0 md:max-w-xl md:flex-1" />

@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { INDIA_STATE_NAMES } from "@/modules/delivery/lib/deliveryMethodConfig";
 import { useShopCartStore } from "@/store/external/shopCartStore";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import type { ShopProductPublic } from "@/shared/lib/shop/productPublic";
@@ -19,14 +21,16 @@ import PortalAccountSwitcher from "@/modules/external/portal/PortalAccountSwitch
 import { usePortalAccountStore } from "@/store/external/portalAccountStore";
 
 type ShippingOption = {
+    optionId: string;
     methodId: number;
     kind: "SHIPROCKET" | "CUSTOM" | "OWN_BOY";
+    serviceName?: string;
     label: string;
     amountPaise: number;
     etaText: string | null;
 };
 
-const EMPTY_ADDRESS = { name: "", phone: "", line1: "", line2: "", city: "", state: "", pincode: "" };
+const EMPTY_ADDRESS = { name: "", phone: "", line1: "", line2: "", pincode: "", locality: "", neighbourhood: "", city: "", state: "" };
 
 export default function ShopCheckoutPage() {
     const router = useRouter();
@@ -49,7 +53,7 @@ export default function ShopCheckoutPage() {
     const [options, setOptions] = useState<ShippingOption[]>([]);
     const [quoting, setQuoting] = useState(false);
     const [quoteError, setQuoteError] = useState("");
-    const [selectedMethodId, setSelectedMethodId] = useState<number | null>(null);
+    const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
 
     useEffect(() => {
         axios
@@ -73,12 +77,84 @@ export default function ShopCheckoutPage() {
     }, [lines, byId]);
 
     const pincodeValid = /^\d{6}$/u.test(address.pincode);
+    const [pincodeInfo, setPincodeInfo] = useState<string>("");
+    const [localities, setLocalities] = useState<string[]>([]);
+    // Our local delivery boy's coverage for this pincode: locality → [neighbourhoods].
+    const [coverage, setCoverage] = useState<Record<string, string[]>>({});
+
+    // Load local-delivery neighbourhood coverage for the pincode (enables the
+    // linked Locality ↔ Neighbourhood pickers + the Local delivery courier).
+    useEffect(() => {
+        if (!pincodeValid) {
+            setCoverage({});
+            return;
+        }
+        let cancelled = false;
+        axios
+            .get<{ localities: Record<string, string[]> }>(`/api/shop/local-coverage/${address.pincode}`)
+            .then((r) => {
+                if (cancelled) return;
+                const cov = r.data.localities ?? {};
+                setCoverage(cov);
+                // Drop a stale neighbourhood if it isn't covered under the new pincode.
+                setAddress((a) => {
+                    const all = Object.values(cov).flat();
+                    return a.neighbourhood && !all.includes(a.neighbourhood) ? { ...a, neighbourhood: "" } : a;
+                });
+            })
+            .catch(() => {
+                if (!cancelled) setCoverage({});
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [address.pincode, pincodeValid]);
+
+    // Auto-fill City + State + locality options from the pincode (India Post
+    // lookup). Runs whenever a valid 6-digit pincode is entered; the resolved
+    // state also drives zone matching.
+    useEffect(() => {
+        if (!pincodeValid) {
+            setPincodeInfo("");
+            setLocalities([]);
+            return;
+        }
+        let cancelled = false;
+        setPincodeInfo("Detecting location…");
+        axios
+            .get<{ ok: boolean; city?: string; state?: string; localities?: string[] }>(`/api/shop/pincode/${address.pincode}`)
+            .then((r) => {
+                if (cancelled) return;
+                if (r.data.ok) {
+                    const locs = Array.isArray(r.data.localities) ? r.data.localities : [];
+                    setLocalities(locs);
+                    setAddress((a) => ({
+                        ...a,
+                        city: r.data.city || a.city,
+                        state: r.data.state || a.state,
+                        // Reset the locality when the pincode changes; auto-pick when
+                        // there's only one so the customer needn't choose.
+                        locality: locs.length === 1 ? locs[0] : "",
+                    }));
+                    setPincodeInfo(r.data.city && r.data.state ? `${r.data.city}, ${r.data.state}` : "");
+                } else {
+                    setLocalities([]);
+                    setPincodeInfo("Couldn't detect — enter city & state.");
+                }
+            })
+            .catch(() => {
+                if (!cancelled) setPincodeInfo("");
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [address.pincode, pincodeValid]);
 
     // Fetch courier options whenever the pincode becomes valid (or the cart changes).
     useEffect(() => {
         if (!pincodeValid || lines.length === 0) {
             setOptions([]);
-            setSelectedMethodId(null);
+            setSelectedOptionId(null);
             return;
         }
         let cancelled = false;
@@ -87,20 +163,22 @@ export default function ShopCheckoutPage() {
         axios
             .post<{ options: ShippingOption[] }>("/api/shop/shipping/quote", {
                 pincode: address.pincode,
+                state: address.state || undefined,
+                neighbourhood: address.neighbourhood || undefined,
                 lines,
-                cod: true,
+                cod: payMethod === "COD",
             })
             .then((r) => {
                 if (cancelled) return;
                 const opts = r.data.options ?? [];
                 setOptions(opts);
-                setSelectedMethodId(opts.length > 0 ? opts[0].methodId : null);
+                setSelectedOptionId(opts.length > 0 ? opts[0].optionId : null);
                 if (opts.length === 0) setQuoteError("No courier serves this pincode yet.");
             })
             .catch(() => {
                 if (cancelled) return;
                 setOptions([]);
-                setSelectedMethodId(null);
+                setSelectedOptionId(null);
                 setQuoteError("Could not fetch delivery options. Check the pincode.");
             })
             .finally(() => {
@@ -109,9 +187,33 @@ export default function ShopCheckoutPage() {
         return () => {
             cancelled = true;
         };
-    }, [address.pincode, pincodeValid, lines]);
+    }, [address.pincode, address.state, address.neighbourhood, pincodeValid, lines, payMethod]);
 
-    const selected = options.find((o) => o.methodId === selectedMethodId) ?? null;
+    // Linked Locality ↔ Neighbourhood pickers (pincode is the enabler).
+    const hasCoverage = Object.keys(coverage).length > 0;
+    // Locality options = India Post areas ∪ the localities we cover (so a
+    // neighbourhood's parent locality is always selectable).
+    const localityOptions = [...new Set([...localities, ...Object.keys(coverage)])];
+    // Neighbourhood options: the selected locality's, else all covered ones.
+    const neighbourhoodOptions = [
+        ...new Set(address.locality && coverage[address.locality] ? coverage[address.locality] : Object.values(coverage).flat()),
+    ];
+    // Pick a locality → keep the neighbourhood only if still valid under it.
+    const onLocalityChange = (v: string) =>
+        setAddress((a) => {
+            const loc = v === "__none__" ? "" : v;
+            const valid = loc ? coverage[loc] ?? [] : Object.values(coverage).flat();
+            return { ...a, locality: loc, neighbourhood: a.neighbourhood && valid.includes(a.neighbourhood) ? a.neighbourhood : "" };
+        });
+    // Pick a neighbourhood → its parent locality auto-fills.
+    const onNeighbourhoodChange = (v: string) =>
+        setAddress((a) => {
+            const nb = v === "__none__" ? "" : v;
+            const parent = nb ? Object.keys(coverage).find((l) => (coverage[l] ?? []).includes(nb)) ?? a.locality : a.locality;
+            return { ...a, neighbourhood: nb, locality: parent };
+        });
+
+    const selected = options.find((o) => o.optionId === selectedOptionId) ?? null;
     const shipping = selected?.amountPaise ?? 0;
     const grand = total + shipping;
 
@@ -147,11 +249,13 @@ export default function ShopCheckoutPage() {
                     phone: address.phone.trim(),
                     line1: address.line1.trim(),
                     line2: address.line2.trim() || null,
+                    locality: address.locality.trim() || null,
+                    neighbourhood: address.neighbourhood.trim() || null,
                     city: address.city.trim(),
                     state: address.state.trim(),
                     pincode: address.pincode.trim(),
                 },
-                deliveryMethodId: selected.methodId,
+                optionId: selected.optionId,
                 paymentMethod: payMethod,
             });
             clear();
@@ -197,7 +301,7 @@ export default function ShopCheckoutPage() {
                             {accountOptions.length === 0 && !accountLoading ? (
                                 <p className="text-sm text-muted-foreground">
                                     No active portal profile found. Please sign in to the customer portal first.{" "}
-                                    <Link href="/login" className="text-primary underline">
+                                    <Link href="/login?callbackUrl=/shop/checkout" className="text-primary underline">
                                         Sign in
                                     </Link>
                                 </p>
@@ -227,21 +331,68 @@ export default function ShopCheckoutPage() {
                                 <Input value={address.line2} onChange={(e) => setField("line2")(e.target.value)} />
                             </div>
                             <div className="grid gap-2">
-                                <Label>City</Label>
-                                <Input value={address.city} onChange={(e) => setField("city")(e.target.value)} />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label>State</Label>
-                                <Input value={address.state} onChange={(e) => setField("state")(e.target.value)} />
-                            </div>
-                            <div className="grid gap-2">
                                 <Label>Pincode</Label>
                                 <Input
                                     value={address.pincode}
                                     onChange={(e) => setField("pincode")(e.target.value.replace(/\D/gu, "").slice(0, 6))}
                                     inputMode="numeric"
-                                    placeholder="6-digit"
+                                    placeholder="6-digit — city & state auto-fill"
                                 />
+                                {pincodeInfo ? <p className="text-xs text-muted-foreground">{pincodeInfo}</p> : null}
+                            </div>
+                            <div className="grid gap-2">
+                                <Label>Locality / area</Label>
+                                <Select
+                                    value={address.locality || "__none__"}
+                                    onValueChange={onLocalityChange}
+                                    disabled={localityOptions.length === 0}
+                                >
+                                    <SelectTrigger className="w-full">
+                                        <SelectValue placeholder={localityOptions.length ? "Select locality" : "Enter pincode first"} />
+                                    </SelectTrigger>
+                                    <SelectContent className="max-h-72">
+                                        <SelectItem value="__none__">Not listed / other</SelectItem>
+                                        {localityOptions.map((l) => (
+                                            <SelectItem key={l} value={l}>{l}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            {hasCoverage ? (
+                                <div className="grid gap-2 sm:col-span-2">
+                                    <Label>Neighbourhood (for local delivery)</Label>
+                                    <Select value={address.neighbourhood || "__none__"} onValueChange={onNeighbourhoodChange}>
+                                        <SelectTrigger className="w-full">
+                                            <SelectValue placeholder="Select your neighbourhood" />
+                                        </SelectTrigger>
+                                        <SelectContent className="max-h-72">
+                                            <SelectItem value="__none__">Not my area</SelectItem>
+                                            {neighbourhoodOptions.map((n) => (
+                                                <SelectItem key={n} value={n}>{n}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <p className="text-xs text-muted-foreground">
+                                        We deliver locally here — pick your neighbourhood to see the local delivery option.
+                                    </p>
+                                </div>
+                            ) : null}
+                            <div className="grid gap-2">
+                                <Label>City</Label>
+                                <Input value={address.city} onChange={(e) => setField("city")(e.target.value)} />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label>State</Label>
+                                <Select value={address.state} onValueChange={(v) => setField("state")(v)}>
+                                    <SelectTrigger className="w-full">
+                                        <SelectValue placeholder="Select state" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {INDIA_STATE_NAMES.map((s) => (
+                                            <SelectItem key={s} value={s}>{s}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                             </div>
                         </CardContent>
                     </Card>
@@ -266,12 +417,12 @@ export default function ShopCheckoutPage() {
                             ) : (
                                 <ul className="space-y-2">
                                     {options.map((o) => {
-                                        const active = o.methodId === selectedMethodId;
+                                        const active = o.optionId === selectedOptionId;
                                         return (
-                                            <li key={o.methodId}>
+                                            <li key={o.optionId}>
                                                 <button
                                                     type="button"
-                                                    onClick={() => setSelectedMethodId(o.methodId)}
+                                                    onClick={() => setSelectedOptionId(o.optionId)}
                                                     className={`flex w-full items-center justify-between rounded-lg border px-4 py-3 text-left transition ${
                                                         active
                                                             ? "border-primary ring-1 ring-primary bg-primary/5"

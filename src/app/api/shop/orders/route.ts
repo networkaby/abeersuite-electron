@@ -12,6 +12,7 @@ import { barcodeTagPaise } from "@/shared/lib/pricing/barcodePrice";
 import { getOrdersPipeline } from "@/modules/ecommerce/lib/ordersPipeline";
 import { quoteShipping } from "@/modules/delivery/lib/shippingQuote";
 import { loadDeliveryMethod, type ShiprocketConfig } from "@/modules/delivery/lib/deliveryMethods";
+import { chargeableUnitGrams } from "@/modules/delivery/lib/chargeableWeight";
 
 const DEFAULT_ITEM_WEIGHT_GRAMS = 500;
 
@@ -25,6 +26,8 @@ const addressSchema = z.object({
     phone: z.string().trim().min(6).max(20),
     line1: z.string().trim().min(1).max(200),
     line2: z.string().trim().max(200).optional().nullable(),
+    locality: z.string().trim().max(120).optional().nullable(),
+    neighbourhood: z.string().trim().max(120).optional().nullable(),
     city: z.string().trim().min(1).max(80),
     state: z.string().trim().min(1).max(80),
     pincode: z.string().trim().regex(/^\d{6}$/u, "Enter a valid 6-digit pincode"),
@@ -34,7 +37,9 @@ const createOrderSchema = z.object({
     lines: z.array(lineSchema).min(1),
     accountId: z.coerce.number().int().positive(),
     shippingAddress: addressSchema,
-    deliveryMethodId: z.coerce.number().int().positive(),
+    // The exact courier option the customer picked (e.g. "custom:2:0",
+    // "shiprocket:3:51"). Re-priced server-side against the fresh quote.
+    optionId: z.string().trim().min(1).max(80),
     paymentMethod: z.enum(["COD", "ONLINE"]).optional(),
 });
 
@@ -46,7 +51,7 @@ export async function POST(req: Request) {
 
         const { data, error } = await validateRequest(req, createOrderSchema);
         if (error) return error;
-        const { lines, accountId, shippingAddress, deliveryMethodId, paymentMethod } = data;
+        const { lines, accountId, shippingAddress, optionId, paymentMethod } = data;
 
         const context = await resolvePortalAccountContext(customerId, accountId);
         if (context.active.accountId !== accountId) {
@@ -96,7 +101,7 @@ export async function POST(req: Request) {
                 );
             }
             totalPaise += unitPricePaise * l.quantity;
-            weightGrams += (p.weightGrams ?? fallbackWeight) * l.quantity;
+            weightGrams += chargeableUnitGrams(p, fallbackWeight) * l.quantity;
             resolvedLines.push({
                 productId: l.productId,
                 quantity: l.quantity,
@@ -109,11 +114,13 @@ export async function POST(req: Request) {
         const isCod = (paymentMethod ?? "COD") === "COD";
         const options = await quoteShipping({
             deliveryPincode: shippingAddress.pincode,
+            deliveryState: shippingAddress.state,
+            deliveryNeighbourhood: shippingAddress.neighbourhood ?? undefined,
             subtotalPaise: totalPaise,
             weightGrams,
             cod: isCod,
         });
-        const chosen = options.find((o) => o.methodId === deliveryMethodId);
+        const chosen = options.find((o) => o.optionId === optionId);
         if (!chosen) {
             return NextResponse.json(
                 { error: "The selected delivery option is not available for this address." },
@@ -149,11 +156,15 @@ export async function POST(req: Request) {
                             phone: shippingAddress.phone,
                             line1: shippingAddress.line1,
                             line2: shippingAddress.line2 ?? null,
+                            locality: shippingAddress.locality ?? null,
+                            neighbourhood: shippingAddress.neighbourhood ?? null,
                             city: shippingAddress.city,
                             state: shippingAddress.state,
                             pincode: shippingAddress.pincode,
                             // Snapshot of the courier the customer picked (for the delivery step).
                             courierKind: chosen.kind,
+                            courierOptionId: chosen.optionId,
+                            courierService: chosen.serviceName ?? chosen.label,
                             shiprocketCourierId: chosen.shiprocketCourierId ?? null,
                             shiprocketCourierName: chosen.shiprocketCourierName ?? null,
                         },

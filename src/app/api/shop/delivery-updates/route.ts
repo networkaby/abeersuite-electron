@@ -2,13 +2,17 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { shiprocketStatusToStage } from "@/modules/delivery/lib/shiprocketStatus";
 
-// POST /api/shop/shiprocket/webhook — Shiprocket tracking callback.
+// POST /api/shop/delivery-updates — carrier tracking callback (used by Shiprocket).
 //
-// Configure this URL in Shiprocket → Settings → API → Webhooks, and set a token
-// there; Shiprocket sends it as the `x-api-key` header. We reject calls whose
-// header doesn't match SHIPROCKET_WEBHOOK_TOKEN (when that env is set). The
-// payload carries the AWB + current status; we map it onto the P8 delivery stage
-// for the matching delivery. Always returns 200 quickly (Shiprocket requirement).
+// NOTE: the path deliberately avoids the words "shiprocket", "kartrocket", "sr",
+// "kr" — Shiprocket rejects webhook URLs containing those keywords.
+//
+// Configure this URL in Shiprocket → Settings → Additional Settings → Webhooks,
+// pick Auth Token Type "x-api-key", and set a Token there; Shiprocket sends it as
+// the `x-api-key` header. We reject calls whose header doesn't match
+// SHIPROCKET_WEBHOOK_TOKEN (when that env is set). The payload carries the AWB +
+// current status; we map it onto the P8 delivery stage for the matching delivery.
+// Always returns 200 quickly (Shiprocket requirement).
 
 type WebhookBody = {
     awb?: string;

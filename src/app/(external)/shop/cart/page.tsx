@@ -32,9 +32,8 @@ export default function ShopCartPage() {
         if (p) subtotal += p.pricePaise * l.quantity;
     }
 
-    const shippingEstimate = subtotal > 0 ? (subtotal >= 500000 ? 0 : 9900) : 0;
-    const total = subtotal + shippingEstimate;
-
+    // Shipping isn't priced here — the customer's address (pincode / neighbourhood)
+    // decides the courier and rate, so we quote it on the checkout page.
     return (
         <main className="mx-auto max-w-6xl px-4 py-10 lg:py-14">
             <h1 className="text-3xl font-bold tracking-tight">Shopping cart</h1>
@@ -135,19 +134,18 @@ export default function ShopCartPage() {
                                 <span className="tabular-nums font-medium">{formatRupeesFromPaise(subtotal)}</span>
                             </div>
                             <div className="flex justify-between gap-4">
-                                <span className="text-muted-foreground">Shipping (est.)</span>
-                                <span className="tabular-nums font-medium">
-                                    {shippingEstimate === 0 ? "FREE" : formatRupeesFromPaise(shippingEstimate)}
-                                </span>
+                                <span className="text-muted-foreground">Shipping</span>
+                                <span className="tabular-nums font-medium text-muted-foreground">Shown at checkout</span>
                             </div>
                             <p className="text-xs text-muted-foreground">
-                                Free shipping on demo orders over ₹5,000 subtotal.
+                                Shipping is calculated at checkout once you enter your delivery address.
                             </p>
                             <div className="h-px bg-border" role="separator" />
                             <div className="flex justify-between gap-4 text-base">
-                                <span className="font-semibold">Estimated total</span>
-                                <span className="tabular-nums font-bold">{formatRupeesFromPaise(total)}</span>
+                                <span className="font-semibold">Total</span>
+                                <span className="tabular-nums font-bold">{formatRupeesFromPaise(subtotal)}</span>
                             </div>
+                            <p className="text-[11px] text-muted-foreground">Plus shipping, added at checkout.</p>
                         </CardContent>
                         <CardFooter className="flex flex-col gap-3">
                             <Button size="lg" className="w-full rounded-full shadow-md" asChild>

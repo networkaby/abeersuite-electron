@@ -64,6 +64,10 @@ export default function ProductForm({
     const [weightGrams, setWeightGrams] = useState<string>(
         initial?.weightGrams == null ? "" : String(initial.weightGrams)
     );
+    const dimStr = (v: number | null | undefined) => (v == null ? "" : String(v));
+    const [lengthCm, setLengthCm] = useState<string>(dimStr(initial?.lengthCm));
+    const [breadthCm, setBreadthCm] = useState<string>(dimStr(initial?.breadthCm));
+    const [heightCm, setHeightCm] = useState<string>(dimStr(initial?.heightCm));
     const [isListedInShop, setIsListedInShop] = useState(initial?.isListedInShop ?? true);
     const [allowBackorder, setAllowBackorder] = useState(initial?.allowBackorder ?? false);
     const [isActive, setIsActive] = useState(initial?.isActive ?? true);
@@ -94,6 +98,9 @@ export default function ProductForm({
         setStock(initial.stock === null || initial.stock === undefined ? "" : String(initial.stock));
         setLowStockThreshold(String(initial.lowStockThreshold ?? 5));
         setWeightGrams(initial.weightGrams == null ? "" : String(initial.weightGrams));
+        setLengthCm(dimStr(initial.lengthCm));
+        setBreadthCm(dimStr(initial.breadthCm));
+        setHeightCm(dimStr(initial.heightCm));
         setIsListedInShop(initial.isListedInShop ?? true);
         setAllowBackorder(initial.allowBackorder ?? false);
         setIsActive(initial.isActive ?? true);
@@ -145,6 +152,9 @@ export default function ProductForm({
         brandId: initial?.brandId ?? null,
         warrantyTermId: initial?.warrantyTermId ?? null,
         weightGrams: weightGrams.trim() === "" ? null : parseInt(weightGrams, 10),
+        lengthCm: lengthCm.trim() === "" ? null : parseInt(lengthCm, 10),
+        breadthCm: breadthCm.trim() === "" ? null : parseInt(breadthCm, 10),
+        heightCm: heightCm.trim() === "" ? null : parseInt(heightCm, 10),
         brandName: initial?.brandName ?? null,
         groupName: initial?.groupName ?? null,
         shopCategory: shopCategory.trim() || null,
@@ -176,6 +186,9 @@ export default function ProductForm({
             stock: stock.trim() === "" ? null : parseInt(stock, 10),
             lowStockThreshold: parseInt(lowStockThreshold, 10) || 5,
             weightGrams: weightGrams.trim() === "" ? null : parseInt(weightGrams, 10),
+            lengthCm: lengthCm.trim() === "" ? null : parseInt(lengthCm, 10),
+            breadthCm: breadthCm.trim() === "" ? null : parseInt(breadthCm, 10),
+            heightCm: heightCm.trim() === "" ? null : parseInt(heightCm, 10),
             // Never send "listed" for a product that isn't shop-ready (server 422s).
             isListedInShop: listedEffective,
             allowBackorder,
@@ -271,8 +284,32 @@ export default function ProductForm({
                         value={weightGrams}
                         onChange={(e) => setWeightGrams(e.target.value)}
                         inputMode="numeric"
-                        placeholder="e.g. 500 — used to rate couriers at checkout"
+                        placeholder="e.g. 500 — actual weight"
                     />
+                </div>
+                <div className="grid gap-2">
+                    <Label>Parcel dimensions (cm) — for volumetric weight</Label>
+                    <div className="grid grid-cols-3 gap-3">
+                        <Input value={lengthCm} onChange={(e) => setLengthCm(e.target.value)} inputMode="numeric" placeholder="Length" />
+                        <Input value={breadthCm} onChange={(e) => setBreadthCm(e.target.value)} inputMode="numeric" placeholder="Breadth" />
+                        <Input value={heightCm} onChange={(e) => setHeightCm(e.target.value)} inputMode="numeric" placeholder="Height" />
+                    </div>
+                    {(() => {
+                        const l = parseInt(lengthCm, 10) || 0;
+                        const b = parseInt(breadthCm, 10) || 0;
+                        const h = parseInt(heightCm, 10) || 0;
+                        const vol = l > 0 && b > 0 && h > 0 ? Math.round((l * b * h * 1000) / 5000) : 0;
+                        const actual = parseInt(weightGrams, 10) || 0;
+                        if (vol === 0) return null;
+                        const charged = Math.max(actual, vol);
+                        return (
+                            <p className="text-xs text-muted-foreground">
+                                Volumetric {vol} g (L×B×H ÷ 5000). Couriers charge on{" "}
+                                <span className="font-medium">max(actual, volumetric) = {charged} g</span>
+                                {charged > actual ? " (volumetric wins)" : ""}.
+                            </p>
+                        );
+                    })()}
                 </div>
                 <div className="rounded-lg border border-border p-3 space-y-2">
                     <div className="flex items-center justify-between">

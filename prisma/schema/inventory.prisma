@@ -232,6 +232,12 @@ model InvProduct {
   /// weight is Σ(weightGrams × qty). null = unknown; the quote falls back to the
   /// delivery method's configured default item weight.
   weightGrams             Int?
+  /// Parcel dimensions of ONE unit, in centimetres. Used for VOLUMETRIC weight
+  /// (L×B×H / 5000 kg) — couriers bill on max(actual, volumetric). All three must
+  /// be set for volumetric to apply; otherwise only actual weight is used.
+  lengthCm                Int?
+  breadthCm               Int?
+  heightCm                Int?
 
   // ── Pricing strategy (cost basis + per-item overrides) ─────────────────────
   /// Per-item cost-basis method consumed by the pricing-strategy resolver +

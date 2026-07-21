@@ -31,9 +31,8 @@ dotenv.config({ path: ".env" });
 // The permissions to add for the CURRENT change. Keep these identical to the rows
 // added in bootstrap-seed.ts. `systemOnly` rows are upserted but NOT granted to R1.
 const ADDITIONS: { id: string; label: string; module: string; description: string; systemOnly?: boolean }[] = [
-    { id: "deals:create", label: "Create deals", module: "crm", description: "Add a deal to the CRM pipeline (the New Deal + quick action)." },
-    { id: "tasks:create", label: "Create tasks", module: "administration", description: "Add an internal work item on the Administration board (the New Task + quick action)." },
-    { id: "quick-actions:more", label: "Show More + quick action", module: "core", description: "Show the More + button in the Quick Actions bar (opens the all-create-actions dialog)." },
+    { id: "ui:sidebar:settings:couriers", label: "Settings → Couriers", module: "ui", description: "Show the \"Couriers\" link under Settings in the sidebar." },
+    { id: "ui:sidebar:settings:standard-courier", label: "Settings → Standard Courier", module: "ui", description: "Show the \"Standard Courier\" link under Settings in the sidebar." },
 ];
 
 const ADMIN_ROLE_ID = "R1";
