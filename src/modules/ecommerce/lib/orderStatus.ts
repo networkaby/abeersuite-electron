@@ -2,6 +2,8 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { createSystemInboxNotifications } from "@/modules/message/lib/inbox";
 import { CONFIRMED_STATUS_LABEL } from "@/modules/ecommerce/lib/ordersPipeline";
 import { ORDER_STAGE } from "@/modules/order/lib/orderPipeline";
+import { shiprocketEnvReady } from "@/modules/delivery/lib/shiprocket";
+import { pushDeliveryToShiprocket } from "@/modules/delivery/lib/shiprocketFulfil";
 
 export type TransitionOrderPipelineInput = {
     orderId: number;
@@ -84,6 +86,29 @@ export async function transitionOrderPipelineStatus(input: TransitionOrderPipeli
     const order = { ...t, ...t.order, statusId: t.status };
 
     const link = `/office/ecommerce/orders/${orderId}`;
+
+    // ── Auto-book the courier at Packing ─────────────────────────────────────
+    // "Start packing" tells an API courier we're ready to hand over: book the
+    // shipment (AWB + pickup request + label) via the existing Shiprocket push.
+    // Best-effort — a courier-API failure must NEVER block packing; staff get an
+    // inbox alert and can book manually from the delivery instead.
+    // SHIPWAY has no booking API yet (rates only) and OWN/CUSTOM couriers have no
+    // API at all — those keep the manual dispatch path.
+    if (toStatusId === ORDER_STAGE.PACKING) {
+        try {
+            await autoBookCourier(orderId, actorUserId, link);
+        } catch (e) {
+            console.error("[orderStatus] courier auto-booking failed for order", orderId, e);
+            await createSystemInboxNotifications({
+                roleIds: ["R1", "R2"],
+                actorUserId,
+                title: `Order #${orderId} — courier auto-booking failed`,
+                body: `${e instanceof Error ? e.message : "Unknown error"} — book the courier manually from the delivery.`,
+                link,
+            }).catch(() => undefined);
+        }
+    }
+
     if (toStatusLabel === CONFIRMED_STATUS_LABEL) {
         await createSystemInboxNotifications({
             roleIds: ["R1", "R2"],
@@ -106,4 +131,41 @@ export async function transitionOrderPipelineStatus(input: TransitionOrderPipeli
     // invoiceId kept in the return shape for the status route; always null now
     // because invoicing is manual.
     return { order, invoiceId: null as number | null };
+}
+
+/**
+ * Book the order's chosen courier via its API when packing starts. Silently
+ * skips when there's nothing to do (non-API courier, already booked, creds
+ * absent, no delivery spawned); throws only on a real booking failure so the
+ * caller can alert staff.
+ */
+async function autoBookCourier(orderId: number, actorUserId: number, link: string) {
+    const order = await prisma.ticketOrder.findUnique({
+        where: { ticketId: orderId },
+        select: { shippingAddress: true },
+    });
+    const addr = (order?.shippingAddress ?? {}) as { courierKind?: string };
+    if (addr.courierKind !== "SHIPROCKET") return; // Shipway: no booking API yet — manual path
+    if (!shiprocketEnvReady()) return; // creds absent (dev) — manual path
+
+    const delivery = await prisma.ticketDelivery.findFirst({
+        where: { orderSource: "shop", orderId },
+        select: { ticketId: true, awb: true },
+    });
+    if (!delivery || delivery.awb) return; // nothing spawned yet, or already booked
+
+    const result = await pushDeliveryToShiprocket(delivery.ticketId);
+
+    // Stamp the AWB onto the order so the header + "Mark Dispatched" pre-fill.
+    await prisma.ticketOrder.update({
+        where: { ticketId: orderId },
+        data: { trackingNumber: result.awb },
+    });
+    await createSystemInboxNotifications({
+        roleIds: ["R1", "R2"],
+        actorUserId,
+        title: `Order #${orderId} — courier booked`,
+        body: `${result.courierName ?? "Shiprocket"} · AWB ${result.awb} · pickup requested.`,
+        link,
+    }).catch(() => undefined);
 }

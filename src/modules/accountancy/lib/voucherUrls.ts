@@ -53,7 +53,9 @@ export function receiptHref(
     variant: ReceiptVariant,
 ): string {
     if (variant === "thermal") {
-        if (source === "inv" && kind === "POS") return `/receipt/invoice/${rawId}?kind=POS`;
+        // POS + ONLINE_INVOICE share the rich customer-receipt page (ladder,
+        // per-kind template) — ONLINE_INVOICE is the parcel-insert print.
+        if (source === "inv" && (kind === "POS" || kind === "ONLINE_INVOICE")) return `/receipt/invoice/${rawId}?kind=${kind}`;
         if (source === "gl" && (kind === "RECEIPT" || kind === "PAYMENT")) return `/receipt/payment/${rawId}`;
         return `/receipt/voucher/${source}/${rawId}?paper=THERMAL_80MM`;
     }

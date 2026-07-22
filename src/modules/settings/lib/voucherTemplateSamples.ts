@@ -134,6 +134,42 @@ export function buildSampleForKind(kind: VoucherTemplateKind): ThermalReceiptSam
                 ],
                 branchAddress: SAMPLE_BRANCH_ADDRESS,
             };
+        case "ONLINE_INVOICE":
+            // Parcel-insert receipt — duplicate of the POS ladder look, but for a
+            // shipped online order: named customer + the full online benefit
+            // stack (level discount, loyalty points, coupon) + shipping. Gift
+            // cards are a TENDER, not a discount — they never show here.
+            return {
+                reference: "OI-2026-0042", date: today,
+                partyName: "Akramul Jakir", partyPhone: "+91 90000 00000", partyGstin: null,
+                lines: [
+                    { description: "Logitech B100 USB Mouse", quantity: 2, amount: 700,  mrp: 800,  barcode: 700 },
+                    { description: "HP Laptop 14s Charger",   quantity: 1, amount: 1600, mrp: 1800, barcode: 1600 },
+                    { description: "TP-Link Cat6 Cable 5m",   quantity: 3, amount: 700,  mrp: 800,  barcode: 700 },
+                ],
+                subtotal: 3000, taxAmount: 391.27, total: 2615,
+                notes: null,
+                taxBreakdown: intraBreakdown,
+                discounts: {
+                    grossAtTag: 3000,
+                    rows: [
+                        { label: "Level Discount (Gold)",  amount: 135 },
+                        { label: "Loyalty: 100 pts redeemed", amount: 100 },
+                        { label: "Coupon SAVE10",          amount: 200 },
+                    ],
+                    charges: [
+                        { label: "Shipping", amount: 50 },
+                    ],
+                    total: 435,
+                    // Saving from MRP = MRP total (3400) − goods paid (2565).
+                    savingsTotal: 835,
+                    savingsPct: 25,
+                },
+                hsnSummary: [
+                    { hsn: "8471", ratePct: 18, taxable: 2173.73, cgst: 195.64, sgst: 195.63, total: 2565 },
+                ],
+                branchAddress: SAMPLE_BRANCH_ADDRESS,
+            };
         case "PURCHASE":
             return {
                 reference: "PV/26-27/0008", date: today,
@@ -394,6 +430,7 @@ export const VOUCHER_KIND_LABEL: Record<VoucherTemplateKind, string> = {
     PURCHASE: "Purchase",
     SALE: "Sale",
     POS: "POS",
+    ONLINE_INVOICE: "Online Invoice",
     ESTIMATE: "Estimate",
     POS_ESTIMATE: "POS Estimate",
     POS_ORDER: "POS Order",

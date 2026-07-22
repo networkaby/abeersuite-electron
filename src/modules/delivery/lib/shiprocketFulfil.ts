@@ -24,6 +24,10 @@ type ShipAddress = {
     city?: string;
     state?: string;
     pincode?: string;
+    // Checkout snapshot — the specific Shiprocket courier the customer picked
+    // (or staff changed to). Passed to AWB assignment so the booked courier is
+    // the chosen one, not Shiprocket's auto-pick.
+    shiprocketCourierId?: number | null;
 };
 
 export type ShiprocketPushResult = { awb: string; courierName: string | null; labelUrl: string | null; trackingUrl: string };
@@ -97,7 +101,8 @@ export async function pushDeliveryToShiprocket(deliveryTicketId: number): Promis
         weight: Number(weightKg.toFixed(2)),
     });
 
-    const { awb, courierName } = await shiprocketAssignAwb(created.shipmentId);
+    const chosenCourierId = Number(addr.shiprocketCourierId) || undefined;
+    const { awb, courierName } = await shiprocketAssignAwb(created.shipmentId, chosenCourierId);
     // Pickup + label are best-effort — a failure here shouldn't lose the AWB.
     await shiprocketGeneratePickup(created.shipmentId).catch(() => undefined);
     const label = await shiprocketGenerateLabel(created.shipmentId).catch(() => ({ labelUrl: null }));

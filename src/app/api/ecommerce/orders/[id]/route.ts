@@ -54,6 +54,29 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
             },
         });
         if (!t?.order) return NextResponse.json({ error: "Not found" }, { status: 404 });
+        // The spawned P8 delivery (one per order) — live courier stage + AWB for
+        // the office Delivery panel.
+        const del = await prisma.ticketDelivery.findFirst({
+            where: { orderSource: "shop", orderId: oid },
+            select: {
+                ticketId: true,
+                carrier: true,
+                awb: true,
+                trackingUrl: true,
+                ticket: { select: { status: true, ticketStatus: { select: { label: true, color: true } } } },
+            },
+        });
+        const delivery = del
+            ? {
+                  id: del.ticketId,
+                  carrier: del.carrier,
+                  awb: del.awb,
+                  trackingUrl: del.trackingUrl,
+                  stageId: del.ticket.status,
+                  stageLabel: del.ticket.ticketStatus?.label ?? null,
+                  stageColor: del.ticket.ticketStatus?.color ?? null,
+              }
+            : null;
         const relatedTickets = await prisma.ticket.findMany({
             where: { repair: { sourceOrderTicketId: oid } },
             select: { id: true, status: true, notes: true, createdAt: true },
@@ -91,7 +114,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
               }
             : null;
         const { order, ticketStatus, ...core } = t;
-        const flat = { ...core, ...order, statusId: core.status, status: order.legacyStatus, orderStatus: ticketStatus, tickets: relatedTickets, invVoucher };
+        const flat = { ...core, ...order, statusId: core.status, status: order.legacyStatus, orderStatus: ticketStatus, tickets: relatedTickets, invVoucher, delivery };
         return NextResponse.json(flat);
     } catch (e) {
         return handleApiError(e, "Failed to load order");

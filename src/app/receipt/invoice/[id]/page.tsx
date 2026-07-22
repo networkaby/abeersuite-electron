@@ -111,7 +111,12 @@ export default async function PosReceiptPage({
     // or a stale call).
     const sellerStateCode = (org.gstStateCode || "").trim();
     let taxBreakdown: ThermalTaxBreakdown | null = null;
-    const taxAmt = Number(voucher.taxAmount);
+    // Printed GST = line tax + GST on tax-bearing charge rows (POS services)
+    // + GST embedded in the (inclusive) shipping charge — the same pool the
+    // GL splits onto the CGST/SGST/IGST legs, so the printed tax box always
+    // matches the books.
+    const chargesTax = settlement.charges.reduce((s, c) => s + Math.max(0, Number(c.taxAmount ?? 0)), 0);
+    const taxAmt = Number(voucher.taxAmount) + chargesTax + Number(voucher.shippingTaxAmt ?? 0);
     if (taxAmt > 0 && placeOfSupplyParam && isValidStateCode(placeOfSupplyParam) && sellerStateCode) {
         const split = computeGstSplit({
             taxAmount:       taxAmt,
@@ -131,11 +136,12 @@ export default async function PosReceiptPage({
     // doesn't reveal it. Built only when there's actual ladder data, so plain
     // invoices and non-sale vouchers render exactly as before.
     //
-    // POS ONLY: the price-hiding ladder is a counter-receipt device. A formal
-    // SALE invoice (often B2B, with the buyer's GSTIN) must show the REAL
-    // per-line price + tax for the buyer's ITC — so SALE renders the normal
-    // invoice, not the ladder.
-    const isSaleKind = kind === "POS";
+    // POS + ONLINE_INVOICE ONLY: the price-hiding ladder is a customer-receipt
+    // device (counter slip / parcel insert — the online invoice prints the same
+    // ladder as the POS sale). A formal SALE invoice (often B2B, with the
+    // buyer's GSTIN) must show the REAL per-line price + tax for the buyer's
+    // ITC — so SALE renders the normal invoice, not the ladder.
+    const isSaleKind = kind === "POS" || kind === "ONLINE_INVOICE";
     // The spend-tier discount now lives on the goods lines (line.amount is NET). To
     // show it as its own "Level discount" row the ladder needs the GROSS (pre-tier)
     // line amounts + the tier as a bill-level figure — the exact inputs it took when

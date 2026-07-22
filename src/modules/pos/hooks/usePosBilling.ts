@@ -12,7 +12,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { calcVoucherTotals, calcLineTotals } from "@/modules/inventory/lib/stock";
+import { calcVoucherTotals, calcLineTotals, resolveShippingGstRate } from "@/modules/inventory/lib/stock";
 import { type PartySearchAndCreateHandle, type PickedParty } from "@/shared/components/PartySearchAndCreate";
 import { type ActiveShift } from "@/modules/pos/components/ActiveShiftBar";
 import { type PendingHandover } from "@/modules/pos/components/HandoverAcceptDialog";
@@ -235,6 +235,16 @@ export function usePosBilling(opts: {
     const subtotal = lineRows.reduce((s, l) => s + l.gross, 0);   // pre-tax goods value
     const tax = lineRows.reduce((s, l) => s + l.taxAmount, 0);
     const shippingAmt = Math.max(0, parseAmt(shippingAmtStr));
+    // Shipping GST hint (display only — the server recomputes and owns it).
+    // The typed shipping amount is tax-INCLUSIVE, so the total never moves;
+    // this only surfaces the embedded GST: rate = dominant >50% goods rate,
+    // else max rate; a service-only bill falls back to its service rates.
+    // Weights are pre-tax qty × unitPrice — identical to the server's.
+    const goodsRateLines = cart.filter((l) => l.kind !== "service");
+    const shippingRateBase = (goodsRateLines.length > 0 ? goodsRateLines : cart)
+        .map((l) => ({ value: l.qty * l.unitPrice, taxRate: l.taxRate }));
+    const shippingGstRate = shippingAmt > 0 ? resolveShippingGstRate(shippingRateBase) : 0;
+    const shippingTaxAmt = (shippingAmt * shippingGstRate) / (100 + shippingGstRate);
     const manualChargesNet = charges.reduce((s, c) => s + parseAmt(c.amount), 0);
 
     // ── Spend tiers, resolved live ────────────────────────────────────────────
@@ -730,6 +740,7 @@ export function usePosBilling(opts: {
         pay, setPay, splits, setSplits, submitting, setSubmitting, openCheckout,
         // adjustments / offers
         adjustmentsOpen, setAdjustmentsOpen, shippingAmt, shippingAmtStr, setShippingAmtStr,
+        shippingGstRate, shippingTaxAmt,
         redeemPointsStr, setRedeemPointsStr, redeemOn, setRedeemOn,
         couponCodeStr, setCouponCodeStr, appliedCoupon, setAppliedCoupon, autoCoupon,
         couponBusy, applyCoupon,

@@ -2,7 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse, after } from "next/server";
 import { requirePosVoucher } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
-import { invNextRef, calcVoucherTotals, calcLineTotals } from "@/modules/inventory/lib/stock";
+import { invNextRef, calcVoucherTotals, calcLineTotals, resolveShippingGstRate } from "@/modules/inventory/lib/stock";
 import { recordStockMovementsBatch } from "@/modules/inventory/lib/stockMovement";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import { resolveEffectiveCostMap } from "@/modules/pricing-strategy/lib/resolveCost";
@@ -21,6 +21,7 @@ import * as Sentry from "@sentry/nextjs";
 import { validateRequest } from "@/shared/lib/api";
 import { checkCreditLimit, CreditLimitError } from "@/shared/lib/accountancy/checkCreditLimit";
 import { round2 } from "@/shared/lib/format";
+import { TIER_SPEND_VOUCHER_TYPES } from "@/shared/lib/pricing";
 import {
     ratesFromConfig,
     buildRulesIndex,
@@ -289,6 +290,19 @@ export async function POST(req: Request) {
     // totalAmount, the tier/loyalty floors, and the JE all see the same bill.
     const serviceGross = serviceCharges.reduce((s, c) => s + c.amount + c.taxAmount, 0);
 
+    // ── Shipping GST (composite supply — freight follows the bill) ────────
+    // `shippingAmt` is tax-INCLUSIVE (customer pays exactly what the cashier
+    // typed); back-calculate the embedded GST at the rate the bill dictates:
+    // dominant >50% goods rate, else max rate — service rates when the bill
+    // has no goods (resolveShippingGstRate). Weights are pre-tax, pre-discount
+    // (qty × unitPrice) so the client hint computes the identical rate.
+    // Unrounded like line/service tax — the engine rounds at the GL boundary.
+    const shippingRateLines = body.lines.length > 0
+        ? body.lines.map((l) => ({ value: l.quantity * l.unitPrice, taxRate: l.taxRate }))
+        : body.services.map((s) => ({ value: s.quantity * s.unitPrice, taxRate: serviceById.get(s.serviceId)?.gstRate ? Number(serviceById.get(s.serviceId)!.gstRate!.rate) : 0 }));
+    const shippingGstRate = body.shippingAmt > 0 ? resolveShippingGstRate(shippingRateLines) : 0;
+    const shippingTaxAmt  = (body.shippingAmt * shippingGstRate) / (100 + shippingGstRate);
+
     // ── Validate line items + payment totals ──────────────────────────────
     // goodsValue = pre-tax goods (Σ qty × unit price). grossTaxAmount = the tag GST
     // before any tier discount — drives the loyalty floors + coupon-stacking math.
@@ -405,9 +419,11 @@ export async function POST(req: Request) {
     if (body.couponCode || body.autoApply) {
         const couponConfig = await prisma.couponConfig.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} });
         couponExpenseAccountId = couponConfig.couponExpenseAccountId;
-        // First-time buyer = no prior POSTED SALE/POS voucher (identified only).
+        // First-time buyer = no prior POSTED sale-type voucher on ANY channel
+        // (SALE / POS / ONLINE_INVOICE — a webshop buyer isn't "new" at the
+        // counter). Identified customers only.
         const isNewCustomer = isIdentified
-            ? (await prisma.voucherDetail.count({ where: { universalVoucher: { partyAccountId: customerAccount.id, status: "POSTED", deletedAt: null, type: { in: ["SALE", "POS"] } } } })) === 0
+            ? (await prisma.voucherDetail.count({ where: { universalVoucher: { partyAccountId: customerAccount.id, status: "POSTED", deletedAt: null, type: { in: [...TIER_SPEND_VOUCHER_TYPES] } } } })) === 0
             : false;
         // Coupon eligibility needs each line's taxonomy (include/exclude rules).
         const tax = await loadTaxonomy();
@@ -708,6 +724,7 @@ export async function POST(req: Request) {
                     deliveryMode:   "COUNTER",
                     placeOfSupply:  sellerStateCode,
                     shippingAmt:    body.shippingAmt,
+                    shippingTaxAmt: round2(shippingTaxAmt),
                     // Pre-tax tier discount total (Σ line discountAmt). Stored with the
                     // GROSS subtotal above so the engine posts the "Discount Allowed"
                     // leg exactly as before — only the amount's base changed (% of
@@ -760,6 +777,8 @@ export async function POST(req: Request) {
                 subtotal:    voucher.subtotal,
                 taxAmount:   voucher.taxAmount,
                 shippingAmt: voucher.shippingAmt,
+                // UNROUNDED (matches line/service tax) — the engine rounds each leg once.
+                shippingTaxAmt,
                 discountAmt: voucher.discountAmt,
                 roundOff:    voucher.roundOff,
                 totalAmount: voucher.totalAmount,
@@ -822,8 +841,9 @@ export async function POST(req: Request) {
                 // customer has now crossed (one-time per tier). Lifetime spend is
                 // aggregated inside the tx so it includes the just-posted sale.
                 if (milestoneTiers.length > 0) {
+                    // Every sale channel counts toward milestone lifetime spend.
                     const spendAgg = await tx.voucherDetail.aggregate({
-                        where: { universalVoucher: { partyAccountId: customerAccount.id, status: "POSTED", deletedAt: null, type: { in: ["SALE", "POS"] } } },
+                        where: { universalVoucher: { partyAccountId: customerAccount.id, status: "POSTED", deletedAt: null, type: { in: [...TIER_SPEND_VOUCHER_TYPES] } } },
                         _sum: { totalAmount: true },
                     });
                     const lifetimeSpend = Number(spendAgg._sum.totalAmount ?? 0);

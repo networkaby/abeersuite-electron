@@ -458,6 +458,12 @@ model VoucherDetail {
   discountPct         Decimal?               @db.Decimal(5, 2)
   discountAmt         Decimal?               @db.Decimal(14, 2)
   shippingAmt         Decimal                @default(0) @db.Decimal(14, 2)
+  /// GST embedded inside `shippingAmt` (which stays GROSS — what the customer
+  /// pays). POS computes it via resolveShippingGstRate (dominant->50% goods
+  /// rate, else max rate; service rates when the bill has no goods). The GL
+  /// posts shipping NET (shippingAmt − shippingTaxAmt) to Shipping Income and
+  /// pools this tax into the CGST/SGST/IGST legs. 0 on non-POS flows (today).
+  shippingTaxAmt      Decimal                @default(0) @db.Decimal(14, 2)
   roundOff            Decimal                @default(0) @db.Decimal(14, 2)
   subtotal            Decimal                @db.Decimal(14, 2)
   taxAmount           Decimal                @default(0) @db.Decimal(14, 2)

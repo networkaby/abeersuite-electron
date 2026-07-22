@@ -38,6 +38,10 @@ export const INVENTORY_VOUCHER_KINDS = [
     "PURCHASE",
     "SALE",
     "POS",
+    // Online-channel invoice (shop order → one-click ONLINE_INVOICE). Seeded as
+    // a DUPLICATE of the POS receipt (same ladder look) but its own row — the
+    // parcel-insert print can diverge from the counter slip independently.
+    "ONLINE_INVOICE",
     "ESTIMATE",
     "POS_ESTIMATE",
     "POS_ORDER",
@@ -98,6 +102,7 @@ const HEADER_LINE_2: Record<VoucherTemplateKind, string> = {
     PURCHASE: "Purchase Invoice",
     SALE: "Tax Invoice",
     POS: "POS sale receipt",
+    ONLINE_INVOICE: "Tax Invoice (Online Order)",
     ESTIMATE: "Estimate / Quotation",
     POS_ESTIMATE: "Estimate / Quotation",
     POS_ORDER: "Order Confirmation",
@@ -150,6 +155,7 @@ const WITH_SIGNATURE: ReadonlySet<VoucherTemplateKind> = new Set<VoucherTemplate
 const BARCODE_KINDS: ReadonlySet<VoucherTemplateKind> = new Set<VoucherTemplateKind>([
     "SALE",
     "POS",
+    "ONLINE_INVOICE",
     "SALE_RETURN",
 ]);
 
@@ -209,6 +215,9 @@ const DEFAULT_PAPER_BY_KIND: Record<VoucherTemplateKind, PaperFormat> = {
     PURCHASE: "A4",
     SALE: "A4",
     POS: "THERMAL_80MM",
+    // Duplicate of POS, but the primary use is the parcel-insert print — an A4
+    // sheet packs better with the item; flip per taste on the settings page.
+    ONLINE_INVOICE: "A4",
     ESTIMATE: "A4",
     POS_ESTIMATE: "THERMAL_80MM",
     POS_ORDER: "THERMAL_80MM",
@@ -247,6 +256,7 @@ export const PRINT_AFTER_SAVE_DEFAULT_BY_KIND: Record<VoucherTemplateKind, boole
     PURCHASE: false,
     SALE: true,
     POS: true,
+    ONLINE_INVOICE: true,
     ESTIMATE: true,
     POS_ESTIMATE: true,
     POS_ORDER: true,
@@ -292,6 +302,9 @@ export const THERMAL_DEFAULT_BY_KIND: Record<VoucherTemplateKind, boolean> = {
     PURCHASE:              false,
     SALE:                  false,
     POS:                   true,
+    // Parcel insert prints from the office on A4 — browser print, not the
+    // counter thermal auto-fire.
+    ONLINE_INVOICE:        false,
     ESTIMATE:              false,
     POS_ESTIMATE:          true,
     POS_ORDER:             true,

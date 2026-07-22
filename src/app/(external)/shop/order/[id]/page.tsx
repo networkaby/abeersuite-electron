@@ -46,6 +46,12 @@ export default async function ShopOrderConfirmationPage({
             paidAt: true,
             totalPaise: true,
             shippingChargePaise: true,
+            tierDiscountPaise: true,
+            tierLabel: true,
+            couponCode: true,
+            couponDiscountPaise: true,
+            loyaltyRedeemPoints: true,
+            loyaltyRedeemPaise: true,
             courier: true,
             shippingAddress: true,
             trackingNumber: true,
@@ -146,6 +152,26 @@ export default async function ShopOrderConfirmationPage({
                         <span>{formatRupeesFromPaise(l.unitPricePaise * l.quantity)}</span>
                     </li>
                 ))}
+                {order.tierDiscountPaise > 0 && (
+                    <li className="flex justify-between gap-2 border-t border-border pt-1 mt-1 text-emerald-600 dark:text-emerald-400">
+                        {/* Frozen level discount — line prices above are the gross tags;
+                            totalPaise is already net of this. */}
+                        <span>Level discount{order.tierLabel ? ` (${order.tierLabel})` : ""}</span>
+                        <span>−{formatRupeesFromPaise(order.tierDiscountPaise)}</span>
+                    </li>
+                )}
+                {order.couponDiscountPaise > 0 && (
+                    <li className="flex justify-between gap-2 border-t border-border pt-1 mt-1 text-emerald-600 dark:text-emerald-400">
+                        <span>Coupon{order.couponCode ? ` (${order.couponCode})` : ""}</span>
+                        <span>−{formatRupeesFromPaise(order.couponDiscountPaise)}</span>
+                    </li>
+                )}
+                {order.loyaltyRedeemPaise > 0 && (
+                    <li className="flex justify-between gap-2 border-t border-border pt-1 mt-1 text-emerald-600 dark:text-emerald-400">
+                        <span>Loyalty ({order.loyaltyRedeemPoints} pts)</span>
+                        <span>−{formatRupeesFromPaise(order.loyaltyRedeemPaise)}</span>
+                    </li>
+                )}
                 <li className="flex justify-between gap-2 border-t border-border pt-1 mt-1 text-muted-foreground">
                     <span>Shipping{courierLabel ? ` · ${courierLabel}` : ""}</span>
                     <span>{order.shippingChargePaise === 0 ? "FREE" : formatRupeesFromPaise(order.shippingChargePaise)}</span>

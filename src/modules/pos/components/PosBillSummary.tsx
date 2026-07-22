@@ -83,6 +83,10 @@ export type PosBillSummaryProps = {
     shippingAmt: number;
     shippingAmtStr: string;
     setShippingAmtStr: (v: SetStateAction<string>) => void;
+    // Shipping GST hint — the typed amount is tax-inclusive; these surface the
+    // embedded rate + ₹ (dominant >50% rate, else max — see resolveShippingGstRate).
+    shippingGstRate: number;
+    shippingTaxAmt: number;
     roundOff: number;
     autoRoundOff: number;
     roundOffStr: string;
@@ -103,7 +107,8 @@ export function PosBillSummary({
     couponBlockedLoyalty, couponCodeStr, setCouponCodeStr, applyCoupon, couponBusy,
     giftCard, setGiftCard, giftCardCodeStr, setGiftCardCodeStr, applyGiftCard, gcBusy,
     giftCardApplied, payableTotal,
-    shippingAmtStr, setShippingAmtStr,
+    shippingAmt, shippingAmtStr, setShippingAmtStr,
+    shippingGstRate, shippingTaxAmt,
     autoRoundOff, roundOffStr, setRoundOffStr, roundOffManuallyEdited,
     setRoundOffManuallyEdited,
     cart, checkoutSlot,
@@ -303,7 +308,9 @@ export function PosBillSummary({
                     wrap so it never dangles at the start of a wrapped line. */}
                 {snapshot && <div className="hidden h-4 w-px shrink-0 self-center bg-border sm:block" />}
 
-                {/* Shipping */}
+                {/* Shipping — typed amount is tax-INCLUSIVE; the hint shows the
+                    GST hiding inside it (rate follows the bill: dominant >50%
+                    rate, else max). Server recomputes — display only. */}
                 <div className="flex items-center gap-2">
                     <Label htmlFor="pos-shipping" className="text-muted-foreground">Shipping</Label>
                     <Input
@@ -315,6 +322,11 @@ export function PosBillSummary({
                         placeholder="0.00"
                         className="h-7 w-24 text-right text-xs"
                     />
+                    {shippingAmt > 0.005 && shippingGstRate > 0 && (
+                        <span className="whitespace-nowrap text-[10px] text-muted-foreground">
+                            incl. GST @{shippingGstRate}% · {formatInr(shippingTaxAmt)}
+                        </span>
+                    )}
                 </div>
                 {/* Round-off */}
                 <div className="flex items-center gap-2">

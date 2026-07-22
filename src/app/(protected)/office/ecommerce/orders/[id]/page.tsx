@@ -18,10 +18,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import OrderStatusActions from "@/modules/ecommerce/components/OrderStatusActions";
+import OrderCourierPanel from "@/modules/ecommerce/components/OrderCourierPanel";
 import { OrderSourceBadge } from "@/modules/ecommerce/components/OrderSourceBadge";
 import type { OrderSource, ShopOrderStatus } from "@/generated/prisma/enums";
 import { toast } from "sonner";
-import { FileText, ExternalLink, CreditCard, Truck } from "lucide-react";
+import { FileText, ExternalLink, CreditCard, Truck, Printer } from "lucide-react";
 import { editFormUrl } from "@/modules/inventory/components/VoucherActionsMenu";
 
 type NextPipelineStatus = {
@@ -43,6 +44,8 @@ type ShippingAddressJson = {
     state?: string;
     pincode?: string;
     courierService?: string;
+    /** Courier kind chosen at checkout ("SHIPROCKET" | "CUSTOM" | "OWN_BOY" | …). */
+    courierKind?: string;
     /** Online gateway chosen at checkout ("razorpay" | "payu" | …). */
     onlineProvider?: string | null;
     /** Auto-posted advance receipt for the online payment. */
@@ -68,6 +71,14 @@ type OrderDetail = {
     paymentMethod: "COD" | "ONLINE";
     totalPaise: number;
     shippingChargePaise: number;
+    // Frozen benefit snapshots from checkout — totalPaise is already NET of
+    // both; line unitPricePaise stays the gross tag.
+    tierDiscountPaise: number;
+    tierLabel: string | null;
+    couponCode: string | null;
+    couponDiscountPaise: number;
+    loyaltyRedeemPoints: number;
+    loyaltyRedeemPaise: number;
     razorpayPaymentId: string | null;
     shippingName: string | null;
     shippingAddress: ShippingAddressJson | null;
@@ -105,6 +116,16 @@ type OrderDetail = {
         type: string;
         status: string;
         totalAmount: string;
+    } | null;
+    // The spawned P8 delivery — live courier stage + AWB (webhook auto-synced).
+    delivery: {
+        id: number;
+        carrier: string | null;
+        awb: string | null;
+        trackingUrl: string | null;
+        stageId: string;
+        stageLabel: string | null;
+        stageColor: string | null;
     } | null;
 };
 
@@ -269,6 +290,8 @@ export default function EcommerceOrderDetailPage() {
                         statusId={order.statusId}
                         nextStatuses={nextStatuses}
                         status={order.statusId ? null : order.status}
+                        defaultCourier={addr.courierService ?? order.courier}
+                        defaultTracking={order.delivery?.awb ?? order.trackingNumber}
                     />
 
                     {/* Invoice — required before Packing, so it sits right next to the
@@ -296,11 +319,20 @@ export default function EcommerceOrderDetailPage() {
                                             {v.status} · {formatRupeesFromPaise(Math.round(Number(v.totalAmount) * 100))}
                                         </p>
                                     </div>
-                                    <Button variant="outline" size="sm" asChild>
-                                        <Link href={href}>
-                                            <ExternalLink size={13} /> Open voucher
-                                        </Link>
-                                    </Button>
+                                    <div className="flex items-center gap-2">
+                                        {/* Parcel insert — POS-style receipt on the ONLINE_INVOICE
+                                            template (own row on the print-templates page). */}
+                                        <Button variant="outline" size="sm" asChild>
+                                            <Link href={`/receipt/invoice/${v.id}?kind=ONLINE_INVOICE`} target="_blank">
+                                                <Printer size={13} /> Print
+                                            </Link>
+                                        </Button>
+                                        <Button variant="outline" size="sm" asChild>
+                                            <Link href={href}>
+                                                <ExternalLink size={13} /> Open voucher
+                                            </Link>
+                                        </Button>
+                                    </div>
                                 </div>
                             );
                         })() : (
@@ -332,8 +364,26 @@ export default function EcommerceOrderDetailPage() {
                             ))}
                         </ul>
                         <div className="mt-3 space-y-1 border-t border-border pt-2 text-sm">
+                            {(order.tierDiscountPaise ?? 0) > 0 && (
+                                <p className="flex justify-between text-emerald-600 dark:text-emerald-400">
+                                    <span>Level discount{order.tierLabel ? ` (${order.tierLabel})` : ""}</span>
+                                    <span>−{formatRupeesFromPaise(order.tierDiscountPaise)}</span>
+                                </p>
+                            )}
+                            {(order.couponDiscountPaise ?? 0) > 0 && (
+                                <p className="flex justify-between text-emerald-600 dark:text-emerald-400">
+                                    <span>Coupon{order.couponCode ? ` (${order.couponCode})` : ""}</span>
+                                    <span>−{formatRupeesFromPaise(order.couponDiscountPaise)}</span>
+                                </p>
+                            )}
+                            {(order.loyaltyRedeemPaise ?? 0) > 0 && (
+                                <p className="flex justify-between text-emerald-600 dark:text-emerald-400">
+                                    <span>Loyalty ({order.loyaltyRedeemPoints} pts)</span>
+                                    <span>−{formatRupeesFromPaise(order.loyaltyRedeemPaise)}</span>
+                                </p>
+                            )}
                             <p className="flex justify-between text-muted-foreground">
-                                <span>Items</span>
+                                <span>Items{(order.tierDiscountPaise ?? 0) > 0 ? " (after discount)" : ""}</span>
                                 <span>{formatRupeesFromPaise(order.totalPaise)}</span>
                             </p>
                             <p className="flex justify-between text-muted-foreground">
@@ -496,14 +546,18 @@ export default function EcommerceOrderDetailPage() {
                             <p className="text-muted-foreground">
                                 {[addr.city, addr.state, addr.pincode].filter(Boolean).join(", ")}
                             </p>
-                            {(addr.courierService || order.courier) && (
-                                <p className="mt-1 text-xs text-muted-foreground">
-                                    Courier: {addr.courierService ?? order.courier}
-                                    {order.trackingNumber ? ` · ${order.trackingNumber}` : ""}
-                                </p>
-                            )}
                         </div>
                     ) : null}
+
+                    {/* Delivery — chosen courier, live courier stage, AWB, change-courier */}
+                    <OrderCourierPanel
+                        orderId={order.id}
+                        statusId={order.statusId}
+                        courierLabel={addr.courierService ?? order.courier}
+                        trackingNumber={order.trackingNumber}
+                        delivery={order.delivery}
+                        onUpdated={load}
+                    />
                 </div>
             </div>
         </div>

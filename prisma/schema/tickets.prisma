@@ -177,6 +177,34 @@ model TicketOrder {
   // STORE_PICKUP | FREE_DELIVERY). Grand total on
   // the bill = totalPaise (goods) + shippingChargePaise. GL posting stays manual.
   shippingChargePaise Int     @default(0)
+  // Spend-tier discount FROZEN at checkout (same engine as POS: tier% × cost).
+  // totalPaise above is already NET of this discount — the gateway charges the
+  // discounted amount. tierDiscountPaise = the inclusive (customer-facing) ₹
+  // effect; tierDiscountPct = the configured cost-% that produced it; tierLabel
+  // = display name ("Gold of FY spend") for the bill row + printed ladder.
+  // Per-line pre-tax splits live on TicketOrderLine.tierDiscountPaise.
+  tierDiscountPaise   Int      @default(0)
+  tierDiscountPct     Decimal? @db.Decimal(5, 2)
+  tierLabel           String?
+  // Coupon FROZEN at checkout (same engine as POS — selectCouponForCart,
+  // channel SHOP; explicit code or best AUTO offer). totalPaise is already NET
+  // of couponDiscountPaise. The CouponRedemption row is written AT CHECKOUT
+  // (spine null — locks usage limits against double-use across pending
+  // orders); the invoice conversion stamps its universalVoucherId when it
+  // posts, so full-return reversal keeps working. Non-stackable coupons drop
+  // the tier (tierDiscountPaise then freezes as 0).
+  couponId            Int?
+  couponCode          String?
+  couponDiscountPaise Int      @default(0)
+  couponRedemptionId  Int?
+  // Loyalty redemption FROZEN at checkout (points + ₹ value; validated against
+  // balance / floors / the cart-aware redeem ceiling — same clampRedemption as
+  // POS). totalPaise is already NET of loyaltyRedeemPaise. Points are NOT
+  // burned here — the invoice conversion burns lots + earns + milestones in
+  // its posting tx (applyLoyaltyForSale, POS-parity), guarding that the
+  // balance still covers the frozen points (422 otherwise).
+  loyaltyRedeemPoints Int      @default(0)
+  loyaltyRedeemPaise  Int      @default(0)
   razorpayOrderId     String? @unique
   razorpayPaymentId   String?
   courier             String?
@@ -199,6 +227,12 @@ model TicketOrderLine {
   productId      Int
   quantity       Int @default(1)
   unitPricePaise Int
+  // Whole-line spend-tier discount, PRE-TAX paise, frozen at checkout
+  // (tier% × costExcl × qty, clamped to the line's pre-tax value — POS
+  // formula). unitPricePaise stays the GROSS tag; the invoice conversion
+  // passes this as the line's discountAmt so GST recomputes on the reduced
+  // base exactly like a POS sale line. 0 = no discount on this line.
+  tierDiscountPaise Int @default(0)
 
   order   TicketOrder @relation(fields: [orderTicketId], references: [ticketId], onDelete: Cascade)
   product InvProduct  @relation(fields: [productId], references: [id])

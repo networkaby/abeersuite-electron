@@ -249,7 +249,54 @@ export default function ShopCheckoutPage() {
 
     const selected = options.find((o) => o.optionId === selectedOptionId) ?? null;
     const shipping = selected?.amountPaise ?? 0;
-    const grand = total + shipping;
+
+    // Customer-benefit preview — server-owned (/api/shop/tier-preview, the same
+    // helper the order route freezes at checkout): the spend-tier "level"
+    // discount + the coupon (typed code or best AUTO offer, POS stacking
+    // rules). Logged-in only; a guest or a failed call just shows plain
+    // prices. Display-only here — the order route recomputes and stores its
+    // own numbers (and takes the coupon usage slot).
+    type BenefitPreview = {
+        tierPct: number; tierLabel: string | null; discountPaise: number;
+        coupon: { code: string; name: string; discountPaise: number; droppedTier: boolean } | null;
+        couponError: string | null;
+        loyalty: {
+            balance: number; redeemValue: number; minRedeemPoints: number;
+            maxRedeemablePts: number; redeemPoints: number; redeemPaise: number;
+            redeemError: string | null;
+        } | null;
+    };
+    const [tierPreview, setTierPreview] = useState<BenefitPreview | null>(null);
+    // The APPLIED code / points (sent to preview + place-order); the input
+    // boxes are separate drafts so typing doesn't spam the endpoint.
+    const [couponCode, setCouponCode] = useState("");
+    const [couponDraft, setCouponDraft] = useState("");
+    const [redeemPts, setRedeemPts] = useState(0);
+    const [redeemDraft, setRedeemDraft] = useState("");
+    // No sync setState in the effect (react-hooks/set-state-in-effect) — a
+    // guest / empty cart never fetches; the derived gate below hides stale rows.
+    useEffect(() => {
+        if (!activeAccountId || lines.length === 0) return;
+        let cancelled = false;
+        const timer = setTimeout(() => {
+            axios
+                .post<BenefitPreview>("/api/shop/tier-preview", {
+                    accountId: activeAccountId,
+                    lines: lines.map((l) => ({ productId: l.productId, quantity: l.quantity })),
+                    couponCode: couponCode || undefined,
+                    redeemPoints: redeemPts || undefined,
+                })
+                .then((r) => { if (!cancelled) setTierPreview(r.data); })
+                .catch(() => { if (!cancelled) setTierPreview(null); });
+        }, 300);
+        return () => { cancelled = true; clearTimeout(timer); };
+    }, [activeAccountId, lines, couponCode, redeemPts]);
+    const previewLive = !!activeAccountId && lines.length > 0 && !!tierPreview;
+    const tierDiscount = previewLive ? tierPreview!.discountPaise : 0;
+    const couponDiscount = previewLive ? (tierPreview!.coupon?.discountPaise ?? 0) : 0;
+    const loyaltyDiscount = previewLive ? (tierPreview!.loyalty?.redeemPaise ?? 0) : 0;
+
+    const grand = Math.max(0, total - tierDiscount - couponDiscount - loyaltyDiscount) + shipping;
 
     // The "Pay on delivery" rail shows only when active AND it serves this address.
     const podShown = !!pod && pod.active && pod.availableHere;
@@ -309,6 +356,12 @@ export default function ShopCheckoutPage() {
                 optionId: selected.optionId,
                 paymentMethod: isCod ? "COD" : "ONLINE",
                 onlineProvider: isCod ? undefined : payChoice,
+                // Applied coupon code — the server re-validates and freezes it
+                // (AUTO offers apply server-side even without a code).
+                couponCode: couponCode || undefined,
+                // Loyalty points to burn — server clamps/validates; lots burn at
+                // invoice post.
+                redeemPoints: redeemPts || undefined,
             });
             clear();
             router.push(`/shop/order/${order.id}`);
@@ -650,6 +703,109 @@ export default function ShopCheckoutPage() {
                             <span className="text-muted-foreground">Subtotal</span>
                             <span className="tabular-nums font-medium">{formatRupeesFromPaise(total)}</span>
                         </div>
+                        {tierDiscount > 0 && (
+                            <div className="flex justify-between text-sm text-emerald-600 dark:text-emerald-400">
+                                <span>
+                                    Level discount{tierPreview?.tierLabel ? ` (${tierPreview.tierLabel})` : ""}
+                                </span>
+                                <span className="tabular-nums font-medium">−{formatRupeesFromPaise(tierDiscount)}</span>
+                            </div>
+                        )}
+                        {couponDiscount > 0 && tierPreview?.coupon && (
+                            <div className="flex justify-between text-sm text-emerald-600 dark:text-emerald-400">
+                                <span>Coupon ({tierPreview.coupon.code})</span>
+                                <span className="tabular-nums font-medium">−{formatRupeesFromPaise(couponDiscount)}</span>
+                            </div>
+                        )}
+                        {loyaltyDiscount > 0 && tierPreview?.loyalty && (
+                            <div className="flex justify-between text-sm text-emerald-600 dark:text-emerald-400">
+                                <span>Loyalty ({tierPreview.loyalty.redeemPoints} pts)</span>
+                                <span className="tabular-nums font-medium">−{formatRupeesFromPaise(loyaltyDiscount)}</span>
+                            </div>
+                        )}
+                        {/* Coupon code — logged-in only (benefits need an identified
+                            customer). Server validates; errors show inline. */}
+                        {activeAccountId ? (
+                            <div className="space-y-1">
+                                <div className="flex items-center gap-2">
+                                    <Input
+                                        value={couponDraft}
+                                        onChange={(e) => setCouponDraft(e.target.value.toUpperCase())}
+                                        placeholder="Coupon code"
+                                        className="h-8 text-xs"
+                                    />
+                                    {couponCode ? (
+                                        <Button
+                                            type="button" variant="outline" size="sm" className="h-8"
+                                            onClick={() => { setCouponCode(""); setCouponDraft(""); }}
+                                        >
+                                            Remove
+                                        </Button>
+                                    ) : (
+                                        <Button
+                                            type="button" variant="outline" size="sm" className="h-8"
+                                            disabled={!couponDraft.trim()}
+                                            onClick={() => setCouponCode(couponDraft.trim())}
+                                        >
+                                            Apply
+                                        </Button>
+                                    )}
+                                </div>
+                                {couponCode && tierPreview?.couponError ? (
+                                    <p className="text-xs text-destructive">{tierPreview.couponError}</p>
+                                ) : null}
+                                {couponDiscount > 0 && tierPreview?.coupon?.droppedTier ? (
+                                    <p className="text-[11px] text-muted-foreground">
+                                        This coupon doesn&apos;t combine with the level discount — the better deal applies.
+                                    </p>
+                                ) : null}
+                                {/* Loyalty points — shown once the programme is live and the
+                                    customer has a balance. Server clamps to the cart ceiling. */}
+                                {tierPreview?.loyalty && tierPreview.loyalty.balance > 0 ? (
+                                    <div className="space-y-1 pt-1">
+                                        <p className="text-xs text-muted-foreground">
+                                            You have <span className="font-medium text-foreground">{tierPreview.loyalty.balance} points</span>
+                                            {tierPreview.loyalty.maxRedeemablePts > 0
+                                                ? <> — up to {tierPreview.loyalty.maxRedeemablePts} usable on this order (₹{(tierPreview.loyalty.redeemValue * tierPreview.loyalty.maxRedeemablePts).toFixed(0)})</>
+                                                : null}
+                                        </p>
+                                        <div className="flex items-center gap-2">
+                                            <Input
+                                                value={redeemDraft}
+                                                onChange={(e) => setRedeemDraft(e.target.value.replace(/\D/g, ""))}
+                                                placeholder="Points to use"
+                                                inputMode="numeric"
+                                                className="h-8 text-xs"
+                                            />
+                                            {redeemPts > 0 ? (
+                                                <Button
+                                                    type="button" variant="outline" size="sm" className="h-8"
+                                                    onClick={() => { setRedeemPts(0); setRedeemDraft(""); }}
+                                                >
+                                                    Remove
+                                                </Button>
+                                            ) : (
+                                                <Button
+                                                    type="button" variant="outline" size="sm" className="h-8"
+                                                    disabled={!redeemDraft || parseInt(redeemDraft, 10) <= 0}
+                                                    onClick={() => setRedeemPts(parseInt(redeemDraft, 10) || 0)}
+                                                >
+                                                    Use points
+                                                </Button>
+                                            )}
+                                        </div>
+                                        {redeemPts > 0 && tierPreview.loyalty.redeemError ? (
+                                            <p className="text-xs text-destructive">{tierPreview.loyalty.redeemError}</p>
+                                        ) : null}
+                                        {redeemPts > 0 && tierPreview.loyalty.redeemPoints > 0 && tierPreview.loyalty.redeemPoints < redeemPts ? (
+                                            <p className="text-[11px] text-muted-foreground">
+                                                Clamped to {tierPreview.loyalty.redeemPoints} points (order limit).
+                                            </p>
+                                        ) : null}
+                                    </div>
+                                ) : null}
+                            </div>
+                        ) : null}
                         <div className="flex justify-between text-sm">
                             <span className="text-muted-foreground">
                                 Shipping{selected ? ` · ${selected.label}` : ""}

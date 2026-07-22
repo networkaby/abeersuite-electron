@@ -123,3 +123,35 @@ export function calcVoucherTotals(
     const totalAmount = subtotal + shippingAmt - discountAmt + roundOff + chargesNet;
     return { subtotal, taxAmount, totalAmount };
 }
+
+// ── Shipping GST rate (composite-supply rule) ─────────────────────────────────
+
+/** GST rate (%) the shipping charge inherits from the bill's lines.
+ *
+ * Freight charged by the seller is part of the value of supply (CGST Act
+ * §15(2)(c)), taxed at the principal supply's rate. Principal = the rate
+ * group holding MORE than 50% of the bill's pre-tax, pre-discount value
+ * (`qty × unitPrice`); a truly mixed bill (no group crosses 50%, ties
+ * included) falls back to the highest rate on the bill.
+ *
+ * Callers pass GOODS lines; a service-only bill passes its service lines
+ * instead (same rule over service rates). Client and server both use this
+ * helper so the displayed hint and the posted tax never drift.
+ * Empty input → 0 (nothing to inherit — e.g. an all-exempt bill stays 0%).
+ */
+export function resolveShippingGstRate(
+    lines: { value: number; taxRate: number }[],
+): number {
+    const totalValue = lines.reduce((s, l) => s + Math.max(0, l.value), 0);
+    if (totalValue <= 0) return 0;
+    const byRate = new Map<number, number>();
+    for (const l of lines) {
+        byRate.set(l.taxRate, (byRate.get(l.taxRate) ?? 0) + Math.max(0, l.value));
+    }
+    let maxRate = 0;
+    for (const [rate, value] of byRate) {
+        if (value / totalValue > 0.5) return rate;   // dominant principal supply
+        if (rate > maxRate) maxRate = rate;
+    }
+    return maxRate;                                   // mixed bill → highest rate
+}

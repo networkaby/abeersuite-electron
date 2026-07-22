@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { extractApiError } from "@/shared/lib/api";
@@ -27,6 +27,10 @@ type Props = {
     nextStatuses?: NextPipelineStatus[];
     // Legacy enum fallback (Razorpay / old orders)
     status?: ShopOrderStatus | null;
+    // Pre-fill for the Dispatched fields — the order's courier + auto-booked AWB
+    // flow in so staff don't retype them (still editable for manual overrides).
+    defaultCourier?: string | null;
+    defaultTracking?: string | null;
 };
 
 const LEGACY_LABELS: Partial<Record<ShopOrderStatus, string>> = {
@@ -38,10 +42,26 @@ const LEGACY_LABELS: Partial<Record<ShopOrderStatus, string>> = {
     CANCELLED: "Cancel order",
 };
 
-export default function OrderStatusActions({ orderId, onUpdated, statusId, nextStatuses, status }: Props) {
+export default function OrderStatusActions({
+    orderId,
+    onUpdated,
+    statusId,
+    nextStatuses,
+    status,
+    defaultCourier,
+    defaultTracking,
+}: Props) {
     const [busy, setBusy] = useState(false);
-    const [courier, setCourier] = useState("");
-    const [trackingNumber, setTrackingNumber] = useState("");
+    const [courier, setCourier] = useState(defaultCourier ?? "");
+    const [trackingNumber, setTrackingNumber] = useState(defaultTracking ?? "");
+
+    // Auto-booking may stamp the AWB after mount (page refetch) — flow the new
+    // defaults into untouched fields so "Mark Dispatched" carries them.
+    useEffect(() => {
+        if (defaultCourier && !courier) setCourier(defaultCourier);
+        if (defaultTracking && !trackingNumber) setTrackingNumber(defaultTracking);
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- only on default changes
+    }, [defaultCourier, defaultTracking]);
 
     // ── Pipeline mode ───────────────────────────────────────────────────────────
     if (statusId && nextStatuses !== undefined) {

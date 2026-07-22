@@ -6,7 +6,7 @@ import { handleApiError } from "@/shared/lib/api";
 import { selectPrimaryPhone, selectPrimaryEmail } from "@/shared/lib/prisma/fragments";
 import { getLedgerOutstanding } from "@/modules/accountancy/lib/outstandings";
 import { ratesFromConfig, liveBalance } from "@/modules/loyalty/lib";
-import { resolveTierTitles, type TierPeriodInput } from "@/shared/lib/pricing";
+import { resolveTierForAccount, TIER_SPEND_VOUCHER_TYPES } from "@/shared/lib/pricing";
 import { resolveEffectiveCreditLimit } from "@/shared/lib/accountancy/creditLimit";
 
 // GET /api/pos/account-snapshot/[accountId]
@@ -33,7 +33,9 @@ import { resolveEffectiveCreditLimit } from "@/shared/lib/accountancy/creditLimi
 // prisma.invoice/payment to prisma.invVoucher on 2026-05-24 as part of
 // the Invoice → InvVoucher consolidation (Layer 3d).
 
-const SALE_TYPES = ["SALE", "POS"] as const;
+// One customer, every channel — online invoices count as spend too
+// (shared with the tier resolver so brackets and turnover agree).
+const SALE_TYPES = TIER_SPEND_VOUCHER_TYPES;
 
 export async function GET(_: Request, { params }: { params: Promise<{ accountId: string }> }) {
     const { response } = await requireAuth();
@@ -105,24 +107,12 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
         const oneYearAgo = new Date();
         oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
 
-        // Each period ("Best of the month", "Best of the quarter") carries its own levels
-        // and its own BRACKET of history, so a customer can hold several titles at once.
-        // Spend is counted per bracket — NOT lifetime — so a customer who stops buying
-        // falls out of the recent ones. Admin-set at
-        // /office/customer-retention/customer-tiers. Levels arrive minSpend desc so the
-        // first one cleared is the highest.
-        const tierPeriods = await prisma.customerTierPeriod.findMany({
-            where: { enabled: true },
-            orderBy: [{ sortOrder: "asc" }, { fromDay: "asc" }],
-            include: { levels: { where: { enabled: true }, orderBy: { minSpend: "desc" } } },
-        });
-
         // 5D-4/5D-8/5D-10/5D-11: party + status + deletedAt + date + type all live on the spine.
         const baseWhere: Prisma.VoucherDetailWhereInput = {
             universalVoucher: { partyAccountId: accountId, status: "POSTED", deletedAt: null, type: { in: [...SALE_TYPES] } },
         };
 
-        const [lifetimeAgg, ytdAgg, periodAggs, latestVoucher, latestTicket, recentTickets, ledgerOutstanding, loyaltyConfig, couponConfig] = await Promise.all([
+        const [lifetimeAgg, ytdAgg, tierCtx, latestVoucher, latestTicket, recentTickets, ledgerOutstanding, loyaltyConfig] = await Promise.all([
             prisma.voucherDetail.aggregate({
                 where: baseWhere,
                 _sum: { totalAmount: true },
@@ -132,29 +122,9 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
                 where: { universalVoucher: { partyAccountId: accountId, status: "POSTED", deletedAt: null, date: { gte: oneYearAgo }, type: { in: [...SALE_TYPES] } } },
                 _sum: { totalAmount: true },
             }),
-            // Spend inside each period's bracket — this is what decides the titles. One
-            // aggregate per period; there are only a handful of periods.
-            //
-            // The bracket holds sales aged `fromDay <= age < toDay`. Older edge (toDay) is
-            // exclusive and newer edge (fromDay) inclusive, so tiled brackets (0-30, 30-90)
-            // hand a sale to exactly one period — no gap at the seam, no double count.
-            // fromDay 0 has no upper bound, so a sale made today still counts.
-            Promise.all(tierPeriods.map((p) => {
-                const notBefore = new Date();
-                notBefore.setDate(notBefore.getDate() - p.toDay);
-                const notAfter = new Date();
-                notAfter.setDate(notAfter.getDate() - p.fromDay);
-                return prisma.voucherDetail.aggregate({
-                    where: {
-                        universalVoucher: {
-                            partyAccountId: accountId, status: "POSTED", deletedAt: null,
-                            type: { in: [...SALE_TYPES] },
-                            date: p.fromDay === 0 ? { gt: notBefore } : { gt: notBefore, lte: notAfter },
-                        },
-                    },
-                    _sum: { totalAmount: true },
-                });
-            })),
+            // Periods + bracket spend + guard + at-rest resolution (currentSaleValue 0)
+            // — the shared server tier resolver (also used by shop checkout).
+            resolveTierForAccount(prisma, accountId),
             prisma.voucherDetail.findFirst({
                 where: baseWhere,
                 orderBy: { universalVoucher: { date: "desc" } },   // 5D-10
@@ -181,43 +151,15 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
             // Real persisted loyalty balance + the rates the POS UI needs to
             // compute the ₹ value of a redemption live.
             prisma.loyaltyConfig.findUnique({ where: { id: 1 } }),
-            // The global discount guard — caps the stacked tier % (see below).
-            prisma.couponConfig.findUnique({ where: { id: 1 }, select: { maxTotalDiscountPct: true } }),
         ]);
 
         const lifetimeTotal = Number(lifetimeAgg?._sum.totalAmount ?? 0);
         const ytdTotal = Number(ytdAgg?._sum.totalAmount ?? 0);
         const invoiceCount = lifetimeAgg?._count._all ?? 0;
 
-        // Periods as the resolver wants them: Decimals flattened to numbers, posted bracket
-        // spend attached. The bill on the counter is NOT here — it only exists in the POS,
-        // so a "consider current sale" period scores its history alone at this point. The
-        // POS re-resolves these against the live cart through the same resolveTierTitles.
-        const tierPeriodInputs: TierPeriodInput[] = tierPeriods.map((p, i) => ({
-            id:               p.id,
-            name:             p.name,
-            currentSaleScope: p.currentSaleScope,
-            currentSaleOnly:  p.currentSaleOnly,
-            fromDay:          p.fromDay,
-            toDay:            p.toDay,
-            spend:            Number(periodAggs[i]?._sum.totalAmount ?? 0),
-            levels:           p.levels.map((l) => ({
-                name:        l.name,
-                minSpend:    Number(l.minSpend),
-                discountPct: Number(l.discountPct),
-            })),
-        }));
-
-        // Global guard (CouponConfig.maxTotalDiscountPct — the "Discount guard", editable
-        // from both Spend Tiers and Coupons).
-        const tierCapPct = couponConfig?.maxTotalDiscountPct != null ? Number(couponConfig.maxTotalDiscountPct) : null;
-        // At rest: no bill, so this is the history-only view. The POS overrides it live.
-        const tier = resolveTierTitles({
-            periods: tierPeriodInputs,
-            currentSaleValue: 0,
-            isNewCustomer: invoiceCount === 0,
-            capPct: tierCapPct,
-        });
+        // At rest: no bill, so this is the history-only view. The POS overrides it
+        // live by re-running resolveTierTitles against `tierPeriods` below.
+        const { tierPeriodInputs, tierCapPct, tier } = tierCtx;
         const discountPct = tier.discountPct;
         // Live, dynamic balance — Σ in-window lots under the current expiry window
         // (was a derived ⌊lifetime/100⌋ placeholder). `loyaltyRates` carries the full

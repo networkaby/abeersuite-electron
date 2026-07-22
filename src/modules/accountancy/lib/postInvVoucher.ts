@@ -4,14 +4,16 @@
 // live at report time via getClosingStockValue (matches Tally).
 //
 // Posting rules:
-//   SALE   →  Dr <Party | Cash>  total
-//             Cr Sales A/c       subtotal + shippingAmt
-//             Cr <Tax ledgers>   taxAmount        (split CGST+SGST or IGST)
-//             Dr/Cr Round Off    |roundOff|       (if non-zero)
-//   PURCH  →  Dr Purchase A/c    subtotal + shippingAmt
-//             Dr <Tax ledgers>   taxAmount        (split CGST+SGST or IGST)
-//             Cr <Party | Cash>  total
-//             Dr/Cr Round Off    |roundOff|       (if non-zero)
+//   SALE   →  Dr <Party | Cash>    total
+//             Cr Sales A/c         subtotal − taxAmount   (gross goods)
+//             Cr Shipping Income   shippingAmt − shippingTaxAmt (net; folds into body when unseeded)
+//             Cr <Tax ledgers>     taxAmount + charge GST + shippingTaxAmt (split CGST+SGST or IGST)
+//             Dr/Cr Round Off      |roundOff|             (if non-zero)
+//   PURCH  →  Dr Purchase A/c      subtotal − taxAmount
+//             Dr Freight Charges   shippingAmt − shippingTaxAmt
+//             Dr <Tax ledgers>     taxAmount + charge GST + shippingTaxAmt (split CGST+SGST or IGST)
+//             Cr <Party | Cash>    total
+//             Dr/Cr Round Off      |roundOff|             (if non-zero)
 //
 // GST routing (added 2026-05-23):
 //   • Caller passes resolved `sellerStateCode` + `buyerStateCode` (place of
@@ -112,6 +114,12 @@ export type PostVoucherInput = {
         subtotal:    Prisma.Decimal | number;
         taxAmount:   Prisma.Decimal | number;
         shippingAmt: Prisma.Decimal | number;
+        /// GST embedded in `shippingAmt` (which stays GROSS). When set, the
+        /// shipping leg posts NET (shippingAmt − shippingTaxAmt) and this tax
+        /// joins the CGST/SGST/IGST pool below — mirroring tax-bearing charge
+        /// rows. Absent/0 = pre-existing behaviour (full gross to Shipping
+        /// Income). POS sale is the only writer today.
+        shippingTaxAmt?: Prisma.Decimal | number | null;
         roundOff:    Prisma.Decimal | number;
         totalAmount: Prisma.Decimal | number;
         /// Voucher-level overall discount (₹). Posts to "Discount Allowed"
@@ -220,6 +228,11 @@ export async function buildInvVoucherGlLines(
     const subtotal     = toNumber(voucher.subtotal);
     const taxAmount    = toNumber(voucher.taxAmount);
     const shippingAmt  = toNumber(voucher.shippingAmt);
+    // GST inside the (gross) shipping amount — clamped so a bad caller can
+    // never push the shipping net negative. 0 for every non-POS caller.
+    const shippingTax  = Math.min(Math.max(0, toNumber(voucher.shippingTaxAmt ?? 0)), shippingAmt);
+    // What Shipping Income actually earns (the tax was never income).
+    const shippingNet  = shippingAmt - shippingTax;
     const discountAmt  = Math.max(0, toNumber(voucher.discountAmt ?? 0));
     const roundOff     = toNumber(voucher.roundOff);
     const totalAmount  = toNumber(voucher.totalAmount);
@@ -292,7 +305,9 @@ export async function buildInvVoucherGlLines(
     const chargesTax = (voucher.charges ?? []).reduce(
         (s, ch) => s + Math.max(0, toNumber(ch.taxAmount ?? 0)), 0,
     );
-    const totalTax = taxAmount + chargesTax;
+    // Shipping GST rides the same pool (shipping leg posts NET, like a
+    // tax-bearing charge). 0 whenever shippingTaxAmt isn't set.
+    const totalTax = taxAmount + chargesTax + shippingTax;
 
     if (totalTax > 0) {
         const split = computeGstSplit({
@@ -354,7 +369,7 @@ export async function buildInvVoucherGlLines(
             tx, isDebtorParty ? NAMES.SHIPPING_INCOME : NAMES.SHIPPING_EXPENSE,
         );
         if (!shippingLedger) {
-            notes.push(`no ${isDebtorParty ? "Shipping Income" : "Freight Charges"} ledger — shipping of ${shippingAmt.toFixed(2)} folded into ${bodyLedger.name}`);
+            notes.push(`no ${isDebtorParty ? "Shipping Income" : "Freight Charges"} ledger — shipping of ${shippingNet.toFixed(2)} folded into ${bodyLedger.name}`);
         }
     }
 
@@ -385,7 +400,8 @@ export async function buildInvVoucherGlLines(
     let bodyAmount = goodsAmount;
     let rndLineAmt = roundOff;
     if (unledgered > 0)     { bodyAmount += unledgered; }
-    if (!shippingLedger)    { bodyAmount += shippingAmt; }
+    // NET only — shipping's GST is already in the tax pool above.
+    if (!shippingLedger)    { bodyAmount += shippingNet; }
     if (!discountLedger)    { bodyAmount -= discountAmt; }
     if (!roundOffLedger)    { bodyAmount += rndLineAmt; rndLineAmt = 0; }
 
@@ -434,13 +450,14 @@ export async function buildInvVoucherGlLines(
             role:        "TAX",
         });
     }
-    if (shippingLedger && shippingAmt > 0) {
+    if (shippingLedger && shippingNet > 0) {
         // Same direction as body — credits Shipping Income on sale,
         // debits Freight Charges on purchase. Returns flip via bodyType.
+        // NET of shippingTax — the GST share posts on the tax legs above.
         lines.push({
             accountId:   shippingLedger.id,
             type:        bodyType,
-            amount:      shippingAmt,
+            amount:      shippingNet,
             description: shippingLedger.name,
             role:        "SHIPPING",
         });

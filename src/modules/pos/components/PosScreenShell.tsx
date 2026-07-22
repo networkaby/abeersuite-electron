@@ -430,6 +430,8 @@ export function PosScreenShell({
                             shippingAmt={b.shippingAmt}
                             shippingAmtStr={b.shippingAmtStr}
                             setShippingAmtStr={b.setShippingAmtStr}
+                            shippingGstRate={b.shippingGstRate}
+                            shippingTaxAmt={b.shippingTaxAmt}
                             roundOff={b.roundOff}
                             autoRoundOff={b.autoRoundOff}
                             roundOffStr={b.roundOffStr}

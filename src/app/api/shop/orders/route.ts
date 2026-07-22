@@ -10,6 +10,7 @@ import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
 import { loadShopStockPolicy } from "@/shared/lib/shop/stockPolicy";
 import { barcodeTagPaise } from "@/shared/lib/pricing/barcodePrice";
 import { getOrdersPipeline } from "@/modules/ecommerce/lib/ordersPipeline";
+import { computeShopCartBenefits } from "@/modules/ecommerce/lib/shopTierDiscount";
 import { quoteShipping } from "@/modules/delivery/lib/shippingQuote";
 import { resolvePayOnDelivery } from "@/shared/lib/payments/payOnDeliveryMethod";
 import { loadDeliveryMethod, type ShiprocketConfig } from "@/modules/delivery/lib/deliveryMethods";
@@ -45,6 +46,12 @@ const createOrderSchema = z.object({
     // The online gateway the customer chose at checkout (e.g. "razorpay", "payu",
     // "cashfree", "demo") — snapshotted so the order page opens the right flow.
     onlineProvider: z.string().trim().max(40).optional(),
+    // Coupon code the customer applied (server re-validates via the shared POS
+    // engine; the best AUTO offer applies even without a code).
+    couponCode: z.string().trim().max(40).optional(),
+    // Loyalty points the customer wants to burn (server clamps + validates;
+    // the invoice conversion burns the lots when it posts).
+    redeemPoints: z.coerce.number().int().min(0).optional(),
 });
 
 export async function POST(req: Request) {
@@ -55,7 +62,7 @@ export async function POST(req: Request) {
 
         const { data, error } = await validateRequest(req, createOrderSchema);
         if (error) return error;
-        const { lines, accountId, shippingAddress, optionId, paymentMethod, onlineProvider } = data;
+        const { lines, accountId, shippingAddress, optionId, paymentMethod, onlineProvider, couponCode, redeemPoints } = data;
 
         const context = await resolvePortalAccountContext(customerId, accountId);
         if (context.active.accountId !== accountId) {
@@ -145,13 +152,69 @@ export async function POST(req: Request) {
         }
         const shippingChargePaise = chosen.amountPaise;
 
+        // ── Customer benefits (the SAME engines as the POS counter) ──────────
+        // Tier + coupon finalized together (POS stacking rules: a non-stackable
+        // coupon drops the tier; the global guard clamps the coupon). Resolved
+        // server-side — the shopper's browser is never trusted; the cart /
+        // checkout preview the identical numbers via /api/shop/tier-preview
+        // (same helper). currentSaleValue = the bill BEFORE discount (goods
+        // incl + shipping). Frozen here in paise — the price promised at
+        // checkout never shifts.
+        const benefits = await computeShopCartBenefits(
+            prisma, accountId, resolvedLines, totalPaise + shippingChargePaise,
+            { couponCode, autoApply: true, redeemPoints },
+        );
+        // An EXPLICIT code that fails is a hard error (the customer typed it and
+        // expects the discount); a silently-failed AUTO offer just doesn't apply.
+        if (couponCode?.trim() && benefits.couponError) {
+            return NextResponse.json({ error: benefits.couponError, code: "COUPON_REJECTED" }, { status: 422 });
+        }
+        // Same for explicitly-requested points that could not apply.
+        if ((redeemPoints ?? 0) > 0 && benefits.loyalty?.redeemError) {
+            return NextResponse.json({ error: benefits.loyalty.redeemError, code: "LOYALTY_REDEEM_REJECTED" }, { status: 422 });
+        }
+        const loyaltyPts = benefits.loyalty?.redeemPoints ?? 0;
+        const loyaltyPaise = benefits.loyalty?.redeemPaise ?? 0;
+        if (loyaltyPaise > 0) {
+            // The invoice must be able to post the redemption leg — refuse up
+            // front rather than freeze an unpostable discount (POS parity).
+            const loyaltyConfig = await prisma.loyaltyConfig.findUnique({ where: { id: 1 }, select: { redeemExpenseAccountId: true } });
+            if (loyaltyConfig?.redeemExpenseAccountId == null) {
+                return NextResponse.json(
+                    { error: "Loyalty redemption ledger is not configured. Re-run the bootstrap seed.", code: "LOYALTY_LEDGER_MISSING" },
+                    { status: 422 },
+                );
+            }
+        }
+        const tierDiscountInclPaise = benefits.discountInclPaise;
+        const lineTierDiscPaise = benefits.lineDiscPaise;
+        const couponPaise = benefits.coupon?.discountPaise ?? 0;
+        totalPaise -= tierDiscountInclPaise + couponPaise + loyaltyPaise; // gateway/COD charges the NET
+
         // Place the order on the sales-orders pipeline (P7) at its entry stage —
         // it becomes a ticket on the staff orders board.
         const entryStatus = ordersPipeline?.statuses.find((s) => s.isEntryPoint);
 
         // An order is a Ticket (flavour "order") + TicketOrder detail on the orders
         // pipeline (P7). Core status = the pipeline entry stage; legacy enum on detail.
-        const t = await prisma.ticket.create({
+        // One tx: the coupon's usage slot (CouponRedemption, spine null until the
+        // invoice posts) is taken atomically with the order that spends it.
+        const t = await prisma.$transaction(async (tx) => {
+            let couponRedemptionId: number | null = null;
+            if (benefits.coupon) {
+                const red = await tx.couponRedemption.create({
+                    data: {
+                        couponId:  benefits.coupon.id,
+                        accountId,
+                        universalVoucherId: null,   // stamped by the invoice conversion
+                        amount:    couponPaise / 100,
+                        channel:   "SHOP",
+                    },
+                    select: { id: true },
+                });
+                couponRedemptionId = red.id;
+            }
+            return tx.ticket.create({
             data: {
                 accountId: context.active.accountId,
                 pipelineId: ordersPipeline?.id ?? null,
@@ -162,6 +225,19 @@ export async function POST(req: Request) {
                         paymentMethod: isCod ? "COD" : "ONLINE",
                         totalPaise,
                         shippingChargePaise,
+                        // Frozen benefit snapshots (see block above). totalPaise is
+                        // already NET of tier + coupon.
+                        tierDiscountPaise: tierDiscountInclPaise,
+                        tierDiscountPct: benefits.tierPct > 0 && tierDiscountInclPaise > 0 ? benefits.tierPct : null,
+                        tierLabel: tierDiscountInclPaise > 0 ? benefits.tierLabel : null,
+                        couponId: benefits.coupon?.id ?? null,
+                        // Codeless AUTO offers freeze their display name instead.
+                        couponCode: benefits.coupon ? (benefits.coupon.code ?? benefits.coupon.name) : null,
+                        couponDiscountPaise: couponPaise,
+                        couponRedemptionId,
+                        // Frozen loyalty redemption (points burn at invoice post).
+                        loyaltyRedeemPoints: loyaltyPts,
+                        loyaltyRedeemPaise: loyaltyPaise,
                         courier: chosen.kind,
                         personId: customerId,
                         guestEmail: null,
@@ -190,10 +266,13 @@ export async function POST(req: Request) {
                             onlineProvider: isCod ? null : onlineProvider ?? null,
                         },
                         lines: {
-                            create: resolvedLines.map((r) => ({
+                            create: resolvedLines.map((r, i) => ({
                                 productId: r.productId,
                                 quantity: r.quantity,
                                 unitPricePaise: r.unitPricePaise,
+                                // Whole-line pre-tax tier discount (paise) — the invoice
+                                // conversion replays it as the line's discountAmt.
+                                tierDiscountPaise: lineTierDiscPaise.get(i) ?? 0,
                             })),
                         },
                     },
@@ -202,8 +281,9 @@ export async function POST(req: Request) {
             select: {
                 id: true,
                 status: true,
-                order: { select: { totalPaise: true, shippingChargePaise: true, legacyStatus: true } },
+                order: { select: { totalPaise: true, shippingChargePaise: true, tierDiscountPaise: true, tierLabel: true, couponCode: true, couponDiscountPaise: true, loyaltyRedeemPoints: true, loyaltyRedeemPaise: true, legacyStatus: true } },
             },
+            });
         });
         const goods = t.order?.totalPaise ?? 0;
         const shipping = t.order?.shippingChargePaise ?? 0;
@@ -212,6 +292,14 @@ export async function POST(req: Request) {
             totalPaise: goods,
             shippingChargePaise: shipping,
             grandTotalPaise: goods + shipping,
+            // Frozen benefit snapshots — goods total above is already net of
+            // them; returned so the order page can show the rows.
+            tierDiscountPaise: t.order?.tierDiscountPaise ?? 0,
+            tierLabel: t.order?.tierLabel ?? null,
+            couponCode: t.order?.couponCode ?? null,
+            couponDiscountPaise: t.order?.couponDiscountPaise ?? 0,
+            loyaltyRedeemPoints: t.order?.loyaltyRedeemPoints ?? 0,
+            loyaltyRedeemPaise: t.order?.loyaltyRedeemPaise ?? 0,
             paymentMethod: isCod ? "COD" : "ONLINE",
             status: t.order?.legacyStatus,
         };

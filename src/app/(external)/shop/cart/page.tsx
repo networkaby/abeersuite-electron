@@ -5,6 +5,7 @@ import ShopRemoteImage from "@/modules/external/shop/ShopRemoteImage";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useShopCartStore } from "@/store/external/shopCartStore";
+import { usePortalAccountStore } from "@/store/external/portalAccountStore";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
@@ -13,9 +14,26 @@ import { productPath } from "@/shared/lib/shop/productPublic";
 import { Input } from "@/components/ui/input";
 import { Truck, Shield, CreditCard } from "lucide-react";
 
+type TierPreview = {
+    tierPct: number;
+    tierLabel: string | null;
+    discountPaise: number;
+    // Best AUTO offer (typed codes live on the checkout page, not the cart).
+    coupon: { code: string; name: string; discountPaise: number; droppedTier: boolean } | null;
+};
+
 export default function ShopCartPage() {
     const { lines, setQty, remove, clear } = useShopCartStore();
     const [products, setProducts] = useState<ShopProductPublic[]>([]);
+    // Level (spend-tier) discount preview — logged-in customers only. The
+    // server owns the number (/api/shop/tier-preview, same helper the order
+    // route freezes at checkout); guests silently see plain prices.
+    const storeAccountId = usePortalAccountStore((s) => s.activeAccountId);
+    const [fetchedAccountId, setFetchedAccountId] = useState<number | null>(null);
+    // Store wins when another surface (checkout / portal) already hydrated it;
+    // else the one-shot fetch below fills the fallback.
+    const accountId = storeAccountId ?? fetchedAccountId;
+    const [tierPreview, setTierPreview] = useState<TierPreview | null>(null);
 
     useEffect(() => {
         axios
@@ -24,6 +42,36 @@ export default function ShopCartPage() {
             .catch(() => setProducts([]));
     }, []);
 
+    // Resolve the active portal account when the store hasn't been hydrated
+    // yet — ask once; a 401/403 (guest) just leaves the fallback null.
+    useEffect(() => {
+        if (storeAccountId) return;
+        let cancelled = false;
+        axios
+            .get<{ active: { accountId: number } }>("/api/portal/account-context")
+            .then((r) => { if (!cancelled) setFetchedAccountId(r.data.active.accountId); })
+            .catch(() => { /* guest — no preview */ });
+        return () => { cancelled = true; };
+    }, [storeAccountId]);
+
+    // Live preview — debounced so qty typing doesn't spam the endpoint. No
+    // sync setState here (react-hooks/set-state-in-effect): a guest / empty
+    // cart simply never fetches, and the render gate below hides stale rows.
+    useEffect(() => {
+        if (!accountId || lines.length === 0) return;
+        let cancelled = false;
+        const timer = setTimeout(() => {
+            axios
+                .post<TierPreview>("/api/shop/tier-preview", {
+                    accountId,
+                    lines: lines.map((l) => ({ productId: l.productId, quantity: l.quantity })),
+                })
+                .then((r) => { if (!cancelled) setTierPreview(r.data); })
+                .catch(() => { if (!cancelled) setTierPreview(null); });
+        }, 300);
+        return () => { cancelled = true; clearTimeout(timer); };
+    }, [accountId, lines]);
+
     const byId = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
 
     let subtotal = 0;
@@ -31,6 +79,9 @@ export default function ShopCartPage() {
         const p = byId.get(l.productId);
         if (p) subtotal += p.pricePaise * l.quantity;
     }
+    const tierDiscountPaise = accountId && lines.length > 0 ? (tierPreview?.discountPaise ?? 0) : 0;
+    const couponPaise = accountId && lines.length > 0 ? (tierPreview?.coupon?.discountPaise ?? 0) : 0;
+    const netTotal = Math.max(0, subtotal - tierDiscountPaise - couponPaise);
 
     // Shipping isn't priced here — the customer's address (pincode / neighbourhood)
     // decides the courier and rate, so we quote it on the checkout page.
@@ -133,6 +184,24 @@ export default function ShopCartPage() {
                                 <span className="text-muted-foreground">Subtotal</span>
                                 <span className="tabular-nums font-medium">{formatRupeesFromPaise(subtotal)}</span>
                             </div>
+                            {tierDiscountPaise > 0 && (
+                                <div className="flex justify-between gap-4 text-emerald-600 dark:text-emerald-400">
+                                    <span>
+                                        Level discount{tierPreview?.tierLabel ? ` (${tierPreview.tierLabel})` : ""}
+                                    </span>
+                                    <span className="tabular-nums font-medium">
+                                        −{formatRupeesFromPaise(tierDiscountPaise)}
+                                    </span>
+                                </div>
+                            )}
+                            {couponPaise > 0 && tierPreview?.coupon && (
+                                <div className="flex justify-between gap-4 text-emerald-600 dark:text-emerald-400">
+                                    <span>Offer applied ({tierPreview.coupon.name})</span>
+                                    <span className="tabular-nums font-medium">
+                                        −{formatRupeesFromPaise(couponPaise)}
+                                    </span>
+                                </div>
+                            )}
                             <div className="flex justify-between gap-4">
                                 <span className="text-muted-foreground">Shipping</span>
                                 <span className="tabular-nums font-medium text-muted-foreground">Shown at checkout</span>
@@ -143,7 +212,7 @@ export default function ShopCartPage() {
                             <div className="h-px bg-border" role="separator" />
                             <div className="flex justify-between gap-4 text-base">
                                 <span className="font-semibold">Total</span>
-                                <span className="tabular-nums font-bold">{formatRupeesFromPaise(subtotal)}</span>
+                                <span className="tabular-nums font-bold">{formatRupeesFromPaise(netTotal)}</span>
                             </div>
                             <p className="text-[11px] text-muted-foreground">Plus shipping, added at checkout.</p>
                         </CardContent>
