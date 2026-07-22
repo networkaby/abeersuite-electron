@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { handleApiError } from "@/shared/lib/api";
 import { requirePortalCustomer } from "@/shared/lib/auth/portalAuthGuard";
-import { isOnlineGatewayEnabled } from "@/shared/lib/payments/activeOnlineGateway";
+import { getPayableGateway } from "@/shared/lib/payments/activeOnlineGateway";
 
 const paramsSchema = z.object({ id: z.coerce.number().int().positive() });
 
@@ -20,7 +20,8 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
 
         const { id } = paramsSchema.parse(await params);
 
-        if (!(await isOnlineGatewayEnabled("razorpay"))) {
+        // Offerable = enabled + wired + settlement ledger set (no ledger → unusable).
+        if (!(await getPayableGateway("razorpay"))) {
             return NextResponse.json({ error: "Razorpay is not enabled for online checkout." }, { status: 400 });
         }
         const keyId = process.env.RAZORPAY_KEY_ID;

@@ -12,6 +12,7 @@ import { writeOrderStatus, resolveOrderStatus } from "@/modules/order/lib/orderA
 import { ORDER_STAGE } from "@/modules/order/lib/orderPipeline";
 import { reserveOrder } from "@/modules/order/lib/reservation";
 import { spawnDelivery } from "@/modules/delivery/lib/delivery";
+import { postOnlineOrderReceipt } from "@/shared/lib/payments/onlineReceipt";
 
 export type MarkOrderPaidResult =
     | { ok: true; paid: true; alreadyPaid?: boolean; statusId: string | null }
@@ -24,11 +25,13 @@ export type MarkOrderPaidResult =
  * @param ticketId  the order (TicketOrder.ticketId)
  * @param opts.paymentId  PSP payment reference to record (e.g. PayU mihpayid)
  * @param opts.gatewayLabel  short label for the staff notification ("PayU", "demo")
+ * @param opts.provider  gateway registry id ("razorpay" | "payu" | "cashfree" | "demo")
+ *                       — drives the auto-posted Receipt's settlement ledger
  * @param opts.customerId  when set, the order must belong to this customer
  */
 export async function markOrderPaid(
     ticketId: number,
-    opts: { paymentId: string; gatewayLabel: string; customerId?: number },
+    opts: { paymentId: string; gatewayLabel: string; provider: string; customerId?: number },
 ): Promise<MarkOrderPaidResult> {
     const order = await prisma.ticketOrder.findUnique({
         where: { ticketId },
@@ -57,6 +60,15 @@ export async function markOrderPaid(
         where: { ticketId },
         data: { legacyStatus: "PAID", paidAt: new Date(), razorpayPaymentId: opts.paymentId },
     });
+
+    // Book the money: advance RECEIPT (Dr settlement ledger · Cr customer) under HQ.
+    // Best-effort — the payment is real regardless; a bookkeeping hiccup is logged,
+    // never surfaced to the customer. Runs only on this PENDING→PAID flip, so once.
+    try {
+        await postOnlineOrderReceipt({ ticketId, provider: opts.provider, paymentRef: opts.paymentId });
+    } catch (e) {
+        console.error("[markOrderPaid] online receipt posting failed for order", ticketId, e);
+    }
 
     // Advance P7 New → Confirmed (reserve stock + spawn the delivery). Best-effort:
     // the order is already marked paid; a hiccup here must not fail the call.

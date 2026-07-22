@@ -41,6 +41,7 @@ export async function GET(req: Request) {
     const result = await markOrderPaid(ticketId, {
         paymentId: order.razorpayOrderId,
         gatewayLabel: "Cashfree",
+        provider: "cashfree",
     });
     return backToOrder(req, ticketId, !result.ok);
 }

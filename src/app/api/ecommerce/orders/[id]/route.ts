@@ -58,8 +58,40 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
             where: { repair: { sourceOrderTicketId: oid } },
             select: { id: true, status: true, notes: true, createdAt: true },
         });
+        // The linked invoice (one-click convert writes a VoucherLink kind=SHOP_ORDER).
+        // Latest non-cancelled linked voucher wins — a cancelled invoice may be
+        // superseded by a re-raised one.
+        const invLinks = await prisma.voucherLink.findMany({
+            where: { kind: "SHOP_ORDER", targetId: String(oid) },
+            select: { universalVoucherId: true },
+        });
+        const invSpine = invLinks.length
+            ? await prisma.universalVoucher.findFirst({
+                  where: {
+                      id: { in: invLinks.map((l) => l.universalVoucherId) },
+                      status: { not: "CANCELLED" },
+                      deletedAt: null,
+                  },
+                  orderBy: { id: "desc" },
+                  select: {
+                      voucherNo: true,
+                      type: true,
+                      status: true,
+                      voucherDetail: { select: { id: true, totalAmount: true } },
+                  },
+              })
+            : null;
+        const invVoucher = invSpine?.voucherDetail
+            ? {
+                  id: invSpine.voucherDetail.id,
+                  reference: invSpine.voucherNo,
+                  type: invSpine.type,
+                  status: invSpine.status,
+                  totalAmount: String(invSpine.voucherDetail.totalAmount),
+              }
+            : null;
         const { order, ticketStatus, ...core } = t;
-        const flat = { ...core, ...order, statusId: core.status, status: order.legacyStatus, orderStatus: ticketStatus, tickets: relatedTickets };
+        const flat = { ...core, ...order, statusId: core.status, status: order.legacyStatus, orderStatus: ticketStatus, tickets: relatedTickets, invVoucher };
         return NextResponse.json(flat);
     } catch (e) {
         return handleApiError(e, "Failed to load order");

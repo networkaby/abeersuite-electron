@@ -35,10 +35,13 @@ import {
 import {
     getGatewayProvider,
     PAY_ON_DELIVERY_PROVIDER_ID,
+    settlementAccountIdOf,
     type PaymentGatewayProvider,
 } from "@/modules/pos/lib/paymentGateways";
 import { INDIA_STATE_NAMES } from "@/modules/delivery/lib/deliveryMethodConfig";
 import { sanitizePodArea, type PodAreaMode } from "@/shared/lib/payments/payOnDelivery";
+import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/components/GlAccountCombobox";
+import { Landmark } from "lucide-react";
 
 // ── Types mirroring the API ───────────────────────────────────────────────────
 
@@ -73,6 +76,9 @@ type FormState = {
     enabledForOnline: boolean;
     config: Record<string, string>;
     isActive: boolean;
+    // The GL ledger money collected via this method settles into (Cash/Bank asset
+    // ledger). Stored on configJson.settlementAccountId. null = not set yet.
+    settlementAccountId: number | null;
     // Pay-on-Delivery area rule (only meaningful when provider is pay_on_delivery).
     podMode: PodAreaMode;
     podStates: string[];
@@ -88,6 +94,7 @@ const EMPTY_FORM: FormState = {
     enabledForOnline: false,
     config: {},
     isActive: true,
+    settlementAccountId: null,
     podMode: "except",
     podStates: [],
     podPincodes: "",
@@ -139,6 +146,9 @@ export default function PaymentMethodsSettingsPage() {
     const [dialogOpen, setDialogOpen] = useState(false);
     const [form, setForm] = useState<FormState>(EMPTY_FORM);
     const [saving, setSaving] = useState(false);
+    // Cash/Bank asset ledgers a method's proceeds may settle into (same set the
+    // counter payment accounts pick from).
+    const [glAccounts, setGlAccounts] = useState<GlAccount[]>([]);
 
     const load = useCallback(async () => {
         setLoadError(false);
@@ -156,6 +166,21 @@ export default function PaymentMethodsSettingsPage() {
             setLoadError(true);
         }
     }, []);
+
+    // Load the ASSET-side ledgers once for the settlement picker. Any asset group
+    // qualifies — Cash-in-Hand, Bank Accounts, or a custom group like "Gateway"
+    // under Current Assets (party ledgers already excluded by the API flag).
+    useEffect(() => {
+        axios
+            .get<GlAccount[]>("/api/accountancy/gl-accounts?includeParties=false")
+            .then((r) => setGlAccounts(r.data.filter((a) => a.group?.type === "ASSET")))
+            .catch(() => setGlAccounts([]));
+    }, []);
+
+    const accountName = useCallback(
+        (id: number | null) => (id ? (glAccounts.find((a) => a.id === id)?.name ?? null) : null),
+        [glAccounts],
+    );
 
     useEffect(() => {
         void load();
@@ -189,6 +214,7 @@ export default function PaymentMethodsSettingsPage() {
                       Object.entries(g.configJson ?? {}).map(([k, v]) => [k, String(v ?? "")]),
                   ),
             isActive: g.isActive,
+            settlementAccountId: settlementAccountIdOf(g.configJson),
             podMode: area?.mode ?? "except",
             podStates: area?.states ?? [],
             podPincodes: (area?.pincodePrefixes ?? []).join("\n"),
@@ -217,6 +243,8 @@ export default function PaymentMethodsSettingsPage() {
                   },
               }
             : form.config;
+        // The settlement ledger is common to every method — layer it onto configJson.
+        if (form.settlementAccountId) configJson.settlementAccountId = form.settlementAccountId;
         const payload = {
             provider: form.provider,
             displayName: form.displayName.trim(),
@@ -327,6 +355,18 @@ export default function PaymentMethodsSettingsPage() {
                                         )}
 
                                         <CredentialBadge status={g.credentialStatus} />
+
+                                        {/* Settlement ledger — warn when a payable online gateway has none. */}
+                                        {settlementAccountIdOf(g.configJson) ? (
+                                            <Badge className="bg-slate-100 text-slate-700">
+                                                <Landmark className="mr-1 size-3" />
+                                                {accountName(settlementAccountIdOf(g.configJson)) ?? "Ledger set"}
+                                            </Badge>
+                                        ) : g.enabledForOnline ? (
+                                            <Badge className="bg-red-100 text-red-600">
+                                                <Landmark className="mr-1 size-3" /> No ledger
+                                            </Badge>
+                                        ) : null}
 
                                         <Button
                                             type="button"
@@ -474,6 +514,25 @@ export default function PaymentMethodsSettingsPage() {
                                 </div>
                             </div>
                         )}
+
+                        {/* Settlement ledger — the Cash/Bank ledger money collected via this
+                            method books into (online receipts Dr this ledger). */}
+                        <div className="grid gap-1.5">
+                            <Label className="flex items-center gap-1.5">
+                                <Landmark className="size-3.5" /> Settlement ledger
+                            </Label>
+                            <GlAccountCombobox
+                                value={form.settlementAccountId}
+                                onChange={(acc) => setForm((f) => ({ ...f, settlementAccountId: acc?.id ?? null }))}
+                                accounts={glAccounts}
+                                placeholder="Cash / Bank ledger money settles into…"
+                            />
+                            <p className="text-muted-foreground text-[11px]">
+                                {form.provider === PAY_ON_DELIVERY_PROVIDER_ID
+                                    ? "Where collected-on-delivery cash is booked when remitted."
+                                    : "Online payments via this gateway post a Receipt debiting this ledger."}
+                            </p>
+                        </div>
 
                         {/* Non-secret provider config fields (e.g. manual UPI VPA). */}
                         {provider?.configFields.map((field) => (

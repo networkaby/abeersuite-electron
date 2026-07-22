@@ -228,6 +228,16 @@ export function getGatewayProvider(id: string): PaymentGatewayProvider | undefin
     return PAYMENT_GATEWAY_PROVIDERS.find((p) => p.id === id);
 }
 
+/// The GL settlement ledger a method's collections book into, read off its
+/// configJson (`settlementAccountId`). null = not configured — an online gateway
+/// without one is UNUSABLE (not offered at checkout) so every payment is bookable.
+export function settlementAccountIdOf(configJson: unknown): number | null {
+    const v = Number(
+        (configJson as { settlementAccountId?: unknown } | null | undefined)?.settlementAccountId,
+    );
+    return Number.isInteger(v) && v > 0 ? v : null;
+}
+
 /// The env var names a provider needs for the given environment (TEST/LIVE).
 export function envVarsFor(provider: PaymentGatewayProvider, env: GatewayEnvironment): string[] {
     return env === "LIVE" ? provider.envVars.live : provider.envVars.test;

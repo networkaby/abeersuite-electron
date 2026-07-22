@@ -1,6 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { createSystemInboxNotifications } from "@/modules/message/lib/inbox";
 import { CONFIRMED_STATUS_LABEL } from "@/modules/ecommerce/lib/ordersPipeline";
+import { ORDER_STAGE } from "@/modules/order/lib/orderPipeline";
 
 export type TransitionOrderPipelineInput = {
     orderId: number;
@@ -11,18 +12,24 @@ export type TransitionOrderPipelineInput = {
     actorUserId: number;
 };
 
+// Forward stages that require the order's invoice to exist first: the invoice
+// (one-click ONLINE_INVOICE convert on the order page) posts revenue + GST +
+// stock OUT, so goods must never be packed/dispatched before it's raised.
+const INVOICE_REQUIRED_STAGES: string[] = [
+    ORDER_STAGE.PACKING,
+    ORDER_STAGE.DISPATCHED,
+    ORDER_STAGE.DELIVERED,
+];
+
 /**
  * Pure pipeline status move for a shop order (sales-orders / P7).
  *
- * Phase 1 (COD MVP): moving stages changes the order's `statusId` only — there is
- * **NO** stock decrement and **NO** voucher / journal-entry creation. Invoice,
- * delivery, GL posting and stock movement are all done **MANUALLY** by staff
- * through the office Sale-voucher flow (which posts stock via `recordStockMovement`
- * and GL via `postInvVoucherToGl`, with real GST, on post).
- *
- * This deliberately replaces the old auto path (a crude hardcoded JE on "Paid"
- * plus a DRAFT SALE voucher on "Confirmed") that bypassed the stock ledger and
- * could double-book the same sale.
+ * Moving stages changes the order's `statusId` only — stock + GL post via the
+ * order's ONLINE_INVOICE (the one-click convert on the order detail page), never
+ * from a status move. The gate below makes that invoice MANDATORY before the
+ * order can advance past Confirmed (Packing / Dispatched / Delivered); Cancel and
+ * Return stay open. The online payment itself is booked separately as an advance
+ * RECEIPT at gateway success (markOrderPaid → postOnlineOrderReceipt).
  */
 export async function transitionOrderPipelineStatus(input: TransitionOrderPipelineInput) {
     const { orderId, toStatusId, toStatusLabel, courier, trackingNumber, actorUserId } = input;
@@ -32,6 +39,31 @@ export async function transitionOrderPipelineStatus(input: TransitionOrderPipeli
         select: { id: true, order: { select: { ticketId: true } } },
     });
     if (!existing?.order) throw new Error("Order not found");
+
+    // Invoice gate — a POSTED ONLINE_INVOICE must be linked (VoucherLink
+    // SHOP_ORDER) before the order moves toward fulfilment. "Cannot transition"
+    // keys the status route's 422 mapping.
+    if (INVOICE_REQUIRED_STAGES.includes(toStatusId)) {
+        const links = await prisma.voucherLink.findMany({
+            where: { kind: "SHOP_ORDER", targetId: String(orderId) },
+            select: { universalVoucherId: true },
+        });
+        const posted = links.length
+            ? await prisma.universalVoucher.findFirst({
+                  where: {
+                      id: { in: links.map((l) => l.universalVoucherId) },
+                      status: "POSTED",
+                      deletedAt: null,
+                  },
+                  select: { id: true },
+              })
+            : null;
+        if (!posted) {
+            throw new Error(
+                `Cannot transition to ${toStatusLabel} — create the invoice first (one click on the order page).`,
+            );
+        }
+    }
 
     // An order is a Ticket (flavour "order") + TicketOrder detail. Status is the core
     // pipeline stage; courier/tracking live on the detail.

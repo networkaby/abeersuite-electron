@@ -21,7 +21,6 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { fmt } from "@/utils/constants";
 import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/components/GlAccountCombobox";
-import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { CHANNEL_LABEL, POS_PAY_CHANNELS, channelNeedsVpa } from "@/modules/pos/lib/counterTenders";
 import type { PosPayChannel } from "@/generated/prisma/client";
 
@@ -96,12 +95,10 @@ export default function CountersAdminPage() {
     const loadGlAccounts = async () => {
         try {
             const { data } = await axios.get<GlAccount[]>("/api/accountancy/gl-accounts?includeParties=false");
-            // Filter to ASSET-style ledgers — only Cash-in-Hand + Bank Accounts
-            // can sensibly receive POS payment proceeds.
-            setGlAccounts(data.filter((a) =>
-                a.group?.name === ACCOUNT_GROUPS.CASH_IN_HAND ||
-                a.group?.name === ACCOUNT_GROUPS.BANK_ACCOUNTS,
-            ));
+            // Any ASSET-group ledger can receive payment proceeds — Cash-in-Hand,
+            // Bank Accounts, or a custom group like "Gateway" under Current Assets
+            // (party ledgers already excluded by the API flag).
+            setGlAccounts(data.filter((a) => a.group?.type === "ASSET"));
         } catch {
             setGlAccounts([]);
         }

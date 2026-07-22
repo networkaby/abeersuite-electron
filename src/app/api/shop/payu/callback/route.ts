@@ -53,7 +53,11 @@ export async function POST(req: Request) {
     if (body.amount !== expected) return backToOrder(req, order.ticketId, true);
 
     const paymentId = body.mihpayid || body.payuMoneyId || `PAYU-${txnid}`;
-    const result = await markOrderPaid(order.ticketId, { paymentId, gatewayLabel: "PayU" });
+    const result = await markOrderPaid(order.ticketId, {
+        paymentId,
+        gatewayLabel: "PayU",
+        provider: "payu",
+    });
     if (!result.ok) return backToOrder(req, order.ticketId, true);
 
     return backToOrder(req, order.ticketId, false);

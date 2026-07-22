@@ -59,6 +59,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         const result = await markOrderPaid(order.ticketId, {
             paymentId: razorpay_payment_id,
             gatewayLabel: "Razorpay",
+            provider: "razorpay",
             customerId,
         });
         if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });

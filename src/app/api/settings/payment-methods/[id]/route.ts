@@ -48,13 +48,21 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
         const isPod = existing.provider === PAY_ON_DELIVERY_PROVIDER_ID;
         // POD stores an area rule ({ area: {...} }); everything else validates against
-        // the provider's declared config fields.
-        const nextConfigJson =
-            data.configJson === undefined
-                ? undefined
-                : isPod
-                  ? (sanitizePodConfig(data.configJson) as Prisma.InputJsonValue)
-                  : (data.configJson as Prisma.InputJsonValue);
+        // the provider's declared config fields. The settlement ledger
+        // (configJson.settlementAccountId) is common to every method — preserved on
+        // top of whichever shape (POD's sanitizer would otherwise drop it).
+        let nextConfigJson: Prisma.InputJsonValue | undefined;
+        if (data.configJson === undefined) {
+            nextConfigJson = undefined;
+        } else {
+            const base = isPod
+                ? (sanitizePodConfig(data.configJson) as Record<string, unknown>)
+                : { ...data.configJson };
+            const sid = Number((data.configJson as { settlementAccountId?: unknown }).settlementAccountId);
+            if (Number.isInteger(sid) && sid > 0) base.settlementAccountId = sid;
+            else delete base.settlementAccountId;
+            nextConfigJson = base as Prisma.InputJsonValue;
+        }
         if (data.configJson !== undefined && !isPod) {
             const configError = validateGatewayConfigJson(existing.provider, data.configJson);
             if (configError) return NextResponse.json({ error: configError }, { status: 400 });

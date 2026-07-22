@@ -34,7 +34,7 @@ Cross-cutting code lives in `src/shared/` (see §12). shadcn primitives live in 
 
 - **`(protected)/office/*`** — staff app (requires a staff session). Segments mirror URLs 1:1: `accountancy`, `inventory`, `pos` (manager shift reports), `pricing-strategy`, `customer-retention`, `customers` (Contacts), `crm`, `orders`, `repairing`, `ecommerce`, `admin`, `administration`, `settings`, `work-flow-inbox` (post-login landing).
 - **`(protected)/vouchers/pos`** — the POS register (operator surface), opened standalone. `/vouchers/pos/new` is the New Sale screen.
-- **`(external)/*`** — customer-facing: `(store)` marketing homepage, `shop` (catalogue → cart → Razorpay checkout), `portal` (customer self-service), `login` (portal sign-in).
+- **`(external)/*`** — customer-facing: `(store)` marketing homepage, `shop` (catalogue → cart → checkout with courier + payment-method pickers), `portal` (customer self-service), `login` (portal sign-in).
 - **`(protected)/lab`** — experimental Front/Back-office prototype. Not gated, not production.
 - Staff sign-in: `/staff/login`. Portal sign-in: `/login`.
 
@@ -130,7 +130,9 @@ Repair, deals, delivery, and refund all ride this one engine. **The `Account` is
 
 - **Loyalty** (`loyalty.prisma`) — points earn/redeem with expiry lots (`LoyaltyLot`/`LoyaltyLedger`), tiers, milestones; applied inside the POS sale tx.
 - **Coupons / gift cards** (`coupons.prisma`) — `Coupon` (+ product rules), `CouponRedemption`, `GiftCard`/`GiftCardTxn`.
-- **Shop / portal** — the storefront reads `InvProduct`; checkout is Razorpay, confirmed by the **signed webhook**, not the client response. Cart/wishlist/compare are Zustand + localStorage (no DB until checkout). Portal auth (`PersonPortalCredential`) is fully separate from the staff session — no crossover.
+- **Shop / portal** — the storefront reads `InvProduct`; cart/wishlist/compare are Zustand + localStorage (no DB until checkout). Checkout picks a **courier** (hard-coded catalog — Local delivery / Standard courier / Shiprocket / Shipway aggregators — curated into an N-slot list by `delivery/lib/shippingQuote.ts`) and a **payment method**: Pay-on-Delivery (area rule on `configJson.area`) or an online gateway (Razorpay / PayU / Cashfree / demo). Payment methods are a fixed, self-healing catalog (`PAYMENT_METHOD_DEFAULTS` in `pos/lib/paymentGateways.ts`; no add/delete via UI); each carries a **settlement ledger** (`configJson.settlementAccountId`) and a gateway **without one is not offered** at checkout.
+- **Online payment → books.** Gateway success is verified server-side (Razorpay HMAC signature / PayU reverse-hash / Cashfree order-status query) → `markOrderPaid` flips the order PAID, auto-posts an **advance RECEIPT** (Dr the gateway's settlement ledger · Cr the customer, HQ branch, attributed to the first admin) and auto-confirms the order (reserve stock + spawn delivery). Staff then one-click converts the order into a posted **`ONLINE_INVOICE`** (`POST /api/ecommerce/orders/[id]/invoice` — GST backed out of the tax-inclusive storefront prices per product, stock OUT, reservation → EXECUTED, linked via `VoucherLink SHOP_ORDER`, and the advance receipt allocated against it). The order pipeline **blocks Packing / Dispatched / Delivered until that posted invoice exists**; the invoice itself stays a normal, editable voucher.
+- Portal auth (`PersonPortalCredential`) is fully separate from the staff session — no crossover.
 
 ---
 
@@ -184,5 +186,5 @@ src/shared/
 - Some columns were added via `prisma db push` with no migration recorded — generate migrations before a production deploy.
 - **Production DB is in use** — check impact on seeds, APIs, and UI before removing anything (AGENTS.md).
 - Seeds: `pnpm prisma db seed` runs `personal-bootstrap.ts` (production restore = code-owned catalog from `lib/codeOwnedCatalog.ts` + the captured `data/personal.local.json` snapshot; upsert-only). `bootstrap-seed.ts` is the generic new-client installer (`pnpm seed:generic`). `helper-*.ts` (trade-specific), `dummy-*.ts` (demo), `hard-clean.ts` (reset to bootstrap). See `docs/seeds.md`.
-- Razorpay needs `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` / `RAZORPAY_WEBHOOK_SECRET`.
+- Gateway env (presence shown as ✓/✗ on Settings → Payment Methods, values never stored): `RAZORPAY_KEY_ID`/`RAZORPAY_KEY_SECRET`, `PAYU_MERCHANT_KEY`/`PAYU_MERCHANT_SALT`, `CASHFREE_APP_ID`/`CASHFREE_SECRET_KEY`. Courier aggregators: `SHIPROCKET_EMAIL`/`SHIPROCKET_PASSWORD` (+ optional `SHIPROCKET_WEBHOOK_TOKEN`), `SHIPWAY_USERNAME`/`SHIPWAY_LICENSE`.
 - Protected surfaces (POS/GL posting, Balance Sheet, P&L, Day Book, accounting math): treat as append-only/verified — run the parity harness and confirm before changing (see PROJECT_BRAIN.md "protected" notes).

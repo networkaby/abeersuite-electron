@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { handleApiError } from "@/shared/lib/api";
 import { requirePortalCustomer } from "@/shared/lib/auth/portalAuthGuard";
-import { isOnlineGatewayEnabled } from "@/shared/lib/payments/activeOnlineGateway";
+import { getPayableGateway } from "@/shared/lib/payments/activeOnlineGateway";
 import { markOrderPaid } from "@/modules/order/lib/markOrderPaid";
 
 // POST /api/shop/orders/[id]/demo-pay
@@ -23,14 +23,15 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
         const ticketId = parseInt(id, 10);
         if (!Number.isFinite(ticketId)) return NextResponse.json({ error: "Invalid order" }, { status: 400 });
 
-        // Only simulate when the demo gateway is enabled for online checkout.
-        if (!(await isOnlineGatewayEnabled("demo"))) {
+        // Only simulate when the demo gateway is offerable (enabled + ledger set).
+        if (!(await getPayableGateway("demo"))) {
             return NextResponse.json({ error: "Demo payment is not enabled." }, { status: 400 });
         }
 
         const result = await markOrderPaid(ticketId, {
             paymentId: `DEMO-${ticketId}-${Date.now()}`,
             gatewayLabel: "demo",
+            provider: "demo",
             customerId,
         });
         if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });

@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { handleApiError } from "@/shared/lib/api";
 import { requirePortalCustomer } from "@/shared/lib/auth/portalAuthGuard";
-import { getActiveOnlineGateways } from "@/shared/lib/payments/activeOnlineGateway";
+import { getPayableGateway } from "@/shared/lib/payments/activeOnlineGateway";
 import { cashfreeCreds, cashfreeMode, createCashfreeOrder } from "@/shared/lib/payments/cashfree";
 import { absoluteBase } from "@/shared/lib/http/absoluteBase";
 
@@ -22,7 +22,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
         const { id } = paramsSchema.parse(await params);
 
-        const cf = (await getActiveOnlineGateways()).find((g) => g.provider === "cashfree");
+        // Offerable = enabled + wired + settlement ledger set (no ledger → unusable).
+        const cf = await getPayableGateway("cashfree");
         if (!cf) {
             return NextResponse.json({ error: "Cashfree is not enabled for online checkout." }, { status: 400 });
         }
