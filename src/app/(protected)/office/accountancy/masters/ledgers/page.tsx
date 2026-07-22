@@ -13,9 +13,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
 import { fmt } from "@/utils/constants";
 import { GroupCombobox } from "@/modules/accountancy/components/GroupCombobox";
 
@@ -137,8 +134,6 @@ function drCr(balance: number): string {
     return balance > 0 ? `${abs} Dr` : `${abs} Cr`;
 }
 
-const NONE = "none";
-
 // A ledger's normal balance is inherited from its group's accounting nature.
 function inheritedNormalBalance(type: GroupType): "Debit" | "Credit" {
     return type === "ASSET" || type === "EXPENSE" ? "Debit" : "Credit";
@@ -153,8 +148,8 @@ export default function LedgersPage() {
     const [showAdd, setShowAdd]   = useState(false);
     const [saving, setSaving]     = useState(false);
 
-    const [newForm, setNewForm] = useState({
-        name: "", groupId: NONE, description: "",
+    const [newForm, setNewForm] = useState<{ name: string; groupId: number | null; description: string }>({
+        name: "", groupId: null, description: "",
     });
     const [newBank, setNewBank] = useState<BankFields>(EMPTY_BANK);
 
@@ -236,19 +231,20 @@ export default function LedgersPage() {
 
     const addLedger = async () => {
         if (!newForm.name.trim()) { toast.error("Name is required"); return; }
+        if (!newForm.groupId) { toast.error("Group is required"); return; }
         setSaving(true);
-        const newGroupIsBank = isBankGroupName(allFlat.find((g) => String(g.id) === newForm.groupId)?.name);
+        const newGroupIsBank = isBankGroupName(allFlat.find((g) => g.id === newForm.groupId)?.name);
         try {
             // normalBalance is left unset → inherited from the group's nature.
             await axios.post("/api/accountancy/ledgers", {
                 name:          newForm.name.trim(),
-                groupId:       newForm.groupId !== NONE ? Number(newForm.groupId) : null,
+                groupId:       newForm.groupId,
                 description:   newForm.description.trim() || null,
                 ...(newGroupIsBank && hasBankData(newBank) ? { bankJson: newBank } : {}),
             });
             toast.success("Ledger created");
             setShowAdd(false);
-            setNewForm({ name: "", groupId: NONE, description: "" });
+            setNewForm({ name: "", groupId: null, description: "" });
             setNewBank(EMPTY_BANK);
             load();
         } catch (err: unknown) {
@@ -296,21 +292,18 @@ export default function LedgersPage() {
                             />
                         </div>
                         <div className="space-y-1.5">
-                            <Label>Under (Group)</Label>
-                            <Select value={newForm.groupId} onValueChange={(v) => setNewForm((f) => ({ ...f, groupId: v }))}>
-                                <SelectTrigger><SelectValue placeholder="No group" /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value={NONE}>No group</SelectItem>
-                                    {allFlat.map((g) => (
-                                        <SelectItem key={g.id} value={String(g.id)}>{g.name}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                            <Label>Under (Group) <span className="text-destructive">*</span></Label>
+                            <GroupCombobox
+                                value={newForm.groupId}
+                                onChange={(groupId) => setNewForm((f) => ({ ...f, groupId }))}
+                                groups={allFlat}
+                                allowNone={false}
+                            />
                         </div>
                         <div className="space-y-1.5">
                             <Label>Normal Balance</Label>
                             {(() => {
-                                const selectedGroup = allFlat.find((g) => String(g.id) === newForm.groupId);
+                                const selectedGroup = allFlat.find((g) => g.id === newForm.groupId);
                                 return (
                                     <div className="flex h-9 items-center rounded-md border border-input bg-muted/40 px-3 text-sm text-muted-foreground">
                                         {selectedGroup
@@ -331,7 +324,7 @@ export default function LedgersPage() {
                     </div>
                     {/* Bank particulars — only for ledgers under a Bank group;
                         printed on the Contra deposit slip. */}
-                    {isBankGroupName(allFlat.find((g) => String(g.id) === newForm.groupId)?.name) && (
+                    {isBankGroupName(allFlat.find((g) => g.id === newForm.groupId)?.name) && (
                         <div className="space-y-3 rounded-md border border-border bg-muted/30 p-4">
                             <p className="text-sm font-medium text-foreground">Bank Details <span className="font-normal text-muted-foreground">— printed on the deposit slip</span></p>
                             <div className="grid grid-cols-2 gap-4 md:grid-cols-3">

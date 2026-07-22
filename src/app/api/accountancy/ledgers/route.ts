@@ -23,7 +23,7 @@ const emptyBank = (b: z.infer<typeof bankJsonSchema>): boolean =>
 
 const createSchema = z.object({
     name:        z.string().trim().min(1).max(200),
-    groupId:     z.number().int().positive().nullish(),
+    groupId:     z.number().int().positive(),
     code:        z.string().trim().max(32).nullish(),
     description: z.string().trim().max(1000).nullish(),
     normalBalance: z.enum(["DEBIT", "CREDIT"]).optional(),
@@ -99,7 +99,7 @@ export async function POST(req: Request) {
         const account = await prisma.account.create({
             data: {
                 name:          body.name,
-                groupId:       body.groupId ?? null,
+                groupId:       body.groupId,
                 code:          body.code ?? null,
                 description:   body.description ?? null,
                 normalBalance: body.normalBalance ?? null,

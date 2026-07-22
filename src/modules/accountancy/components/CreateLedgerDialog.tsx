@@ -35,8 +35,6 @@ export interface CreatedLedger {
     groupId: number | null;
 }
 
-const NONE = "none";
-
 // Flatten the tree preserving depth so the picker can render an indented
 // bullet hierarchy (parent group › sub-group).
 function flattenGroups(nodes: GroupNode[], depth = 0, out: GroupOption[] = []): GroupOption[] {
@@ -66,8 +64,8 @@ export function CreateLedgerDialog({
 }) {
     const [groups, setGroups]   = useState<GroupOption[]>([]);
     const [saving, setSaving]   = useState(false);
-    const [form, setForm]       = useState({
-        name: "", groupId: NONE, description: "",
+    const [form, setForm]       = useState<{ name: string; groupId: number | null; description: string }>({
+        name: "", groupId: null, description: "",
     });
 
     // Reset the form and load the group list whenever the dialog opens.
@@ -75,7 +73,7 @@ export function CreateLedgerDialog({
         if (!open) return;
         setForm({
             name: "",
-            groupId: defaultGroupId ? String(defaultGroupId) : NONE,
+            groupId: defaultGroupId ?? null,
             description: "",
         });
         axios.get<GroupNode[]>("/api/accountancy/account-groups")
@@ -83,17 +81,18 @@ export function CreateLedgerDialog({
             .catch(() => { /* group list is optional */ });
     }, [open, defaultGroupId]);
 
-    const selectedGroup = groups.find((g) => String(g.id) === form.groupId);
+    const selectedGroup = groups.find((g) => g.id === form.groupId);
 
     const save = async () => {
         if (!form.name.trim()) { toast.error("Name is required"); return; }
+        if (!form.groupId) { toast.error("Group is required"); return; }
         setSaving(true);
         try {
             // normalBalance is left unset → inherited from the group's nature
             // (loadNormalBalanceMap infers it from group.type at read time).
             const r = await axios.post<CreatedLedger>("/api/accountancy/ledgers", {
                 name:          form.name.trim(),
-                groupId:       form.groupId !== NONE ? Number(form.groupId) : null,
+                groupId:       form.groupId,
                 description:   form.description.trim() || null,
             });
             toast.success("Ledger created");
@@ -128,12 +127,13 @@ export function CreateLedgerDialog({
                         />
                     </div>
                     <div className="space-y-1.5">
-                        <Label>Under (Group)</Label>
+                        <Label>Under (Group) <span className="text-destructive">*</span></Label>
                         <GroupCombobox
-                            value={form.groupId === NONE ? null : Number(form.groupId)}
-                            onChange={(id) => setForm((f) => ({ ...f, groupId: id == null ? NONE : String(id) }))}
+                            value={form.groupId}
+                            onChange={(id) => setForm((f) => ({ ...f, groupId: id }))}
                             groups={groups}
                             placeholder="Search group…"
+                            allowNone={false}
                         />
                     </div>
                     <div className="space-y-1.5">

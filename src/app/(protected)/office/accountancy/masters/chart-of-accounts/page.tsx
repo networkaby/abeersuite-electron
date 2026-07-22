@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Plus, Pencil, Check, X, Loader2, TrendingUp, TrendingDown } from "lucide-react";
+import { Plus, Pencil, Check, X, Loader2, TrendingUp, TrendingDown, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -106,6 +106,21 @@ export default function ChartOfAccountsPage() {
             await axios.patch(`/api/accountancy/gl-accounts/${a.id}`, { isActive: true });
             toast.success("Activated");
             load();
+        }
+    };
+
+    // Hard delete — same Account table/rule as the Ledgers page: only allowed
+    // when the account has no posted entries, no sub-accounts, and isn't a
+    // customer/company identity ledger (enforced server-side).
+    const deleteAccount = async (a: GlAccount) => {
+        if (!confirm(`Delete account "${a.name}"? This cannot be undone.`)) return;
+        try {
+            await axios.delete(`/api/accountancy/ledgers/${a.id}`);
+            toast.success("Account deleted");
+            load();
+        } catch (err: unknown) {
+            const msg = axios.isAxiosError(err) ? err.response?.data?.error : "Cannot delete";
+            toast.error(msg ?? "Cannot delete account");
         }
     };
 
@@ -228,13 +243,13 @@ export default function ChartOfAccountsPage() {
             {grouped.map(({ type, rows }) => rows.length === 0 ? null : (
                 <AccountSection key={type} type={type} rows={rows} editingId={editingId} editName={editName} editDesc={editDesc} saving={saving}
                     onStartEdit={startEdit} onSetEditName={setEditName} onSetEditDesc={setEditDesc}
-                    onSaveEdit={saveEdit} onCancelEdit={() => setEditingId(null)} onToggleActive={toggleActive} />
+                    onSaveEdit={saveEdit} onCancelEdit={() => setEditingId(null)} onToggleActive={toggleActive} onDelete={deleteAccount} />
             ))}
 
             {ungrouped.length > 0 && (
                 <AccountSection type={null} rows={ungrouped} editingId={editingId} editName={editName} editDesc={editDesc} saving={saving}
                     onStartEdit={startEdit} onSetEditName={setEditName} onSetEditDesc={setEditDesc}
-                    onSaveEdit={saveEdit} onCancelEdit={() => setEditingId(null)} onToggleActive={toggleActive} />
+                    onSaveEdit={saveEdit} onCancelEdit={() => setEditingId(null)} onToggleActive={toggleActive} onDelete={deleteAccount} />
             )}
             </div>
         </ScrollArea>
@@ -254,11 +269,12 @@ type SectionProps = {
     onSaveEdit: (id: number) => void;
     onCancelEdit: () => void;
     onToggleActive: (a: GlAccount) => void;
+    onDelete: (a: GlAccount) => void;
 };
 
 function AccountSection({
     type, rows, editingId, editName, editDesc, saving,
-    onStartEdit, onSetEditName, onSetEditDesc, onSaveEdit, onCancelEdit, onToggleActive,
+    onStartEdit, onSetEditName, onSetEditDesc, onSaveEdit, onCancelEdit, onToggleActive, onDelete,
 }: SectionProps) {
     const colorClass = type ? GL_TYPE_COLORS[type] : "bg-muted text-muted-foreground";
     const label = type ?? "UNGROUPED";
@@ -368,6 +384,16 @@ function AccountSection({
                                                 className={`text-xs ${a.isActive ? "text-destructive hover:bg-destructive/10" : "text-green-600 hover:bg-green-50"}`}
                                             >
                                                 {a.isActive ? <X size={14} /> : <Check size={14} />}
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon-sm"
+                                                onClick={() => onDelete(a)}
+                                                className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                                                title="Delete (only if no transactions)"
+                                            >
+                                                <Trash2 size={14} />
                                             </Button>
                                         </>
                                     )}

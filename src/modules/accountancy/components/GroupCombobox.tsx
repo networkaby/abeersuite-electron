@@ -32,6 +32,8 @@ type Props = {
     placeholder?: string;
     className?: string;
     autoFocus?: boolean;
+    /** Show the "No group" entry and allow clearing to null. Default true. */
+    allowNone?: boolean;
 };
 
 export function GroupCombobox({
@@ -39,11 +41,12 @@ export function GroupCombobox({
     placeholder = "Search group…",
     className = "",
     autoFocus = false,
+    allowNone = true,
 }: Props) {
     const [query, setQuery] = useState("");
 
     const selected = groups.find((g) => g.id === value);
-    const selectedLabel = selected ? selected.name : (value === null ? NO_GROUP_LABEL : "");
+    const selectedLabel = selected ? selected.name : (value === null && allowNone ? NO_GROUP_LABEL : "");
 
     const syncQuery = useCallback(() => {
         setQuery(selectedLabel);
@@ -55,7 +58,7 @@ export function GroupCombobox({
     const filteredGroups = showAll
         ? groups
         : groups.filter((g) => g.name.toLowerCase().includes(q));
-    const showNoGroup = showAll || NO_GROUP_LABEL.toLowerCase().includes(q);
+    const showNoGroup = allowNone && (showAll || NO_GROUP_LABEL.toLowerCase().includes(q));
 
     const items: ({ kind: "none" } | { kind: "group"; group: GroupOption })[] = [
         ...(showNoGroup ? [{ kind: "none" as const }] : []),
