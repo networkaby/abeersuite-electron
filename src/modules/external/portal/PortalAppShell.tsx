@@ -5,9 +5,11 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { signOut, useSession } from "next-auth/react";
 import {
+    ChevronDown,
     CreditCard,
     Heart,
     LayoutDashboard,
+    LogOut,
     Menu,
     Percent,
     Settings,
@@ -18,7 +20,13 @@ import {
     X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 type PortalAppShellProps = {
     children: React.ReactNode;
@@ -111,11 +119,33 @@ export default function PortalAppShell({ children }: PortalAppShellProps) {
                         </Link>
                     </div>
                     <div className="flex items-center gap-2">
-                        {isCustomer ? <Badge variant="secondary" className="hidden sm:inline-flex">Signed in</Badge> : null}
                         {isCustomer ? (
-                            <Button variant="outline" size="sm" onClick={() => signOut({ callbackUrl: "/portal" })}>
-                                Sign out
-                            </Button>
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="outline" size="sm" className="gap-1.5">
+                                        <span className="max-w-[10rem] truncate">
+                                            {user?.name ? `Welcome, ${user.name}` : "My Account"}
+                                        </span>
+                                        <ChevronDown className="size-3.5 shrink-0" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                    <DropdownMenuItem asChild>
+                                        <Link href="/portal/settings">
+                                            <Settings className="size-4" />
+                                            Profile Settings
+                                        </Link>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem
+                                        variant="destructive"
+                                        onClick={() => signOut({ callbackUrl: "/portal" })}
+                                    >
+                                        <LogOut className="size-4" />
+                                        Sign out
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
                         ) : (
                             <Button variant="outline" size="sm" asChild>
                                 <Link href="/login">Sign in</Link>
