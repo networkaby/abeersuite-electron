@@ -23,11 +23,13 @@ import { usePortalAccountStore } from "@/store/external/portalAccountStore";
 type ShippingOption = {
     optionId: string;
     methodId: number;
-    kind: "SHIPROCKET" | "SHIPWAY" | "CUSTOM" | "OWN_BOY";
+    kind: "SHIPROCKET" | "SHIPWAY" | "CUSTOM" | "OWN_BOY" | "STORE_PICKUP" | "FREE_DELIVERY";
     serviceName?: string;
     label: string;
     amountPaise: number;
     etaText: string | null;
+    /** Store pickup only — the store's note (address / timings) shown when selected. */
+    pickupNote?: string;
     /** Dev-only: courier dropped by the dedupe/cap, shown in a dev panel. */
     hidden?: boolean;
 };
@@ -485,6 +487,13 @@ export default function ShopCheckoutPage() {
                                                             {o.etaText ? (
                                                                 <span className="block text-xs text-muted-foreground">
                                                                     Est. {o.etaText}
+                                                                </span>
+                                                            ) : null}
+                                                            {o.kind === "STORE_PICKUP" ? (
+                                                                <span className="block text-xs text-muted-foreground">
+                                                                    {active && o.pickupNote
+                                                                        ? o.pickupNote
+                                                                        : "Collect your order from our store — no delivery charge."}
                                                                 </span>
                                                             ) : null}
                                                         </span>

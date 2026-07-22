@@ -54,8 +54,8 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     }
 }
 
-// The four couriers are hard-coded and cannot be deleted — use the Active toggle to
-// switch one off at checkout. (Deleting would also orphan its config, e.g. Local
+// The delivery options are hard-coded and cannot be deleted — use the Active toggle
+// to switch one off at checkout. (Deleting would also orphan its config, e.g. Local
 // delivery's vehicle matrix.)
 export async function DELETE() {
     const { response } = await requireAuth();

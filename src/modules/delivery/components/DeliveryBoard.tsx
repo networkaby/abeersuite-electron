@@ -18,9 +18,13 @@ interface DeliveryCard {
     codToCollectPaise: number; createdAt: string;
 }
 
+// TODO(bridge): "PICKUP" is the legacy manual-assign value pre-dating the
+// STORE_PICKUP checkout kind — kept so old delivery rows still label; new shop
+// orders arrive with STORE_PICKUP already set. Collapse once old rows are gone.
 const CARRIERS = ["OWN_BOY", "CUSTOM", "SHIPROCKET", "PICKUP"] as const;
 const CARRIER_LABEL: Record<string, string> = {
-    SHIPROCKET: "Shiprocket", CUSTOM: "Custom courier", OWN_BOY: "Local boy", PICKUP: "Pickup",
+    SHIPROCKET: "Shiprocket", SHIPWAY: "Shipway", CUSTOM: "Custom courier", OWN_BOY: "Local boy",
+    PICKUP: "Pickup", STORE_PICKUP: "Store pickup", FREE_DELIVERY: "Free delivery",
 };
 
 export function DeliveryBoard() {

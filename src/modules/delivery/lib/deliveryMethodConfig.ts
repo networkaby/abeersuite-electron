@@ -5,7 +5,7 @@
 
 import { INDIAN_STATES } from "@/shared/lib/gst/indianStates";
 
-export type DeliveryKind = "SHIPROCKET" | "SHIPWAY" | "CUSTOM" | "OWN_BOY";
+export type DeliveryKind = "SHIPROCKET" | "SHIPWAY" | "CUSTOM" | "OWN_BOY" | "STORE_PICKUP" | "FREE_DELIVERY";
 
 // Canonical India state names (reused from the GST module) — the values a zone
 // can be matched by, and what the checkout state picker offers.
@@ -16,7 +16,7 @@ export function canonicalStateName(name: string | null | undefined): string | nu
     return name ? STATE_CANONICAL.get(name.trim().toLowerCase()) ?? null : null;
 }
 
-export const DELIVERY_KINDS: DeliveryKind[] = ["OWN_BOY", "CUSTOM", "SHIPROCKET", "SHIPWAY"];
+export const DELIVERY_KINDS: DeliveryKind[] = ["OWN_BOY", "CUSTOM", "SHIPROCKET", "SHIPWAY", "STORE_PICKUP", "FREE_DELIVERY"];
 
 export const DELIVERY_KIND_LABEL: Record<DeliveryKind, string> = {
     OWN_BOY: "Local delivery boy",
@@ -25,12 +25,17 @@ export const DELIVERY_KIND_LABEL: Record<DeliveryKind, string> = {
     CUSTOM: "Standard courier",
     SHIPROCKET: "Shiprocket",
     SHIPWAY: "Shipway",
+    // Customer collects the order from our shop — always ₹0, no courier involved.
+    STORE_PICKUP: "Pickup from store",
+    // OUR free delivery — ₹0, offered ONLY inside its serve list (states/pincode
+    // prefixes); empty serve list = offered nowhere.
+    FREE_DELIVERY: "Free delivery",
 };
 
 /**
- * The HARD-CODED courier catalog — the four couriers are fixed in code, not
+ * The HARD-CODED courier catalog — the six delivery options are fixed in code, not
  * user-addable/deletable. The DB stores only each courier's editable CONFIG
- * (exclusions, pickup, active, priority, service levels, vehicles). A fifth courier
+ * (exclusions, pickup, active, priority, service levels, vehicles). A seventh option
  * is added by extending this list (and DELIVERY_KINDS) in code — never via the UI.
  *
  * These are create-if-absent defaults: the app ensures one row per kind exists (so a
@@ -48,6 +53,10 @@ export const DELIVERY_METHOD_DEFAULTS: {
     { kind: "CUSTOM", displayName: "Standard courier", isActive: true, sortOrder: 1, configJson: { flatPaise: 9900, freeAbovePaise: 500000 } },
     { kind: "SHIPROCKET", displayName: "Shiprocket", isActive: false, sortOrder: 2, configJson: { pickupLocation: "Primary", pickupPincode: "", defaultItemWeightGrams: 500 } },
     { kind: "SHIPWAY", displayName: "Shipway", isActive: false, sortOrder: 3, configJson: { pickupLocation: "Primary", pickupPincode: "", defaultItemWeightGrams: 500 } },
+    { kind: "STORE_PICKUP", displayName: "Pickup from store", isActive: true, sortOrder: 4, configJson: { note: "", include: { states: [], pincodePrefixes: [] } } },
+    // Inactive with an empty serve list on purpose — admin must switch it on AND
+    // set coverage first (empty serve list = offered nowhere, never all-India free).
+    { kind: "FREE_DELIVERY", displayName: "Free delivery", isActive: false, sortOrder: 5, configJson: { include: { states: [], pincodePrefixes: [] } } },
 ];
 
 /** Aggregator (Shiprocket / Shipway): no stored rate — priced live by the API.
@@ -63,6 +72,23 @@ export type ShiprocketConfig = {
 
 /** Shipway pickup config — same shape as Shiprocket's (an aggregator rate source). */
 export type ShipwayConfig = ShiprocketConfig;
+
+/** Pickup from store — always ₹0. The note (store address / timings) is shown to
+ *  the customer at checkout under the option. Optional serve area (`include`):
+ *  EMPTY = offered everywhere (pickup costs nothing — opposite of free delivery's
+ *  empty-means-nowhere); non-empty = offered only where it matches. */
+export type StorePickupConfig = {
+    note?: string;
+    include?: DeliveryExclusions; // same {states, pincodePrefixes} shape as exclude
+};
+
+/** Free delivery — ₹0, offered ONLY where the serve list (`include`) matches:
+ *  destination state listed, OR pincode starts with a listed prefix. The common
+ *  `exclude` then blocks pockets inside a served area (e.g. serve Assam, block
+ *  7844…). Empty serve list = offered nowhere. */
+export type FreeDeliveryConfig = {
+    include?: DeliveryExclusions; // same {states, pincodePrefixes} shape as exclude
+};
 
 /** The aggregator kinds priced live by an external API (vs our own rate cards). */
 export const AGGREGATOR_KINDS: DeliveryKind[] = ["SHIPROCKET", "SHIPWAY"];
@@ -224,9 +250,11 @@ export function sanitizeExclusions(raw: unknown): DeliveryExclusions {
     return { states, pincodePrefixes };
 }
 
-/** True when a destination is on a courier's exclusion list (state OR pincode prefix). */
-export function isDestinationExcluded(exclude: unknown, pincode: string, state?: string | null): boolean {
-    const e = (exclude && typeof exclude === "object" ? exclude : {}) as DeliveryExclusions;
+/** Does a destination match a {states, pincodePrefixes} list? (state listed OR
+ *  pincode starts with a listed prefix). Shared by exclude AND the free-delivery
+ *  serve list — same matching, opposite meaning. */
+export function destinationMatchesList(list: unknown, pincode: string, state?: string | null): boolean {
+    const e = (list && typeof list === "object" ? list : {}) as DeliveryExclusions;
     const st = canonicalStateName(state ?? "");
     if (st && Array.isArray(e.states) && e.states.some((s) => canonicalStateName(s) === st)) return true;
     const p = pincode.trim();
@@ -235,6 +263,17 @@ export function isDestinationExcluded(exclude: unknown, pincode: string, state?:
         return !!x && p.startsWith(x);
     })) return true;
     return false;
+}
+
+/** True when a destination is on a courier's exclusion list (state OR pincode prefix). */
+export function isDestinationExcluded(exclude: unknown, pincode: string, state?: string | null): boolean {
+    return destinationMatchesList(exclude, pincode, state);
+}
+
+/** Does a serve list have any entries? (Decides the empty-list meaning per kind:
+ *  free delivery empty = nowhere; store pickup empty = everywhere.) */
+export function hasServeList(list: DeliveryExclusions | undefined): boolean {
+    return (list?.states?.length ?? 0) > 0 || (list?.pincodePrefixes?.length ?? 0) > 0;
 }
 
 const intOrZero = (v: unknown): number => Math.max(0, Math.round(Number(v) || 0));
@@ -665,6 +704,19 @@ export function sanitizeDeliveryConfig(kind: DeliveryKind, raw: Record<string, u
         // Local couriers (vehicles). Each is its own rate matrix + weight limit.
         if (Array.isArray(raw.vehicles)) out.vehicles = raw.vehicles.map(sanitizeOwnBoyVehicle);
         return withExclude(out);
+    }
+    if (kind === "STORE_PICKUP") {
+        // Always ₹0 — the customer-facing pickup note + optional serve area
+        // (empty serve area = offered everywhere).
+        return withExclude({
+            note: String(raw.note ?? "").trim().slice(0, 500),
+            include: sanitizeExclusions(raw.include),
+        });
+    }
+    if (kind === "FREE_DELIVERY") {
+        // Serve list — same {states, pincodePrefixes} shape (and sanitizer) as
+        // exclude. Always stored (even empty) so "empty = offered nowhere" is explicit.
+        return withExclude({ include: sanitizeExclusions(raw.include) });
     }
     // SHIPROCKET / SHIPWAY — pickup config + exclusions (both aggregators, same shape)
     return withExclude({

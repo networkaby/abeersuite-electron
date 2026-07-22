@@ -66,6 +66,11 @@ export default async function ShopOrderConfirmationPage({
     // back to the raw kind for older orders.
     const courierLabel =
         (order.shippingAddress as { courierService?: string } | null)?.courierService ?? order.courier ?? null;
+    // Store pickup — the store's note (address / timings) snapshotted at checkout.
+    const isStorePickup = order.courier === "STORE_PICKUP";
+    const pickupNote = isStorePickup
+        ? (order.shippingAddress as { pickupNote?: string } | null)?.pickupNote ?? null
+        : null;
 
     // Delivery card for this order (P8), if one has been spawned.
     const delivery = await prisma.ticketDelivery.findFirst({
@@ -151,6 +156,15 @@ export default async function ShopOrderConfirmationPage({
                 <span>{order.legacyStatus === "PAID" ? "Total paid" : "Total due"}</span>
                 <span>{formatRupeesFromPaise(grand)}</span>
             </p>
+
+            {isStorePickup ? (
+                <div className="rounded-lg border border-border p-3 text-sm space-y-1">
+                    <p className="font-medium">Pickup from store</p>
+                    <p className="text-muted-foreground">
+                        {pickupNote || "Collect your order from our store once it's ready."}
+                    </p>
+                </div>
+            ) : null}
 
             {delivery ? (
                 <div className="rounded-lg border border-border p-3 text-sm space-y-1">

@@ -181,6 +181,9 @@ export async function POST(req: Request) {
                             courierKind: chosen.kind,
                             courierOptionId: chosen.optionId,
                             courierService: chosen.serviceName ?? chosen.label,
+                            // Store pickup only — the store's note (address / timings) so the
+                            // order page can tell the customer where to collect.
+                            pickupNote: chosen.pickupNote ?? null,
                             shiprocketCourierId: chosen.shiprocketCourierId ?? null,
                             shiprocketCourierName: chosen.shiprocketCourierName ?? null,
                             // Snapshot of the online gateway chosen at checkout (null for COD).

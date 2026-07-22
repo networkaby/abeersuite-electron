@@ -173,7 +173,8 @@ model TicketOrder {
 
   totalPaise          Int     @default(0)
   // Shipping charge the customer picked at checkout (paise). The chosen courier
-  // is stored in `courier` (kind: SHIPROCKET | CUSTOM | OWN_BOY). Grand total on
+  // is stored in `courier` (kind: SHIPROCKET | SHIPWAY | CUSTOM | OWN_BOY |
+  // STORE_PICKUP | FREE_DELIVERY). Grand total on
   // the bill = totalPaise (goods) + shippingChargePaise. GL posting stays manual.
   shippingChargePaise Int     @default(0)
   razorpayOrderId     String? @unique

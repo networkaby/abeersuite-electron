@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import axios from "axios";
 import { toast } from "sonner";
-import { Pencil, Truck, PackageCheck, MapPin, SlidersHorizontal, ChevronDown } from "lucide-react";
+import { Pencil, Truck, PackageCheck, MapPin, SlidersHorizontal, ChevronDown, Store, Gift } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -52,6 +52,11 @@ type FormState = {
     pincodes: string;
     pickupLocation: string;
     pickupPincode: string;
+    // Store pickup: customer-facing note (store address / timings).
+    pickupNote: string;
+    // Free delivery serve list — where it IS offered (empty = nowhere).
+    includeStates: string[];
+    includePincodes: string; // prefixes, one per line / comma-separated
     // Availability exclusions (common to every kind).
     excludeStates: string[];
     excludePincodes: string; // prefixes, one per line / comma-separated
@@ -72,6 +77,9 @@ function emptyForm(kind: DeliveryKind = "OWN_BOY"): FormState {
         pincodes: "",
         pickupLocation: "Primary",
         pickupPincode: "",
+        pickupNote: "",
+        includeStates: [],
+        includePincodes: "",
         excludeStates: [],
         excludePincodes: "",
     };
@@ -100,6 +108,7 @@ export default function CouriersSettingsPage() {
     const openEdit = (m: Method) => {
         const c = m.configJson ?? {};
         const ex = (c.exclude ?? {}) as { states?: unknown; pincodePrefixes?: unknown };
+        const inc = (c.include ?? {}) as { states?: unknown; pincodePrefixes?: unknown };
         setForm({
             id: m.id,
             kind: m.kind,
@@ -111,11 +120,20 @@ export default function CouriersSettingsPage() {
             pincodes: Array.isArray(c.pincodes) ? (c.pincodes as string[]).join("\n") : "",
             pickupLocation: String(c.pickupLocation ?? "Primary"),
             pickupPincode: String(c.pickupPincode ?? ""),
+            pickupNote: String(c.note ?? ""),
+            includeStates: Array.isArray(inc.states) ? (inc.states as string[]) : [],
+            includePincodes: Array.isArray(inc.pincodePrefixes) ? (inc.pincodePrefixes as string[]).join("\n") : "",
             excludeStates: Array.isArray(ex.states) ? (ex.states as string[]) : [],
             excludePincodes: Array.isArray(ex.pincodePrefixes) ? (ex.pincodePrefixes as string[]).join("\n") : "",
         });
         setDialogOpen(true);
     };
+
+    const parsePrefixes = (raw: string): string[] =>
+        raw
+            .split(/[\s,]+/u)
+            .map((p) => p.trim())
+            .filter((p) => /^\d{1,6}$/u.test(p));
 
     const buildConfig = (): Record<string, unknown> => {
         if (form.kind === "CUSTOM") {
@@ -126,6 +144,17 @@ export default function CouriersSettingsPage() {
             // then set on the Standard Courier → Local courier tab (no flat rate).
             return { pincodes: [], flatPaise: 0, freeAbovePaise: 0, baseGrams: 500, stepGrams: 500, neighbourhoods: {} };
         }
+        if (form.kind === "STORE_PICKUP") {
+            // Always ₹0 — pickup note + optional serve area (empty = everywhere).
+            return {
+                note: form.pickupNote.trim(),
+                include: { states: form.includeStates, pincodePrefixes: parsePrefixes(form.includePincodes) },
+            };
+        }
+        if (form.kind === "FREE_DELIVERY") {
+            // Serve list — where free delivery IS offered (empty = nowhere).
+            return { include: { states: form.includeStates, pincodePrefixes: parsePrefixes(form.includePincodes) } };
+        }
         return {
             pickupLocation: form.pickupLocation.trim(),
             pickupPincode: form.pickupPincode.trim(),
@@ -134,10 +163,7 @@ export default function CouriersSettingsPage() {
 
     const buildExclude = (): { states: string[]; pincodePrefixes: string[] } => ({
         states: form.excludeStates,
-        pincodePrefixes: form.excludePincodes
-            .split(/[\s,]+/u)
-            .map((p) => p.trim())
-            .filter((p) => /^\d{1,6}$/u.test(p)),
+        pincodePrefixes: parsePrefixes(form.excludePincodes),
     });
 
     const save = async () => {
@@ -191,6 +217,16 @@ export default function CouriersSettingsPage() {
             const areas = Object.values(nb).reduce<number>((sum, locs) => sum + Object.keys((locs ?? {}) as object).length, 0);
             return areas > 0 ? `${areas} area(s) covered · matrix` : "No coverage yet";
         }
+        if (m.kind === "STORE_PICKUP" || m.kind === "FREE_DELIVERY") {
+            const inc = (c.include ?? {}) as { states?: unknown; pincodePrefixes?: unknown };
+            const st = Array.isArray(inc.states) ? inc.states.length : 0;
+            const px = Array.isArray(inc.pincodePrefixes) ? inc.pincodePrefixes.length : 0;
+            const parts = [st > 0 ? `${st} state(s)` : null, px > 0 ? `${px} pincode prefix(es)` : null].filter(Boolean);
+            const serve = parts.length > 0 ? `serves ${parts.join(" + ")}` : null;
+            if (m.kind === "FREE_DELIVERY") return serve ? `₹0 · ${serve}` : "No serve area yet — offered nowhere";
+            const note = String(c.note ?? "").trim() ? "pickup note set" : "no pickup note yet";
+            return `₹0 · ${serve ?? "offered everywhere"} · ${note}`;
+        }
         return `Pickup ${c.pickupPincode || "—"}`;
     };
 
@@ -203,8 +239,9 @@ export default function CouriersSettingsPage() {
                         <p className="text-muted-foreground mt-1 max-w-2xl text-sm">
                             The delivery options a customer can pick at checkout. The chosen courier&apos;s
                             rate becomes the order&apos;s shipping charge. Shiprocket rates are fetched live by
-                            parcel weight; the local boy is offered only for the pincodes you list. Shiprocket
-                            API keys live in environment variables — only non-secret pickup config is set here.
+                            parcel weight; the local boy is offered only for the pincodes you list. Pickup from
+                            store and Free delivery are always ₹0 — free delivery only inside its serve area.
+                            Shiprocket API keys live in environment variables — only non-secret pickup config is set here.
                         </p>
                     </div>
                 </div>
@@ -229,7 +266,7 @@ export default function CouriersSettingsPage() {
                                 <CardContent className="flex flex-wrap items-center gap-x-4 gap-y-2 py-4">
                                     <div className="min-w-40 flex-1">
                                         <div className="flex items-center gap-2">
-                                            {m.kind === "SHIPROCKET" || m.kind === "SHIPWAY" ? <Truck className="size-4" /> : m.kind === "OWN_BOY" ? <MapPin className="size-4" /> : <PackageCheck className="size-4" />}
+                                            {m.kind === "SHIPROCKET" || m.kind === "SHIPWAY" ? <Truck className="size-4" /> : m.kind === "OWN_BOY" ? <MapPin className="size-4" /> : m.kind === "STORE_PICKUP" ? <Store className="size-4" /> : m.kind === "FREE_DELIVERY" ? <Gift className="size-4" /> : <PackageCheck className="size-4" />}
                                             <span className="font-medium">{m.displayName}</span>
                                             {!m.isActive && <Badge className="bg-muted text-muted-foreground">Inactive</Badge>}
                                         </div>
@@ -330,6 +367,93 @@ export default function CouriersSettingsPage() {
                                     )}
                                 </p>
                             </>
+                        ) : null}
+
+                        {form.kind === "STORE_PICKUP" ? (
+                            <div className="grid gap-1.5">
+                                <Label>Pickup note (shown to the customer)</Label>
+                                <textarea
+                                    className="border-input bg-background flex min-h-[80px] w-full rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                                    value={form.pickupNote}
+                                    placeholder="e.g. Collect from Network Service, G.S. Road, 11am–8pm (Mon–Sat)"
+                                    onChange={(e) => setForm((f) => ({ ...f, pickupNote: e.target.value }))}
+                                />
+                                <p className="text-muted-foreground text-[11px]">
+                                    Always ₹0 — the customer collects the order from the store. This note (address / timings) shows under the option at checkout.
+                                </p>
+                            </div>
+                        ) : null}
+
+                        {form.kind === "FREE_DELIVERY" || form.kind === "STORE_PICKUP" ? (
+                            <div className="rounded-md border border-border p-3 space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <Label className="text-sm">
+                                        {form.kind === "FREE_DELIVERY"
+                                            ? "Offer free delivery to… (serve area)"
+                                            : "Offer store pickup to… (serve area)"}
+                                    </Label>
+                                    {(form.includeStates.length > 0 || form.includePincodes.trim()) ? (
+                                        <Button type="button" variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground"
+                                            onClick={() => setForm((f) => ({ ...f, includeStates: [], includePincodes: "" }))}>
+                                            Clear
+                                        </Button>
+                                    ) : null}
+                                </div>
+                                <div className="grid gap-1.5">
+                                    <Label className="text-xs text-muted-foreground">Served states</Label>
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button type="button" variant="outline" size="sm" className="w-full justify-between gap-1 font-normal">
+                                                {form.includeStates.length > 0 ? `${form.includeStates.length} state${form.includeStates.length > 1 ? "s" : ""} served` : "None"}
+                                                <ChevronDown className="size-3.5 opacity-60" />
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="start" className="max-h-72 w-64 overflow-y-auto">
+                                            {INDIA_STATE_NAMES.map((st) => (
+                                                <DropdownMenuCheckboxItem
+                                                    key={st}
+                                                    checked={form.includeStates.includes(st)}
+                                                    onCheckedChange={() =>
+                                                        setForm((f) => ({
+                                                            ...f,
+                                                            includeStates: f.includeStates.includes(st)
+                                                                ? f.includeStates.filter((x) => x !== st)
+                                                                : [...f.includeStates, st],
+                                                        }))
+                                                    }
+                                                    onSelect={(e) => e.preventDefault()}
+                                                >
+                                                    {st}
+                                                </DropdownMenuCheckboxItem>
+                                            ))}
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                </div>
+                                <div className="grid gap-1.5">
+                                    <Label className="text-xs text-muted-foreground">Served pincodes (prefixes)</Label>
+                                    <textarea
+                                        className="border-input bg-background flex min-h-[60px] w-full rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                                        value={form.includePincodes}
+                                        placeholder="One prefix per line, e.g. 781 (all 781xxx) or 781301"
+                                        onChange={(e) => setForm((f) => ({ ...f, includePincodes: e.target.value }))}
+                                    />
+                                    <p className="text-muted-foreground text-[11px]">
+                                        {form.kind === "FREE_DELIVERY" ? (
+                                            <>
+                                                Free delivery (₹0) is offered ONLY where a served state or pincode-prefix matches.
+                                                Empty serve area = offered nowhere. Use the exclusions below to block pockets inside
+                                                a served state (e.g. serve Assam, block 7844).
+                                            </>
+                                        ) : (
+                                            <>
+                                                Empty serve area = pickup offered everywhere. Add states / pincode-prefixes to offer
+                                                pickup only to nearby customers. Use the exclusions below to block pockets inside a
+                                                served area.
+                                            </>
+                                        )}
+                                    </p>
+                                </div>
+                            </div>
                         ) : null}
 
                         {/* Availability exclusions — hide this courier for some destinations. */}

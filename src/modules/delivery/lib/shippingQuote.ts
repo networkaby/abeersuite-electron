@@ -5,6 +5,9 @@
 //                creds/pickup pincode are missing)
 //   CUSTOM     → one option per active service level (its rate card)
 //   OWN_BOY    → one option per vehicle that covers the neighbourhood + fits weight
+//   STORE_PICKUP  → one ₹0 option (customer collects from the shop); optional serve
+//                   list — empty = offered everywhere, non-empty = only where it matches
+//   FREE_DELIVERY → one ₹0 option, ONLY where its serve list matches (empty = nowhere)
 // The customer's pick becomes TicketOrder.shippingChargePaise + courier.
 
 import {
@@ -15,11 +18,15 @@ import {
     computeCustomRatePaise,
     cheapestCustomRatePaise,
     isDestinationExcluded,
+    destinationMatchesList,
+    hasServeList,
     type CustomConfig,
     type DeliveryKind,
+    type FreeDeliveryConfig,
     type OwnBoyConfig,
     type ShiprocketConfig,
     type ShipwayConfig,
+    type StorePickupConfig,
 } from "./deliveryMethods";
 import { shiprocketServiceability, shiprocketEnvReady } from "./shiprocket";
 import { shipwayServiceability, shipwayEnvReady } from "./shipway";
@@ -117,6 +124,9 @@ export type ShippingOption = {
     // Shiprocket only — the chosen courier the fulfilment step will assign.
     shiprocketCourierId?: number;
     shiprocketCourierName?: string;
+    // Store pickup only — the store's pickup note (address / timings) shown to the
+    // customer under the option when selected.
+    pickupNote?: string;
     // Dev aid only — set on aggregator couriers dropped by the dedupe/cap, returned
     // (locally) so checkout can show them in a dev-only panel. Never set in prod.
     hidden?: boolean;
@@ -237,6 +247,36 @@ export async function quoteShipping(params: {
                     amountPaise,
                     etaText: null,
                 });
+            });
+        } else if (m.kind === "STORE_PICKUP") {
+            // Customer collects from the shop — always ₹0. Optional serve area:
+            // EMPTY = offered everywhere (unlike free delivery); non-empty =
+            // offered only where a served state / pincode prefix matches. The
+            // pickup note (store address / timings) rides along for checkout.
+            const cfg = m.configJson as StorePickupConfig;
+            if (hasServeList(cfg.include) && !destinationMatchesList(cfg.include, params.deliveryPincode, params.deliveryState)) continue;
+            out.push({
+                optionId: `store_pickup:${m.id}`,
+                methodId: m.id,
+                kind: "STORE_PICKUP",
+                label: m.displayName,
+                amountPaise: 0,
+                etaText: null,
+                pickupNote: String(cfg.note ?? "").trim() || undefined,
+            });
+        } else if (m.kind === "FREE_DELIVERY") {
+            // OUR free delivery — ₹0, ONLY where the serve list matches (state
+            // listed OR pincode prefix). The common exclude already blocked pockets
+            // above. Empty serve list matches nothing → offered nowhere.
+            const cfg = m.configJson as FreeDeliveryConfig;
+            if (!destinationMatchesList(cfg.include, params.deliveryPincode, params.deliveryState)) continue;
+            out.push({
+                optionId: `free_delivery:${m.id}`,
+                methodId: m.id,
+                kind: "FREE_DELIVERY",
+                label: m.displayName,
+                amountPaise: 0,
+                etaText: null,
             });
         } else if (m.kind === "SHIPROCKET") {
             const cfg = m.configJson as ShiprocketConfig;
@@ -410,7 +450,9 @@ export async function quoteShipping(params: {
         (a) => Number.isFinite(a.rank) && (a.o.kind === "SHIPROCKET" || a.o.kind === "SHIPWAY")
     );
     const indiaPostId = customIndiaPost?.optionId;
-    const ownLocal = out.filter((o) => o.kind === "OWN_BOY");
+    // Store pickup + free delivery always show when quoted (both ₹0 — the price
+    // sort puts them on top). They never join the aggregator curation.
+    const ownLocal = out.filter((o) => o.kind === "OWN_BOY" || o.kind === "STORE_PICKUP" || o.kind === "FREE_DELIVERY");
     const ownStandard = hasPreferredAgg
         ? []
         : out.filter((o) => o.kind === "CUSTOM" && !usedIds.has(o.optionId) && o.optionId !== indiaPostId);

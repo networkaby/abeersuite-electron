@@ -5,13 +5,14 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { DELIVERY_METHOD_DEFAULTS, sanitizeDeliveryConfig } from "@/modules/delivery/lib/deliveryMethods";
 
-// Settings → Couriers. The four couriers (Local delivery / Standard courier /
-// Shiprocket / Shipway) are HARD-CODED — not addable or deletable here. Only their
-// editable config is stored in the DB. Any signed-in staff may read/edit — the
-// Settings sidebar tick decides who reaches the page. Aggregator SECRETS stay in env.
+// Settings → Couriers. The six delivery options (Local delivery / Standard courier /
+// Shiprocket / Shipway / Pickup from store / Free delivery) are HARD-CODED — not
+// addable or deletable here. Only their editable config is stored in the DB. Any
+// signed-in staff may read/edit — the Settings sidebar tick decides who reaches the
+// page. Aggregator SECRETS stay in env.
 
 /** Create any of the hard-coded couriers that don't yet exist (create-if-absent, by
- *  kind). Makes the four self-healing on a fresh DB — no seed required. */
+ *  kind). Makes the catalog self-healing on a fresh DB — no seed required. */
 async function ensureDeliveryMethodDefaults(): Promise<void> {
     const present = new Set((await prisma.deliveryMethod.findMany({ select: { kind: true } })).map((m) => m.kind));
     const missing = DELIVERY_METHOD_DEFAULTS.filter((d) => !present.has(d.kind));
