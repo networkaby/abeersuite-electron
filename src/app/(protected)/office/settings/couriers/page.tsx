@@ -397,8 +397,9 @@ export default function CouriersSettingsPage() {
                                 <p className="text-muted-foreground text-[11px]">
                                     {form.kind === "SHIPWAY" ? (
                                         <>
-                                            Set <code>SHIPWAY_USERNAME</code> / <code>SHIPWAY_LICENSE</code> in the
-                                            environment for live rates. Without them, Shipway is skipped at checkout.
+                                            Set <code>SHIPWAY_USERNAME</code> (your Shipway email) and{" "}
+                                            <code>SHIPWAY_LICENSE</code> (License Key) for live rates. Without them,
+                                            Shipway is skipped at checkout.
                                         </>
                                     ) : (
                                         <>

@@ -23,11 +23,13 @@ import { usePortalAccountStore } from "@/store/external/portalAccountStore";
 type ShippingOption = {
     optionId: string;
     methodId: number;
-    kind: "SHIPROCKET" | "CUSTOM" | "OWN_BOY";
+    kind: "SHIPROCKET" | "SHIPWAY" | "CUSTOM" | "OWN_BOY";
     serviceName?: string;
     label: string;
     amountPaise: number;
     etaText: string | null;
+    /** Dev-only: courier dropped by the dedupe/cap, shown in a dev panel. */
+    hidden?: boolean;
 };
 
 const EMPTY_ADDRESS = { name: "", phone: "", line1: "", line2: "", pincode: "", locality: "", neighbourhood: "", city: "", state: "" };
@@ -172,7 +174,9 @@ export default function ShopCheckoutPage() {
                 if (cancelled) return;
                 const opts = r.data.options ?? [];
                 setOptions(opts);
-                setSelectedOptionId(opts.length > 0 ? opts[0].optionId : null);
+                // Auto-select the first real (non-dev-hidden) option.
+                const firstVisible = opts.find((o) => !o.hidden);
+                setSelectedOptionId(firstVisible?.optionId ?? null);
                 if (opts.length === 0) setQuoteError("No courier serves this pincode yet.");
             })
             .catch(() => {
@@ -415,40 +419,75 @@ export default function ShopCheckoutPage() {
                             ) : quoteError ? (
                                 <p className="text-sm text-destructive">{quoteError}</p>
                             ) : (
-                                <ul className="space-y-2">
-                                    {options.map((o) => {
-                                        const active = o.optionId === selectedOptionId;
-                                        return (
-                                            <li key={o.optionId}>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setSelectedOptionId(o.optionId)}
-                                                    className={`flex w-full items-center justify-between rounded-lg border px-4 py-3 text-left transition ${
-                                                        active
-                                                            ? "border-primary ring-1 ring-primary bg-primary/5"
-                                                            : "border-border hover:border-primary/50"
-                                                    }`}
-                                                >
-                                                    <span className="min-w-0">
-                                                        <span className="block text-sm font-medium">{o.label}</span>
-                                                        {o.etaText ? (
-                                                            <span className="block text-xs text-muted-foreground">
-                                                                Est. {o.etaText}
-                                                            </span>
-                                                        ) : null}
-                                                    </span>
-                                                    <span className="text-sm font-semibold tabular-nums shrink-0">
-                                                        {o.amountPaise === 0 ? (
-                                                            <Badge variant="secondary">FREE</Badge>
-                                                        ) : (
-                                                            formatRupeesFromPaise(o.amountPaise)
-                                                        )}
-                                                    </span>
-                                                </button>
-                                            </li>
-                                        );
-                                    })}
-                                </ul>
+                                <>
+                                    <ul className="space-y-2">
+                                        {options.filter((o) => !o.hidden).map((o) => {
+                                            const active = o.optionId === selectedOptionId;
+                                            return (
+                                                <li key={o.optionId}>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setSelectedOptionId(o.optionId)}
+                                                        className={`flex w-full items-center justify-between rounded-lg border px-4 py-3 text-left transition ${
+                                                            active
+                                                                ? "border-primary ring-1 ring-primary bg-primary/5"
+                                                                : "border-border hover:border-primary/50"
+                                                        }`}
+                                                    >
+                                                        <span className="min-w-0">
+                                                            <span className="block text-sm font-medium">{o.label}</span>
+                                                            {o.etaText ? (
+                                                                <span className="block text-xs text-muted-foreground">
+                                                                    Est. {o.etaText}
+                                                                </span>
+                                                            ) : null}
+                                                        </span>
+                                                        <span className="text-sm font-semibold tabular-nums shrink-0">
+                                                            {o.amountPaise === 0 ? (
+                                                                <Badge variant="secondary">FREE</Badge>
+                                                            ) : (
+                                                                formatRupeesFromPaise(o.amountPaise)
+                                                            )}
+                                                        </span>
+                                                    </button>
+                                                </li>
+                                            );
+                                        })}
+                                    </ul>
+
+                                    {/* DEV ONLY — couriers dropped by the dedupe/cap (never shown in production). */}
+                                    {options.some((o) => o.hidden) ? (
+                                        <div className="mt-3 rounded-lg border border-dashed border-amber-500/50 bg-amber-500/5 p-3">
+                                            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-500">
+                                                Dev only · {options.filter((o) => o.hidden).length} courier(s) hidden by dedupe/cap
+                                            </p>
+                                            <ul className="space-y-1.5">
+                                                {options.filter((o) => o.hidden).map((o) => {
+                                                    const active = o.optionId === selectedOptionId;
+                                                    return (
+                                                        <li key={o.optionId}>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setSelectedOptionId(o.optionId)}
+                                                                className={`flex w-full items-center justify-between rounded-md border px-3 py-2 text-left transition ${
+                                                                    active ? "border-primary ring-1 ring-primary" : "border-border/60 opacity-70 hover:opacity-100"
+                                                                }`}
+                                                            >
+                                                                <span className="min-w-0 text-xs">
+                                                                    {o.label}{" "}
+                                                                    <span className="text-muted-foreground">· {o.kind}</span>
+                                                                </span>
+                                                                <span className="shrink-0 text-xs font-semibold tabular-nums">
+                                                                    {formatRupeesFromPaise(o.amountPaise)}
+                                                                </span>
+                                                            </button>
+                                                        </li>
+                                                    );
+                                                })}
+                                            </ul>
+                                        </div>
+                                    ) : null}
+                                </>
                             )}
                         </CardContent>
                     </Card>

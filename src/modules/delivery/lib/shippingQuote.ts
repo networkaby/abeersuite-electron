@@ -24,10 +24,63 @@ import {
 import { shiprocketServiceability, shiprocketEnvReady } from "./shiprocket";
 import { shipwayServiceability, shipwayEnvReady } from "./shipway";
 
-// Cap on how many couriers each aggregator (Shiprocket / Shipway) surfaces at
-// checkout — a serviceability call can return 15-25 couriers; showing the cheapest
-// handful per aggregator keeps the picker usable. Shown cheapest-first.
-const MAX_AGGREGATOR_OPTIONS = 8;
+// How the merged aggregator pool (Shiprocket + Shipway) is curated at checkout — an
+// N-slot arrangement (N = COURIER_SLOTS, any number ≥ 5). Display order top→bottom:
+//   1        cheapest surface
+//   2        priority surface — price contest: best-rank surface vs cheapest LISTED
+//            non-surface (whichever is cheaper wins; India Post can't be the rival)
+//   3 … n-2  fill — cheapest remaining, preference-list carriers first then outside;
+//            no surface/non-surface distinction (India Post excluded)
+//   n-1      cheapest non-surface (name without "surface")
+//   n        best-preference non-surface
+// So 2 surface slots at the top, 2 non-surface at the bottom, and (N-4) fills in the
+// middle. Each DISTINCT service is its own courier (only the same service from both
+// APIs collapses to the cheaper), so a carrier can appear more than once — its
+// Surface, Express and Air are separate options and a used one never blocks another.
+// Any courier priced below the lowest surface is economy → eligible for the surface
+// quota too.
+// Our own India Post is treated as surface and eligible ONLY in the surface quota
+// (never premium/fill) when no aggregator offers India Post. The PREFERENCE list
+// ranks carriers (first = highest); keys must match the courier name ("india post"
+// ↔ "India Post"). Other Standard-courier services are a fallback (no preferred
+// aggregator); the local boy always shows. When the pool is too small to fill all N
+// slots, fewer are shown — never padded with duplicates.
+const CARRIER_PREFERENCE = ["delhivery", "amazon", "xpressbees", "ekart", "ecom", "dtdc", "india post"];
+
+// Total courier rows to display. Editable to any number ≥ 5 (2 surface + 2
+// non-surface + at least one fill). Fewer show when the pool runs dry.
+const COURIER_SLOTS = 6;
+
+/** The carrier a courier label belongs to (a preference key, or "other:<word>"). */
+function carrierOf(label: string): string {
+    const squashed = label.toLowerCase().replace(/[^a-z]+/gu, "");
+    const hit = CARRIER_PREFERENCE.find((c) => squashed.includes(c.replace(/[^a-z]+/gu, "")));
+    if (hit) return hit;
+    return "other:" + (label.toLowerCase().replace(/\bshipway\b/gu, " ").trim().split(/\s+/u)[0] || squashed);
+}
+
+/** Preference rank of a carrier — lower is better; non-preferred sort last. */
+function prefRank(carrier: string): number {
+    const i = CARRIER_PREFERENCE.indexOf(carrier);
+    return i < 0 ? Number.POSITIVE_INFINITY : i;
+}
+
+/** "Surface" is the one reliable service label across aggregators. */
+function isSurface(label: string): boolean {
+    return /\bsurface\b/u.test(label.toLowerCase());
+}
+
+/** Tidy an aggregator courier label for display — drop the "Shipway" brand, the
+ *  weight slab "(…kg)" and trailing weights, but KEEP the service word (Surface,
+ *  Express…) since that's what the name actually says. */
+function cleanLabel(label: string): string {
+    return label
+        .replace(/^\s*shipway\s+/iu, "")
+        .replace(/\s*\([^)]*\)\s*/gu, " ")
+        .replace(/\b\d+(\.\d+)?\s*(kgs?|gms?|g)\b/giu, " ")
+        .replace(/\s+/gu, " ")
+        .trim() || label;
+}
 
 export type ShippingOption = {
     // Stable, unique per option — the value checkout sends back to identify the
@@ -45,6 +98,9 @@ export type ShippingOption = {
     // Shiprocket only — the chosen courier the fulfilment step will assign.
     shiprocketCourierId?: number;
     shiprocketCourierName?: string;
+    // Dev aid only — set on aggregator couriers dropped by the dedupe/cap, returned
+    // (locally) so checkout can show them in a dev-only panel. Never set in prod.
+    hidden?: boolean;
 };
 
 /**
@@ -172,12 +228,9 @@ export async function quoteShipping(params: {
                 weightGrams: params.weightGrams,
                 cod: params.cod,
             });
-            // One option per Shiprocket courier — cheapest-first, capped so the
-            // picker isn't flooded. Each carries its courierId for fulfilment.
-            const shown = [...couriers]
-                .sort((a, b) => a.ratePaise - b.ratePaise)
-                .slice(0, MAX_AGGREGATOR_OPTIONS);
-            for (const c of shown) {
+            // Push every Shiprocket courier — deduped vs Shipway and capped after the
+            // merge (below). Each carries its courierId for fulfilment.
+            for (const c of couriers) {
                 out.push({
                     optionId: `shiprocket:${m.id}:${c.courierId}`,
                     methodId: m.id,
@@ -199,12 +252,9 @@ export async function quoteShipping(params: {
                 weightGrams: params.weightGrams,
                 cod: params.cod,
             });
-            // One option per Shipway courier — cheapest-first, capped. courierId
-            // rides on the optionId for the (later) fulfilment step.
-            const shown = [...couriers]
-                .sort((a, b) => a.ratePaise - b.ratePaise)
-                .slice(0, MAX_AGGREGATOR_OPTIONS);
-            for (const c of shown) {
+            // Push every Shipway courier — deduped vs Shiprocket and capped after the
+            // merge (below). courierId rides on the optionId for fulfilment.
+            for (const c of couriers) {
                 out.push({
                     optionId: `shipway:${m.id}:${c.courierId}`,
                     methodId: m.id,
@@ -217,5 +267,146 @@ export async function quoteShipping(params: {
             }
         }
     }
-    return out;
+
+    // ── Curate the aggregator pool ────────────────────────────────────────────
+    // Tag every Shiprocket/Shipway courier with its carrier, preference rank and
+    // whether it's a surface service.
+    type Agg = { o: ShippingOption; rank: number; surface: boolean };
+    const aggAll: Agg[] = out
+        .filter((o) => o.kind === "SHIPROCKET" || o.kind === "SHIPWAY")
+        .map((o) => ({ o, rank: prefRank(carrierOf(o.label)), surface: isSurface(o.label) }));
+    const byPrefPrice = (a: Agg, b: Agg) => a.rank - b.rank || a.o.amountPaise - b.o.amountPaise;
+
+    // Treat our own INDIAN POST (a Standard-courier service) as a surface economy
+    // option when NO aggregator offers India Post — so it competes in the list
+    // instead of sitting only in the fallback.
+    const pool: Agg[] = [...aggAll];
+    const aggHasIndiaPost = aggAll.some((a) => carrierOf(a.o.label) === "india post");
+    const customIndiaPost = aggHasIndiaPost
+        ? undefined
+        : out.find((o) => o.kind === "CUSTOM" && /indian?\s*post/iu.test(o.label));
+    if (customIndiaPost) pool.push({ o: customIndiaPost, rank: prefRank("india post"), surface: true });
+
+    // De-dup only TRUE duplicates: the SAME service offered by both APIs (Shiprocket
+    // + Shipway) collapses to the cheaper. Different services of one carrier (Surface,
+    // Express, Air, …) are DISTINCT couriers — each survives and a used one never
+    // blocks another. The key is the cleaned service name (carrier + service word).
+    const tierKey = (a: Agg) => cleanLabel(a.o.label).toLowerCase();
+    const byKey = new Map<string, Agg>();
+    for (const a of pool) {
+        const cur = byKey.get(tierKey(a));
+        if (!cur || a.o.amountPaise < cur.o.amountPaise) byKey.set(tierKey(a), a);
+    }
+    // Then drop NEAR-duplicates: same carrier + same tier priced within a whisker of
+    // a cheaper survivor — e.g. "Xpressbees Express ₹169.20" and the plain "Xpressbees
+    // ₹170.20" are effectively one courier. Distinct services with a real price gap
+    // (Express ₹169 vs Air ₹618) are kept. Threshold: ₹20 or 5%, whichever is larger.
+    const NEAR_DUP_PAISE = 2000;
+    const NEAR_DUP_FRAC = 0.05;
+    const dedup: Agg[] = [];
+    for (const a of [...byKey.values()].sort((x, y) => x.o.amountPaise - y.o.amountPaise)) {
+        const carrier = carrierOf(a.o.label);
+        const nearCheaper = dedup.some(
+            (k) =>
+                carrierOf(k.o.label) === carrier &&
+                k.surface === a.surface &&
+                a.o.amountPaise - k.o.amountPaise <=
+                Math.max(NEAR_DUP_PAISE, Math.round(k.o.amountPaise * NEAR_DUP_FRAC))
+        );
+        if (!nearCheaper) dedup.push(a);
+    }
+
+    // "Below the lowest surface" is economy → eligible for the surface quota too.
+    const lowestSurface = Math.min(
+        ...dedup.filter((a) => a.surface).map((a) => a.o.amountPaise),
+        Number.POSITIVE_INFINITY
+    );
+    const belowLowest = (a: Agg) => Number.isFinite(lowestSurface) && a.o.amountPaise < lowestSurface;
+    const isIndiaPost = (a: Agg) => carrierOf(a.o.label) === "india post";
+
+    const surfaceEligible = dedup.filter((a) => a.surface || belowLowest(a));
+    // India Post is eligible ONLY in the surface quota.
+    const premiumEligible = dedup.filter((a) => !a.surface && !isIndiaPost(a));
+
+    const usedIds = new Set<string>();
+    const free = (a: Agg) => !usedIds.has(a.o.optionId);
+    const pick = (a?: Agg): Agg | undefined => {
+        if (a && free(a)) { usedIds.add(a.o.optionId); return a; }
+        return undefined;
+    };
+    const cheapest = (l: Agg[]) => [...l].sort((a, b) => a.o.amountPaise - b.o.amountPaise);
+    const preferred = (l: Agg[]) => [...l].sort(byPrefPrice);
+
+    // ── Anchors: 2 surface at the top, 2 non-surface at the bottom ────────────
+    // No carrier blocking between anchors (a carrier's Surface and Express can both
+    // appear); only exact-option de-dup. All four are claimed BEFORE the fills, so
+    // the fills compete over whatever is left.
+
+    // 1. cheapest surface-eligible.
+    const sTop = pick(cheapest(surfaceEligible).find(free));
+
+    // 2. priority surface — a price contest, cheaper wins, between the best-rank
+    //    surface and the cheapest LISTED non-surface (India Post can't be the rival;
+    //    its priority index is ignored — only "in list" + cheapest). The loser stays
+    //    free for the non-surface anchors below.
+    const surfaceChampion = preferred(dedup.filter((a) => a.surface)).find(free);
+    const nonSurfaceRival = cheapest(
+        dedup.filter((a) => !a.surface && !isIndiaPost(a) && Number.isFinite(a.rank))
+    ).find(free);
+    const sPriority = pick(
+        [surfaceChampion, nonSurfaceRival]
+            .filter((a): a is Agg => !!a)
+            .sort((a, b) => a.o.amountPaise - b.o.amountPaise)[0]
+    );
+
+    // n-1. cheapest non-surface.   n. best-preference non-surface.
+    const nsCheap = pick(cheapest(premiumEligible).find(free));
+    const nsPriority = pick(preferred(premiumEligible).find(free));
+
+    // ── Fills (slots 3 … n-2) ─────────────────────────────────────────────────
+    // Cheapest remaining, preference-list carriers first then outside; no surface /
+    // non-surface distinction; never India Post. Take up to (N-4) — fewer if the
+    // pool runs dry, never padded.
+    const fillSorted = dedup
+        .filter((a) => !isIndiaPost(a))
+        .sort((a, b) => (Number.isFinite(a.rank) ? 0 : 1) - (Number.isFinite(b.rank) ? 0 : 1) || a.o.amountPaise - b.o.amountPaise);
+    const fillCount = Math.max(0, COURIER_SLOTS - 4);
+    const fills: Agg[] = [];
+    for (const a of fillSorted) {
+        if (fills.length >= fillCount) break;
+        const got = pick(a);
+        if (got) fills.push(got);
+    }
+
+    // Display order: 2 surface, the fills, 2 non-surface (drop empty slots); tidy labels.
+    const chosenAgg = [sTop, sPriority, ...fills, nsCheap, nsPriority].filter((a): a is Agg => !!a);
+    const aggOpts = chosenAgg.map((a): ShippingOption => ({ ...a.o, label: cleanLabel(a.o.label) }));
+
+    // Local boy always shows. Standard-courier services (except India Post, handled
+    // above via the surface quota) stay a FALLBACK — shown only when no preferred
+    // AGGREGATOR courier is available.
+    const hasPreferredAgg = chosenAgg.some(
+        (a) => Number.isFinite(a.rank) && (a.o.kind === "SHIPROCKET" || a.o.kind === "SHIPWAY")
+    );
+    const indiaPostId = customIndiaPost?.optionId;
+    const ownLocal = out.filter((o) => o.kind === "OWN_BOY");
+    const ownStandard = hasPreferredAgg
+        ? []
+        : out.filter((o) => o.kind === "CUSTOM" && !usedIds.has(o.optionId) && o.optionId !== indiaPostId);
+    // The SELECTION above decides WHICH couriers show; the DISPLAY is then sorted by
+    // price (cheapest first) so the list reads cleanly — the slot arrangement no
+    // longer dictates on-screen order.
+    const shown = [...ownLocal, ...ownStandard, ...aggOpts].sort((a, b) => a.amountPaise - b.amountPaise);
+
+    // Dev aid: running locally (NEXTAUTH_URL → localhost) also return the couriers
+    // that were dropped, flagged `hidden`, so checkout can list them in a dev-only
+    // panel. Production returns only the clean `shown` list.
+    const devPreview = (process.env.NEXTAUTH_URL ?? "").includes("localhost");
+    if (!devPreview) return shown;
+    const shownIds = new Set(shown.map((o) => o.optionId));
+    const hidden = out
+        .filter((o) => !shownIds.has(o.optionId))
+        .map((o): ShippingOption => ({ ...o, hidden: true }))
+        .sort((a, b) => a.amountPaise - b.amountPaise);
+    return [...shown, ...hidden];
 }
