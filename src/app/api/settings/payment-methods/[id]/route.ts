@@ -7,8 +7,9 @@ import { validateRequest, handleApiError, pickDefined } from "@/shared/lib/api";
 import {
     getGatewayProvider,
     validateGatewayConfigJson,
+    PAY_ON_DELIVERY_PROVIDER_ID,
 } from "@/modules/pos/lib/paymentGateways";
-import { clearOnlineSiblings } from "@/shared/lib/payments/gatewayMutations";
+import { sanitizePodConfig } from "@/shared/lib/payments/payOnDelivery";
 
 const paramsSchema = z.object({ id: z.coerce.number().int().positive() });
 
@@ -42,11 +43,19 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         }
 
         // Resolve the post-update values to validate against (merge over existing).
-        const nextEnvironment = data.environment ?? existing.environment;
         const nextEnabledForOnline = data.enabledForOnline ?? existing.enabledForOnline;
         const nextEnabledForCounter = data.enabledForCounter ?? existing.enabledForCounter;
 
-        if (data.configJson !== undefined) {
+        const isPod = existing.provider === PAY_ON_DELIVERY_PROVIDER_ID;
+        // POD stores an area rule ({ area: {...} }); everything else validates against
+        // the provider's declared config fields.
+        const nextConfigJson =
+            data.configJson === undefined
+                ? undefined
+                : isPod
+                  ? (sanitizePodConfig(data.configJson) as Prisma.InputJsonValue)
+                  : (data.configJson as Prisma.InputJsonValue);
+        if (data.configJson !== undefined && !isPod) {
             const configError = validateGatewayConfigJson(existing.provider, data.configJson);
             if (configError) return NextResponse.json({ error: configError }, { status: 400 });
         }
@@ -63,23 +72,19 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             );
         }
 
-        const updated = await prisma.$transaction(async (tx) => {
-            const row = await tx.paymentGateway.update({
-                where: { id },
-                data: pickDefined({
-                    displayName: data.displayName,
-                    environment: data.environment,
-                    enabledForCounter: data.enabledForCounter,
-                    enabledForOnline: data.enabledForOnline,
-                    configJson: data.configJson as Prisma.InputJsonValue | undefined,
-                    sortOrder: data.sortOrder,
-                    isActive: data.isActive,
-                }),
-            });
-            if (row.enabledForOnline) {
-                await clearOnlineSiblings(tx, nextEnvironment, row.id);
-            }
-            return row;
+        // Multiple gateways may be enabled for online at once — the storefront offers
+        // each as its own pay option, so no "only one online" enforcement here.
+        const updated = await prisma.paymentGateway.update({
+            where: { id },
+            data: pickDefined({
+                displayName: data.displayName,
+                environment: data.environment,
+                enabledForCounter: data.enabledForCounter,
+                enabledForOnline: data.enabledForOnline,
+                configJson: nextConfigJson,
+                sortOrder: data.sortOrder,
+                isActive: data.isActive,
+            }),
         });
         return NextResponse.json({ gateway: updated });
     } catch (e) {
@@ -87,19 +92,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     }
 }
 
-export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+// Payment methods are a fixed, code-owned catalog and can't be deleted — switch a
+// method off with the Active toggle instead. (Deleting would also orphan its config,
+// e.g. the Pay-on-Delivery area rule or a counter rail pointing at it.)
+export async function DELETE() {
     const { response } = await requireAuth();
     if (response) return response;
-    try {
-        const { id } = paramsSchema.parse(await params);
-        const existing = await prisma.paymentGateway.findUnique({ where: { id } });
-        if (!existing) {
-            return NextResponse.json({ error: "Payment method not found" }, { status: 404 });
-        }
-        // Counter rails referencing this gateway auto-unlink via onDelete: SetNull.
-        await prisma.paymentGateway.delete({ where: { id } });
-        return NextResponse.json({ ok: true });
-    } catch (e) {
-        return handleApiError(e, "Failed to delete payment method");
-    }
+    return NextResponse.json(
+        { error: "Payment methods are fixed and can't be deleted — switch it off with the Active toggle instead." },
+        { status: 405 },
+    );
 }

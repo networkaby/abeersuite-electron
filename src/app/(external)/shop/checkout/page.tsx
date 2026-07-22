@@ -44,9 +44,13 @@ export default function ShopCheckoutPage() {
     const [products, setProducts] = useState<ShopProductPublic[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
-    // The active online gateway (if any) — enables the "Pay online" rail.
-    const [onlineGateway, setOnlineGateway] = useState<{ provider: string; displayName: string } | null>(null);
-    const [payMethod, setPayMethod] = useState<"COD" | "ONLINE">("COD");
+    // Enabled online gateways (0..n) — any of them enables the "Pay online" rail;
+    // the customer picks the specific gateway on the order/payment page.
+    const [onlineGateways, setOnlineGateways] = useState<{ provider: string; displayName: string }[]>([]);
+    // The Pay-on-Delivery rail — active + whether it serves the entered address.
+    const [pod, setPod] = useState<{ active: boolean; availableHere: boolean; displayName: string } | null>(null);
+    // The selected payment rail: "cod" or an online gateway's provider id.
+    const [payChoice, setPayChoice] = useState<string>("cod");
 
     const [address, setAddress] = useState(EMPTY_ADDRESS);
     const setField = (k: keyof typeof EMPTY_ADDRESS) => (v: string) => setAddress((a) => ({ ...a, [k]: v }));
@@ -62,10 +66,6 @@ export default function ShopCheckoutPage() {
             .get<ShopProductPublic[]>("/api/shop/products")
             .then((r) => setProducts(r.data))
             .catch(() => setProducts([]));
-        axios
-            .get<{ online: { provider: string; displayName: string } | null }>("/api/shop/payment-config")
-            .then((r) => setOnlineGateway(r.data.online ?? null))
-            .catch(() => setOnlineGateway(null));
     }, []);
 
     const byId = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
@@ -152,6 +152,34 @@ export default function ShopCheckoutPage() {
         };
     }, [address.pincode, pincodeValid]);
 
+    // Payment rails available for this address: the online gateway (address-
+    // independent) + Pay-on-Delivery (folds in its Active toggle + area rule). Re-runs
+    // as the pincode/state changes so a blocked area hides the POD button live.
+    useEffect(() => {
+        let cancelled = false;
+        const params = pincodeValid
+            ? `?pincode=${encodeURIComponent(address.pincode)}${address.state ? `&state=${encodeURIComponent(address.state)}` : ""}`
+            : "";
+        axios
+            .get<{
+                online: { provider: string; displayName: string }[];
+                payOnDelivery: { active: boolean; availableHere: boolean; displayName: string };
+            }>(`/api/shop/payment-config${params}`)
+            .then((r) => {
+                if (cancelled) return;
+                setOnlineGateways(r.data.online ?? []);
+                setPod(r.data.payOnDelivery ?? null);
+            })
+            .catch(() => {
+                if (cancelled) return;
+                setOnlineGateways([]);
+                setPod(null);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [address.pincode, address.state, pincodeValid]);
+
     // Fetch courier options whenever the pincode becomes valid (or the cart changes).
     useEffect(() => {
         if (!pincodeValid || lines.length === 0) {
@@ -168,7 +196,7 @@ export default function ShopCheckoutPage() {
                 state: address.state || undefined,
                 neighbourhood: address.neighbourhood || undefined,
                 lines,
-                cod: payMethod === "COD",
+                cod: payChoice === "cod",
             })
             .then((r) => {
                 if (cancelled) return;
@@ -191,7 +219,7 @@ export default function ShopCheckoutPage() {
         return () => {
             cancelled = true;
         };
-    }, [address.pincode, address.state, address.neighbourhood, pincodeValid, lines, payMethod]);
+    }, [address.pincode, address.state, address.neighbourhood, pincodeValid, lines, payChoice]);
 
     // Linked Locality ↔ Neighbourhood pickers (pincode is the enabler).
     const hasCoverage = Object.keys(coverage).length > 0;
@@ -221,6 +249,23 @@ export default function ShopCheckoutPage() {
     const shipping = selected?.amountPaise ?? 0;
     const grand = total + shipping;
 
+    // The "Pay on delivery" rail shows only when active AND it serves this address.
+    const podShown = !!pod && pod.active && pod.availableHere;
+    const hasOnline = onlineGateways.length > 0;
+    const hasRail = podShown || hasOnline;
+    const isCod = payChoice === "cod";
+
+    // Keep the selected rail valid: if it disappears (POD blocked here, or a gateway
+    // gets disabled), fall back to the first still-available rail.
+    useEffect(() => {
+        const valid =
+            (payChoice === "cod" && podShown) ||
+            onlineGateways.some((g) => g.provider === payChoice);
+        if (valid) return;
+        if (podShown) setPayChoice("cod");
+        else if (onlineGateways[0]) setPayChoice(onlineGateways[0].provider);
+    }, [payChoice, podShown, onlineGateways]);
+
     const addressComplete =
         address.name.trim() &&
         address.phone.trim().length >= 6 &&
@@ -229,7 +274,7 @@ export default function ShopCheckoutPage() {
         address.state.trim() &&
         pincodeValid;
 
-    const canPlace = !!activeAccountId && !!addressComplete && !!selected && !loading;
+    const canPlace = !!activeAccountId && !!addressComplete && !!selected && hasRail && !loading;
 
     const submit = async () => {
         setLoading(true);
@@ -260,7 +305,8 @@ export default function ShopCheckoutPage() {
                     pincode: address.pincode.trim(),
                 },
                 optionId: selected.optionId,
-                paymentMethod: payMethod,
+                paymentMethod: isCod ? "COD" : "ONLINE",
+                onlineProvider: isCod ? undefined : payChoice,
             });
             clear();
             router.push(`/shop/order/${order.id}`);
@@ -499,43 +545,54 @@ export default function ShopCheckoutPage() {
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-2">
-                            <button
-                                type="button"
-                                onClick={() => setPayMethod("COD")}
-                                className={`flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-left transition ${
-                                    payMethod === "COD"
-                                        ? "border-primary ring-1 ring-primary bg-primary/5"
-                                        : "border-border hover:border-primary/50"
-                                }`}
-                            >
-                                <HandCoins className="size-5 shrink-0" />
-                                <span>
-                                    <span className="block text-sm font-medium">Cash on delivery</span>
-                                    <span className="block text-xs text-muted-foreground">Pay when your order arrives.</span>
-                                </span>
-                            </button>
-                            {onlineGateway ? (
+                            {podShown ? (
                                 <button
                                     type="button"
-                                    onClick={() => setPayMethod("ONLINE")}
+                                    onClick={() => setPayChoice("cod")}
                                     className={`flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-left transition ${
-                                        payMethod === "ONLINE"
+                                        payChoice === "cod"
+                                            ? "border-primary ring-1 ring-primary bg-primary/5"
+                                            : "border-border hover:border-primary/50"
+                                    }`}
+                                >
+                                    <HandCoins className="size-5 shrink-0" />
+                                    <span>
+                                        <span className="block text-sm font-medium">
+                                            {pod?.displayName ?? "Pay on delivery"}
+                                        </span>
+                                        <span className="block text-xs text-muted-foreground">Pay when your order arrives.</span>
+                                    </span>
+                                </button>
+                            ) : null}
+                            {/* Each enabled online gateway is its own selectable rail (like couriers). */}
+                            {onlineGateways.map((g) => (
+                                <button
+                                    key={g.provider}
+                                    type="button"
+                                    onClick={() => setPayChoice(g.provider)}
+                                    className={`flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-left transition ${
+                                        payChoice === g.provider
                                             ? "border-primary ring-1 ring-primary bg-primary/5"
                                             : "border-border hover:border-primary/50"
                                     }`}
                                 >
                                     <CreditCard className="size-5 shrink-0" />
                                     <span>
-                                        <span className="block text-sm font-medium">
-                                            Pay online · {onlineGateway.displayName}
-                                        </span>
+                                        <span className="block text-sm font-medium">{g.displayName}</span>
                                         <span className="block text-xs text-muted-foreground">
-                                            {onlineGateway.provider === "demo"
+                                            {g.provider === "demo"
                                                 ? "Demo gateway — simulate the payment on the next screen."
-                                                : "Pay securely online."}
+                                                : "Pay securely online on the next screen."}
                                         </span>
                                     </span>
                                 </button>
+                            ))}
+                            {!hasRail ? (
+                                <p className="text-sm text-muted-foreground">
+                                    {pincodeValid
+                                        ? "No payment method is available for this address."
+                                        : "Enter your delivery address to see payment options."}
+                                </p>
                             ) : null}
                         </CardContent>
                     </Card>
@@ -615,14 +672,14 @@ export default function ShopCheckoutPage() {
                             <Lock className="size-4" />
                             {loading
                                 ? "Placing order…"
-                                : payMethod === "ONLINE"
-                                  ? "Place order & pay online"
-                                  : "Place COD order"}
+                                : isCod
+                                  ? "Place order"
+                                  : "Place order & pay online"}
                         </Button>
                         <p className="text-[11px] text-center text-muted-foreground leading-relaxed">
-                            {payMethod === "ONLINE"
-                                ? "You’ll complete payment on the next screen."
-                                : `Pay on delivery — you’ll pay ${selected ? "the courier" : ""} when your order arrives.`}
+                            {isCod
+                                ? `Pay on delivery — you’ll pay ${selected ? "the courier" : ""} when your order arrives.`
+                                : "You’ll complete payment on the next screen."}
                         </p>
                     </CardFooter>
                 </Card>

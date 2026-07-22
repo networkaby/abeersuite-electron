@@ -11,6 +11,7 @@ import { loadShopStockPolicy } from "@/shared/lib/shop/stockPolicy";
 import { barcodeTagPaise } from "@/shared/lib/pricing/barcodePrice";
 import { getOrdersPipeline } from "@/modules/ecommerce/lib/ordersPipeline";
 import { quoteShipping } from "@/modules/delivery/lib/shippingQuote";
+import { resolvePayOnDelivery } from "@/shared/lib/payments/payOnDeliveryMethod";
 import { loadDeliveryMethod, type ShiprocketConfig } from "@/modules/delivery/lib/deliveryMethods";
 import { chargeableUnitGrams } from "@/modules/delivery/lib/chargeableWeight";
 
@@ -41,6 +42,9 @@ const createOrderSchema = z.object({
     // "shiprocket:3:51"). Re-priced server-side against the fresh quote.
     optionId: z.string().trim().min(1).max(80),
     paymentMethod: z.enum(["COD", "ONLINE"]).optional(),
+    // The online gateway the customer chose at checkout (e.g. "razorpay", "payu",
+    // "cashfree", "demo") — snapshotted so the order page opens the right flow.
+    onlineProvider: z.string().trim().max(40).optional(),
 });
 
 export async function POST(req: Request) {
@@ -51,7 +55,7 @@ export async function POST(req: Request) {
 
         const { data, error } = await validateRequest(req, createOrderSchema);
         if (error) return error;
-        const { lines, accountId, shippingAddress, optionId, paymentMethod } = data;
+        const { lines, accountId, shippingAddress, optionId, paymentMethod, onlineProvider } = data;
 
         const context = await resolvePortalAccountContext(customerId, accountId);
         if (context.active.accountId !== accountId) {
@@ -112,6 +116,18 @@ export async function POST(req: Request) {
         // Re-price shipping server-side for the chosen courier — never trust a
         // client-sent amount. COD unless the customer chose the online (demo) rail.
         const isCod = (paymentMethod ?? "COD") === "COD";
+
+        // Guard the Pay-on-Delivery rail server-side: reject a COD order when the
+        // rail is switched off or the destination is outside its area rule.
+        if (isCod) {
+            const pod = await resolvePayOnDelivery(shippingAddress.pincode, shippingAddress.state);
+            if (!pod.availableHere) {
+                return NextResponse.json(
+                    { error: "Pay on delivery isn't available for this address." },
+                    { status: 400 },
+                );
+            }
+        }
         const options = await quoteShipping({
             deliveryPincode: shippingAddress.pincode,
             deliveryState: shippingAddress.state,
@@ -167,6 +183,8 @@ export async function POST(req: Request) {
                             courierService: chosen.serviceName ?? chosen.label,
                             shiprocketCourierId: chosen.shiprocketCourierId ?? null,
                             shiprocketCourierName: chosen.shiprocketCourierName ?? null,
+                            // Snapshot of the online gateway chosen at checkout (null for COD).
+                            onlineProvider: isCod ? null : onlineProvider ?? null,
                         },
                         lines: {
                             create: resolvedLines.map((r) => ({

@@ -3,8 +3,8 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { getActiveOnlineGateway } from "@/shared/lib/payments/activeOnlineGateway";
-import SimulatePaymentButton from "@/modules/external/shop/SimulatePaymentButton";
+import { getPayableOnlineGateways } from "@/shared/lib/payments/activeOnlineGateway";
+import OnlinePayPanel from "@/modules/external/shop/OnlinePayPanel";
 
 // Coarse delivery-stage labels (P8) mapped from the seeded status ids, so the
 // customer sees a friendly line without us leaking internal stage codes.
@@ -20,10 +20,13 @@ const DELIVERY_STAGE_LABEL: Record<string, string> = {
 
 export default async function ShopOrderConfirmationPage({
     params,
+    searchParams,
 }: {
     params: Promise<{ id: string }>;
+    searchParams: Promise<{ pay?: string }>;
 }) {
     const { id } = await params;
+    const { pay } = await searchParams;
     const orderId = parseInt(id, 10);
     if (!Number.isFinite(orderId)) {
         return (
@@ -72,8 +75,16 @@ export default async function ShopOrderConfirmationPage({
 
     const grand = order.totalPaise + order.shippingChargePaise;
     const unpaidOnline = order.paymentMethod === "ONLINE" && order.legacyStatus === "PENDING_PAYMENT";
-    const gateway = await getActiveOnlineGateway();
-    const showSimulate = unpaidOnline && gateway?.provider === "demo";
+    // Every enabled online gateway is offered as its own pay option; the one chosen
+    // at checkout (snapshot on the order) is pre-selected.
+    const gateways = unpaidOnline ? await getPayableOnlineGateways() : [];
+    const chosenProvider =
+        (order.shippingAddress as { onlineProvider?: string } | null)?.onlineProvider ?? null;
+    const payFailed = pay === "failed";
+    // Auto-launch the pre-chosen gateway on first arrival (skip the picker); on a
+    // failed/cancelled return, show the picker so they can retry or switch.
+    const autoLaunch =
+        unpaidOnline && !payFailed && !!chosenProvider && gateways.some((g) => g.provider === chosenProvider);
 
     return (
         <main className="mx-auto max-w-lg px-4 py-8 space-y-5">
@@ -97,10 +108,28 @@ export default async function ShopOrderConfirmationPage({
 
             {unpaidOnline ? (
                 <p className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300">
-                    {showSimulate
-                        ? "This order is awaiting payment. Use the floating button to simulate a successful payment."
-                        : "This order is awaiting online payment."}
+                    {autoLaunch
+                        ? "This order is awaiting online payment. Taking you to the payment page…"
+                        : gateways.length > 0
+                          ? "This order is awaiting online payment. Choose how to pay below."
+                          : "This order is awaiting online payment."}
                 </p>
+            ) : null}
+
+            {payFailed ? (
+                <p className="rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-300">
+                    Payment was not completed. You can try again below.
+                </p>
+            ) : null}
+
+            {unpaidOnline && gateways.length > 0 ? (
+                <OnlinePayPanel
+                    orderId={order.ticketId}
+                    amountLabel={formatRupeesFromPaise(grand)}
+                    gateways={gateways}
+                    chosen={chosenProvider}
+                    autoLaunch={autoLaunch}
+                />
             ) : null}
 
             <ul className="text-sm space-y-1 border border-border rounded-lg p-3">
@@ -147,8 +176,6 @@ export default async function ShopOrderConfirmationPage({
             <Button variant="outline" asChild>
                 <Link href="/shop">Continue shopping</Link>
             </Button>
-
-            {showSimulate ? <SimulatePaymentButton orderId={order.ticketId} /> : null}
         </main>
     );
 }

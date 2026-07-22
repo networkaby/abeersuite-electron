@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Check, X, Plus, Pencil, Trash2, Globe, Monitor, KeyRound } from "lucide-react";
+import { Check, X, Pencil, Globe, Monitor, KeyRound, ChevronDown, MapPin } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -27,10 +27,18 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import {
-    PAYMENT_GATEWAY_PROVIDERS,
+    DropdownMenu,
+    DropdownMenuTrigger,
+    DropdownMenuContent,
+    DropdownMenuCheckboxItem,
+} from "@/components/ui/dropdown-menu";
+import {
     getGatewayProvider,
+    PAY_ON_DELIVERY_PROVIDER_ID,
     type PaymentGatewayProvider,
 } from "@/modules/pos/lib/paymentGateways";
+import { INDIA_STATE_NAMES } from "@/modules/delivery/lib/deliveryMethodConfig";
+import { sanitizePodArea, type PodAreaMode } from "@/shared/lib/payments/payOnDelivery";
 
 // ── Types mirroring the API ───────────────────────────────────────────────────
 
@@ -65,17 +73,24 @@ type FormState = {
     enabledForOnline: boolean;
     config: Record<string, string>;
     isActive: boolean;
+    // Pay-on-Delivery area rule (only meaningful when provider is pay_on_delivery).
+    podMode: PodAreaMode;
+    podStates: string[];
+    podPincodes: string; // prefixes, one per line / comma-separated
 };
 
 const EMPTY_FORM: FormState = {
     id: null,
-    provider: PAYMENT_GATEWAY_PROVIDERS[0]?.id ?? "razorpay",
+    provider: PAY_ON_DELIVERY_PROVIDER_ID, // overwritten by openEdit; never created fresh
     displayName: "",
     environment: "TEST",
     enabledForCounter: true,
     enabledForOnline: false,
     config: {},
     isActive: true,
+    podMode: "except",
+    podStates: [],
+    podPincodes: "",
 };
 
 async function getWithRetry<T>(url: string, tries = 3, delayMs = 400): Promise<T> {
@@ -89,6 +104,14 @@ async function getWithRetry<T>(url: string, tries = 3, delayMs = 400): Promise<T
         }
     }
     throw lastErr;
+}
+
+/** One-line summary of the POD rail's area rule, for its card badge. */
+function podAreaSummary(g: Gateway): string {
+    const a = sanitizePodArea((g.configJson as { area?: unknown })?.area);
+    const n = a.states.length + a.pincodePrefixes.length;
+    if (n === 0) return "Everywhere";
+    return a.mode === "only" ? `Only ${n} area${n > 1 ? "s" : ""}` : `Except ${n} area${n > 1 ? "s" : ""}`;
 }
 
 function CredentialBadge({ status }: { status: CredentialStatus }) {
@@ -149,12 +172,9 @@ export default function PaymentMethodsSettingsPage() {
         return form.environment === "LIVE" ? s.live : s.test;
     }, [statuses, form.provider, form.environment]);
 
-    const openCreate = () => {
-        setForm(EMPTY_FORM);
-        setDialogOpen(true);
-    };
-
     const openEdit = (g: Gateway) => {
+        const isPod = g.provider === PAY_ON_DELIVERY_PROVIDER_ID;
+        const area = isPod ? sanitizePodArea((g.configJson as { area?: unknown })?.area) : null;
         setForm({
             id: g.id,
             provider: g.provider,
@@ -162,10 +182,16 @@ export default function PaymentMethodsSettingsPage() {
             environment: g.environment,
             enabledForCounter: g.enabledForCounter,
             enabledForOnline: g.enabledForOnline,
-            config: Object.fromEntries(
-                Object.entries(g.configJson ?? {}).map(([k, v]) => [k, String(v ?? "")]),
-            ),
+            // POD's configJson holds a nested area object, not flat string fields.
+            config: isPod
+                ? {}
+                : Object.fromEntries(
+                      Object.entries(g.configJson ?? {}).map(([k, v]) => [k, String(v ?? "")]),
+                  ),
             isActive: g.isActive,
+            podMode: area?.mode ?? "except",
+            podStates: area?.states ?? [],
+            podPincodes: (area?.pincodePrefixes ?? []).join("\n"),
         });
         setDialogOpen(true);
     };
@@ -177,26 +203,35 @@ export default function PaymentMethodsSettingsPage() {
             return;
         }
         setSaving(true);
+        const isPod = form.provider === PAY_ON_DELIVERY_PROVIDER_ID;
+        // POD stores an area rule; everything else stores its flat config fields.
+        const configJson: Record<string, unknown> = isPod
+            ? {
+                  area: {
+                      mode: form.podMode,
+                      states: form.podStates,
+                      pincodePrefixes: form.podPincodes
+                          .split(/[\n,]/u)
+                          .map((s) => s.trim())
+                          .filter(Boolean),
+                  },
+              }
+            : form.config;
         const payload = {
             provider: form.provider,
             displayName: form.displayName.trim(),
             environment: form.environment,
             enabledForCounter: provider.supportsCounter ? form.enabledForCounter : false,
             enabledForOnline: provider.supportsOnline ? form.enabledForOnline : false,
-            configJson: form.config,
+            configJson,
             isActive: form.isActive,
         };
         try {
-            if (form.id == null) {
-                await axios.post("/api/settings/payment-methods", payload);
-                toast.success("Payment method added");
-            } else {
-                // provider can't change on edit; send everything else.
-                const { provider: _p, ...patch } = payload;
-                void _p;
-                await axios.patch(`/api/settings/payment-methods/${form.id}`, patch);
-                toast.success("Payment method updated");
-            }
+            // Fixed catalog — always an edit; the provider itself never changes.
+            const { provider: _p, ...patch } = payload;
+            void _p;
+            await axios.patch(`/api/settings/payment-methods/${form.id}`, patch);
+            toast.success("Payment method updated");
             setDialogOpen(false);
             await load();
         } catch (e) {
@@ -209,47 +244,19 @@ export default function PaymentMethodsSettingsPage() {
         }
     };
 
-    const remove = async (g: Gateway) => {
-        if (
-            !window.confirm(
-                `Delete "${g.displayName}"?` +
-                    (g.counterCount > 0
-                        ? ` ${g.counterCount} counter rail(s) will be unlinked from it.`
-                        : ""),
-            )
-        ) {
-            return;
-        }
-        try {
-            await axios.delete(`/api/settings/payment-methods/${g.id}`);
-            toast.success("Payment method deleted");
-            await load();
-        } catch (e) {
-            const msg = axios.isAxiosError(e)
-                ? (e.response?.data?.error ?? "Failed to delete")
-                : "Failed to delete";
-            toast.error(msg);
-        }
-    };
-
     return (
         <ScrollArea className="h-full" type="always">
             <div className="space-y-6 px-6 pt-3 pb-6">
-                <div className="flex items-start justify-between gap-4">
-                    <div>
-                        <h1 className="text-xl font-semibold">Payment Methods</h1>
-                        <p className="text-muted-foreground mt-1 max-w-2xl text-sm">
-                            Configure the payment gateways and methods used across the business. A
-                            counter picks one of these for its rails under{" "}
-                            <span className="font-medium">Admin → POS Counters</span>; online
-                            checkout uses the one marked “Online”. API keys live in environment
-                            variables — this page only shows whether they’re detected, never their
-                            values.
-                        </p>
-                    </div>
-                    <Button type="button" onClick={openCreate} disabled={!loaded}>
-                        <Plus className="mr-1 size-4" /> Add method
-                    </Button>
+                <div>
+                    <h1 className="text-xl font-semibold">Payment Methods</h1>
+                    <p className="text-muted-foreground mt-1 max-w-2xl text-sm">
+                        A fixed set of payment methods — configure each, but you can’t add or
+                        remove them (a new gateway is added in code). A counter picks one for its
+                        rails under <span className="font-medium">Admin → POS Counters</span>;
+                        online checkout uses the one marked “Online”. API keys live in environment
+                        variables — this page only shows whether they’re detected, never their
+                        values.
+                    </p>
                 </div>
 
                 {loadError ? (
@@ -265,8 +272,7 @@ export default function PaymentMethodsSettingsPage() {
                     <Card className="max-w-xl">
                         <CardContent className="py-8 text-center">
                             <p className="text-muted-foreground text-sm">
-                                No payment methods configured yet. Add Razorpay, Cashfree, or a
-                                manual UPI method to get started.
+                                Loading the payment methods…
                             </p>
                         </CardContent>
                     </Card>
@@ -291,15 +297,18 @@ export default function PaymentMethodsSettingsPage() {
                                             </span>
                                         </div>
 
-                                        <Badge
-                                            className={
-                                                g.environment === "LIVE"
-                                                    ? "bg-orange-100 text-orange-700"
-                                                    : "bg-blue-100 text-blue-700"
-                                            }
-                                        >
-                                            {g.environment}
-                                        </Badge>
+                                        {/* Environment is meaningless for the keyless Pay-on-Delivery rail. */}
+                                        {g.provider !== PAY_ON_DELIVERY_PROVIDER_ID && (
+                                            <Badge
+                                                className={
+                                                    g.environment === "LIVE"
+                                                        ? "bg-orange-100 text-orange-700"
+                                                        : "bg-blue-100 text-blue-700"
+                                                }
+                                            >
+                                                {g.environment}
+                                            </Badge>
+                                        )}
 
                                         {g.enabledForCounter && (
                                             <Badge className="bg-teal-100 text-teal-700">
@@ -311,29 +320,23 @@ export default function PaymentMethodsSettingsPage() {
                                                 <Globe className="mr-1 size-3" /> Online
                                             </Badge>
                                         )}
+                                        {g.provider === PAY_ON_DELIVERY_PROVIDER_ID && (
+                                            <Badge className="bg-amber-100 text-amber-700">
+                                                <MapPin className="mr-1 size-3" /> {podAreaSummary(g)}
+                                            </Badge>
+                                        )}
 
                                         <CredentialBadge status={g.credentialStatus} />
 
-                                        <div className="flex items-center gap-1">
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="icon"
-                                                onClick={() => openEdit(g)}
-                                                aria-label="Edit"
-                                            >
-                                                <Pencil className="size-4" />
-                                            </Button>
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="icon"
-                                                onClick={() => void remove(g)}
-                                                aria-label="Delete"
-                                            >
-                                                <Trash2 className="size-4 text-destructive" />
-                                            </Button>
-                                        </div>
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={() => openEdit(g)}
+                                            aria-label="Edit"
+                                        >
+                                            <Pencil className="size-4" />
+                                        </Button>
                                     </CardContent>
                                 </Card>
                             );
@@ -345,9 +348,7 @@ export default function PaymentMethodsSettingsPage() {
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
                 <DialogContent className="max-w-lg">
                     <DialogHeader>
-                        <DialogTitle>
-                            {form.id == null ? "Add payment method" : "Edit payment method"}
-                        </DialogTitle>
+                        <DialogTitle>Edit {provider?.label ?? form.displayName}</DialogTitle>
                         <DialogDescription>
                             Secret API keys are never entered here — set them in environment
                             variables. This form holds only non-secret configuration.
@@ -355,28 +356,6 @@ export default function PaymentMethodsSettingsPage() {
                     </DialogHeader>
 
                     <div className="space-y-4">
-                        <div className="grid gap-1.5">
-                            <Label>Provider</Label>
-                            <Select
-                                value={form.provider}
-                                onValueChange={(v) =>
-                                    setForm((f) => ({ ...f, provider: v, config: {}, enabledForOnline: false }))
-                                }
-                                disabled={form.id != null /* provider fixed after create */}
-                            >
-                                <SelectTrigger className="w-full">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {PAYMENT_GATEWAY_PROVIDERS.map((p) => (
-                                        <SelectItem key={p.id} value={p.id}>
-                                            {p.label}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-
                         <div className="grid gap-1.5">
                             <Label htmlFor="pm-name">Display name</Label>
                             <Input
@@ -389,23 +368,112 @@ export default function PaymentMethodsSettingsPage() {
                             />
                         </div>
 
-                        <div className="grid gap-1.5">
-                            <Label>Environment</Label>
-                            <Select
-                                value={form.environment}
-                                onValueChange={(v) =>
-                                    setForm((f) => ({ ...f, environment: v as "TEST" | "LIVE" }))
-                                }
-                            >
-                                <SelectTrigger className="w-full">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="TEST">Test</SelectItem>
-                                    <SelectItem value="LIVE">Live</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
+                        {/* Environment picks which env-var set is checked — irrelevant for
+                            keyless Pay on delivery, so hidden for it. */}
+                        {form.provider !== PAY_ON_DELIVERY_PROVIDER_ID && (
+                            <div className="grid gap-1.5">
+                                <Label>Environment</Label>
+                                <Select
+                                    value={form.environment}
+                                    onValueChange={(v) =>
+                                        setForm((f) => ({ ...f, environment: v as "TEST" | "LIVE" }))
+                                    }
+                                >
+                                    <SelectTrigger className="w-full">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="TEST">Test</SelectItem>
+                                        <SelectItem value="LIVE">Live</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
+
+                        {/* Pay-on-Delivery area rule — where the "pay later" rail is offered. */}
+                        {form.provider === PAY_ON_DELIVERY_PROVIDER_ID && (
+                            <div className="rounded-md border border-border p-3 space-y-3">
+                                <div className="flex items-center gap-1.5 text-sm font-medium">
+                                    <MapPin className="size-3.5" /> Where it&apos;s offered
+                                </div>
+                                <div className="grid gap-1.5">
+                                    <Label className="text-xs text-muted-foreground">Area rule</Label>
+                                    <Select
+                                        value={form.podMode}
+                                        onValueChange={(v) =>
+                                            setForm((f) => ({ ...f, podMode: v as PodAreaMode }))
+                                        }
+                                    >
+                                        <SelectTrigger className="w-full">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="except">
+                                                Offer everywhere, except the areas below
+                                            </SelectItem>
+                                            <SelectItem value="only">
+                                                Offer only in the areas below
+                                            </SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="grid gap-1.5">
+                                    <Label className="text-xs text-muted-foreground">States</Label>
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                className="w-full justify-between gap-1 font-normal"
+                                            >
+                                                {form.podStates.length > 0
+                                                    ? `${form.podStates.length} state${form.podStates.length > 1 ? "s" : ""} selected`
+                                                    : "None"}
+                                                <ChevronDown className="size-3.5 opacity-60" />
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="start" className="max-h-72 w-64 overflow-y-auto">
+                                            {INDIA_STATE_NAMES.map((st) => (
+                                                <DropdownMenuCheckboxItem
+                                                    key={st}
+                                                    checked={form.podStates.includes(st)}
+                                                    onCheckedChange={() =>
+                                                        setForm((f) => ({
+                                                            ...f,
+                                                            podStates: f.podStates.includes(st)
+                                                                ? f.podStates.filter((x) => x !== st)
+                                                                : [...f.podStates, st],
+                                                        }))
+                                                    }
+                                                    onSelect={(e) => e.preventDefault()}
+                                                >
+                                                    {st}
+                                                </DropdownMenuCheckboxItem>
+                                            ))}
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                </div>
+                                <div className="grid gap-1.5">
+                                    <Label className="text-xs text-muted-foreground">Pincodes (prefixes)</Label>
+                                    <textarea
+                                        className="border-input bg-background flex min-h-[60px] w-full rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                                        value={form.podPincodes}
+                                        placeholder="One prefix per line, e.g. 78 (all 78xxxx) or 781301"
+                                        onChange={(e) =>
+                                            setForm((f) => ({ ...f, podPincodes: e.target.value }))
+                                        }
+                                    />
+                                    <p className="text-muted-foreground text-[11px]">
+                                        {form.podStates.length === 0 && !form.podPincodes.trim()
+                                            ? "No areas set — Pay on delivery is offered everywhere."
+                                            : form.podMode === "only"
+                                              ? "Pay on delivery shows only where the state or pincode-prefix matches."
+                                              : "Pay on delivery is hidden where the state or pincode-prefix matches."}
+                                    </p>
+                                </div>
+                            </div>
+                        )}
 
                         {/* Non-secret provider config fields (e.g. manual UPI VPA). */}
                         {provider?.configFields.map((field) => (
@@ -486,8 +554,8 @@ export default function PaymentMethodsSettingsPage() {
                                             Use for online checkout
                                         </Label>
                                         <p className="text-muted-foreground text-[11px]">
-                                            Only one method per environment can be the online
-                                            gateway.
+                                            You can enable several — the customer picks one at
+                                            checkout.
                                         </p>
                                     </div>
                                     <Switch

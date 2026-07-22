@@ -927,8 +927,9 @@ async function main() {
         // are operator-configured under /office/admin/counters, not bootstrap
         // defaults — a fresh counter starts with Cash (the till) only.
         // Likewise the PaymentGateway catalog (Settings → Payment Methods, which a
-        // GATEWAY rail or online checkout points to) is operator config — bootstrap
-        // seeds none; it starts empty and is wiped by hard-clean.
+        // GATEWAY rail or online checkout points to) is a HARD-CODED, self-healing
+        // catalog (PAYMENT_METHOD_DEFAULTS): bootstrap seeds none — the app creates
+        // any missing method-row on first load of Settings → Payment Methods.
         const { rows: existing } = await pool.query<{ id: number }>(
             `SELECT id FROM "pos_counters" WHERE "branchId" = $1 AND name = $2 LIMIT 1`,
             [b.id, counterName],

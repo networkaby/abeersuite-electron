@@ -75,6 +75,20 @@ export const cashfreeProvider: PaymentGatewayProvider = {
     available: true,
 };
 
+export const payuProvider: PaymentGatewayProvider = {
+    id: "payu",
+    label: "PayU",
+    kind: "GATEWAY",
+    envVars: {
+        test: ["PAYU_MERCHANT_KEY", "PAYU_MERCHANT_SALT"],
+        live: ["PAYU_MERCHANT_KEY", "PAYU_MERCHANT_SALT"],
+    },
+    supportsOnline: true,
+    supportsCounter: true,
+    configFields: [],
+    available: true,
+};
+
 export const manualUpiProvider: PaymentGatewayProvider = {
     id: "manual_upi",
     label: "Generic UPI / manual",
@@ -111,16 +125,104 @@ export const demoProvider: PaymentGatewayProvider = {
     available: true,
 };
 
+/// Pay on delivery — OUR OWN "pay later" rail (formerly the hardcoded Cash-on-
+/// Delivery button at checkout). No external API, no keys. It is NEITHER the
+/// prepaid online gateway (supportsOnline:false → stays out of the ≤1-online-gateway
+/// slot) NOR a counter rail (supportsCounter:false). Its checkout availability is
+/// driven purely by `isActive` + an area rule stored on configJson.area
+/// (see src/shared/lib/payments/payOnDelivery.ts). It's a FIXED singleton: the app
+/// self-heals exactly one row and the UI/API forbid adding or deleting it.
+export const PAY_ON_DELIVERY_PROVIDER_ID = "pay_on_delivery";
+
+export const payOnDeliveryProvider: PaymentGatewayProvider = {
+    id: PAY_ON_DELIVERY_PROVIDER_ID,
+    label: "Pay on delivery",
+    kind: "MANUAL",
+    envVars: { test: [], live: [] },
+    supportsOnline: false,
+    supportsCounter: false,
+    // Area rules use a bespoke editor (states + pincode prefixes + mode), not the
+    // simple text/vpa configFields — so none are declared here.
+    configFields: [],
+    available: true,
+};
+
 /// All known providers, in display order. Append PayU / PayPal here later — no
 /// migration needed (PaymentGateway.provider is a plain string keyed to this list).
 export const PAYMENT_GATEWAY_PROVIDERS: PaymentGatewayProvider[] = [
+    payOnDeliveryProvider,
     razorpayProvider,
+    payuProvider,
     cashfreeProvider,
     manualUpiProvider,
     demoProvider,
 ];
 
 export const GATEWAY_PROVIDER_IDS: string[] = PAYMENT_GATEWAY_PROVIDERS.map((p) => p.id);
+
+/**
+ * The HARD-CODED payment-method catalog — like the courier catalog, these methods
+ * are fixed in code, not user-addable/deletable. The app self-heals one row per
+ * entry (create-if-absent by provider); the DB stores only each method's editable
+ * config (Active, environment, counter/online flags, POD area rule). A new gateway
+ * is added by appending here (and to PAYMENT_GATEWAY_PROVIDERS) — never via the UI.
+ *
+ * Not every registered provider is in the catalog: the Demo simulator and the
+ * generic manual-UPI counter rail stay available to other flows but aren't shown
+ * as fixed cards here. Self-heal never overwrites an existing row, so an already-
+ * configured method (e.g. Razorpay with its keys) keeps its settings.
+ */
+export const PAYMENT_METHOD_DEFAULTS: {
+    provider: string;
+    displayName: string;
+    environment: "TEST" | "LIVE";
+    enabledForCounter: boolean;
+    enabledForOnline: boolean;
+    isActive: boolean;
+    sortOrder: number;
+    configJson: Record<string, unknown>;
+}[] = [
+    {
+        provider: PAY_ON_DELIVERY_PROVIDER_ID,
+        displayName: "Pay on delivery",
+        environment: "TEST",
+        enabledForCounter: false,
+        enabledForOnline: false,
+        isActive: true, // preserves the old always-on Cash-on-Delivery behaviour
+        sortOrder: 0,
+        configJson: { area: { mode: "except", states: [], pincodePrefixes: [] } },
+    },
+    {
+        provider: "razorpay",
+        displayName: "Razorpay",
+        environment: "TEST",
+        enabledForCounter: true,
+        enabledForOnline: false,
+        isActive: false, // activate once the keys are set + the operator turns it on
+        sortOrder: 10,
+        configJson: {},
+    },
+    {
+        provider: "payu",
+        displayName: "PayU",
+        environment: "TEST",
+        enabledForCounter: true,
+        enabledForOnline: false,
+        isActive: false,
+        sortOrder: 20,
+        configJson: {},
+    },
+    {
+        provider: "cashfree",
+        displayName: "Cashfree",
+        environment: "TEST",
+        enabledForCounter: true,
+        enabledForOnline: false,
+        isActive: false,
+        sortOrder: 30,
+        configJson: {},
+    },
+];
 
 export function getGatewayProvider(id: string): PaymentGatewayProvider | undefined {
     return PAYMENT_GATEWAY_PROVIDERS.find((p) => p.id === id);

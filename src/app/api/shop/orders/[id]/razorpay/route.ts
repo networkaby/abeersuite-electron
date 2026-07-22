@@ -2,46 +2,65 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { handleApiError } from "@/shared/lib/api";
+import { requirePortalCustomer } from "@/shared/lib/auth/portalAuthGuard";
+import { isOnlineGatewayEnabled } from "@/shared/lib/payments/activeOnlineGateway";
 
 const paramsSchema = z.object({ id: z.coerce.number().int().positive() });
 
 /**
- * Prepare Razorpay order (MVP: returns config when keys exist; otherwise mock payload).
+ * Start a Razorpay payment: create a Razorpay order for the shop order's GRAND
+ * total and return the config the client Checkout modal needs. The customer pays
+ * in the modal; success is confirmed server-side by /razorpay-verify (signature).
  */
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
     try {
-        const { id } = paramsSchema.parse(await params);
-        const order = await prisma.ticketOrder.findUnique({
-            where: { ticketId: id },
-            select: { ticketId: true, totalPaise: true, legacyStatus: true, razorpayOrderId: true },
-        });
-        if (!order) {
-            return NextResponse.json({ error: "Order not found" }, { status: 404 });
-        }
-        if (order.legacyStatus !== "PENDING_PAYMENT") {
-            return NextResponse.json({ error: "Order is not payable" }, { status: 400 });
-        }
+        const auth = await requirePortalCustomer();
+        if (auth.response) return auth.response;
+        const { customerId } = auth;
 
+        const { id } = paramsSchema.parse(await params);
+
+        if (!(await isOnlineGatewayEnabled("razorpay"))) {
+            return NextResponse.json({ error: "Razorpay is not enabled for online checkout." }, { status: 400 });
+        }
         const keyId = process.env.RAZORPAY_KEY_ID;
         const keySecret = process.env.RAZORPAY_KEY_SECRET;
-
         if (!keyId || !keySecret) {
-            return NextResponse.json({
-                mock: true,
-                message: "Set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET to create live Razorpay orders.",
-                orderId: order.ticketId,
-                amountPaise: order.totalPaise,
-            });
+            return NextResponse.json(
+                { error: "Razorpay keys are not set (RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET)." },
+                { status: 400 },
+            );
         }
 
-        const auth = Buffer.from(`${keyId}:${keySecret}`).toString("base64");
-        const amount = order.totalPaise;
+        const order = await prisma.ticketOrder.findUnique({
+            where: { ticketId: id },
+            select: {
+                ticketId: true,
+                personId: true,
+                paymentMethod: true,
+                legacyStatus: true,
+                totalPaise: true,
+                shippingChargePaise: true,
+            },
+        });
+        if (!order) return NextResponse.json({ error: "Order not found" }, { status: 404 });
+        if (order.personId !== customerId) {
+            return NextResponse.json({ error: "This order is not yours." }, { status: 403 });
+        }
+        if (order.paymentMethod !== "ONLINE") {
+            return NextResponse.json({ error: "This order is not an online-payment order." }, { status: 400 });
+        }
+        if (order.legacyStatus !== "PENDING_PAYMENT") {
+            return NextResponse.json({ error: "Order is not payable." }, { status: 400 });
+        }
+
+        // Charge the GRAND total (goods + shipping), in paise.
+        const amount = (order.totalPaise ?? 0) + (order.shippingChargePaise ?? 0);
+
+        const authHeader = Buffer.from(`${keyId}:${keySecret}`).toString("base64");
         const rp = await fetch("https://api.razorpay.com/v1/orders", {
             method: "POST",
-            headers: {
-                Authorization: `Basic ${auth}`,
-                "Content-Type": "application/json",
-            },
+            headers: { Authorization: `Basic ${authHeader}`, "Content-Type": "application/json" },
             body: JSON.stringify({
                 amount,
                 currency: "INR",
