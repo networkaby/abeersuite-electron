@@ -54,15 +54,14 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     }
 }
 
-export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+// The four couriers are hard-coded and cannot be deleted — use the Active toggle to
+// switch one off at checkout. (Deleting would also orphan its config, e.g. Local
+// delivery's vehicle matrix.)
+export async function DELETE() {
     const { response } = await requireAuth();
     if (response) return response;
-    const id = Number((await ctx.params).id);
-    if (!Number.isInteger(id) || id < 1) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
-    try {
-        await prisma.deliveryMethod.delete({ where: { id } });
-        return NextResponse.json({ ok: true });
-    } catch (e) {
-        return handleApiError(e, "Failed to delete courier");
-    }
+    return NextResponse.json(
+        { error: "Couriers are fixed and can't be deleted — switch it off with the Active toggle instead." },
+        { status: 405 }
+    );
 }

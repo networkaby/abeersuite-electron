@@ -1,28 +1,37 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import type { Prisma } from "@/generated/prisma/client";
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { requireAuth } from "@/shared/lib/auth/permissions";
-import { validateRequest, handleApiError } from "@/shared/lib/api";
-import { DELIVERY_KINDS, sanitizeDeliveryConfig, type DeliveryKind } from "@/modules/delivery/lib/deliveryMethods";
+import { handleApiError } from "@/shared/lib/api";
+import { DELIVERY_METHOD_DEFAULTS, sanitizeDeliveryConfig } from "@/modules/delivery/lib/deliveryMethods";
 
-// Settings → Couriers. The catalog of delivery methods offered at checkout
-// (Shiprocket / Custom courier / Local delivery boy). Any signed-in staff may read
-// and write — the Settings sidebar tick decides who reaches the page. Shiprocket
-// SECRETS stay in env; only non-secret config (pickup, weight, dims) lives here.
+// Settings → Couriers. The four couriers (Local delivery / Standard courier /
+// Shiprocket / Shipway) are HARD-CODED — not addable or deletable here. Only their
+// editable config is stored in the DB. Any signed-in staff may read/edit — the
+// Settings sidebar tick decides who reaches the page. Aggregator SECRETS stay in env.
 
-const createSchema = z.object({
-    kind: z.string().refine((k) => DELIVERY_KINDS.includes(k as DeliveryKind), "Unknown courier kind"),
-    displayName: z.string().trim().min(1, "Display name is required").max(80),
-    isActive: z.boolean().default(true),
-    sortOrder: z.number().int().min(0).max(9999).default(0),
-    configJson: z.record(z.string(), z.unknown()).default({}),
-});
+/** Create any of the hard-coded couriers that don't yet exist (create-if-absent, by
+ *  kind). Makes the four self-healing on a fresh DB — no seed required. */
+async function ensureDeliveryMethodDefaults(): Promise<void> {
+    const present = new Set((await prisma.deliveryMethod.findMany({ select: { kind: true } })).map((m) => m.kind));
+    const missing = DELIVERY_METHOD_DEFAULTS.filter((d) => !present.has(d.kind));
+    if (missing.length === 0) return;
+    await prisma.deliveryMethod.createMany({
+        data: missing.map((d) => ({
+            kind: d.kind,
+            displayName: d.displayName,
+            isActive: d.isActive,
+            sortOrder: d.sortOrder,
+            configJson: sanitizeDeliveryConfig(d.kind, d.configJson) as Prisma.InputJsonValue,
+        })),
+    });
+}
 
 export async function GET() {
     const { response } = await requireAuth();
     if (response) return response;
     try {
+        await ensureDeliveryMethodDefaults();
         const rows = await prisma.deliveryMethod.findMany({ orderBy: [{ sortOrder: "asc" }, { id: "asc" }] });
         return NextResponse.json({ methods: rows });
     } catch (e) {
@@ -30,24 +39,11 @@ export async function GET() {
     }
 }
 
-export async function POST(req: Request) {
-    const { response } = await requireAuth();
-    if (response) return response;
-    const { data, error } = await validateRequest(req, createSchema);
-    if (error) return error;
-    try {
-        const kind = data.kind as DeliveryKind;
-        const created = await prisma.deliveryMethod.create({
-            data: {
-                kind,
-                displayName: data.displayName,
-                isActive: data.isActive,
-                sortOrder: data.sortOrder,
-                configJson: sanitizeDeliveryConfig(kind, data.configJson) as Prisma.InputJsonValue,
-            },
-        });
-        return NextResponse.json({ method: created }, { status: 201 });
-    } catch (e) {
-        return handleApiError(e, "Failed to create courier");
-    }
+// No POST: the courier catalog is hard-coded (add a fifth by extending
+// DELIVERY_METHOD_DEFAULTS in code, not via the UI).
+export function POST() {
+    return NextResponse.json(
+        { error: "Couriers are fixed — a new courier kind is added in code, not here." },
+        { status: 405 }
+    );
 }

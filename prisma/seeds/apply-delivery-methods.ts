@@ -17,22 +17,17 @@ import { PrismaClient, Prisma } from "../../src/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import * as dotenv from "dotenv";
+import { DELIVERY_METHOD_DEFAULTS } from "../../src/modules/delivery/lib/deliveryMethodConfig";
 
 dotenv.config({ path: ".env.local" });
 dotenv.config({ path: ".env" });
 
-const DEFAULTS: {
-    kind: string;
-    displayName: string;
-    isActive: boolean;
-    sortOrder: number;
-    configJson: Prisma.InputJsonValue;
-}[] = [
-    { kind: "OWN_BOY", displayName: "Local delivery", isActive: true, sortOrder: 0, configJson: { pincodes: [], flatPaise: 4900, freeAbovePaise: 0, baseGrams: 500, stepGrams: 500, neighbourhoods: {} } },
-    { kind: "CUSTOM", displayName: "Standard courier", isActive: true, sortOrder: 1, configJson: { flatPaise: 9900, freeAbovePaise: 500000 } },
-    { kind: "SHIPROCKET", displayName: "Shiprocket", isActive: false, sortOrder: 2, configJson: { pickupLocation: "Primary", pickupPincode: "", defaultItemWeightGrams: 500, length: 15, breadth: 15, height: 10 } },
-    { kind: "SHIPWAY", displayName: "Shipway", isActive: false, sortOrder: 3, configJson: { pickupLocation: "Primary", pickupPincode: "", defaultItemWeightGrams: 500, length: 15, breadth: 15, height: 10 } },
-];
+// Single source: the hard-coded courier catalog lives in deliveryMethodConfig.ts and
+// is also what the app ensures on load — this applier just mirrors it into the DB.
+const DEFAULTS = DELIVERY_METHOD_DEFAULTS.map((d) => ({
+    ...d,
+    configJson: d.configJson as Prisma.InputJsonValue,
+}));
 
 async function main() {
     const rawUrl = (process.env.DIRECT_URL ?? process.env.DATABASE_URL ?? "")

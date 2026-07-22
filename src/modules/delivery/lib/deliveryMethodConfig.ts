@@ -27,6 +27,29 @@ export const DELIVERY_KIND_LABEL: Record<DeliveryKind, string> = {
     SHIPWAY: "Shipway",
 };
 
+/**
+ * The HARD-CODED courier catalog — the four couriers are fixed in code, not
+ * user-addable/deletable. The DB stores only each courier's editable CONFIG
+ * (exclusions, pickup, active, priority, service levels, vehicles). A fifth courier
+ * is added by extending this list (and DELIVERY_KINDS) in code — never via the UI.
+ *
+ * These are create-if-absent defaults: the app ensures one row per kind exists (so a
+ * fresh DB needs no seed), and never clobbers an admin's saved config. Single source
+ * for both the app's ensure-on-load and the seed applier.
+ */
+export const DELIVERY_METHOD_DEFAULTS: {
+    kind: DeliveryKind;
+    displayName: string;
+    isActive: boolean;
+    sortOrder: number;
+    configJson: Record<string, unknown>;
+}[] = [
+    { kind: "OWN_BOY", displayName: "Local delivery", isActive: true, sortOrder: 0, configJson: { pincodes: [], flatPaise: 4900, freeAbovePaise: 0, baseGrams: 500, stepGrams: 500, neighbourhoods: {} } },
+    { kind: "CUSTOM", displayName: "Standard courier", isActive: true, sortOrder: 1, configJson: { flatPaise: 9900, freeAbovePaise: 500000 } },
+    { kind: "SHIPROCKET", displayName: "Shiprocket", isActive: false, sortOrder: 2, configJson: { pickupLocation: "Primary", pickupPincode: "", defaultItemWeightGrams: 500 } },
+    { kind: "SHIPWAY", displayName: "Shipway", isActive: false, sortOrder: 3, configJson: { pickupLocation: "Primary", pickupPincode: "", defaultItemWeightGrams: 500 } },
+];
+
 /** Aggregator (Shiprocket / Shipway): no stored rate — priced live by the API.
  *  Only non-secret pickup config lives here; API creds come from env. */
 export type ShiprocketConfig = {

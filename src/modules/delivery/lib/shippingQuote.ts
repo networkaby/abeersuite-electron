@@ -51,6 +51,25 @@ const CARRIER_PREFERENCE = ["delhivery", "amazon", "xpressbees", "ekart", "ecom"
 // non-surface + at least one fill). Fewer show when the pool runs dry.
 const COURIER_SLOTS = 6;
 
+// HARD BLOCK LIST — couriers to NEVER show at checkout, whatever their price or
+// rank. Each entry is matched (squashed, case-insensitive) against the aggregator
+// courier name, so "bluedart" hides Bluedart, "air" hides every Air service, etc.
+// Rejected couriers never enter the pool OR the dev-only hidden panel. Empty by
+// default; add carriers/keywords here to suppress them everywhere.
+const CARRIER_REJECT: string[] = [];
+
+const squashLabel = (label: string) => label.toLowerCase().replace(/[^a-z]+/gu, "");
+
+/** True when a courier name matches the reject list (dropped before curation). */
+function isRejectedCourier(name: string): boolean {
+    if (CARRIER_REJECT.length === 0) return false;
+    const squashed = squashLabel(name);
+    return CARRIER_REJECT.some((r) => {
+        const key = squashLabel(r);
+        return key.length > 0 && squashed.includes(key);
+    });
+}
+
 /** The carrier a courier label belongs to (a preference key, or "other:<word>"). */
 function carrierOf(label: string): string {
     const squashed = label.toLowerCase().replace(/[^a-z]+/gu, "");
@@ -231,6 +250,7 @@ export async function quoteShipping(params: {
             // Push every Shiprocket courier — deduped vs Shipway and capped after the
             // merge (below). Each carries its courierId for fulfilment.
             for (const c of couriers) {
+                if (isRejectedCourier(c.courierName)) continue;
                 out.push({
                     optionId: `shiprocket:${m.id}:${c.courierId}`,
                     methodId: m.id,
@@ -255,6 +275,7 @@ export async function quoteShipping(params: {
             // Push every Shipway courier — deduped vs Shiprocket and capped after the
             // merge (below). courierId rides on the optionId for fulfilment.
             for (const c of couriers) {
+                if (isRejectedCourier(c.courierName)) continue;
                 out.push({
                     optionId: `shipway:${m.id}:${c.courierId}`,
                     methodId: m.id,

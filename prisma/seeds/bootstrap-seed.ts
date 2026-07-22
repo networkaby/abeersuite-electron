@@ -49,6 +49,7 @@
 
 import { PrismaClient, Prisma } from "../../src/generated/prisma/client";
 import { seedVoucherSeries } from "../../src/modules/accountancy/lib/seedVoucherSeries";
+import { DELIVERY_METHOD_DEFAULTS } from "../../src/modules/delivery/lib/deliveryMethodConfig";
 import {
     VOUCHER_TEMPLATE_KINDS,
     buildVoucherTemplateDefaults,
@@ -1329,22 +1330,15 @@ async function main() {
     //               serviceable list), flat ₹49.
     //   SHIPROCKET – live API rates; seeded INACTIVE until creds + pickup are set.
     console.log("[17/17] Delivery methods (courier options)");
-    const DELIVERY_METHOD_DEFAULTS: {
-        kind: string;
-        displayName: string;
-        isActive: boolean;
-        sortOrder: number;
-        configJson: Prisma.InputJsonValue;
-    }[] = [
-        { kind: "OWN_BOY", displayName: "Local delivery", isActive: true, sortOrder: 0, configJson: { pincodes: [], flatPaise: 4900, freeAbovePaise: 0, baseGrams: 500, stepGrams: 500, neighbourhoods: {} } },
-        { kind: "CUSTOM", displayName: "Standard courier", isActive: true, sortOrder: 1, configJson: { flatPaise: 9900, freeAbovePaise: 500000 } },
-        { kind: "SHIPROCKET", displayName: "Shiprocket", isActive: false, sortOrder: 2, configJson: { pickupLocation: "Primary", pickupPincode: "", defaultItemWeightGrams: 500, length: 15, breadth: 15, height: 10 } },
-        { kind: "SHIPWAY", displayName: "Shipway", isActive: false, sortOrder: 3, configJson: { pickupLocation: "Primary", pickupPincode: "", defaultItemWeightGrams: 500, length: 15, breadth: 15, height: 10 } },
-    ];
+    // The hard-coded courier catalog is code-owned (deliveryMethodConfig.ts) and the
+    // app self-heals it on load; this create-only pass just pre-fills a fresh DB.
     let dmCreated = 0;
     for (const m of DELIVERY_METHOD_DEFAULTS) {
         const exists = await prisma.deliveryMethod.findFirst({ where: { kind: m.kind }, select: { id: true } });
-        if (!exists) { await prisma.deliveryMethod.create({ data: m }); dmCreated++; }
+        if (!exists) {
+            await prisma.deliveryMethod.create({ data: { ...m, configJson: m.configJson as Prisma.InputJsonValue } });
+            dmCreated++;
+        }
     }
     console.log(`      ✓ ${DELIVERY_METHOD_DEFAULTS.length} delivery methods ensured (${dmCreated} new)\n`);
 

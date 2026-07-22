@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import axios from "axios";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, Truck, PackageCheck, MapPin, SlidersHorizontal, ChevronDown } from "lucide-react";
+import { Pencil, Truck, PackageCheck, MapPin, SlidersHorizontal, ChevronDown } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -15,18 +15,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import {
     Dialog,
     DialogContent,
-    DialogDescription,
     DialogFooter,
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
 import {
     DropdownMenu,
     DropdownMenuCheckboxItem,
@@ -34,7 +26,6 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-    DELIVERY_KINDS,
     DELIVERY_KIND_LABEL,
     INDIA_STATE_NAMES,
     type DeliveryKind,
@@ -61,10 +52,6 @@ type FormState = {
     pincodes: string;
     pickupLocation: string;
     pickupPincode: string;
-    defaultItemWeightGrams: string;
-    length: string;
-    breadth: string;
-    height: string;
     // Availability exclusions (common to every kind).
     excludeStates: string[];
     excludePincodes: string; // prefixes, one per line / comma-separated
@@ -85,10 +72,6 @@ function emptyForm(kind: DeliveryKind = "OWN_BOY"): FormState {
         pincodes: "",
         pickupLocation: "Primary",
         pickupPincode: "",
-        defaultItemWeightGrams: "500",
-        length: "15",
-        breadth: "15",
-        height: "10",
         excludeStates: [],
         excludePincodes: "",
     };
@@ -114,7 +97,6 @@ export default function CouriersSettingsPage() {
     }, []);
     useEffect(() => { void load(); }, [load]);
 
-    const openCreate = () => { setForm(emptyForm()); setDialogOpen(true); };
     const openEdit = (m: Method) => {
         const c = m.configJson ?? {};
         const ex = (c.exclude ?? {}) as { states?: unknown; pincodePrefixes?: unknown };
@@ -129,10 +111,6 @@ export default function CouriersSettingsPage() {
             pincodes: Array.isArray(c.pincodes) ? (c.pincodes as string[]).join("\n") : "",
             pickupLocation: String(c.pickupLocation ?? "Primary"),
             pickupPincode: String(c.pickupPincode ?? ""),
-            defaultItemWeightGrams: String(c.defaultItemWeightGrams ?? 500),
-            length: String(c.length ?? 15),
-            breadth: String(c.breadth ?? 15),
-            height: String(c.height ?? 10),
             excludeStates: Array.isArray(ex.states) ? (ex.states as string[]) : [],
             excludePincodes: Array.isArray(ex.pincodePrefixes) ? (ex.pincodePrefixes as string[]).join("\n") : "",
         });
@@ -151,10 +129,6 @@ export default function CouriersSettingsPage() {
         return {
             pickupLocation: form.pickupLocation.trim(),
             pickupPincode: form.pickupPincode.trim(),
-            defaultItemWeightGrams: parseInt(form.defaultItemWeightGrams, 10) || 500,
-            length: parseInt(form.length, 10) || 15,
-            breadth: parseInt(form.breadth, 10) || 15,
-            height: parseInt(form.height, 10) || 10,
         };
     };
 
@@ -203,17 +177,6 @@ export default function CouriersSettingsPage() {
         }
     };
 
-    const remove = async (m: Method) => {
-        if (!window.confirm(`Delete "${m.displayName}"?`)) return;
-        try {
-            await axios.delete(`/api/settings/couriers/${m.id}`);
-            toast.success("Courier deleted");
-            await load();
-        } catch (e) {
-            toast.error(axios.isAxiosError(e) ? (e.response?.data?.error ?? "Failed to delete") : "Failed to delete");
-        }
-    };
-
     const summary = (m: Method): string => {
         const c = m.configJson ?? {};
         if (m.kind === "CUSTOM") {
@@ -228,7 +191,7 @@ export default function CouriersSettingsPage() {
             const areas = Object.values(nb).reduce<number>((sum, locs) => sum + Object.keys((locs ?? {}) as object).length, 0);
             return areas > 0 ? `${areas} area(s) covered · matrix` : "No coverage yet";
         }
-        return `Pickup ${c.pickupPincode || "—"} · ${c.defaultItemWeightGrams ?? 500}g default`;
+        return `Pickup ${c.pickupPincode || "—"}`;
     };
 
     return (
@@ -244,9 +207,6 @@ export default function CouriersSettingsPage() {
                             API keys live in environment variables — only non-secret pickup config is set here.
                         </p>
                     </div>
-                    <Button type="button" onClick={openCreate} disabled={!loaded}>
-                        <Plus className="mr-1 size-4" /> Add courier
-                    </Button>
                 </div>
 
                 {loadError ? (
@@ -288,9 +248,6 @@ export default function CouriersSettingsPage() {
                                         <Button type="button" variant="ghost" size="icon" onClick={() => openEdit(m)} aria-label="Edit">
                                             <Pencil className="size-4" />
                                         </Button>
-                                        <Button type="button" variant="ghost" size="icon" onClick={() => void remove(m)} aria-label="Delete">
-                                            <Trash2 className="size-4 text-destructive" />
-                                        </Button>
                                     </div>
                                 </CardContent>
                             </Card>
@@ -300,40 +257,22 @@ export default function CouriersSettingsPage() {
             </div>
 
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-                <DialogContent className="max-w-lg">
+                <DialogContent className="max-w-[73rem] max-h-[85vh] grid-rows-[auto_1fr_auto]">
                     <DialogHeader>
-                        <DialogTitle>{form.id == null ? "Add courier" : "Edit courier"}</DialogTitle>
-                        <DialogDescription>
+                        <DialogTitle>{form.displayName}</DialogTitle>
+                        {/* <DialogDescription>
                             {form.kind === "SHIPROCKET" || form.kind === "SHIPWAY"
                                 ? `${DELIVERY_KIND_LABEL[form.kind]} API keys are set in environment variables — only pickup config is entered here.`
                                 : form.kind === "CUSTOM"
-                                  ? "Your own courier. Name & visibility here; pricing lives on the rate card."
-                                  : "The in-house delivery boy. Name & visibility here; coverage and per-neighbourhood rates live on the Local courier tab."}
-                        </DialogDescription>
+                                    ? "Your own courier. Name & visibility here; pricing lives on the rate card."
+                                    : "The in-house delivery boy. Name & visibility here; coverage and per-neighbourhood rates live on the Local courier tab."}
+                        </DialogDescription> */}
                     </DialogHeader>
 
-                    <div className="space-y-4">
-                        <div className="grid gap-1.5">
-                            <Label>Kind</Label>
-                            <Select
-                                value={form.kind}
-                                onValueChange={(v) => setForm((f) => ({ ...f, kind: v as DeliveryKind }))}
-                                disabled={form.id != null}
-                            >
-                                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                    {DELIVERY_KINDS.map((k) => (
-                                        <SelectItem key={k} value={k}>{DELIVERY_KIND_LABEL[k]}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-
-                        <div className="grid gap-1.5">
-                            <Label htmlFor="c-name">Display name</Label>
-                            <Input id="c-name" value={form.displayName} onChange={(e) => setForm((f) => ({ ...f, displayName: e.target.value }))} />
-                        </div>
-
+                    <div className="space-y-4 overflow-y-auto min-h-0 -mr-4 pr-4">
+                        {/* Courier names are fixed by the hard-coded catalog (shown in the title) —
+                            not editable here. The modal only edits config: coverage/pickup,
+                            exclusions, priority, active. */}
                         {form.kind === "OWN_BOY" ? (
                             <div className="rounded-md border border-border bg-muted/30 p-3 text-sm">
                                 {form.id == null ? (
@@ -374,24 +313,6 @@ export default function CouriersSettingsPage() {
                                     <div className="grid gap-1.5">
                                         <Label>Pickup pincode</Label>
                                         <Input value={form.pickupPincode} inputMode="numeric" onChange={(e) => setForm((f) => ({ ...f, pickupPincode: e.target.value.replace(/\D/gu, "").slice(0, 6) }))} placeholder="6-digit origin" />
-                                    </div>
-                                </div>
-                                <div className="grid grid-cols-4 gap-3">
-                                    <div className="grid gap-1.5">
-                                        <Label>Wt (g)</Label>
-                                        <Input value={form.defaultItemWeightGrams} inputMode="numeric" onChange={(e) => setForm((f) => ({ ...f, defaultItemWeightGrams: e.target.value }))} />
-                                    </div>
-                                    <div className="grid gap-1.5">
-                                        <Label>L (cm)</Label>
-                                        <Input value={form.length} inputMode="numeric" onChange={(e) => setForm((f) => ({ ...f, length: e.target.value }))} />
-                                    </div>
-                                    <div className="grid gap-1.5">
-                                        <Label>B (cm)</Label>
-                                        <Input value={form.breadth} inputMode="numeric" onChange={(e) => setForm((f) => ({ ...f, breadth: e.target.value }))} />
-                                    </div>
-                                    <div className="grid gap-1.5">
-                                        <Label>H (cm)</Label>
-                                        <Input value={form.height} inputMode="numeric" onChange={(e) => setForm((f) => ({ ...f, height: e.target.value }))} />
                                     </div>
                                 </div>
                                 <p className="text-muted-foreground text-[11px]">
@@ -472,9 +393,11 @@ export default function CouriersSettingsPage() {
                                 <Input value={String(form.sortOrder)} inputMode="numeric" onChange={(e) => setForm((f) => ({ ...f, sortOrder: parseInt(e.target.value, 10) || 0 }))} />
                                 <p className="text-muted-foreground text-[11px]">Lower = higher priority (shown first).</p>
                             </div>
-                            <div className="flex items-start justify-between rounded-md border border-border px-3 py-2">
-                                <Label htmlFor="c-active" className="font-normal">Active</Label>
-                                <Switch id="c-active" checked={form.isActive} onCheckedChange={(v) => setForm((f) => ({ ...f, isActive: v }))} />
+                            <div className="grid gap-1.5 self-start">
+                                <Label htmlFor="c-active">Active</Label>
+                                <div className="flex h-9 items-center">
+                                    <Switch id="c-active" checked={form.isActive} onCheckedChange={(v) => setForm((f) => ({ ...f, isActive: v }))} />
+                                </div>
                             </div>
                         </div>
                     </div>
