@@ -60,8 +60,13 @@ async function srFetch<T>(path: string, init: RequestInit = {}, retry = true): P
         cachedToken = null;
         return srFetch<T>(path, init, false);
     }
-    const json = (await res.json().catch(() => ({}))) as T & { message?: string };
-    if (!res.ok) throw new Error(json?.message || `Shiprocket request failed (${res.status})`);
+    const json = (await res.json().catch(() => ({}))) as T & { message?: string; errors?: unknown };
+    if (!res.ok) {
+        // Shiprocket's `message` is often a generic "Oops! Invalid Data." — the
+        // real field-level reasons ride in `errors`; append them so staff see WHY.
+        const detail = json?.errors ? ` — ${JSON.stringify(json.errors)}` : "";
+        throw new Error((json?.message || `Shiprocket request failed (${res.status})`) + detail);
+    }
     return json;
 }
 
@@ -172,15 +177,22 @@ export async function shiprocketAssignAwb(
     courierId?: number
 ): Promise<{ awb: string; courierName: string | null }> {
     type Resp = {
-        response?: { data?: { awb_code?: string; courier_name?: string } };
+        response?: { data?: { awb_code?: string; courier_name?: string; awb_assign_error?: string } };
         awb_code?: string;
+        message?: string;
+        awb_assign_status?: number;
     };
     const json = await srFetch<Resp>(`/courier/assign/awb`, {
         method: "POST",
         body: JSON.stringify({ shipment_id: shipmentId, ...(courierId ? { courier_id: courierId } : {}) }),
     });
     const awb = json.response?.data?.awb_code ?? json.awb_code;
-    if (!awb) throw new Error("Shiprocket did not return an AWB");
+    if (!awb) {
+        // Assign failures often come back HTTP 200 with the reason in the body
+        // (e.g. insufficient wallet balance) — surface it instead of a mystery.
+        const why = json.response?.data?.awb_assign_error || json.message;
+        throw new Error(why ? `AWB assignment failed: ${why}` : "Shiprocket did not return an AWB");
+    }
     return { awb, courierName: json.response?.data?.courier_name ?? null };
 }
 
@@ -200,6 +212,25 @@ export async function shiprocketGenerateLabel(shipmentId: string): Promise<{ lab
         body: JSON.stringify({ shipment_id: [shipmentId] }),
     });
     return { labelUrl: json.label_url ?? null };
+}
+
+/** Generate + print the pickup manifest for a booked shipment — the sheet the
+ *  courier's pickup agent signs at handover. Generate is best-effort (it fails
+ *  once a manifest already exists); print returns the PDF URL either way. */
+export async function shiprocketPrintManifest(
+    shipmentId: string,
+    srOrderId: string,
+): Promise<{ manifestUrl: string | null }> {
+    await srFetch(`/manifests/generate`, {
+        method: "POST",
+        body: JSON.stringify({ shipment_id: [shipmentId] }),
+    }).catch(() => undefined);
+    type Resp = { manifest_url?: string };
+    const json = await srFetch<Resp>(`/manifests/print`, {
+        method: "POST",
+        body: JSON.stringify({ order_ids: [srOrderId] }),
+    });
+    return { manifestUrl: json.manifest_url ?? null };
 }
 
 export type SrTracking = {

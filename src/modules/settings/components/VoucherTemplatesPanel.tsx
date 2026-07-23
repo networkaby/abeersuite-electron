@@ -16,6 +16,7 @@ import ReceiptPreview from "@/shared/components/print/ReceiptPreview";
 import { RepairTicketBody } from "@/shared/components/print/RepairTicketBody";
 import { ShippingSlipBody } from "@/shared/components/print/ShippingSlipBody";
 import ShippingLabel from "@/shared/components/print/ShippingLabel";
+import OrderParcelLabel from "@/shared/components/print/OrderParcelLabel";
 import {
     VOUCHER_TEMPLATE_KIND_GROUPS,
     resolveTemplateForFormat,
@@ -31,6 +32,7 @@ import {
     SAMPLE_REPAIR_TICKET,
     SAMPLE_SHIPPING_SLIP,
     SAMPLE_SHIPPING_LABEL,
+    SAMPLE_PARCEL_LABEL,
 } from "@/modules/settings/lib/voucherTemplateSamples";
 
 interface Props {
@@ -110,7 +112,7 @@ const SLIP_SIGNOFF_ELEMENTS: { label: string; a4: BoolTemplateKey; thermal: Bool
 const BESPOKE_HIDDEN_ELEMENTS = new Set<BoolTemplateKey>([
     "showTaxSummary", "showMrp", "showBarcode", "showBranchAddress",
 ]);
-const BESPOKE_KINDS = new Set<VoucherTemplateKind>(["REPAIR_TICKET", "SHIPPING_SLIP", "SERVICE_SHIPPING_LABEL"]);
+const BESPOKE_KINDS = new Set<VoucherTemplateKind>(["REPAIR_TICKET", "SHIPPING_SLIP", "SERVICE_SHIPPING_LABEL", "DELIVERY_SHIPPING_LABEL"]);
 
 export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props) {
     const byKind = useMemo(() => {
@@ -180,6 +182,17 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
     // The shipping label is its OWN postcard document (not the letterhead chrome),
     // so it previews standalone. Feed the live-edited shop identity as the From.
     const isLabel = selectedKind === "SERVICE_SHIPPING_LABEL";
+    // The parcel label (order shipped by our own courier) — also standalone.
+    const isParcelLabel = selectedKind === "DELIVERY_SHIPPING_LABEL";
+    const parcelLabelData = {
+        ...SAMPLE_PARCEL_LABEL,
+        from: {
+            name:    mergedPreview.headerLine1 || SAMPLE_PARCEL_LABEL.from.name,
+            address: mergedPreview.addressBlock?.trim() || SAMPLE_PARCEL_LABEL.from.address,
+            phone:   mergedPreview.phoneLine?.replace(/^Ph:\s*/i, "").trim() || SAMPLE_PARCEL_LABEL.from.phone,
+        },
+        footer: mergedPreview.footerLine?.trim() || SAMPLE_PARCEL_LABEL.footer,
+    };
     const labelData = {
         ...SAMPLE_SHIPPING_LABEL,
         from: {
@@ -597,7 +610,9 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
                                     <PreviewToggle label="TL 100×50" active={labelPreviewFormat === "tl"} onClick={() => setLabelPreviewFormat("tl")} />
                                 </div>
                             )}
-                            {!isLabel && (
+                            {/* The parcel label previews its 4×6 face only (its A4/roll
+                                variants share the same face). */}
+                            {!isLabel && !isParcelLabel && (
                                 <div className="flex items-center gap-1 rounded-md border bg-card p-0.5 text-xs">
                                     <PreviewToggle
                                         label="As default"
@@ -628,7 +643,11 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
                             </Button>
                         </div>
                     </div>
-                    {isLabel ? (
+                    {isParcelLabel ? (
+                        <div className="flex justify-center rounded-md bg-muted/20 p-4">
+                            <OrderParcelLabel data={parcelLabelData} previewMode />
+                        </div>
+                    ) : isLabel ? (
                         <div className="flex justify-center rounded-md bg-muted/20 p-4">
                             <ShippingLabel data={labelData} previewMode previewFormat={labelPreviewFormat} fields={labelFields} />
                         </div>
@@ -663,7 +682,9 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
                     </DialogHeader>
                     <div className="overflow-auto bg-muted/20 px-5 pb-5" style={{ maxHeight: "82vh" }}>
                         <div className="flex justify-center py-2">
-                            {isLabel ? (
+                            {isParcelLabel ? (
+                                <OrderParcelLabel data={parcelLabelData} previewMode />
+                            ) : isLabel ? (
                                 <ShippingLabel data={labelData} previewMode previewFormat={labelPreviewFormat} fields={labelFields} />
                             ) : (
                                 <ReceiptPreview

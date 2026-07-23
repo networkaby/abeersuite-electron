@@ -5,18 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { getPayableOnlineGateways } from "@/shared/lib/payments/activeOnlineGateway";
 import OnlinePayPanel from "@/modules/external/shop/OnlinePayPanel";
-
-// Coarse delivery-stage labels (P8) mapped from the seeded status ids, so the
-// customer sees a friendly line without us leaking internal stage codes.
-const DELIVERY_STAGE_LABEL: Record<string, string> = {
-    S50: "Preparing to dispatch",
-    S51: "Courier assigned",
-    S52: "Picked up",
-    S53: "In transit",
-    S54: "Out for delivery",
-    S55: "Delivered",
-    S56: "Delivery failed / returned",
-};
+import { DELIVERY_STAGE_LABEL } from "@/modules/delivery/lib/shiprocketStatus";
 
 export default async function ShopOrderConfirmationPage({
     params,

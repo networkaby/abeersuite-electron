@@ -554,6 +554,7 @@ export default function EcommerceOrderDetailPage() {
                         orderId={order.id}
                         statusId={order.statusId}
                         courierLabel={addr.courierService ?? order.courier}
+                        courierKind={addr.courierKind ?? null}
                         trackingNumber={order.trackingNumber}
                         delivery={order.delivery}
                         onUpdated={load}

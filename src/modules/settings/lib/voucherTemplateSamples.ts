@@ -12,6 +12,7 @@ import type { VoucherTemplateKind } from "@/shared/lib/print/voucherTemplateDefa
 import type { RepairTicketBodyData } from "@/shared/components/print/RepairTicketBody";
 import type { ShippingSlipBodyData } from "@/shared/components/print/ShippingSlipBody";
 import type { ShippingLabelData } from "@/shared/components/print/ShippingLabel";
+import type { ParcelLabelData } from "@/shared/components/print/OrderParcelLabel";
 
 // Sample issuing-branch address for previewing the "Branch address" toggle.
 const SAMPLE_BRANCH_ADDRESS = "Zone Road, Ward 5\nBongaigaon, Assam, 783380";
@@ -55,6 +56,20 @@ export const SAMPLE_SHIPPING_LABEL: ShippingLabelData = {
     ref:      "RMA-2291",
     device:   "Dell XPS 13 (Laptop)",
     footer:   "Handle with care · Fragile electronics",
+};
+
+// Parcel label (DELIVERY_SHIPPING_LABEL) — an order shipped by our own courier.
+export const SAMPLE_PARCEL_LABEL: ParcelLabelData = {
+    from:    { name: "Network Service", address: "Main Road\nBongaigaon, Assam", phone: "88769 96969" },
+    to:      { name: "Akramul Jakir", address: "Kalaprishad Market, Main Road\nAbhayapuri, Kamrup, Assam", phone: "99549 99271", pincode: "781009" },
+    orderNo: "WEB-27",
+    date:    "23 Jul 2026",
+    courier: "Local delivery · Bike",
+    awb:     null,
+    payment: { cod: true, amountLabel: "₹980.86" },
+    weightGrams: 500,
+    items:   1,
+    footer:  "Handle with care",
 };
 
 export function buildSampleForKind(kind: VoucherTemplateKind): ThermalReceiptSample {
@@ -415,6 +430,15 @@ export function buildSampleForKind(kind: VoucherTemplateKind): ThermalReceiptSam
                 subtotal: null, taxAmount: null, total: null,
                 notes: null,
             };
+        case "DELIVERY_SHIPPING_LABEL":
+            // Parcel label for an order shipped by our own couriers.
+            return {
+                reference: "WEB-27", date: today,
+                partyName: "Sample Customer", partyPhone: "90000 00000",
+                lines: [],
+                subtotal: null, taxAmount: null, total: 980.86,
+                notes: null,
+            };
     }
 }
 
@@ -448,4 +472,5 @@ export const VOUCHER_KIND_LABEL: Record<VoucherTemplateKind, string> = {
     REPAIR_TICKET: "Repair Ticket",
     SHIPPING_SLIP: "Service Slip",
     SERVICE_SHIPPING_LABEL: "Service Shipping Label",
+    DELIVERY_SHIPPING_LABEL: "Parcel Shipping Label",
 };

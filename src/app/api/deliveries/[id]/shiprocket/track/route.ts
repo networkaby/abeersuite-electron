@@ -4,9 +4,11 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { shiprocketEnvReady, shiprocketTrackByAwb } from "@/modules/delivery/lib/shiprocket";
 import { shiprocketStatusToStage } from "@/modules/delivery/lib/shiprocketStatus";
+import { mirrorStageToOrder } from "@/modules/delivery/lib/mirrorOrderStage";
 
 // POST /api/deliveries/[id]/shiprocket/track — pull the current Shiprocket status
-// for this delivery's AWB and, if it maps to a later P8 stage, move the delivery.
+// for this delivery's AWB and, if it maps to a later P8 stage, move the delivery
+// and mirror the milestone onto the order (poll fallback beside the webhook).
 export async function POST(_req: Request, ctx: { params: Promise<{ id: string }> }) {
     const { response } = await requireAuth();
     if (response) return response;
@@ -18,13 +20,17 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
     }
 
     try {
-        const del = await prisma.ticketDelivery.findUnique({ where: { ticketId: id }, select: { awb: true } });
+        const del = await prisma.ticketDelivery.findUnique({
+            where: { ticketId: id },
+            select: { awb: true, orderSource: true, orderId: true },
+        });
         if (!del?.awb) return NextResponse.json({ error: "This delivery has no AWB yet" }, { status: 400 });
 
         const t = await shiprocketTrackByAwb(del.awb);
         const stage = shiprocketStatusToStage({ statusId: t.currentStatusId, status: t.currentStatus });
         if (stage) {
             await prisma.ticket.update({ where: { id }, data: { status: stage } });
+            await mirrorStageToOrder(del, stage, del.awb).catch(() => undefined);
         }
         return NextResponse.json({ ok: true, currentStatus: t.currentStatus, statusId: stage });
     } catch (e) {

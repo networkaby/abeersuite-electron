@@ -17,6 +17,18 @@ export const DELIVERY_STAGE = {
     FAILED_RTO: "S56",
 } as const;
 
+// Customer-friendly wording for each stage — shown on the shop order page and
+// the portal My Orders list, so internal stage codes never leak to customers.
+export const DELIVERY_STAGE_LABEL: Record<string, string> = {
+    [DELIVERY_STAGE.TO_DISPATCH]: "Preparing to dispatch",
+    [DELIVERY_STAGE.CARRIER_ASSIGNED]: "Courier assigned",
+    [DELIVERY_STAGE.PICKED_UP]: "Picked up",
+    [DELIVERY_STAGE.IN_TRANSIT]: "In transit",
+    [DELIVERY_STAGE.OUT_FOR_DELIVERY]: "Out for delivery",
+    [DELIVERY_STAGE.DELIVERED]: "Delivered",
+    [DELIVERY_STAGE.FAILED_RTO]: "Delivery failed / returned",
+};
+
 // Shiprocket numeric status codes → our stage. (The common, documented set; any
 // code not here falls back to the string matcher, then to null.)
 const BY_ID: Record<number, string> = {

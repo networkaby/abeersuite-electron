@@ -4,6 +4,8 @@ import { CONFIRMED_STATUS_LABEL } from "@/modules/ecommerce/lib/ordersPipeline";
 import { ORDER_STAGE } from "@/modules/order/lib/orderPipeline";
 import { shiprocketEnvReady } from "@/modules/delivery/lib/shiprocket";
 import { pushDeliveryToShiprocket } from "@/modules/delivery/lib/shiprocketFulfil";
+import { shipwayEnvReady } from "@/modules/delivery/lib/shipway";
+import { pushDeliveryToShipway } from "@/modules/delivery/lib/shipwayFulfil";
 
 export type TransitionOrderPipelineInput = {
     orderId: number;
@@ -68,7 +70,8 @@ export async function transitionOrderPipelineStatus(input: TransitionOrderPipeli
     }
 
     // An order is a Ticket (flavour "order") + TicketOrder detail. Status is the core
-    // pipeline stage; courier/tracking live on the detail.
+    // pipeline stage; courier/tracking live on the detail. Dispatch/delivery
+    // timestamps are stamped once (first arrival) — they feed the customer timeline.
     const t = await prisma.ticket.update({
         where: { id: orderId },
         data: {
@@ -77,6 +80,8 @@ export async function transitionOrderPipelineStatus(input: TransitionOrderPipeli
                 update: {
                     ...(courier !== undefined ? { courier: courier ?? null } : {}),
                     ...(trackingNumber !== undefined ? { trackingNumber: trackingNumber ?? null } : {}),
+                    ...(toStatusId === ORDER_STAGE.DISPATCHED ? { shippedAt: new Date() } : {}),
+                    ...(toStatusId === ORDER_STAGE.DELIVERED ? { deliveredAt: new Date() } : {}),
                 },
             },
         },
@@ -89,11 +94,10 @@ export async function transitionOrderPipelineStatus(input: TransitionOrderPipeli
 
     // ── Auto-book the courier at Packing ─────────────────────────────────────
     // "Start packing" tells an API courier we're ready to hand over: book the
-    // shipment (AWB + pickup request + label) via the existing Shiprocket push.
+    // shipment (AWB + pickup request + label) via the Shiprocket or Shipway push.
     // Best-effort — a courier-API failure must NEVER block packing; staff get an
-    // inbox alert and can book manually from the delivery instead.
-    // SHIPWAY has no booking API yet (rates only) and OWN/CUSTOM couriers have no
-    // API at all — those keep the manual dispatch path.
+    // inbox alert and can book manually (Book courier now) instead. OWN/CUSTOM
+    // couriers have no API — those keep the manual dispatch path.
     if (toStatusId === ORDER_STAGE.PACKING) {
         try {
             await autoBookCourier(orderId, actorUserId, link);
@@ -144,9 +148,10 @@ async function autoBookCourier(orderId: number, actorUserId: number, link: strin
         where: { ticketId: orderId },
         select: { shippingAddress: true },
     });
-    const addr = (order?.shippingAddress ?? {}) as { courierKind?: string };
-    if (addr.courierKind !== "SHIPROCKET") return; // Shipway: no booking API yet — manual path
-    if (!shiprocketEnvReady()) return; // creds absent (dev) — manual path
+    const kind = ((order?.shippingAddress ?? {}) as { courierKind?: string }).courierKind;
+    const ready =
+        kind === "SHIPROCKET" ? shiprocketEnvReady() : kind === "SHIPWAY" ? shipwayEnvReady() : false;
+    if (!ready) return; // non-API courier, or creds absent (dev) — manual path
 
     const delivery = await prisma.ticketDelivery.findFirst({
         where: { orderSource: "shop", orderId },
@@ -154,18 +159,17 @@ async function autoBookCourier(orderId: number, actorUserId: number, link: strin
     });
     if (!delivery || delivery.awb) return; // nothing spawned yet, or already booked
 
-    const result = await pushDeliveryToShiprocket(delivery.ticketId);
+    // Books + stamps the AWB on both the delivery and the order.
+    const result =
+        kind === "SHIPROCKET"
+            ? await pushDeliveryToShiprocket(delivery.ticketId)
+            : await pushDeliveryToShipway(delivery.ticketId);
 
-    // Stamp the AWB onto the order so the header + "Mark Dispatched" pre-fill.
-    await prisma.ticketOrder.update({
-        where: { ticketId: orderId },
-        data: { trackingNumber: result.awb },
-    });
     await createSystemInboxNotifications({
         roleIds: ["R1", "R2"],
         actorUserId,
         title: `Order #${orderId} — courier booked`,
-        body: `${result.courierName ?? "Shiprocket"} · AWB ${result.awb} · pickup requested.`,
+        body: `${result.courierName ?? kind} · AWB ${result.awb} · pickup requested.`,
         link,
     }).catch(() => undefined);
 }

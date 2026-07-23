@@ -113,6 +113,44 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
 
 const changeSchema = z.object({ optionId: z.string().trim().min(1).max(80) });
 
+// Manual tracking entry — for OUR couriers (local / Standard) the booking is
+// done outside the system, so staff paste the courier's tracking number here.
+// It lands on both the order (header + Mark-Dispatched pre-fill + label
+// barcode) and the P8 delivery's awb. API couriers get their AWB from the
+// booking push instead — this stays available as an escape hatch.
+const trackingSchema = z.object({ trackingNumber: z.string().trim().max(60) });
+
+export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+    const { response } = await requireModuleAccess("e-commerce");
+    if (response) return response;
+    const { id } = await ctx.params;
+    const oid = parseInt(id, 10);
+    if (!Number.isFinite(oid)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+
+    const { data, error } = await validateRequest(req, trackingSchema);
+    if (error) return error;
+
+    try {
+        const order = await prisma.ticketOrder.findUnique({ where: { ticketId: oid }, select: { ticketId: true } });
+        if (!order) return NextResponse.json({ error: "Order not found" }, { status: 404 });
+
+        const value = data.trackingNumber || null;
+        await prisma.$transaction(async (tx) => {
+            await tx.ticketOrder.update({ where: { ticketId: oid }, data: { trackingNumber: value } });
+            const delivery = await tx.ticketDelivery.findFirst({
+                where: { orderSource: "shop", orderId: oid },
+                select: { ticketId: true },
+            });
+            if (delivery) {
+                await tx.ticketDelivery.update({ where: { ticketId: delivery.ticketId }, data: { awb: value } });
+            }
+        });
+        return NextResponse.json({ ok: true, trackingNumber: value });
+    } catch (e) {
+        return handleApiError(e, "Failed to save the tracking number");
+    }
+}
+
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
     const { response } = await requireModuleAccess("e-commerce");
     if (response) return response;

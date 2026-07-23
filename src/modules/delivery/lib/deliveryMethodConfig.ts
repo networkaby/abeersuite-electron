@@ -718,7 +718,9 @@ export function sanitizeDeliveryConfig(kind: DeliveryKind, raw: Record<string, u
         // exclude. Always stored (even empty) so "empty = offered nowhere" is explicit.
         return withExclude({ include: sanitizeExclusions(raw.include) });
     }
-    // SHIPROCKET / SHIPWAY — pickup config + exclusions (both aggregators, same shape)
+    // SHIPROCKET / SHIPWAY — pickup config + exclusions (both aggregators, same shape).
+    // SHIPWAY only: optional warehouseId override — booking normally auto-resolves
+    // the Shipway warehouse whose pincode matches pickupPincode.
     return withExclude({
         pickupLocation: String(raw.pickupLocation ?? "").trim(),
         pickupPincode: String(raw.pickupPincode ?? "").trim(),
@@ -726,5 +728,8 @@ export function sanitizeDeliveryConfig(kind: DeliveryKind, raw: Record<string, u
         length: intOrZero(raw.length) || 15,
         breadth: intOrZero(raw.breadth) || 15,
         height: intOrZero(raw.height) || 10,
+        ...(kind === "SHIPWAY" && intOrZero(raw.warehouseId) > 0
+            ? { warehouseId: intOrZero(raw.warehouseId) }
+            : {}),
     });
 }
