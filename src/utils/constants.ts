@@ -316,6 +316,34 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         ],
     },
 
+    // Business Intelligence (management decision reports — customer/item profit,
+    // FSN, movement. Distinct from the accountant's operational reports under
+    // Accountancy → Financial Insights.)
+    {
+        label: "Business Intelligence",
+        icon: BarChart3,
+        key: "bi",
+        dashboardHref: "/office/bi",
+        pathPrefixes: ["/office/bi"],
+        children: [
+            { label: "Customer Profit", icon: Users, href: "/office/bi/customer-profit" },
+            { label: "Top Customers", icon: ChartArea, href: "/office/bi/top-customers" },
+            { label: "RFM Segmentation", icon: Network, href: "/office/bi/rfm" },
+            { label: "Item Profit", icon: Box, href: "/office/bi/item-profit" },
+            { label: "ABC Analysis", icon: Layers, href: "/office/bi/abc" },
+            { label: "FSN & Dead Stock", icon: ArrowLeftRight, href: "/office/bi/fsn" },
+            { label: "Stock Turnover", icon: PackageCheck, href: "/office/bi/stock-turnover" },
+            { label: "Movement Register", icon: ClipboardList, href: "/office/bi/movement-register" },
+            { label: "Sales Trend", icon: ChartArea, href: "/office/bi/sales-trend" },
+            { label: "Branch Comparison", icon: Building2, href: "/office/bi/branch-comparison" },
+            { label: "Discount Impact", icon: Percent, href: "/office/bi/discount-impact" },
+            { label: "Basket Analysis", icon: ShoppingCart, href: "/office/bi/basket" },
+            { label: "Supplier Purchases", icon: Truck, href: "/office/bi/supplier-purchases" },
+            { label: "Price Variance", icon: Tag, href: "/office/bi/purchase-price-variance" },
+            { label: "Inactive Customers", icon: Clock, href: "/office/bi/inactive-customers" },
+        ],
+    },
+
     // Inventory
     {
         label: "Inventory",
@@ -503,20 +531,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
     //     ],
     // },
 
-    // Intelligence
-    // {
-    //     label: "Intelligence",
-    //     icon: ChartArea,
-    //     key: "intelligence",
-    //     dashboardHref: "/office/roadmap/intelligence",
-    //     pathPrefixes: ["/office/roadmap/intelligence"],
-    //     children: [
-    //         // { label: "Overview", icon: LayoutDashboard, href: "/office/roadmap/intelligence" },
-    //         { label: "Dashboards", icon: BarChart2, href: "/office/roadmap/intelligence/dashboards" },
-    //         { label: "Ticket insights", icon: ClipboardList, href: "/office/roadmap/intelligence/tickets" },
-    //         { label: "Exports", icon: Download, href: "/office/roadmap/intelligence/exports" },
-    //     ],
-    // },
+
 
     // Administration
     {

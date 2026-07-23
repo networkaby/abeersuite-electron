@@ -22,6 +22,7 @@ Current implementation of `service-mgmt-experiment` — an internal business OS 
 ## 2) Domain modules (`src/modules/`)
 
 `accountancy` · `inventory` · `pos` · `pricing-strategy` · `coupons` · `loyalty` — the commerce + finance core.
+`bi` — Business Intelligence: management decision reports (customer/item profit, top-N customers, RFM segmentation, ABC analysis, FSN & dead stock, stock turnover, movement register, sales trend/seasonality with YoY, branch comparison, discount impact incl. bill-level coupon/loyalty, basket analysis, supplier purchases, purchase price variance, inactive customers) on a shared margin engine (`modules/bi/lib/marginEngine.ts`, purchase twin `purchaseLines.ts`) that derives COGS at report time from inward stock-ledger lots (no cost is stored at sale time); pages under `/office/bi`, APIs under `/api/bi/*` (requireAuth reads), charts via recharts.
 `repairing` · `deals` · `order` · `delivery` · `refund` — the pipeline/ticket flavours.
 `customer` (contacts) · `admin` · `administration` · `settings` · `home` · `message` · `core` — org, contacts, workspace.
 `ecommerce` (staff shop admin) · `external` (customer-facing shop/store/portal UI) · `lab` (throwaway prototype, not production).
@@ -32,7 +33,7 @@ Cross-cutting code lives in `src/shared/` (see §12). shadcn primitives live in 
 
 ## 3) Route groups (`src/app`)
 
-- **`(protected)/office/*`** — staff app (requires a staff session). Segments mirror URLs 1:1: `accountancy`, `inventory`, `pos` (manager shift reports), `pricing-strategy`, `customer-retention`, `customers` (Contacts), `crm`, `orders`, `repairing`, `ecommerce`, `admin`, `administration`, `settings`, `work-flow-inbox` (post-login landing).
+- **`(protected)/office/*`** — staff app (requires a staff session). Segments mirror URLs 1:1: `accountancy`, `bi` (Business Intelligence reports), `inventory`, `pos` (manager shift reports), `pricing-strategy`, `customer-retention`, `customers` (Contacts), `crm`, `orders`, `repairing`, `ecommerce`, `admin`, `administration`, `settings`, `work-flow-inbox` (post-login landing).
 - **`(protected)/vouchers/pos`** — the POS register (operator surface), opened standalone. `/vouchers/pos/new` is the New Sale screen.
 - **`(external)/*`** — customer-facing: `(store)` marketing homepage, `shop` (catalogue → cart → checkout with courier + payment-method pickers), `portal` (customer self-service), `login` (portal sign-in).
 - **`(protected)/lab`** — experimental Front/Back-office prototype. Not gated, not production.
