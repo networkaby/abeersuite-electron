@@ -113,8 +113,52 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
                   totalAmount: String(invSpine.voucherDetail.totalAmount),
               }
             : null;
+        // The return credit note (SALE_RETURN via refVoucherId) + the P9 refund
+        // ticket — drives the order page's Return / Refund panel.
+        const [returnDetail, refundTicket] = await Promise.all([
+            invVoucher
+                ? prisma.voucherDetail.findFirst({
+                      where: {
+                          refVoucherId: invVoucher.id,
+                          universalVoucher: { type: "SALE_RETURN", status: { not: "CANCELLED" }, deletedAt: null },
+                      },
+                      select: {
+                          id: true,
+                          totalAmount: true,
+                          universalVoucher: { select: { voucherNo: true, status: true } },
+                      },
+                  })
+                : Promise.resolve(null),
+            prisma.ticket.findFirst({
+                where: { refund: { orderSource: "shop", orderId: oid } },
+                select: {
+                    id: true,
+                    status: true,
+                    ticketStatus: { select: { label: true, color: true } },
+                    refund: { select: { amountPaise: true, payoutVoucherId: true, reason: true } },
+                },
+            }),
+        ]);
+        const returnVoucher = returnDetail
+            ? {
+                  id: returnDetail.id,
+                  reference: returnDetail.universalVoucher?.voucherNo ?? null,
+                  status: returnDetail.universalVoucher?.status ?? null,
+                  totalAmount: String(returnDetail.totalAmount),
+              }
+            : null;
+        const refund = refundTicket?.refund
+            ? {
+                  id: refundTicket.id,
+                  stageLabel: refundTicket.ticketStatus?.label ?? null,
+                  stageColor: refundTicket.ticketStatus?.color ?? null,
+                  amountPaise: refundTicket.refund.amountPaise,
+                  paidOut: refundTicket.refund.payoutVoucherId != null,
+                  reason: refundTicket.refund.reason,
+              }
+            : null;
         const { order, ticketStatus, ...core } = t;
-        const flat = { ...core, ...order, statusId: core.status, status: order.legacyStatus, orderStatus: ticketStatus, tickets: relatedTickets, invVoucher, delivery };
+        const flat = { ...core, ...order, statusId: core.status, status: order.legacyStatus, orderStatus: ticketStatus, tickets: relatedTickets, invVoucher, delivery, returnVoucher, refund };
         return NextResponse.json(flat);
     } catch (e) {
         return handleApiError(e, "Failed to load order");

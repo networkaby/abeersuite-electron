@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import OrderStatusActions from "@/modules/ecommerce/components/OrderStatusActions";
 import OrderCourierPanel from "@/modules/ecommerce/components/OrderCourierPanel";
+import OrderReturnPanel from "@/modules/ecommerce/components/OrderReturnPanel";
 import { OrderSourceBadge } from "@/modules/ecommerce/components/OrderSourceBadge";
 import type { OrderSource, ShopOrderStatus } from "@/generated/prisma/enums";
 import { toast } from "sonner";
@@ -126,6 +127,16 @@ type OrderDetail = {
         stageId: string;
         stageLabel: string | null;
         stageColor: string | null;
+    } | null;
+    // Return credit note (SALE_RETURN against the invoice) + P9 refund ticket.
+    returnVoucher: { id: number; reference: string | null; status: string | null; totalAmount: string } | null;
+    refund: {
+        id: number;
+        stageLabel: string | null;
+        stageColor: string | null;
+        amountPaise: number;
+        paidOut: boolean;
+        reason: string | null;
     } | null;
 };
 
@@ -349,6 +360,18 @@ export default function EcommerceOrderDetailPage() {
                             </div>
                         )}
                     </div>
+
+                    {/* Return / Refund — RTO receive-back + customer return */}
+                    <OrderReturnPanel
+                        orderId={order.id}
+                        statusId={order.statusId}
+                        deliveryStageId={order.delivery?.stageId ?? null}
+                        isPaid={isPaid}
+                        hasInvoice={!!order.invVoucher && order.invVoucher.status === "POSTED"}
+                        returnVoucher={order.returnVoucher}
+                        refund={order.refund}
+                        onUpdated={load}
+                    />
 
                     {/* Line items */}
                     <div className="rounded-lg border border-border p-4">

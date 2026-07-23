@@ -77,6 +77,48 @@ export async function spawnRefund(ref: OrderRef): Promise<void> {
 }
 
 /**
+ * Spawn a Refund (P9) for a SHOP order with an explicit amount — used by the
+ * online return flow (RTO received back / customer return). The order's paid
+ * money lives on its auto-posted advance RECEIPT; `sourceSpineId` is that
+ * receipt's UniversalVoucher id, so the standard payout step (Dr customer /
+ * Cr the receipt's DEBIT ledger — the gateway settlement ledger) pays the money
+ * back the way it came. Idempotent — one refund per order.
+ */
+export async function spawnShopRefund(params: {
+    orderId: number;
+    amountPaise: number;
+    sourceSpineId: number | null;
+    reason: string;
+}): Promise<{ refundTicketId: number; already: boolean } | null> {
+    const existing = await prisma.ticket.findFirst({
+        where: { refund: { orderSource: "shop", orderId: params.orderId } },
+        select: { id: true },
+    });
+    if (existing) return { refundTicketId: existing.id, already: true };
+    if (params.amountPaise <= 0) return null;
+    const pipeline = await getRefundPipeline();
+    const entry = pipeline?.statuses.find((s) => s.isEntryPoint) ?? pipeline?.statuses[0];
+    if (!pipeline || !entry) return null;
+    const t = await prisma.ticket.create({
+        data: {
+            pipelineId: pipeline.id,
+            status: entry.id,
+            refund: {
+                create: {
+                    orderSource: "shop",
+                    orderId: params.orderId,
+                    amountPaise: params.amountPaise,
+                    sourceVoucherId: params.sourceSpineId,
+                    reason: params.reason,
+                },
+            },
+        },
+        select: { id: true },
+    });
+    return { refundTicketId: t.id, already: false };
+}
+
+/**
  * Resolve everything needed to post a refund's GL pay-back: the customer ledger to
  * debit and the cash/bank ledger to credit are read back from the original advance
  * Receipt (its party account + its DEBIT line), so the money goes back the way it
