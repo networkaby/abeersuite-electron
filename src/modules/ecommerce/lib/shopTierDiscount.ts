@@ -94,6 +94,24 @@ export async function computeShopCartBenefits(
     currentSaleValuePaise: number,
     opts: { couponCode?: string | null; autoApply?: boolean; redeemPoints?: number } = {},
 ): Promise<ShopCartBenefits> {
+    // Customer Quality: no-discount flag — flagged customer bills at barcode
+    // price on the shop too. Every benefit comes back empty (tier 0, no coupon,
+    // no loyalty), so both the preview and the frozen order numbers are zeros.
+    // Silent: the storefront just shows a plain full-price cart; an explicitly
+    // typed coupon code gets the generic not-applicable line.
+    const flagAcct = await db.account.findUnique({
+        where:  { id: accountId },
+        select: { person: { select: { noDiscount: true } }, company: { select: { noDiscount: true } } },
+    });
+    if ((flagAcct?.person?.noDiscount ?? flagAcct?.company?.noDiscount) === true) {
+        return {
+            tierPct: 0, tierLabel: null, discountInclPaise: 0, lineDiscPaise: new Map(),
+            coupon: null,
+            couponError: opts.couponCode?.trim() ? "This coupon isn't applicable on this order." : null,
+            loyalty: null,
+        };
+    }
+
     // A customer who has actually PURCHASED before (order reached PAID or
     // beyond) is not "new" — even while staff hasn't invoiced it yet. Without
     // this, a NEW-scoped welcome period re-fires on every order until the

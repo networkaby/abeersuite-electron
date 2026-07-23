@@ -31,11 +31,7 @@ dotenv.config({ path: ".env" });
 // The permissions to add for the CURRENT change. Keep these identical to the rows
 // added in bootstrap-seed.ts. `systemOnly` rows are upserted but NOT granted to R1.
 const ADDITIONS: { id: string; label: string; module: string; description: string; systemOnly?: boolean }[] = [
-    { id: "ui:sidebar:bi:basket-analysis", label: "Business Intelligence → Basket Analysis", module: "ui", description: "Show the \"Basket Analysis\" link under Business Intelligence in the sidebar." },
-    { id: "ui:sidebar:bi:supplier-purchases", label: "Business Intelligence → Supplier Purchases", module: "ui", description: "Show the \"Supplier Purchases\" link under Business Intelligence in the sidebar." },
-    { id: "ui:sidebar:bi:price-variance", label: "Business Intelligence → Price Variance", module: "ui", description: "Show the \"Price Variance\" link under Business Intelligence in the sidebar." },
-    { id: "ui:sidebar:bi:inactive-customers", label: "Business Intelligence → Inactive Customers", module: "ui", description: "Show the \"Inactive Customers\" link under Business Intelligence in the sidebar." },
-    { id: "ui:sidebar:inventory:reorder", label: "Inventory → Reorder", module: "ui", description: "Show the \"Reorder\" link under Inventory in the sidebar." },
+    { id: "ui:sidebar:settings:customer-groups", label: "Settings → Customer Groups", module: "ui", description: "Show the \"Customer Groups\" link under Settings in the sidebar." },
 ];
 
 const ADMIN_ROLE_ID = "R1";

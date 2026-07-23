@@ -632,6 +632,7 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     { label: "Item Import", href: "/office/settings/item-import", icon: Upload, permission: "inventory:masters:edit" },
     { label: "Customer Import", href: "/office/settings/customer-import", icon: Upload, permission: "customers:edit" },
     { label: "Customer Tools", href: "/office/settings/customer-tools", icon: Users, permission: "customers:edit" },
+    { label: "Customer Groups", href: "/office/settings/customer-groups", icon: Users, permission: "customers:edit" },
 ];
 
 // ─── ButtonBar ────────────────────────────────────────────────────────────────

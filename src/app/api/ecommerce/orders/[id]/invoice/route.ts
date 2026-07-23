@@ -210,6 +210,15 @@ export async function POST(_req: NextRequest, ctx: { params: Promise<{ id: strin
         // via applyLoyaltyForSale/applyMilestones, exactly like /api/pos/sale.
         const loyaltyConfig = await prisma.loyaltyConfig.findUnique({ where: { id: 1 } });
         const loyaltyRates = loyaltyConfig ? ratesFromConfig(loyaltyConfig) : null;
+        // Customer Quality: no-discount flag — a flagged customer earns nothing
+        // at posting time (checkout already froze zero benefits for them). A
+        // redemption frozen BEFORE the flag was set still burns below — the
+        // order promised the customer that price; only new benefits stop.
+        const flagAcct = await prisma.account.findUnique({
+            where:  { id: t.accountId },
+            select: { person: { select: { noDiscount: true } }, company: { select: { noDiscount: true } } },
+        });
+        const noDiscountFlag = (flagAcct?.person?.noDiscount ?? flagAcct?.company?.noDiscount) === true;
         const loyaltyEnabled = !!loyaltyRates?.enabled;
         const redeemPoints = loyaltyEnabled ? (t.order.loyaltyRedeemPoints ?? 0) : 0;
         const redeemRupees = loyaltyEnabled ? (t.order.loyaltyRedeemPaise ?? 0) / 100 : 0;
@@ -289,7 +298,9 @@ export async function POST(_req: NextRequest, ctx: { params: Promise<{ id: strin
                 prisma.loyaltyEarnRule.findMany({ where: { enabled: true }, select: { scope: true, categoryId: true, groupId: true, productId: true, multiplier: true, redeemCapPct: true, enabled: true } }),
                 prisma.loyaltyMilestone.findMany({ where: { enabled: true }, orderBy: { threshold: "asc" } }),
             ]);
-            earnLines = t.order.lines.map((l, i) => ({
+            // Flagged → no earn lines (earn = 0) while the frozen redemption,
+            // if any, still burns via applyLoyaltyForSale below.
+            earnLines = noDiscountFlag ? [] : t.order.lines.map((l, i) => ({
                 productId: l.productId,
                 groupId: l.product?.groupId ?? null,
                 categoryId: l.product?.categoryId ?? null,
@@ -300,7 +311,8 @@ export async function POST(_req: NextRequest, ctx: { params: Promise<{ id: strin
                 groupParent: new Map(groups.map((g) => [g.id, g.parentId])),
                 categoryParent: new Map(categories.map((c) => [c.id, c.parentId])),
             };
-            milestoneTiers = milestones.map((m) => ({ id: m.id, threshold: Number(m.threshold), bonusPoints: m.bonusPoints, label: m.label, issuesCouponTemplateId: m.issuesCouponTemplateId }));
+            // Flagged → no milestone awards either (bonus points are a benefit).
+            milestoneTiers = noDiscountFlag ? [] : milestones.map((m) => ({ id: m.id, threshold: Number(m.threshold), bonusPoints: m.bonusPoints, label: m.label, issuesCouponTemplateId: m.issuesCouponTemplateId }));
         }
 
         const receiptVoucherId = Number(addr.receiptVoucherId) || null;

@@ -19,6 +19,9 @@ const updateSchema = z.object({
     gstStateCode:      z.string().trim().optional().nullable(),
     gstRegType:        z.enum(["REGULAR", "COMPOSITION", "SEZ", "UNREGISTERED"]).optional().nullable(),
     shippingStateCode: z.string().trim().max(2).optional().nullable(),
+    // Customer Quality (internal-only) — see PUT /api/person/[id].
+    noDiscount:        z.boolean().optional(),
+    customerGroupId:   z.number().int().positive().optional().nullable(),
 });
 
 export async function GET(
@@ -154,6 +157,8 @@ export async function PUT(
                 ...(body.shippingStateCode !== undefined && {
                     shippingStateCode: body.shippingStateCode || null,
                 }),
+                ...(body.noDiscount !== undefined && { noDiscount: body.noDiscount }),
+                ...(body.customerGroupId !== undefined && { customerGroupId: body.customerGroupId }),
             },
         });
         return NextResponse.json(company);

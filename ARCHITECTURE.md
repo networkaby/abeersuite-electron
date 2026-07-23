@@ -126,6 +126,7 @@ Repair, deals, delivery, and refund all ride this one engine. **The `Account` is
 - GST identity (GSTIN, state code, reg type) lives on `Person` / `Company`, not a separate party model.
 - Contacts are a **flat** permission surface: `customers:{view,create,edit,delete}`, any branch (no radius — contacts have no branch).
 - The accounting-facing party is the **`Account`** (party ledger); a Person/Company links to its `Account`.
+- **Customer Quality** (internal-only — never exposed to the customer): `Person`/`Company` carry `noDiscount` (Boolean), `qualityLog` (Json append-only timeline of `{rating|comment}` entries with denormalised author name/avatar, timestamp, source `pos|office` + counter name), and `customerGroupId` → **`CustomerGroup`** (marketing-segment master, Settings → Customer Groups, `customers:edit` nav permission). Surfaces: the **Quality tab** on `customers/all` (flag toggle gated by `customers:edit` credit-limit-style; stars + comment timeline open to all staff) and the **POS customer panel** (tap-to-rate stars + staff notes with the counter name; no flag UI). The **no-discount flag** = bill at barcode price: `/api/pos/sale`, `/api/pos/coupon-validate`, the POS `account-snapshot` and `computeShopCartBenefits` (shop preview + orders) all strip tier discount, coupons and loyalty (earn + redeem + milestones) server-side, silently — the cashier's manual discount still works; the ecommerce invoice route still burns a redemption frozen before the flag was set but earns nothing. Timeline entries append via `POST /api/customer-quality`; helpers in `modules/customer/lib/customerQuality.ts`.
 
 ---
 
@@ -147,7 +148,7 @@ Repair, deals, delivery, and refund all ride this one engine. **The `Account` is
 
 | File | Key models |
 |---|---|
-| `base.prisma` | Person, Company, PersonCompany, Phone, Email |
+| `base.prisma` | Person, Company, PersonCompany, Phone, Email, CustomerGroup |
 | `accounts.prisma` | AccountGroup, Account, CustomerTierPeriod, CustomerTier |
 | `finance.prisma` | **UniversalVoucher**, **VoucherGlLine**, VoucherLink, VoucherAllocation, VoucherSeries, VoucherPrintTemplate, BooksConfig, AuditLog |
 | `inventory.prisma` | InvProduct(+Code/Branch), masters (InvUnit/Category/ProductGroup/Brand/WarrantyTerm/AttributeMaster/GstRate), **VoucherDetail**, **VoucherInventoryLine**, InvStockLedger, StockReservation, RedemptionHold, InvBom(+Line), StrategyPoint, AdditionalCostAllocation |

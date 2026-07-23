@@ -34,6 +34,7 @@ import CustomerLinkPanel from "@/modules/customer/components/CustomerLinkPanel";
 import CompanyLinkPanel from "@/modules/customer/components/CompanyLinkPanel";
 import PersonProfileTab from "@/modules/customer/components/PersonProfileTab";
 import CompanyProfileTab from "@/modules/customer/components/CompanyProfileTab";
+import CustomerQualityTab from "@/modules/customer/components/CustomerQualityTab";
 
 type PersonRow = {
     id: number;
@@ -58,6 +59,9 @@ type PersonDetail = {
     accountId: number;
     creditLimit: string | null;
     accountGroupName: string | null;
+    customerGroupId: number | null;
+    noDiscount: boolean;
+    qualityLog: unknown;
     name: string;
     phone: string | null;
     email: string | null;
@@ -74,6 +78,9 @@ type CompanyDetail = {
     accountId: number;
     creditLimit: string | null;
     accountGroupName: string | null;
+    customerGroupId: number | null;
+    noDiscount: boolean;
+    qualityLog: unknown;
     name: string;
     phone: string | null;
     email: string | null;
@@ -90,8 +97,8 @@ type CompanyDetail = {
 };
 
 type SelectedItem = { kind: "person" | "company"; id: number };
-type PersonTab = "transactions" | "profile" | "tickets" | "devices" | "companies" | "loyalty";
-type CompanyTab = "transactions" | "profile" | "contacts" | "devices" | "loyalty";
+type PersonTab = "transactions" | "profile" | "tickets" | "devices" | "companies" | "loyalty" | "quality";
+type CompanyTab = "transactions" | "profile" | "contacts" | "devices" | "loyalty" | "quality";
 
 
 export default function AllCustomersPage() {
@@ -390,7 +397,7 @@ export default function AllCustomersPage() {
 
                         <div className="border-b bg-card px-6">
                             <div className="flex gap-2 py-2">
-                                {(["transactions", "profile", "tickets", "devices", "companies", "loyalty"] as PersonTab[]).map((item) => (
+                                {(["transactions", "profile", "tickets", "devices", "companies", "loyalty", "quality"] as PersonTab[]).map((item) => (
                                     <Button key={item} type="button" size="sm" variant={personTab === item ? "default" : "ghost"} onClick={() => handlePersonTabChange(item)}>
                                         {item}
                                     </Button>
@@ -483,6 +490,17 @@ export default function AllCustomersPage() {
                                 <LoyaltyPanel accountId={personDetail.accountId} canManage={canManageLoyalty} />
                             )}
 
+                            {personTab === "quality" && (
+                                <CustomerQualityTab
+                                    key={`pq-${personDetail.id}`}
+                                    party={{ kind: "person", id: personDetail.id }}
+                                    initialNoDiscount={personDetail.noDiscount}
+                                    initialQualityLog={personDetail.qualityLog}
+                                    canEditCustomer={canEditCustomer}
+                                    onSaved={refetchPersonDetail}
+                                />
+                            )}
+
                             {personTab === "transactions" && (
                                 txLoading ? (
                                     <div className="flex items-center justify-center py-16 text-muted-foreground"><Loader2 size={20} className="animate-spin" /></div>
@@ -530,7 +548,7 @@ export default function AllCustomersPage() {
 
                         <div className="border-b bg-card px-6">
                             <div className="flex gap-2 py-2">
-                                {(["transactions", "profile", "contacts", "devices", "loyalty"] as CompanyTab[]).map((item) => (
+                                {(["transactions", "profile", "contacts", "devices", "loyalty", "quality"] as CompanyTab[]).map((item) => (
                                     <Button key={item} type="button" size="sm" variant={companyTab === item ? "default" : "ghost"} onClick={() => handleCompanyTabChange(item)}>
                                         {item}
                                     </Button>
@@ -595,6 +613,17 @@ export default function AllCustomersPage() {
 
                             {companyTab === "loyalty" && (
                                 <LoyaltyPanel accountId={companyDetail.accountId} canManage={canManageLoyalty} />
+                            )}
+
+                            {companyTab === "quality" && (
+                                <CustomerQualityTab
+                                    key={`cq-${companyDetail.id}`}
+                                    party={{ kind: "company", id: companyDetail.id }}
+                                    initialNoDiscount={companyDetail.noDiscount}
+                                    initialQualityLog={companyDetail.qualityLog}
+                                    canEditCustomer={canEditCustomer}
+                                    onSaved={refetchCompanyDetail}
+                                />
                             )}
 
                             {companyTab === "transactions" && (

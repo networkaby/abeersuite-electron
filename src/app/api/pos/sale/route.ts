@@ -196,8 +196,8 @@ export async function POST(req: Request) {
             where:  { id: body.accountId },
             select: {
                 id: true, name: true, personId: true, companyId: true,
-                person:  { select: { name: true } },
-                company: { select: { name: true } },
+                person:  { select: { name: true, noDiscount: true } },
+                company: { select: { name: true, noDiscount: true } },
             },
         }),
         prisma.loyaltyConfig.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} }),
@@ -234,12 +234,27 @@ export async function POST(req: Request) {
                    ?? customerAccount.companyId
                    ?? customerAccount.id;
 
+    // ── Customer Quality: no-discount flag (server-authoritative) ─────────
+    // Flagged customer bills at barcode price — ALL automatic benefits are
+    // stripped here regardless of what the client sent (hard-coded all-block;
+    // a settings toggle may refine the scope later): tier discount → 0,
+    // coupons → skipped, loyalty earn + redeem → off. Silent by design — the
+    // POS UI never learns the flag (the snapshot already previews zeros); the
+    // cashier's manual price edits still apply as typed. Flag UI lives only on
+    // the customer module's Quality tab (customers:edit).
+    const noDiscountFlag =
+        (customerAccount.person?.noDiscount ?? customerAccount.company?.noDiscount) === true;
+    if (noDiscountFlag) {
+        body.discountPct = 0;
+        body.discountAmt = 0;
+    }
+
     // ── Loyalty context ───────────────────────────────────────────────────
     // Only identified customers (a real Person/Company account) earn or redeem;
     // anonymous walk-in / counter ledgers never accrue points.
     const isIdentified = customerAccount.personId !== null || customerAccount.companyId !== null;
     const loyaltyRates = ratesFromConfig(loyaltyConfig);
-    const loyaltyEnabled = isIdentified && loyaltyRates.enabled;
+    const loyaltyEnabled = isIdentified && loyaltyRates.enabled && !noDiscountFlag;
     // Live, dynamic balance — Σ in-window lots (respects the current expiry window).
     const loyaltyBalance = loyaltyEnabled
         ? await liveBalance(prisma, customerAccount.id, loyaltyRates)
@@ -416,7 +431,8 @@ export async function POST(req: Request) {
     let couponId: number | null = null;
     let couponExpenseAccountId: number | null = null;
     let effectiveTierDiscount = tierDiscount;
-    if (body.couponCode || body.autoApply) {
+    // noDiscountFlag: coupons (typed code AND auto-offers) are skipped silently.
+    if (!noDiscountFlag && (body.couponCode || body.autoApply)) {
         const couponConfig = await prisma.couponConfig.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} });
         couponExpenseAccountId = couponConfig.couponExpenseAccountId;
         // First-time buyer = no prior POSTED sale-type voucher on ANY channel

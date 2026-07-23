@@ -4,6 +4,7 @@
 // so the one draft shape has a single definition.
 
 import { type TierPeriodInput, type TierTitle } from "@/shared/lib/pricing";
+import { type QualityLogEntry } from "@/modules/customer/lib/customerQuality";
 
 export type Snapshot = {
     party: { kind: "person" | "company"; id: number; name: string; phone: string | null; email: string | null; gstin: string | null; address: string | null };
@@ -39,6 +40,9 @@ export type Snapshot = {
     balanceOverdue: number;
     availableCredit: number | null; // = max(0, creditLimit − balanceDue)
     rating: number | null;
+    // Customer Quality staff timeline (ratings + behaviour comments). The POS
+    // panel shows recent entries and appends new ones via /api/customer-quality.
+    qualityLog: QualityLogEntry[];
     favouriteCategory: string | null;
     personalizedOffers: Array<{ id: string; label: string; tag: string }>;
     lastVisitAt: string | null;

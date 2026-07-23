@@ -4,6 +4,7 @@ import type { ComponentProps } from "react";
 import PersonProfileEdit from "./PersonProfileEdit";
 import AccountCreditLimitCard from "./AccountCreditLimitCard";
 import AccountClassificationCard from "./AccountClassificationCard";
+import CustomerGroupCard from "./CustomerGroupCard";
 import DevicesMiniGrid from "./DevicesMiniGrid";
 import CustomerEmergencyPasswordResetCard from "./CustomerEmergencyPasswordResetCard";
 
@@ -20,6 +21,7 @@ interface Props {
         accountId: number;
         creditLimit: string | null;
         accountGroupName?: string | null;
+        customerGroupId?: number | null;
         name: string;
         address: string | null;
         phones: ProfileData["phones"];
@@ -70,6 +72,12 @@ export default function PersonProfileTab({ detail, canEditCustomer, canManageUse
                     canEdit
                     onSaved={onSaved}
                     onConverted={onConverted}
+                />
+                <CustomerGroupCard
+                    key={`cg-${detail.id}`}
+                    party={{ kind: "person", id: detail.id }}
+                    initialGroupId={detail.customerGroupId ?? null}
+                    onSaved={onSaved}
                 />
             </fieldset>
             <DevicesMiniGrid devices={detail.devices} />

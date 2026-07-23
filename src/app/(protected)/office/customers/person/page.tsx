@@ -48,6 +48,7 @@ import { indianFiscalYearStart } from "@/modules/accountancy/lib/period";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import CustomerLinkPanel from "@/modules/customer/components/CustomerLinkPanel";
 import { LoyaltyPanel } from "@/modules/loyalty/components/LoyaltyPanel";
+import CustomerQualityTab from "@/modules/customer/components/CustomerQualityTab";
 
 interface CustomerListItem {
     id: number;
@@ -63,6 +64,9 @@ interface CustomerDetail {
     accountId: number;
     creditLimit: string | null;
     accountGroupName: string | null;
+    customerGroupId: number | null;
+    noDiscount: boolean;
+    qualityLog: unknown;
     name: string;
     phone: string | null;
     email: string | null;
@@ -74,7 +78,7 @@ interface CustomerDetail {
     emails: { id: number; email: string; label: string | null; isPrimary: boolean }[];
 }
 
-type Tab = "transactions" | "profile" | "tickets" | "devices" | "companies" | "loyalty";
+type Tab = "transactions" | "profile" | "tickets" | "devices" | "companies" | "loyalty" | "quality";
 
 export default function CustomersPage() {
     const { data: session } = useSession();
@@ -330,7 +334,7 @@ export default function CustomersPage() {
                             {/* ── Tabs ── */}
                             <div className="border-b bg-card px-2">
                                 <div className="flex gap-2 py-2">
-                                    {(["transactions", "profile", "tickets", "devices", "companies", "loyalty"] as Tab[]).map((item) => (
+                                    {(["transactions", "profile", "tickets", "devices", "companies", "loyalty", "quality"] as Tab[]).map((item) => (
                                         <Button
                                             key={item}
                                             type="button"
@@ -436,6 +440,18 @@ export default function CustomersPage() {
                                 {/* Loyalty */}
                                 {tab === "loyalty" && (
                                     <LoyaltyPanel accountId={detail.accountId} canManage={canManageLoyalty} />
+                                )}
+
+                                {/* Customer Quality — flag / rating / comments (internal-only) */}
+                                {tab === "quality" && (
+                                    <CustomerQualityTab
+                                        key={`pq-${detail.id}`}
+                                        party={{ kind: "person", id: detail.id }}
+                                        initialNoDiscount={detail.noDiscount}
+                                        initialQualityLog={detail.qualityLog}
+                                        canEditCustomer={canEditCustomer}
+                                        onSaved={refetchDetail}
+                                    />
                                 )}
 
                                 {/* Transactions */}

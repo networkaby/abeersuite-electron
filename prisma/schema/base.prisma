@@ -30,6 +30,22 @@ model Person {
   /// Lightweight free-form tags for segmentation (filter with has/hasSome).
   tags            String[]         @default([])
 
+  // ── Customer Quality (internal-only; the customer must never see these) ──
+  /// "No discount" flag — flagged customer bills at barcode price: ALL
+  /// automatic benefits (tier discount, coupons, loyalty earn+redeem) are
+  /// suppressed server-side, silently, on POS and shop. Hard-coded all-block
+  /// for now; a settings toggle may refine the scope later. Toggle UI gated
+  /// by customers:edit (same as credit limit).
+  noDiscount      Boolean @default(false)
+  /// Append-only staff timeline of rating/comment entries — see
+  /// QualityLogEntry in src/modules/customer/lib/customerQuality.ts.
+  /// Latest "rating" entry = current rating.
+  qualityLog      Json    @default("[]")
+  /// Marketing segment (Corporate / School / Lawyer …) for product targeting.
+  /// New master — NOT the old CRM tags/lifecycleStage.
+  customerGroupId Int?
+  customerGroup   CustomerGroup? @relation(fields: [customerGroupId], references: [id])
+
   // ── GST profile (optional; only meaningful for B2B parties) ──────────────
   /// 15-char GSTIN. Indian format: 2 digits state + 10 PAN + entity + Z + check
   gstin             String?
@@ -87,6 +103,12 @@ model Company {
   ownerPositionId String?
   tags            String[]         @default([])
 
+  // ── Customer Quality — mirror of Person, see comments there ──────────────
+  noDiscount      Boolean @default(false)
+  qualityLog      Json    @default("[]")
+  customerGroupId Int?
+  customerGroup   CustomerGroup? @relation(fields: [customerGroupId], references: [id])
+
   // ── GST profile ──────────────────────────────────────────────────────────
   /// 15-char GSTIN
   gstin             String?
@@ -118,6 +140,18 @@ model Company {
   mergedIntoCompany   Company?  @relation("CompanyMergedInto", fields: [mergedIntoCompanyId], references: [id])
   mergedFromCompany   Company[] @relation("CompanyMergedInto")
   mergedAt            DateTime?
+}
+
+/// Marketing segment master (Corporate / School / Lawyer …) for product
+/// targeting — internal-only, managed at /office/settings/customer-groups.
+/// One group per customer via Person/Company.customerGroupId.
+model CustomerGroup {
+  id        Int       @id @default(autoincrement())
+  name      String    @unique
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  persons   Person[]
+  companies Company[]
 }
 
 /// Contact funnel stage (HubSpot-style) — shared by Person & Company.

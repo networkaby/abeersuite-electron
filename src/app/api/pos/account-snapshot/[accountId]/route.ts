@@ -8,6 +8,7 @@ import { getLedgerOutstanding } from "@/modules/accountancy/lib/outstandings";
 import { ratesFromConfig, liveBalance } from "@/modules/loyalty/lib";
 import { resolveTierForAccount, TIER_SPEND_VOUCHER_TYPES } from "@/shared/lib/pricing";
 import { resolveEffectiveCreditLimit } from "@/shared/lib/accountancy/creditLimit";
+import { latestRating, parseQualityLog } from "@/modules/customer/lib/customerQuality";
 
 // GET /api/pos/account-snapshot/[accountId]
 // Polymorphic POS "we know you" panel — works for either a Person account
@@ -60,6 +61,8 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
                         name: true,
                         gstin: true,
                         address: true,
+                        noDiscount: true,
+                        qualityLog: true,
                         phones: selectPrimaryPhone,
                         emails: selectPrimaryEmail,
                     },
@@ -70,6 +73,8 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
                         name: true,
                         gstin: true,
                         address: true,
+                        noDiscount: true,
+                        qualityLog: true,
                         phones: selectPrimaryPhone,
                         emails: selectPrimaryEmail,
                     },
@@ -103,6 +108,16 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
             };
         }
         if (!party) return NextResponse.json({ error: "Account is not linked to a person or company" }, { status: 400 });
+
+        // Customer Quality — staff rating/comments timeline + the silent
+        // no-discount flag. When flagged, every automatic benefit is stripped
+        // from the response (tier, offers, loyalty), so the POS naturally
+        // previews a benefit-less bill at barcode price. The flag itself is
+        // NEVER sent — POS staff see no reason, by design (customer module
+        // Quality tab is the only place the flag shows).
+        const partyRow = (account.person ?? account.company)!;
+        const qualityLog = parseQualityLog(partyRow.qualityLog);
+        const noDiscount = partyRow.noDiscount;
 
         const oneYearAgo = new Date();
         oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
@@ -200,26 +215,29 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
                 openingBalance: account.openingBalance ? Number(account.openingBalance) : null,
             },
             turnover: { lifetime: lifetimeTotal, last12Months: ytdTotal, invoiceCount },
-            discountPct,
+            discountPct: noDiscount ? 0 : discountPct,
             // The raw material, so the POS can re-resolve against the live cart — a
             // CURRENT_SALE period scores 0 until there is a bill to score.
-            tierPeriods: tierPeriodInputs,
+            // Flagged customer → empty periods, so the live re-resolve yields 0 too.
+            tierPeriods: noDiscount ? [] : tierPeriodInputs,
             tierCapPct,
             // History-only view (no bill). The POS recomputes all of this from
             // `tierPeriods` as items are scanned; other callers can use it as-is.
-            tierTitles:    tier.titles,
-            badgePeriodId: tier.badgePeriodId,
-            rawTierPct:    tier.rawPct,
-            cappedByGuard: tier.cappedByGuard,
-            loyaltyPoints,
-            loyaltyRates,
-            customerLevel,
+            tierTitles:    noDiscount ? [] : tier.titles,
+            badgePeriodId: noDiscount ? null : tier.badgePeriodId,
+            rawTierPct:    noDiscount ? 0 : tier.rawPct,
+            cappedByGuard: noDiscount ? false : tier.cappedByGuard,
+            loyaltyPoints: noDiscount ? 0 : loyaltyPoints,
+            loyaltyRates:  noDiscount ? null : loyaltyRates,
+            customerLevel: noDiscount ? "" : customerLevel,
             creditLimit,
             balanceDue,
             balanceOverdue: overdueDue,
             availableCredit,
-            // Placeholders — surface as soft "—" in UI; wire to real data later.
-            rating: null,
+            // Customer Quality — latest rating + the full staff timeline (the POS
+            // panel shows the stars and recent comments, and can append entries).
+            rating: latestRating(qualityLog),
+            qualityLog,
             favouriteCategory: null,
             personalizedOffers: [] as Array<{ id: string; label: string; tag: string }>,
             lastVisitAt,

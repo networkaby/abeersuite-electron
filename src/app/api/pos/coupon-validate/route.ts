@@ -40,6 +40,18 @@ export async function POST(req: Request) {
     if (error) return error;
 
     try {
+        // Customer Quality: no-discount flag — flagged customer gets no coupons.
+        // Same generic wording as an ineligible coupon, so nothing is revealed.
+        if (data.accountId != null) {
+            const acct = await prisma.account.findUnique({
+                where:  { id: data.accountId },
+                select: { person: { select: { noDiscount: true } }, company: { select: { noDiscount: true } } },
+            });
+            if ((acct?.person?.noDiscount ?? acct?.company?.noDiscount) === true) {
+                return NextResponse.json({ ok: false, reason: data.code ? "No coupon applied" : "No automatic offer available" });
+            }
+        }
+
         const goodsValue = data.lines.reduce((s, l) => s + l.qty * l.unitPrice, 0);
         const tierRupees = data.tierRupees ?? 0;
         const loyaltyRupees = data.loyaltyRupees ?? 0;

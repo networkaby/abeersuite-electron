@@ -4,6 +4,7 @@ import type { ComponentProps } from "react";
 import CompanyProfileEdit from "./CompanyProfileEdit";
 import AccountCreditLimitCard from "./AccountCreditLimitCard";
 import AccountClassificationCard from "./AccountClassificationCard";
+import CustomerGroupCard from "./CustomerGroupCard";
 import DevicesMiniGrid from "./DevicesMiniGrid";
 
 type ProfileData = ComponentProps<typeof CompanyProfileEdit>["profile"];
@@ -18,6 +19,7 @@ interface Props {
         accountId: number;
         creditLimit: string | null;
         accountGroupName?: string | null;
+        customerGroupId?: number | null;
         name: string;
         address: string | null;
         companyReg: string | null;
@@ -70,6 +72,12 @@ export default function CompanyProfileTab({ detail, canEditCompany, onSaved, onC
                     canEdit
                     onSaved={onSaved}
                     onConverted={onConverted}
+                />
+                <CustomerGroupCard
+                    key={`cg-${detail.id}`}
+                    party={{ kind: "company", id: detail.id }}
+                    initialGroupId={detail.customerGroupId ?? null}
+                    onSaved={onSaved}
                 />
             </fieldset>
             <DevicesMiniGrid devices={detail.devices} />

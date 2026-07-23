@@ -44,6 +44,7 @@ import { EntityListPanel } from "@/shared/components/EntityListPanel";
 import { TransactionsTable, type CustomerTransactions } from "@/modules/customer/components/TransactionsTable";
 import CompanyLinkPanel from "@/modules/customer/components/CompanyLinkPanel";
 import { LoyaltyPanel } from "@/modules/loyalty/components/LoyaltyPanel";
+import CustomerQualityTab from "@/modules/customer/components/CustomerQualityTab";
 
 interface CompanyListItem {
     id: number;
@@ -58,6 +59,9 @@ interface CompanyDetail {
     accountId: number;
     creditLimit: string | null;
     accountGroupName: string | null;
+    customerGroupId: number | null;
+    noDiscount: boolean;
+    qualityLog: unknown;
     name: string;
     phone: string | null;
     email: string | null;
@@ -73,7 +77,7 @@ interface CompanyDetail {
     } | null;
 }
 
-type Tab = "transactions" | "profile" | "contacts" | "devices" | "loyalty";
+type Tab = "transactions" | "profile" | "contacts" | "devices" | "loyalty" | "quality";
 
 export default function CompaniesPage() {
     const router = useRouter();
@@ -313,7 +317,7 @@ export default function CompaniesPage() {
                             {/* ── Tabs ── */}
                             <div className="border-b bg-card px-6">
                                 <div className="flex gap-2 py-2">
-                                    {(["transactions", "profile", "contacts", "devices", "loyalty"] as Tab[]).map((item) => (
+                                    {(["transactions", "profile", "contacts", "devices", "loyalty", "quality"] as Tab[]).map((item) => (
                                         <Button
                                             key={item}
                                             type="button"
@@ -398,6 +402,18 @@ export default function CompaniesPage() {
                                 {/* Loyalty */}
                                 {tab === "loyalty" && (
                                     <LoyaltyPanel accountId={detail.accountId} canManage={canManageLoyalty} />
+                                )}
+
+                                {/* Customer Quality — flag / rating / comments (internal-only) */}
+                                {tab === "quality" && (
+                                    <CustomerQualityTab
+                                        key={`cq-${detail.id}`}
+                                        party={{ kind: "company", id: detail.id }}
+                                        initialNoDiscount={detail.noDiscount}
+                                        initialQualityLog={detail.qualityLog}
+                                        canEditCustomer={canEditCompany}
+                                        onSaved={refetchDetail}
+                                    />
                                 )}
 
                                 {/* Transactions */}

@@ -445,7 +445,7 @@ export function PosScreenShell({
                 </main>
 
                 {/* Right column — customer "we know you" panel (shared) */}
-                <PosCustomerPanel snapshot={b.snapshot} loading={b.loadingSnapshot} tier={b.tier} />
+                <PosCustomerPanel snapshot={b.snapshot} loading={b.loadingSnapshot} tier={b.tier} counterNo={b.activeShift?.counter.name ?? null} />
             </div>
 
             {/* Mode-specific dialogs (checkout / payment link) */}

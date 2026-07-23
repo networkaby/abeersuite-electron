@@ -5,17 +5,26 @@
 // two carried a byte-identical copy of this panel; it now lives here once.
 //
 // Renders the whole <aside>: empty state, loading state, and the populated
-// profile (identity, money/credit, offers, loyalty, tickets, warranties).
+// profile (identity, money/credit, offers, loyalty, tickets, warranties,
+// Customer Quality rating + staff notes).
 
+import { useState } from "react";
+import axios from "axios";
+import { toast } from "sonner";
 import {
     User, Building2, Phone, Mail, MapPin,
     CreditCard, Wallet, TrendingDown, AlertCircle, Sparkles,
-    TrendingUp, Award, Clock, Star, Tag, Crown,
+    TrendingUp, Award, Clock, Star, Tag, Crown, MessageSquarePlus,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { formatInr } from "@/shared/lib/format";
+import { extractApiError } from "@/shared/lib/api";
 import { type Snapshot } from "@/modules/pos/lib/posDraftTypes";
 import { type TierResult } from "@/shared/lib/pricing";
+import { StarRating, QualityTimeline } from "@/modules/customer/components/CustomerQualityTab";
+import { latestRating, type QualityLogEntry } from "@/modules/customer/lib/customerQuality";
 
 const since = (iso: string | null) => {
     if (!iso) return "never";
@@ -35,7 +44,7 @@ const since = (iso: string | null) => {
  * live cart, so a CURRENT_SALE title appears as the bill grows. The snapshot's own
  * tier fields are the history-only view and would go stale here.
  */
-export function PosCustomerPanel({ snapshot, loading, tier }: { snapshot: Snapshot | null; loading: boolean; tier: TierResult }) {
+export function PosCustomerPanel({ snapshot, loading, tier, counterNo }: { snapshot: Snapshot | null; loading: boolean; tier: TierResult; counterNo?: string | null }) {
     return (
         <aside className="flex min-h-0 flex-col overflow-y-auto bg-muted/30 p-4">
             {!snapshot ? (
@@ -49,14 +58,41 @@ export function PosCustomerPanel({ snapshot, loading, tier }: { snapshot: Snapsh
             ) : loading ? (
                 <div className="text-sm text-muted-foreground">Loading…</div>
             ) : (
-                <CustomerPanel snapshot={snapshot} tier={tier} />
+                // Keyed by party so the quality-log local state resets on customer switch.
+                <CustomerPanel key={`${snapshot.party.kind}-${snapshot.party.id}`} snapshot={snapshot} tier={tier} counterNo={counterNo ?? null} />
             )}
         </aside>
     );
 }
 
-function CustomerPanel({ snapshot, tier }: { snapshot: Snapshot; tier: TierResult }) {
+function CustomerPanel({ snapshot, tier, counterNo }: { snapshot: Snapshot; tier: TierResult; counterNo: string | null }) {
     const c = snapshot.party;
+
+    // Customer Quality — rating + staff notes, appendable right from the counter.
+    const [log, setLog] = useState<QualityLogEntry[]>(snapshot.qualityLog ?? []);
+    const [note, setNote] = useState("");
+    const [qualityBusy, setQualityBusy] = useState(false);
+    const rating = latestRating(log);
+    const comments = log.filter((e) => e.type === "comment");
+
+    const appendQuality = async (payload: { type: "rating"; stars: number } | { type: "comment"; text: string }) => {
+        setQualityBusy(true);
+        try {
+            const { data } = await axios.post<{ qualityLog: QualityLogEntry[] }>("/api/customer-quality", {
+                [c.kind === "person" ? "personId" : "companyId"]: c.id,
+                source: "pos",
+                ...(counterNo ? { counterNo } : {}),
+                ...payload,
+            });
+            setLog(data.qualityLog);
+            if (payload.type === "comment") setNote("");
+        } catch (e) {
+            toast.error(extractApiError(e, "Could not save"));
+        } finally {
+            setQualityBusy(false);
+        }
+    };
+
     const level = tier.badgeLevelName;
     const levelColor =
         level === "Platinum" ? "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300" :
@@ -189,20 +225,53 @@ function CustomerPanel({ snapshot, tier }: { snapshot: Snapshot; tier: TierResul
                 <Stat icon={<Clock size={14} />} label="Last visit" value={since(snapshot.lastVisitAt)} />
             </div>
 
-            {/* Rating + favourite category */}
+            {/* Rating (tap to rate) + favourite category */}
             <div className="grid grid-cols-2 gap-1.5">
-                <Stat
-                    icon={<Star size={14} />}
-                    label="Rating"
-                    value={snapshot.rating != null ? `${snapshot.rating.toFixed(1)} / 5` : "—"}
-                    sub={snapshot.rating == null ? "no rating yet" : undefined}
-                />
+                <div className="rounded-md border border-border bg-card px-2.5 py-1.5">
+                    <div className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+                        <Star size={14} /> Rating
+                    </div>
+                    <div className="mt-1">
+                        <StarRating value={rating} onRate={(stars) => void appendQuality({ type: "rating", stars })} sizePx={15} disabled={qualityBusy} />
+                    </div>
+                    <div className="text-[10px] leading-tight text-muted-foreground">{rating == null ? "no rating — tap to rate" : "tap to re-rate"}</div>
+                </div>
                 <Stat
                     icon={<Tag size={14} />}
                     label="Favourite"
                     value={snapshot.favouriteCategory ?? "—"}
                     sub={snapshot.favouriteCategory == null ? "needs invoice link" : undefined}
                 />
+            </div>
+
+            {/* Staff notes — behaviour knowledge from earlier dealings; add fresh
+                ones right after dealing with the customer. Internal-only. */}
+            <div>
+                <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Staff notes</div>
+                {/* Input first — the cashier types without scrolling past old notes. */}
+                <div className="flex gap-1.5">
+                    <Input
+                        value={note}
+                        onChange={(e) => setNote(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter" && note.trim()) void appendQuality({ type: "comment", text: note.trim() }); }}
+                        placeholder="Note this customer's behaviour…"
+                        className="h-7 flex-1 text-xs"
+                    />
+                    <Button
+                        size="icon-sm"
+                        variant="outline"
+                        onClick={() => { if (note.trim()) void appendQuality({ type: "comment", text: note.trim() }); }}
+                        disabled={qualityBusy || !note.trim()}
+                        title="Add note"
+                    >
+                        <MessageSquarePlus size={13} />
+                    </Button>
+                </div>
+                {comments.length > 0 && (
+                    <div className="mt-2 rounded-md border border-border bg-card p-2.5">
+                        <QualityTimeline log={comments.slice(-3)} compact />
+                    </div>
+                )}
             </div>
 
             {snapshot.recentTickets.length > 0 && (
