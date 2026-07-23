@@ -9,17 +9,23 @@
 //
 // Two tabs:
 //   • Item wise — one row per product; lead time + floor edited inline
-//     (PATCH /api/inventory/products/:id).
+//     (PATCH /api/inventory/products/:id). View select pivots the list
+//     Group / Category / Brand-wise with expandable sections (stock-summary
+//     pattern) so "order hard disks" doesn't mean scrolling 3000 rows.
 //   • Smart — substitute bands: items in the same leaf product group whose
 //     last-inward COST sits within x% pool their demand (Enter UPS ≈ Frontech
-//     UPS), so the shop orders the band once, not every brand. Member rows
-//     show cost + margin% — cost decides the band, margin decides which brand
-//     to procure.
+//     UPS). BOM outputs (in-house packs) are dropped — the parent carries the
+//     buy signal. Member rows show cost + margin%.
+//
+// Funnel multi-select filters (Group / Category / Brand — products-page
+// pattern) apply to BOTH tabs.
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { ChevronDown, ChevronRight, Loader2, RefreshCw, TriangleAlert } from "lucide-react";
+import {
+    ChevronDown, ChevronRight, Filter, Loader2, RefreshCw, TriangleAlert,
+} from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -81,10 +87,74 @@ interface Report {
     bands: Band[] | null;
 }
 
+type FilterField = "group" | "category" | "brand";
+type View = "item" | FilterField;
+
 const ALL_BRANCHES = "__all__";
+const NONE_KEY = "__none__";
 
 const fmtQty = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(2));
 const fmtCost = (paise: number | null) => (paise == null ? "—" : fmt(paise / 100));
+
+const FIELD_LABELS: Record<FilterField, string> = { group: "Group", category: "Category", brand: "Brand" };
+const NONE_LABELS: Record<FilterField, string> = { group: "Ungrouped", category: "Uncategorised", brand: "No brand" };
+
+/// One checklist box inside the Filters panel (Strategies-page pattern):
+/// searchable multi-select of unique values derived from the rows, with a
+/// "(none)" entry when any row lacks the relation.
+function FilterBox({
+    field, values, hasNone, selected, onToggle, onClear,
+}: {
+    field: FilterField;
+    values: string[];
+    hasNone: boolean;
+    selected: Set<string>;
+    onToggle: (field: FilterField, key: string) => void;
+    onClear: (field: FilterField) => void;
+}) {
+    const [query, setQuery] = useState("");
+    const items: { key: string; label: string }[] = [
+        ...(hasNone ? [{ key: NONE_KEY, label: `(${NONE_LABELS[field].toLowerCase()})` }] : []),
+        ...values.map((v) => ({ key: v, label: v })),
+    ];
+    const q = query.trim().toLowerCase();
+    const visible = !q ? items : items.filter((it) => it.label.toLowerCase().includes(q));
+
+    return (
+        <div className="rounded-md border border-border bg-background p-2">
+            <div className="flex items-center justify-between text-xs mb-1.5">
+                <span className="font-medium text-foreground">{FIELD_LABELS[field]}s</span>
+                {selected.size > 0 && (
+                    <button type="button" className="text-muted-foreground hover:underline" onClick={() => onClear(field)}>
+                        clear ({selected.size})
+                    </button>
+                )}
+            </div>
+            <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder={`Filter ${FIELD_LABELS[field].toLowerCase()}s…`}
+                className="mb-1.5 h-7 w-full rounded border border-input bg-transparent px-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            />
+            <ul className="max-h-44 overflow-auto space-y-1">
+                {visible.length === 0 ? (
+                    <li className="px-1 py-0.5 text-xs text-muted-foreground">No matches</li>
+                ) : visible.map((it) => (
+                    <li key={it.key}>
+                        <label className="flex items-center gap-2 text-sm cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={selected.has(it.key)}
+                                onChange={() => onToggle(field, it.key)}
+                            />
+                            <span className="truncate">{it.label}</span>
+                        </label>
+                    </li>
+                ))}
+            </ul>
+        </div>
+    );
+}
 
 export default function ReorderPage() {
     const [data, setData] = useState<Report | null>(null);
@@ -95,6 +165,10 @@ export default function ReorderPage() {
     const [tab, setTab] = useState<"items" | "smart">("items");
     const [tolerance, setTolerance] = useState(20);
     const [expanded, setExpanded] = useState<Set<string>>(new Set());
+    const [view, setView] = useState<View>("item");
+    const [sections, setSections] = useState<Set<string>>(new Set());
+    const [filters, setFilters] = useState<Map<FilterField, Set<string>>>(new Map());
+    const [filtersOpen, setFiltersOpen] = useState(false);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -134,26 +208,141 @@ export default function ReorderPage() {
         }
     }
 
+    // ── Filters ───────────────────────────────────────────────────────────────
+    const toggleFilter = (field: FilterField, key: string) =>
+        setFilters((prev) => {
+            const next = new Map(prev);
+            const set = new Set(next.get(field) ?? []);
+            if (set.has(key)) set.delete(key); else set.add(key);
+            if (set.size === 0) next.delete(field); else next.set(field, set);
+            return next;
+        });
+    const clearFilter = (field: FilterField) =>
+        setFilters((prev) => {
+            const next = new Map(prev);
+            next.delete(field);
+            return next;
+        });
+    const anyFilter = filters.size > 0;
+
+    const fieldValue = (r: ReorderRow, field: FilterField): string | null =>
+        field === "group" ? r.group : field === "category" ? r.category : r.brand;
+
+    const filterOptions = useMemo(() => {
+        const out = {} as Record<FilterField, { values: string[]; hasNone: boolean }>;
+        for (const field of ["group", "category", "brand"] as FilterField[]) {
+            const set = new Set<string>();
+            let hasNone = false;
+            for (const r of data?.rows ?? []) {
+                const v = fieldValue(r, field);
+                if (v) set.add(v); else hasNone = true;
+            }
+            out[field] = { values: [...set].sort((a, b) => a.localeCompare(b)), hasNone };
+        }
+        return out;
+    }, [data]);
+
     const rowById = useMemo(() => new Map((data?.rows ?? []).map((r) => [r.id, r])), [data]);
 
     const q = search.trim().toLowerCase();
-    const matchesSearch = useCallback(
-        (r: ReorderRow) => !q || r.name.toLowerCase().includes(q) || r.sku.toLowerCase().includes(q),
-        [q],
-    );
+    const passesFilters = useCallback((r: ReorderRow): boolean => {
+        if (q && !r.name.toLowerCase().includes(q) && !r.sku.toLowerCase().includes(q)) return false;
+        for (const [field, set] of filters) {
+            const v = fieldValue(r, field);
+            if (!set.has(v ?? NONE_KEY)) return false;
+        }
+        return true;
+    }, [q, filters]);
 
     const itemRows = useMemo(
-        () => (data?.rows ?? []).filter((r) => (!lowOnly || r.isLow) && matchesSearch(r)),
-        [data, lowOnly, matchesSearch],
+        () => (data?.rows ?? []).filter((r) => (!lowOnly || r.isLow) && passesFilters(r)),
+        [data, lowOnly, passesFilters],
     );
+
+    // ── Hierarchy sections (Item tab, view ≠ item) — stock-summary pattern ────
+    const grouped = useMemo(() => {
+        if (view === "item") return [];
+        const map = new Map<string, ReorderRow[]>();
+        for (const r of itemRows) {
+            const k = fieldValue(r, view) ?? NONE_LABELS[view];
+            const arr = map.get(k);
+            if (arr) arr.push(r); else map.set(k, [r]);
+        }
+        return [...map.entries()]
+            .map(([name, items]) => ({
+                name,
+                items: items.sort((a, b) => Number(b.isLow) - Number(a.isLow) || a.name.localeCompare(b.name)),
+                lowCount: items.filter((r) => r.isLow).length,
+                totalShortfall: items.reduce((s, r) => s + r.shortfall, 0),
+            }))
+            .sort((a, b) => b.lowCount - a.lowCount || a.name.localeCompare(b.name));
+    }, [itemRows, view]);
 
     const bandRows = useMemo(
         () => (data?.bands ?? []).filter((b) =>
             (!lowOnly || b.isLow) &&
-            (!q || b.productIds.some((id) => { const r = rowById.get(id); return r ? matchesSearch(r) : false; })),
+            (!(q || anyFilter) || b.productIds.some((id) => { const r = rowById.get(id); return r ? passesFilters(r) : false; })),
         ),
-        [data, lowOnly, q, rowById, matchesSearch],
+        [data, lowOnly, q, anyFilter, rowById, passesFilters],
     );
+
+    // ── Smart-tab sections (view ≠ band-wise) ────────────────────────────────
+    // Group view: a band has exactly one home (banding never crosses a group).
+    // Brand / Category views: a band appears under EVERY value its members
+    // carry — deliberate duplication, the supplier-order view ("ordering
+    // Frontech today: which shortfalls can that order fill?"). Never sum
+    // shortfall across sections — the same band repeats.
+    const bandSections = useMemo(() => {
+        if (tab !== "smart" || view === "item") return [];
+        const map = new Map<string, Band[]>();
+        const add = (name: string, b: Band) => {
+            const arr = map.get(name);
+            if (arr) arr.push(b); else map.set(name, [b]);
+        };
+        for (const b of bandRows) {
+            if (view === "group") {
+                add(b.groupName ?? NONE_LABELS.group, b);
+            } else {
+                const names = new Set<string>();
+                for (const id of b.productIds) {
+                    const r = rowById.get(id);
+                    if (r) names.add(fieldValue(r, view) ?? NONE_LABELS[view]);
+                }
+                for (const n of names) add(n, b);
+            }
+        }
+        return [...map.entries()]
+            .map(([name, bands]) => ({
+                name,
+                bands,
+                lowCount: bands.filter((x) => x.isLow).length,
+                totalShortfall: bands.reduce((s, x) => s + x.shortfall, 0),
+            }))
+            .sort((a, b) => b.lowCount - a.lowCount || b.totalShortfall - a.totalShortfall || a.name.localeCompare(b.name));
+    }, [tab, view, bandRows, rowById]);
+
+    // Auto-expand every section whenever the active section set changes
+    // (stock-summary pattern) — collapse individually or via the global toggle.
+    const activeSectionNames = useMemo(
+        () => (tab === "items" ? grouped.map((g) => g.name) : bandSections.map((s) => s.name)),
+        [tab, grouped, bandSections],
+    );
+    useEffect(() => {
+        if (activeSectionNames.length === 0) return;
+        setSections(new Set(activeSectionNames));
+    }, [activeSectionNames]);
+
+    const toggleSection = (name: string) =>
+        setSections((prev) => {
+            const next = new Set(prev);
+            if (next.has(name)) next.delete(name); else next.add(name);
+            return next;
+        });
+    const allExpanded = activeSectionNames.length > 0 && activeSectionNames.every((n) => sections.has(n));
+    const toggleAllSections = () => {
+        if (allExpanded) setSections(new Set());
+        else setSections(new Set(activeSectionNames));
+    };
 
     const toggleExpand = (key: string) =>
         setExpanded((prev) => {
@@ -174,6 +363,146 @@ export default function ReorderPage() {
         ? (data?.bands ?? []).filter((b) => b.isLow).length
         : data?.lowCount ?? 0;
 
+    const renderItemRow = (r: ReorderRow, indent = false) => (
+        <tr key={r.id} className={`border-b last:border-0 hover:bg-muted/40 ${r.isLow ? "bg-amber-500/5" : ""}`}>
+            <td className={`px-3 py-2 ${indent ? "pl-9" : ""}`}>
+                <span className="font-medium text-foreground">{r.name}</span>
+                <span className="ml-2 font-mono text-xs text-muted-foreground">{r.sku}</span>
+                {r.inHouse && (
+                    <span className="ml-2 rounded px-1.5 py-0.5 text-[10px] font-medium bg-sky-500/15 text-sky-600" title="BOM output — produced in-house. LOW here means: go pack/assemble, not purchase.">
+                        In-house
+                    </span>
+                )}
+            </td>
+            <td className="px-3 py-2 text-right font-mono">{fmtQty(r.stock)}{r.unit ? ` ${r.unit}` : ""}</td>
+            <td className="px-3 py-2 text-right font-mono text-muted-foreground">{r.reserved > 0 ? fmtQty(r.reserved) : "—"}</td>
+            <td className="px-3 py-2 text-right font-mono font-semibold">{fmtQty(r.available)}</td>
+            <td className="px-3 py-2 text-right font-mono">{r.avgDailyUsage > 0 ? r.avgDailyUsage.toFixed(2) : "—"}</td>
+            <td className="px-3 py-2 text-right">
+                <Input
+                    key={`lt-${r.id}-${r.ownLeadTimeDays ?? ""}`}
+                    className="h-7 w-16 ml-auto text-right font-mono text-xs"
+                    inputMode="numeric"
+                    placeholder={String(r.leadTimeDays)}
+                    defaultValue={r.ownLeadTimeDays ?? ""}
+                    onBlur={(e) => void saveField(r.id, "leadTimeDays", e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                />
+            </td>
+            <td className="px-3 py-2 text-right font-mono">{fmtQty(r.reorderLevel)}</td>
+            <td className="px-3 py-2 text-right">
+                <Input
+                    key={`fl-${r.id}-${r.lowStockThreshold}`}
+                    className="h-7 w-16 ml-auto text-right font-mono text-xs"
+                    inputMode="numeric"
+                    defaultValue={r.lowStockThreshold}
+                    onBlur={(e) => void saveField(r.id, "lowStockThreshold", e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                />
+            </td>
+            <td className="px-3 py-2 text-right font-mono text-destructive">
+                {r.shortfall > 0 ? fmtQty(r.shortfall) : "—"}
+            </td>
+            <td className="px-3 py-2 text-center">
+                {r.isLow ? (
+                    <span className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-red-500/15 text-red-600">LOW</span>
+                ) : (
+                    <span className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-emerald-500/15 text-emerald-600">OK</span>
+                )}
+            </td>
+        </tr>
+    );
+
+    // One band (+ expanded member rows). In brand/category sections the member
+    // matching the section value is highlighted — that's the SKU you'd put on
+    // this supplier's order; the alternates dim.
+    const renderBand = (b: Band, keyPrefix = "", highlightField?: FilterField, highlightValue?: string) => {
+        const multi = b.productIds.length > 1;
+        const isOpen = expanded.has(b.key);
+        const indent = keyPrefix !== "";
+        return (
+            <Fragment key={`${keyPrefix}${b.key}`}>
+            <tr
+                className={`border-b last:border-0 hover:bg-muted/40 ${b.isLow ? "bg-amber-500/5" : ""} ${multi ? "cursor-pointer" : ""}`}
+                onClick={multi ? () => toggleExpand(b.key) : undefined}
+            >
+                <td className={`px-3 py-2 ${indent ? "pl-7" : ""}`}>
+                    <span className="inline-flex items-center gap-1.5">
+                        {multi ? (
+                            isOpen ? <ChevronDown className="size-3.5 text-muted-foreground" /> : <ChevronRight className="size-3.5 text-muted-foreground" />
+                        ) : <span className="inline-block w-3.5" />}
+                        <span className="font-medium text-foreground">{bandLabel(b)}</span>
+                    </span>
+                </td>
+                <td className="px-3 py-2 text-right font-mono">{b.productIds.length}</td>
+                <td className="px-3 py-2 text-right font-mono font-semibold">{fmtQty(b.available)}</td>
+                <td className="px-3 py-2 text-right font-mono">{b.avgDailyUsage > 0 ? b.avgDailyUsage.toFixed(2) : "—"}</td>
+                <td className="px-3 py-2 text-right font-mono">{b.leadTimeDays}</td>
+                <td className="px-3 py-2 text-right font-mono">{fmtQty(b.threshold)}</td>
+                <td className="px-3 py-2 text-right font-mono text-destructive">{b.shortfall > 0 ? fmtQty(b.shortfall) : "—"}</td>
+                <td className="px-3 py-2 text-center">
+                    {b.isLow ? (
+                        <span className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-red-500/15 text-red-600">LOW</span>
+                    ) : (
+                        <span className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-emerald-500/15 text-emerald-600">OK</span>
+                    )}
+                </td>
+            </tr>
+            {multi && isOpen && b.productIds.map((id) => {
+                const r = rowById.get(id);
+                if (!r) return null;
+                const isTarget = highlightField != null &&
+                    (fieldValue(r, highlightField) ?? NONE_LABELS[highlightField]) === highlightValue;
+                const dim = highlightField != null && !isTarget;
+                return (
+                <tr
+                    key={`${keyPrefix}${b.key}-${id}`}
+                    className={`border-b last:border-0 text-xs ${isTarget ? "bg-primary/10" : "bg-muted/20"} ${dim ? "opacity-60" : ""}`}
+                >
+                    <td className={`px-3 py-1.5 ${indent ? "pl-14" : "pl-9"}`}>
+                        <span className="text-foreground">{r.name}</span>
+                        <span className="ml-2 font-mono text-muted-foreground">{r.sku}</span>
+                        {r.brand && <span className="ml-2 text-muted-foreground">{r.brand}</span>}
+                        {isTarget && (
+                            <span className="ml-2 rounded px-1.5 py-0.5 text-[10px] font-medium bg-primary/20 text-primary">this {FIELD_LABELS[highlightField!].toLowerCase()}</span>
+                        )}
+                    </td>
+                    <td className="px-3 py-1.5 text-right font-mono text-muted-foreground">
+                        cost {fmtCost(r.costPaise)}
+                    </td>
+                    <td className="px-3 py-1.5 text-right font-mono">{fmtQty(r.available)}</td>
+                    <td className="px-3 py-1.5 text-right font-mono">{r.avgDailyUsage > 0 ? r.avgDailyUsage.toFixed(2) : "—"}</td>
+                    <td className="px-3 py-1.5 text-right font-mono">{r.leadTimeDays}</td>
+                    <td className="px-3 py-1.5 text-right font-mono text-muted-foreground" colSpan={2}>
+                        margin {r.marginPct != null ? `${r.marginPct.toFixed(1)}%` : "—"}
+                    </td>
+                    <td className="px-3 py-1.5 text-center">
+                        {r.available <= 0 && <span className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-red-500/15 text-red-600">ZERO</span>}
+                    </td>
+                </tr>
+                );
+            })}
+            </Fragment>
+        );
+    };
+
+    const itemTableHead = (
+        <thead className="border-b bg-muted text-xs text-muted-foreground">
+            <tr>
+                <th className="px-3 py-2 text-left font-medium">Item</th>
+                <th className="px-3 py-2 text-right font-medium">Stock</th>
+                <th className="px-3 py-2 text-right font-medium">Reserved</th>
+                <th className="px-3 py-2 text-right font-medium">Available</th>
+                <th className="px-3 py-2 text-right font-medium">Avg use / day</th>
+                <th className="px-3 py-2 text-right font-medium">Lead time (d)</th>
+                <th className="px-3 py-2 text-right font-medium">Reorder level</th>
+                <th className="px-3 py-2 text-right font-medium">Min floor</th>
+                <th className="px-3 py-2 text-right font-medium">Shortfall</th>
+                <th className="px-3 py-2 text-center font-medium">Status</th>
+            </tr>
+        </thead>
+    );
+
     return (
         <ScrollArea className="h-full" type="always">
         <div className="max-w-7xl mx-auto space-y-5 px-6 pt-3 pb-6">
@@ -185,9 +514,9 @@ export default function ReorderPage() {
                         minimum. LOW when available (stock − reserved) is at or under the level.
                     </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                     <Input
-                        className="h-9 w-52"
+                        className="h-9 w-48"
                         placeholder="Search item / SKU…"
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
@@ -196,7 +525,7 @@ export default function ReorderPage() {
                         value={branchId || ALL_BRANCHES}
                         onValueChange={(v) => setBranchId(v === ALL_BRANCHES ? "" : v)}
                     >
-                        <SelectTrigger className="h-9 w-44">
+                        <SelectTrigger className="h-9 w-40">
                             <SelectValue placeholder="All branches" />
                         </SelectTrigger>
                         <SelectContent>
@@ -213,32 +542,95 @@ export default function ReorderPage() {
             </div>
 
             <div className="flex items-center justify-between gap-3 flex-wrap">
-                <Tabs value={tab} onValueChange={(v) => setTab(v as "items" | "smart")}>
-                    <TabsList>
-                        <TabsTrigger value="items">Item wise</TabsTrigger>
-                        <TabsTrigger value="smart">Smart (substitute bands)</TabsTrigger>
-                    </TabsList>
-                </Tabs>
-                {tab === "smart" && (
-                    <div className="flex items-center gap-2">
-                        <span className="text-xs text-muted-foreground">Cost tolerance ±%</span>
-                        <Input
-                            className="h-8 w-16 text-right font-mono text-xs"
-                            inputMode="numeric"
-                            defaultValue={tolerance}
-                            key={`tol-${tolerance}`}
-                            onBlur={(e) => {
-                                const v = Math.min(Math.max(parseInt(e.target.value, 10) || 20, 1), 100);
-                                if (v !== tolerance) setTolerance(v);
-                            }}
-                            onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-                        />
-                        <span className="text-[11px] text-muted-foreground">
-                            same group + cost within x% = substitutes, demand pooled
-                        </span>
+                <div className="flex items-center gap-2 flex-wrap">
+                    <Tabs value={tab} onValueChange={(v) => setTab(v as "items" | "smart")}>
+                        <TabsList>
+                            <TabsTrigger value="items">Item wise</TabsTrigger>
+                            <TabsTrigger value="smart">Smart (substitute bands)</TabsTrigger>
+                        </TabsList>
+                    </Tabs>
+                    <div className="inline-flex items-center rounded-lg border border-border bg-muted/40 p-0.5">
+                        {(["group", "category", "brand", "item"] as View[]).map((v) => (
+                            <button
+                                key={v}
+                                type="button"
+                                onClick={() => setView(v)}
+                                className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                                    view === v ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                                }`}
+                            >
+                                {v === "item" ? (tab === "smart" ? "Band-Wise" : "Item-Wise") : FIELD_LABELS[v]}
+                            </button>
+                        ))}
                     </div>
-                )}
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className={`h-9 ${anyFilter ? "border-primary text-primary" : ""}`}
+                        onClick={() => setFiltersOpen((o) => !o)}
+                    >
+                        <Filter className="size-4" />
+                        Filters{anyFilter ? ` (${[...filters.values()].reduce((s, set) => s + set.size, 0)})` : ""}
+                    </Button>
+                    <span className="text-xs text-muted-foreground">
+                        {tab === "items"
+                            ? `${itemRows.length} / ${data?.rows.length ?? 0} shown`
+                            : `${bandRows.length} / ${data?.bands?.length ?? 0} bands shown`}
+                    </span>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                    {view !== "item" && (
+                        <Button variant="outline" size="sm" className="h-9" onClick={toggleAllSections}>
+                            {allExpanded ? "Collapse all" : "Expand all"}
+                        </Button>
+                    )}
+                    {tab === "smart" && (
+                        <>
+                            <span className="text-xs text-muted-foreground">Cost tolerance ±%</span>
+                            <Input
+                                className="h-8 w-16 text-right font-mono text-xs"
+                                inputMode="numeric"
+                                defaultValue={tolerance}
+                                key={`tol-${tolerance}`}
+                                onBlur={(e) => {
+                                    const v = Math.min(Math.max(parseInt(e.target.value, 10) || 20, 1), 100);
+                                    if (v !== tolerance) setTolerance(v);
+                                }}
+                                onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                            />
+                            <span className="text-[11px] text-muted-foreground">
+                                same group + cost within x% = substitutes, demand pooled
+                            </span>
+                        </>
+                    )}
+                </div>
             </div>
+
+            {filtersOpen && (
+                <div className="rounded-lg border border-border bg-card p-3 shadow-sm">
+                    <div className="mb-2 flex items-center justify-between text-xs">
+                        <span className="font-medium text-foreground">Filters — tick values to narrow the list (applies to both tabs)</span>
+                        {anyFilter && (
+                            <button type="button" className="text-muted-foreground hover:underline" onClick={() => setFilters(new Map())}>
+                                clear all
+                            </button>
+                        )}
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                        {(["brand", "group", "category"] as FilterField[]).map((f) => (
+                            <FilterBox
+                                key={f}
+                                field={f}
+                                values={filterOptions[f]?.values ?? []}
+                                hasNone={filterOptions[f]?.hasNone ?? false}
+                                selected={filters.get(f) ?? new Set()}
+                                onToggle={toggleFilter}
+                                onClear={clearFilter}
+                            />
+                        ))}
+                    </div>
+                </div>
+            )}
 
             {loading && (
                 <div className="flex justify-center py-20">
@@ -275,74 +667,46 @@ export default function ReorderPage() {
                     {tab === "items" ? (
                     <div className="overflow-x-auto rounded-lg border border-border bg-card shadow-sm">
                         <table className="w-full text-sm">
-                            <thead className="border-b bg-muted text-xs text-muted-foreground">
-                                <tr>
-                                    <th className="px-3 py-2 text-left font-medium">Item</th>
-                                    <th className="px-3 py-2 text-right font-medium">Stock</th>
-                                    <th className="px-3 py-2 text-right font-medium">Reserved</th>
-                                    <th className="px-3 py-2 text-right font-medium">Available</th>
-                                    <th className="px-3 py-2 text-right font-medium">Avg use / day</th>
-                                    <th className="px-3 py-2 text-right font-medium">Lead time (d)</th>
-                                    <th className="px-3 py-2 text-right font-medium">Reorder level</th>
-                                    <th className="px-3 py-2 text-right font-medium">Min floor</th>
-                                    <th className="px-3 py-2 text-right font-medium">Shortfall</th>
-                                    <th className="px-3 py-2 text-center font-medium">Status</th>
-                                </tr>
-                            </thead>
+                            {itemTableHead}
                             <tbody>
                                 {itemRows.length === 0 ? (
                                     <tr><td colSpan={10} className="py-12 text-center text-muted-foreground text-sm">
-                                        {lowOnly ? "Nothing at or below its reorder level. 🎉" : "No active products."}
+                                        {lowOnly || anyFilter || q ? "Nothing matches the current filters." : "No active products."}
                                     </td></tr>
-                                ) : itemRows.map((r) => (
-                                    <tr key={r.id} className={`border-b last:border-0 hover:bg-muted/40 ${r.isLow ? "bg-amber-500/5" : ""}`}>
-                                        <td className="px-3 py-2">
-                                            <span className="font-medium text-foreground">{r.name}</span>
-                                            <span className="ml-2 font-mono text-xs text-muted-foreground">{r.sku}</span>
-                                            {r.inHouse && (
-                                                <span className="ml-2 rounded px-1.5 py-0.5 text-[10px] font-medium bg-sky-500/15 text-sky-600" title="BOM output — produced in-house. LOW here means: go pack/assemble, not purchase.">
-                                                    In-house
-                                                </span>
-                                            )}
-                                        </td>
-                                        <td className="px-3 py-2 text-right font-mono">{fmtQty(r.stock)}{r.unit ? ` ${r.unit}` : ""}</td>
-                                        <td className="px-3 py-2 text-right font-mono text-muted-foreground">{r.reserved > 0 ? fmtQty(r.reserved) : "—"}</td>
-                                        <td className="px-3 py-2 text-right font-mono font-semibold">{fmtQty(r.available)}</td>
-                                        <td className="px-3 py-2 text-right font-mono">{r.avgDailyUsage > 0 ? r.avgDailyUsage.toFixed(2) : "—"}</td>
-                                        <td className="px-3 py-2 text-right">
-                                            <Input
-                                                key={`lt-${r.id}-${r.ownLeadTimeDays ?? ""}`}
-                                                className="h-7 w-16 ml-auto text-right font-mono text-xs"
-                                                inputMode="numeric"
-                                                placeholder={String(r.leadTimeDays)}
-                                                defaultValue={r.ownLeadTimeDays ?? ""}
-                                                onBlur={(e) => void saveField(r.id, "leadTimeDays", e.target.value)}
-                                                onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-                                            />
-                                        </td>
-                                        <td className="px-3 py-2 text-right font-mono">{fmtQty(r.reorderLevel)}</td>
-                                        <td className="px-3 py-2 text-right">
-                                            <Input
-                                                key={`fl-${r.id}-${r.lowStockThreshold}`}
-                                                className="h-7 w-16 ml-auto text-right font-mono text-xs"
-                                                inputMode="numeric"
-                                                defaultValue={r.lowStockThreshold}
-                                                onBlur={(e) => void saveField(r.id, "lowStockThreshold", e.target.value)}
-                                                onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-                                            />
-                                        </td>
-                                        <td className="px-3 py-2 text-right font-mono text-destructive">
-                                            {r.shortfall > 0 ? fmtQty(r.shortfall) : "—"}
-                                        </td>
-                                        <td className="px-3 py-2 text-center">
-                                            {r.isLow ? (
-                                                <span className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-red-500/15 text-red-600">LOW</span>
-                                            ) : (
-                                                <span className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-emerald-500/15 text-emerald-600">OK</span>
-                                            )}
-                                        </td>
-                                    </tr>
-                                ))}
+                                ) : view === "item" ? (
+                                    itemRows.map((r) => renderItemRow(r))
+                                ) : (
+                                    grouped.map((g) => {
+                                        const isOpen = sections.has(g.name);
+                                        return (
+                                            <Fragment key={g.name}>
+                                                <tr
+                                                    className="border-b bg-muted/50 cursor-pointer hover:bg-muted"
+                                                    onClick={() => toggleSection(g.name)}
+                                                >
+                                                    <td className="px-3 py-2" colSpan={8}>
+                                                        <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
+                                                            {isOpen ? <ChevronDown className="size-3.5 text-muted-foreground" /> : <ChevronRight className="size-3.5 text-muted-foreground" />}
+                                                            {g.name}
+                                                            <span className="ml-1 text-xs font-normal text-muted-foreground">{g.items.length} items</span>
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-3 py-2 text-right font-mono text-destructive">
+                                                        {g.totalShortfall > 0 ? fmtQty(g.totalShortfall) : "—"}
+                                                    </td>
+                                                    <td className="px-3 py-2 text-center">
+                                                        {g.lowCount > 0 ? (
+                                                            <span className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-red-500/15 text-red-600">{g.lowCount} LOW</span>
+                                                        ) : (
+                                                            <span className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-emerald-500/15 text-emerald-600">OK</span>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                                {isOpen && g.items.map((r) => renderItemRow(r, true))}
+                                            </Fragment>
+                                        );
+                                    })
+                                )}
                             </tbody>
                         </table>
                     </div>
@@ -364,67 +728,51 @@ export default function ReorderPage() {
                             <tbody>
                                 {bandRows.length === 0 ? (
                                     <tr><td colSpan={8} className="py-12 text-center text-muted-foreground text-sm">
-                                        {lowOnly ? "No band at or below its reorder level. 🎉" : "No active products."}
+                                        {lowOnly || anyFilter || q ? "No band matches the current filters." : "No active products."}
                                     </td></tr>
-                                ) : bandRows.map((b) => {
-                                    const multi = b.productIds.length > 1;
-                                    const isOpen = expanded.has(b.key);
-                                    return (
-                                    <Fragment key={b.key}>
-                                    <tr
-                                        className={`border-b last:border-0 hover:bg-muted/40 ${b.isLow ? "bg-amber-500/5" : ""} ${multi ? "cursor-pointer" : ""}`}
-                                        onClick={multi ? () => toggleExpand(b.key) : undefined}
-                                    >
-                                        <td className="px-3 py-2">
-                                            <span className="inline-flex items-center gap-1.5">
-                                                {multi ? (
-                                                    isOpen ? <ChevronDown className="size-3.5 text-muted-foreground" /> : <ChevronRight className="size-3.5 text-muted-foreground" />
-                                                ) : <span className="inline-block w-3.5" />}
-                                                <span className="font-medium text-foreground">{bandLabel(b)}</span>
-                                            </span>
-                                        </td>
-                                        <td className="px-3 py-2 text-right font-mono">{b.productIds.length}</td>
-                                        <td className="px-3 py-2 text-right font-mono font-semibold">{fmtQty(b.available)}</td>
-                                        <td className="px-3 py-2 text-right font-mono">{b.avgDailyUsage > 0 ? b.avgDailyUsage.toFixed(2) : "—"}</td>
-                                        <td className="px-3 py-2 text-right font-mono">{b.leadTimeDays}</td>
-                                        <td className="px-3 py-2 text-right font-mono">{fmtQty(b.threshold)}</td>
-                                        <td className="px-3 py-2 text-right font-mono text-destructive">{b.shortfall > 0 ? fmtQty(b.shortfall) : "—"}</td>
-                                        <td className="px-3 py-2 text-center">
-                                            {b.isLow ? (
-                                                <span className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-red-500/15 text-red-600">LOW</span>
-                                            ) : (
-                                                <span className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-emerald-500/15 text-emerald-600">OK</span>
-                                            )}
-                                        </td>
-                                    </tr>
-                                    {multi && isOpen && b.productIds.map((id) => {
-                                        const r = rowById.get(id);
-                                        if (!r) return null;
+                                ) : view === "item" ? (
+                                    bandRows.map((b) => renderBand(b))
+                                ) : (
+                                    bandSections.map((sec) => {
+                                        const isOpen = sections.has(sec.name);
                                         return (
-                                        <tr key={`${b.key}-${id}`} className="border-b last:border-0 bg-muted/20 text-xs">
-                                            <td className="px-3 py-1.5 pl-9">
-                                                <span className="text-foreground">{r.name}</span>
-                                                <span className="ml-2 font-mono text-muted-foreground">{r.sku}</span>
-                                                {r.brand && <span className="ml-2 text-muted-foreground">{r.brand}</span>}
-                                            </td>
-                                            <td className="px-3 py-1.5 text-right font-mono text-muted-foreground">
-                                                cost {fmtCost(r.costPaise)}
-                                            </td>
-                                            <td className="px-3 py-1.5 text-right font-mono">{fmtQty(r.available)}</td>
-                                            <td className="px-3 py-1.5 text-right font-mono">{r.avgDailyUsage > 0 ? r.avgDailyUsage.toFixed(2) : "—"}</td>
-                                            <td className="px-3 py-1.5 text-right font-mono">{r.leadTimeDays}</td>
-                                            <td className="px-3 py-1.5 text-right font-mono text-muted-foreground" colSpan={2}>
-                                                margin {r.marginPct != null ? `${r.marginPct.toFixed(1)}%` : "—"}
-                                            </td>
-                                            <td className="px-3 py-1.5 text-center">
-                                                {r.available <= 0 && <span className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-red-500/15 text-red-600">ZERO</span>}
-                                            </td>
-                                        </tr>
+                                            <Fragment key={sec.name}>
+                                                <tr
+                                                    className="border-b bg-muted/50 cursor-pointer hover:bg-muted"
+                                                    onClick={() => toggleSection(sec.name)}
+                                                >
+                                                    <td className="px-3 py-2" colSpan={6}>
+                                                        <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
+                                                            {isOpen ? <ChevronDown className="size-3.5 text-muted-foreground" /> : <ChevronRight className="size-3.5 text-muted-foreground" />}
+                                                            {sec.name}
+                                                            <span className="ml-1 text-xs font-normal text-muted-foreground">
+                                                                {sec.bands.length} band{sec.bands.length === 1 ? "" : "s"}
+                                                            </span>
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-3 py-2 text-right font-mono text-destructive" title={view !== "group" ? "Fillable by this section's order — the same band repeats under other sections, don't sum across them." : undefined}>
+                                                        {sec.totalShortfall > 0 ? fmtQty(sec.totalShortfall) : "—"}
+                                                    </td>
+                                                    <td className="px-3 py-2 text-center">
+                                                        {sec.lowCount > 0 ? (
+                                                            <span className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-red-500/15 text-red-600">{sec.lowCount} LOW</span>
+                                                        ) : (
+                                                            <span className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-emerald-500/15 text-emerald-600">OK</span>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                                {isOpen && sec.bands.map((b) =>
+                                                    renderBand(
+                                                        b,
+                                                        `${sec.name}::`,
+                                                        view === "group" ? undefined : view,
+                                                        view === "group" ? undefined : sec.name,
+                                                    ),
+                                                )}
+                                            </Fragment>
                                         );
-                                    })}
-                                    </Fragment>
-                                    );
-                                })}
+                                    })
+                                )}
                             </tbody>
                         </table>
                     </div>
