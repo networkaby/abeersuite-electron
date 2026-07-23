@@ -327,9 +327,12 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         pathPrefixes: ["/office/bi"],
         children: [
             { label: "Customer Profit", icon: Users, href: "/office/bi/customer-profit" },
+            { label: "Bill Profit", icon: Receipt, href: "/office/bi/bill-profit" },
             { label: "Top Customers", icon: ChartArea, href: "/office/bi/top-customers" },
             { label: "RFM Segmentation", icon: Network, href: "/office/bi/rfm" },
+            { label: "Party Sale & Purchase", icon: ArrowLeftRight, href: "/office/bi/party-sale-purchase" },
             { label: "Item Profit", icon: Box, href: "/office/bi/item-profit" },
+            { label: "Item by Party", icon: Grid2x2, href: "/office/bi/item-by-party" },
             { label: "ABC Analysis", icon: Layers, href: "/office/bi/abc" },
             { label: "FSN & Dead Stock", icon: ArrowLeftRight, href: "/office/bi/fsn" },
             { label: "Stock Turnover", icon: PackageCheck, href: "/office/bi/stock-turnover" },

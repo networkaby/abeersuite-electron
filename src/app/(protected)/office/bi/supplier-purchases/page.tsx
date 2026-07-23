@@ -13,12 +13,13 @@ import { TopBarChart } from "@/modules/bi/components/TopBarChart";
 
 interface SupplierRow {
     accountId: number | null; name: string; bills: number; qty: number;
-    value: number; sharePct: number; lastPurchase: string;
+    value: number; sharePct: number; lastPurchase: string | null;
+    soldValue: number; profit: number; marginPct: number;
 }
 interface Report {
     branches: BranchOption[];
     rows: SupplierRow[];
-    totals: { value: number; bills: number };
+    totals: { value: number; bills: number; soldValue: number; profit: number; marginPct: number };
 }
 
 export default function SupplierPurchasesPage() {
@@ -39,8 +40,8 @@ export default function SupplierPurchasesPage() {
                 <div>
                     <h1 className="text-2xl font-bold text-foreground">Supplier Purchases</h1>
                     <p className="text-sm text-muted-foreground mt-0.5">
-                        Purchase volume per supplier (pre-tax, returns netted)
-                        {topShare > 40 ? ` — top supplier holds ${topShare.toFixed(0)}% of your supply (concentration risk).` : "."}
+                        Purchase volume per supplier (pre-tax, returns netted) with attributed profitability — each item&apos;s sale profit split across its suppliers by qty share
+                        {topShare > 40 ? `. Top supplier holds ${topShare.toFixed(0)}% of your supply (concentration risk).` : "."}
                     </p>
                 </div>
                 <BiFilterBar
@@ -57,10 +58,10 @@ export default function SupplierPurchasesPage() {
 
             {!loading && data && (
                 <>
-                    {data.rows.length > 0 && (
+                    {data.rows.some((r) => r.value !== 0) && (
                         <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
                             <div className="mb-2 text-sm font-medium text-foreground">Top 10 suppliers by purchase value</div>
-                            <TopBarChart data={data.rows.slice(0, 10).map((r) => ({ name: r.name, value: r.value }))} dataKey="value" name="Purchases" height={Math.max(120, Math.min(data.rows.length, 10) * 30)} />
+                            <TopBarChart data={data.rows.filter((r) => r.value !== 0).slice(0, 10).map((r) => ({ name: r.name, value: r.value }))} dataKey="value" name="Purchases" height={Math.max(120, Math.min(data.rows.length, 10) * 30)} />
                         </div>
                     )}
 
@@ -73,20 +74,26 @@ export default function SupplierPurchasesPage() {
                                     <th className="px-3 py-2 text-right font-medium">Qty</th>
                                     <th className="px-3 py-2 text-right font-medium">Purchase Value</th>
                                     <th className="px-3 py-2 text-right font-medium">Share %</th>
+                                    <th className="px-3 py-2 text-right font-medium">Sold (attr)</th>
+                                    <th className="px-3 py-2 text-right font-medium">Profit (attr)</th>
+                                    <th className="px-3 py-2 text-right font-medium">Margin %</th>
                                     <th className="px-3 py-2 text-right font-medium">Last Purchase</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {data.rows.length === 0 ? (
-                                    <tr><td colSpan={6} className="py-12 text-center text-muted-foreground text-sm">No purchases in this period.</td></tr>
+                                    <tr><td colSpan={9} className="py-12 text-center text-muted-foreground text-sm">No purchases in this period.</td></tr>
                                 ) : data.rows.map((r) => (
-                                    <tr key={r.accountId ?? "none"} className="border-b last:border-0 hover:bg-muted/40">
+                                    <tr key={r.name} className="border-b last:border-0 hover:bg-muted/40">
                                         <td className="px-3 py-2.5 font-medium text-foreground">{r.name}</td>
-                                        <td className="px-3 py-2.5 text-right text-muted-foreground">{r.bills}</td>
-                                        <td className="px-3 py-2.5 text-right font-mono">{fmtQty(r.qty)}</td>
-                                        <td className="px-3 py-2.5 text-right font-mono font-semibold">{fmt(r.value)}</td>
-                                        <td className="px-3 py-2.5 text-right font-mono">{r.sharePct.toFixed(1)}%</td>
-                                        <td className="px-3 py-2.5 text-right text-xs text-muted-foreground">{fmtDate(r.lastPurchase)}</td>
+                                        <td className="px-3 py-2.5 text-right text-muted-foreground">{r.bills || "—"}</td>
+                                        <td className="px-3 py-2.5 text-right font-mono">{r.qty !== 0 ? fmtQty(r.qty) : "—"}</td>
+                                        <td className="px-3 py-2.5 text-right font-mono font-semibold">{r.value !== 0 ? fmt(r.value) : "—"}</td>
+                                        <td className="px-3 py-2.5 text-right font-mono">{r.sharePct !== 0 ? `${r.sharePct.toFixed(1)}%` : "—"}</td>
+                                        <td className="px-3 py-2.5 text-right font-mono">{fmt(r.soldValue)}</td>
+                                        <td className={`px-3 py-2.5 text-right font-mono font-semibold ${r.profit < 0 ? "text-red-600" : ""}`}>{fmt(r.profit)}</td>
+                                        <td className={`px-3 py-2.5 text-right font-mono ${r.marginPct < 0 ? "text-red-600" : ""}`}>{r.soldValue !== 0 ? `${r.marginPct.toFixed(1)}%` : "—"}</td>
+                                        <td className="px-3 py-2.5 text-right text-xs text-muted-foreground">{r.lastPurchase ? fmtDate(r.lastPurchase) : "—"}</td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -97,7 +104,11 @@ export default function SupplierPurchasesPage() {
                                         <td className="px-3 py-2.5 text-right">{data.totals.bills}</td>
                                         <td />
                                         <td className="px-3 py-2.5 text-right font-mono">{fmt(data.totals.value)}</td>
-                                        <td colSpan={2} />
+                                        <td />
+                                        <td className="px-3 py-2.5 text-right font-mono">{fmt(data.totals.soldValue)}</td>
+                                        <td className={`px-3 py-2.5 text-right font-mono ${data.totals.profit < 0 ? "text-red-600" : ""}`}>{fmt(data.totals.profit)}</td>
+                                        <td className="px-3 py-2.5 text-right font-mono">{data.totals.marginPct.toFixed(1)}%</td>
+                                        <td />
                                     </tr>
                                 </tfoot>
                             )}

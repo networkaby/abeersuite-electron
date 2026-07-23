@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Loader2, Users, ChartArea, Box, ArrowLeftRight, ClipboardList, Network, Layers, PackageCheck, Building2, Percent, ShoppingCart, Truck, Tag, Clock } from "lucide-react";
+import { Loader2, Users, ChartArea, Box, ArrowLeftRight, ClipboardList, Network, Layers, PackageCheck, Building2, Percent, ShoppingCart, Truck, Tag, Clock, Receipt, Grid2x2 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { fmt } from "@/utils/constants";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
@@ -25,8 +25,11 @@ interface Overview {
 
 const REPORTS = [
     { href: "/office/bi/customer-profit", icon: Users, label: "Customer-wise Profit", desc: "Revenue, derived COGS and margin per customer, with item drill-down." },
+    { href: "/office/bi/bill-profit", icon: Receipt, label: "Bill-wise Profit", desc: "Profit earned on each individual bill — loss-making bills flagged." },
     { href: "/office/bi/top-customers", icon: ChartArea, label: "Top Customers", desc: "Rank by profit, revenue or visit frequency — with share of total." },
     { href: "/office/bi/item-profit", icon: Box, label: "Item-wise Profit", desc: "Margin per product; pivot by category or brand; below-cost flags." },
+    { href: "/office/bi/item-by-party", icon: Grid2x2, label: "Item by Party", desc: "One item, both sides — who buys it and who supplies it." },
+    { href: "/office/bi/party-sale-purchase", icon: ArrowLeftRight, label: "Party Sale & Purchase", desc: "Sold-to vs bought-from per party, with the net flow." },
     { href: "/office/bi/fsn", icon: ArrowLeftRight, label: "FSN & Dead Stock", desc: "Fast / Slow / Non-moving classes and the value locked in dead stock." },
     { href: "/office/bi/movement-register", icon: ClipboardList, label: "Item Movement Register", desc: "Opening, in, out and closing per item with the dated ledger." },
     { href: "/office/bi/rfm", icon: Network, label: "RFM Segmentation", desc: "Champions, Loyal, At-Risk, Lost — who to reward and who to win back." },
