@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, LayoutGrid, ChevronRight, ChevronDown } from "lucide-react";
+import { Plus, Pencil, Trash2, LayoutGrid, ChevronRight, ChevronDown, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -46,6 +46,10 @@ type Row = {
     gstRate: { id: number; rate: string | number; label: string } | null;
     hsnCode: string | null;
     taxability: string | null;
+    /** Movement-band overrides (days) — null = inherit parent → org default. */
+    slowAfterDays: number | null;
+    nonMovingAfterDays: number | null;
+    deadAfterDays: number | null;
 };
 
 const TAXABILITY_OPTIONS = [
@@ -62,13 +66,21 @@ const emptyForm = {
     gstRateId: "",
     hsnCode: "",
     taxability: "",
+    slowAfterDays: "",
+    nonMovingAfterDays: "",
+    deadAfterDays: "",
 };
 
 const NONE = "__none__";
 
+/** Org-wide movement-band fallback (Settings → Org defaults). */
+type OrgBands = { slow: number; nonMoving: number; dead: number };
+const BAND_KEYS = ["slowAfterDays", "nonMovingAfterDays", "deadAfterDays"] as const;
+
 export default function InventoryProductGroupsPage() {
     const [rows, setRows] = useState<Row[]>([]);
     const [gstRates, setGstRates] = useState<GstRateOpt[]>([]);
+    const [orgBands, setOrgBands] = useState<OrgBands | null>(null);
     const [loading, setLoading] = useState(true);
     const [adding, setAdding] = useState(false);
     const [editId, setEditId] = useState<number | null>(null);
@@ -89,7 +101,43 @@ export default function InventoryProductGroupsPage() {
             .get<GstRateOpt[]>("/api/inventory/gst-rates")
             .then((r) => setGstRates(r.data))
             .catch(() => {/* non-fatal */});
+        axios
+            .get("/api/settings/org-defaults")
+            .then((r) => setOrgBands({
+                slow:      r.data.reorderSlowAfterDays      ?? 30,
+                nonMoving: r.data.reorderNonMovingAfterDays ?? 90,
+                dead:      r.data.reorderDeadAfterDays      ?? 180,
+            }))
+            .catch(() => {/* non-fatal — bands fall back to em dash */});
     }, []);
+
+    // Resolve a group's EFFECTIVE bands: its own value if set, else walk up the
+    // parent chain (first ancestor that sets the field wins), else the org
+    // default. `own` marks whether the winning value is set on THIS group — so
+    // the table can show own values solid and inherited values muted, but always
+    // show the real number (never a bare "inherit").
+    const resolveBands = (r: Row): Record<typeof BAND_KEYS[number], { value: number | null; own: boolean }> => {
+        const byId = new Map(rows.map((g) => [g.id, g]));
+        const orgFallback: Record<typeof BAND_KEYS[number], number | null> = {
+            slowAfterDays:      orgBands?.slow      ?? null,
+            nonMovingAfterDays: orgBands?.nonMoving ?? null,
+            deadAfterDays:      orgBands?.dead      ?? null,
+        };
+        const out = {} as Record<typeof BAND_KEYS[number], { value: number | null; own: boolean }>;
+        for (const key of BAND_KEYS) {
+            if (r[key] != null) { out[key] = { value: r[key], own: true }; continue; }
+            let node = r.parentId != null ? byId.get(r.parentId) : undefined;
+            const seen = new Set<number>();
+            let value: number | null = null;
+            while (node && !seen.has(node.id)) {
+                seen.add(node.id);
+                if (node[key] != null) { value = node[key]; break; }
+                node = node.parentId != null ? byId.get(node.parentId) : undefined;
+            }
+            out[key] = { value: value ?? orgFallback[key], own: false };
+        }
+        return out;
+    };
 
     const cancel = () => {
         setAdding(false);
@@ -111,6 +159,9 @@ export default function InventoryProductGroupsPage() {
                 gstRateId:  form.gstRateId  !== "" && form.gstRateId !== NONE ? Number(form.gstRateId) : null,
                 hsnCode:    form.hsnCode.trim() || null,
                 taxability: form.taxability !== "" && form.taxability !== NONE ? form.taxability : null,
+                slowAfterDays:      form.slowAfterDays.trim()      !== "" ? Number(form.slowAfterDays)      : null,
+                nonMovingAfterDays: form.nonMovingAfterDays.trim() !== "" ? Number(form.nonMovingAfterDays) : null,
+                deadAfterDays:      form.deadAfterDays.trim()      !== "" ? Number(form.deadAfterDays)      : null,
             };
             if (adding) {
                 await axios.post("/api/inventory/product-groups", payload);
@@ -125,6 +176,41 @@ export default function InventoryProductGroupsPage() {
             toast.error(axios.isAxiosError(e) ? e.response?.data?.error : "Save failed");
         } finally {
             setSaving(false);
+        }
+    };
+
+    // ── Inline movement-band editing ──────────────────────────────────────
+    // Bands change often, so they are editable straight in the table row —
+    // no need to open the full Edit dialog. Blank = inherit (null).
+    const [bandEditId, setBandEditId] = useState<number | null>(null);
+    const [bandForm, setBandForm] = useState({ slow: "", nonMoving: "", dead: "" });
+    const [bandSaving, setBandSaving] = useState(false);
+
+    const startBandEdit = (r: Row) => {
+        setBandEditId(r.id);
+        setBandForm({
+            slow:      r.slowAfterDays      != null ? String(r.slowAfterDays)      : "",
+            nonMoving: r.nonMovingAfterDays != null ? String(r.nonMovingAfterDays) : "",
+            dead:      r.deadAfterDays      != null ? String(r.deadAfterDays)      : "",
+        });
+    };
+
+    const saveBands = async () => {
+        if (bandEditId == null) return;
+        setBandSaving(true);
+        try {
+            await axios.patch(`/api/inventory/product-groups/${bandEditId}`, {
+                slowAfterDays:      bandForm.slow.trim()      !== "" ? Number(bandForm.slow)      : null,
+                nonMovingAfterDays: bandForm.nonMoving.trim() !== "" ? Number(bandForm.nonMoving) : null,
+                deadAfterDays:      bandForm.dead.trim()      !== "" ? Number(bandForm.dead)      : null,
+            });
+            toast.success("Movement bands updated");
+            setBandEditId(null);
+            load();
+        } catch (e: unknown) {
+            toast.error(axios.isAxiosError(e) ? e.response?.data?.error : "Save failed");
+        } finally {
+            setBandSaving(false);
         }
     };
 
@@ -251,6 +337,33 @@ export default function InventoryProductGroupsPage() {
                             </Select>
                         </div>
 
+                        {/* Movement bands */}
+                        <div className="space-y-2 sm:col-span-2">
+                            <Label>Movement bands (days since last sale)</Label>
+                            <div className="grid grid-cols-3 gap-2">
+                                {([
+                                    ["slowAfterDays", "Slow after"],
+                                    ["nonMovingAfterDays", "Non-moving after"],
+                                    ["deadAfterDays", "Dead after"],
+                                ] as const).map(([key, label]) => (
+                                    <div key={key} className="space-y-1">
+                                        <span className="text-[11px] text-muted-foreground">{label}</span>
+                                        <Input
+                                            inputMode="numeric"
+                                            placeholder="inherit"
+                                            value={form[key]}
+                                            onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value.replace(/\D/g, "") }))}
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                            <p className="text-[11px] text-muted-foreground">
+                                Drives the Reorder / Stock Health classes. Blank = inherit parent group → org default
+                                (Settings → Org defaults). Set once on a root group — e.g. CCTV 60/150/270 — and the
+                                whole tree follows.
+                            </p>
+                        </div>
+
                         {/* Active */}
                         <div className="sm:col-span-2">
                             <label className="flex items-center gap-2 text-sm">
@@ -275,20 +388,25 @@ export default function InventoryProductGroupsPage() {
                             <TableHead>GST</TableHead>
                             <TableHead>HSN</TableHead>
                             <TableHead>Taxability</TableHead>
+                            <TableHead title="Days since last sale: Slow / Non-moving / Dead. Click a cell to edit.">
+                                Movement (S / N / D)
+                            </TableHead>
                             <TableHead className="text-right"> </TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {loading ? (
                             <TableRow>
-                                <TableCell colSpan={5} className="text-muted-foreground">Loading…</TableCell>
+                                <TableCell colSpan={6} className="text-muted-foreground">Loading…</TableCell>
                             </TableRow>
                         ) : visible.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={5} className="text-muted-foreground">No groups yet.</TableCell>
+                                <TableCell colSpan={6} className="text-muted-foreground">No groups yet.</TableCell>
                             </TableRow>
                         ) : (
-                            visible.map(({ row: r, depth, hasChildren }) => (
+                            visible.map(({ row: r, depth, hasChildren }) => {
+                              const bands = resolveBands(r);
+                              return (
                                 <TableRow key={r.id}>
                                     <TableCell className="font-medium" style={{ paddingLeft: `${12 + depth * 20}px` }}>
                                         <span className="flex items-center gap-1">
@@ -310,6 +428,60 @@ export default function InventoryProductGroupsPage() {
                                     <TableCell className="text-sm">{r.gstRate ? r.gstRate.label : <span className="italic text-muted-foreground">inherit</span>}</TableCell>
                                     <TableCell className="font-mono text-sm">{r.hsnCode ?? <span className="italic text-muted-foreground">inherit</span>}</TableCell>
                                     <TableCell className="text-sm">{r.taxability ?? <span className="italic text-muted-foreground">inherit</span>}</TableCell>
+                                    {/* Movement bands — click to edit inline (frequently tuned) */}
+                                    <TableCell
+                                        className={bandEditId === r.id ? "py-1" : "cursor-pointer"}
+                                        title={bandEditId === r.id ? undefined : "Click to edit movement bands"}
+                                        onClick={bandEditId === r.id ? undefined : () => startBandEdit(r)}
+                                    >
+                                        {bandEditId === r.id ? (
+                                            <div className="flex items-center gap-1">
+                                                {([
+                                                    ["slow", "Slow", "slowAfterDays"],
+                                                    ["nonMoving", "Non-moving", "nonMovingAfterDays"],
+                                                    ["dead", "Dead", "deadAfterDays"],
+                                                ] as const).map(([key, label, bandKey], i) => (
+                                                    <Input
+                                                        key={key}
+                                                        autoFocus={i === 0}
+                                                        inputMode="numeric"
+                                                        // Placeholder = the value that would be inherited if left blank.
+                                                        placeholder={bands[bandKey].value != null ? `↳${bands[bandKey].value}` : "inh"}
+                                                        title={`${label} after (days) — blank inherits ${bands[bandKey].value ?? "—"}`}
+                                                        className="h-7 w-14 px-1.5 text-xs"
+                                                        value={bandForm[key]}
+                                                        onChange={(e) => setBandForm((f) => ({ ...f, [key]: e.target.value.replace(/\D/g, "") }))}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === "Enter") saveBands();
+                                                            if (e.key === "Escape") setBandEditId(null);
+                                                        }}
+                                                    />
+                                                ))}
+                                                <Button type="button" variant="outline" size="icon-sm" aria-label="Save bands" disabled={bandSaving} onClick={saveBands}>
+                                                    <Check className="size-3.5" />
+                                                </Button>
+                                                <Button type="button" variant="outline" size="icon-sm" aria-label="Cancel" disabled={bandSaving} onClick={() => setBandEditId(null)}>
+                                                    <X className="size-3.5" />
+                                                </Button>
+                                            </div>
+                                        ) : (
+                                            // Always show the effective numbers. Own values are solid;
+                                            // inherited values are muted + italic.
+                                            <span className="font-mono text-sm">
+                                                {BAND_KEYS.map((key, i) => {
+                                                    const b = bands[key];
+                                                    return (
+                                                        <span key={key}>
+                                                            {i > 0 && <span className="text-muted-foreground"> / </span>}
+                                                            <span className={b.own ? "text-foreground" : "italic text-muted-foreground"}>
+                                                                {b.value ?? "–"}
+                                                            </span>
+                                                        </span>
+                                                    );
+                                                })}
+                                            </span>
+                                        )}
+                                    </TableCell>
                                     <TableCell className="text-right space-x-2">
                                         {!r.isActive ? <Badge variant="outline">inactive</Badge> : null}
                                         <Button
@@ -327,6 +499,9 @@ export default function InventoryProductGroupsPage() {
                                                     gstRateId:  r.gstRateId != null ? String(r.gstRateId) : "",
                                                     hsnCode:    r.hsnCode  ?? "",
                                                     taxability: r.taxability ?? "",
+                                                    slowAfterDays:      r.slowAfterDays      != null ? String(r.slowAfterDays)      : "",
+                                                    nonMovingAfterDays: r.nonMovingAfterDays != null ? String(r.nonMovingAfterDays) : "",
+                                                    deadAfterDays:      r.deadAfterDays      != null ? String(r.deadAfterDays)      : "",
                                                 });
                                             }}
                                         >
@@ -337,7 +512,8 @@ export default function InventoryProductGroupsPage() {
                                         </Button>
                                     </TableCell>
                                 </TableRow>
-                            ))
+                              );
+                            })
                         )}
                     </TableBody>
                 </Table>
