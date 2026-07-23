@@ -66,6 +66,8 @@ model Person {
   receivedConnections SocialConnection[]      @relation("ConnectionAddressee")
   dealTickets         TicketDeal[] // deals (Ticket flavour "deal") linked to this person
   orderTickets        TicketOrder[] // orders (Ticket flavour "order") linked to this person
+  helpTickets         TicketHelp[] // help/enquiry tickets (Ticket flavour "help") linked to this person
+  timelineLogs        TicketLog[] // CRM Reconnect notes/calls logged directly on this person
   owner               Position?               @relation("PersonOwnerPosition", fields: [ownerPositionId], references: [id])
   phones              Phone[]
   emails              Email[]
@@ -122,9 +124,11 @@ model Company {
   financialYearFrom  DateTime? @db.Date
   booksBeginningFrom DateTime? @db.Date
 
-  account     Account? // enforced at app level; FK lives on Account.companyId
-  persons     PersonCompany[]
-  dealTickets TicketDeal[] // deals (Ticket flavour "deal") linked to this company
+  account      Account? // enforced at app level; FK lives on Account.companyId
+  persons      PersonCompany[]
+  dealTickets  TicketDeal[] // deals (Ticket flavour "deal") linked to this company
+  helpTickets  TicketHelp[] // help/enquiry tickets (Ticket flavour "help") linked to this company
+  timelineLogs TicketLog[] // CRM Reconnect notes/calls logged directly on this company
   owner       Position?       @relation("CompanyOwnerPosition", fields: [ownerPositionId], references: [id])
   phones      Phone[]
   emails      Email[]

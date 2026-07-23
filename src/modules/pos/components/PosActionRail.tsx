@@ -12,7 +12,7 @@
 
 import { Fragment } from "react";
 import {
-    Banknote, HandCoins, HelpCircle, TicketPlus,
+    Banknote, HandCoins, HelpCircle, TicketPlus, MessageCircleQuestion,
     type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -23,6 +23,7 @@ export type PosActionRailProps = {
     onRcv: () => void;
     onHelp: () => void;
     onTicket: () => void;
+    onEnquiry: () => void;
     canExp?: boolean;
     canRcv?: boolean;
 };
@@ -51,6 +52,7 @@ const RAIL_ACTIONS: RailAction[] = [
     { key: "help", label: "Help", icon: HelpCircle, kind: "action", divider: true, title: "POS help & keyboard shortcuts" },
 
     { key: "ticket", label: "Ticket", icon: TicketPlus, kind: "action", title: "Create a repair ticket for a customer" },
+    { key: "enquiry", label: "Enquiry", icon: MessageCircleQuestion, kind: "action", title: "Log a customer help / enquiry ticket (price, availability, warranty…)" },
     // { key: "hold", label: "Hold", icon: Pause, kind: "soon" },
     // { key: "note", label: "Note", icon: StickyNote, kind: "soon" },
     // { key: "disc", label: "Disc", icon: Percent, kind: "soon" },
@@ -59,8 +61,8 @@ const RAIL_ACTIONS: RailAction[] = [
     // { key: "print", label: "Print", icon: Printer, kind: "soon" },
 ];
 
-export function PosActionRail({ onExp, onRcv, onHelp, onTicket, canExp = true, canRcv = true }: PosActionRailProps) {
-    const handlers: Record<string, () => void> = { rcv: onRcv, exp: onExp, help: onHelp, ticket: onTicket };
+export function PosActionRail({ onExp, onRcv, onHelp, onTicket, onEnquiry, canExp = true, canRcv = true }: PosActionRailProps) {
+    const handlers: Record<string, () => void> = { rcv: onRcv, exp: onExp, help: onHelp, ticket: onTicket, enquiry: onEnquiry };
     const flags: Record<AccessKey, boolean> = { canRcv, canExp };
 
     return (

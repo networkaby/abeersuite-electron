@@ -10,8 +10,9 @@ model Pipeline {
   isActive    Boolean  @default(true)
   order       Int      @default(0)
   // The FLAVOUR of Ticket this pipeline carries — selects the optional 1:1 detail
-  // table + the UI. "repair" | "deal" | "order" | "delivery" | "refund" | "task"
-  // (task = a bare core row, no detail) | "none". A sub-status' spawnPipelineId
+  // table + the UI. "repair" | "deal" | "order" | "delivery" | "refund" | "help"
+  // (front-desk enquiry → TicketHelp) | "task" (a bare core row, no detail) |
+  // "none". A sub-status' spawnPipelineId
   // resolves the target pipeline, then this decides which detail row the spawned
   // child gets (see lib/childEntities.ts registry).
   entityType  String   @default("repair")

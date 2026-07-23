@@ -26,6 +26,7 @@ import { PosTopBar } from "@/modules/pos/components/PosTopBar";
 import { PosActionRail } from "@/modules/pos/components/PosActionRail";
 import { PosCustomerPanel } from "@/modules/pos/components/PosCustomerPanel";
 import QuickTicketButton from "@/shared/components/QuickTicketButton";
+import HelpQuickForm from "@/modules/help/components/HelpQuickForm";
 import { useQuickTicketStore } from "@/store/quickTicketStore";
 import { PosBillSummary } from "@/modules/pos/components/PosBillSummary";
 import { formatInr } from "@/shared/lib/format";
@@ -56,6 +57,8 @@ export function PosScreenShell({
 }) {
     // "+ Add service charge" dropdown (Sale mode) — pick a catalogue service.
     const [serviceMenuOpen, setServiceMenuOpen] = useState(false);
+    // Counter "Enquiry" — log a front-desk help ticket (reuses the office form).
+    const [enquiryOpen, setEnquiryOpen] = useState(false);
     return (
         <div className="flex h-full w-full flex-row">
           {/* Main column — everything except the far-right action rail. */}
@@ -458,12 +461,18 @@ export function PosScreenShell({
             onRcv={() => b.activeShift ? b.setReceiptDialogOpen(true) : toast.error("Open a shift first to collect a payment")}
             onHelp={() => toast.info("POS help — coming soon")}
             onTicket={() => { useQuickTicketStore.getState().reset(); useQuickTicketStore.getState().setOpen(true); }}
+            onEnquiry={() => setEnquiryOpen(true)}
             canExp={b.posAccess.canExp}
             canRcv={b.posAccess.canRcv}
           />
 
           {/* Quick-ticket dialog (opened from the rail's Ticket button). */}
           <QuickTicketButton />
+
+          {/* Help / enquiry ticket dialog (opened from the rail's Enquiry button).
+              Quick contact-first entry; no position list at the counter — it lands
+              unassigned for the office to pick up. */}
+          <HelpQuickForm open={enquiryOpen} onOpenChange={setEnquiryOpen} onSaved={() => { /* counter has no list to refresh */ }} />
         </div>
     );
 }

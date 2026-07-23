@@ -59,6 +59,7 @@ import {
     Gift,
     Trash2,
     MapPin,
+    LifeBuoy,
 } from "lucide-react";
 
 // Keys match the Priority enum: LOW | MEDIUM | HIGH | URGENT
@@ -423,6 +424,21 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         children: [
             { label: "Deals", icon: ClipboardList, href: "/office/crm/deals" },
             // Future under CRM: Contacts, Leads (lead-finding) — separate modules.
+        ],
+    },
+
+    // Help Desk (front-desk enquiry / first-response tickets — counter + office)
+    {
+        label: "Help Desk",
+        icon: LifeBuoy,
+        key: "help",
+        dashboardHref: "/office/help",
+        pathPrefixes: ["/office/help"],
+        createActions: [
+            { label: "New Help +", subtitle: "Log a front-desk enquiry", icon: LifeBuoy, variant: "default", href: "/office/help?new=1", permission: "help:create" },
+        ],
+        children: [
+            { label: "Help Desk", icon: LifeBuoy, href: "/office/help" },
         ],
     },
 

@@ -31,10 +31,11 @@ dotenv.config({ path: ".env" });
 // The permissions to add for the CURRENT change. Keep these identical to the rows
 // added in bootstrap-seed.ts. `systemOnly` rows are upserted but NOT granted to R1.
 const ADDITIONS: { id: string; label: string; module: string; description: string; systemOnly?: boolean }[] = [
-    { id: "ui:sidebar:settings:customer-groups", label: "Settings → Customer Groups", module: "ui", description: "Show the \"Customer Groups\" link under Settings in the sidebar." },
-    { id: "ui:sidebar:bi:stock-health", label: "Business Intelligence → Stock Health", module: "ui", description: "Show the \"Stock Health\" link under Business Intelligence in the sidebar." },
-    { id: "ui:sidebar:bi:party-sale-purchase", label: "Business Intelligence → Party Sale & Purchase", module: "ui", description: "Show the \"Party Sale & Purchase\" link under Business Intelligence in the sidebar." },
-    { id: "ui:sidebar:bi:item-by-party", label: "Business Intelligence → Item by Party", module: "ui", description: "Show the \"Item by Party\" link under Business Intelligence in the sidebar." },
+    // Help Desk module (front-desk enquiry tickets — counter + office).
+    { id: "ui:sidebar:help:help-desk", label: "Help Desk → Help Desk", module: "ui", description: "Show the \"Help Desk\" link under Help Desk in the sidebar." },
+    { id: "help:create", label: "Create help tickets", module: "help", description: "Log a front-desk enquiry (the New Help + quick action and the POS counter Enquiry button)." },
+    { id: "help:edit", label: "Edit help tickets", module: "help", description: "Advise, move stage, close with an outcome, and convert a help ticket into a repair / deal / sale." },
+    { id: "help:delete", label: "Delete help tickets", module: "help", description: "Delete a help ticket." },
 ];
 
 const ADMIN_ROLE_ID = "R1";

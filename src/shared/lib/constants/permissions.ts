@@ -97,6 +97,13 @@ export const PERMISSIONS = {
     // UI-visibility gates only, matching the ungated-→-gated move for these actions.
     DEALS_CREATE:                       "deals:create",
     TASKS_CREATE:                       "tasks:create",
+
+    // Help Desk — front-desk enquiry tickets (Help board + POS counter Enquiry).
+    // CREATE gates logging one; EDIT gates advise / close-with-outcome / convert;
+    // DELETE gates removal. UI-visibility only, like the other resource families.
+    HELP_CREATE:                        "help:create",
+    HELP_EDIT:                          "help:edit",
+    HELP_DELETE:                        "help:delete",
     // Gate for the "More +" quick action (opens the all-create-actions dialog).
     // Behaves like a create action — its own tick in the role's Quick Actions.
     QUICK_ACTIONS_MORE:                 "quick-actions:more",

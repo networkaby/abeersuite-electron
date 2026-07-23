@@ -34,6 +34,7 @@
     "seed:recompute-balances": "tsx prisma/seeds/recompute-balances.ts",
     "seed:apply-permissions": "tsx prisma/seeds/apply-permissions.ts",
     "seed:apply-delivery-methods": "tsx prisma/seeds/apply-delivery-methods.ts",
+    "seed:apply-help-pipeline": "tsx prisma/seeds/apply-help-pipeline.ts",
     "seed:check-docs": "tsx scripts/check-doc-sync.ts",
     "seed:fix-docs": "tsx scripts/check-doc-sync.ts --fix",
     "precommit": "tsx scripts/check-doc-sync.ts --strict",

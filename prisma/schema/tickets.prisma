@@ -80,6 +80,7 @@ model Ticket {
   order    TicketOrder?
   delivery TicketDelivery?
   refund   TicketRefund?
+  help     TicketHelp?
 
   @@index([parentTicketId])
   @@index([status])
@@ -282,11 +283,68 @@ model TicketRefund {
   @@index([orderSource, orderId])
 }
 
+// ── Detail: Help (front-desk enquiry / triage ticket) ─────────────────────────
+// A short-lived FIRST-RESPONSE record. The front desk (counter or office) logs a
+// customer's problem or question — price, availability, technical info, warranty
+// on a dead device… — the concerned team advises, then it CLOSES with an
+// `outcome`. On a "converted" outcome it hands off by creating a fresh, INDEPENDENT
+// ticket (a repair / service ticket, or a CRM deal) on that pipeline — no parent/
+// child link back: the closed help ticket + its outcome is the whole record. The
+// customer is either an existing party (personId / companyId) OR a brand-new
+// walk-in captured inline (contactName + phone). GL-silent — a help ticket never
+// touches the ledger (estimates / orders / invoices are decoupled vouchers, raised
+// independently, never "converted from" a ticket).
+model TicketHelp {
+  ticketId Int    @id
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  // Customer — an existing party link, or a new walk-in captured inline.
+  personId    Int?
+  companyId   Int?
+  person      Person?  @relation(fields: [personId], references: [id])
+  company     Company? @relation(fields: [companyId], references: [id])
+  contactName String?
+  phone       String?
+  email       String?
+
+  // What they need. `inquiryType` = PRICE | AVAILABILITY | TECH_INFO | WARRANTY |
+  // OTHER (a light string, mirrored on the core Ticket.category tag); `subject` is
+  // the one-line summary shown on the board card.
+  inquiryType String?
+  subject     String?
+
+  // Set when the ticket closes — its terminal disposition. A CONVERTED_* outcome
+  // records that a downstream ticket was created; there is deliberately no FK to it.
+  outcome HelpOutcome?
+
+  @@index([personId])
+  @@index([companyId])
+  @@index([outcome])
+}
+
+// Terminal disposition of a help ticket (the single "ladder" that every enquiry
+// type shares — see the three broken-machine / price stories).
+enum HelpOutcome {
+  NOT_FEASIBLE // we don't service that / it's not available and can't be arranged
+  CUSTOMER_DECLINED // customer chose not to proceed
+  RESOLVED_INFO // advice / price / info given, nothing more to do
+  CONVERTED_TO_SERVICE // handed off into a repair / service ticket
+  CONVERTED_TO_SALE // handed off into a sale (deal / estimate / order)
+}
+
 // ── Timeline: one log for every flavour (repair status changes, deal activities,
 // task comments) — actor is a frozen ActorSnapshot, no User FK. ────────────────
 model TicketLog {
-  id       Int @id @default(autoincrement())
-  ticketId Int
+  id Int @id @default(autoincrement())
+
+  // ── Owner: exactly one of ticket / person / company (app-enforced) ──────────
+  // Normally the timeline of a Ticket (repair/deal notes, status changes). For the
+  // CRM "Reconnect" page a note/call hangs directly off a customer (Person or
+  // Company) with NO ticket — the customer is their own timeline. Real tickets
+  // spun off later (e.g. a Deal on interest) keep using ticketId as before.
+  ticketId  Int?
+  personId  Int?
+  companyId Int?
 
   author     Json          @default("{}") // ActorSnapshot
   kind       TicketLogKind @default(NOTE)
@@ -305,11 +363,15 @@ model TicketLog {
 
   createdAt DateTime @default(now())
 
-  ticket       Ticket        @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  ticket       Ticket?       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  person       Person?       @relation(fields: [personId], references: [id], onDelete: Cascade)
+  company      Company?      @relation(fields: [companyId], references: [id], onDelete: Cascade)
   ticketStatus TicketStatus? @relation(fields: [status], references: [id])
   ticketWorker TicketWorker? @relation(fields: [workerId], references: [id])
 
   @@index([ticketId])
+  @@index([personId, createdAt])
+  @@index([companyId, createdAt])
 }
 
 // Kind of a TicketLog entry — merges the former TaskCommentKind + DealActivityKind

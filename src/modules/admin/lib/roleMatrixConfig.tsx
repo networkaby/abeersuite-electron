@@ -227,6 +227,19 @@ export const MATRIX_ROWS: {
                 deleteOwn: "tickets:delete", deleteBranch: "tickets:delete", deleteOrg: "tickets:delete",
             },
         },
+        // Help Desk — the front-desk enquiry ticket, same flat CRUD shape as repair
+        // tickets (no branch radius; open to all staff, gated only by holding the id).
+        {
+            key: "help",
+            label: "Help Tickets",
+            module: "help",
+            cells: {
+                viewOwn: "help:create", viewBranch: "help:create", viewOrg: "help:create",
+                create: "help:create",
+                editOwn: "help:edit", editBranch: "help:edit", editOrg: "help:edit",
+                deleteOwn: "help:delete", deleteBranch: "help:delete", deleteOrg: "help:delete",
+            },
+        },
         {
             key: "users",
             label: "Users",

@@ -144,17 +144,18 @@ const PIPELINES: PipelineSeed[] = [
         ],
     },
     {
-        id: "P2", name: "customer-support", label: "Customer Support",
-        description: "General customer support tickets not related to repairs",
-        color: "bg-teal-100 text-teal-700", order: 2, entityType: "ticket",
+        // Front-desk Help Desk — a universal enquiry / first-response pipeline
+        // (flavour "help" → TicketHelp). Log a customer's problem or question, the
+        // team advises, then it closes with an outcome (or converts into a real
+        // repair / deal / estimate / order). Deliberately short: Open → Reviewing →
+        // Closed. Was the orphan "customer-support" repair-flavoured pipeline.
+        id: "P2", name: "help-desk", label: "Help Desk",
+        description: "Front-desk enquiries & first response — price, availability, technical info, warranty help",
+        color: "bg-teal-100 text-teal-700", order: 2, entityType: "help",
         statuses: [
-            { id: "S10", label: "New Request", color: "bg-gray-100 text-gray-600", order: 1, isEntryPoint: true,  isTerminal: false, pipelineId: "P2" },
-            { id: "S11", label: "In Triage", color: "bg-yellow-100 text-yellow-700", order: 2, isEntryPoint: false, isTerminal: false, pipelineId: "P2" },
-            { id: "S12", label: "Assigned", color: "bg-blue-100 text-blue-600", order: 3, isEntryPoint: false, isTerminal: false, pipelineId: "P2" },
-            { id: "S13", label: "In Progress", color: "bg-indigo-100 text-indigo-600", order: 4, isEntryPoint: false, isTerminal: false, pipelineId: "P2" },
-            { id: "S14", label: "Pending Customer", color: "bg-orange-100 text-orange-600", order: 5, isEntryPoint: false, isTerminal: false, pipelineId: "P2" },
-            { id: "S15", label: "Resolved", color: "bg-green-100 text-green-600", order: 6, isEntryPoint: false, isTerminal: false, pipelineId: "P2" },
-            { id: "S16", label: "Closed", color: "bg-gray-100 text-gray-400", order: 7, isEntryPoint: false, isTerminal: true,  pipelineId: "P2" },
+            { id: "S10", label: "Open", color: "bg-gray-100 text-gray-600", order: 1, isEntryPoint: true,  isTerminal: false, pipelineId: "P2" },
+            { id: "S11", label: "Reviewing", color: "bg-yellow-100 text-yellow-700", order: 2, isEntryPoint: false, isTerminal: false, pipelineId: "P2" },
+            { id: "S16", label: "Closed", color: "bg-gray-100 text-gray-400", order: 3, isEntryPoint: false, isTerminal: true,  pipelineId: "P2" },
         ],
     },
     {

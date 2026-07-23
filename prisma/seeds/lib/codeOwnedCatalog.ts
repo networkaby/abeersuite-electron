@@ -178,6 +178,13 @@ export const PERMISSION_CATALOG: PermissionSeed[] = [
     // the deals and work-board pages themselves ride their sidebar links.
     { id: "deals:create", label: "Create deals", module: "crm", description: "Add a deal to the CRM pipeline (the New Deal + quick action)." },
     { id: "tasks:create", label: "Create tasks", module: "administration", description: "Add an internal work item on the Administration board (the New Task + quick action)." },
+
+    // help — the front-desk enquiry ticket (Help Desk board + POS counter Enquiry
+    // button). View rides the help sidebar link; these gate create / edit / delete
+    // (incl. advise, close-with-outcome, and convert to a repair / deal).
+    { id: "help:create", label: "Create help tickets", module: "help", description: "Log a front-desk enquiry (the New Help + quick action and the POS counter Enquiry button)." },
+    { id: "help:edit", label: "Edit help tickets", module: "help", description: "Advise, move stage, close with an outcome, and convert a help ticket into a repair / deal / sale." },
+    { id: "help:delete", label: "Delete help tickets", module: "help", description: "Delete a help ticket." },
     { id: "quick-actions:more", label: "Show More + quick action", module: "core", description: "Show the More + button in the Quick Actions bar (opens the all-create-actions dialog)." },
 ];
 
