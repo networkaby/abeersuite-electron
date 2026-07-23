@@ -10,6 +10,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/componen
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { INDIA_STATE_NAMES } from "@/modules/delivery/lib/deliveryMethodConfig";
 import { useShopCartStore } from "@/store/external/shopCartStore";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
@@ -273,6 +274,16 @@ export default function ShopCheckoutPage() {
     const [couponDraft, setCouponDraft] = useState("");
     const [redeemPts, setRedeemPts] = useState(0);
     const [redeemDraft, setRedeemDraft] = useState("");
+    // "Use maximum points" tick — when on, the REQUESTED points track the
+    // server's own ceiling (maxRedeemablePts) instead of a manual number, so
+    // it stays correct as the cart/coupon change the ceiling. Derived, not
+    // stored: maxRedeemablePts is computed by the server independently of how
+    // many points were requested, so this converges within one extra preview
+    // round-trip (first call requests 0 → server returns the real ceiling →
+    // effect re-fires requesting exactly that ceiling → stable).
+    const [useMaxPoints, setUseMaxPoints] = useState(false);
+    const maxRedeemablePts = tierPreview?.loyalty?.maxRedeemablePts ?? 0;
+    const requestedRedeemPts = useMaxPoints ? maxRedeemablePts : redeemPts;
     // No sync setState in the effect (react-hooks/set-state-in-effect) — a
     // guest / empty cart never fetches; the derived gate below hides stale rows.
     useEffect(() => {
@@ -284,13 +295,13 @@ export default function ShopCheckoutPage() {
                     accountId: activeAccountId,
                     lines: lines.map((l) => ({ productId: l.productId, quantity: l.quantity })),
                     couponCode: couponCode || undefined,
-                    redeemPoints: redeemPts || undefined,
+                    redeemPoints: requestedRedeemPts || undefined,
                 })
                 .then((r) => { if (!cancelled) setTierPreview(r.data); })
                 .catch(() => { if (!cancelled) setTierPreview(null); });
         }, 300);
         return () => { cancelled = true; clearTimeout(timer); };
-    }, [activeAccountId, lines, couponCode, redeemPts]);
+    }, [activeAccountId, lines, couponCode, requestedRedeemPts]);
     const previewLive = !!activeAccountId && lines.length > 0 && !!tierPreview;
     const tierDiscount = previewLive ? tierPreview!.discountPaise : 0;
     const couponDiscount = previewLive ? (tierPreview!.coupon?.discountPaise ?? 0) : 0;
@@ -360,8 +371,9 @@ export default function ShopCheckoutPage() {
                 // (AUTO offers apply server-side even without a code).
                 couponCode: couponCode || undefined,
                 // Loyalty points to burn — server clamps/validates; lots burn at
-                // invoice post.
-                redeemPoints: redeemPts || undefined,
+                // invoice post. requestedRedeemPts tracks the live ceiling when
+                // "Use maximum points" is ticked.
+                redeemPoints: requestedRedeemPts || undefined,
             });
             clear();
             router.push(`/shop/order/${order.id}`);
@@ -765,39 +777,57 @@ export default function ShopCheckoutPage() {
                                     <div className="space-y-1 pt-1">
                                         <p className="text-xs text-muted-foreground">
                                             You have <span className="font-medium text-foreground">{tierPreview.loyalty.balance} points</span>
-                                            {tierPreview.loyalty.maxRedeemablePts > 0
-                                                ? <> — up to {tierPreview.loyalty.maxRedeemablePts} usable on this order (₹{(tierPreview.loyalty.redeemValue * tierPreview.loyalty.maxRedeemablePts).toFixed(0)})</>
+                                            {maxRedeemablePts > 0
+                                                ? <> — up to {maxRedeemablePts} usable on this order (₹{(tierPreview.loyalty.redeemValue * maxRedeemablePts).toFixed(0)})</>
                                                 : null}
                                         </p>
-                                        <div className="flex items-center gap-2">
-                                            <Input
-                                                value={redeemDraft}
-                                                onChange={(e) => setRedeemDraft(e.target.value.replace(/\D/g, ""))}
-                                                placeholder="Points to use"
-                                                inputMode="numeric"
-                                                className="h-8 text-xs"
+                                        {/* Tick to apply the maximum usable points — tracks the live
+                                            ceiling (recomputed as the coupon/cart change it) instead of
+                                            a fixed number typed once. */}
+                                        <label className="flex items-center gap-2 text-xs">
+                                            <Checkbox
+                                                checked={useMaxPoints}
+                                                disabled={maxRedeemablePts <= 0}
+                                                onCheckedChange={(checked) => {
+                                                    const on = checked === true;
+                                                    setUseMaxPoints(on);
+                                                    if (on) { setRedeemPts(0); setRedeemDraft(""); }
+                                                }}
                                             />
-                                            {redeemPts > 0 ? (
-                                                <Button
-                                                    type="button" variant="outline" size="sm" className="h-8"
-                                                    onClick={() => { setRedeemPts(0); setRedeemDraft(""); }}
-                                                >
-                                                    Remove
-                                                </Button>
-                                            ) : (
-                                                <Button
-                                                    type="button" variant="outline" size="sm" className="h-8"
-                                                    disabled={!redeemDraft || parseInt(redeemDraft, 10) <= 0}
-                                                    onClick={() => setRedeemPts(parseInt(redeemDraft, 10) || 0)}
-                                                >
-                                                    Use points
-                                                </Button>
-                                            )}
-                                        </div>
-                                        {redeemPts > 0 && tierPreview.loyalty.redeemError ? (
+                                            Use maximum points
+                                            {maxRedeemablePts > 0 ? ` (${maxRedeemablePts} pts)` : ""}
+                                        </label>
+                                        {!useMaxPoints && (
+                                            <div className="flex items-center gap-2">
+                                                <Input
+                                                    value={redeemDraft}
+                                                    onChange={(e) => setRedeemDraft(e.target.value.replace(/\D/g, ""))}
+                                                    placeholder="Points to use"
+                                                    inputMode="numeric"
+                                                    className="h-8 text-xs"
+                                                />
+                                                {redeemPts > 0 ? (
+                                                    <Button
+                                                        type="button" variant="outline" size="sm" className="h-8"
+                                                        onClick={() => { setRedeemPts(0); setRedeemDraft(""); }}
+                                                    >
+                                                        Remove
+                                                    </Button>
+                                                ) : (
+                                                    <Button
+                                                        type="button" variant="outline" size="sm" className="h-8"
+                                                        disabled={!redeemDraft || parseInt(redeemDraft, 10) <= 0}
+                                                        onClick={() => setRedeemPts(parseInt(redeemDraft, 10) || 0)}
+                                                    >
+                                                        Use points
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        )}
+                                        {requestedRedeemPts > 0 && tierPreview.loyalty.redeemError ? (
                                             <p className="text-xs text-destructive">{tierPreview.loyalty.redeemError}</p>
                                         ) : null}
-                                        {redeemPts > 0 && tierPreview.loyalty.redeemPoints > 0 && tierPreview.loyalty.redeemPoints < redeemPts ? (
+                                        {!useMaxPoints && redeemPts > 0 && tierPreview.loyalty.redeemPoints > 0 && tierPreview.loyalty.redeemPoints < redeemPts ? (
                                             <p className="text-[11px] text-muted-foreground">
                                                 Clamped to {tierPreview.loyalty.redeemPoints} points (order limit).
                                             </p>
