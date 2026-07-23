@@ -60,6 +60,11 @@ interface OrgDefaults {
     defaultSaleCreditPeriod: number | null;
     defaultPurchaseCreditPeriod: number | null;
     defaultLeadTimeDays: number;
+    reorderSlowAfterDays: number;
+    reorderNonMovingAfterDays: number;
+    reorderDeadAfterDays: number;
+    reorderNewItemDays: number;
+    clearanceMarginCutoffPct: number | string;
     defaultCurrencySymbol: string;
     barcodeBandsJson: BarcodeBand[];
     cashDenominationsJson: number[];
@@ -168,6 +173,13 @@ export function OrgDefaultsForm({ units }: { units: InvUnit[] }) {
                 defaultSaleCreditPeriod: draft.defaultSaleCreditPeriod,
                 defaultPurchaseCreditPeriod: draft.defaultPurchaseCreditPeriod,
                 defaultLeadTimeDays: draft.defaultLeadTimeDays ?? 7,
+                // `|| default` (not ??) — a blanked field (0) falls back to the shipped default.
+                reorderSlowAfterDays: draft.reorderSlowAfterDays || 30,
+                reorderNonMovingAfterDays: draft.reorderNonMovingAfterDays || 90,
+                reorderDeadAfterDays: draft.reorderDeadAfterDays || 180,
+                reorderNewItemDays: draft.reorderNewItemDays || 60,
+                // 0 is a legitimate cutoff (only below-cost = clearance).
+                clearanceMarginCutoffPct: Math.min(Math.max(Number(draft.clearanceMarginCutoffPct) || 0, 0), 100),
                 defaultCurrencySymbol: draft.defaultCurrencySymbol,
                 // Sorted ascending by `max` so barcodePrice's `find(price <= max)` picks the right band.
                 barcodeBandsJson: [...(draft.barcodeBandsJson ?? [])]
@@ -396,9 +408,61 @@ export function OrgDefaultsForm({ units }: { units: InvUnit[] }) {
                             }}
                         />
                         <p className="text-[10px] text-muted-foreground">
-                            Reorder-point fallback: level = 30-day avg daily usage × lead time. A product can override this on the Reorder page.
+                            Reorder-point fallback: level = avg daily usage × lead time. A product can override this on the Reorder page.
                         </p>
                     </div>
+                </div>
+            </section>
+
+            {/* Movement classification bands (universal fallback) */}
+            <section className="rounded-lg border bg-card p-4 space-y-4">
+                <div>
+                    <h2 className="text-sm font-semibold">Movement bands (days since last sale)</h2>
+                    <p className="text-xs text-muted-foreground">
+                        Universal fallback for the Reorder / Stock Health classes: Regular →
+                        <span className="font-medium"> Slow</span> after N days, → <span className="font-medium">Non-moving</span>,
+                        → <span className="font-medium">Dead</span> (never reorder). A product group or category can override
+                        these in its Masters dialog — CCTV project cycles and ink/paper consumables don&apos;t share one calendar.
+                    </p>
+                </div>
+                <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                    {([
+                        ["reorderSlowAfterDays", "Slow after (days)", "e.g. 30"],
+                        ["reorderNonMovingAfterDays", "Non-moving after", "e.g. 90"],
+                        ["reorderDeadAfterDays", "Dead after", "e.g. 180"],
+                        ["reorderNewItemDays", "“New” item age", "e.g. 60"],
+                    ] as const).map(([key, label, ph]) => (
+                        <div key={key} className="space-y-1">
+                            <Label className="text-xs">{label}</Label>
+                            <Input
+                                type="text"
+                                className="h-9"
+                                placeholder={ph}
+                                value={draft[key] ?? ""}
+                                onChange={(e) => {
+                                    const v = e.target.value.replace(/\D/g, "");
+                                    set(key, v === "" ? 0 : Number(v));
+                                }}
+                            />
+                        </div>
+                    ))}
+                </div>
+                <div className="max-w-[260px] space-y-1">
+                    <Label className="text-xs">Clearance margin cutoff (%)</Label>
+                    <Input
+                        type="text"
+                        className="h-9"
+                        placeholder="e.g. 1"
+                        value={String(draft.clearanceMarginCutoffPct ?? "")}
+                        onChange={(e) => {
+                            const v = e.target.value.replace(/[^0-9.]/g, "");
+                            set("clearanceMarginCutoffPct", v);
+                        }}
+                    />
+                    <p className="text-[10px] text-muted-foreground">
+                        A sale at pre-tax price ≤ cost × (1 + this%) counts as clearance — stock leaving, never demand.
+                        Clearance sales feed no usage average and can never revive a dead item&apos;s buy signal.
+                    </p>
                 </div>
             </section>
 

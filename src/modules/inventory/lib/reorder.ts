@@ -1,6 +1,3 @@
-import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { toNumber } from "@/modules/accountancy/lib/balance";
-
 /**
  * Reorder-point math — the complete formula (deliberately NOT Tally's, which
  * conflates the sampling window and the coverage horizon into one "Period"):
@@ -15,35 +12,9 @@ import { toNumber } from "@/modules/accountancy/lib/balance";
  * The manual floor covers new / no-history items.
  */
 
-/** Sampling window for average daily usage — long enough to be stable, short enough to track trend. */
-export const REORDER_USAGE_WINDOW_DAYS = 30;
-
-/**
- * Average daily outward qty per product over the trailing window, from
- * InvStockLedger (POSTED, non-deleted vouchers — same filter as the BI FSN
- * report). Optionally scoped to one branch. Products with no outward rows in
- * the window are simply absent from the map (treat as 0).
- */
-export async function avgDailyUsageMap(opts: { branchId?: string | null } = {}): Promise<Map<number, number>> {
-    const from = new Date();
-    from.setDate(from.getDate() - REORDER_USAGE_WINDOW_DAYS);
-    from.setHours(0, 0, 0, 0);
-
-    const sums = await prisma.invStockLedger.groupBy({
-        by: ["productId"],
-        where: {
-            ...(opts.branchId ? { branchId: opts.branchId } : {}),
-            universalVoucher: { status: "POSTED", deletedAt: null },
-            date: { gte: from },
-            outQty: { gt: 0 },
-        },
-        _sum: { outQty: true },
-    });
-
-    return new Map(
-        sums.map((s) => [s.productId, toNumber(s._sum.outQty ?? 0) / REORDER_USAGE_WINDOW_DAYS]),
-    );
-}
+// Average-daily-usage + movement classification live in movementClass.ts —
+// the class decides the sampling window (Regular = slow band, Slow = the
+// longer non-moving band) and guards against dead-stock blips.
 
 /** reorderLevel = avgDailyUsage × leadTimeDays, floored by the manual threshold. */
 export function reorderThreshold(avgDailyUsage: number, leadTimeDays: number, lowStockThreshold: number): number {

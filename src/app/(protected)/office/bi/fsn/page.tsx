@@ -55,7 +55,8 @@ export default function FsnPage() {
                 <div>
                     <h1 className="text-2xl font-bold text-foreground">FSN & Dead Stock</h1>
                     <p className="text-sm text-muted-foreground mt-0.5">
-                        Fast (turnover ≥ {data?.fastMinTurnover ?? 3}) / Slow / Non-moving in the period — non-moving with stock on hand is dead stock, its value locked.
+                        Turnover-based (industry standard): Fast (turnover ≥ {data?.fastMinTurnover ?? 3}) / Slow / Non-moving in the period — non-moving with stock on hand is dead stock, its value locked.
+                        For the house recency lens that drives Reorder, see <a href="/office/bi/stock-health" className="underline hover:text-foreground">Stock Health</a>.
                     </p>
                 </div>
                 <BiFilterBar

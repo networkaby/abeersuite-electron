@@ -44,9 +44,18 @@ export const invUnitCreateSchema = z.object({
 
 export const invUnitUpdateSchema = invUnitCreateSchema.partial();
 
+/// Movement-band overrides (days since last sale) — null = inherit up the
+/// chain (parent group/category → org defaults). Shared by group + category.
+const movementBandFields = {
+    slowAfterDays:      z.number().int().min(1).max(3650).nullish(),
+    nonMovingAfterDays: z.number().int().min(1).max(3650).nullish(),
+    deadAfterDays:      z.number().int().min(1).max(3650).nullish(),
+};
+
 export const invCategoryCreateSchema = nameIsActiveSchema.extend({
     slug: zOptStr(120),
     parentId: z.number().int().positive().nullish(),
+    ...movementBandFields,
 });
 
 export const invCategoryUpdateSchema = invCategoryCreateSchema.partial();
@@ -64,6 +73,7 @@ export const invProductGroupCreateSchema = nameIsActiveSchema.extend({
     gstRateId:  z.number().int().positive().nullish(),
     hsnCode:    zOptStr(32),
     taxability: z.enum(TAXABILITY).nullish(),
+    ...movementBandFields,
 });
 
 export const invProductGroupUpdateSchema = invProductGroupCreateSchema.partial();

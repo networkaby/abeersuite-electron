@@ -335,6 +335,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Item by Party", icon: Grid2x2, href: "/office/bi/item-by-party" },
             { label: "ABC Analysis", icon: Layers, href: "/office/bi/abc" },
             { label: "FSN & Dead Stock", icon: ArrowLeftRight, href: "/office/bi/fsn" },
+            { label: "Stock Health", icon: ShieldCheck, href: "/office/bi/stock-health" },
             { label: "Stock Turnover", icon: PackageCheck, href: "/office/bi/stock-turnover" },
             { label: "Movement Register", icon: ClipboardList, href: "/office/bi/movement-register" },
             { label: "Sales Trend", icon: ChartArea, href: "/office/bi/sales-trend" },

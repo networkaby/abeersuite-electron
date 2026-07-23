@@ -41,9 +41,16 @@ type InvCategory = {
     parentId: number | null;
     isActive: boolean;
     parent?: { id: number; name: string } | null;
+    /** Movement-band overrides (days) — null = inherit parent → org default. */
+    slowAfterDays: number | null;
+    nonMovingAfterDays: number | null;
+    deadAfterDays: number | null;
 };
 
-const empty = { name: "", slug: "", parentId: "", isActive: true };
+const empty = {
+    name: "", slug: "", parentId: "", isActive: true,
+    slowAfterDays: "", nonMovingAfterDays: "", deadAfterDays: "",
+};
 
 export default function InventoryCategoriesPage() {
     const [rows, setRows] = useState<InvCategory[]>([]);
@@ -85,6 +92,9 @@ export default function InventoryCategoriesPage() {
                 slug: slugTrim === "" ? null : slugTrim,
                 parentId: parentId != null && Number.isFinite(parentId) ? parentId : null,
                 isActive: form.isActive,
+                slowAfterDays:      form.slowAfterDays.trim()      !== "" ? Number(form.slowAfterDays)      : null,
+                nonMovingAfterDays: form.nonMovingAfterDays.trim() !== "" ? Number(form.nonMovingAfterDays) : null,
+                deadAfterDays:      form.deadAfterDays.trim()      !== "" ? Number(form.deadAfterDays)      : null,
             };
             if (adding) {
                 await axios.post("/api/inventory/categories", payload);
@@ -171,6 +181,30 @@ export default function InventoryCategoriesPage() {
                                 </SelectContent>
                             </Select>
                         </div>
+                        <div className="space-y-2 sm:col-span-2">
+                            <Label>Movement bands (days since last sale)</Label>
+                            <div className="grid grid-cols-3 gap-2">
+                                {([
+                                    ["slowAfterDays", "Slow after"],
+                                    ["nonMovingAfterDays", "Non-moving after"],
+                                    ["deadAfterDays", "Dead after"],
+                                ] as const).map(([key, label]) => (
+                                    <div key={key} className="space-y-1">
+                                        <span className="text-[11px] text-muted-foreground">{label}</span>
+                                        <Input
+                                            inputMode="numeric"
+                                            placeholder="inherit"
+                                            value={form[key]}
+                                            onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value.replace(/\D/g, "") }))}
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                            <p className="text-[11px] text-muted-foreground">
+                                Drives the Reorder / Stock Health classes (a product&apos;s group override wins first).
+                                Blank = inherit parent category → org default — e.g. consumables 15/45/90.
+                            </p>
+                        </div>
                         <div className="flex items-end">
                             <label className="flex items-center gap-2 text-sm">
                                 <input type="checkbox" checked={form.isActive} onChange={(e) => setForm((f) => ({ ...f, isActive: e.target.checked }))} />
@@ -247,6 +281,9 @@ export default function InventoryCategoriesPage() {
                                                     slug: c.slug ?? "",
                                                     parentId: c.parentId == null ? "" : String(c.parentId),
                                                     isActive: c.isActive,
+                                                    slowAfterDays:      c.slowAfterDays      != null ? String(c.slowAfterDays)      : "",
+                                                    nonMovingAfterDays: c.nonMovingAfterDays != null ? String(c.nonMovingAfterDays) : "",
+                                                    deadAfterDays:      c.deadAfterDays      != null ? String(c.deadAfterDays)      : "",
                                                 });
                                             }}
                                         >

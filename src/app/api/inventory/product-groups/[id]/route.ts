@@ -75,6 +75,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 gstRateId: b.gstRateId,
                 hsnCode: b.hsnCode,
                 taxability: b.taxability,
+                // Movement-band overrides (null = inherit up the chain).
+                slowAfterDays: b.slowAfterDays,
+                nonMovingAfterDays: b.nonMovingAfterDays,
+                deadAfterDays: b.deadAfterDays,
             }),
             include: groupInclude,
         });

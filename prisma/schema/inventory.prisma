@@ -35,6 +35,13 @@ model InvCategory {
   parentId  Int?
   parent    InvCategory?  @relation("InvCategoryHierarchy", fields: [parentId], references: [id])
   children  InvCategory[] @relation("InvCategoryHierarchy")
+  /// Movement-band overrides (days since last sale). null = inherit parent
+  /// category → OrgDefaults.reorder*AfterDays. Second rung of the resolution
+  /// (product's group chain wins first) — consumables vs CCTV don't share
+  /// one calendar.
+  slowAfterDays      Int?
+  nonMovingAfterDays Int?
+  deadAfterDays      Int?
   isActive  Boolean       @default(true)
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
@@ -66,6 +73,13 @@ model InvProductGroup {
   gstRate    GstRate?    @relation("InvProductGroupGst", fields: [gstRateId], references: [id], onDelete: SetNull)
   hsnCode    String?
   taxability Taxability?
+
+  /// Movement-band overrides (days since last sale) for the reorder / Stock
+  /// Health classifier. null = inherit parent group → category → OrgDefaults.
+  /// Set once on a root group ("CCTV": 60/150/270) and the whole tree follows.
+  slowAfterDays      Int?
+  nonMovingAfterDays Int?
+  deadAfterDays      Int?
 
   products         InvProduct[]
   loyaltyEarnRules LoyaltyEarnRule[]   @relation("InvProductGroupLoyaltyRules")

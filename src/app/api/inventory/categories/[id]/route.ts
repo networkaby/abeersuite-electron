@@ -34,6 +34,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 slug: b.slug,
                 parentId: b.parentId,
                 isActive: b.isActive,
+                // Movement-band overrides (null = inherit up the chain).
+                slowAfterDays: b.slowAfterDays,
+                nonMovingAfterDays: b.nonMovingAfterDays,
+                deadAfterDays: b.deadAfterDays,
             }),
         });
         // A renamed category changes the generated name of products using it

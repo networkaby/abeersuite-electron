@@ -3,9 +3,14 @@
 // Reorder Status — Tally's "Reorder Levels" screen done with the complete
 // formula (sampling window and coverage horizon kept separate):
 //
-//   reorder level = avg daily usage (30-day window) × lead time (days)
+//   reorder level = avg daily usage (class-driven window) × lead time (days)
 //   threshold     = max(reorder level, manual floor)
 //   LOW           = available (stock − reserved) <= threshold
+//
+// The movement class (movementClass.ts: recency vs group→category→org bands)
+// decides the treatment — Regular = red LOW (buy), Slow = amber REVIEW, New =
+// floor only, Dead / Non-moving / In-house = the collapsed "Skipped" section
+// with per-row reasons. Skipped is stated, never silent.
 //
 // Two tabs:
 //   • Item wise — one row per product; lead time + floor edited inline
@@ -36,12 +41,24 @@ import {
 import { extractApiError } from "@/shared/lib/api";
 import { fmt } from "@/utils/constants";
 
+type MovementClass = "NEW" | "REGULAR" | "SLOW" | "NON_MOVING" | "DEAD";
+type Signal = "buy" | "review" | "ok" | "skipped";
+
 interface ReorderRow {
     id: number;
     sku: string;
     name: string;
     /** BOM output — made in-house; hidden from Smart bands, badged here. */
     inHouse: boolean;
+    movementClass: MovementClass;
+    daysSinceLastSale: number | null;
+    activeDays: number;
+    clearanceDays: number;
+    blip: boolean;
+    usageWindowDays: number;
+    bandSource: string;
+    signal: Signal;
+    skipReason: string | null;
     unit: string | null;
     group: string | null;
     groupId: number | null;
@@ -78,10 +95,10 @@ interface Band {
 }
 
 interface Report {
-    windowDays: number;
     defaultLeadTimeDays: number;
     tolerancePct: number;
     branches: { id: string; name: string }[];
+    counts: { buy: number; review: number; skipped: number };
     lowCount: number;
     rows: ReorderRow[];
     bands: Band[] | null;
@@ -98,6 +115,25 @@ const fmtCost = (paise: number | null) => (paise == null ? "—" : fmt(paise / 1
 
 const FIELD_LABELS: Record<FilterField, string> = { group: "Group", category: "Category", brand: "Brand" };
 const NONE_LABELS: Record<FilterField, string> = { group: "Ungrouped", category: "Uncategorised", brand: "No brand" };
+
+/// Movement-class badges — Regular stays silent (only exceptions get ink).
+const CLASS_BADGES: Record<MovementClass, { label: string; cls: string } | null> = {
+    REGULAR: null,
+    NEW: { label: "New", cls: "bg-blue-500/15 text-blue-600" },
+    SLOW: { label: "Slow", cls: "bg-amber-500/15 text-amber-600" },
+    NON_MOVING: { label: "Non-moving", cls: "bg-orange-500/15 text-orange-600" },
+    DEAD: { label: "Dead", cls: "bg-red-500/15 text-red-600" },
+};
+
+function ClassBadge({ movementClass, blip }: { movementClass: MovementClass; blip?: boolean }) {
+    const b = CLASS_BADGES[movementClass];
+    if (!b) return null;
+    return (
+        <span className={`ml-2 rounded px-1.5 py-0.5 text-[10px] font-medium ${b.cls}`}>
+            {b.label}{blip ? " · blip" : ""}
+        </span>
+    );
+}
 
 /// One checklist box inside the Filters panel (Strategies-page pattern):
 /// searchable multi-select of unique values derived from the rows, with a
@@ -164,11 +200,18 @@ export default function ReorderPage() {
     const [search, setSearch] = useState("");
     const [tab, setTab] = useState<"items" | "smart">("items");
     const [tolerance, setTolerance] = useState(20);
+    const [skippedOpen, setSkippedOpen] = useState(false);
     const [expanded, setExpanded] = useState<Set<string>>(new Set());
     const [view, setView] = useState<View>("item");
     const [sections, setSections] = useState<Set<string>>(new Set());
     const [filters, setFilters] = useState<Map<FilterField, Set<string>>>(new Map());
     const [filtersOpen, setFiltersOpen] = useState(false);
+    const [bulkLead, setBulkLead] = useState("");
+    const [bulkFloor, setBulkFloor] = useState("");
+    const [bulkApplying, setBulkApplying] = useState(false);
+    /// Manually ticked rows. Empty = bulk targets ALL shown rows; ticking
+    /// narrows the target (filter → select all → untick the exceptions).
+    const [selected, setSelected] = useState<Set<number>>(new Set());
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -205,6 +248,46 @@ export default function ReorderPage() {
             await load();
         } catch (err) {
             toast.error(extractApiError(err, "Failed to save"));
+        }
+    }
+
+    // Bulk-apply lead time / floor (POST /api/inventory/products/bulk-reorder).
+    // Target = the ticked rows among those shown; nothing ticked = all shown.
+    // clearLead=true resets the targets' lead override back to the org default.
+    async function bulkApply(clearLead = false) {
+        const shown = itemRows.map((r) => r.id);
+        const ids = selected.size > 0 ? shown.filter((id) => selected.has(id)) : shown;
+        if (ids.length === 0) { toast.error("No items to apply to"); return; }
+        const lead = clearLead ? null
+            : bulkLead.trim() === "" ? undefined
+            : Math.max(0, parseInt(bulkLead, 10) || 0);
+        const floor = clearLead ? undefined
+            : bulkFloor.trim() === "" ? undefined
+            : Math.max(0, parseInt(bulkFloor, 10) || 0);
+        if (lead === undefined && floor === undefined) {
+            toast.error("Type a lead time and/or min floor first");
+            return;
+        }
+        const what = clearLead
+            ? "reset lead time to org default"
+            : [lead !== undefined ? `lead time ${lead}d` : null, floor !== undefined ? `min floor ${floor}` : null].filter(Boolean).join(" + ");
+        const scope = selected.size > 0 ? "selected" : "shown";
+        if (!window.confirm(`Apply ${what} to ${ids.length} ${scope} item(s)?`)) return;
+        setBulkApplying(true);
+        try {
+            const res = await axios.post<{ updated: number }>("/api/inventory/products/bulk-reorder", {
+                productIds: ids,
+                ...(lead !== undefined ? { leadTimeDays: lead } : {}),
+                ...(floor !== undefined ? { lowStockThreshold: floor } : {}),
+            });
+            toast.success(`Updated ${res.data.updated} item(s)`);
+            setBulkLead(""); setBulkFloor("");
+            setSelected(new Set());
+            await load();
+        } catch (err) {
+            toast.error(extractApiError(err, "Bulk apply failed"));
+        } finally {
+            setBulkApplying(false);
         }
     }
 
@@ -254,10 +337,36 @@ export default function ReorderPage() {
         return true;
     }, [q, filters]);
 
+    // Considered rows (Regular / New / Slow) — the main table.
     const itemRows = useMemo(
-        () => (data?.rows ?? []).filter((r) => (!lowOnly || r.isLow) && passesFilters(r)),
+        () => (data?.rows ?? []).filter((r) => r.signal !== "skipped" && (!lowOnly || r.isLow) && passesFilters(r)),
         [data, lowOnly, passesFilters],
     );
+    // Skipped rows (Dead / Non-moving / In-house) — stated, never silent.
+    const skippedRows = useMemo(
+        () => (data?.rows ?? []).filter((r) => r.signal === "skipped" && passesFilters(r)),
+        [data, passesFilters],
+    );
+
+    // ── Row selection (bulk-apply target) ─────────────────────────────────────
+    const shownSelectedCount = useMemo(
+        () => itemRows.reduce((n, r) => n + (selected.has(r.id) ? 1 : 0), 0),
+        [itemRows, selected],
+    );
+    const allShownSelected = itemRows.length > 0 && shownSelectedCount === itemRows.length;
+    const toggleRowSelect = (id: number) =>
+        setSelected((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id); else next.add(id);
+            return next;
+        });
+    const toggleSelectAllShown = () =>
+        setSelected((prev) => {
+            const next = new Set(prev);
+            if (allShownSelected) for (const r of itemRows) next.delete(r.id);
+            else for (const r of itemRows) next.add(r.id);
+            return next;
+        });
 
     // ── Hierarchy sections (Item tab, view ≠ item) — stock-summary pattern ────
     const grouped = useMemo(() => {
@@ -364,10 +473,19 @@ export default function ReorderPage() {
         : data?.lowCount ?? 0;
 
     const renderItemRow = (r: ReorderRow, indent = false) => (
-        <tr key={r.id} className={`border-b last:border-0 hover:bg-muted/40 ${r.isLow ? "bg-amber-500/5" : ""}`}>
+        <tr key={r.id} className={`border-b last:border-0 hover:bg-muted/40 ${r.isLow ? "bg-amber-500/5" : ""} ${selected.has(r.id) ? "bg-primary/5" : ""}`}>
+            <td className="w-8 px-2 py-2 text-center">
+                <input
+                    type="checkbox"
+                    aria-label={`Select ${r.name}`}
+                    checked={selected.has(r.id)}
+                    onChange={() => toggleRowSelect(r.id)}
+                />
+            </td>
             <td className={`px-3 py-2 ${indent ? "pl-9" : ""}`}>
                 <span className="font-medium text-foreground">{r.name}</span>
                 <span className="ml-2 font-mono text-xs text-muted-foreground">{r.sku}</span>
+                <ClassBadge movementClass={r.movementClass} blip={r.blip} />
                 {r.inHouse && (
                     <span className="ml-2 rounded px-1.5 py-0.5 text-[10px] font-medium bg-sky-500/15 text-sky-600" title="BOM output — produced in-house. LOW here means: go pack/assemble, not purchase.">
                         In-house
@@ -377,7 +495,19 @@ export default function ReorderPage() {
             <td className="px-3 py-2 text-right font-mono">{fmtQty(r.stock)}{r.unit ? ` ${r.unit}` : ""}</td>
             <td className="px-3 py-2 text-right font-mono text-muted-foreground">{r.reserved > 0 ? fmtQty(r.reserved) : "—"}</td>
             <td className="px-3 py-2 text-right font-mono font-semibold">{fmtQty(r.available)}</td>
-            <td className="px-3 py-2 text-right font-mono">{r.avgDailyUsage > 0 ? r.avgDailyUsage.toFixed(2) : "—"}</td>
+            <td
+                className="px-3 py-2 text-right font-mono"
+                title={r.usageWindowDays > 0
+                    ? `Organic usage over ${r.usageWindowDays}d · ${r.activeDays} organic sale day(s)${r.clearanceDays > 0 ? ` · ${r.clearanceDays} clearance day(s) excluded` : ""}${r.daysSinceLastSale != null ? ` · last organic sale ${r.daysSinceLastSale}d ago` : ""}`
+                    : undefined}
+            >
+                {r.avgDailyUsage > 0 ? r.avgDailyUsage.toFixed(2) : "—"}
+                {r.clearanceDays > 0 && (
+                    <span className="ml-1 rounded px-1 py-0.5 text-[9px] font-medium bg-purple-500/15 text-purple-600" title={`${r.clearanceDays} day(s) of clearance-priced sales in the window — excluded from demand`}>
+                        clr
+                    </span>
+                )}
+            </td>
             <td className="px-3 py-2 text-right">
                 <Input
                     key={`lt-${r.id}-${r.ownLeadTimeDays ?? ""}`}
@@ -389,7 +519,12 @@ export default function ReorderPage() {
                     onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
                 />
             </td>
-            <td className="px-3 py-2 text-right font-mono">{fmtQty(r.reorderLevel)}</td>
+            <td
+                className="px-3 py-2 text-right font-mono"
+                title={`${r.avgDailyUsage.toFixed(2)}/day × ${r.leadTimeDays}d = ${r.reorderLevel} · floor ${r.lowStockThreshold} → threshold ${r.threshold}`}
+            >
+                {fmtQty(r.reorderLevel)}
+            </td>
             <td className="px-3 py-2 text-right">
                 <Input
                     key={`fl-${r.id}-${r.lowStockThreshold}`}
@@ -404,8 +539,10 @@ export default function ReorderPage() {
                 {r.shortfall > 0 ? fmtQty(r.shortfall) : "—"}
             </td>
             <td className="px-3 py-2 text-center">
-                {r.isLow ? (
+                {r.signal === "buy" ? (
                     <span className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-red-500/15 text-red-600">LOW</span>
+                ) : r.signal === "review" ? (
+                    <span className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-amber-500/15 text-amber-600" title="Slow mover at/below level — the machine never pushes buying for slow movers; you judge.">REVIEW</span>
                 ) : (
                     <span className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-emerald-500/15 text-emerald-600">OK</span>
                 )}
@@ -489,6 +626,14 @@ export default function ReorderPage() {
     const itemTableHead = (
         <thead className="border-b bg-muted text-xs text-muted-foreground">
             <tr>
+                <th className="w-8 px-2 py-2 text-center">
+                    <input
+                        type="checkbox"
+                        aria-label="Select all shown"
+                        checked={allShownSelected}
+                        onChange={toggleSelectAllShown}
+                    />
+                </th>
                 <th className="px-3 py-2 text-left font-medium">Item</th>
                 <th className="px-3 py-2 text-right font-medium">Stock</th>
                 <th className="px-3 py-2 text-right font-medium">Reserved</th>
@@ -510,8 +655,9 @@ export default function ReorderPage() {
                 <div>
                     <h1 className="text-2xl font-bold text-foreground">Reorder Status</h1>
                     <p className="text-sm text-muted-foreground mt-0.5">
-                        Level = avg daily usage (last {data?.windowDays ?? 30} days) × lead time, floored by the manual
-                        minimum. LOW when available (stock − reserved) is at or under the level.
+                        Level = avg daily usage × lead time, floored by the manual minimum. Movement class decides the
+                        treatment: Regular → red LOW = buy; Slow → amber REVIEW; Dead / Non-moving / In-house → skipped
+                        (reason stated). Bands per group/category in Masters; universal bands in Settings → Org defaults.
                     </p>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
@@ -574,7 +720,7 @@ export default function ReorderPage() {
                     </Button>
                     <span className="text-xs text-muted-foreground">
                         {tab === "items"
-                            ? `${itemRows.length} / ${data?.rows.length ?? 0} shown`
+                            ? `${itemRows.length} / ${(data?.rows.length ?? 0) - (data?.counts.skipped ?? 0)} shown · ${skippedRows.length} skipped`
                             : `${bandRows.length} / ${data?.bands?.length ?? 0} bands shown`}
                     </span>
                 </div>
@@ -649,10 +795,19 @@ export default function ReorderPage() {
                         >
                             <div className="flex items-center gap-2">
                                 <TriangleAlert className="size-4 text-destructive" />
-                                <span className="text-lg font-mono font-semibold text-foreground">{lowCount}</span>
-                                <span className="text-xs text-muted-foreground">
-                                    {tab === "smart" ? "bands at / below reorder level" : "items at / below reorder level"}
-                                </span>
+                                {tab === "smart" ? (
+                                    <>
+                                        <span className="text-lg font-mono font-semibold text-foreground">{lowCount}</span>
+                                        <span className="text-xs text-muted-foreground">bands at / below reorder level</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <span className="text-lg font-mono font-semibold text-foreground">{data.counts.buy}</span>
+                                        <span className="text-xs text-muted-foreground">to buy</span>
+                                        <span className="text-lg font-mono font-semibold text-amber-600">{data.counts.review}</span>
+                                        <span className="text-xs text-muted-foreground">to review (slow movers)</span>
+                                    </>
+                                )}
                             </div>
                             <div className="text-[11px] text-muted-foreground mt-0.5">
                                 {lowOnly ? "showing low only — click to show all" : "click to show low only"}
@@ -662,15 +817,58 @@ export default function ReorderPage() {
                             Default lead time: <span className="font-mono">{data.defaultLeadTimeDays}d</span> (Settings →
                             Org defaults). A blank Lead-time cell rides the default; type a value to override per item.
                         </p>
+                        {tab === "items" && (
+                            <div className="ml-auto flex items-center gap-2 rounded-lg border border-border bg-card p-2 shadow-sm">
+                                <span className="text-xs font-medium text-foreground">
+                                    Bulk set ({shownSelectedCount > 0 ? `${shownSelectedCount} selected` : `${itemRows.length} shown`})
+                                </span>
+                                {shownSelectedCount > 0 && (
+                                    <button
+                                        type="button"
+                                        className="text-xs text-muted-foreground hover:underline"
+                                        onClick={() => setSelected(new Set())}
+                                    >
+                                        clear
+                                    </button>
+                                )}
+                                <Input
+                                    className="h-8 w-20 text-right font-mono text-xs"
+                                    inputMode="numeric"
+                                    placeholder="Lead d"
+                                    value={bulkLead}
+                                    onChange={(e) => setBulkLead(e.target.value.replace(/\D/g, ""))}
+                                />
+                                <Input
+                                    className="h-8 w-20 text-right font-mono text-xs"
+                                    inputMode="numeric"
+                                    placeholder="Min floor"
+                                    value={bulkFloor}
+                                    onChange={(e) => setBulkFloor(e.target.value.replace(/\D/g, ""))}
+                                />
+                                <Button size="sm" className="h-8" disabled={bulkApplying} onClick={() => void bulkApply()}>
+                                    {bulkApplying ? "Applying…" : "Apply"}
+                                </Button>
+                                <button
+                                    type="button"
+                                    className="text-xs text-muted-foreground hover:underline"
+                                    disabled={bulkApplying}
+                                    onClick={() => void bulkApply(true)}
+                                    title="Clear the per-item lead-time override on all shown items — they ride the org default again."
+                                >
+                                    reset lead
+                                </button>
+                            </div>
+                        )}
                     </div>
 
                     {tab === "items" ? (
+                    <>
                     <div className="overflow-x-auto rounded-lg border border-border bg-card shadow-sm">
                         <table className="w-full text-sm">
                             {itemTableHead}
                             <tbody>
                                 {itemRows.length === 0 ? (
-                                    <tr><td colSpan={10} className="py-12 text-center text-muted-foreground text-sm">
+                                    <tr><td colSpan={11} className="py-12 text-center text-muted-foreground text-sm">
                                         {lowOnly || anyFilter || q ? "Nothing matches the current filters." : "No active products."}
                                     </td></tr>
                                 ) : view === "item" ? (
@@ -684,7 +882,7 @@ export default function ReorderPage() {
                                                     className="border-b bg-muted/50 cursor-pointer hover:bg-muted"
                                                     onClick={() => toggleSection(g.name)}
                                                 >
-                                                    <td className="px-3 py-2" colSpan={8}>
+                                                    <td className="px-3 py-2" colSpan={9}>
                                                         <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
                                                             {isOpen ? <ChevronDown className="size-3.5 text-muted-foreground" /> : <ChevronRight className="size-3.5 text-muted-foreground" />}
                                                             {g.name}
@@ -710,6 +908,55 @@ export default function ReorderPage() {
                             </tbody>
                         </table>
                     </div>
+
+                    {/* Skipped — stated, never silent. */}
+                    {skippedRows.length > 0 && (
+                        <div className="rounded-lg border border-border bg-card shadow-sm">
+                            <button
+                                type="button"
+                                className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-muted/40"
+                                onClick={() => setSkippedOpen((o) => !o)}
+                            >
+                                {skippedOpen ? <ChevronDown className="size-4 text-muted-foreground" /> : <ChevronRight className="size-4 text-muted-foreground" />}
+                                <span className="font-medium text-foreground">Skipped — not for reorder</span>
+                                <span className="text-xs text-muted-foreground">
+                                    {skippedRows.length} item(s): dead / non-moving / in-house — no buy signal, reason stated per row
+                                </span>
+                            </button>
+                            {skippedOpen && (
+                                <table className="w-full border-t text-sm">
+                                    <thead className="border-b bg-muted text-xs text-muted-foreground">
+                                        <tr>
+                                            <th className="px-3 py-2 text-left font-medium">Item</th>
+                                            <th className="px-3 py-2 text-right font-medium">Last sale</th>
+                                            <th className="px-3 py-2 text-right font-medium">Stock</th>
+                                            <th className="px-3 py-2 text-left font-medium">Why skipped</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {skippedRows.map((r) => (
+                                            <tr key={r.id} className="border-b last:border-0 hover:bg-muted/40">
+                                                <td className="px-3 py-2">
+                                                    <span className="text-foreground">{r.name}</span>
+                                                    <span className="ml-2 font-mono text-xs text-muted-foreground">{r.sku}</span>
+                                                    <ClassBadge movementClass={r.movementClass} blip={r.blip} />
+                                                    {r.inHouse && (
+                                                        <span className="ml-2 rounded px-1.5 py-0.5 text-[10px] font-medium bg-sky-500/15 text-sky-600">In-house</span>
+                                                    )}
+                                                </td>
+                                                <td className="px-3 py-2 text-right font-mono text-xs text-muted-foreground">
+                                                    {r.daysSinceLastSale != null ? `${r.daysSinceLastSale}d ago` : "never"}
+                                                </td>
+                                                <td className="px-3 py-2 text-right font-mono">{fmtQty(r.stock)}{r.unit ? ` ${r.unit}` : ""}</td>
+                                                <td className="px-3 py-2 text-xs text-muted-foreground">{r.skipReason ?? "—"}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            )}
+                        </div>
+                    )}
+                    </>
                     ) : (
                     <div className="overflow-x-auto rounded-lg border border-border bg-card shadow-sm">
                         <table className="w-full text-sm">

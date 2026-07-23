@@ -37,6 +37,16 @@ export const orgDefaultsUpdateSchema = z.object({
     /// Fallback supplier lead time (days) for the reorder-point check when a
     /// product has no leadTimeDays of its own.
     defaultLeadTimeDays:         z.number().int().min(0).max(365).optional(),
+    /// Universal movement-class bands (days since last sale) — group/category
+    /// overrides win; these are the final fallback.
+    reorderSlowAfterDays:        z.number().int().min(1).max(3650).optional(),
+    reorderNonMovingAfterDays:   z.number().int().min(1).max(3650).optional(),
+    reorderDeadAfterDays:        z.number().int().min(1).max(3650).optional(),
+    /// Never-sold products younger than this classify as "New" (floor-only).
+    reorderNewItemDays:          z.number().int().min(1).max(3650).optional(),
+    /// Clearance detector: sale at realized pre-tax unit ≤ cost × (1 + this%)
+    /// = clearance, never demand (excluded from usage + the revival ladder).
+    clearanceMarginCutoffPct:    z.number().min(0).max(100).optional(),
     /// AccountGroup whose POSTED debits feed the pricing-strategy additional-cost
     /// "waiting" pool (Costing page). Decision-support only — never posts to GL.
     shippingPoolGroupId:        z.number().int().positive().nullable().optional(),

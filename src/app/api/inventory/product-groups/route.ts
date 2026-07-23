@@ -49,6 +49,9 @@ export async function POST(req: Request) {
                 gstRateId:  b.gstRateId  ?? null,
                 hsnCode:    b.hsnCode    ?? null,
                 taxability: b.taxability ?? null,
+                slowAfterDays:      b.slowAfterDays      ?? null,
+                nonMovingAfterDays: b.nonMovingAfterDays ?? null,
+                deadAfterDays:      b.deadAfterDays      ?? null,
             },
             include: groupInclude,
         });

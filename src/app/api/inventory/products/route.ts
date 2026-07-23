@@ -12,6 +12,7 @@ import {
     productOpeningValue, syncProductCacheFromOpening,
 } from "@/modules/inventory/lib/stockValue";
 import { resolveActiveBranchId } from "@/shared/lib/auth/activeBranch";
+import { classifyProducts } from "@/modules/inventory/lib/movementClass";
 import { toNumber } from "@/modules/accountancy/lib/balance";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import * as Sentry from "@sentry/nextjs";
@@ -103,14 +104,26 @@ export async function GET(req: NextRequest) {
             movedByProduct.set(r.productId, toNumber(r._sum.inQty ?? 0) - toNumber(r._sum.outQty ?? 0));
         }
 
+        // Movement class badge (Regular/New/Slow/Non-moving/Dead) — decision
+        // support on the list; same engine as the Reorder page.
+        const movement = await classifyProducts(
+            rows.map((r) => ({ id: r.id, groupId: r.groupId, categoryId: r.categoryId, createdAt: r.createdAt })),
+            { branchId: activeBranchId },
+        );
+
         const enriched = rows.map((r) => {
             const moved = movedByProduct.get(r.id);
             const opening = r.openingStock != null ? toNumber(r.openingStock) : null;
             // No opening AND no movements → null ("stock not tracked", shown as —).
             const stock = moved == null && opening == null ? null : (opening ?? 0) + (moved ?? 0);
+            const m = movement.get(r.id);
             // Derived primary barcode for list display/search/sort (the full set
             // is `codes`, included above).
-            return { ...r, stock, barcode1: primaryBarcode(r.codes) };
+            return {
+                ...r, stock, barcode1: primaryBarcode(r.codes),
+                movementClass: m?.movementClass ?? null,
+                daysSinceLastSale: m?.daysSinceLastSale ?? null,
+            };
         });
 
         return NextResponse.json(enriched);

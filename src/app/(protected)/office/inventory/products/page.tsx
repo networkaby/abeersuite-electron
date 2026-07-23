@@ -69,6 +69,9 @@ type Row = {
     requireSaleNote: boolean;
     stock: number | null;
     lowStockThreshold: number;
+    /** Movement class (Reorder/Stock Health engine) — decision-help badge. */
+    movementClass: "NEW" | "REGULAR" | "SLOW" | "NON_MOVING" | "DEAD" | null;
+    daysSinceLastSale: number | null;
     modelNo: string | null;
     /** Derived primary barcode (first BARCODE code) — for display/search/sort. */
     barcode1: string | null;
@@ -898,7 +901,26 @@ export default function InventoryProductsPage() {
                                                         </button>
                                                     </div>
                                                 ) : (
-                                                    r.name
+                                                    <>
+                                                        {r.name}
+                                                        {r.movementClass && r.movementClass !== "REGULAR" && (
+                                                            <span
+                                                                className={`ml-1.5 rounded px-1.5 py-0.5 text-[10px] font-medium align-middle ${
+                                                                    r.movementClass === "NEW" ? "bg-blue-500/15 text-blue-600"
+                                                                    : r.movementClass === "SLOW" ? "bg-amber-500/15 text-amber-600"
+                                                                    : r.movementClass === "NON_MOVING" ? "bg-orange-500/15 text-orange-600"
+                                                                    : "bg-red-500/15 text-red-600"
+                                                                }`}
+                                                                title={r.daysSinceLastSale != null
+                                                                    ? `Last sale ${r.daysSinceLastSale}d ago — movement class from the Reorder / Stock Health engine`
+                                                                    : "Never sold — movement class from the Reorder / Stock Health engine"}
+                                                            >
+                                                                {r.movementClass === "NON_MOVING" ? "Non-moving"
+                                                                    : r.movementClass === "NEW" ? "New"
+                                                                    : r.movementClass === "SLOW" ? "Slow" : "Dead"}
+                                                            </span>
+                                                        )}
+                                                    </>
                                                 )}
                                             </TableCell>
                                             ) : null}

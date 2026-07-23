@@ -41,6 +41,9 @@ export async function POST(req: Request) {
                 slug: b.slug ?? null,
                 parentId: b.parentId ?? null,
                 isActive: b.isActive ?? true,
+                slowAfterDays:      b.slowAfterDays      ?? null,
+                nonMovingAfterDays: b.nonMovingAfterDays ?? null,
+                deadAfterDays:      b.deadAfterDays      ?? null,
             },
         });
         return NextResponse.json(row, { status: 201 });

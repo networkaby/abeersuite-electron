@@ -144,9 +144,28 @@ model OrgDefaults {
 
   /// Fallback supplier lead time (days) for the reorder-point check when a
   /// product has no leadTimeDays of its own.
-  /// reorderLevel = avg daily usage (30-day window) × lead time, floored by
+  /// reorderLevel = avg daily usage (trailing window) × lead time, floored by
   /// the product's lowStockThreshold.
   defaultLeadTimeDays Int @default(7)
+
+  // ── Movement classification bands (universal fallback) ─────────────────────
+  // Days-since-last-sale boundaries for the movement classes that drive the
+  // Reorder page + BI Stock Health: Regular ≤ slow < Slow ≤ nonMoving <
+  // Non-moving ≤ dead < Dead. Overridable per ProductGroup (walks the parent
+  // chain) and per Category — CCTV project cycles and ink/paper consumables
+  // don't share one calendar. Resolution: group chain → category → here.
+  reorderSlowAfterDays      Int @default(30)
+  reorderNonMovingAfterDays Int @default(90)
+  reorderDeadAfterDays      Int @default(180)
+  /// A never-sold product younger than this is "New" (floor-only benefit of
+  /// the doubt); older never-sold stock classifies as Dead.
+  reorderNewItemDays        Int @default(60)
+
+  /// Clearance detector: a sale line whose realized pre-tax unit price is at
+  /// or below cost × (1 + this%) counts as CLEARANCE — stock leaving, never
+  /// demand. Excluded from usage averages and from the revival ladder, so
+  /// dumping dead stock at discount can never resurrect its buy signal.
+  clearanceMarginCutoffPct Decimal @default(1) @db.Decimal(5, 2)
 
   // Currency display (free-form: ₹ / INR / Rs. / $ / USD — no conversion)
   defaultCurrencySymbol String @default("₹")
