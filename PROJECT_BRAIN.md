@@ -285,7 +285,8 @@ Data queries filter by the resolved branch set (`where.branchId in branchIds`), 
 - Despatch courier integration — auto-generate tracking label from "Pending Despatch" worker.
 - SLA alerts — flag tickets stuck too long in a status.
 - Position model — named slots in the org chart (needed at 50+ users).
-- Per-branch reorder points on `InvProductBranch` (currently global on `InvProduct`).
+- Per-branch reorder inputs on `InvProductBranch` — the Reorder page (2026-07-23) computes usage per branch, but `lowStockThreshold` / `leadTimeDays` are still global on `InvProduct`.
+- Assemble/bundle products (assembled PC, CCTV set kits) — sellable bundles of group products; rides BOM + Manufacturing like repacking, needs its own product/pricing surface (noted 2026-07-23).
 - GSTIN auto-fill from public GST lookup API when typing a 15-char GSTIN.
 - POS exchange as one atomic transaction (currently credit note → new sale).
 - Personal till accountability via a user dimension on variance JEs (currently counter-only).

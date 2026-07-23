@@ -34,6 +34,9 @@ export const orgDefaultsUpdateSchema = z.object({
     valuationMethod:            z.enum(VALUATION_METHOD).optional(),
     defaultSaleCreditPeriod:     z.number().int().min(0).nullable().optional(),
     defaultPurchaseCreditPeriod: z.number().int().min(0).nullable().optional(),
+    /// Fallback supplier lead time (days) for the reorder-point check when a
+    /// product has no leadTimeDays of its own.
+    defaultLeadTimeDays:         z.number().int().min(0).max(365).optional(),
     /// AccountGroup whose POSTED debits feed the pricing-strategy additional-cost
     /// "waiting" pool (Costing page). Decision-support only — never posts to GL.
     shippingPoolGroupId:        z.number().int().positive().nullable().optional(),

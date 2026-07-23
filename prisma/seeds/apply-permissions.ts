@@ -33,6 +33,7 @@ dotenv.config({ path: ".env" });
 const ADDITIONS: { id: string; label: string; module: string; description: string; systemOnly?: boolean }[] = [
     { id: "ui:sidebar:settings:couriers", label: "Settings → Couriers", module: "ui", description: "Show the \"Couriers\" link under Settings in the sidebar." },
     { id: "ui:sidebar:settings:standard-courier", label: "Settings → Standard Courier", module: "ui", description: "Show the \"Standard Courier\" link under Settings in the sidebar." },
+    { id: "ui:sidebar:inventory:reorder", label: "Inventory → Reorder", module: "ui", description: "Show the \"Reorder\" link under Inventory in the sidebar." },
 ];
 
 const ADMIN_ROLE_ID = "R1";

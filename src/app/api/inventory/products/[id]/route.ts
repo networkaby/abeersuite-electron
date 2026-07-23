@@ -138,6 +138,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                     : {}),
                 ...(b.notes !== undefined ? { notes: b.notes } : {}),
                 ...(b.requireSaleNote !== undefined ? { requireSaleNote: b.requireSaleNote } : {}),
+                // Reorder inputs (Reorder page inline edit).
+                ...(b.lowStockThreshold !== undefined ? { lowStockThreshold: b.lowStockThreshold } : {}),
+                ...(b.leadTimeDays !== undefined ? { leadTimeDays: b.leadTimeDays } : {}),
                 ...(b.isActive !== undefined ? { isActive: b.isActive } : {}),
                 ...(b.shopSubheading !== undefined ? { shopSubheading: b.shopSubheading } : {}),
                 ...(b.slug !== undefined ? { slug: b.slug } : {}),

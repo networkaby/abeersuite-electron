@@ -86,6 +86,7 @@ There is **one** general-ledger representation: the **`UniversalVoucher` spine**
 - Masters: `InvUnit`, `InvCategory`, `InvProductGroup`, `InvBrand`, `InvWarrantyTerm`, `InvAttributeMaster`, `GstRate`, `InvBom`/`InvBomLine`.
 - Stock: `InvProductBranch` (per-branch stock), `InvStockLedger` (movements), `StockReservation` / `RedemptionHold` (soft holds).
 - Pricing: `pricing-strategy` module + `StrategyPoint`; costing via `AdditionalCostAllocation`.
+- **Reorder** (`/office/inventory/reorder` + `/api/inventory/reports/reorder`): reorder level = 30-day avg daily usage (`InvStockLedger.outQty`) × lead time (`InvProduct.leadTimeDays` ?? `OrgDefaults.defaultLeadTimeDays`), floored by the manual `lowStockThreshold`; LOW when available (stock − reserved) ≤ level. Lead time + floor are edited inline on the page (math in `inventory/lib/reorder.ts`). The **Smart tab** (`?grouped=1&tolerance=x`) pools substitutes: items in the same leaf product group whose last-inward cost (opening cost counts, via the valuation cascade) sits within x% of the band's cheapest member share one pooled level (Σ usage, Σ available, max lead, max floor) — one shortfall per band instead of one per brand; member rows carry cost + margin% for the which-brand-to-procure call. **BOM outputs are excluded from Smart bands** (made in-house, never procured — their demand reaches the purchasable parent through the parent's consumption `outQty`); they stay on the Item-wise tab with an "In-house" badge, where LOW means "go pack/assemble".
 
 ---
 

@@ -141,6 +141,11 @@ export const invProductUpdateSchema = invProductCreateSchema.partial().extend({
     sku: z.string().trim().min(1).max(64).optional(),
     name: z.string().trim().min(1).max(500).optional(),
     unitId: z.coerce.number().int().positive().optional(),
+    // Reorder inputs — edited inline on the Reorder page.
+    /// Manual minimum-alert floor (see InvProduct.lowStockThreshold).
+    lowStockThreshold: z.coerce.number().int().min(0).optional(),
+    /// Per-product supplier lead time (days); null = org default.
+    leadTimeDays: z.coerce.number().int().min(0).max(365).optional().nullable(),
 });
 
 // ── Naming convention (InvNamingConfig singleton) ──────────────────────────

@@ -357,6 +357,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             // { label: "Stock Ledger", icon: BookOpen, href: "/office/inventory/stock-ledger" },
             // { label: "Stock Summary", icon: BarChart3, href: "/office/inventory/stock-summary" },
             { label: "Item Ledger", icon: ClipboardList, href: "/office/inventory/inventory-details" },
+            { label: "Reorder", icon: PackageCheck, href: "/office/inventory/reorder" },
             {
                 label: "Masters",
                 icon: ChartArea,

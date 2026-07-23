@@ -142,6 +142,12 @@ model OrgDefaults {
   defaultSaleCreditPeriod     Int?
   defaultPurchaseCreditPeriod Int?
 
+  /// Fallback supplier lead time (days) for the reorder-point check when a
+  /// product has no leadTimeDays of its own.
+  /// reorderLevel = avg daily usage (30-day window) × lead time, floored by
+  /// the product's lowStockThreshold.
+  defaultLeadTimeDays Int @default(7)
+
   // Currency display (free-form: ₹ / INR / Rs. / $ / USD — no conversion)
   defaultCurrencySymbol String @default("₹")
 

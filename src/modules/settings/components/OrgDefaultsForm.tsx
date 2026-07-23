@@ -59,6 +59,7 @@ interface OrgDefaults {
     valuationMethod: string;
     defaultSaleCreditPeriod: number | null;
     defaultPurchaseCreditPeriod: number | null;
+    defaultLeadTimeDays: number;
     defaultCurrencySymbol: string;
     barcodeBandsJson: BarcodeBand[];
     cashDenominationsJson: number[];
@@ -166,6 +167,7 @@ export function OrgDefaultsForm({ units }: { units: InvUnit[] }) {
                 valuationMethod: draft.valuationMethod,
                 defaultSaleCreditPeriod: draft.defaultSaleCreditPeriod,
                 defaultPurchaseCreditPeriod: draft.defaultPurchaseCreditPeriod,
+                defaultLeadTimeDays: draft.defaultLeadTimeDays ?? 7,
                 defaultCurrencySymbol: draft.defaultCurrencySymbol,
                 // Sorted ascending by `max` so barcodePrice's `find(price <= max)` picks the right band.
                 barcodeBandsJson: [...(draft.barcodeBandsJson ?? [])]
@@ -379,6 +381,23 @@ export function OrgDefaultsForm({ units }: { units: InvUnit[] }) {
                                 set("defaultPurchaseCreditPeriod", v === "" ? null : Number(v));
                             }}
                         />
+                    </div>
+
+                    <div className="space-y-1">
+                        <Label className="text-xs">Supplier lead time (days)</Label>
+                        <Input
+                            type="text"
+                            className="h-9"
+                            placeholder="e.g. 7"
+                            value={draft.defaultLeadTimeDays ?? 7}
+                            onChange={(e) => {
+                                const v = e.target.value.replace(/\D/g, "");
+                                set("defaultLeadTimeDays", v === "" ? 0 : Number(v));
+                            }}
+                        />
+                        <p className="text-[10px] text-muted-foreground">
+                            Reorder-point fallback: level = 30-day avg daily usage × lead time. A product can override this on the Reorder page.
+                        </p>
                     </div>
                 </div>
             </section>

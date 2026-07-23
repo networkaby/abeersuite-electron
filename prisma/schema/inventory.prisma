@@ -222,7 +222,13 @@ model InvProduct {
   /// available-to-sell = stock − reserved. Incremented when an order is Confirmed,
   /// decremented on Cancel/Return; converted to a real stock-out at Fulfil.
   reserved                Int     @default(0)
+  /// Manual minimum-alert floor. The reorder check uses
+  /// max(avgDailyUsage × leadTimeDays, lowStockThreshold) — so this is the
+  /// backstop for new / no-history items, not the whole reorder point.
   lowStockThreshold       Int     @default(5)
+  /// Supplier lead time in days for THIS product (reorder-point coverage
+  /// horizon). null = inherit OrgDefaults.defaultLeadTimeDays.
+  leadTimeDays            Int?
   isListedInShop          Boolean @default(false)
   /// Per-product override of the org out-of-stock policy: when true the shop
   /// accepts orders for this product even at zero stock (backorder / procure later).
