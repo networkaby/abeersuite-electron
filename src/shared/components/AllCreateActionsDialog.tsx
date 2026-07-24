@@ -27,7 +27,7 @@ type Props = {
 
 export default function AllCreateActionsDialog({ open, onOpenChange, permissions, isAdmin, defaultPipeline }: Props) {
     const { setOpen: openQuickTicket, setInitialPipelineId } = useQuickTicketStore();
-    const { setPersonOpen, setCompanyOpen } = useCreateDialogStore();
+    const { setPersonOpen, setCompanyOpen, setHelpOpen } = useCreateDialogStore();
     // GL voucher stores removed — those kinds now navigate to full-page routes.
 
     const canDo = (a: ModuleCreateAction) => canDoCreateAction(a, permissions, isAdmin);
@@ -42,6 +42,8 @@ export default function AllCreateActionsDialog({ open, onOpenChange, permissions
             setPersonOpen(true);
         } else if (action.action === "new-company") {
             setCompanyOpen(true);
+        } else if (action.action === "new-help-ticket") {
+            setHelpOpen(true);
         } else if (action.action === "new-journal-voucher") {
             window.open("/vouchers/journal-entries/new", "_blank", "noopener");
         } else if (action.action === "new-debit-note") {

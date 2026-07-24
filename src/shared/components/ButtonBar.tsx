@@ -18,30 +18,31 @@ import { useCreateDialogStore } from "@/store/createDialogStore";
 import CreatePersonDialog from "@/shared/components/CreatePersonDialog";
 import CreateCompanyDialog from "@/shared/components/CreateCompanyDialog";
 import AllCreateActionsDialog from "@/shared/components/AllCreateActionsDialog";
+import { HelpQuickForm } from "@/modules/help/components";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const ACTION_HREFS: Partial<Record<NonNullable<ModuleCreateAction["action"]>, string>> = {
-    "new-journal-voucher":        "/vouchers/journal-entries/new",
-    "new-debit-note":             "/vouchers/debit-notes/new",
-    "new-contra":                 "/vouchers/contras/new",
-    "new-payment":                "/vouchers/payments/new",
-    "new-receipt":                "/vouchers/receipts/new",
-    "new-credit-note":            "/vouchers/credit-notes/new",
-    "new-sale":                   "/vouchers/sales/new",
-    "new-purchase":               "/vouchers/purchases/new",
-    "new-sale-return":            "/vouchers/sale-returns/new",
-    "new-purchase-return":        "/vouchers/purchase-returns/new",
-    "new-sales-order":            "/vouchers/sales-orders/new",
-    "new-purchase-order":         "/vouchers/purchase-orders/new",
-    "new-grn":                    "/vouchers/grn/new",
-    "new-challan":                "/vouchers/challans/new",
-    "new-manufacturing-journal":  "/vouchers/manufacturing-journals/new",
-    "new-physical-stock":         "/vouchers/physical-stock/new",
-    "new-branch-transfer":        "/vouchers/branch-transfers/new",
-    "new-rejection-in":           "/vouchers/rejections-in/new",
-    "new-rejection-out":          "/vouchers/rejections-out/new",
-    "new-estimate":               "/vouchers/estimates/new",
+    "new-journal-voucher": "/vouchers/journal-entries/new",
+    "new-debit-note": "/vouchers/debit-notes/new",
+    "new-contra": "/vouchers/contras/new",
+    "new-payment": "/vouchers/payments/new",
+    "new-receipt": "/vouchers/receipts/new",
+    "new-credit-note": "/vouchers/credit-notes/new",
+    "new-sale": "/vouchers/sales/new",
+    "new-purchase": "/vouchers/purchases/new",
+    "new-sale-return": "/vouchers/sale-returns/new",
+    "new-purchase-return": "/vouchers/purchase-returns/new",
+    "new-sales-order": "/vouchers/sales-orders/new",
+    "new-purchase-order": "/vouchers/purchase-orders/new",
+    "new-grn": "/vouchers/grn/new",
+    "new-challan": "/vouchers/challans/new",
+    "new-manufacturing-journal": "/vouchers/manufacturing-journals/new",
+    "new-physical-stock": "/vouchers/physical-stock/new",
+    "new-branch-transfer": "/vouchers/branch-transfers/new",
+    "new-rejection-in": "/vouchers/rejections-in/new",
+    "new-rejection-out": "/vouchers/rejections-out/new",
+    "new-estimate": "/vouchers/estimates/new",
 };
 
 interface BtnBarMenuState { x: number; y: number; href: string; }
@@ -75,7 +76,7 @@ function ActionContextMenu({ menu, onClose }: { menu: BtnBarMenuState | null; on
     return (
         <div
             data-bb-ctx-menu
-            className="fixed z-50 min-w-[180px] rounded-md border border-border bg-popover text-popover-foreground shadow-lg py-1"
+            className="fixed z-50 min-w-45 rounded-md border border-border bg-popover text-popover-foreground shadow-lg py-1"
             style={{ left: x, top: y }}
             onContextMenu={(e) => e.preventDefault()}
         >
@@ -125,7 +126,7 @@ export default function ButtonBar({ user }: { user?: UserType }) {
     });
 
     const { setOpen: openQuickTicket, setInitialPipelineId } = useQuickTicketStore();
-    const { personOpen, companyOpen, setPersonOpen, setCompanyOpen } = useCreateDialogStore();
+    const { personOpen, companyOpen, helpOpen, setPersonOpen, setCompanyOpen, setHelpOpen } = useCreateDialogStore();
     // GL voucher stores removed — those kinds now navigate to full-page routes.
 
     const permissions = user?.permissions ?? [];
@@ -156,6 +157,8 @@ export default function ButtonBar({ user }: { user?: UserType }) {
             setPersonOpen(true);
         } else if (action.action === "new-company") {
             setCompanyOpen(true);
+        } else if (action.action === "new-help-ticket") {
+            setHelpOpen(true);
         }
     };
 
@@ -353,6 +356,7 @@ export default function ButtonBar({ user }: { user?: UserType }) {
             />
             <CreatePersonDialog open={personOpen} onOpenChange={setPersonOpen} />
             <CreateCompanyDialog open={companyOpen} onOpenChange={setCompanyOpen} />
+            <HelpQuickForm open={helpOpen} onOpenChange={setHelpOpen} onSaved={() => { /* no list on-screen to refresh */ }} />
             <ActionContextMenu menu={ctxMenu} onClose={() => setCtxMenu(null)} />
         </>
     );
