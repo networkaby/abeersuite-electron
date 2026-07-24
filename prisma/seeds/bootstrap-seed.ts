@@ -269,19 +269,19 @@ const WORK_GROUPS = [
 // permission ("work:<id>") that gates who may set their workers; the
 // state-like works (escalated / ready / no_fix) stay ungated (any staff).
 // Opaque ids (W1…W7) so the id never encodes the label — renames stay safe.
-// groupId → WorkGroup (above).
+// groupIds → WorkGroup[] (above), via the WorkGroupWork join table.
 const WORKS = [
-    { id: "W1", label: "Tele Calling", order: 1, color: "bg-blue-100 text-blue-600", gated: true, groupId: "G1", successLabel: "Reachable", failLabel: "Unreachable", prompt: "Add alternative number of customer if you know", startLabel: "Make a call", args: [{ key: "number", label: "Call number", source: "customer.phone" }, { key: "reason", label: "Reason", source: "user", kind: "text", on: "fail" }] },
-    { id: "W2", label: "Repairing", order: 2, color: "bg-green-100 text-green-700", gated: false, groupId: "G2", successLabel: "Fixed", failLabel: "Can't fix", args: [] },
-    { id: "W3", label: "Admin Approval", order: 3, color: "bg-orange-100 text-orange-600", gated: false, groupId: "G3", successLabel: "Approved", failLabel: "Rejected", args: [] },
-    { id: "W4", label: "Order Parts", order: 4, color: "bg-purple-100 text-purple-600", gated: false, groupId: "G4", successLabel: "Ordered", failLabel: "Unavailable", args: [{ key: "part", label: "Part needed", source: "user", kind: "text" }] },
-    { id: "W5", label: "Waiting & Follow Up", order: 5, color: "bg-teal-100 text-teal-600", gated: false, groupId: "G1", successLabel: null, failLabel: null, args: [] },
-    { id: "W6", label: "Escalated To EC", order: 6, color: "bg-red-100 text-red-600", gated: false, groupId: "G3", successLabel: null, failLabel: null, args: [] },
-    { id: "W7", label: "Incoming Courier", order: 7, color: "bg-orange-100 text-orange-600", gated: false, groupId: "G4", successLabel: "Received", failLabel: "Lost", args: [{ key: "tracking", label: "Tracking #", source: "user", kind: "text", on: "success" }, { key: "lost_reason", label: "Lost reason", source: "user", kind: "text", on: "fail" }] },
-    { id: "W8", label: "Order", order: 8, color: "bg-orange-100 text-orange-600", gated: false, groupId: "G5", successLabel: null, failLabel: null, args: [] },
+    { id: "W1", label: "Tele Calling", order: 1, color: "bg-blue-100 text-blue-600", gated: true, groupIds: ["G1"], successLabel: "Reachable", failLabel: "Unreachable", prompt: "Add alternative number of customer if you know", startLabel: "Make a call", args: [{ key: "number", label: "Call number", source: "customer.phone" }, { key: "reason", label: "Reason", source: "user", kind: "text", on: "fail" }] },
+    { id: "W2", label: "Repairing", order: 2, color: "bg-green-100 text-green-700", gated: false, groupIds: ["G2"], successLabel: "Fixed", failLabel: "Can't fix", args: [] },
+    { id: "W3", label: "Admin Approval", order: 3, color: "bg-orange-100 text-orange-600", gated: false, groupIds: ["G3"], successLabel: "Approved", failLabel: "Rejected", args: [] },
+    { id: "W4", label: "Order Parts", order: 4, color: "bg-purple-100 text-purple-600", gated: false, groupIds: ["G4"], successLabel: "Ordered", failLabel: "Unavailable", args: [{ key: "part", label: "Part needed", source: "user", kind: "text" }] },
+    { id: "W5", label: "Waiting & Follow Up", order: 5, color: "bg-teal-100 text-teal-600", gated: false, groupIds: ["G1"], successLabel: null, failLabel: null, args: [] },
+    { id: "W6", label: "Escalated To EC", order: 6, color: "bg-red-100 text-red-600", gated: false, groupIds: ["G3"], successLabel: null, failLabel: null, args: [] },
+    { id: "W7", label: "Incoming Courier", order: 7, color: "bg-orange-100 text-orange-600", gated: false, groupIds: ["G4"], successLabel: "Received", failLabel: "Lost", args: [{ key: "tracking", label: "Tracking #", source: "user", kind: "text", on: "success" }, { key: "lost_reason", label: "Lost reason", source: "user", kind: "text", on: "fail" }] },
+    { id: "W8", label: "Order", order: 8, color: "bg-orange-100 text-orange-600", gated: false, groupIds: ["G5"], successLabel: null, failLabel: null, args: [] },
     // Demo ACTION (kind:"auto") — runs the open_tab tool instead of a human. Reports
     // Success (tab opened) / Unsuccess (blocked); saves the opened URL to context.lookup_url.
-    { id: "W9", label: "IMEI Lookup", order: 9, color: "bg-violet-100 text-violet-600", gated: false, groupId: null, successLabel: "Opened", failLabel: "Blocked", args: [], kind: "auto", toolType: "open_tab", toolConfig: { bindings: { url: { mode: "fixed", value: "https://www.imei.info" } }, outputs: { openedUrl: "lookup_url" } } },
+    { id: "W9", label: "IMEI Lookup", order: 9, color: "bg-violet-100 text-violet-600", gated: false, groupIds: [], successLabel: "Opened", failLabel: "Blocked", args: [], kind: "auto", toolType: "open_tab", toolConfig: { bindings: { url: { mode: "fixed", value: "https://www.imei.info" } }, outputs: { openedUrl: "lookup_url" } } },
 ] as const;
 
 type WorkerSeed = {
@@ -681,8 +681,8 @@ async function main() {
         };
         await prisma.work.upsert({
             where:  { id: w.id },
-            update: { label: w.label, color, order: w.order, permissionId, groupId: w.groupId, successLabel: w.successLabel, failLabel: w.failLabel, args: w.args as unknown as Prisma.InputJsonValue, ...shapeFields },
-            create: { id: w.id, label: w.label, color, order: w.order, permissionId, groupId: w.groupId, successLabel: w.successLabel, failLabel: w.failLabel, args: w.args as unknown as Prisma.InputJsonValue, ...shapeFields },
+            update: { label: w.label, color, order: w.order, permissionId, successLabel: w.successLabel, failLabel: w.failLabel, args: w.args as unknown as Prisma.InputJsonValue, ...shapeFields, groups: { deleteMany: {}, create: w.groupIds.map((workGroupId) => ({ workGroupId })) } },
+            create: { id: w.id, label: w.label, color, order: w.order, permissionId, successLabel: w.successLabel, failLabel: w.failLabel, args: w.args as unknown as Prisma.InputJsonValue, ...shapeFields, groups: { create: w.groupIds.map((workGroupId) => ({ workGroupId })) } },
         });
     }
     for (const ss of WORKERS_SEED) {

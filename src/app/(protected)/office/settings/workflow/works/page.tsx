@@ -165,13 +165,13 @@ type WorkFormValues = {
     successPopup: boolean;
     failPopup: boolean;
     args: WorkArg[];
-    groupId: string;
+    groupIds: string[];
 };
 
 const BLANK: WorkFormValues = {
     label: "", color: "bg-gray-100 text-gray-600", gated: false, order: "",
     successLabel: "", failLabel: "", prompt: "", startLabel: "", successPopup: false, failPopup: false,
-    args: [], groupId: "",
+    args: [], groupIds: [],
 };
 
 // The full Add/Edit Work form body — shared by both dialogs so they can't drift.
@@ -237,14 +237,26 @@ function WorkFormBody({ form, set, groups, contextVars }: {
                             <Input value={form.label} onChange={(e) => set({ label: e.target.value })} placeholder="e.g. Cleaning" className="h-9" />
                         </div>
                         <div className="space-y-1.5">
-                            <Label className="text-xs">Group</Label>
-                            <Select value={form.groupId || "__none__"} onValueChange={(v) => set({ groupId: v === "__none__" ? "" : v })}>
-                                <SelectTrigger className="h-9 w-full"><SelectValue placeholder="— none —" /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="__none__">— none —</SelectItem>
-                                    {groups.map((g) => (<SelectItem key={g.id} value={g.id}>{g.label}</SelectItem>))}
-                                </SelectContent>
-                            </Select>
+                            <Label className="text-xs">Groups</Label>
+                            {groups.length === 0 ? (
+                                <p className="text-xs text-muted-foreground">No work groups yet.</p>
+                            ) : (
+                                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-1">
+                                    {groups.map((g) => (
+                                        <label key={g.id} className="flex items-center gap-1.5 text-xs">
+                                            <Checkbox
+                                                checked={form.groupIds.includes(g.id)}
+                                                onCheckedChange={(c) => set({
+                                                    groupIds: c === true
+                                                        ? [...form.groupIds, g.id]
+                                                        : form.groupIds.filter((id) => id !== g.id),
+                                                })}
+                                            />
+                                            {g.label}
+                                        </label>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     </div>
                     <div className="space-y-1.5">
@@ -353,7 +365,8 @@ interface Work {
     successPopup: boolean;
     failPopup: boolean;
     args: WorkArg[] | null;
-    groupId: string | null;
+    groupIds: string[];
+    groups: { id: string; label: string; color: string }[];
     kind?: string;                 // "human" (default) | "auto" (an Action — shown on the Actions page)
     toolConfig?: { outputs?: Record<string, string> } | null;
     statuses: UsingItem[];
@@ -413,7 +426,7 @@ export default function WorksPage() {
         successPopup: form.successPopup,
         failPopup: form.failPopup,
         args: form.args,
-        groupId: form.groupId || null,
+        groupIds: form.groupIds,
     });
 
     const handleCreate = async () => {
@@ -439,7 +452,7 @@ export default function WorksPage() {
             successLabel: work.successLabel ?? "", failLabel: work.failLabel ?? "",
             prompt: work.prompt ?? "", startLabel: work.startLabel ?? "",
             successPopup: work.successPopup ?? false, failPopup: work.failPopup ?? false,
-            args: work.args ?? [], groupId: work.groupId ?? "",
+            args: work.args ?? [], groupIds: work.groups ? work.groups.map((g) => g.id) : [],
         });
     };
 
@@ -521,6 +534,9 @@ export default function WorksPage() {
                                         ) : (
                                             <Badge variant="outline" className="text-muted-foreground">Ungated</Badge>
                                         )}
+                                        {work.groups.map((g) => (
+                                            <Badge key={g.id} {...badgeColor(g.color)}>{g.label}</Badge>
+                                        ))}
                                         <CardTitle className="ml-auto text-sm font-normal text-muted-foreground">
                                             {usageCount} use{usageCount !== 1 ? "s" : ""}
                                         </CardTitle>

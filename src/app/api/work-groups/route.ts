@@ -32,9 +32,13 @@ export async function GET() {
     try {
         const groups = await prisma.workGroup.findMany({
             orderBy: [{ order: "asc" }, { createdAt: "asc" }],
-            include: { works: { select: { id: true, label: true, color: true }, orderBy: { order: "asc" } } },
+            // `works` is now the join table (WorkGroupWork), not Work directly (many-to-many
+            // via an explicit join model) — reach through it to the actual Work row, but
+            // keep the response shape identical to before (works: {id,label,color}[]).
+            include: { works: { include: { work: { select: { id: true, label: true, color: true } } }, orderBy: { work: { order: "asc" } } } },
         });
-        return NextResponse.json(groups);
+        const shaped = groups.map(({ works, ...group }) => ({ ...group, works: works.map((w) => w.work) }));
+        return NextResponse.json(shaped);
     } catch (e) {
         return handleApiError(e, "Failed to fetch work groups");
     }

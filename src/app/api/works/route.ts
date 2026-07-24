@@ -28,7 +28,7 @@ const createSchema = z.object({
     successPopup: z.boolean().optional(),
     failPopup: z.boolean().optional(),
     args: argSchema,
-    groupId: z.string().trim().optional().nullable(),
+    groupIds: z.array(z.string().trim().min(1)).optional(),
     // Execution: "human" (default) or "auto" (an Action that runs a tool).
     kind: z.enum(["human", "auto"]).optional(),
     toolType: z.string().trim().optional().nullable(),
@@ -57,9 +57,15 @@ export async function GET() {
             include: {
                 statuses: { select: { id: true, label: true, color: true, pipelineId: true }, orderBy: { order: "asc" } },
                 workers: { select: { id: true, label: true, color: true, pipelineId: true }, orderBy: { order: "asc" } },
+                groups: { include: { workGroup: { select: { id: true, label: true, color: true } } } },
             },
         });
-        return NextResponse.json(works);
+        const shaped = works.map(({ groups, ...work }) => ({
+            ...work,
+            groups: groups.map((g) => g.workGroup),
+            groupIds: groups.map((g) => g.workGroupId),
+        }));
+        return NextResponse.json(shaped);
     } catch (e) {
         return handleApiError(e, "Failed to fetch works");
     }
@@ -72,7 +78,7 @@ export async function POST(req: Request) {
     try {
         const { data, error } = await validateRequest(req, createSchema);
         if (error) return error;
-        const { label, color, order, gated, successLabel, failLabel, prompt, startLabel, successPopup, failPopup, args, groupId, kind, toolType, toolConfig } = data;
+        const { label, color, order, gated, successLabel, failLabel, prompt, startLabel, successPopup, failPopup, args, groupIds, kind, toolType, toolConfig } = data;
         const isAuto = kind === "auto";
         if (isAuto && toolType && !isKnownTool(toolType)) {
             return NextResponse.json({ error: `Unknown tool: ${toolType}` }, { status: 400 });
@@ -84,7 +90,7 @@ export async function POST(req: Request) {
         // Auto Works (Actions) are system-run — never gated by a human permission.
         const permissionId = gated && !isAuto ? await mintWorkPermission(id, label) : null;
         const work = await prisma.work.create({
-            data: { id, label, color: color ?? "bg-gray-100 text-gray-600", order: maxOrder, permissionId, successLabel: successLabel || null, failLabel: failLabel || null, prompt: prompt || null, startLabel: startLabel || null, successPopup: successPopup ?? false, failPopup: failPopup ?? false, args: (args ?? []) as unknown as Prisma.InputJsonValue, groupId: groupId || null, kind: kind ?? "human", toolType: isAuto ? (toolType || null) : null, toolConfig: (toolConfig ?? {}) as Prisma.InputJsonValue },
+            data: { id, label, color: color ?? "bg-gray-100 text-gray-600", order: maxOrder, permissionId, successLabel: successLabel || null, failLabel: failLabel || null, prompt: prompt || null, startLabel: startLabel || null, successPopup: successPopup ?? false, failPopup: failPopup ?? false, args: (args ?? []) as unknown as Prisma.InputJsonValue, groups: { create: (groupIds ?? []).map((workGroupId) => ({ workGroupId })) }, kind: kind ?? "human", toolType: isAuto ? (toolType || null) : null, toolConfig: (toolConfig ?? {}) as Prisma.InputJsonValue },
         });
         return NextResponse.json(work, { status: 201 });
     } catch (e) {

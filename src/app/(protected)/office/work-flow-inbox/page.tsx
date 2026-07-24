@@ -20,7 +20,7 @@ export default async function AssignmentsPage() {
         company: { select: { name: true, phones: selectPrimaryPhone } },
     };
 
-    const [tickets, doneLogs, works, groups] = await Promise.all([
+    const [tickets, doneLogs, works] = await Promise.all([
         prisma.ticket.findMany({
             where: {
                 ticketStatus: { isTerminal: false },
@@ -58,12 +58,11 @@ export default async function AssignmentsPage() {
             select: {
                 id: true, note: true, createdAt: true,
                 author: true,
-                ticketWorker: { select: { label: true, work: { select: { id: true, label: true, color: true, groupId: true } } } },
+                ticketWorker: { select: { label: true, work: { select: { id: true, label: true, color: true, groups: { select: { workGroup: { select: { id: true, label: true, color: true } } } } } } } },
                 ticket: { select: { id: true, repair: { select: { device: { select: { brand: true, model: true, account: { select: customerPhones } } } } } } },
             },
         }),
-        prisma.work.findMany({ orderBy: { order: "asc" }, select: { id: true, label: true, color: true, permissionId: true, successLabel: true, failLabel: true, prompt: true, startLabel: true, successPopup: true, failPopup: true, args: true, groupId: true, group: { select: { id: true, label: true, color: true } } } }),
-        prisma.workGroup.findMany({ orderBy: { order: "asc" }, select: { id: true, label: true, color: true, permissionId: true } }),
+        prisma.work.findMany({ orderBy: { order: "asc" }, select: { id: true, label: true, color: true, permissionId: true, successLabel: true, failLabel: true, prompt: true, startLabel: true, successPopup: true, failPopup: true, args: true, groups: { select: { workGroup: { select: { id: true, label: true, color: true } } } } } }),
     ]);
 
     const worksById = Object.fromEntries(works.map((w) => [w.id, w]));
@@ -143,9 +142,7 @@ export default async function AssignmentsPage() {
             workId: work?.id ?? "",
             workLabel: work?.label ?? "Work",
             workColor: work?.color ?? "bg-muted text-muted-foreground",
-            groupId: work?.groupId ?? null,
-            groupLabel: work?.group?.label ?? null,
-            groupColor: work?.group?.color ?? null,
+            groups: work?.groups ? work.groups.map((g) => g.workGroup) : [],
             successLabel: work?.successLabel ?? null,
             failLabel: work?.failLabel ?? null,
             startLabel: work?.startLabel ?? null,
@@ -194,9 +191,7 @@ export default async function AssignmentsPage() {
             workId: work?.id ?? "",
             workLabel: work?.label ?? l.ticketWorker?.label ?? "Work",
             workColor: work?.color ?? "bg-muted text-muted-foreground",
-            groupId: work?.groupId ?? null,
-            groupLabel: null,
-            groupColor: null,
+            groups: work?.groups ? work.groups.map((g) => g.workGroup) : [],
             status: "answered",
             coverLabel: l.ticketWorker?.label ?? "",
             ask: null,
@@ -231,9 +226,5 @@ export default async function AssignmentsPage() {
         (it) => !it.workId || visibleWorkIds.has(it.workId)
     );
 
-    // Group chips are sorting only — show the buckets that actually hold a visible item.
-    const presentGroupIds = new Set(visibleItems.map((it) => it.groupId).filter((id): id is string => !!id));
-    const visibleGroups = groups.filter((g) => presentGroupIds.has(g.id));
-
-    return <WorkInboxBoard items={visibleItems} groups={visibleGroups} currentUserId={userId} />;
+    return <WorkInboxBoard items={visibleItems} currentUserId={userId} />;
 }

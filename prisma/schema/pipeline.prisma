@@ -151,20 +151,39 @@ model TicketWorker {
 // A unit of work a status/sub-status represents (calling, parts, qc…). Each
 // gated Work mints a permission ("work:<id>") that gates who can set statuses
 // /sub-statuses carrying it. Generalizes the former WorkerGroup.
-// A WorkGroup categorises Works (e.g. "Calling" groups several calling works). The
-// Work Inbox organises GROUP-wise; a Work belongs to one group (or none).
+// A WorkGroup tags Works (e.g. "Calling" tags several calling works). A Work can
+// carry MULTIPLE tags at once (many-to-many, via WorkGroupWork) — e.g. a "type"
+// tag (Calling) AND a "team" tag (Repair) simultaneously, since a single group
+// axis can't represent both what the work is AND who owns it. The Work Inbox
+// builds its filter chips from whichever tags are visible to the caller, merged
+// by LABEL — two different tag rows that happen to share a display name (e.g. a
+// separate "Calling" tag per department) collapse into one chip, so a role with
+// broad access (e.g. a manager holding every department's permission) sees one
+// combined "Calling" chip instead of several identical-looking duplicates.
 // A *gated* group (permissionId set) mints a permission ("workgroup:<id>") that
 // controls who can SEE the group's tickets in the Work Inbox — distinct from a
 // Work's own permissionId, which gates who can ACT on a ticket carrying that Work.
 model WorkGroup {
-  id           String      @id
+  id           String          @id
   label        String
-  color        String      @default("bg-gray-100 text-gray-600")
-  order        Int         @default(0)
+  color        String          @default("bg-gray-100 text-gray-600")
+  order        Int             @default(0)
   permissionId String?
-  permission   Permission? @relation(fields: [permissionId], references: [id])
-  createdAt    DateTime    @default(now())
-  works        Work[]
+  permission   Permission?     @relation(fields: [permissionId], references: [id])
+  createdAt    DateTime        @default(now())
+  works        WorkGroupWork[]
+}
+
+// Work ↔ WorkGroup join (many-to-many). See the WorkGroup comment above for why
+// a Work needs more than one tag.
+model WorkGroupWork {
+  workGroupId String
+  workId      String
+  workGroup   WorkGroup @relation(fields: [workGroupId], references: [id], onDelete: Cascade)
+  work        Work      @relation(fields: [workId], references: [id], onDelete: Cascade)
+
+  @@id([workGroupId, workId])
+  @@index([workId])
 }
 
 model Work {
@@ -172,8 +191,7 @@ model Work {
   label        String
   color        String         @default("bg-gray-100 text-gray-600")
   order        Int            @default(0)
-  groupId      String?
-  group        WorkGroup?     @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  groups       WorkGroupWork[]
   // Custom outcome-button labels — the Work owns the VOCABULARY (e.g. Tele Calling →
   // "Reachable" / "Unreachable"); the Worker owns the WIRING (success/failWorkerId).
   // null → fall back to generic "Success" / "Unsuccess" on the completion buttons.

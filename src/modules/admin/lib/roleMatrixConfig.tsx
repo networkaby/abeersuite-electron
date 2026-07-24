@@ -91,7 +91,9 @@ export interface WorkRow {
     id: string;
     label: string;
     color: string;
-    groupId: string | null;
+    // A work can carry MULTIPLE group tags (many-to-many). In the role grid it
+    // sorts under each of its groups' buckets; empty = Ungrouped.
+    groupIds: string[];
     permissionId: string | null;
     // "human" works are completed by a person on the Work Inbox; "auto" works are
     // system-run Actions (never gated, never hand-assigned) — excluded from the list.

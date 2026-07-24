@@ -58,8 +58,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     }
 }
 
-// DELETE /api/work-groups/[id] — works in the group keep existing; their groupId is
-// nulled (onDelete: SetNull).
+// DELETE /api/work-groups/[id] — works in the group keep existing; only their
+// membership rows are removed (WorkGroupWork.workGroupId is onDelete: Cascade, so
+// the join rows drop while the Work rows themselves are untouched).
 export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { response } = await requireAuth();
     if (response) return response;

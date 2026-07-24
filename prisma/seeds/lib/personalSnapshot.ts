@@ -90,6 +90,7 @@ export interface PersonalSnapshot {
     pipelines: Row[];
     workGroups: Row[];
     works: Row[];
+    workGroupWorks: Row[];
     ticketStatuses: Row[];
     ticketWorkers: Row[];
     statusTransitions: Row[];
@@ -345,6 +346,7 @@ export async function exportPersonal(prisma: Db): Promise<PersonalSnapshot> {
     const pipelines = (await prisma.pipeline.findMany()).map((p) => omit(p, ["createdAt"]));
     const workGroups = (await prisma.workGroup.findMany()).map((g) => omit(g, ["createdAt"]));
     const works = (await prisma.work.findMany()).map((w) => ({ ...w }));
+    const workGroupWorks = (await prisma.workGroupWork.findMany()).map((r) => ({ workGroupId: r.workGroupId, workId: r.workId }));
     const ticketStatuses = (await prisma.ticketStatus.findMany()).map((s) => ({ ...s }));
     const ticketWorkers = (await prisma.ticketWorker.findMany()).map((w) => ({ ...w }));
     const statusTransitions = (await prisma.statusTransition.findMany()).map((t) => omit(t, ["id"]));
@@ -359,7 +361,7 @@ export async function exportPersonal(prisma: Db): Promise<PersonalSnapshot> {
         branches, departments,
         roles, rolePermissions, departmentPermissions, positions, positionRoles, users, userPositions, userPermissions,
         paymentGateways, deliveryMethods, customerGroups, posCounters, posPaymentAccounts, posServices,
-        pipelines, workGroups, works, ticketStatuses, ticketWorkers, statusTransitions, workerTransitions,
+        pipelines, workGroups, works, workGroupWorks, ticketStatuses, ticketWorkers, statusTransitions, workerTransitions,
     };
 }
 
@@ -623,6 +625,8 @@ export async function importPersonal(prisma: Db, snap: PersonalSnapshot): Promis
     count("workGroups", snap.workGroups.length);
     for (const w of snap.works) await put(prisma.work, { id: w.id }, permIds.has(w.permissionId) ? w : { ...w, permissionId: null });
     count("works", snap.works.length);
+    await prisma.workGroupWork.createMany({ data: snap.workGroupWorks as any, skipDuplicates: true });
+    count("workGroupWorks", snap.workGroupWorks.length);
     for (const p of snap.pipelines) await put(prisma.pipeline, { id: p.id }, p);
     count("pipelines", snap.pipelines.length);
     // Statuses first WITHOUT their worker cross-links (workers don't exist yet).

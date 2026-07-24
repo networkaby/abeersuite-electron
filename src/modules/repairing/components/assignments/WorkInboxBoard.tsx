@@ -25,9 +25,7 @@ export interface WorkInboxItem {
     workId: string;
     workLabel: string;
     workColor: string;
-    groupId: string | null;
-    groupLabel: string | null;
-    groupColor: string | null;
+    groups: { id: string; label: string; color: string }[];
     successLabel?: string | null;
     failLabel?: string | null;
     startLabel?: string | null;
@@ -71,13 +69,21 @@ const STATUS_PILL: Record<WorkInboxItem["status"], { label: string; cls: string 
 
 
 export default function WorkInboxBoard({
-    items, groups, currentUserId,
+    items, currentUserId,
 }: {
     items: WorkInboxItem[];
-    groups: { id: string; label: string; color: string }[];
     currentUserId: number;
 }) {
     const [filter, setFilter] = useState<string>("all");
+
+    // Chips are derived from whatever groups the caller's visible items actually
+    // carry — not a raw WorkGroup table scan. Two same-labeled groups scoped to
+    // different departments (e.g. a Repair-only "Calling" and a Sales-only
+    // "Calling") pool into one merged chip keyed by label; last-seen color wins
+    // when labels collide with different colors (arbitrary tie-break, fine).
+    const chipGroups = Array.from(
+        new Map(items.flatMap((it) => it.groups).map((g) => [g.label, g])).values()
+    );
 
     // Finished (answered) rows are historical completion stamps — they live ONLY under
     // the Finished tab. Snoozed rows (deferred retries not yet due) live ONLY under the
@@ -89,8 +95,8 @@ export default function WorkInboxBoard({
         : it.snoozed ? false
         : f === "all" ? true
         : f === "mine" ? it.assignee?.id === currentUserId
-        : f === "ungrouped" ? !it.groupId
-        : it.groupId === f;
+        : f === "ungrouped" ? it.groups.length === 0
+        : it.groups.some((g) => g.label === f);
 
     const shown = items.filter((it) => matches(it, filter));
     const count = (f: string) => items.filter((it) => matches(it, f)).length;
@@ -131,7 +137,7 @@ export default function WorkInboxBoard({
             <div className="mb-4 flex flex-wrap gap-2">
                 {chip("all", "All")}
                 {chip("mine", "Mine")}
-                {groups.map((g) => chip(g.id, g.label, g.color))}
+                {chipGroups.map((g) => chip(g.label, g.label, g.color))}
                 {chip("ungrouped", "Ungrouped")}
                 {chip("waiting", "Waiting")}
                 {chip("finished", "Finished")}

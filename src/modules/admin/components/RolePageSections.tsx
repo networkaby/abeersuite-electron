@@ -590,8 +590,8 @@ export function WorkAccessSection({
     // Ordered buckets: known groups by their order, then an "Ungrouped" catch-all.
     const orderedGroups = [...groups].sort((a, b) => a.order - b.order);
     const buckets: { id: string | null; label: string; color: string | null; works: WorkRow[] }[] = [
-        ...orderedGroups.map((g) => ({ id: g.id, label: g.label, color: g.color, works: matched.filter((w) => w.groupId === g.id) })),
-        { id: null, label: "Ungrouped", color: null, works: matched.filter((w) => !w.groupId || !groups.some((g) => g.id === w.groupId)) },
+        ...orderedGroups.map((g) => ({ id: g.id, label: g.label, color: g.color, works: matched.filter((w) => w.groupIds.includes(g.id)) })),
+        { id: null, label: "Ungrouped", color: null, works: matched.filter((w) => !w.groupIds.some((gid) => groups.some((g) => g.id === gid))) },
     ].filter((b) => b.works.length > 0);
 
     return (
