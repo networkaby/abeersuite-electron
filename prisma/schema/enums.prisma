@@ -37,6 +37,18 @@ enum LogVisibility {
   PUBLIC
 }
 
+// ── Call / telephony enums ────────────────────────────────────────────────────
+
+// Direction of a captured PBX call (see Call in calls.prisma). Distinct from the
+// old call-logs route's INBOUND/OUTBOUND zod enum (removed). INTERNAL = ext↔ext;
+// UNKNOWN = an SMDR line the bridge couldn't classify.
+enum CallDirection {
+  INCOMING
+  OUTGOING
+  INTERNAL
+  UNKNOWN
+}
+
 // ── Finance enums ─────────────────────────────────────────────────────────────
 
 enum GroupType {

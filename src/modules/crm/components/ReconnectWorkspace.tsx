@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import {
     Search, Phone, StickyNote, CalendarCheck, CheckSquare, Send, ShoppingCart, CreditCard,
     Wrench, HelpCircle, Handshake, Sparkles, RefreshCw, User, Building2, PhoneOff, PlusCircle,
-    Package, ShieldCheck, ShieldAlert, Clock, Bookmark, Users2, X,
+    Package, ShieldCheck, ShieldAlert, Clock, Bookmark, Users2, X, PhoneIncoming, PhoneOutgoing, PhoneMissed, ArrowDownUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useNow } from "@/shared/hooks";
 import { formatDate, formatDateTime } from "@/shared/lib/format";
+import type { MissedMode } from "@/shared/lib/calls";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { LIFECYCLE_META, LIFECYCLES, type ContactLifecycle } from "@/modules/customer/lib/contactTypes";
 
@@ -37,6 +38,8 @@ type TimelineSource = "sale" | "payment" | "repair" | "inquiry" | "deal" | "note
 interface TimelineEntry {
     key: string; at: string; source: TimelineSource; title: string;
     detail?: string; amountPaise?: number; ref?: { kind: "ticket" | "voucher"; id: number }; author?: string;
+    direction?: "in" | "out";
+    missed?: boolean;
 }
 interface TalkingPoint { line: string; fromKey: string }
 interface Timeline { entries: TimelineEntry[]; talkingPoints: TalkingPoint[]; lastActivityAt: string | null }
@@ -60,7 +63,7 @@ const ACTIVITY_TYPES: { value: ActivityType; label: string }[] = [
     { value: "deal", label: "Deal" },
     { value: "note", label: "Call / note" },
 ];
-const FILTER_KEYS = ["activity", "activityType", "sold", "notSold", "warranty", "revenue", "profit", "stage", "group", "owner", "type"] as const;
+const FILTER_KEYS = ["activity", "activityType", "callLog", "sold", "notSold", "warranty", "revenue", "profit", "stage", "group", "owner", "type"] as const;
 type FilterKey = typeof FILTER_KEYS[number];
 const noFilters = (): Record<FilterKey, boolean> => Object.fromEntries(FILTER_KEYS.map((k) => [k, false])) as Record<FilterKey, boolean>;
 
@@ -200,6 +203,10 @@ export default function ReconnectWorkspace({
     const [activityPresence, setActivityPresence] = useState<"has" | "not">("has");
     const [activityFromDays, setActivityFromDays] = useState("");
     const [activityToDays, setActivityToDays] = useState("");
+    const [callDir, setCallDir] = useState<"any" | "in" | "out">("out");
+    const [callFromDays, setCallFromDays] = useState("");
+    const [callToDays, setCallToDays] = useState("");
+    const [callMissedMode, setCallMissedMode] = useState<MissedMode>("all");
     const [soldCategoryId, setSoldCategoryId] = useState("");
     const [soldProductQ, setSoldProductQ] = useState("");
     const [soldFromDays, setSoldFromDays] = useState("");
@@ -223,6 +230,7 @@ export default function ReconnectWorkspace({
     const [ownerPositionId, setOwnerPositionId] = useState("");
     const [kind, setKind] = useState<"all" | "person" | "company">("all");
     const [q, setQ] = useState("");
+    const [sort, setSort] = useState<"quietest" | "recent" | "nameAsc" | "nameDesc">("quietest");
 
     // ── Saved filters (Zoho-style views) ──
     const [savedFilters, setSavedFilters] = useState<SavedFilterDto[]>([]);
@@ -263,6 +271,12 @@ export default function ReconnectWorkspace({
             if (activityFromDays.trim()) p.set("activityFromDays", activityFromDays.trim());
             if (activityToDays.trim()) p.set("activityToDays", activityToDays.trim());
         }
+        if (enabled.callLog) {
+            p.set("callDirection", callDir);
+            if (callFromDays.trim()) p.set("callFromDays", callFromDays.trim());
+            if (callToDays.trim()) p.set("callToDays", callToDays.trim());
+            if (callMissedMode !== "all") p.set("callMissed", callMissedMode);
+        }
         if (enabled.sold && (soldCategoryId || soldProductQ.trim())) {
             if (soldCategoryId) p.set("soldCategoryId", soldCategoryId);
             if (soldProductQ.trim()) p.set("soldProductQ", soldProductQ.trim());
@@ -296,13 +310,15 @@ export default function ReconnectWorkspace({
         if (enabled.owner && ownerPositionId) p.set("ownerPositionId", ownerPositionId);
         if (enabled.type && kind !== "all") p.set("kind", kind);
         if (q.trim()) p.set("q", q.trim());
+        p.set("sort", sort);
         return p;
     }, [
         enabled, activity, activityType, activityPresence, activityFromDays, activityToDays,
+        callDir, callFromDays, callToDays, callMissedMode,
         soldCategoryId, soldProductQ, soldFromDays, soldToDays,
         notSoldCategoryId, notSoldProductQ, notSoldFromDays, notSoldToDays,
         warrantyDays, warrantyTermIds, revenueMin, revenueMax, revenueFromDays, revenueToDays,
-        profitMin, profitMax, profitFromDays, profitToDays, stage, groupId, ownerPositionId, kind, q,
+        profitMin, profitMax, profitFromDays, profitToDays, stage, groupId, ownerPositionId, kind, q, sort,
     ]);
 
     const activeCount = Object.values(enabled).filter(Boolean).length;
@@ -312,10 +328,11 @@ export default function ReconnectWorkspace({
     // ── Saved filters: capture the whole checklist state, and restore it ──────────
     const serializeFilters = (): Record<string, unknown> => ({
         enabled, activity, activityType, activityPresence, activityFromDays, activityToDays,
+        callDir, callFromDays, callToDays, callMissedMode,
         soldCategoryId, soldProductQ, soldFromDays, soldToDays,
         notSoldCategoryId, notSoldProductQ, notSoldFromDays, notSoldToDays,
         warrantyDays, warrantyTermIds, revenueMin, revenueMax, revenueFromDays, revenueToDays,
-        profitMin, profitMax, profitFromDays, profitToDays, stage, groupId, ownerPositionId, kind,
+        profitMin, profitMax, profitFromDays, profitToDays, stage, groupId, ownerPositionId, kind, sort,
     });
 
     const applyFilters = (p: Record<string, unknown>) => {
@@ -326,6 +343,10 @@ export default function ReconnectWorkspace({
         setActivityPresence((p.activityPresence as typeof activityPresence) ?? "has");
         setActivityFromDays(s(p.activityFromDays));
         setActivityToDays(s(p.activityToDays));
+        setCallDir((p.callDir as "any" | "in" | "out") ?? "out");
+        setCallFromDays(s(p.callFromDays));
+        setCallToDays(s(p.callToDays));
+        setCallMissedMode(p.callMissed === "only" || p.callMissed === "exclude" ? p.callMissed : "all");
         setSoldCategoryId(s(p.soldCategoryId));
         setSoldProductQ(s(p.soldProductQ));
         setSoldFromDays(s(p.soldFromDays));
@@ -343,6 +364,7 @@ export default function ReconnectWorkspace({
         setStage((p.stage as ContactLifecycle | "") ?? "");
         setGroupId(s(p.groupId)); setOwnerPositionId(s(p.ownerPositionId));
         setKind((p.kind as typeof kind) ?? "all");
+        setSort((p.sort as typeof sort) ?? "quietest");
     };
 
     const loadSaved = useCallback(async () => {
@@ -453,11 +475,11 @@ export default function ReconnectWorkspace({
         [selected],
     );
 
-    const addLog = async () => {
+    const addLog = async (direction?: "out" | "in") => {
         if (!selected || !targetBody || !body.trim()) return;
         setPosting(true);
         try {
-            await axios.post("/api/crm/reconnect/log", { ...targetBody, kind: composerKind, body: body.trim() });
+            await axios.post("/api/crm/reconnect/log", { ...targetBody, kind: composerKind, body: body.trim(), ...(direction ? { direction } : {}) });
             setBody("");
             await loadTimeline(selected);
             toast.success("Added to timeline");
@@ -572,6 +594,42 @@ export default function ReconnectWorkspace({
                         <p className="text-[11px] text-muted-foreground">Window blank = ever. Use a range for a past period / festive season.</p>
                     </FilterRow>
 
+                    <FilterRow label="Call log" checked={enabled.callLog} onToggle={toggle("callLog")} summary={`${callDir === "any" ? "any call" : callDir === "in" ? "incoming" : "outgoing"}${callMissedMode === "only" ? " · miscalls" : callMissedMode === "exclude" ? " · connected" : ""}`}>
+                        <div className="flex gap-1">
+                            {([["out", "Outgoing"], ["in", "Incoming"], ["any", "Any"]] as const).map(([d, label]) => (
+                                <button key={d} type="button" onClick={() => setCallDir(d)}
+                                    className={`flex-1 rounded-md px-2 py-1 text-xs font-medium ${callDir === d ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}>{label}</button>
+                            ))}
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <PhoneMissed className="size-3.5 shrink-0 text-red-600" />
+                            {/* Two ticks, mutually exclusive (ticking one clears the
+                                other); neither ticked = include all (default). */}
+                            <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                <Checkbox
+                                    checked={callMissedMode === "only"}
+                                    onCheckedChange={(v) => setCallMissedMode(v === true ? "only" : "all")}
+                                />
+                                Miss call only
+                            </label>
+                            <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                <Checkbox
+                                    checked={callMissedMode === "exclude"}
+                                    onCheckedChange={(v) => setCallMissedMode(v === true ? "exclude" : "all")}
+                                />
+                                No misscall
+                            </label>
+                        </div>
+                        <DayWindow from={callFromDays} setFrom={setCallFromDays} to={callToDays} setTo={setCallToDays} />
+                        <p className="text-[11px] text-muted-foreground">
+                            {callMissedMode === "only"
+                                ? "Customers we MISSED — unanswered calls of this direction — in the window."
+                                : callMissedMode === "exclude"
+                                    ? "Customers with a CONNECTED call of this direction — miscalls ignored."
+                                    : "Customers with any logged call of this direction in the window."}
+                        </p>
+                    </FilterRow>
+
                     <FilterRow label="Sold item" checked={enabled.sold} onToggle={toggle("sold")} summary={[categories.find((c) => String(c.id) === soldCategoryId)?.name, soldProductQ.trim()].filter(Boolean).join(" · ")}>
                         <ItemPicker categoryId={soldCategoryId} setCategoryId={setSoldCategoryId} q={soldProductQ} setQ={setSoldProductQ} fromDays={soldFromDays} setFromDays={setSoldFromDays} toDays={soldToDays} setToDays={setSoldToDays} categories={categories} />
                         <p className="text-[11px] text-muted-foreground">We sold them this — pitch a related item (printer → ink).</p>
@@ -664,6 +722,18 @@ export default function ReconnectWorkspace({
                     <div className="relative">
                         <Search className="absolute left-2 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                         <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name…" className="h-8 pl-8" />
+                    </div>
+                    <div className="mt-1.5 flex items-center gap-1.5">
+                        <ArrowDownUp className="size-3 shrink-0 text-muted-foreground" />
+                        <Select value={sort} onValueChange={(v) => setSort(v as typeof sort)}>
+                            <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="quietest">Quietest first</SelectItem>
+                                <SelectItem value="recent">Recently active</SelectItem>
+                                <SelectItem value="nameAsc">Name A–Z</SelectItem>
+                                <SelectItem value="nameDesc">Name Z–A</SelectItem>
+                            </SelectContent>
+                        </Select>
                     </div>
                     <div className="mt-1.5 flex items-center justify-between px-0.5 text-[11px] text-muted-foreground">
                         <span>{loadingList ? "Loading…" : `${total} found`}{truncated ? " (capped)" : ""}</span>
@@ -799,10 +869,21 @@ export default function ReconnectWorkspace({
                                             ))}
                                         </div>
                                         <Textarea value={body} onChange={(e) => setBody(e.target.value)} rows={2} placeholder={`Log a ${composerKind.toLowerCase()} on this customer…`} />
-                                        <div className="flex justify-end">
-                                            <Button size="sm" onClick={addLog} disabled={posting || !body.trim()}>
-                                                <Send className="size-4" /> Log {composerKind.toLowerCase()}
-                                            </Button>
+                                        <div className="flex justify-end gap-1.5">
+                                            {composerKind === "CALL" ? (
+                                                <>
+                                                    <Button size="sm" variant="outline" onClick={() => addLog("out")} disabled={posting || !body.trim()}>
+                                                        <PhoneOutgoing className="size-4" /> We called them
+                                                    </Button>
+                                                    <Button size="sm" onClick={() => addLog("in")} disabled={posting || !body.trim()}>
+                                                        <PhoneIncoming className="size-4" /> They called us
+                                                    </Button>
+                                                </>
+                                            ) : (
+                                                <Button size="sm" onClick={() => addLog()} disabled={posting || !body.trim()}>
+                                                    <Send className="size-4" /> Log {composerKind.toLowerCase()}
+                                                </Button>
+                                            )}
                                         </div>
                                     </div>
 
@@ -813,15 +894,21 @@ export default function ReconnectWorkspace({
                                         )}
                                         {timeline?.entries.map((e) => {
                                             const meta = SOURCE_META[e.source];
-                                            const Icon = meta.icon;
+                                            // Miscall stands out: incoming-missed red (a customer we
+                                            // missed), outgoing-unanswered amber (our unanswered call).
+                                            const missedTone = e.direction === "out" ? "text-amber-600" : "text-red-600";
+                                            const Icon = e.source === "call" && e.missed
+                                                ? PhoneMissed
+                                                : e.source === "call" && e.direction ? (e.direction === "in" ? PhoneIncoming : PhoneOutgoing) : meta.icon;
+                                            const tint = e.source === "call" && e.missed ? missedTone : meta.tint;
                                             return (
                                                 <div key={e.key} className="flex gap-2.5">
-                                                    <span className={`mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-muted ${meta.tint}`}>
+                                                    <span className={`mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-muted ${tint}`}>
                                                         <Icon className="size-3.5" />
                                                     </span>
                                                     <div className="min-w-0 flex-1">
                                                         <div className="flex items-baseline justify-between gap-2">
-                                                            <span className="text-sm font-medium">{e.title}</span>
+                                                            <span className={`text-sm font-medium ${e.source === "call" && e.missed ? missedTone : ""}`}>{e.title}</span>
                                                             <span className="shrink-0 text-[11px] text-muted-foreground">{formatDateTime(e.at)}</span>
                                                         </div>
                                                         {e.detail && <p className="whitespace-pre-wrap text-sm text-muted-foreground">{e.detail}</p>}

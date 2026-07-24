@@ -63,6 +63,11 @@ model Ticket {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  // When the ticket entered its CURRENT main status (`status`). Stamped only on a
+  // real status change — unlike `updatedAt`, which bumps on any edit — so the
+  // status-resolve-time SLA (TicketStatus.resolveTimeHours) is measured honestly.
+  // Defaults to now() on create; existing rows backfilled to updatedAt.
+  statusEnteredAt DateTime? @default(now())
 
   // ── Spine relations (local, cheap) ──────────────────────────────────────────
   pipeline     Pipeline?     @relation(fields: [pipelineId], references: [id])

@@ -35,6 +35,7 @@
     "seed:apply-permissions": "tsx prisma/seeds/apply-permissions.ts",
     "seed:apply-delivery-methods": "tsx prisma/seeds/apply-delivery-methods.ts",
     "seed:apply-help-pipeline": "tsx prisma/seeds/apply-help-pipeline.ts",
+    "seed:apply-status-entered-at": "tsx prisma/seeds/apply-status-entered-at.ts",
     "seed:check-docs": "tsx scripts/check-doc-sync.ts",
     "seed:fix-docs": "tsx scripts/check-doc-sync.ts --fix",
     "precommit": "tsx scripts/check-doc-sync.ts --strict",

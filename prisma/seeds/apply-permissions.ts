@@ -38,6 +38,8 @@ const ADDITIONS: { id: string; label: string; module: string; description: strin
     { id: "help:delete", label: "Delete help tickets", module: "help", description: "Delete a help ticket." },
     // CRM → Reconnect (customer-centric re-engagement page). Rides only its sidebar link.
     { id: "ui:sidebar:crm:reconnect", label: "CRM → Reconnect", module: "ui", description: "Show the \"Reconnect\" link under CRM in the sidebar." },
+    // CRM → Call Log (raw PBX call stream + triage). Rides only its sidebar link.
+    { id: "ui:sidebar:crm:call-log", label: "CRM → Call Log", module: "ui", description: "Show the \"Call Log\" link under CRM in the sidebar." },
 ];
 
 const ADMIN_ROLE_ID = "R1";

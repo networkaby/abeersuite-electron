@@ -30,6 +30,8 @@ type PersonForm = {
 type CreatePersonDialogProps = {
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    /** Optional phone to seed the form with (e.g. creating a lead from a call). */
+    initialPhone?: string;
 };
 
 const INITIAL_FORM: PersonForm = {
@@ -42,7 +44,7 @@ const INITIAL_FORM: PersonForm = {
     shippingStateCode: "",
 };
 
-export default function CreatePersonDialog({ open, onOpenChange }: CreatePersonDialogProps) {
+export default function CreatePersonDialog({ open, onOpenChange, initialPhone }: CreatePersonDialogProps) {
     const [saving, setSaving] = useState(false);
     const [form, setForm] = useState<PersonForm>(INITIAL_FORM);
     const [serverError, setServerError] = useState<string | null>(null);
@@ -53,8 +55,14 @@ export default function CreatePersonDialog({ open, onOpenChange }: CreatePersonD
     // Clear stale error the moment the user edits a field.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => { if (serverError) setServerError(null); }, [form]);
-    // Clear when the dialog re-opens.
-    useEffect(() => { if (open) { setServerError(null); setShowGstSection(false); } }, [open]);
+    // Clear when the dialog re-opens; seed the phone if one was passed in.
+    useEffect(() => {
+        if (open) {
+            setServerError(null);
+            setShowGstSection(false);
+            setForm({ ...INITIAL_FORM, phone: initialPhone ?? "" });
+        }
+    }, [open, initialPhone]);
 
     function setField<K extends keyof PersonForm>(field: K, value: PersonForm[K]) {
         setForm((prev) => {

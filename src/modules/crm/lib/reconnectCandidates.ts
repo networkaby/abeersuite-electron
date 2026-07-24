@@ -2,6 +2,8 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import type { ContactLifecycle, Prisma } from "@/generated/prisma/client";
 import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
 import { loadMarginLines } from "@/modules/bi/lib/marginEngine";
+import { phoneMatchKey } from "@/shared/lib/format";
+import { MISSED_CALL_WHERE } from "@/shared/lib/calls";
 import type { ReconnectFilterInput } from "@/shared/lib/schemas/reconnectSchema";
 
 /**
@@ -94,23 +96,31 @@ function buildIndex(loaded: Loaded[]): UniverseIndex {
 }
 
 export async function findReconnectCandidates(filter: ReconnectFilterInput): Promise<ReconnectResult> {
-    const { activity, stage, groupId, ownerPositionId, kind, q, take, cursor } = filter;
+    const { activity, sort, stage, groupId, ownerPositionId, kind, q, take, cursor } = filter;
 
     // ── 1. Cheap-filter the universe (Person + Company), skipping dead rows ──────
-    const nameFilter: Prisma.StringFilter | undefined = q ? { contains: q, mode: "insensitive" } : undefined;
+    // The search box matches customer NAME or CONTACT NUMBER (nothing else). Phone
+    // is a plain substring match on the stored value — same convention as the
+    // party search (src/app/api/person route).
+    const qPerson: Prisma.PersonWhereInput | undefined = q
+        ? { OR: [{ name: { contains: q, mode: "insensitive" } }, { phones: { some: { phone: { contains: q } } } }] }
+        : undefined;
+    const qCompany: Prisma.CompanyWhereInput | undefined = q
+        ? { OR: [{ name: { contains: q, mode: "insensitive" } }, { phones: { some: { phone: { contains: q } } } }] }
+        : undefined;
     const personWhere: Prisma.PersonWhereInput = {
         isActive: true, mergedIntoPersonId: null, convertedToCompanyId: null,
         ...(stage ? { lifecycleStage: stage } : {}),
         ...(groupId ? { customerGroupId: groupId } : {}),
         ...(ownerPositionId ? { ownerPositionId } : {}),
-        ...(nameFilter ? { name: nameFilter } : {}),
+        ...(qPerson ?? {}),
     };
     const companyWhere: Prisma.CompanyWhereInput = {
         isActive: true, mergedIntoCompanyId: null, convertedToPersonId: null,
         ...(stage ? { lifecycleStage: stage } : {}),
         ...(groupId ? { customerGroupId: groupId } : {}),
         ...(ownerPositionId ? { ownerPositionId } : {}),
-        ...(nameFilter ? { name: nameFilter } : {}),
+        ...(qCompany ?? {}),
     };
     const wantPerson = kind === "person" || kind === "all";
     const wantCompany = kind === "company" || kind === "all";
@@ -176,8 +186,19 @@ export async function findReconnectCandidates(filter: ReconnectFilterInput): Pro
     if (activity === "quiet") rows = rows.filter((r) => r.lastActivityAt != null);
     else if (activity === "never") rows = rows.filter((r) => r.lastActivityAt == null);
 
+    const byName = (a: ReconnectCandidate, b: ReconnectCandidate) => a.name.localeCompare(b.name);
     rows.sort((a, b) => {
-        if (a.lastActivityAt == null && b.lastActivityAt == null) return a.name.localeCompare(b.name);
+        if (sort === "nameAsc") return byName(a, b);
+        if (sort === "nameDesc") return byName(b, a);
+        if (sort === "recent") {
+            // Most recently active first; never-active sink to the bottom.
+            if (a.lastActivityAt == null && b.lastActivityAt == null) return byName(a, b);
+            if (a.lastActivityAt == null) return 1;
+            if (b.lastActivityAt == null) return -1;
+            return a.lastActivityAt < b.lastActivityAt ? 1 : a.lastActivityAt > b.lastActivityAt ? -1 : 0;
+        }
+        // "quietest" (default): never-active first, then oldest → newest touch.
+        if (a.lastActivityAt == null && b.lastActivityAt == null) return byName(a, b);
         if (a.lastActivityAt == null) return -1;
         if (b.lastActivityAt == null) return 1;
         return a.lastActivityAt < b.lastActivityAt ? -1 : a.lastActivityAt > b.lastActivityAt ? 1 : 0;
@@ -202,6 +223,7 @@ async function computeRestrictions(
 ): Promise<{ accountKeep: Set<number> | null; keyKeep: Set<string> | null }> {
     const {
         activityType, activityPresence, activityFromDays, activityToDays,
+        callDirection, callFromDays, callToDays, callMissed,
         soldCategoryId, soldProductQ, soldFromDays, soldToDays,
         notSoldCategoryId, notSoldProductQ, notSoldFromDays, notSoldToDays,
         warrantyEndingDays, warrantyTermIds,
@@ -244,8 +266,72 @@ async function computeRestrictions(
         const withType = await activityTypeKeys(idx, activityType, daysWindow(activityFromDays, activityToDays));
         andKeys(activityPresence === "not" ? new Set([...universeKeys()].filter((k) => !withType.has(k))) : withType);
     }
+    // Call log: an incoming / outgoing / any call over a window (optionally only miscalls).
+    if (callDirection) {
+        andKeys(await callLogKeys(idx, callDirection, daysWindow(callFromDays, callToDays), callMissed));
+    }
 
     return { accountKeep, keyKeep };
+}
+
+/** Customer keys with ≥1 call (of the given direction) inside the window — across
+ *  BOTH the auto call log (Call table, matched by phone) and manually-logged calls
+ *  (TicketLog kind=CALL). Non-spam calls only. `missedMode`: undefined = all calls;
+ *  "only" = just miscalls (customers we missed, manual logs dropped as they're
+ *  always connected); "exclude" = connected calls only. */
+async function callLogKeys(idx: UniverseIndex, direction: "any" | "in" | "out", win: { from?: Date; to?: Date }, missedMode: "only" | "exclude" | undefined): Promise<Set<string>> {
+    const { personIds, companyIds } = idx;
+    if (!personIds.length && !companyIds.length) return new Set();
+    const dr = dateRange(win);
+    const keys = new Set<string>();
+
+    // (a) Auto calls in the Call table. Calls carry no customer FK — they match by
+    // phone — so map the universe's phones → customer, then match calls by key.
+    const phoneRows = await prisma.phone.findMany({
+        where: { OR: [{ personId: { in: personIds } }, { companyId: { in: companyIds } }] },
+        select: { phone: true, personId: true, companyId: true },
+    });
+    const keyToCustomer = new Map<string, string>();
+    for (const p of phoneRows) {
+        const k = phoneMatchKey(p.phone);
+        if (!k) continue;
+        const ck = p.personId ? keyOf("person", p.personId) : p.companyId ? keyOf("company", p.companyId) : null;
+        if (ck && !keyToCustomer.has(k)) keyToCustomer.set(k, ck);
+    }
+    const phoneKeys = [...keyToCustomer.keys()];
+    if (phoneKeys.length) {
+        // A miscall is direction-specific: incoming = speech 0, outgoing = duration 0.
+        // "exclude" = the opposite (some talk time).
+        const missWhen = (zeroField: "speechSec" | "durationSec"): Prisma.CallWhereInput =>
+            missedMode === "only" ? { [zeroField]: 0 } : missedMode === "exclude" ? { [zeroField]: { gt: 0 } } : {};
+        const dirWhere: Prisma.CallWhereInput =
+            direction === "in" ? { direction: "INCOMING", ...missWhen("speechSec") }
+                : direction === "out" ? { direction: "OUTGOING", ...missWhen("durationSec") }
+                    : missedMode === "only" ? MISSED_CALL_WHERE : missedMode === "exclude" ? { NOT: MISSED_CALL_WHERE } : {};
+        const calls = await prisma.call.findMany({
+            where: { phone: { in: phoneKeys }, spam: false, ...(dr ? { occurredAt: dr } : {}), ...dirWhere },
+            select: { phone: true },
+        });
+        for (const c of calls) { const ck = c.phone ? keyToCustomer.get(c.phone) : undefined; if (ck) keys.add(ck); }
+    }
+
+    // (b) Manually-logged calls — TicketLog kind=CALL hung directly on the customer.
+    // A hand-logged call is a connected one, so it counts for "all" / "exclude" but
+    // never for "only".
+    if (missedMode !== "only") {
+        const rows = await prisma.ticketLog.findMany({
+            where: {
+                kind: "CALL",
+                OR: [{ personId: { in: personIds } }, { companyId: { in: companyIds } }],
+                ...(dr ? { createdAt: dr } : {}),
+                ...(direction !== "any" ? { data: { path: ["direction"], equals: direction } } : {}),
+            },
+            select: { personId: true, companyId: true },
+        });
+        for (const r of rows) { if (r.personId) keys.add(keyOf("person", r.personId)); else if (r.companyId) keys.add(keyOf("company", r.companyId)); }
+    }
+
+    return keys;
 }
 
 function accountFilterActive(f: ReconnectFilterInput): boolean {

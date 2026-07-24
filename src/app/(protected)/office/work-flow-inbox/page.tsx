@@ -1,7 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { auth } from "@/auth";
 import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
-import { timeAgo, timeUntil } from "@/shared/lib/format/timeAgo";
+import { timeAgo, timeUntil, formatDuration } from "@/shared/lib/format/timeAgo";
 import WorkInboxBoard, { type WorkInboxItem } from "@/modules/repairing/components/assignments/WorkInboxBoard";
 import { parseArgs, isUserArg, isEntryArg, argKey, resolveTicketSource, META_PREV_OUTCOME, META_LAST_NOTE, type TicketLike } from "@/modules/repairing/lib/ticketSources";
 import { resolvedUserFromSession, hasPermission } from "@/shared/lib/auth/permissions";
@@ -28,6 +28,9 @@ export default async function AssignmentsPage() {
             },
             orderBy: { updatedAt: "asc" },
             include: {
+                // The current status carries the resolve-time SLA (hours). Overdue =
+                // time-in-status (from statusEnteredAt) exceeds it → "needs attention".
+                ticketStatus: { select: { resolveTimeHours: true } },
                 repair: { include: { device: { include: { account: { include: customerPhones } } } } },
                 ticketWorker: {
                     select: {
@@ -84,7 +87,15 @@ export default async function AssignmentsPage() {
     // the purity rule targets re-rendering client components, not this case.
     // eslint-disable-next-line react-hooks/purity
     const now = Date.now();
+    const HOUR_MS = 3_600_000;
     const openItems: WorkInboxItem[] = tickets.map((t) => {
+        // SLA breach = time since the ticket entered its current status exceeds that
+        // status' resolveTimeHours. statusEnteredAt is stamped only on real status
+        // changes; fall back to updatedAt for tickets that predate the field.
+        const enteredAt = t.statusEnteredAt ?? t.updatedAt;
+        const slaHours = t.ticketStatus?.resolveTimeHours ?? null;
+        const overdueByMs = slaHours != null ? now - enteredAt.getTime() - slaHours * HOUR_MS : -1;
+        const needsAttention = overdueByMs > 0;
         const work = t.ticketWorker?.workId ? worksById[t.ticketWorker.workId] : undefined;
         const device = t.repair?.device ?? null;
         const acct = device?.account ?? null;
@@ -158,7 +169,9 @@ export default async function AssignmentsPage() {
             answeredBy: null,
             snoozed,
             wakeLabel: snoozed && t.wakeAt ? timeUntil(t.wakeAt) : null,
-            ageLabel: timeAgo(t.updatedAt),
+            ageLabel: timeAgo(enteredAt),
+            needsAttention: needsAttention && !snoozed,
+            overdueLabel: needsAttention && !snoozed ? formatDuration(overdueByMs) : null,
         };
     });
 
@@ -201,13 +214,20 @@ export default async function AssignmentsPage() {
             snoozed: false,
             wakeLabel: null,
             ageLabel: timeAgo(l.createdAt),
+            needsAttention: false,
+            overdueLabel: null,
         };
     });
+
+    // Needs-attention (SLA-breached) items float to the top; the query already
+    // orders by longest-waiting, and Array.sort is stable, so within each group the
+    // longest-waiting-first order is preserved.
+    const sortedOpen = [...openItems].sort((a, b) => Number(b.needsAttention) - Number(a.needsAttention));
 
     // Drop items whose work the caller can't act on (gated work, permission not
     // held) — private to its holders, not just absent from a filter chip. Items
     // with no work fall through as open.
-    const visibleItems = [...openItems, ...finishedItems].filter(
+    const visibleItems = [...sortedOpen, ...finishedItems].filter(
         (it) => !it.workId || visibleWorkIds.has(it.workId)
     );
 

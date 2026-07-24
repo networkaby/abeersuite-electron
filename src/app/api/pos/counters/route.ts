@@ -65,6 +65,7 @@ export async function GET(req: NextRequest) {
                 branchId:    c.branchId,
                 branch:      c.branch,
                 isActive:    c.isActive,
+                epbxExtension: c.epbxExtension,
                 tillAccount: {
                     id:      c.tillAccount.id,
                     name:    c.tillAccount.name,

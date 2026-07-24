@@ -200,6 +200,7 @@ export async function PUT(
             where: { id: Number(id) },
             data: {
                 ...(body.status !== undefined   && { ticketStatus: { connect: { id: body.status } } }),
+                ...(body.status !== undefined && body.status !== scopedTicket.status && { statusEnteredAt: new Date() }),
                 ...(body.priority !== undefined && { priority: body.priority }),
                 ...(body.notes !== undefined    && { notes: body.notes }),
                 ...(Object.keys(repairData).length ? { repair: { update: repairData } } : {}),

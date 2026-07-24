@@ -65,6 +65,7 @@ interface TicketStatus {
     leavePrompt: string | null;
     announceOnEntry: boolean;
     etaText: string | null;
+    resolveTimeHours: number | null;
     pipelineId: string | null;
     fromTransitions: { toStatusId: string; to: { label: string } }[];
     _count: { tickets: number };
@@ -82,11 +83,25 @@ interface StatusForm {
     leavePrompt: string;
     announceOnEntry: boolean;
     etaText: string;
+    // Resolve time entered as days + hours (UI convenience) — combined into total
+    // hours only when saving. resolveTimeHoursPart is the 0–23 remainder.
+    resolveTimeDays: string;
+    resolveTimeHoursPart: string;
+}
+
+// "76" → "3d 4h" (drops the zero side: "3d" or "4h" alone) — for the read-only SLA badge.
+function formatResolveTime(totalHours: number): string {
+    const days = Math.floor(totalHours / 24);
+    const hours = totalHours % 24;
+    if (days === 0) return `${hours}h`;
+    if (hours === 0) return `${days}d`;
+    return `${days}d ${hours}h`;
 }
 
 const EMPTY_FORM: StatusForm = {
     label: "", color: "bg-gray-100 text-gray-600", order: 0, isTerminal: false, isEntryPoint: false,
     workId: "", warrantyScope: "any", actionLabel: "", leavePrompt: "", announceOnEntry: false, etaText: "",
+    resolveTimeDays: "", resolveTimeHoursPart: "",
 };
 
 export default function StatusesPage() {
@@ -150,6 +165,8 @@ export default function StatusesPage() {
             leavePrompt: status.leavePrompt ?? "",
             announceOnEntry: status.announceOnEntry ?? false,
             etaText: status.etaText ?? "",
+            resolveTimeDays: status.resolveTimeHours != null ? String(Math.floor(status.resolveTimeHours / 24)) : "",
+            resolveTimeHoursPart: status.resolveTimeHours != null ? String(status.resolveTimeHours % 24) : "",
         });
     };
 
@@ -161,6 +178,11 @@ export default function StatusesPage() {
         }
         setSavingEdit(true);
         try {
+            const daysBlank = editForm.resolveTimeDays.trim() === "";
+            const hoursBlank = editForm.resolveTimeHoursPart.trim() === "";
+            const resolveTimeHours = daysBlank && hoursBlank
+                ? null
+                : (daysBlank ? 0 : Number(editForm.resolveTimeDays)) * 24 + (hoursBlank ? 0 : Number(editForm.resolveTimeHoursPart));
             await axios.patch(`/api/ticket-statuses/${editModalId}`, {
                 label: editForm.label.trim(),
                 color: editForm.color,
@@ -173,6 +195,7 @@ export default function StatusesPage() {
                 leavePrompt: editForm.leavePrompt.trim() || null,
                 announceOnEntry: editForm.announceOnEntry,
                 etaText: editForm.etaText.trim() || null,
+                resolveTimeHours,
             });
             toast.success("Status updated");
             setEditModalId(null);
@@ -305,6 +328,7 @@ export default function StatusesPage() {
                                         <span className="flex items-center gap-1"><ArrowUpDown size={12} /> Order</span>
                                     </TableHead>
                                     <TableHead>Flags</TableHead>
+                                    <TableHead>Resolve Time</TableHead>
                                     <TableHead>Work</TableHead>
                                     <TableHead>Transitions To</TableHead>
                                     <TableHead>Tickets</TableHead>
@@ -314,7 +338,7 @@ export default function StatusesPage() {
                             <TableBody>
                                 {statuses.length === 0 && !addingNew && (
                                     <TableRow>
-                                        <TableCell colSpan={9} className="py-10 text-center text-sm text-muted-foreground">
+                                        <TableCell colSpan={10} className="py-10 text-center text-sm text-muted-foreground">
                                             No statuses in this pipeline yet. Add the first one.
                                         </TableCell>
                                     </TableRow>
@@ -338,6 +362,13 @@ export default function StatusesPage() {
                                                     <span className="text-xs text-muted-foreground">—</span>
                                                 )}
                                             </div>
+                                        </TableCell>
+                                        <TableCell>
+                                            {status.resolveTimeHours != null ? (
+                                                <Badge className="bg-orange-100 text-orange-700">{formatResolveTime(status.resolveTimeHours)}</Badge>
+                                            ) : (
+                                                <span className="text-xs text-muted-foreground">—</span>
+                                            )}
                                         </TableCell>
                                         <TableCell>
                                             {(() => {
@@ -413,6 +444,7 @@ export default function StatusesPage() {
                                                 Terminal
                                             </label>
                                         </TableCell>
+                                        <TableCell className="text-xs text-muted-foreground">—</TableCell>
                                         <TableCell colSpan={2} className="text-xs text-muted-foreground">
                                             Set work after creation
                                         </TableCell>
@@ -538,6 +570,39 @@ export default function StatusesPage() {
                             </div>
                             <p className="text-xs text-muted-foreground">
                                 Entry point = where new tickets land. Terminal = a close-out stage with no further moves.
+                            </p>
+                        </div>
+
+                        {/* ── Resolve time (SLA) ─────────────────────────── */}
+                        <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Resolve time</p>
+                            <div className="flex items-center gap-2">
+                                <Input
+                                    type="text"
+                                    inputMode="numeric"
+                                    className="w-20"
+                                    value={editForm.resolveTimeDays}
+                                    onChange={(e) => setEditForm((prev) => ({ ...prev, resolveTimeDays: e.target.value.replace(/[^0-9]/g, "") }))}
+                                    placeholder="0"
+                                />
+                                <span className="text-sm text-muted-foreground">days</span>
+                                <Input
+                                    type="text"
+                                    inputMode="numeric"
+                                    className="w-20"
+                                    value={editForm.resolveTimeHoursPart}
+                                    onChange={(e) => {
+                                        const digits = e.target.value.replace(/[^0-9]/g, "");
+                                        const clamped = digits === "" ? "" : String(Math.min(23, Number(digits)));
+                                        setEditForm((prev) => ({ ...prev, resolveTimeHoursPart: clamped }));
+                                    }}
+                                    placeholder="0"
+                                />
+                                <span className="text-sm text-muted-foreground">hours</span>
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                                A ticket sitting here longer than this is flagged
+                                {" "}<span className="font-medium text-foreground">Needs attention</span> in the Work Inbox. Blank = no SLA.
                             </p>
                         </div>
 

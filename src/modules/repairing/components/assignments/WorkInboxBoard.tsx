@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Wrench, Clock, CheckCircle2, XCircle, MessageSquare } from "lucide-react";
+import { Wrench, Clock, CheckCircle2, XCircle, MessageSquare, AlertTriangle } from "lucide-react";
 import WorkActions from "../WorkActions";
 import { type WorkArg } from "@/modules/repairing/lib/ticketSources";
 import { badgeColor, dotColor } from "@/shared/lib/format/entityColor";
@@ -57,6 +57,10 @@ export interface WorkInboxItem {
     /** When the snoozed retry comes due, e.g. "in 2d" (snoozed rows only). */
     wakeLabel: string | null;
     ageLabel: string;
+    /** SLA breach — in this status longer than its resolve time. */
+    needsAttention: boolean;
+    /** How far past the resolve time, e.g. "2h" (overdue rows only). */
+    overdueLabel: string | null;
 }
 
 const STATUS_PILL: Record<WorkInboxItem["status"], { label: string; cls: string }> = {
@@ -149,6 +153,11 @@ export default function WorkInboxBoard({
                                 ) : (
                                     <span className={`shrink-0 rounded-full px-2 py-0.5 font-medium ${pill.cls}`}>{pill.label}</span>
                                 )}
+                                {it.needsAttention && (
+                                    <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 font-medium text-red-700 dark:bg-red-950 dark:text-red-300">
+                                        <AlertTriangle size={11} />Needs attention
+                                    </span>
+                                )}
                                 <span className={`shrink-0 rounded-md px-2 py-0.5 text-[11px] font-medium ${badgeColor(it.workColor).className}`} style={badgeColor(it.workColor).style}>
                                     {it.workLabel}
                                 </span>
@@ -160,7 +169,9 @@ export default function WorkInboxBoard({
                                     {it.phone && <><span className="mx-1">·</span>{it.phone}</>}
                                 </span>
                                 <span className="ml-auto flex shrink-0 items-center gap-2">
-                                    <span className="inline-flex items-center gap-1 text-muted-foreground"><Clock size={12} />{it.ageLabel}</span>
+                                    <span className={`inline-flex items-center gap-1 ${it.needsAttention ? "font-medium text-red-600 dark:text-red-400" : "text-muted-foreground"}`}>
+                                        <Clock size={12} />{it.ageLabel}{it.overdueLabel ? ` · ${it.overdueLabel} over` : ""}
+                                    </span>
                                     <Link href={`/office/repairing/tickets/${it.ticketId}`} className="text-primary hover:underline">Open</Link>
                                 </span>
                             </div>

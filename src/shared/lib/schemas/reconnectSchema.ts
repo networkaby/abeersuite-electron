@@ -36,6 +36,9 @@ const exactlyOneTarget = (d: { personId?: number | null; companyId?: number | nu
     }
 };
 
+/** Call direction — only meaningful for kind CALL; stored on the log's `data`. */
+export const callDirectionSchema = z.enum(["in", "out"]);
+
 /** POST a note / call / meeting / task onto a customer's own timeline. */
 export const addTimelineLogSchema = z
     .object({
@@ -43,6 +46,7 @@ export const addTimelineLogSchema = z
         kind: reconnectLogKindSchema.default("NOTE"),
         body: z.string().trim().min(1, "Cannot be empty").max(5000),
         dueAt: dateField, // only meaningful for TASK
+        direction: callDirectionSchema.optional(), // only meaningful for CALL
     })
     .superRefine(exactlyOneTarget);
 
@@ -82,6 +86,13 @@ export const reconnectFilterSchema = z.object({
     activityPresence: z.enum(["has", "not"]).default("has"),
     activityFromDays: dayCount,
     activityToDays: dayCount,
+    // Call log: has an incoming / outgoing / any call over a days-ago window.
+    callDirection: z.enum(["any", "in", "out"]).optional(),
+    callFromDays: dayCount,
+    callToDays: dayCount,
+    // Miscall lens on the call-log filter: absent = include all calls; "only" =
+    // just miscalls (customers we missed); "exclude" = connected calls only.
+    callMissed: z.enum(["only", "exclude"]).optional(),
 
     // ── Sold-to-customer behaviour (NOT supplier procurement) ────────────────────
     // We SOLD them a category / product, over a "days ago" window (a past period /
@@ -116,6 +127,9 @@ export const reconnectFilterSchema = z.object({
     ownerPositionId: z.string().trim().min(1).optional(),
     kind: z.enum(["person", "company", "all"]).default("all"),
     q: z.string().trim().max(200).optional(),
+
+    // How the middle-pane list is ordered.
+    sort: z.enum(["quietest", "recent", "nameAsc", "nameDesc"]).default("quietest"),
 
     // Paging.
     take: z.coerce.number().int().min(1).max(200).default(50),

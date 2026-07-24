@@ -16,6 +16,7 @@ const ticketStatusSchema = labelColorSchema.extend({
     leavePrompt: z.string().optional().nullable(),
     announceOnEntry: z.boolean().optional(),
     etaText: z.string().optional().nullable(),
+    resolveTimeHours: z.coerce.number().int().nonnegative().nullable().optional(),
     pipelineId: z.string().optional().nullable(),
 });
 
@@ -67,6 +68,7 @@ export async function POST(req: Request) {
                 leavePrompt:  body.leavePrompt ?? null,
                 announceOnEntry: body.announceOnEntry ?? false,
                 etaText:      body.etaText ?? null,
+                resolveTimeHours: body.resolveTimeHours ?? null,
                 pipelineId:   body.pipelineId ?? null,
             },
         });

@@ -10,7 +10,7 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import {
-    Plus, Pencil, Trash2, X, Check, Monitor, Building2, ToggleLeft, ToggleRight, Lock, Unlock,
+    Plus, Pencil, Trash2, X, Check, Monitor, Building2, ToggleLeft, ToggleRight, Lock, Unlock, Phone,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,6 +51,7 @@ type Counter = {
     branchId: string;
     branch: { id: string; name: string };
     isActive: boolean;
+    epbxExtension: string | null;
     tillAccount: { id: number; name: string; balance: string };
     paymentAccounts: PaymentAccount[];
     allowedExpenseAccountIds: number[];
@@ -70,11 +71,13 @@ type EditPayAcct = { id?: number; channel: PosPayChannel; label: string; account
 
 type EditForm = {
     name: string;
+    epbxExtension: string;
     paymentAccounts: EditPayAcct[];
     allowedExpenseAccountIds: number[];
 };
 const EMPTY_EDIT: EditForm = {
     name: "",
+    epbxExtension: "",
     paymentAccounts: [],
     allowedExpenseAccountIds: [],
 };
@@ -152,6 +155,7 @@ export default function CountersAdminPage() {
     const startEdit = (c: Counter) => {
         setEditForm({
             name: c.name,
+            epbxExtension: c.epbxExtension ?? "",
             paymentAccounts: (c.paymentAccounts ?? []).map((p) => ({
                 id: p.id,
                 channel: p.channel,
@@ -223,6 +227,7 @@ export default function CountersAdminPage() {
         try {
             await axios.patch(`/api/pos/counters/${editId}`, {
                 name: editForm.name.trim(),
+                epbxExtension: editForm.epbxExtension.trim() || null,
                 paymentAccounts,
                 allowedExpenseAccountIds: editForm.allowedExpenseAccountIds,
             });
@@ -357,6 +362,16 @@ export default function CountersAdminPage() {
                                                             value={editForm.name}
                                                             onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
                                                             className="mt-1"
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="text-xs font-medium text-muted-foreground">EPBX extension</label>
+                                                        <Input
+                                                            value={editForm.epbxExtension}
+                                                            onChange={(e) => setEditForm((f) => ({ ...f, epbxExtension: e.target.value }))}
+                                                            placeholder="e.g. 201"
+                                                            className="mt-1"
+                                                            maxLength={20}
                                                         />
                                                     </div>
                                                 </div>
@@ -507,6 +522,11 @@ export default function CountersAdminPage() {
                                                     <div className="flex gap-3 mt-0.5 flex-wrap text-xs text-muted-foreground">
                                                         <span>Balance ₹{fmt(Number(c.tillAccount.balance))}</span>
                                                         <span>{c.totalShifts} shift{c.totalShifts === 1 ? "" : "s"}</span>
+                                                        {c.epbxExtension && (
+                                                            <span className="flex items-center gap-1">
+                                                                <Phone size={11} /> Ext {c.epbxExtension}
+                                                            </span>
+                                                        )}
                                                         {c.activeShift && (
                                                             <span className="text-amber-700 dark:text-amber-400">
                                                                 · {c.activeShift.status === "AWAITING_HANDOVER" ? "awaiting handover" : `in use — ${c.activeShift.user.name}`}

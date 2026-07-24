@@ -1,0 +1,79 @@
+// ── Telephony / call log ──────────────────────────────────────────────────────
+//
+// One row per phone call, captured from the shop's Matrix PBX by the `epbx-bridge`
+// (D:\AbeerSuite\tools\epbx-bridge) and POSTed to /api/calls. This is a raw event
+// firehose — EVERY call is stored (incoming / outgoing / internal / unknown,
+// answered or missed, known caller or not).
+//
+// Deliberately has NO foreign key to Person/Company. A call is matched to a
+// customer BY PHONE at read time (see phoneMatchKey + buildCustomerTimeline), so a
+// call that arrived before the customer existed lights up in their timeline the
+// moment they're created with that number. Unknown callers are never auto-made
+// into leads — staff triage them on the CRM Call Log page (/office/crm/call-log).
+
+model Call {
+  id Int @id @default(autoincrement())
+
+  direction CallDirection
+
+  // Normalized match key — last-10-digit India form (phoneMatchKey). Null for
+  // internal ext↔ext calls (no external number). This is the join to a customer.
+  phone     String?
+  // The number exactly as the PBX sent it (dialed for OG, caller for IC) — audit.
+  rawNumber String?
+
+  // Extensions + trunk. Mapping: OG fromExt→fromExt; IC connectedExt→toExt (the
+  // extension that answered); INTERNAL fromExt/toExt as-is. serial = PBX line no.
+  fromExt String?
+  toExt   String?
+  trunk   String?
+  serial  String?
+
+  // SMDR status code exactly as sent (R / U / N / C / B …). The UI maps codes to
+  // Answered / Missed labels — codes vary by model, so store raw, interpret in app.
+  status String?
+
+  // All four SMDR durations (seconds). Not every kind carries all of them.
+  durationSec Int @default(0)
+  speechSec   Int @default(0)
+  answerSec   Int @default(0)
+  holdSec     Int @default(0)
+
+  // Outgoing call metering (optional).
+  amount Decimal? @db.Decimal(10, 2)
+  units  Int?
+
+  // When the call actually happened — parsed from the record's own date+time
+  // (IST). The Matrix protocol buffers records while the TCP link is down and
+  // replays them on reconnect, so receive-time would mis-stamp replayed calls.
+  occurredAt DateTime
+  // When the record reached us (bridge timestamp) — audit only.
+  receivedAt DateTime
+
+  // The original SMDR line. Audit / re-parse, and the idempotency key. The same
+  // call reaches us many ways — bridge retries (fresh timestamp each time), the
+  // SAME installer runs on every PC so several may push it at once, and buffered
+  // replays repeat — but the raw line (serial+date+time embedded) is identical.
+  // `@unique` makes de-dupe race-proof: concurrent inserts of the same line hit
+  // the constraint and the API treats the loser as a duplicate. (Postgres treats
+  // NULLs as distinct, so internal/old-bridge rows with no raw line never clash.)
+  raw String? @unique
+
+  // Staff-editable, empty at creation (a call is logged with no note).
+  note String?
+
+  // Spam is flagged on the NUMBER: flagging one call sets spam=true on every call
+  // sharing its `phone`, and new calls from a flagged number are inserted flagged.
+  // Flagged calls are kept (audit) but hidden from the CRM timeline.
+  spam Boolean @default(false)
+
+  // Reserved for a future feature: auto-merge the nearest call onto a help ticket
+  // so the ticket carries a call entry. Plain scalar (no relation) until built.
+  ticketId Int?
+
+  createdAt DateTime @default(now())
+
+  @@index([phone])
+  @@index([occurredAt])
+  @@index([spam])
+}

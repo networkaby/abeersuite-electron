@@ -132,6 +132,7 @@ export async function PATCH(
                     data: {
                         workerId: newWorkerId,
                         status: statusId,
+                        ...(statusId !== ticket.status && { statusEnteredAt: new Date() }),
                         ...(mergedContext && { context: mergedContext as Prisma.InputJsonValue }),
                         wakeAt: null, retryCount: 0, retryKeyId: null,
                         updatedAt: new Date(),
@@ -295,6 +296,7 @@ export async function PATCH(
                 data: {
                     workerId: newWorkerId,
                     status: newMainStatus,
+                    ...(newMainStatus !== ticket.status && { statusEnteredAt: new Date() }),
                     ...(mergedContext && { context: mergedContext as Prisma.InputJsonValue }),
                     wakeAt,
                     retryCount,

@@ -136,7 +136,7 @@ export async function autoAdvance(ticketId: number, userId: number): Promise<Aut
         await prisma.$transaction(async (tx) => {
             await tx.ticket.update({
                 where: { id: ticketId },
-                data: { workerId: newWorkerId, status: newStatus, context: merged as Prisma.InputJsonValue, updatedAt: new Date() },
+                data: { workerId: newWorkerId, status: newStatus, ...(newStatus !== ticket.status && { statusEnteredAt: new Date() }), context: merged as Prisma.InputJsonValue, updatedAt: new Date() },
             });
             // Completion stamp for the Action we just ran (feeds the Finished list + history).
             await tx.ticketLog.create({ data: { ticketId, status: ticket.status, workerId: worker.id, note: `Work done · ${result.success ? "Success" : "Unsuccess"} — ${worker.label} (auto)`, author } });

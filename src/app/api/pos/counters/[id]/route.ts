@@ -30,6 +30,12 @@ const paymentAccountSchema = z.object({
 const updateSchema = z.object({
     name:     z.string().trim().min(1).max(60).optional(),
     isActive: z.boolean().optional(),
+    // EPBX/intercom extension of the phone at this counter. Empty string/null clears
+    // it; an absent field is left untouched (.optional() outermost so the transform
+    // never runs on undefined and accidentally nulls it on unrelated PATCHes).
+    epbxExtension: z.union([z.string().trim().max(20), z.null()])
+        .transform((v) => (typeof v === "string" && v.trim().length ? v.trim() : null))
+        .optional(),
     // Full replace of the counter's payment-account list when supplied.
     paymentAccounts: z.array(paymentAccountSchema).max(20).optional(),
     // Allowed POS-expenditure ledgers (EXPENSE group). Empty = no restriction.
@@ -171,6 +177,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 data: pickDefined({
                     name: data.name,
                     isActive: data.isActive,
+                    epbxExtension: data.epbxExtension,
                     allowedExpenseAccountIds: data.allowedExpenseAccountIds,
                     // Release clears all three lock fields; next open rebinds.
                     ...(data.releaseLock ? { boundDeviceId: null, boundDeviceLabel: null, boundAt: null } : {}),
@@ -185,6 +192,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             branchId: updated.branchId,
             branch:   updated.branch,
             isActive: updated.isActive,
+            epbxExtension: updated.epbxExtension,
             tillAccount: {
                 id:      updated.tillAccount.id,
                 name:    updated.tillAccount.name,

@@ -12,6 +12,7 @@ import {
     Calculator,
     Network,
     PhoneCall,
+    Voicemail,
     Briefcase,
     Monitor,
     ShoppingCart,
@@ -61,6 +62,10 @@ import {
     Trash2,
     MapPin,
     LifeBuoy,
+    HandCoins,
+    HelpCircle,
+    TicketPlus,
+    MessageCircleQuestion,
 } from "lucide-react";
 
 // Keys match the Priority enum: LOW | MEDIUM | HIGH | URGENT
@@ -103,7 +108,7 @@ export type ModuleCreateAction = {
     href?: string;
     /** Open the href in a new browser tab. */
     newTab?: boolean;
-    action?: "more" | "new-ticket" | "new-person" | "new-company" | "new-journal-voucher" | "new-debit-note" | "new-contra" | "new-payment" | "new-receipt" | "new-credit-note" | "new-sale" | "new-purchase" | "new-sale-return" | "new-purchase-return" | "new-estimate" | "new-sales-order" | "new-purchase-order" | "new-grn" | "new-challan" | "new-manufacturing-journal" | "new-physical-stock" | "new-branch-transfer" | "new-rejection-in" | "new-rejection-out";
+    action?: "more" | "new-ticket" | "new-help-ticket" | "new-person" | "new-company" | "new-journal-voucher" | "new-debit-note" | "new-contra" | "new-payment" | "new-receipt" | "new-credit-note" | "new-sale" | "new-purchase" | "new-sale-return" | "new-purchase-return" | "new-estimate" | "new-sales-order" | "new-purchase-order" | "new-grn" | "new-challan" | "new-manufacturing-journal" | "new-physical-stock" | "new-branch-transfer" | "new-rejection-in" | "new-rejection-out";
     pipelineRef?: "default";
     permission?: string | null;
     disabled?: boolean;
@@ -154,13 +159,49 @@ export type ButtonBarAction = {
     disabled?: boolean;
 };
 
+// ─── POS action rail ────────────────────────────────────────────────────────
+// The narrow vertical button rail pinned to the far-right edge of the POS screen
+// (Rcv / Exp / Help / Ticket / Enquiry). Edit POS_RAIL_ACTIONS to add / remove /
+// reorder buttons — same as the sidebar nav below.
+//   - kind "action" → runs a wired handler (keyed by `key`; e.g. rcv/exp).
+//   - kind "soon"   → placeholder that toasts "<label> — coming soon".
+//   - `divider: true` draws a separator line above that button.
+//   - `can` hides the button unless that access flag is true.
+
+/** Access-flag keys a rail button can be gated by. */
+export type PosRailAccessKey = "canRcv" | "canExp";
+
+export type PosRailAction = {
+    /** Stable id — for "action" buttons this also picks the handler. */
+    key: string;
+    label: string;
+    icon: LucideIcon;
+    kind: "action" | "soon";
+    title?: string;
+    /** Draw a separator line above this button. */
+    divider?: boolean;
+    /** Hide the button unless this access flag is true. */
+    can?: PosRailAccessKey;
+};
+
+// ⇩ Edit this list to add / remove / reorder POS rail buttons.
+export const POS_RAIL_ACTIONS: PosRailAction[] = [
+    { key: "rcv", label: "Rcv", icon: HandCoins, kind: "action", can: "canRcv", title: "Collect a payment from a customer into this counter's till — posts a receipt voucher" },
+    { key: "exp", label: "Exp", icon: Banknote, kind: "action", can: "canExp", title: "Record a counter expenditure (tea, sundry…) — posts a payment voucher from the counter's till" },
+
+    // { key: "help", label: "Help", icon: HelpCircle, kind: "action", divider: true, title: "POS help & keyboard shortcuts" },
+
+    { key: "ticket", label: "Ticket", icon: TicketPlus, kind: "action", title: "Create a repair ticket for a customer" },
+    { key: "enquiry", label: "Enquiry", icon: MessageCircleQuestion, kind: "action", title: "Log a customer help / enquiry ticket (price, availability, warranty…)" },
+
+];
+
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 
 export const WORKSPACE_NAV: NavItem[] = [
     { label: "Inbox", href: "/office/message/inbox", icon: Inbox, permission: null },
     { label: "Work Flow", href: "/office/work-flow-inbox", icon: ClipboardList, permission: null },
     { label: "POS", href: "/vouchers/pos", icon: Monitor, permission: "pos:shift:open" },
-    // { label: "CallLog", href: "/office/core/call-log", icon: PhoneCall, permission: null },
     // { label: "Search SLno", href: "/office/core/search-slno", icon: Search, permission: null },
 
 ];
@@ -256,7 +297,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         ],
         children: [
             { label: "Daybook", icon: ClipboardList, href: "/office/accountancy/reports/day-book", permission: "finance:voucher:create" },
-            // { label: "Orders n Estimates", icon: PackageCheck, href: "/office/accountancy/orders-estimates", permission: "finance:voucher:create" },
+            { label: "Orders n Estimates", icon: PackageCheck, href: "/office/accountancy/orders-estimates", permission: "finance:voucher:create" },
             { label: "Pending Inventory", icon: ClipboardList, href: "/office/accountancy/reports/pending-vouchers", permission: "finance:voucher:create" },
             { label: "Stock Summary", icon: BarChart3, href: "/office/inventory/stock-summary" },
             { label: "Account Ledger", icon: BookOpen, href: "/office/accountancy/account-ledgers", permission: "finance:voucher:create" },
@@ -277,12 +318,8 @@ export const MODULE_SECTIONS: ModuleSection[] = [
                 href: "/office/accountancy/reports",
                 permission: "finance:voucher:create",
                 children: [
-                    // { label: "Balance Sheet", icon: FolderTree, href: "/office/accountancy/reports/balance-sheet" },
-                    // { label: "Profit & Loss A/c", icon: BookOpen, href: "/office/accountancy/reports/profit-loss" },
+
                     { label: "Trial Balance", icon: Wallet, href: "/office/accountancy/reports/trial-balance" },
-                    // { label: "Day Book", icon: ClipboardList, href: "/office/accountancy/reports/day-book" },
-                    // { label: "Cash Book", icon: Wallet, href: "/office/accountancy/reports/cash-book" },
-                    // { label: "Bank Book", icon: Wallet, href: "/office/accountancy/reports/bank-book" },
                     { label: "Receivables", icon: Wallet, href: "/office/accountancy/reports/receivables" },
                     { label: "Payables", icon: Wallet, href: "/office/accountancy/reports/payables" },
                     { label: "Cash Flow", icon: ClipboardList, href: "/office/accountancy/reports/cash-flow" },
@@ -388,8 +425,6 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         children: [
 
             { label: "Products", icon: Box, href: "/office/inventory/products" },
-            // { label: "Stock Ledger", icon: BookOpen, href: "/office/inventory/stock-ledger" },
-            // { label: "Stock Summary", icon: BarChart3, href: "/office/inventory/stock-summary" },
             { label: "Item Ledger", icon: ClipboardList, href: "/office/inventory/inventory-details" },
             { label: "Reorder", icon: PackageCheck, href: "/office/inventory/reorder" },
             {
@@ -425,7 +460,8 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         children: [
             { label: "Deals", icon: ClipboardList, href: "/office/crm/deals" },
             { label: "Reconnect", icon: PhoneCall, href: "/office/crm/reconnect" },
-            // Future under CRM: Contacts, Leads (lead-finding) — separate modules.
+            { label: "Call Log", icon: Voicemail, href: "/office/crm/call-log" },
+
         ],
     },
 
@@ -437,7 +473,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         dashboardHref: "/office/help",
         pathPrefixes: ["/office/help"],
         createActions: [
-            { label: "New Help +", subtitle: "Log a front-desk enquiry", icon: LifeBuoy, variant: "default", href: "/office/help?new=1", permission: "help:create" },
+            { label: "New Help +", subtitle: "Log a front-desk enquiry", icon: LifeBuoy, variant: "default", action: "new-help-ticket", permission: "help:create" },
         ],
         children: [
             { label: "Help Desk", icon: LifeBuoy, href: "/office/help" },
@@ -493,20 +529,20 @@ export const MODULE_SECTIONS: ModuleSection[] = [
     // },
 
     // Delivery
-    {
-        label: "Delivery",
-        icon: Truck,
-        key: "delivery",
-        dashboardHref: "",
-        pathPrefixes: [""],
-        children: [
-            // Live: the Delivery board (P8) is under Orders → Delivery
-            // (/office/orders/delivery); courier config (Shiprocket / Custom / Local
-            // boy) is under Settings → Couriers (/office/settings/couriers).
-            // Still roadmap:
-            // { label: "Proof of delivery", icon: FileText, href: "/office/roadmap/delivery/pod" },
-        ],
-    },
+    // {
+    //     label: "Delivery",
+    //     icon: Truck,
+    //     key: "delivery",
+    //     dashboardHref: "",
+    //     pathPrefixes: [""],
+    //     children: [
+    //         // Live: the Delivery board (P8) is under Orders → Delivery
+    //         // (/office/orders/delivery); courier config (Shiprocket / Custom / Local
+    //         // boy) is under Settings → Couriers (/office/settings/couriers).
+    //         // Still roadmap:
+    //         // { label: "Proof of delivery", icon: FileText, href: "/office/roadmap/delivery/pod" },
+    //     ],
+    // },
 
     // Field Service
     // {
@@ -523,20 +559,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
     //     ],
     // },
 
-    // HelpDesk
-    // {
-    //     label: "HelpDesk",
-    //     icon: HelpCircle,
-    //     key: "helpdesk",
-    //     dashboardHref: "/office/roadmap/helpdesk",
-    //     pathPrefixes: ["/office/roadmap/helpdesk"],
-    //     children: [
-    //         // { label: "Overview", icon: ChartArea, href: "/office/roadmap/helpdesk" },
-    //         { label: "Queues", icon: Inbox, href: "/office/roadmap/helpdesk/queues" },
-    //         { label: "Knowledge base", icon: BookOpen, href: "/office/roadmap/helpdesk/knowledge" },
-    //         { label: "SLAs", icon: Timer, href: "/office/roadmap/helpdesk/slas" },
-    //     ],
-    // },
+
 
     // Projects
     // {
@@ -567,7 +590,6 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         ],
         children: [
             { label: "Work Board", icon: ListChecks, href: "/office/administration" },
-            // Roadmap placeholders — not yet built:
 
         ],
     },
@@ -580,13 +602,11 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         dashboardHref: "/office/customer-retention",
         pathPrefixes: ["/office/roadmap/retention", "/office/customer-retention"],
         children: [
-            // { label: "Overview", icon: ChartArea, href: "/office/roadmap/retention" },
             { label: "Coupons", icon: Ticket, href: "/office/customer-retention/coupons", permission: "coupons:edit" },
             { label: "Gift Cards", icon: CreditCard, href: "/office/customer-retention/gift-cards", permission: "coupons:edit" },
             { label: "Loyalty", icon: Gift, href: "/office/customer-retention/loyalty", permission: "loyalty:edit" },
             { label: "Spend Tiers", icon: BadgePercent, href: "/office/customer-retention/customer-tiers", permission: "customers:edit" },
-            // Campaigns page not built yet — was pointing at the non-existent /office/roadmap/retention/campaigns (404).
-            // { label: "Campaigns", icon: Megaphone, href: "/office/roadmap/retention/campaigns" },
+
         ],
     },
 
@@ -598,9 +618,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         dashboardHref: "/office/pricing-strategy/strategies",
         pathPrefixes: ["/office/pricing-strategy"],
         children: [
-            // { label: "Overview", icon: ChartArea, href: "/office/pricing-strategy" },
             { label: "Strategies", icon: Calculator, href: "/office/pricing-strategy/strategies" },
-            // { label: "Items", icon: Boxes, href: "/office/pricing-strategy/items" },
             { label: "Costing", icon: Truck, href: "/office/pricing-strategy/costing" },
             { label: "Needs attention", icon: AlertTriangle, href: "/office/pricing-strategy/needs-attention" },
             { label: "Update & print labels", icon: Printer, href: "/office/pricing-strategy/update-print-labels" },
@@ -648,7 +666,7 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     { label: "Thermal Printer", href: "/office/settings/printer-settings", icon: Printer, permission: "settings:manage" },
     { label: "QR Display", href: "/office/settings/qr-display-settings", icon: QrCode, permission: "settings:manage" },
     { label: "Print Templates", href: "/office/settings/voucher-templates", icon: FileText, permission: "settings:manage", sidebarKey: "voucher-templates" },
-    // { label: "Print Preview", href: "/office/settings/voucher-templates/preview", icon: FileText, permission: "settings:manage", sidebarKey: "voucher-preview" },
+    { label: "Print Preview", href: "/office/settings/voucher-templates/preview", icon: FileText, permission: "settings:manage", sidebarKey: "voucher-preview" },
     { label: "Backup & Restore", href: "/office/settings/backup-restore", icon: Database, permission: "settings:manage" },
     { label: "Downloads", href: "/office/settings/downloads", icon: Download, permission: "settings:manage" },
     { label: "Item Import", href: "/office/settings/item-import", icon: Upload, permission: "inventory:masters:edit" },
@@ -747,16 +765,16 @@ export const VOUCHER_CREATE_PERMISSION_BY_ACTION: Record<string, string> = Objec
 export const BUTTON_BAR_ACTIONS: ButtonBarAction[] = [
     // "More +" opens the all-create-actions dialog. Gated like any create action
     // (own permission → tick in the role's Quick Actions), rendered first.
-    { label: "More +", subtitle: "All create actions", icon: Grid2x2, variant: "outline", action: "more", permission: "quick-actions:more" },
+
     {
         label: "Repair +", subtitle: "Open repair intake", icon: Wrench, variant: "default",
         action: "new-ticket",
         pipelineRef: "default",
         permission: "tickets:create",
     },
+    { label: "Help Ticket +", subtitle: "Log a front-desk enquiry", icon: LifeBuoy, variant: "default", action: "new-help-ticket", permission: "help:create" },
     { label: "POS", subtitle: "Open POS register", icon: Monitor, variant: "default", href: "/vouchers/pos/new", newTab: true, permission: "pos:shift:open" },
-    //"/vouchers/pos/orders"
-    //"/vouchers/pos/estimates"
+
     { label: "Sale +", subtitle: "New Sale Invoice", icon: Receipt, variant: "default", action: "new-sale" },
     { label: "Purchase +", subtitle: "New Purchase Invoice", icon: ShoppingCart, variant: "outline", action: "new-purchase" },
     { label: "Sale Return +", subtitle: "Customer returns goods (Credit Note)", icon: Receipt, variant: "outline", action: "new-sale-return" },
@@ -783,4 +801,8 @@ export const BUTTON_BAR_ACTIONS: ButtonBarAction[] = [
     { label: "Companies +", subtitle: "Create a new company", icon: Building2, variant: "outline", action: "new-company", permission: "customers:create" },
     { label: "New Deal +", subtitle: "Add a deal to the pipeline", icon: Network, variant: "outline", href: "/office/crm/deals?new=1", permission: "deals:create" },
     { label: "New Task +", subtitle: "Add an internal work item", icon: ListChecks, variant: "outline", href: "/office/administration?new=1", permission: "tasks:create" },
+
+    { label: "More +", subtitle: "All create actions", icon: Grid2x2, variant: "outline", action: "more", permission: "quick-actions:more" },
+
+
 ];

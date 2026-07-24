@@ -40,6 +40,9 @@ model PosCounter {
   // rejects anything else. Shape: number[] (Account ids).
   allowedExpenseAccountIds Json                       @default("[]")
   isActive                 Boolean                    @default(true)
+  // EPBX/intercom extension of the phone at this counter (e.g. "201"). Free text,
+  // shown in the admin counter config alongside the other counter details. Null = unset.
+  epbxExtension            String?
   // Device lock — which physical PC is bound to this counter. Set on first shift
   // open (the browser sends its stable bridge deviceId); every later open on a
   // different PC is refused. Released centrally from /office/admin/counters, or

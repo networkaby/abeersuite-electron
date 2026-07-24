@@ -34,6 +34,8 @@ export async function POST(req: Request) {
                 note: data.body,
                 // dueAt only meaningful for TASK, harmless otherwise.
                 dueAt: data.kind === "TASK" && data.dueAt ? new Date(data.dueAt) : null,
+                // Call direction (incoming/outgoing) lives on the log's `data` JSON.
+                data: data.kind === "CALL" && data.direction ? { direction: data.direction } : undefined,
             },
             select: { id: true, kind: true, note: true, dueAt: true, doneAt: true, createdAt: true, author: true },
         });

@@ -1,5 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import type { Prisma } from "@/generated/prisma/client";
+import { isMissedCall } from "@/shared/lib/calls";
+import { phoneMatchKey } from "@/shared/lib/format";
 
 /**
  * Reconnect — the customer's own unified timeline.
@@ -34,6 +36,11 @@ export interface TimelineEntry {
     ref?: { kind: "ticket" | "voucher"; id: number };
     /** Display name of who logged a note/call. */
     author?: string;
+    /** Call direction (only on `call` entries). */
+    direction?: "in" | "out";
+    /** True for a miscall (incoming unanswered / outgoing unanswered) — the UI
+     *  renders these with a distinct (red / amber) style. */
+    missed?: boolean;
 }
 
 export interface TalkingPoint {
@@ -61,10 +68,28 @@ export async function resolveAccountId(ref: CustomerRef): Promise<number | null>
     return account?.id ?? null;
 }
 
+/** "m:ss" (or "s sec" under a minute) — compact call length for the timeline. */
+function callDurationLabel(sec: number): string {
+    if (!sec || sec < 0) return "0s";
+    if (sec < 60) return `${sec}s`;
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m}m ${String(s).padStart(2, "0")}s`;
+}
+
 function actorName(author: unknown): string | undefined {
     if (author && typeof author === "object" && "name" in author) {
         const n = (author as { name?: unknown }).name;
         if (typeof n === "string" && n.trim()) return n;
+    }
+    return undefined;
+}
+
+/** Pull the call direction out of a TicketLog's `data` JSON, if present. */
+function callDirection(data: unknown): "in" | "out" | undefined {
+    if (data && typeof data === "object" && "direction" in data) {
+        const d = (data as { direction?: unknown }).direction;
+        if (d === "in" || d === "out") return d;
     }
     return undefined;
 }
@@ -103,7 +128,15 @@ export async function buildCustomerTimeline(ref: CustomerRef, limit = 20): Promi
         ? { partyAccountId: accountId, status: "POSTED", deletedAt: null }
         : null;
 
-    const [sales, repairs, inquiries, deals, logs] = await Promise.all([
+    // Auto-captured PBX calls have no customer FK — they're matched by phone.
+    // Resolve this customer's numbers to match keys, then grab their (non-spam)
+    // calls. A call logged before the customer existed lights up here retroactively.
+    const phoneRows = await prisma.phone.findMany({ where: partyWhere, select: { phone: true } });
+    const callKeys = Array.from(
+        new Set(phoneRows.map((p) => phoneMatchKey(p.phone)).filter((k): k is string => !!k)),
+    );
+
+    const [sales, repairs, inquiries, deals, logs, calls] = await Promise.all([
         salesWhere
             ? prisma.universalVoucher.findMany({
                 where: salesWhere,
@@ -163,8 +196,23 @@ export async function buildCustomerTimeline(ref: CustomerRef, limit = 20): Promi
             where: partyWhere,
             orderBy: { createdAt: "desc" },
             take: limit,
-            select: { id: true, kind: true, note: true, author: true, createdAt: true },
+            select: { id: true, kind: true, note: true, author: true, createdAt: true, data: true },
         }),
+        callKeys.length
+            ? prisma.call.findMany({
+                where: { phone: { in: callKeys }, spam: false },
+                orderBy: { occurredAt: "desc" },
+                take: limit,
+                select: {
+                    id: true,
+                    direction: true,
+                    occurredAt: true,
+                    note: true,
+                    durationSec: true,
+                    speechSec: true,
+                },
+            })
+            : Promise.resolve([]),
     ]);
 
     const entries: TimelineEntry[] = [];
@@ -223,13 +271,39 @@ export async function buildCustomerTimeline(ref: CustomerRef, limit = 20): Promi
     for (const l of logs) {
         const source: TimelineSource =
             l.kind === "CALL" ? "call" : l.kind === "MEETING" ? "meeting" : l.kind === "TASK" ? "task" : "note";
+        const dir = l.kind === "CALL" ? callDirection(l.data) : undefined;
         entries.push({
             key: `log:${l.id}`,
             at: l.createdAt.toISOString(),
             source,
-            title: l.kind === "CALL" ? "Call" : l.kind === "MEETING" ? "Meeting" : l.kind === "TASK" ? "Task" : "Note",
+            title: l.kind === "CALL"
+                ? (dir === "in" ? "Call — incoming" : dir === "out" ? "Call — outgoing" : "Call")
+                : l.kind === "MEETING" ? "Meeting" : l.kind === "TASK" ? "Task" : "Note",
             detail: l.note ?? undefined,
             author: actorName(l.author),
+            direction: dir,
+        });
+    }
+
+    // Auto-captured PBX calls (Call table, matched by phone). Rendered as "call"
+    // entries alongside the manual TicketLog calls above.
+    for (const c of calls) {
+        const incoming = c.direction === "INCOMING";
+        const outgoing = c.direction === "OUTGOING";
+        const missed = isMissedCall(c.direction, c.speechSec, c.durationSec);
+        const summary = missed
+            ? (incoming ? "Missed call" : "No answer")
+            : incoming
+                ? `Answered (${callDurationLabel(c.speechSec || c.durationSec)})`
+                : `Called (${callDurationLabel(c.durationSec)})`;
+        entries.push({
+            key: `call:${c.id}`,
+            at: c.occurredAt.toISOString(),
+            source: "call",
+            title: incoming ? "Call — incoming" : outgoing ? "Call — outgoing" : "Call",
+            detail: c.note ? c.note : summary,
+            direction: incoming ? "in" : outgoing ? "out" : undefined,
+            missed,
         });
     }
 

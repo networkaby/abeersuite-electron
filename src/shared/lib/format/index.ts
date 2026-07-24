@@ -4,6 +4,7 @@ export * from "./timeAgo";
 export * from "./moneyInr";
 export * from "./numberWords";
 export * from "./parseNumericInput";
+export * from "./phone";
 export * from "./dateInput";
 export * from "./slugify";
 export * from "./utils";
