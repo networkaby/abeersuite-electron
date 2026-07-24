@@ -11,6 +11,7 @@ import {
     FileText,
     Calculator,
     Network,
+    PhoneCall,
     Briefcase,
     Monitor,
     ShoppingCart,
@@ -423,6 +424,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         ],
         children: [
             { label: "Deals", icon: ClipboardList, href: "/office/crm/deals" },
+            { label: "Reconnect", icon: PhoneCall, href: "/office/crm/reconnect" },
             // Future under CRM: Contacts, Leads (lead-finding) — separate modules.
         ],
     },

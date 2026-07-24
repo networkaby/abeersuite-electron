@@ -1,0 +1,291 @@
+import { prisma } from "@/shared/lib/prisma/prismaClient";
+import type { Prisma } from "@/generated/prisma/client";
+
+/**
+ * Reconnect — the customer's own unified timeline.
+ *
+ * The customer (Person or Company) IS the record. This merges everything that
+ * ever happened to them into one time-sorted feed — sales, repairs, inquiries,
+ * deals, and the notes/calls logged directly on them (TicketLog with a
+ * personId/companyId, no ticket). From that feed we also derive a few
+ * ready-to-say "talking points" so the caller opens warm.
+ *
+ * Two customer keys are in play (see codeOwnedCatalog / Account): sales + repairs
+ * key on Account.id; inquiries + deals + notes key on personId/companyId. We
+ * resolve the account up front and fan out.
+ */
+
+export type CustomerRef = { kind: "person" | "company"; id: number };
+
+export type TimelineSource = "sale" | "payment" | "repair" | "inquiry" | "deal" | "note" | "call" | "meeting" | "task";
+
+export interface TimelineEntry {
+    /** Stable per-source key, e.g. "sale:1042". */
+    key: string;
+    /** ISO timestamp used for sorting + display. */
+    at: string;
+    source: TimelineSource;
+    /** Headline line. */
+    title: string;
+    /** Optional secondary line (items, device, subject…). */
+    detail?: string;
+    amountPaise?: number;
+    /** Where this came from, so the UI can deep-link. */
+    ref?: { kind: "ticket" | "voucher"; id: number };
+    /** Display name of who logged a note/call. */
+    author?: string;
+}
+
+export interface TalkingPoint {
+    /** A short, sayable opener grounded in real history. */
+    line: string;
+    /** Which timeline entry it was derived from (for UI context). */
+    fromKey: string;
+}
+
+export interface CustomerTimeline {
+    entries: TimelineEntry[];
+    talkingPoints: TalkingPoint[];
+    lastActivityAt: string | null;
+}
+
+/** Itemised customer sales — carry product lines ("you bought a laptop"). */
+const SALE_TYPES = ["SALE", "POS", "ONLINE_INVOICE"] as const;
+
+/** Resolve the customer's ledger Account id (both Person & Company have exactly one). */
+export async function resolveAccountId(ref: CustomerRef): Promise<number | null> {
+    const account = await prisma.account.findFirst({
+        where: ref.kind === "person" ? { personId: ref.id } : { companyId: ref.id },
+        select: { id: true },
+    });
+    return account?.id ?? null;
+}
+
+function actorName(author: unknown): string | undefined {
+    if (author && typeof author === "object" && "name" in author) {
+        const n = (author as { name?: unknown }).name;
+        if (typeof n === "string" && n.trim()) return n;
+    }
+    return undefined;
+}
+
+/** dd Mon — compact human date for talking points. */
+function shortDate(iso: string): string {
+    const d = new Date(iso);
+    return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+}
+
+/** "3 weeks ago" style relative age, Indian-English simple. */
+function agoLabel(iso: string): string {
+    const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
+    if (days <= 0) return "today";
+    if (days === 1) return "yesterday";
+    if (days < 14) return `${days} days ago`;
+    if (days < 60) return `${Math.round(days / 7)} weeks ago`;
+    if (days < 365) return `${Math.round(days / 30)} months ago`;
+    return `${Math.round(days / 365)} year(s) ago`;
+}
+
+/**
+ * Build one customer's full timeline + talking points.
+ * `limit` caps each source before the merge (default 20).
+ */
+export async function buildCustomerTimeline(ref: CustomerRef, limit = 20): Promise<CustomerTimeline> {
+    const accountId = await resolveAccountId(ref);
+    const personId = ref.kind === "person" ? ref.id : undefined;
+    const companyId = ref.kind === "company" ? ref.id : undefined;
+    const partyWhere = ref.kind === "person" ? { personId } : { companyId };
+
+    // ── Fan out across every source (each scoped to this one customer) ──────────
+    // Any posted, non-deleted voucher on the account = a financial touch. Sales carry
+    // product lines; receipts/others show as a plain payment entry.
+    const salesWhere: Prisma.UniversalVoucherWhereInput | null = accountId
+        ? { partyAccountId: accountId, status: "POSTED", deletedAt: null }
+        : null;
+
+    const [sales, repairs, inquiries, deals, logs] = await Promise.all([
+        salesWhere
+            ? prisma.universalVoucher.findMany({
+                where: salesWhere,
+                orderBy: { date: "desc" },
+                take: limit,
+                select: {
+                    id: true,
+                    type: true,
+                    date: true,
+                    voucherNo: true,
+                    voucherDetail: { select: { totalAmount: true } },
+                    inventoryLines: {
+                        take: 6,
+                        select: { quantity: true, product: { select: { name: true } } },
+                    },
+                },
+            })
+            : Promise.resolve([]),
+        accountId
+            ? prisma.ticket.findMany({
+                where: { accountId, repair: { isNot: null } },
+                orderBy: { createdAt: "desc" },
+                take: limit,
+                select: {
+                    id: true,
+                    createdAt: true,
+                    ticketStatus: { select: { label: true } },
+                    repair: {
+                        select: {
+                            receivedBackAt: true,
+                            device: { select: { type: true, brand: true, model: true, problem: true } },
+                        },
+                    },
+                },
+            })
+            : Promise.resolve([]),
+        prisma.ticketHelp.findMany({
+            where: partyWhere,
+            orderBy: { ticket: { createdAt: "desc" } },
+            take: limit,
+            select: {
+                subject: true,
+                inquiryType: true,
+                ticket: { select: { id: true, createdAt: true, ticketStatus: { select: { label: true } } } },
+            },
+        }),
+        prisma.ticketDeal.findMany({
+            where: partyWhere,
+            orderBy: { ticket: { createdAt: "desc" } },
+            take: limit,
+            select: {
+                valuePaise: true,
+                ticket: { select: { id: true, title: true, createdAt: true, ticketStatus: { select: { label: true } } } },
+            },
+        }),
+        prisma.ticketLog.findMany({
+            where: partyWhere,
+            orderBy: { createdAt: "desc" },
+            take: limit,
+            select: { id: true, kind: true, note: true, author: true, createdAt: true },
+        }),
+    ]);
+
+    const entries: TimelineEntry[] = [];
+
+    for (const v of sales) {
+        const isSale = (SALE_TYPES as readonly string[]).includes(v.type);
+        const items = v.inventoryLines.map((l) => l.product.name).filter(Boolean);
+        const label = items.length ? items.slice(0, 3).join(", ") + (items.length > 3 ? "…" : "") : undefined;
+        entries.push({
+            key: `voucher:${v.id}`,
+            at: v.date.toISOString(),
+            source: isSale ? "sale" : "payment",
+            title: isSale ? (v.type === "POS" ? "Counter sale" : v.type === "ONLINE_INVOICE" ? "Online order" : "Sale") : "Payment",
+            detail: isSale ? label : undefined,
+            amountPaise: v.voucherDetail?.totalAmount != null ? Math.round(Number(v.voucherDetail.totalAmount) * 100) : undefined,
+            ref: { kind: "voucher", id: v.id },
+        });
+    }
+
+    for (const t of repairs) {
+        const d = t.repair?.device;
+        const dev = d ? [d.brand, d.type].filter(Boolean).join(" ") : "device";
+        entries.push({
+            key: `repair:${t.id}`,
+            at: (t.repair?.receivedBackAt ?? t.createdAt).toISOString(),
+            source: "repair",
+            title: `Service — ${dev}`,
+            detail: [d?.problem, t.ticketStatus?.label].filter(Boolean).join(" · ") || undefined,
+            ref: { kind: "ticket", id: t.id },
+        });
+    }
+
+    for (const h of inquiries) {
+        entries.push({
+            key: `inquiry:${h.ticket.id}`,
+            at: h.ticket.createdAt.toISOString(),
+            source: "inquiry",
+            title: `Enquiry — ${h.inquiryType}`,
+            detail: [h.subject, h.ticket.ticketStatus?.label].filter(Boolean).join(" · ") || undefined,
+            ref: { kind: "ticket", id: h.ticket.id },
+        });
+    }
+
+    for (const dl of deals) {
+        entries.push({
+            key: `deal:${dl.ticket.id}`,
+            at: dl.ticket.createdAt.toISOString(),
+            source: "deal",
+            title: dl.ticket.title ? `Deal — ${dl.ticket.title}` : "Deal",
+            detail: dl.ticket.ticketStatus?.label ?? undefined,
+            amountPaise: dl.valuePaise ?? undefined,
+            ref: { kind: "ticket", id: dl.ticket.id },
+        });
+    }
+
+    for (const l of logs) {
+        const source: TimelineSource =
+            l.kind === "CALL" ? "call" : l.kind === "MEETING" ? "meeting" : l.kind === "TASK" ? "task" : "note";
+        entries.push({
+            key: `log:${l.id}`,
+            at: l.createdAt.toISOString(),
+            source,
+            title: l.kind === "CALL" ? "Call" : l.kind === "MEETING" ? "Meeting" : l.kind === "TASK" ? "Task" : "Note",
+            detail: l.note ?? undefined,
+            author: actorName(l.author),
+        });
+    }
+
+    entries.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
+
+    return {
+        entries,
+        talkingPoints: deriveTalkingPoints(entries),
+        lastActivityAt: entries[0]?.at ?? null,
+    };
+}
+
+/**
+ * Turn the raw timeline into a few sayable openers. Deliberately simple + honest —
+ * each line points back at a real entry, so the caller can trust it. Extend by
+ * adding more rules here; order = priority (most trust-building first).
+ */
+export function deriveTalkingPoints(entries: TimelineEntry[]): TalkingPoint[] {
+    const points: TalkingPoint[] = [];
+
+    const lastRepair = entries.find((e) => e.source === "repair");
+    if (lastRepair) {
+        const dev = lastRepair.title.replace(/^Service — /, "");
+        points.push({
+            line: `We serviced your ${dev} ${agoLabel(lastRepair.at)} (${shortDate(lastRepair.at)}). Is it working properly now?`,
+            fromKey: lastRepair.key,
+        });
+    }
+
+    const lastSale = entries.find((e) => e.source === "sale" && e.detail);
+    if (lastSale?.detail) {
+        points.push({
+            line: `You bought ${lastSale.detail} ${agoLabel(lastSale.at)}. How is it working out?`,
+            fromKey: lastSale.key,
+        });
+    }
+
+    const lastInquiry = entries.find((e) => e.source === "inquiry");
+    if (lastInquiry) {
+        const subj = lastInquiry.detail?.split(" · ")[0];
+        points.push({
+            line: subj
+                ? `You had asked about "${subj}" ${agoLabel(lastInquiry.at)}. Did you get what you needed?`
+                : `You had an enquiry ${agoLabel(lastInquiry.at)}. Did we sort it out for you?`,
+            fromKey: lastInquiry.key,
+        });
+    }
+
+    // Dormancy nudge — only when nothing better and there IS a last touch.
+    const last = entries[0];
+    if (points.length === 0 && last) {
+        points.push({
+            line: `We haven't been in touch since ${shortDate(last.at)} (${agoLabel(last.at)}). Just checking in — how are things?`,
+            fromKey: last.key,
+        });
+    }
+
+    return points.slice(0, 3);
+}

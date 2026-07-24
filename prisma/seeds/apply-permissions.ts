@@ -36,6 +36,8 @@ const ADDITIONS: { id: string; label: string; module: string; description: strin
     { id: "help:create", label: "Create help tickets", module: "help", description: "Log a front-desk enquiry (the New Help + quick action and the POS counter Enquiry button)." },
     { id: "help:edit", label: "Edit help tickets", module: "help", description: "Advise, move stage, close with an outcome, and convert a help ticket into a repair / deal / sale." },
     { id: "help:delete", label: "Delete help tickets", module: "help", description: "Delete a help ticket." },
+    // CRM → Reconnect (customer-centric re-engagement page). Rides only its sidebar link.
+    { id: "ui:sidebar:crm:reconnect", label: "CRM → Reconnect", module: "ui", description: "Show the \"Reconnect\" link under CRM in the sidebar." },
 ];
 
 const ADMIN_ROLE_ID = "R1";

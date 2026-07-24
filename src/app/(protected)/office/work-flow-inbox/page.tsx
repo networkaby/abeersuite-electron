@@ -48,7 +48,8 @@ export default async function AssignmentsPage() {
         }),
         // Completion stamps — "Work done · Success/Unsuccess" — feed the Finished list.
         prisma.ticketLog.findMany({
-            where: { note: { startsWith: "Work done · " } },
+            // Work-completion stamps are always ticket-backed (customer-attached CRM logs never match).
+            where: { note: { startsWith: "Work done · " }, ticketId: { not: null } },
             orderBy: { createdAt: "desc" },
             take: 60,
             select: {
@@ -162,7 +163,9 @@ export default async function AssignmentsPage() {
     });
 
     // Finished works, read from the completion stamps (most recent first).
-    const finishedItems: WorkInboxItem[] = doneLogs.map((l) => {
+    const finishedItems: WorkInboxItem[] = doneLogs
+        .filter((l): l is typeof l & { ticket: NonNullable<typeof l.ticket> } => l.ticket !== null)
+        .map((l) => {
         const work = l.ticketWorker?.work;
         const acct = l.ticket.repair?.device?.account ?? null;
         const unsuccess = !!l.note?.includes("· Unsuccess");

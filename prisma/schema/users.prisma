@@ -53,6 +53,7 @@ model User {
   posCashDrops                     PosCashDrop[]              @relation("PosCashDropBy")
   handoversReceived                PosHandover[]              @relation("HandoverToUser")
   quickNotes                       QuickNote[]
+  savedFilters                     SavedFilter[]              @relation("UserSavedFilters")
   loyaltyLedgerEntries             LoyaltyLedger[]            @relation("LoyaltyLedgerCreatedBy")
   couponsCreated                   Coupon[]                   @relation("CouponCreatedBy")
   giftCardsCreated                 GiftCard[]                 @relation("GiftCardCreatedBy")
@@ -70,4 +71,23 @@ model QuickNote {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+// ── SavedFilter — a named, reusable list filter (Zoho-style saved view) ──────
+// Generic on `surface` (e.g. "reconnect") so any list can reuse it; `payload` is
+// the surface-specific filter criteria (JSON). Personal to its owner unless
+// `isShared`, which exposes it to all staff on that surface.
+model SavedFilter {
+  id          Int      @id @default(autoincrement())
+  surface     String
+  name        String
+  ownerUserId Int
+  owner       User     @relation("UserSavedFilters", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  isShared    Boolean  @default(false)
+  payload     Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([surface, ownerUserId])
+  @@index([surface, isShared])
 }

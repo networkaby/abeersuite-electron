@@ -65,7 +65,8 @@ export async function GET(
             }),
             prisma.ticketLog.findMany({
                 // author is a JSON ActorSnapshot now — match on its embedded userId.
-                where: { author: { path: ["userId"], equals: userId }, createdAt: { gte: range.gte, lte: range.lte } },
+                // Ticket-backed logs only — customer-attached CRM Reconnect notes (ticket null) aren't ticket activity.
+                where: { author: { path: ["userId"], equals: userId }, createdAt: { gte: range.gte, lte: range.lte }, ticketId: { not: null } },
                 include: {
                     ticketStatus: { select: { label: true } },
                     ticket: { select: { id: true } },
@@ -91,19 +92,21 @@ export async function GET(
 
         if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
-        const ticketActivities: ActivityItem[] = logs.map((log) => {
-            const isCreated = (log.note ?? "").toLowerCase().includes("ticket created");
-            return {
-                id: `ticket-log-${log.id}`,
-                type: isCreated ? "ticket_created" : "ticket_updated",
-                title: isCreated ? "Created ticket" : "Updated ticket",
-                description: isCreated
-                    ? `Ticket #${log.ticket.id} created`
-                    : `Ticket #${log.ticket.id} moved to ${log.ticketStatus?.label ?? log.status ?? ""}${log.note ? ` - ${log.note}` : ""}`,
-                createdAt: log.createdAt.toISOString(),
-                meta: { ticketId: log.ticket.id },
-            };
-        });
+        const ticketActivities: ActivityItem[] = logs
+            .filter((log): log is typeof log & { ticket: { id: number } } => log.ticket !== null)
+            .map((log) => {
+                const isCreated = (log.note ?? "").toLowerCase().includes("ticket created");
+                return {
+                    id: `ticket-log-${log.id}`,
+                    type: isCreated ? "ticket_created" : "ticket_updated",
+                    title: isCreated ? "Created ticket" : "Updated ticket",
+                    description: isCreated
+                        ? `Ticket #${log.ticket.id} created`
+                        : `Ticket #${log.ticket.id} moved to ${log.ticketStatus?.label ?? log.status ?? ""}${log.note ? ` - ${log.note}` : ""}`,
+                    createdAt: log.createdAt.toISOString(),
+                    meta: { ticketId: log.ticket.id },
+                };
+            });
 
         const wallActivities: ActivityItem[] = wallPosts.map((post) => {
             const owner = wallOwners.get(socialKey(post.ownerKind, post.ownerId));

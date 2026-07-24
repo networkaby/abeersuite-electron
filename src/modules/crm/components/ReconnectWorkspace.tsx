@@ -1,0 +1,890 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import axios from "axios";
+import { toast } from "sonner";
+import {
+    Search, Phone, StickyNote, CalendarCheck, CheckSquare, Send, ShoppingCart, CreditCard,
+    Wrench, HelpCircle, Handshake, Sparkles, RefreshCw, User, Building2, PhoneOff, PlusCircle,
+    Package, ShieldCheck, ShieldAlert, Clock, Bookmark, Users2, X,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useNow } from "@/shared/hooks";
+import { formatDate, formatDateTime } from "@/shared/lib/format";
+import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
+import { LIFECYCLE_META, LIFECYCLES, type ContactLifecycle } from "@/modules/customer/lib/contactTypes";
+
+// ── Wire types (mirror the reconnect APIs) ──────────────────────────────────────
+type Kind = "person" | "company";
+interface Candidate {
+    kind: Kind;
+    id: number;
+    name: string;
+    phone: string | null;
+    lifecycleStage: ContactLifecycle;
+    ownerPositionId: string | null;
+    lastActivityAt: string | null;
+    dormantDays: number | null;
+}
+interface CandidatesResponse { candidates: Candidate[]; total: number; nextCursor: number | null; truncated: boolean }
+
+type TimelineSource = "sale" | "payment" | "repair" | "inquiry" | "deal" | "note" | "call" | "meeting" | "task";
+interface TimelineEntry {
+    key: string; at: string; source: TimelineSource; title: string;
+    detail?: string; amountPaise?: number; ref?: { kind: "ticket" | "voucher"; id: number }; author?: string;
+}
+interface TalkingPoint { line: string; fromKey: string }
+interface Timeline { entries: TimelineEntry[]; talkingPoints: TalkingPoint[]; lastActivityAt: string | null }
+
+interface PurchasedItem {
+    productId: number; name: string; category: string | null;
+    qty: number; times: number; lastBoughtAt: string; amountPaise: number; warrantyEndsAt: string | null;
+}
+
+interface PositionOption { id: string; title: string; branchName: string | null }
+interface GroupOption { id: number; name: string }
+interface CategoryOption { id: number; name: string }
+interface WarrantyTermOption { id: number; name: string; durationDays: number | null }
+
+type ActivityType = "any" | "sale" | "repair" | "inquiry" | "deal" | "note";
+const ACTIVITY_TYPES: { value: ActivityType; label: string }[] = [
+    { value: "any", label: "Any activity" },
+    { value: "sale", label: "Sale" },
+    { value: "repair", label: "Repair" },
+    { value: "inquiry", label: "Inquiry" },
+    { value: "deal", label: "Deal" },
+    { value: "note", label: "Call / note" },
+];
+const FILTER_KEYS = ["activity", "activityType", "sold", "notSold", "warranty", "revenue", "profit", "stage", "group", "owner", "type"] as const;
+type FilterKey = typeof FILTER_KEYS[number];
+const noFilters = (): Record<FilterKey, boolean> => Object.fromEntries(FILTER_KEYS.map((k) => [k, false])) as Record<FilterKey, boolean>;
+
+interface SavedFilterDto { id: number; name: string; isShared: boolean; payload: Record<string, unknown>; mine: boolean; ownerName?: string }
+
+const SOURCE_META: Record<TimelineSource, { icon: typeof StickyNote; tint: string }> = {
+    sale: { icon: ShoppingCart, tint: "text-green-600" },
+    payment: { icon: CreditCard, tint: "text-emerald-600" },
+    repair: { icon: Wrench, tint: "text-orange-600" },
+    inquiry: { icon: HelpCircle, tint: "text-blue-600" },
+    deal: { icon: Handshake, tint: "text-purple-600" },
+    note: { icon: StickyNote, tint: "text-muted-foreground" },
+    call: { icon: Phone, tint: "text-sky-600" },
+    meeting: { icon: CalendarCheck, tint: "text-indigo-600" },
+    task: { icon: CheckSquare, tint: "text-amber-600" },
+};
+
+const COMPOSER_KINDS: { kind: "NOTE" | "CALL" | "MEETING" | "TASK"; label: string; icon: typeof StickyNote }[] = [
+    { kind: "CALL", label: "Call", icon: Phone },
+    { kind: "NOTE", label: "Note", icon: StickyNote },
+    { kind: "MEETING", label: "Meeting", icon: CalendarCheck },
+    { kind: "TASK", label: "Task", icon: CheckSquare },
+];
+
+const ACTIVITY_MODES: { value: "quiet" | "never" | "all"; label: string }[] = [
+    { value: "quiet", label: "Going quiet" },
+    { value: "never", label: "Never contacted" },
+    { value: "all", label: "Everyone" },
+];
+
+function agoShort(iso: string | null, now: number): string {
+    if (!iso) return "never";
+    const days = Math.floor((now - new Date(iso).getTime()) / 86_400_000);
+    if (days <= 0) return "today";
+    if (days === 1) return "1 day";
+    if (days < 14) return `${days} days`;
+    if (days < 60) return `${Math.round(days / 7)} wks`;
+    if (days < 365) return `${Math.round(days / 30)} mo`;
+    return `${Math.round(days / 365)} yr`;
+}
+
+// ── One filter row — always visible by name; tick to activate, controls drop in ─
+// Untick keeps the values in state (retick restores) — the clean "switch off one".
+function FilterRow({
+    label, checked, onToggle, summary, children,
+}: {
+    label: string; checked: boolean; onToggle: (v: boolean) => void; summary?: string; children?: React.ReactNode;
+}) {
+    return (
+        <div className="border-b py-1.5 last:border-b-0">
+            <label className="flex cursor-pointer items-center gap-2">
+                <Checkbox checked={checked} onCheckedChange={(v) => onToggle(v === true)} />
+                <span className="flex-1 text-sm font-medium">{label}</span>
+                {checked && summary && <span className="max-w-[95px] truncate text-[11px] text-primary">{summary}</span>}
+            </label>
+            {checked && children && <div className="mt-1.5 space-y-1.5 pl-6">{children}</div>}
+        </div>
+    );
+}
+
+// A "last X to Y days ago" window (from = older bound, to = newer). Blank = open.
+// Used everywhere a time period is picked (activity, sold, not-sold, value).
+function DayWindow({ from, setFrom, to, setTo }: { from: string; setFrom: (v: string) => void; to: string; setTo: (v: string) => void }) {
+    return (
+        <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+            <span>in last</span>
+            <Input type="number" min={0} value={from} onChange={(e) => setFrom(e.target.value)} placeholder="all" className="h-8 w-14" />
+            <span>to</span>
+            <Input type="number" min={0} value={to} onChange={(e) => setTo(e.target.value)} placeholder="0" className="h-8 w-14" />
+            <span>days ago</span>
+        </div>
+    );
+}
+
+// Category + name + a time window — shared by Sold / Not sold.
+function ItemPicker({
+    categoryId, setCategoryId, q, setQ, fromDays, setFromDays, toDays, setToDays, categories,
+}: {
+    categoryId: string; setCategoryId: (v: string) => void;
+    q: string; setQ: (v: string) => void;
+    fromDays: string; setFromDays: (v: string) => void; toDays: string; setToDays: (v: string) => void;
+    categories: CategoryOption[];
+}) {
+    return (
+        <>
+            <Select value={categoryId || "any"} onValueChange={(v) => setCategoryId(v === "any" ? "" : v)}>
+                <SelectTrigger className="h-8"><SelectValue placeholder="Any category" /></SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="any">Any category</SelectItem>
+                    {categories.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
+                </SelectContent>
+            </Select>
+            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Item name…" className="h-8" />
+            <DayWindow from={fromDays} setFrom={setFromDays} to={toDays} setTo={setToDays} />
+        </>
+    );
+}
+
+// ₹ min–max over a "days ago" window — shared by Revenue / Profit.
+function MoneyRange({
+    min, setMin, max, setMax, fromDays, setFromDays, toDays, setToDays,
+}: {
+    min: string; setMin: (v: string) => void; max: string; setMax: (v: string) => void;
+    fromDays: string; setFromDays: (v: string) => void; toDays: string; setToDays: (v: string) => void;
+}) {
+    return (
+        <>
+            <div className="flex items-center gap-1.5">
+                <Input type="number" min={0} value={min} onChange={(e) => setMin(e.target.value)} placeholder="min ₹" className="h-8" />
+                <span className="text-xs text-muted-foreground">–</span>
+                <Input type="number" min={0} value={max} onChange={(e) => setMax(e.target.value)} placeholder="max ₹" className="h-8" />
+            </div>
+            <DayWindow from={fromDays} setFrom={setFromDays} to={toDays} setTo={setToDays} />
+        </>
+    );
+}
+
+export default function ReconnectWorkspace({
+    positions, groups, categories, warrantyTerms, myPositionIds,
+}: {
+    positions: PositionOption[];
+    groups: GroupOption[];
+    categories: CategoryOption[];
+    warrantyTerms: WarrantyTermOption[];
+    myPositionIds: string[];
+}) {
+    // "now" read via a hook — calling Date.now() during render trips react-hooks/purity.
+    const now = useNow();
+
+    // ── Filter checklist: which rows are ticked (active), + each row's values ─────
+    // Untick keeps the value state — only ticked rows contribute to the query.
+    const [enabled, setEnabled] = useState<Record<FilterKey, boolean>>({ ...noFilters(), activity: true });
+    const toggle = (k: FilterKey) => (v: boolean) => setEnabled((e) => ({ ...e, [k]: v }));
+
+    const [activity, setActivity] = useState<"quiet" | "never" | "all">("quiet");
+    const [activityType, setActivityType] = useState<ActivityType>("any");
+    const [activityPresence, setActivityPresence] = useState<"has" | "not">("has");
+    const [activityFromDays, setActivityFromDays] = useState("");
+    const [activityToDays, setActivityToDays] = useState("");
+    const [soldCategoryId, setSoldCategoryId] = useState("");
+    const [soldProductQ, setSoldProductQ] = useState("");
+    const [soldFromDays, setSoldFromDays] = useState("");
+    const [soldToDays, setSoldToDays] = useState("");
+    const [notSoldCategoryId, setNotSoldCategoryId] = useState("");
+    const [notSoldProductQ, setNotSoldProductQ] = useState("");
+    const [notSoldFromDays, setNotSoldFromDays] = useState("");
+    const [notSoldToDays, setNotSoldToDays] = useState("");
+    const [warrantyDays, setWarrantyDays] = useState("");
+    const [warrantyTermIds, setWarrantyTermIds] = useState<number[]>([]);
+    const [revenueMin, setRevenueMin] = useState("");
+    const [revenueMax, setRevenueMax] = useState("");
+    const [revenueFromDays, setRevenueFromDays] = useState("");
+    const [revenueToDays, setRevenueToDays] = useState("");
+    const [profitMin, setProfitMin] = useState("");
+    const [profitMax, setProfitMax] = useState("");
+    const [profitFromDays, setProfitFromDays] = useState("");
+    const [profitToDays, setProfitToDays] = useState("");
+    const [stage, setStage] = useState<ContactLifecycle | "">("");
+    const [groupId, setGroupId] = useState("");
+    const [ownerPositionId, setOwnerPositionId] = useState("");
+    const [kind, setKind] = useState<"all" | "person" | "company">("all");
+    const [q, setQ] = useState("");
+
+    // ── Saved filters (Zoho-style views) ──
+    const [savedFilters, setSavedFilters] = useState<SavedFilterDto[]>([]);
+    const [savingNew, setSavingNew] = useState(false);
+    const [newName, setNewName] = useState("");
+    const [newShared, setNewShared] = useState(false);
+
+    // ── List state ──
+    const [list, setList] = useState<Candidate[]>([]);
+    const [total, setTotal] = useState(0);
+    const [truncated, setTruncated] = useState(false);
+    const [nextCursor, setNextCursor] = useState<number | null>(null);
+    const [loadingList, setLoadingList] = useState(false);
+
+    // ── Selection + right pane ──
+    const [selected, setSelected] = useState<Candidate | null>(null);
+    const [rightTab, setRightTab] = useState<"timeline" | "items">("timeline");
+    const [timeline, setTimeline] = useState<Timeline | null>(null);
+    const [loadingTimeline, setLoadingTimeline] = useState(false);
+    const [items, setItems] = useState<PurchasedItem[] | null>(null);
+    const [loadingItems, setLoadingItems] = useState(false);
+
+    // ── Composer + deal ──
+    const [composerKind, setComposerKind] = useState<"NOTE" | "CALL" | "MEETING" | "TASK">("CALL");
+    const [body, setBody] = useState("");
+    const [posting, setPosting] = useState(false);
+    const [dealTitle, setDealTitle] = useState("");
+    const [creatingDeal, setCreatingDeal] = useState(false);
+    const [showDealForm, setShowDealForm] = useState(false);
+
+    const buildQuery = useCallback(() => {
+        const p = new URLSearchParams();
+        // Activity mode: unticked → show everyone (the base view).
+        p.set("activity", enabled.activity ? activity : "all");
+        if (enabled.activityType) {
+            p.set("activityType", activityType);
+            p.set("activityPresence", activityPresence);
+            if (activityFromDays.trim()) p.set("activityFromDays", activityFromDays.trim());
+            if (activityToDays.trim()) p.set("activityToDays", activityToDays.trim());
+        }
+        if (enabled.sold && (soldCategoryId || soldProductQ.trim())) {
+            if (soldCategoryId) p.set("soldCategoryId", soldCategoryId);
+            if (soldProductQ.trim()) p.set("soldProductQ", soldProductQ.trim());
+            if (soldFromDays.trim()) p.set("soldFromDays", soldFromDays.trim());
+            if (soldToDays.trim()) p.set("soldToDays", soldToDays.trim());
+        }
+        if (enabled.notSold && (notSoldCategoryId || notSoldProductQ.trim())) {
+            if (notSoldCategoryId) p.set("notSoldCategoryId", notSoldCategoryId);
+            if (notSoldProductQ.trim()) p.set("notSoldProductQ", notSoldProductQ.trim());
+            if (notSoldFromDays.trim()) p.set("notSoldFromDays", notSoldFromDays.trim());
+            if (notSoldToDays.trim()) p.set("notSoldToDays", notSoldToDays.trim());
+        }
+        if (enabled.warranty && warrantyDays.trim()) {
+            p.set("warrantyEndingDays", warrantyDays.trim());
+            if (warrantyTermIds.length) p.set("warrantyTermIds", warrantyTermIds.join(","));
+        }
+        if (enabled.revenue && (revenueMin.trim() || revenueMax.trim())) {
+            if (revenueMin.trim()) p.set("revenueMin", revenueMin.trim());
+            if (revenueMax.trim()) p.set("revenueMax", revenueMax.trim());
+            if (revenueFromDays.trim()) p.set("revenueFromDays", revenueFromDays.trim());
+            if (revenueToDays.trim()) p.set("revenueToDays", revenueToDays.trim());
+        }
+        if (enabled.profit && (profitMin.trim() || profitMax.trim())) {
+            if (profitMin.trim()) p.set("profitMin", profitMin.trim());
+            if (profitMax.trim()) p.set("profitMax", profitMax.trim());
+            if (profitFromDays.trim()) p.set("profitFromDays", profitFromDays.trim());
+            if (profitToDays.trim()) p.set("profitToDays", profitToDays.trim());
+        }
+        if (enabled.stage && stage) p.set("stage", stage);
+        if (enabled.group && groupId) p.set("groupId", groupId);
+        if (enabled.owner && ownerPositionId) p.set("ownerPositionId", ownerPositionId);
+        if (enabled.type && kind !== "all") p.set("kind", kind);
+        if (q.trim()) p.set("q", q.trim());
+        return p;
+    }, [
+        enabled, activity, activityType, activityPresence, activityFromDays, activityToDays,
+        soldCategoryId, soldProductQ, soldFromDays, soldToDays,
+        notSoldCategoryId, notSoldProductQ, notSoldFromDays, notSoldToDays,
+        warrantyDays, warrantyTermIds, revenueMin, revenueMax, revenueFromDays, revenueToDays,
+        profitMin, profitMax, profitFromDays, profitToDays, stage, groupId, ownerPositionId, kind, q,
+    ]);
+
+    const activeCount = Object.values(enabled).filter(Boolean).length;
+    const clearAll = () => setEnabled(noFilters());
+    const toggleTerm = (id: number) => setWarrantyTermIds((ids) => ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]);
+
+    // ── Saved filters: capture the whole checklist state, and restore it ──────────
+    const serializeFilters = (): Record<string, unknown> => ({
+        enabled, activity, activityType, activityPresence, activityFromDays, activityToDays,
+        soldCategoryId, soldProductQ, soldFromDays, soldToDays,
+        notSoldCategoryId, notSoldProductQ, notSoldFromDays, notSoldToDays,
+        warrantyDays, warrantyTermIds, revenueMin, revenueMax, revenueFromDays, revenueToDays,
+        profitMin, profitMax, profitFromDays, profitToDays, stage, groupId, ownerPositionId, kind,
+    });
+
+    const applyFilters = (p: Record<string, unknown>) => {
+        const s = (v: unknown, d = "") => (typeof v === "string" ? v : d);
+        setEnabled({ ...noFilters(), ...(p.enabled as Record<FilterKey, boolean> | undefined) });
+        setActivity((p.activity as typeof activity) ?? "quiet");
+        setActivityType((p.activityType as ActivityType) ?? "any");
+        setActivityPresence((p.activityPresence as typeof activityPresence) ?? "has");
+        setActivityFromDays(s(p.activityFromDays));
+        setActivityToDays(s(p.activityToDays));
+        setSoldCategoryId(s(p.soldCategoryId));
+        setSoldProductQ(s(p.soldProductQ));
+        setSoldFromDays(s(p.soldFromDays));
+        setSoldToDays(s(p.soldToDays));
+        setNotSoldCategoryId(s(p.notSoldCategoryId));
+        setNotSoldProductQ(s(p.notSoldProductQ));
+        setNotSoldFromDays(s(p.notSoldFromDays));
+        setNotSoldToDays(s(p.notSoldToDays));
+        setWarrantyDays(s(p.warrantyDays));
+        setWarrantyTermIds(Array.isArray(p.warrantyTermIds) ? (p.warrantyTermIds as number[]) : []);
+        setRevenueMin(s(p.revenueMin)); setRevenueMax(s(p.revenueMax));
+        setRevenueFromDays(s(p.revenueFromDays)); setRevenueToDays(s(p.revenueToDays));
+        setProfitMin(s(p.profitMin)); setProfitMax(s(p.profitMax));
+        setProfitFromDays(s(p.profitFromDays)); setProfitToDays(s(p.profitToDays));
+        setStage((p.stage as ContactLifecycle | "") ?? "");
+        setGroupId(s(p.groupId)); setOwnerPositionId(s(p.ownerPositionId));
+        setKind((p.kind as typeof kind) ?? "all");
+    };
+
+    const loadSaved = useCallback(async () => {
+        try {
+            const res = await axios.get<SavedFilterDto[]>("/api/crm/reconnect/filters");
+            setSavedFilters(res.data);
+        } catch { /* non-fatal — the bar just shows empty */ }
+    }, []);
+    useEffect(() => { loadSaved(); }, [loadSaved]);
+
+    const saveNew = async () => {
+        if (!newName.trim()) return;
+        try {
+            await axios.post("/api/crm/reconnect/filters", { name: newName.trim(), isShared: newShared, payload: serializeFilters() });
+            setSavingNew(false); setNewName(""); setNewShared(false);
+            await loadSaved();
+            toast.success("Filter saved");
+        } catch {
+            toast.error("Failed to save filter");
+        }
+    };
+
+    const deleteSaved = async (id: number) => {
+        try {
+            await axios.delete(`/api/crm/reconnect/filters/${id}`);
+            setSavedFilters((prev) => prev.filter((f) => f.id !== id));
+        } catch {
+            toast.error("Failed to delete filter");
+        }
+    };
+
+    const loadList = useCallback(async () => {
+        setLoadingList(true);
+        try {
+            const res = await axios.get<CandidatesResponse>(`/api/crm/reconnect/candidates?${buildQuery().toString()}`);
+            setList(res.data.candidates);
+            setTotal(res.data.total);
+            setTruncated(res.data.truncated);
+            setNextCursor(res.data.nextCursor);
+        } catch {
+            toast.error("Failed to load customers");
+        } finally {
+            setLoadingList(false);
+        }
+    }, [buildQuery]);
+
+    // Debounce so typing in search / dormancy / item filters doesn't hammer the API.
+    const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    useEffect(() => {
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+        debounceRef.current = setTimeout(loadList, 300);
+        return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+    }, [loadList]);
+
+    const loadMore = async () => {
+        if (nextCursor == null) return;
+        try {
+            const p = buildQuery();
+            p.set("cursor", String(nextCursor));
+            const res = await axios.get<CandidatesResponse>(`/api/crm/reconnect/candidates?${p.toString()}`);
+            setList((prev) => [...prev, ...res.data.candidates]);
+            setNextCursor(res.data.nextCursor);
+        } catch {
+            toast.error("Failed to load more");
+        }
+    };
+
+    const loadTimeline = useCallback(async (c: Candidate) => {
+        setLoadingTimeline(true);
+        setTimeline(null);
+        try {
+            const res = await axios.get<Timeline>(`/api/crm/reconnect/timeline?kind=${c.kind}&id=${c.id}`);
+            setTimeline(res.data);
+        } catch {
+            toast.error("Failed to load timeline");
+        } finally {
+            setLoadingTimeline(false);
+        }
+    }, []);
+
+    const loadItems = useCallback(async (c: Candidate) => {
+        setLoadingItems(true);
+        try {
+            const res = await axios.get<{ items: PurchasedItem[] }>(`/api/crm/reconnect/items?kind=${c.kind}&id=${c.id}`);
+            setItems(res.data.items);
+        } catch {
+            toast.error("Failed to load items");
+        } finally {
+            setLoadingItems(false);
+        }
+    }, []);
+
+    const select = (c: Candidate) => {
+        setSelected(c);
+        setRightTab("timeline");
+        setItems(null);
+        setShowDealForm(false); setDealTitle(""); setBody(""); setComposerKind("CALL");
+        loadTimeline(c);
+    };
+
+    // Lazily load the Items tab the first time it's opened for a customer.
+    useEffect(() => {
+        if (rightTab === "items" && selected && items === null && !loadingItems) loadItems(selected);
+    }, [rightTab, selected, items, loadingItems, loadItems]);
+
+    const targetBody = useMemo(
+        () => (selected ? (selected.kind === "person" ? { personId: selected.id } : { companyId: selected.id }) : null),
+        [selected],
+    );
+
+    const addLog = async () => {
+        if (!selected || !targetBody || !body.trim()) return;
+        setPosting(true);
+        try {
+            await axios.post("/api/crm/reconnect/log", { ...targetBody, kind: composerKind, body: body.trim() });
+            setBody("");
+            await loadTimeline(selected);
+            toast.success("Added to timeline");
+        } catch {
+            toast.error("Failed to log");
+        } finally {
+            setPosting(false);
+        }
+    };
+
+    const changeStage = async (next: ContactLifecycle) => {
+        if (!selected || !targetBody || next === selected.lifecycleStage) return;
+        try {
+            await axios.patch("/api/crm/reconnect/stage", { ...targetBody, lifecycleStage: next });
+            setSelected({ ...selected, lifecycleStage: next });
+            setList((prev) => prev.map((c) => (c.kind === selected.kind && c.id === selected.id ? { ...c, lifecycleStage: next } : c)));
+            toast.success(`Moved to ${LIFECYCLE_META[next].label}`);
+        } catch {
+            toast.error("Failed to update stage");
+        }
+    };
+
+    const createDeal = async () => {
+        if (!selected || !targetBody || !dealTitle.trim()) return;
+        setCreatingDeal(true);
+        try {
+            await axios.post("/api/deals", { title: dealTitle.trim(), ...targetBody });
+            setShowDealForm(false); setDealTitle("");
+            toast.success("Deal created — find it on the Deals board");
+        } catch {
+            toast.error("Failed to create deal");
+        } finally {
+            setCreatingDeal(false);
+        }
+    };
+
+    // Short value summaries shown on each ticked row.
+    const stageSummary = stage ? LIFECYCLE_META[stage].label : "";
+    const groupSummary = groups.find((g) => String(g.id) === groupId)?.name ?? "";
+    const ownerSummary = positions.find((p) => p.id === ownerPositionId)?.title ?? "";
+
+    return (
+        <div className="flex h-full gap-3 p-3">
+            {/* ── LEFT: filter checklist (tick to activate, untick keeps values) ── */}
+            <aside className="flex w-64 shrink-0 flex-col overflow-y-auto rounded-lg border bg-card">
+                {/* Saved filters (Zoho-style views) */}
+                <div className="border-b px-3 py-2">
+                    <div className="flex items-center justify-between">
+                        <span className="flex items-center gap-1 text-xs font-semibold uppercase text-muted-foreground"><Bookmark className="size-3" /> Saved filters</span>
+                        <button type="button" onClick={() => setSavingNew((v) => !v)} className="text-[11px] text-primary hover:underline">＋ Save current</button>
+                    </div>
+                    {savingNew && (
+                        <div className="mt-1.5 flex flex-col gap-1.5 rounded border p-1.5">
+                            <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Filter name…" className="h-7" />
+                            <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                                <Checkbox checked={newShared} onCheckedChange={(v) => setNewShared(v === true)} /> Share with team
+                            </label>
+                            <div className="flex gap-1">
+                                <Button size="sm" className="h-7" onClick={saveNew} disabled={!newName.trim()}>Save</Button>
+                                <Button size="sm" variant="ghost" className="h-7" onClick={() => { setSavingNew(false); setNewName(""); }}>Cancel</Button>
+                            </div>
+                        </div>
+                    )}
+                    {savedFilters.length > 0 ? (
+                        <div className="mt-1.5 flex flex-col gap-0.5">
+                            {savedFilters.map((f) => (
+                                <div key={f.id} className="group flex items-center gap-1">
+                                    <button type="button" onClick={() => applyFilters(f.payload)} className="flex min-w-0 flex-1 items-center gap-1 rounded px-1.5 py-1 text-left text-sm hover:bg-muted">
+                                        <span className="truncate">{f.name}</span>
+                                        {f.isShared && <Users2 className="size-3 shrink-0 text-muted-foreground" />}
+                                        {!f.mine && <span className="shrink-0 text-[10px] text-muted-foreground">· {f.ownerName}</span>}
+                                    </button>
+                                    {f.mine && (
+                                        <button type="button" onClick={() => deleteSaved(f.id)} className="shrink-0 text-muted-foreground opacity-0 hover:text-red-600 group-hover:opacity-100" title="Delete">
+                                            <X className="size-3.5" />
+                                        </button>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        !savingNew && <p className="mt-1 text-[11px] text-muted-foreground">None yet — set filters, then Save current.</p>
+                    )}
+                </div>
+
+                <div className="sticky top-0 z-10 flex items-center justify-between border-b bg-card px-3 py-2">
+                    <span className="text-xs font-semibold uppercase text-muted-foreground">Filters{activeCount ? ` · ${activeCount} on` : ""}</span>
+                    <button type="button" onClick={clearAll} className="text-[11px] text-muted-foreground hover:text-foreground">Clear all</button>
+                </div>
+                <div className="px-3">
+                    <FilterRow label="Activity" checked={enabled.activity} onToggle={toggle("activity")} summary={ACTIVITY_MODES.find((m) => m.value === activity)?.label}>
+                        <div className="flex flex-col gap-1">
+                            {ACTIVITY_MODES.map((m) => (
+                                <button key={m.value} type="button" onClick={() => setActivity(m.value)}
+                                    className={`rounded-md px-2.5 py-1 text-left text-sm ${activity === m.value ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}>{m.label}</button>
+                            ))}
+                        </div>
+                    </FilterRow>
+
+                    <FilterRow label="Has activity of type" checked={enabled.activityType} onToggle={toggle("activityType")} summary={`${activityPresence === "not" ? "no " : ""}${activityType}`}>
+                        <div className="flex gap-1">
+                            {(["has", "not"] as const).map((pv) => (
+                                <button key={pv} type="button" onClick={() => setActivityPresence(pv)}
+                                    className={`flex-1 rounded-md px-2 py-1 text-xs font-medium ${activityPresence === pv ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}>{pv === "has" ? "Has" : "Doesn't have"}</button>
+                            ))}
+                        </div>
+                        <Select value={activityType} onValueChange={(v) => setActivityType(v as ActivityType)}>
+                            <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                            <SelectContent>{ACTIVITY_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
+                        </Select>
+                        <DayWindow from={activityFromDays} setFrom={setActivityFromDays} to={activityToDays} setTo={setActivityToDays} />
+                        <p className="text-[11px] text-muted-foreground">Window blank = ever. Use a range for a past period / festive season.</p>
+                    </FilterRow>
+
+                    <FilterRow label="Sold item" checked={enabled.sold} onToggle={toggle("sold")} summary={[categories.find((c) => String(c.id) === soldCategoryId)?.name, soldProductQ.trim()].filter(Boolean).join(" · ")}>
+                        <ItemPicker categoryId={soldCategoryId} setCategoryId={setSoldCategoryId} q={soldProductQ} setQ={setSoldProductQ} fromDays={soldFromDays} setFromDays={setSoldFromDays} toDays={soldToDays} setToDays={setSoldToDays} categories={categories} />
+                        <p className="text-[11px] text-muted-foreground">We sold them this — pitch a related item (printer → ink).</p>
+                    </FilterRow>
+
+                    <FilterRow label="Not sold" checked={enabled.notSold} onToggle={toggle("notSold")} summary={[categories.find((c) => String(c.id) === notSoldCategoryId)?.name, notSoldProductQ.trim()].filter(Boolean).join(" · ")}>
+                        <ItemPicker categoryId={notSoldCategoryId} setCategoryId={setNotSoldCategoryId} q={notSoldProductQ} setQ={setNotSoldProductQ} fromDays={notSoldFromDays} setFromDays={setNotSoldFromDays} toDays={notSoldToDays} setToDays={setNotSoldToDays} categories={categories} />
+                        <p className="text-[11px] text-muted-foreground">We never sold them this — e.g. has a printer, no ink in 60 days.</p>
+                    </FilterRow>
+
+                    <FilterRow label="Warranty ending" checked={enabled.warranty} onToggle={toggle("warranty")} summary={warrantyDays.trim() ? `≤${warrantyDays.trim()}d` : ""}>
+                        <div className="flex items-center gap-1.5">
+                            <span className="text-xs text-muted-foreground">within</span>
+                            <Input type="number" min={0} value={warrantyDays} onChange={(e) => setWarrantyDays(e.target.value)} placeholder="e.g. 30" className="h-8" />
+                            <span className="text-xs text-muted-foreground">days</span>
+                        </div>
+                        {warrantyTerms.length > 0 && (
+                            <div>
+                                <div className="mb-1 text-[11px] text-muted-foreground">Consider warranties (none = all):</div>
+                                <div className="flex flex-wrap gap-1">
+                                    {warrantyTerms.map((t) => (
+                                        <button key={t.id} type="button" onClick={() => toggleTerm(t.id)}
+                                            className={`rounded-full border px-2 py-0.5 text-[11px] ${warrantyTermIds.includes(t.id) ? "border-primary bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted"}`}>{t.name}</button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </FilterRow>
+
+                    <FilterRow label="Revenue (turnover)" checked={enabled.revenue} onToggle={toggle("revenue")} summary={revenueMin.trim() || revenueMax.trim() ? `₹${revenueMin.trim() || "0"}–${revenueMax.trim() || "∞"}` : ""}>
+                        <MoneyRange min={revenueMin} setMin={setRevenueMin} max={revenueMax} setMax={setRevenueMax} fromDays={revenueFromDays} setFromDays={setRevenueFromDays} toDays={revenueToDays} setToDays={setRevenueToDays} />
+                    </FilterRow>
+
+                    <FilterRow label="Profit (margin)" checked={enabled.profit} onToggle={toggle("profit")} summary={profitMin.trim() || profitMax.trim() ? `₹${profitMin.trim() || "0"}–${profitMax.trim() || "∞"}` : ""}>
+                        <MoneyRange min={profitMin} setMin={setProfitMin} max={profitMax} setMax={setProfitMax} fromDays={profitFromDays} setFromDays={setProfitFromDays} toDays={profitToDays} setToDays={setProfitToDays} />
+                        <p className="text-[11px] text-muted-foreground">Derived margin — a decision signal, not audited-exact.</p>
+                    </FilterRow>
+
+                    <FilterRow label="Stage" checked={enabled.stage} onToggle={toggle("stage")} summary={stageSummary}>
+                        <Select value={stage || "any"} onValueChange={(v) => setStage(v === "any" ? "" : (v as ContactLifecycle))}>
+                            <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="any">Any stage</SelectItem>
+                                {LIFECYCLES.map((s) => <SelectItem key={s} value={s}>{LIFECYCLE_META[s].label}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                    </FilterRow>
+
+                    {groups.length > 0 && (
+                        <FilterRow label="Group" checked={enabled.group} onToggle={toggle("group")} summary={groupSummary}>
+                            <Select value={groupId || "any"} onValueChange={(v) => setGroupId(v === "any" ? "" : v)}>
+                                <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="any">Any group</SelectItem>
+                                    {groups.map((g) => <SelectItem key={g.id} value={String(g.id)}>{g.name}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                        </FilterRow>
+                    )}
+
+                    <FilterRow label="Owner" checked={enabled.owner} onToggle={toggle("owner")} summary={ownerSummary}>
+                        <Select value={ownerPositionId || "any"} onValueChange={(v) => setOwnerPositionId(v === "any" ? "" : v)}>
+                            <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="any">Any owner</SelectItem>
+                                {myPositionIds.length > 0 && positions.filter((p) => myPositionIds.includes(p.id)).map((p) => (
+                                    <SelectItem key={`mine-${p.id}`} value={p.id}>★ {p.title} (mine)</SelectItem>
+                                ))}
+                                {positions.map((p) => (
+                                    <SelectItem key={p.id} value={p.id}>{p.title}{p.branchName ? ` · ${p.branchName}` : ""}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </FilterRow>
+
+                    <FilterRow label="Type" checked={enabled.type} onToggle={toggle("type")} summary={kind !== "all" ? kind : ""}>
+                        <div className="flex gap-1">
+                            {(["all", "person", "company"] as const).map((k) => (
+                                <button key={k} type="button" onClick={() => setKind(k)}
+                                    className={`flex-1 rounded-md px-2 py-1 text-xs font-medium capitalize ${kind === k ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}>{k}</button>
+                            ))}
+                        </div>
+                    </FilterRow>
+                </div>
+            </aside>
+
+            {/* ── MIDDLE: candidate list ────────────────────────────────────── */}
+            <div className="flex w-80 shrink-0 flex-col overflow-hidden rounded-lg border bg-card">
+                <div className="border-b p-2">
+                    <div className="relative">
+                        <Search className="absolute left-2 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name…" className="h-8 pl-8" />
+                    </div>
+                    <div className="mt-1.5 flex items-center justify-between px-0.5 text-[11px] text-muted-foreground">
+                        <span>{loadingList ? "Loading…" : `${total} found`}{truncated ? " (capped)" : ""}</span>
+                        <button type="button" onClick={loadList} className="inline-flex items-center gap-1 hover:text-foreground">
+                            <RefreshCw className="size-3" /> Refresh
+                        </button>
+                    </div>
+                </div>
+
+                <div className="min-h-0 flex-1 overflow-y-auto">
+                    {!loadingList && list.length === 0 && (
+                        <p className="p-4 text-center text-sm text-muted-foreground">No customers match this filter.</p>
+                    )}
+                    {list.map((c) => {
+                        const active = selected?.kind === c.kind && selected.id === c.id;
+                        const meta = LIFECYCLE_META[c.lifecycleStage];
+                        return (
+                            <button
+                                key={`${c.kind}:${c.id}`}
+                                type="button"
+                                onClick={() => select(c)}
+                                className={`flex w-full items-center gap-2 border-b px-3 py-2 text-left hover:bg-muted/60 ${active ? "bg-muted" : ""}`}
+                            >
+                                {c.kind === "company" ? <Building2 className="size-4 shrink-0 text-muted-foreground" /> : <User className="size-4 shrink-0 text-muted-foreground" />}
+                                <div className="min-w-0 flex-1">
+                                    <div className="truncate text-sm font-medium">{c.name}</div>
+                                    <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                                        <Badge variant="secondary" className={`${meta.color} px-1 py-0 text-[10px]`}>{meta.label}</Badge>
+                                        {c.phone && <span className="truncate">{c.phone}</span>}
+                                    </div>
+                                </div>
+                                <div className="shrink-0 text-right text-[11px]">
+                                    <div className={c.lastActivityAt ? "text-muted-foreground" : "text-red-500"}>{agoShort(c.lastActivityAt, now)}</div>
+                                    <div className="text-muted-foreground">quiet</div>
+                                </div>
+                            </button>
+                        );
+                    })}
+                    {nextCursor != null && (
+                        <button type="button" onClick={loadMore} className="w-full py-2 text-center text-xs font-medium text-primary hover:underline">
+                            Load more
+                        </button>
+                    )}
+                </div>
+            </div>
+
+            {/* ── RIGHT: header + Timeline | Items tabs ─────────────────────── */}
+            <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg border bg-card">
+                {!selected ? (
+                    <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
+                        <PhoneOff className="size-8" />
+                        <p className="text-sm">Pick a customer to see their story and start the conversation.</p>
+                    </div>
+                ) : (
+                    <div className="flex h-full flex-col">
+                        {/* Header */}
+                        <div className="border-b p-3">
+                            <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0">
+                                    <div className="flex items-center gap-2">
+                                        {selected.kind === "company" ? <Building2 className="size-4 text-muted-foreground" /> : <User className="size-4 text-muted-foreground" />}
+                                        <h2 className="truncate text-lg font-semibold">{selected.name}</h2>
+                                    </div>
+                                    <div className="mt-0.5 flex items-center gap-2 text-sm text-muted-foreground">
+                                        {selected.phone ? <span className="inline-flex items-center gap-1"><Phone className="size-3.5" /> {selected.phone}</span> : <span className="italic">No phone on file</span>}
+                                        <span>· quiet {agoShort(selected.lastActivityAt, now)}</span>
+                                    </div>
+                                </div>
+                                <div className="flex shrink-0 items-center gap-1.5">
+                                    <Select value={selected.lifecycleStage} onValueChange={(v) => changeStage(v as ContactLifecycle)}>
+                                        <SelectTrigger className="h-8 w-[130px]"><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            {LIFECYCLES.map((s) => <SelectItem key={s} value={s}>{LIFECYCLE_META[s].label}</SelectItem>)}
+                                        </SelectContent>
+                                    </Select>
+                                    <Button size="sm" variant="outline" onClick={() => setShowDealForm((v) => !v)}>
+                                        <PlusCircle className="size-4" /> Deal
+                                    </Button>
+                                </div>
+                            </div>
+
+                            {showDealForm && (
+                                <div className="mt-2 flex items-center gap-2 rounded-md border bg-muted/40 p-2">
+                                    <Input value={dealTitle} onChange={(e) => setDealTitle(e.target.value)} placeholder="Deal title (e.g. New laptop)" className="h-8" />
+                                    <Button size="sm" onClick={createDeal} disabled={creatingDeal || !dealTitle.trim()}>Create</Button>
+                                </div>
+                            )}
+
+                            {/* Tabs */}
+                            <div className="mt-3 flex gap-1">
+                                {(["timeline", "items"] as const).map((t) => (
+                                    <button
+                                        key={t}
+                                        type="button"
+                                        onClick={() => setRightTab(t)}
+                                        className={`rounded-md px-3 py-1 text-sm font-medium capitalize ${rightTab === t ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
+                                    >
+                                        {t === "items" ? "Items / buying" : "Timeline"}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="min-h-0 flex-1 overflow-y-auto p-3">
+                            {rightTab === "timeline" ? (
+                                <>
+                                    {loadingTimeline && <p className="text-sm text-muted-foreground">Loading timeline…</p>}
+
+                                    {/* Talking points */}
+                                    {timeline && timeline.talkingPoints.length > 0 && (
+                                        <div className="mb-4 space-y-1.5 rounded-lg border border-primary/30 bg-primary/5 p-3">
+                                            <div className="flex items-center gap-1.5 text-xs font-semibold uppercase text-primary">
+                                                <Sparkles className="size-3.5" /> How to open the conversation
+                                            </div>
+                                            {timeline.talkingPoints.map((tp) => (
+                                                <p key={tp.fromKey} className="text-sm">“{tp.line}”</p>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {/* Composer */}
+                                    <div className="mb-4 space-y-2 rounded-lg border p-2">
+                                        <div className="flex gap-1">
+                                            {COMPOSER_KINDS.map(({ kind: k, label, icon: Icon }) => (
+                                                <button
+                                                    key={k}
+                                                    type="button"
+                                                    onClick={() => setComposerKind(k)}
+                                                    className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium ${composerKind === k ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
+                                                >
+                                                    <Icon className="size-3.5" /> {label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                        <Textarea value={body} onChange={(e) => setBody(e.target.value)} rows={2} placeholder={`Log a ${composerKind.toLowerCase()} on this customer…`} />
+                                        <div className="flex justify-end">
+                                            <Button size="sm" onClick={addLog} disabled={posting || !body.trim()}>
+                                                <Send className="size-4" /> Log {composerKind.toLowerCase()}
+                                            </Button>
+                                        </div>
+                                    </div>
+
+                                    {/* Timeline feed */}
+                                    <div className="space-y-3">
+                                        {timeline && timeline.entries.length === 0 && !loadingTimeline && (
+                                            <p className="text-sm text-muted-foreground">No history yet — this is a cold contact. A friendly first call is a great start.</p>
+                                        )}
+                                        {timeline?.entries.map((e) => {
+                                            const meta = SOURCE_META[e.source];
+                                            const Icon = meta.icon;
+                                            return (
+                                                <div key={e.key} className="flex gap-2.5">
+                                                    <span className={`mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-muted ${meta.tint}`}>
+                                                        <Icon className="size-3.5" />
+                                                    </span>
+                                                    <div className="min-w-0 flex-1">
+                                                        <div className="flex items-baseline justify-between gap-2">
+                                                            <span className="text-sm font-medium">{e.title}</span>
+                                                            <span className="shrink-0 text-[11px] text-muted-foreground">{formatDateTime(e.at)}</span>
+                                                        </div>
+                                                        {e.detail && <p className="whitespace-pre-wrap text-sm text-muted-foreground">{e.detail}</p>}
+                                                        <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                                                            {e.amountPaise != null && <span className="font-semibold tabular-nums text-foreground">{formatRupeesFromPaise(e.amountPaise)}</span>}
+                                                            {e.author && <span>· {e.author}</span>}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </>
+                            ) : (
+                                /* Items / buying-behaviour tab */
+                                <div className="space-y-2">
+                                    {loadingItems && <p className="text-sm text-muted-foreground">Loading items…</p>}
+                                    {items && items.length === 0 && !loadingItems && (
+                                        <p className="text-sm text-muted-foreground">No purchases on record yet.</p>
+                                    )}
+                                    {items?.map((it) => {
+                                        const warrantyDaysLeft = it.warrantyEndsAt ? Math.round((new Date(it.warrantyEndsAt).getTime() - now) / 86_400_000) : null;
+                                        return (
+                                            <div key={it.productId} className="flex items-start gap-2.5 rounded-lg border p-2.5">
+                                                <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                                                    <Package className="size-3.5" />
+                                                </span>
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="flex items-baseline justify-between gap-2">
+                                                        <span className="truncate text-sm font-medium">{it.name}</span>
+                                                        <span className="shrink-0 text-sm font-semibold tabular-nums">{formatRupeesFromPaise(it.amountPaise)}</span>
+                                                    </div>
+                                                    <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+                                                        {it.category && <Badge variant="secondary" className="px-1 py-0 text-[10px]">{it.category}</Badge>}
+                                                        <span>bought {it.times}× · {it.qty} units</span>
+                                                        <span>· last {agoShort(it.lastBoughtAt, now)} ago</span>
+                                                        {warrantyDaysLeft != null && (
+                                                            warrantyDaysLeft >= 0 ? (
+                                                                <span className={`inline-flex items-center gap-0.5 ${warrantyDaysLeft <= 30 ? "text-amber-600" : "text-emerald-600"}`}>
+                                                                    <ShieldCheck className="size-3" /> warranty ends {formatDate(it.warrantyEndsAt!)} ({warrantyDaysLeft}d)
+                                                                </span>
+                                                            ) : (
+                                                                <span className="inline-flex items-center gap-0.5 text-muted-foreground">
+                                                                    <ShieldAlert className="size-3" /> warranty expired {formatDate(it.warrantyEndsAt!)}
+                                                                </span>
+                                                            )
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                    {items && items.length > 0 && (
+                                        <p className="flex items-center gap-1 pt-1 text-[11px] text-muted-foreground">
+                                            <Clock className="size-3" /> Most-bought first — spot consumables to re-pitch.
+                                        </p>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
