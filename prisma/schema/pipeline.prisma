@@ -45,6 +45,10 @@ model TicketStatus {
   // many hours is "needs attention" — surfaced (overdue-first) in the Work Inbox.
   // null = no SLA on this status. Measured from Ticket.statusEnteredAt.
   resolveTimeHours Int?
+  // Fallback WorkGroup tag for the Resolve-time badge, used only when this status's
+  // active worker carries no Work (and so no groups) to inherit from.
+  resolveGroupId  String?
+  resolveGroup    WorkGroup?         @relation(fields: [resolveGroupId], references: [id], onDelete: SetNull)
   workId          String?
   work            Work?              @relation(fields: [workId], references: [id], onDelete: SetNull)
   // The sub-status auto-applied when a ticket ENTERS this status — hand-picked per
@@ -172,6 +176,7 @@ model WorkGroup {
   permission   Permission?     @relation(fields: [permissionId], references: [id])
   createdAt    DateTime        @default(now())
   works        WorkGroupWork[]
+  resolveStatuses TicketStatus[]
 }
 
 // Work ↔ WorkGroup join (many-to-many). See the WorkGroup comment above for why

@@ -21,6 +21,7 @@ const ticketStatusPatchSchema = z.object({
     announceOnEntry: z.boolean().optional(),
     etaText: z.string().optional().nullable(),
     resolveTimeHours: z.coerce.number().int().nonnegative().nullable().optional(),
+    resolveGroupId: z.string().trim().optional().nullable(),
 });
 
 export async function PATCH(req: Request, { params }: Params) {
@@ -62,6 +63,7 @@ export async function PATCH(req: Request, { params }: Params) {
                 announceOnEntry: body.announceOnEntry !== undefined ? body.announceOnEntry : undefined,
                 etaText: "etaText" in body ? (body.etaText ?? null) : undefined,
                 resolveTimeHours: "resolveTimeHours" in body ? (body.resolveTimeHours ?? null) : undefined,
+                resolveGroupId: "resolveGroupId" in body ? (body.resolveGroupId ?? null) : undefined,
             },
         });
         return NextResponse.json(status);

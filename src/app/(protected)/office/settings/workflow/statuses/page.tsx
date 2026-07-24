@@ -52,6 +52,12 @@ interface Work {
     permissionId: string | null;
 }
 
+interface WorkGroup {
+    id: string;
+    label: string;
+    color: string;
+}
+
 interface TicketStatus {
     id: string;
     label: string;
@@ -66,6 +72,7 @@ interface TicketStatus {
     announceOnEntry: boolean;
     etaText: string | null;
     resolveTimeHours: number | null;
+    resolveGroupId?: string | null;
     pipelineId: string | null;
     fromTransitions: { toStatusId: string; to: { label: string } }[];
     _count: { tickets: number };
@@ -87,6 +94,7 @@ interface StatusForm {
     // hours only when saving. resolveTimeHoursPart is the 0–23 remainder.
     resolveTimeDays: string;
     resolveTimeHoursPart: string;
+    resolveGroupId: string;
 }
 
 // "76" → "3d 4h" (drops the zero side: "3d" or "4h" alone) — for the read-only SLA badge.
@@ -101,7 +109,7 @@ function formatResolveTime(totalHours: number): string {
 const EMPTY_FORM: StatusForm = {
     label: "", color: "bg-gray-100 text-gray-600", order: 0, isTerminal: false, isEntryPoint: false,
     workId: "", warrantyScope: "any", actionLabel: "", leavePrompt: "", announceOnEntry: false, etaText: "",
-    resolveTimeDays: "", resolveTimeHoursPart: "",
+    resolveTimeDays: "", resolveTimeHoursPart: "", resolveGroupId: "",
 };
 
 export default function StatusesPage() {
@@ -109,6 +117,7 @@ export default function StatusesPage() {
     const [activePipelineId, setActivePipelineId] = useState<string>("P1");
     const [statuses, setStatuses] = useState<TicketStatus[]>([]);
     const [works, setWorks] = useState<Work[]>([]);
+    const [groups, setGroups] = useState<WorkGroup[]>([]);
     const [loading, setLoading] = useState(true);
 
     // One full "Edit status" dialog covers basics, flags, work (optional), and prompts.
@@ -128,14 +137,16 @@ export default function StatusesPage() {
     const fetchData = async (pipelineId: string) => {
         setLoading(true);
         try {
-            const [statusesResponse, worksResponse, pipelinesResponse] = await Promise.all([
+            const [statusesResponse, worksResponse, pipelinesResponse, groupsResponse] = await Promise.all([
                 axios.get(`/api/ticket-statuses?pipelineId=${pipelineId}`),
                 axios.get("/api/works"),
                 axios.get("/api/pipelines"),
+                axios.get("/api/work-groups"),
             ]);
             setStatuses(statusesResponse.data);
             setWorks(worksResponse.data);
             setPipelines(pipelinesResponse.data);
+            setGroups(groupsResponse.data);
         } catch {
             toast.error("Failed to load data");
         } finally {
@@ -167,6 +178,7 @@ export default function StatusesPage() {
             etaText: status.etaText ?? "",
             resolveTimeDays: status.resolveTimeHours != null ? String(Math.floor(status.resolveTimeHours / 24)) : "",
             resolveTimeHoursPart: status.resolveTimeHours != null ? String(status.resolveTimeHours % 24) : "",
+            resolveGroupId: status.resolveGroupId ?? "",
         });
     };
 
@@ -196,6 +208,7 @@ export default function StatusesPage() {
                 announceOnEntry: editForm.announceOnEntry,
                 etaText: editForm.etaText.trim() || null,
                 resolveTimeHours,
+                resolveGroupId: editForm.resolveGroupId || null,
             });
             toast.success("Status updated");
             setEditModalId(null);
@@ -604,6 +617,23 @@ export default function StatusesPage() {
                                 A ticket sitting here longer than this is flagged
                                 {" "}<span className="font-medium text-foreground">Needs attention</span> in the Work Inbox. Blank = no SLA.
                             </p>
+                            <div className="space-y-2 pt-1">
+                                <Label>Group <span className="font-normal text-muted-foreground">(optional)</span></Label>
+                                <Select value={editForm.resolveGroupId || "__none__"} onValueChange={(value) => setEditForm((prev) => ({ ...prev, resolveGroupId: value === "__none__" ? "" : value }))}>
+                                    <SelectTrigger className="w-full">
+                                        <SelectValue placeholder="Select group" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="__none__">— none —</SelectItem>
+                                        {groups.map((g) => (
+                                            <SelectItem key={g.id} value={g.id}>{g.label}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <p className="text-xs text-muted-foreground">
+                                    Which group this ticket shows under if it goes overdue with no work attached. Blank = none.
+                                </p>
+                            </div>
                         </div>
 
                         {/* ── Work & access ──────────────────────────────── */}
