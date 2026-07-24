@@ -502,6 +502,46 @@ export default function ReconnectWorkspace({
         }
     };
 
+    // Recheck this customer's real record (any repair/sale) and auto-bump Lead/Prospect → Customer.
+    // `silent` = called after a bulk refresh, to sync the open customer's badge without a second toast.
+    const [refreshingStage, setRefreshingStage] = useState(false);
+    const refreshStage = async (opts?: { silent?: boolean }) => {
+        if (!selected || !targetBody) return;
+        setRefreshingStage(true);
+        try {
+            const res = await axios.post<{ lifecycleStage: ContactLifecycle; changed: boolean }>("/api/crm/reconnect/refresh-stage", targetBody);
+            if (res.data.changed) {
+                setSelected({ ...selected, lifecycleStage: res.data.lifecycleStage });
+                setList((prev) => prev.map((c) => (c.kind === selected.kind && c.id === selected.id ? { ...c, lifecycleStage: res.data.lifecycleStage } : c)));
+                if (!opts?.silent) toast.success(`Has a sale/repair — moved to ${LIFECYCLE_META[res.data.lifecycleStage].label}`);
+            } else if (!opts?.silent) {
+                toast.message("No change — already up to date");
+            }
+        } catch {
+            if (!opts?.silent) toast.error("Failed to refresh");
+        } finally {
+            setRefreshingStage(false);
+        }
+    };
+
+    // Bulk: recheck EVERY Lead/Prospect customer in one background call, then
+    // resync the visible list (and the open customer, if any) without blocking the UI.
+    const [bulkRefreshing, setBulkRefreshing] = useState(false);
+    const refreshAllStages = async () => {
+        setBulkRefreshing(true);
+        toast.message("Refreshing everyone's stage in the background…");
+        try {
+            const res = await axios.post<{ checked: number; updated: number }>("/api/crm/reconnect/refresh-stage/all");
+            toast.success(`Checked ${res.data.checked} customers — ${res.data.updated} moved to Customer`);
+            await loadList();
+            if (selected) await refreshStage({ silent: true });
+        } catch {
+            toast.error("Failed to refresh stages");
+        } finally {
+            setBulkRefreshing(false);
+        }
+    };
+
     const createDeal = async () => {
         if (!selected || !targetBody || !dealTitle.trim()) return;
         setCreatingDeal(true);
@@ -525,6 +565,20 @@ export default function ReconnectWorkspace({
         <div className="flex h-full gap-3 p-3">
             {/* ── LEFT: filter checklist (tick to activate, untick keeps values) ── */}
             <aside className="flex w-64 shrink-0 flex-col overflow-y-auto rounded-lg border bg-card">
+                {/* Bulk stage recheck — runs in the background, doesn't block the page */}
+                <div className="border-b px-3 py-2">
+                    <button
+                        type="button"
+                        onClick={refreshAllStages}
+                        disabled={bulkRefreshing}
+                        className="flex w-full items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground disabled:opacity-60"
+                        title="Recheck every Lead/Prospect for a real sale/repair and bump to Customer"
+                    >
+                        <RefreshCw className={`size-3.5 ${bulkRefreshing ? "animate-spin" : ""}`} />
+                        {bulkRefreshing ? "Refreshing all stages…" : "Refresh all stages"}
+                    </button>
+                </div>
+
                 {/* Saved filters (Zoho-style views) */}
                 <div className="border-b px-3 py-2">
                     <div className="flex items-center justify-between">
@@ -809,6 +863,9 @@ export default function ReconnectWorkspace({
                                             {LIFECYCLES.map((s) => <SelectItem key={s} value={s}>{LIFECYCLE_META[s].label}</SelectItem>)}
                                         </SelectContent>
                                     </Select>
+                                    <Button size="sm" variant="outline" onClick={() => refreshStage()} disabled={refreshingStage} title="Check for a repair/sale and auto-update the stage">
+                                        <RefreshCw className={`size-4 ${refreshingStage ? "animate-spin" : ""}`} />
+                                    </Button>
                                     <Button size="sm" variant="outline" onClick={() => setShowDealForm((v) => !v)}>
                                         <PlusCircle className="size-4" /> Deal
                                     </Button>

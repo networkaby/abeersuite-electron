@@ -58,6 +58,9 @@ export const updateLifecycleStageSchema = z
     })
     .superRefine(exactlyOneTarget);
 
+/** POST — recheck a customer's real record (any repair/sale) and auto-bump their stage. */
+export const refreshStageSchema = z.object({ ...customerTarget }).superRefine(exactlyOneTarget);
+
 /** The kinds of interaction the "has activity of type" filter can look for ("any" = any of them). */
 export const activityTypeSchema = z.enum(["any", "sale", "repair", "inquiry", "deal", "note"]);
 
