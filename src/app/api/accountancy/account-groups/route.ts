@@ -6,11 +6,12 @@ import { aggregateClosingAsOf, loadNormalBalanceMap } from "@/modules/accountanc
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { toNumber } from "@/modules/accountancy/lib/balance";
 
 const createSchema = z.object({
-    name:      z.string().trim().min(1).max(200),
-    type:      z.enum(["ASSET", "LIABILITY", "INCOME", "EXPENSE"]).optional(), // ignored for sub-groups
-    parentId:  z.number().int().positive().nullish(),
+    name: z.string().trim().min(1).max(200),
+    type: z.enum(["ASSET", "LIABILITY", "INCOME", "EXPENSE"]).optional(), // ignored for sub-groups
+    parentId: z.number().int().positive().nullish(),
     sortOrder: z.number().int().min(0).max(9999).optional(),
 });
 
@@ -30,6 +31,9 @@ type LedgerRow = {
     /** Bank-ledger particulars (Bank-group ledgers only) — edited on the
      *  masters Ledgers page, printed on the Contra deposit slip. */
     bankJson: unknown;
+    openingBalance: number | null;
+    openingBalanceType: "DEBIT" | "CREDIT" | null;
+    openingBalanceDate: string | null;
 };
 
 type FlatGroup = {
@@ -133,7 +137,8 @@ export async function GET(req: Request) {
                 select: {
                     id: true, name: true, code: true, normalBalance: true,
                     isActive: true, personId: true, companyId: true, groupId: true,
-                    bankJson: true,
+                    bankJson: true, openingBalance: true, openingBalanceType: true,
+                    openingBalanceDate: true,
                 },
             }),
             loadNormalBalanceMap(),
@@ -147,7 +152,14 @@ export async function GET(req: Request) {
         for (const a of accounts) {
             if (a.groupId === null) continue;
             const arr = ledgersByGroup.get(a.groupId) ?? [];
-            arr.push({ ...a, balance: closingMap.get(a.id) ?? 0 });
+            arr.push({
+                ...a,
+                openingBalance: a.openingBalance !== null ? toNumber(a.openingBalance) : null,
+                openingBalanceDate: a.openingBalanceDate
+                    ? a.openingBalanceDate.toISOString().slice(0, 10)
+                    : null,
+                balance: closingMap.get(a.id) ?? 0,
+            });
             ledgersByGroup.set(a.groupId, arr);
         }
 
@@ -183,9 +195,9 @@ export async function POST(req: Request) {
     try {
         const group = await prisma.accountGroup.create({
             data: {
-                name:      body.name,
-                type:      resolvedType!,
-                parentId:  body.parentId ?? null,
+                name: body.name,
+                type: resolvedType!,
+                parentId: body.parentId ?? null,
                 sortOrder: body.sortOrder ?? 0,
             },
         });

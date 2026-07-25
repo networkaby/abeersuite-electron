@@ -8,27 +8,42 @@ import { handleApiError } from "@/shared/lib/api";
 import { parseIdParam } from "@/shared/lib/api";
 import { pickDefined } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { reconcileOpeningSuspense } from "@/modules/accountancy/lib/openingBalance";
 
 // Bank-ledger particulars — same shape as the create route (kept local: route
 // files may only export handlers). All-blank or null clears the stored value.
 const bankJsonSchema = z.object({
-    bankName:      z.string().trim().max(120).default(""),
-    branch:        z.string().trim().max(120).default(""),
+    bankName: z.string().trim().max(120).default(""),
+    branch: z.string().trim().max(120).default(""),
     accountNumber: z.string().trim().max(40).default(""),
-    ifsc:          z.string().trim().max(20).default(""),
-    beneficiary:   z.string().trim().max(120).default(""),
+    ifsc: z.string().trim().max(20).default(""),
+    beneficiary: z.string().trim().max(120).default(""),
 });
 
 const emptyBank = (b: z.infer<typeof bankJsonSchema>): boolean =>
     !b.bankName && !b.branch && !b.accountNumber && !b.ifsc && !b.beneficiary;
 
 const updateSchema = z.object({
-    name:        z.string().trim().min(1).max(200).optional(),
-    groupId:     z.number().int().positive().nullable().optional(),
-    code:        z.string().trim().max(32).nullable().optional(),
+    name: z.string().trim().min(1).max(200).optional(),
+    groupId: z.number().int().positive().nullable().optional(),
+    code: z.string().trim().max(32).nullable().optional(),
     description: z.string().trim().max(1000).nullable().optional(),
-    isActive:    z.boolean().optional(),
-    bankJson:    bankJsonSchema.nullable().optional(),
+    isActive: z.boolean().optional(),
+    bankJson: bankJsonSchema.nullable().optional(),
+    openingBalance: z.number().nullable().optional(),
+    openingBalanceType: z.enum(["DEBIT", "CREDIT"]).nullable().optional(),
+    openingBalanceDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+}).superRefine((value, ctx) => {
+    if (value.openingBalance === undefined) return;
+    const hasAmount = value.openingBalance != null;
+    const hasType = value.openingBalanceType != null;
+    const hasDate = value.openingBalanceDate != null;
+    if (hasAmount === hasType && hasAmount === hasDate) return;
+    ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Opening balance amount, Dr / Cr, and date must be provided together",
+        path: ["openingBalance"],
+    });
 });
 
 // PATCH /api/accountancy/ledgers/[id]
@@ -64,9 +79,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 ...(body.bankJson !== undefined
                     ? { bankJson: body.bankJson && !emptyBank(body.bankJson) ? body.bankJson : Prisma.DbNull }
                     : {}),
+                ...(body.openingBalance !== undefined
+                    ? {
+                        openingBalance: body.openingBalance,
+                        openingBalanceType: body.openingBalanceType,
+                        openingBalanceDate: body.openingBalanceDate ? new Date(body.openingBalanceDate) : null,
+                    }
+                    : {}),
             },
             include: { group: { select: { id: true, name: true } } },
         });
+        if (body.openingBalance !== undefined) await reconcileOpeningSuspense();
         return NextResponse.json(account);
     } catch (e) {
         if (e instanceof Error && e.message.includes("Unique constraint")) {
