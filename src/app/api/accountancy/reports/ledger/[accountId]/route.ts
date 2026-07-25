@@ -7,6 +7,7 @@ import { resolveSourceBatch } from "@/modules/accountancy/lib/journalEntrySource
 import { ledgerStatusFilterUv } from "@/modules/accountancy/lib/aggregateLedger";
 import { defaultNormalBalanceForGroupType } from "@/modules/accountancy/lib/groupNature";
 import { handleApiError } from "@/shared/lib/api";
+import { dateOnOrBefore, parseIsoDateOnly, toDateOnly } from "@/shared/lib/format/formatDate";
 
 // GET /api/accountancy/reports/ledger/[accountId]?from=YYYY-MM-DD&to=YYYY-MM-DD
 export async function GET(req: Request, { params }: { params: Promise<{ accountId: string }> }) {
@@ -18,9 +19,21 @@ export async function GET(req: Request, { params }: { params: Promise<{ accountI
     const fromParam = searchParams.get("from");
     const toParam = searchParams.get("to");
 
-    const from = fromParam ? new Date(fromParam) : new Date(new Date().getFullYear(), 0, 1);
-    const to = toParam ? new Date(toParam) : new Date();
-    to.setHours(23, 59, 59, 999);
+    const now = new Date();
+    const from = fromParam
+        ? parseIsoDateOnly(fromParam)
+        : new Date(now.getFullYear(), 0, 1);
+    const to = toParam
+        ? (() => {
+            const d = parseIsoDateOnly(toParam);
+            d.setHours(23, 59, 59, 999);
+            return d;
+        })()
+        : (() => {
+            const d = new Date();
+            d.setHours(23, 59, 59, 999);
+            return d;
+        })();
 
     const account = await prisma.account.findUnique({
         where: { id: Number(accountId) },
@@ -33,7 +46,11 @@ export async function GET(req: Request, { params }: { params: Promise<{ accountI
 
     try {
         // Opening balance: all posted lines before the 'from' date, plus the
-        // master-page openingBalance if its as-of date is on/before `from`.
+        // master-page openingBalance if its as-of date is on/before `to`
+        // (matches the aggregateRange policy used by Trial Balance / Balance Sheet
+        // — every master opening dated within or before the report period folds
+        // into the opening bucket so period debits/credits stay balanced and
+        // the list/detail surfaces agree).
         const openingLines = await prisma.voucherGlLine.findMany({
             where: {
                 accountId: Number(accountId),
@@ -44,8 +61,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ accountI
         let openingBalance = openingLines.reduce((bal, l) => {
             return bal + balanceDelta(nb, l.type, toNumber(l.amount));
         }, 0);
-        if (account.openingBalance && account.openingBalanceType
-            && (!account.openingBalanceDate || account.openingBalanceDate < from)) {
+        if (account.openingBalance != null && account.openingBalanceType
+            && (!account.openingBalanceDate || dateOnOrBefore(account.openingBalanceDate, to))) {
             openingBalance += balanceDelta(nb, account.openingBalanceType, toNumber(account.openingBalance));
         }
 
@@ -109,9 +126,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ accountI
             return {
                 id: l.id,
                 journalEntryId: srcUvId,
-                date: l.universalVoucher.date,
+                date: toDateOnly(l.universalVoucher.date),
                 reference: l.universalVoucher.voucherNo ?? formatUvNo(l.universalVoucher.id),
-                description: l.universalVoucher.description,
+                description: l.universalVoucher.description ?? "",
                 lineDescription: l.description,
                 branchId: l.branchId ?? null,
                 branchName: l.branchId ? (branchNameById.get(l.branchId) ?? null) : null,
@@ -128,8 +145,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ accountI
                 normalBalance: nb,
                 groupId: account.groupId, groupName: account.group?.name ?? null,
             },
-            from: from.toISOString(),
-            to: to.toISOString(),
+            from: toDateOnly(from),
+            to: toDateOnly(to),
             openingBalance,
             closingBalance: runningBalance,
             rows,

@@ -4,6 +4,7 @@ import { parseRange } from "@/modules/accountancy/lib/period";
 import { aggregateRange, loadNormalBalanceMap } from "@/modules/accountancy/lib/aggregateLedger";
 import { buildGroupTree } from "@/modules/accountancy/lib/groupTree";
 import { handleApiError } from "@/shared/lib/api";
+import { parseIsoDateOnly, toDateOnly } from "@/shared/lib/format/formatDate";
 
 // Heavy aggregation: full-range GL groupBy across every account. Give Vercel
 // headroom past the default 10s function limit so large datasets don't 504.
@@ -21,7 +22,7 @@ export async function GET(req: Request) {
     let from: Date;
     let to: Date;
     if (asOfParam && !searchParams.get("from") && !searchParams.get("to")) {
-        const parsedAsOf = new Date(asOfParam);
+        const parsedAsOf = parseIsoDateOnly(asOfParam);
         parsedAsOf.setHours(23, 59, 59, 999);
         const fyYear = parsedAsOf.getMonth() < 3 ? parsedAsOf.getFullYear() - 1 : parsedAsOf.getFullYear();
         from = new Date(fyYear, 3, 1, 0, 0, 0, 0);
@@ -51,8 +52,8 @@ export async function GET(req: Request) {
         walk(tree);
 
         return NextResponse.json({
-            from: from.toISOString(),
-            to:   to.toISOString(),
+            from: toDateOnly(from),
+            to:   toDateOnly(to),
             tree,
             totals: {
                 opening: totalOpening,
