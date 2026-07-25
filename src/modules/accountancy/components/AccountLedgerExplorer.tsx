@@ -27,6 +27,7 @@ import { Button } from "@/components/ui/button";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { fmt } from "@/utils/constants";
 import { formatDate } from "@/shared/lib/format/formatDate";
+import { formatDrCr } from "@/shared/lib/format/moneyInr";
 import { cn } from "@/shared/lib/format/utils";
 import { EntityListPanel } from "@/shared/components/EntityListPanel";
 import { BreadcrumbBar } from "@/shared/components/BreadcrumbBar";
@@ -95,13 +96,7 @@ const SOURCE_COLOR: Record<SourceDoc["kind"], string> = {
     invoice:  "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-800",
 };
 
-function drCr(balance: number, normalBalance: NormalBalance | null): string {
-    if (balance === 0) return "0.00";
-    const sign = balance < 0
-        ? (normalBalance === "DEBIT" ? "Cr" : "Dr")
-        : (normalBalance === "DEBIT" ? "Dr" : "Cr");
-    return `${fmt(Math.abs(balance))} ${sign}`;
-}
+const drCr = formatDrCr;
 
 // ── Props ────────────────────────────────────────────────────────────────────
 

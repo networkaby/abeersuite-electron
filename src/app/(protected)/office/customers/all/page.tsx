@@ -24,6 +24,8 @@ import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { useDebouncedValue } from "@/shared/hooks";
 import { LoyaltyPanel } from "@/modules/loyalty/components/LoyaltyPanel";
 import { formatDate } from "@/shared/lib/format/formatDate";
+import { formatDrCr } from "@/shared/lib/format/moneyInr";
+import { cn } from "@/shared/lib/format/utils";
 import { PRIORITY_META } from "@/utils/constants";
 import { initials } from "@/modules/customer/lib/initials";
 import type { Ticket, CustomerDevice } from "@/modules/customer/lib/customerTypes";
@@ -36,23 +38,25 @@ import PersonProfileTab from "@/modules/customer/components/PersonProfileTab";
 import CompanyProfileTab from "@/modules/customer/components/CompanyProfileTab";
 import CustomerQualityTab from "@/modules/customer/components/CustomerQualityTab";
 
+type AccountRef = { id: number; balance: number; normalBalance: "DEBIT" | "CREDIT" } | null;
+
 type PersonRow = {
     id: number;
     name: string;
     phone: string | null;
-    account: { id: number } | null;
+    account: AccountRef;
 };
 
 type CompanyRow = {
     id: number;
     name: string;
     phone: string | null;
-    account: { id: number } | null;
+    account: AccountRef;
 };
 
 type CombinedListItem =
-    | { kind: "person"; id: number; name: string; phone: string | null; accountId: number | null }
-    | { kind: "company"; id: number; name: string; phone: string | null; accountId: number | null };
+    | { kind: "person"; id: number; name: string; phone: string | null; accountId: number | null; account: AccountRef }
+    | { kind: "company"; id: number; name: string; phone: string | null; accountId: number | null; account: AccountRef };
 
 type PersonDetail = {
     id: number;
@@ -281,8 +285,8 @@ export default function AllCustomersPage() {
 
     const merged = useMemo<CombinedListItem[]>(
         () => [
-            ...people.map((p) => ({ kind: "person" as const, id: p.id, name: p.name, phone: p.phone, accountId: p.account?.id ?? null })),
-            ...companies.map((c) => ({ kind: "company" as const, id: c.id, name: c.name, phone: c.phone, accountId: c.account?.id ?? null })),
+            ...people.map((p) => ({ kind: "person" as const, id: p.id, name: p.name, phone: p.phone, accountId: p.account?.id ?? null, account: p.account })),
+            ...companies.map((c) => ({ kind: "company" as const, id: c.id, name: c.name, phone: c.phone, accountId: c.account?.id ?? null, account: c.account })),
         ],
         [people, companies]
     );
@@ -346,7 +350,23 @@ export default function AllCustomersPage() {
                                     </div>
                                     <div className="min-w-0 flex-1">
                                         <p className="truncate text-sm font-medium">{item.name}</p>
-                                        <p className="truncate text-xs text-muted-foreground">{item.phone || "No phone"}</p>
+                                        <div className="mt-0.5 flex items-center justify-between gap-2">
+                                            <p className="truncate text-xs text-muted-foreground">{item.phone || "No phone"}</p>
+                                            {item.account && (
+                                                <span
+                                                    className={cn(
+                                                        "shrink-0 rounded px-1.5 py-0.5 text-xs font-mono font-medium",
+                                                        item.account.balance === 0
+                                                            ? "bg-muted text-muted-foreground"
+                                                            : item.account.balance < 0
+                                                                ? "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300"
+                                                                : "bg-muted text-foreground",
+                                                    )}
+                                                >
+                                                    {formatDrCr(item.account.balance, item.account.normalBalance)}
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
                                     <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
                                         <Icon size={10} className="mr-1" />

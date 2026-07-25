@@ -4,6 +4,8 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
+import { effectiveAccountBalance } from "@/modules/accountancy/lib/balance";
+import { defaultNormalBalanceForGroupType } from "@/modules/accountancy/lib/groupNature";
 import { phoneEmailSchema, gstSchema } from "@/shared/lib/schemas/commonSchemas";
 import { normaliseGstinState } from "@/shared/lib/gst/validateGstinState";
 import { isValidStateCode } from "@/shared/lib/gst/indianStates";
@@ -48,7 +50,16 @@ export async function GET(req: Request) {
                 phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }] },
                 emails: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }] },
                 account: {
-                    select: { id: true, _count: { select: { devices: true } } },
+                    select: {
+                        id: true,
+                        balance: true,
+                        normalBalance: true,
+                        openingBalance: true,
+                        openingBalanceType: true,
+                        openingBalanceDate: true,
+                        group: { select: { type: true } },
+                        _count: { select: { devices: true } },
+                    },
                 },
             },
         });
@@ -61,6 +72,12 @@ export async function GET(req: Request) {
                 customers: c._count.persons,
                 devices: c.account?._count?.devices ?? 0,
             },
+            account: c.account ? {
+                id: c.account.id,
+                balance: effectiveAccountBalance(c.account),
+                normalBalance: c.account.normalBalance
+                    ?? (c.account.group?.type ? defaultNormalBalanceForGroupType(c.account.group.type) : "DEBIT"),
+            } : null,
         }));
         return NextResponse.json(normalised);
     } catch (error) {

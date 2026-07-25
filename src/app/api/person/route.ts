@@ -5,6 +5,8 @@ import { z } from "zod";
 import { ContactConflictError } from "@/modules/customer/lib/contactWrite";
 import { handleApiError, parsePagination, validateRequest } from "@/shared/lib/api";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
+import { effectiveAccountBalance } from "@/modules/accountancy/lib/balance";
+import { defaultNormalBalanceForGroupType } from "@/modules/accountancy/lib/groupNature";
 import { selectPrimaryPhone, selectPrimaryEmail } from "@/shared/lib/prisma/fragments";
 import { phoneEmailSchema, gstSchema } from "@/shared/lib/schemas/commonSchemas";
 import { normaliseGstinState } from "@/shared/lib/gst/validateGstinState";
@@ -184,7 +186,16 @@ export async function GET(req: Request) {
                 phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }] },
                 emails: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }] },
                 account: {
-                    select: { id: true, _count: { select: { devices: true } } },
+                    select: {
+                        id: true,
+                        balance: true,
+                        normalBalance: true,
+                        openingBalance: true,
+                        openingBalanceType: true,
+                        openingBalanceDate: true,
+                        group: { select: { type: true } },
+                        _count: { select: { devices: true } },
+                    },
                 },
             },
         });
@@ -197,6 +208,12 @@ export async function GET(req: Request) {
                 companies: p._count.companies,
                 devices: p.account?._count?.devices ?? 0,
             },
+            account: p.account ? {
+                id: p.account.id,
+                balance: effectiveAccountBalance(p.account),
+                normalBalance: p.account.normalBalance
+                    ?? (p.account.group?.type ? defaultNormalBalanceForGroupType(p.account.group.type) : "DEBIT"),
+            } : null,
         }));
         return NextResponse.json(normalised);
     } catch (error) {

@@ -1,7 +1,38 @@
+import { defaultNormalBalanceForGroupType } from "./groupNature";
+import { dateOnOrBefore } from "@/shared/lib/format/formatDate";
+
 export type LineForBalance = {
     type: "DEBIT" | "CREDIT";
     amount: { toString(): string } | number | string;
 };
+
+/** Minimal shape of an `Account` (+ group) needed to derive its list-view balance. */
+export type AccountForEffectiveBalance = {
+    balance: { toString(): string } | number | string;
+    normalBalance: "DEBIT" | "CREDIT" | null;
+    group: { type: "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE" } | null;
+    openingBalance: { toString(): string } | number | string | null;
+    openingBalanceType: "DEBIT" | "CREDIT" | null;
+    openingBalanceDate: Date | null;
+};
+
+/**
+ * Cheap list-view balance: cached `Account.balance` (GL movements only) plus
+ * the master opening balance folded in at read time — same shape used by the
+ * ledgers list and the customer/company party lists. For the full GL-truth
+ * recompute used by reports, see `aggregateClosingAsOf` instead.
+ */
+export function effectiveAccountBalance(a: AccountForEffectiveBalance): number {
+    const nb = a.normalBalance
+        ?? (a.group?.type ? defaultNormalBalanceForGroupType(a.group.type) : "DEBIT");
+    let bal = toNumber(a.balance);
+    if (a.openingBalance != null && a.openingBalanceType) {
+        if (!a.openingBalanceDate || dateOnOrBefore(a.openingBalanceDate, new Date())) {
+            bal += balanceDelta(nb, a.openingBalanceType, toNumber(a.openingBalance));
+        }
+    }
+    return bal;
+}
 
 export function toNumber(v: { toString(): string } | number | string): number {
     return typeof v === "number" ? v : Number(v);

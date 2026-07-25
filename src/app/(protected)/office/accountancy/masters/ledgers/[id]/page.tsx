@@ -11,8 +11,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { fmt } from "@/utils/constants";
 import { useEscapeBack } from "@/shared/hooks/useEscapeBack";
+import { formatDrCr } from "@/shared/lib/format/moneyInr";
 import { GroupCombobox } from "@/modules/accountancy/components/GroupCombobox";
 
 type GroupType  = "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE";
@@ -52,13 +52,7 @@ function flatGroups(nodes: GroupNode[]): GroupOption[] {
     return result;
 }
 
-function drCr(balance: number, normalBalance: NormalBalance | null): string {
-    if (balance === 0) return "0.00";
-    const sign = balance < 0
-        ? (normalBalance === "DEBIT" ? "Cr" : "Dr")
-        : (normalBalance === "DEBIT" ? "Dr" : "Cr");
-    return `${fmt(Math.abs(balance))} ${sign}`;
-}
+const drCr = formatDrCr;
 
 const LIMIT = 20;
 

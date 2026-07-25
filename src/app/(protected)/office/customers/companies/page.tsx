@@ -11,6 +11,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDate } from "@/shared/lib/format/formatDate";
+import { formatDrCr } from "@/shared/lib/format/moneyInr";
+import { cn } from "@/shared/lib/format/utils";
 import { useDebouncedValue } from "@/shared/hooks";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
@@ -55,6 +57,7 @@ interface CompanyListItem {
     phone: string | null;
     companyReg: string | null;
     _count: { customers: number; devices: number };
+    account: { id: number; balance: number; normalBalance: "DEBIT" | "CREDIT" } | null;
 }
 
 interface CompanyDetail {
@@ -273,7 +276,23 @@ export default function CompaniesPage() {
                                 </div>
                                 <div className="min-w-0 flex-1">
                                     <p className="truncate text-sm font-medium">{company.name}</p>
-                                    <p className="truncate text-xs text-muted-foreground">{company.phone || "No phone"}</p>
+                                    <div className="mt-0.5 flex items-center justify-between gap-2">
+                                        <p className="truncate text-xs text-muted-foreground">{company.phone || "No phone"}</p>
+                                        {company.account && (
+                                            <span
+                                                className={cn(
+                                                    "shrink-0 rounded px-1.5 py-0.5 text-xs font-mono font-medium",
+                                                    company.account.balance === 0
+                                                        ? "bg-muted text-muted-foreground"
+                                                        : company.account.balance < 0
+                                                            ? "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300"
+                                                            : "bg-muted text-foreground",
+                                                )}
+                                            >
+                                                {formatDrCr(company.account.balance, company.account.normalBalance)}
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
                                 {company._count.customers > 0 && (
                                     <span className="text-xs text-muted-foreground">{company._count.customers}c</span>

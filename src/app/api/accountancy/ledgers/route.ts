@@ -7,30 +7,18 @@ import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { reconcileOpeningSuspense } from "@/modules/accountancy/lib/openingBalance";
-import { balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
-import { defaultNormalBalanceForGroupType, type GroupTypeStr } from "@/modules/accountancy/lib/groupNature";
-import { dateOnOrBefore, toDateOnly } from "@/shared/lib/format/formatDate";
+import { effectiveAccountBalance, toNumber } from "@/modules/accountancy/lib/balance";
+import { type GroupTypeStr } from "@/modules/accountancy/lib/groupNature";
+import { toDateOnly } from "@/shared/lib/format/formatDate";
 
 type AccountWithGroup = Awaited<ReturnType<typeof prisma.account.findMany>>[number] & {
     group: { id: number; name: string; type: GroupTypeStr } | null;
 };
 
-function effectiveBalanceForList(a: AccountWithGroup): number {
-    const nb = a.normalBalance
-        ?? (a.group?.type ? defaultNormalBalanceForGroupType(a.group.type) : "DEBIT");
-    let bal = toNumber(a.balance);
-    if (a.openingBalance != null && a.openingBalanceType) {
-        if (!a.openingBalanceDate || dateOnOrBefore(a.openingBalanceDate, new Date())) {
-            bal += balanceDelta(nb, a.openingBalanceType, toNumber(a.openingBalance));
-        }
-    }
-    return bal;
-}
-
 function serializeLedger<T extends AccountWithGroup>(a: T) {
     return {
         ...a,
-        balance: effectiveBalanceForList(a),
+        balance: effectiveAccountBalance(a),
         openingBalance: a.openingBalance != null ? toNumber(a.openingBalance) : null,
         openingBalanceDate: a.openingBalanceDate ? toDateOnly(a.openingBalanceDate) : null,
     };

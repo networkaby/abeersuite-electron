@@ -54,3 +54,18 @@ export function formatInr(rupees: number, decimals: 0 | 2 = 2): string {
         maximumFractionDigits: decimals,
     })}`;
 }
+
+/**
+ * A signed ledger `closing` (positive = balance sits on the account's own
+ * "normal" side, per `aggregateClosingAsOf`) → tally-style "1,234.00 Dr/Cr".
+ * Matches the legacy `fmt()` grouping (@/utils/constants) used across the
+ * account-ledger screens — kept en-US so figures line up identically there.
+ */
+export function formatDrCr(balance: number, normalBalance: "DEBIT" | "CREDIT" | null): string {
+    if (balance === 0) return "0.00";
+    const sign = balance < 0
+        ? (normalBalance === "DEBIT" ? "Cr" : "Dr")
+        : (normalBalance === "DEBIT" ? "Dr" : "Cr");
+    const abs = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Math.abs(balance));
+    return `${abs} ${sign}`;
+}

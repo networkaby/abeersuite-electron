@@ -9,9 +9,8 @@ import { parseIdParam } from "@/shared/lib/api";
 import { pickDefined } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { reconcileOpeningSuspense } from "@/modules/accountancy/lib/openingBalance";
-import { balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
-import { defaultNormalBalanceForGroupType } from "@/modules/accountancy/lib/groupNature";
-import { dateOnOrBefore, toDateOnly } from "@/shared/lib/format/formatDate";
+import { effectiveAccountBalance, toNumber } from "@/modules/accountancy/lib/balance";
+import { toDateOnly } from "@/shared/lib/format/formatDate";
 
 // Bank-ledger particulars — same shape as the create route (kept local: route
 // files may only export handlers). All-blank or null clears the stored value.
@@ -93,17 +92,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             include: { group: { select: { id: true, name: true, type: true } } },
         });
         if (body.openingBalance !== undefined) await reconcileOpeningSuspense();
-        const nb = account.normalBalance
-            ?? (account.group?.type ? defaultNormalBalanceForGroupType(account.group.type) : "DEBIT");
-        let effectiveBal = toNumber(account.balance);
-        if (account.openingBalance != null && account.openingBalanceType) {
-            if (!account.openingBalanceDate || dateOnOrBefore(account.openingBalanceDate, new Date())) {
-                effectiveBal += balanceDelta(nb, account.openingBalanceType, toNumber(account.openingBalance));
-            }
-        }
         return NextResponse.json({
             ...account,
-            balance: effectiveBal,
+            balance: effectiveAccountBalance(account),
             openingBalance: account.openingBalance != null ? toNumber(account.openingBalance) : null,
             openingBalanceDate: account.openingBalanceDate ? toDateOnly(account.openingBalanceDate) : null,
         });
