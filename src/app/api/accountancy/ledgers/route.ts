@@ -8,11 +8,11 @@ import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { reconcileOpeningSuspense } from "@/modules/accountancy/lib/openingBalance";
 import { balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
-import { defaultNormalBalanceForGroupType } from "@/modules/accountancy/lib/groupNature";
+import { defaultNormalBalanceForGroupType, type GroupTypeStr } from "@/modules/accountancy/lib/groupNature";
 import { dateOnOrBefore, toDateOnly } from "@/shared/lib/format/formatDate";
 
 type AccountWithGroup = Awaited<ReturnType<typeof prisma.account.findMany>>[number] & {
-    group: { id: number; name: string; type: string } | null;
+    group: { id: number; name: string; type: GroupTypeStr } | null;
 };
 
 function effectiveBalanceForList(a: AccountWithGroup): number {

@@ -200,7 +200,8 @@
       "Bash(Select-Object -First 30)",
       "Bash(PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION=yes pnpm prisma db push --force-reset)",
       "Bash(git -C D:/AbeerSuite/service-mgmt-experiment status --short)",
-      "Bash(git -C D:/AbeerSuite/service-mgmt-experiment branch --show-current)"
+      "Bash(git -C D:/AbeerSuite/service-mgmt-experiment branch --show-current)",
+      "Bash(git -C \"D:\\\\AbeerSuite\\\\service-mgmt-experiment\" diff -- src/app/api/person/[id]/phones/[phoneId]/route.ts src/modules/customer/lib/contactWrite.ts src/modules/customer/lib/convertParty.ts)"
     ]
   }
 }

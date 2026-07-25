@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { ContactConflictError, contactValueSchema, updateEmail } from "@/modules/customer/lib/contactWrite";
+import { ContactConflictError, contactValueSchema, deleteEmail, updateEmail } from "@/modules/customer/lib/contactWrite";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 
@@ -48,11 +48,18 @@ export async function DELETE(
     const { id, emailId } = await params;
     const emailIdNum = Number(emailId);
     const companyIdNum = Number(id);
+    if (!Number.isFinite(emailIdNum) || !Number.isFinite(companyIdNum)) {
+        return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+    }
     const existing = await prisma.email.findUnique({ where: { id: emailIdNum } });
     if (!existing || existing.companyId !== companyIdNum) {
         return NextResponse.json({ error: "Email not found for this company" }, { status: 404 });
     }
 
-    await prisma.email.delete({ where: { id: emailIdNum } });
-    return NextResponse.json({ success: true });
+    try {
+        await deleteEmail(emailIdNum);
+        return NextResponse.json({ success: true });
+    } catch (e) {
+        return handleApiError(e, "Failed to remove email");
+    }
 }

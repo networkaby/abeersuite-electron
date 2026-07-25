@@ -57,12 +57,6 @@ function inheritedNormalBalance(type: GroupType): "Debit" | "Credit" {
     return type === "ASSET" || type === "EXPENSE" ? "Debit" : "Credit";
 }
 
-type NewLedgerOpeningForm = {
-    openingBalance: string;
-    openingBalanceType: "DEBIT" | "CREDIT";
-    openingBalanceDate: string;
-};
-
 export function CreateLedgerDialog({
     open,
     onOpenChange,

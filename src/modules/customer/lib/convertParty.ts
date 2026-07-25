@@ -862,14 +862,76 @@ export async function mergeParty(
         // 3. Move Phone / Email rows from loser onto winner. Global @unique on
         //    `phone` / `email` is satisfied because duplicate parties don't
         //    share contact values (that's how they ended up as two rows).
+        //
+        //    Primary-tag rule (merge policy):
+        //    — WINNER'S primary is preserved unconditionally (your rule).
+        //    — If winner had NO phones/emails, loser's primary OR loser's
+        //      first row (lowest id) becomes the new primary.
+        //    — In no case do we end up with >1 primary post-merge.
         const partyKey = kind === "person" ? "personId" : "companyId";
-        const partyMoveData: Record<string, number | null> =
-            kind === "person"
-                ? { personId: winnerId, companyId: null }
-                : { companyId: winnerId, personId: null };
+        const winnerPartyWhere = { [partyKey]: winnerId } as const;
 
-        const phones = await tx.phone.updateMany({ where: { [partyKey]: loserId }, data: partyMoveData });
-        const emails = await tx.email.updateMany({ where: { [partyKey]: loserId }, data: partyMoveData });
+        const [winnerHasPhones, winnerHasEmails] = await Promise.all([
+            tx.phone.count({ where: winnerPartyWhere }),
+            tx.email.count({ where: winnerPartyWhere }),
+        ]);
+        const loserPhoneOwnerWhere = { [partyKey]: loserId } as const;
+
+        // When the winner already owns phones/emails, strip the loser's
+        // isPrimary flags as we move them — winner's primary stays the sole one.
+        const phoneMoveData: Record<string, unknown> =
+            kind === "person"
+                ? { personId: winnerId, companyId: null, ...(winnerHasPhones > 0 ? { isPrimary: false } : {}) }
+                : { companyId: winnerId, personId: null, ...(winnerHasPhones > 0 ? { isPrimary: false } : {}) };
+        const emailMoveData: Record<string, unknown> =
+            kind === "person"
+                ? { personId: winnerId, companyId: null, ...(winnerHasEmails > 0 ? { isPrimary: false } : {}) }
+                : { companyId: winnerId, personId: null, ...(winnerHasEmails > 0 ? { isPrimary: false } : {}) };
+
+        const phones = await tx.phone.updateMany({ where: loserPhoneOwnerWhere, data: phoneMoveData });
+        const emails = await tx.email.updateMany({ where: loserPhoneOwnerWhere, data: emailMoveData });
+
+        // 3b. Guarantee at-most-one-primary per contact kind on the winner
+        // after the move (fixes the case where loser had multiple primaries
+        // from prior buggy merges AND winner previously had zero contacts).
+        // Strategy: if any primaries exist, keep the lowest-id one; demote the rest.
+        // Branches on `table` explicitly rather than holding `tx.phone | tx.email`
+        // in one variable — TS can't call through a union of delegate types.
+        async function enforceSinglePrimary(
+            table: "phone" | "email",
+        ) {
+            const primaries = table === "phone"
+                ? await tx.phone.findMany({ where: { ...winnerPartyWhere, isPrimary: true }, orderBy: { id: "asc" }, select: { id: true } })
+                : await tx.email.findMany({ where: { ...winnerPartyWhere, isPrimary: true }, orderBy: { id: "asc" }, select: { id: true } });
+            if (primaries.length <= 1) return;
+            const extras = primaries.slice(1).map((r: { id: number }) => r.id);
+            if (table === "phone") {
+                await tx.phone.updateMany({ where: { id: { in: extras } }, data: { isPrimary: false } });
+            } else {
+                await tx.email.updateMany({ where: { id: { in: extras } }, data: { isPrimary: false } });
+            }
+        }
+
+        // 3c. If the winner had no phones/emails but the loser added some,
+        // promote the lowest-id new row as primary (canonical first-created rule).
+        async function promoteFirstWhenNoPrimary(table: "phone" | "email") {
+            const anyPrimary = table === "phone"
+                ? await tx.phone.findFirst({ where: { ...winnerPartyWhere, isPrimary: true }, select: { id: true } })
+                : await tx.email.findFirst({ where: { ...winnerPartyWhere, isPrimary: true }, select: { id: true } });
+            if (anyPrimary) return;
+            if (table === "phone") {
+                const first = await tx.phone.findFirst({ where: winnerPartyWhere, orderBy: { id: "asc" }, select: { id: true } });
+                if (first) await tx.phone.update({ where: { id: first.id }, data: { isPrimary: true } });
+            } else {
+                const first = await tx.email.findFirst({ where: winnerPartyWhere, orderBy: { id: "asc" }, select: { id: true } });
+                if (first) await tx.email.update({ where: { id: first.id }, data: { isPrimary: true } });
+            }
+        }
+
+        await enforceSinglePrimary("phone");
+        await enforceSinglePrimary("email");
+        await promoteFirstWhenNoPrimary("phone");
+        await promoteFirstWhenNoPrimary("email");
 
         // 4. PersonCompany links: move loser's onto winner. Dedupe by (personId,
         //    companyId) since the same pair could now appear twice.

@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { ContactConflictError, contactValueSchema, updatePhone } from "@/modules/customer/lib/contactWrite";
+import { ContactConflictError, contactValueSchema, deletePhone, updatePhone } from "@/modules/customer/lib/contactWrite";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 
-// PATCH /api/person/[id]/phones/[phoneId] — update a phone row
+// PATCH /api/person/[id]/phones/[phoneId] — update a phone row.
+// Body: { value?, label?, isPrimary? } — send { isPrimary: true } to
+// demote the existing primary and promote this phone instead.
 export async function PATCH(
     req: Request,
     { params }: { params: Promise<{ id: string; phoneId: string }> },
@@ -50,11 +52,18 @@ export async function DELETE(
     const { id, phoneId } = await params;
     const phoneIdNum = Number(phoneId);
     const personIdNum = Number(id);
+    if (!Number.isFinite(phoneIdNum) || !Number.isFinite(personIdNum)) {
+        return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+    }
     const existing = await prisma.phone.findUnique({ where: { id: phoneIdNum } });
     if (!existing || existing.personId !== personIdNum) {
         return NextResponse.json({ error: "Phone not found for this person" }, { status: 404 });
     }
 
-    await prisma.phone.delete({ where: { id: phoneIdNum } });
-    return NextResponse.json({ success: true });
+    try {
+        await deletePhone(phoneIdNum);
+        return NextResponse.json({ success: true });
+    } catch (e) {
+        return handleApiError(e, "Failed to remove phone");
+    }
 }

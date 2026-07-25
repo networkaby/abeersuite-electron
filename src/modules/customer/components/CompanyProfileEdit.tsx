@@ -100,6 +100,15 @@ export default function CompanyProfileEdit({ profile, onSaved }: Props) {
         }
     };
 
+    const makePhonePrimary = async (phoneId: number) => {
+        try {
+            await axios.patch(`/api/companies/${profile.id}/phones/${phoneId}`, { isPrimary: true });
+            setPhones(prev => prev.map(p => ({ ...p, isPrimary: p.id === phoneId })));
+        } catch (e) {
+            toast.error(extractApiError(e, "Failed to set primary phone"));
+        }
+    };
+
     const addEmail = async () => {
         const val = newEmail.trim();
         if (!val) return;
@@ -121,6 +130,15 @@ export default function CompanyProfileEdit({ profile, onSaved }: Props) {
             setEmails(prev => prev.filter(e => e.id !== emailId));
         } catch {
             toast.error("Failed to remove email");
+        }
+    };
+
+    const makeEmailPrimary = async (emailId: number) => {
+        try {
+            await axios.patch(`/api/companies/${profile.id}/emails/${emailId}`, { isPrimary: true });
+            setEmails(prev => prev.map(e => ({ ...e, isPrimary: e.id === emailId })));
+        } catch (e) {
+            toast.error(extractApiError(e, "Failed to set primary email"));
         }
     };
 
@@ -162,7 +180,19 @@ export default function CompanyProfileEdit({ profile, onSaved }: Props) {
                 {phones.map(p => (
                     <div key={p.id} className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm">
                         <span className="flex-1 font-medium">{p.value}</span>
-                        {p.isPrimary && <span className="shrink-0 text-[10px] text-primary">Primary</span>}
+                        {p.isPrimary ? (
+                            <span className="shrink-0 text-[10px] text-primary">Primary</span>
+                        ) : (
+                            phones.length > 1 && (
+                                <button
+                                    type="button"
+                                    onClick={() => void makePhonePrimary(p.id)}
+                                    className="shrink-0 text-[10px] text-muted-foreground underline-offset-2 hover:text-primary hover:underline"
+                                >
+                                    Make primary
+                                </button>
+                            )
+                        )}
                         {p.label && <span className="shrink-0 text-xs text-muted-foreground">{p.label}</span>}
                         <Button
                             onClick={() => void deletePhone(p.id)}
@@ -219,7 +249,19 @@ export default function CompanyProfileEdit({ profile, onSaved }: Props) {
                 {emails.map(em => (
                     <div key={em.id} className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm">
                         <span className="flex-1">{em.value}</span>
-                        {em.isPrimary && <span className="shrink-0 text-[10px] text-primary">Primary</span>}
+                        {em.isPrimary ? (
+                            <span className="shrink-0 text-[10px] text-primary">Primary</span>
+                        ) : (
+                            emails.length > 1 && (
+                                <button
+                                    type="button"
+                                    onClick={() => void makeEmailPrimary(em.id)}
+                                    className="shrink-0 text-[10px] text-muted-foreground underline-offset-2 hover:text-primary hover:underline"
+                                >
+                                    Make primary
+                                </button>
+                            )
+                        )}
                         {em.label && <span className="shrink-0 text-xs text-muted-foreground">{em.label}</span>}
                         <Button
                             onClick={() => void deleteEmail(em.id)}
