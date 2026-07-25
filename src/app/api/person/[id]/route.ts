@@ -83,6 +83,9 @@ export async function GET(
         creditLimit: person.account!.creditLimit,
         accountGroupId: person.account!.group?.id ?? null,
         accountGroupName: person.account!.group?.name ?? null,
+        openingBalance: person.account!.openingBalance,
+        openingBalanceType: person.account!.openingBalanceType,
+        openingBalanceDate: person.account!.openingBalanceDate,
         // Flatten each device's repair tickets back to the old device.tickets shape
         // (core ticket + status + repair fields), newest first.
         devices: person.account!.devices.map((d) => ({

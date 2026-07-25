@@ -4,6 +4,7 @@ import { requireAuth, hasPermission } from "@/shared/lib/auth/permissions";
 import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
+import { reconcileOpeningSuspense } from "@/modules/accountancy/lib/openingBalance";
 import { z } from "zod";
 import { validateRequest, handleApiError, pickDefined } from "@/shared/lib/api";
 
@@ -13,14 +14,21 @@ type Params = { params: Promise<{ id: string }> };
 // null = no credit (cash-only), 0 behaves identically, a positive value grants
 // that much credit headroom. `accountGroup` flips the ledger between Sundry
 // Debtors (customer) and Sundry Creditors (supplier) — resolved to a groupId
-// server-side so the client never needs the group's primary key.
+// server-side so the client never needs the group's primary key. The three
+// `opening*` fields mirror the Accountancy Masters opening-balance editor —
+// same columns, just reachable at customers:edit instead of
+// accountancy-masters:edit so front-desk staff can set it while onboarding
+// a customer. Pass a null amount to clear.
 const updateSchema = z.object({
     creditLimit: z.number().min(0).nullable().optional(),
     accountGroup: z
         .enum([ACCOUNT_GROUPS.SUNDRY_DEBTORS, ACCOUNT_GROUPS.SUNDRY_CREDITORS])
         .optional(),
+    openingBalance:     z.number().nullable().optional(),
+    openingBalanceType: z.enum(["DEBIT", "CREDIT"]).nullable().optional(),
+    openingBalanceDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
 }).refine(
-    (d) => d.creditLimit !== undefined || d.accountGroup !== undefined,
+    (d) => d.creditLimit !== undefined || d.accountGroup !== undefined || d.openingBalance !== undefined,
     { message: "Nothing to update" },
 );
 
@@ -67,9 +75,9 @@ export async function GET(_: Request, { params }: Params) {
     });
 }
 
-// PATCH /api/accounts/[id] — update the account's credit limit.
-// People and companies share the Contacts (customers:*) permission set, so both
-// person and company ledgers gate on customers:edit.
+// PATCH /api/accounts/[id] — update the account's credit limit, group, and/or
+// opening balance. People and companies share the Contacts (customers:*)
+// permission set, so both person and company ledgers gate on customers:edit.
 export async function PATCH(req: Request, { params }: Params) {
     const { user, response } = await requireAuth();
     if (response) return response;
@@ -114,12 +122,31 @@ export async function PATCH(req: Request, { params }: Params) {
         groupId = group.id;
     }
 
+    // Opening balance is a Dr/Cr trio — setting an amount requires the type
+    // alongside it, a null amount clears all three at once.
+    let openingPatch: {
+        openingBalance: number | null;
+        openingBalanceType: "DEBIT" | "CREDIT" | null;
+        openingBalanceDate: Date | null;
+    } | undefined;
+    if (data.openingBalance !== undefined) {
+        if (data.openingBalance !== null && !data.openingBalanceType) {
+            return NextResponse.json({ error: "openingBalanceType is required when setting an opening balance" }, { status: 400 });
+        }
+        openingPatch = {
+            openingBalance:     data.openingBalance,
+            openingBalanceType: data.openingBalance === null ? null : data.openingBalanceType!,
+            openingBalanceDate: data.openingBalance === null ? null : (data.openingBalanceDate ? new Date(data.openingBalanceDate) : null),
+        };
+    }
+
     try {
         const updated = await prisma.account.update({
             where: { id: accountId },
-            data: pickDefined({ creditLimit: data.creditLimit, groupId }),
-            select: { id: true, creditLimit: true, groupId: true },
+            data: pickDefined({ creditLimit: data.creditLimit, groupId, ...openingPatch }),
+            select: { id: true, creditLimit: true, groupId: true, openingBalance: true, openingBalanceType: true, openingBalanceDate: true },
         });
+        if (openingPatch) await reconcileOpeningSuspense();
         return NextResponse.json(updated);
     } catch (e) {
         return handleApiError(e, "Failed to update account");

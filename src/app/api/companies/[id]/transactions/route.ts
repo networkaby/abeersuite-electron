@@ -2,14 +2,19 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
+import { parseRange } from "@/modules/accountancy/lib/period";
+import {
+    CUSTOMER_ACCOUNT_OPENING_SELECT,
+    loadCustomerTransactionVouchers,
+} from "@/modules/customer/lib/customerTransactions";
 
-// GET /api/companies/[id]/transactions
+// GET /api/companies/[id]/transactions?from=YYYY-MM-DD&to=YYYY-MM-DD
 //
 // Returns every InvVoucher that hits the given company's ledger account.
 // Response shape kept as `{ invVouchers }` (the `invoices` array was
 // retired with the Invoice → InvVoucher consolidation on 2026-05-24).
 export async function GET(
-    _: Request,
+    request: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
     const { response } = await requireAuth();
@@ -17,46 +22,21 @@ export async function GET(
 
     const { id } = await params;
     const companyId = Number(id);
+    const { from, to } = parseRange(new URL(request.url).searchParams);
 
     try {
         const account = await prisma.account.findFirst({
-            where:  { companyId },
-            select: { id: true },
+            where: { companyId },
+            select: CUSTOMER_ACCOUNT_OPENING_SELECT,
         });
 
-        const rawVouchers = account
-            ? await prisma.voucherDetail.findMany({
-                where: {
-                    universalVoucher: { deletedAt: null },   // 5D-8: lifecycle on spine
-                    OR: [
-                        { universalVoucher: { partyAccountId: account.id } },   // 5D-4: party on spine
-                        { partyType: "company", partyId: companyId },
-                    ],
-                },
-                select: {
-                    id: true,
-                    totalAmount: true,
-                    universalVoucher: { select: { createdById: true, voucherNo: true, status: true, date: true, type: true, branch: { select: { name: true } } } },   // 5D-2 creator + 5D-6 ref + 5D-8 status + 5D-10 date + 5D-11 type + 5D-12 branch
-                },
-                orderBy: { universalVoucher: { date: "desc" } },   // 5D-10
-            })
-            : [];
-
-        // 5D-2: resolve creator names from each row's spine createdById.
-        const creatorIds = [...new Set(rawVouchers.map((v) => v.universalVoucher?.createdById).filter((x): x is number => x != null))];
-        const creatorById = new Map(
-            (creatorIds.length === 0 ? [] : await prisma.user.findMany({ where: { id: { in: creatorIds } }, select: { id: true, name: true } }))
-                .map((u) => [u.id, u.name]),
+        const invVouchers = await loadCustomerTransactionVouchers(
+            prisma,
+            account,
+            { partyType: "company", partyId: companyId },
+            from,
+            to,
         );
-        const invVouchers = rawVouchers.map(({ universalVoucher, ...v }) => ({
-            ...v,
-            branch:    universalVoucher?.branch ?? null,   // 5D-12: branch on spine
-            type:      universalVoucher?.type,   // 5D-11: type on spine
-            date:      universalVoucher?.date,   // 5D-10: date on spine
-            status:    universalVoucher?.status ?? "DRAFT",   // 5D-8: status on spine
-            reference: universalVoucher?.voucherNo ?? "",   // 5D-6
-            createdBy: universalVoucher?.createdById != null ? { name: creatorById.get(universalVoucher.createdById) ?? null } : null,
-        }));
 
         return NextResponse.json({ invVouchers });
     } catch (e) {

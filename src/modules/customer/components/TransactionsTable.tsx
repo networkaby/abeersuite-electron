@@ -50,20 +50,27 @@ export function TransactionsTable({ invVouchers }: { invVouchers: TxInvVoucher[]
         branchName: string | null;
         createdBy:  string | null;
         balance:    number; // running balance — set in second pass below
+        isOpening:  boolean;
     };
+
+    const formatType = (type: string) =>
+        type === "OPENING"
+            ? "Opening"
+            : type.split("_").map((w: string) => w[0] + w.slice(1).toLowerCase()).join(" ");
 
     // Build raw rows (balance will be filled below)
     const rawRows: Omit<Row, "balance">[] = invVouchers.map((v) => ({
         id:         v.id,
         ref:        v.reference,
-        type:       v.type.split("_").map((w: string) => w[0] + w.slice(1).toLowerCase()).join(" "),
+        type:       formatType(v.type),
         date:       v.date,
         total:      Number(v.totalAmount),
         paid:       Number(v.amountPaid),
         status:     v.status,
-        url:        editFormUrl(v.type, v.id),
-        branchName: v.branch.name,
-        createdBy:  v.createdBy.name,
+        url:        v.type === "OPENING" ? null : editFormUrl(v.type, v.id),
+        branchName: v.branch.name || null,
+        createdBy:  v.createdBy.name || null,
+        isOpening:  v.type === "OPENING",
     }));
 
     // Running balance: sort chronologically (oldest first), accumulate
@@ -104,27 +111,35 @@ export function TransactionsTable({ invVouchers }: { invVouchers: TxInvVoucher[]
                     </TableHeader>
                     <TableBody>
                         {rows.map((row) => (
-                            <TableRow key={row.id}>
+                            <TableRow key={row.id} className={row.isOpening ? "bg-muted/30" : undefined}>
                                 <TableCell className="text-xs text-muted-foreground">{row.type}</TableCell>
                                 <TableCell>
                                     {row.url ? (
                                         <Link href={row.url} className="font-mono text-xs text-primary hover:underline">{row.ref}</Link>
                                     ) : (
-                                        <span className="font-mono text-xs text-muted-foreground">{row.ref}</span>
+                                        <span className={`font-mono text-xs ${row.isOpening ? "text-muted-foreground" : "text-muted-foreground"}`}>{row.ref}</span>
                                     )}
                                 </TableCell>
                                 <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{formatDate(row.date)}</TableCell>
                                 <TableCell className="text-xs text-muted-foreground">{row.branchName ?? <span className="opacity-40">—</span>}</TableCell>
                                 <TableCell className="text-xs text-muted-foreground">{row.createdBy ?? <span className="opacity-40">—</span>}</TableCell>
-                                <TableCell className="text-right font-mono text-xs">{money(row.total)}</TableCell>
-                                <TableCell className="text-right font-mono text-xs">{money(row.paid)}</TableCell>
+                                <TableCell className="text-right font-mono text-xs">
+                                    {row.isOpening && row.total === 0 ? <span className="opacity-40">—</span> : money(row.total)}
+                                </TableCell>
+                                <TableCell className="text-right font-mono text-xs">
+                                    {row.isOpening && row.paid === 0 ? <span className="opacity-40">—</span> : money(row.paid)}
+                                </TableCell>
                                 <TableCell className="text-right font-mono text-xs font-medium tabular-nums">
                                     {money(row.balance)}
                                 </TableCell>
                                 <TableCell>
-                                    <span className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${TX_STATUS_COLORS[row.status] ?? "bg-muted text-muted-foreground"}`}>
-                                        {row.status.charAt(0) + row.status.slice(1).toLowerCase()}
-                                    </span>
+                                    {row.isOpening ? (
+                                        <span className="opacity-40 text-xs">—</span>
+                                    ) : (
+                                        <span className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${TX_STATUS_COLORS[row.status] ?? "bg-muted text-muted-foreground"}`}>
+                                            {row.status.charAt(0) + row.status.slice(1).toLowerCase()}
+                                        </span>
+                                    )}
                                 </TableCell>
                             </TableRow>
                         ))}

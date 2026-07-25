@@ -3,6 +3,7 @@
 import type { ComponentProps } from "react";
 import CompanyProfileEdit from "./CompanyProfileEdit";
 import AccountCreditLimitCard from "./AccountCreditLimitCard";
+import AccountOpeningBalanceCard from "./AccountOpeningBalanceCard";
 import AccountClassificationCard from "./AccountClassificationCard";
 import CustomerGroupCard from "./CustomerGroupCard";
 import DevicesMiniGrid from "./DevicesMiniGrid";
@@ -20,6 +21,9 @@ interface Props {
         creditLimit: string | null;
         accountGroupName?: string | null;
         customerGroupId?: number | null;
+        openingBalance?: string | number | null;
+        openingBalanceType?: "DEBIT" | "CREDIT" | null;
+        openingBalanceDate?: string | null;
         name: string;
         address: string | null;
         companyReg: string | null;
@@ -61,6 +65,15 @@ export default function CompanyProfileTab({ detail, canEditCompany, onSaved, onC
                     key={`cl-${detail.id}`}
                     accountId={detail.accountId}
                     initialLimit={detail.creditLimit}
+                    canEdit
+                    onSaved={onSaved}
+                />
+                <AccountOpeningBalanceCard
+                    key={`ob-${detail.id}`}
+                    accountId={detail.accountId}
+                    initialAmount={detail.openingBalance ?? null}
+                    initialType={detail.openingBalanceType ?? null}
+                    initialDate={detail.openingBalanceDate ?? null}
                     canEdit
                     onSaved={onSaved}
                 />

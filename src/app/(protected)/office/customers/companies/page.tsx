@@ -7,7 +7,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
     ArrowLeft, Building2, Phone, MapPin,
-    User, Smartphone, ExternalLink, Loader2,
+    User, Smartphone, ExternalLink, Loader2, RefreshCw, Printer,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDate } from "@/shared/lib/format/formatDate";
@@ -42,6 +42,9 @@ import {
 } from "@/components/ui/table";
 import { EntityListPanel } from "@/shared/components/EntityListPanel";
 import { TransactionsTable, type CustomerTransactions } from "@/modules/customer/components/TransactionsTable";
+import { TallyDateInput } from "@/shared/components/TallyDateInput";
+import { indianFiscalYearStart } from "@/modules/accountancy/lib/period";
+import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import CompanyLinkPanel from "@/modules/customer/components/CompanyLinkPanel";
 import { LoyaltyPanel } from "@/modules/loyalty/components/LoyaltyPanel";
 import CustomerQualityTab from "@/modules/customer/components/CustomerQualityTab";
@@ -60,6 +63,9 @@ interface CompanyDetail {
     creditLimit: string | null;
     accountGroupName: string | null;
     customerGroupId: number | null;
+    openingBalance: string | null;
+    openingBalanceType: "DEBIT" | "CREDIT" | null;
+    openingBalanceDate: string | null;
     noDiscount: boolean;
     qualityLog: unknown;
     name: string;
@@ -98,6 +104,8 @@ export default function CompaniesPage() {
     const [tab, setTab] = useState<Tab>("transactions");
     const [transactions, setTransactions] = useState<CustomerTransactions | null>(null);
     const [txLoading, setTxLoading] = useState(false);
+    const [from, setFrom] = useState(toIsoDate(indianFiscalYearStart()));
+    const [to, setTo] = useState(toIsoDate(new Date()));
     const [linkKey, setLinkKey] = useState(0);
 
     const [showCreate, setShowCreate] = useState(false);
@@ -141,15 +149,21 @@ export default function CompaniesPage() {
             .finally(() => setDetailLoading(false));
     }, [selectedId]);
 
-    // Auto-load transactions when tab is active (covers default + manual switch).
+    // Load (or reload) transactions for the current company + period.
+    const loadTransactions = useCallback((f: string, t: string) => {
+        if (!selectedId) return;
+        setTxLoading(true);
+        axios.get<CustomerTransactions>(`/api/companies/${selectedId}/transactions?from=${f}&to=${t}`)
+            .then((r) => setTransactions(r.data))
+            .catch(() => toast.error("Failed to load transactions"))
+            .finally(() => setTxLoading(false));
+    }, [selectedId]);
+
+    // Auto-load transactions when the tab is active and not yet loaded.
     useEffect(() => {
         if (!selectedId || tab !== "transactions" || transactions) return;
-        setTxLoading(true);
-        axios.get<CustomerTransactions>(`/api/companies/${selectedId}/transactions`)
-            .then((r) => setTransactions(r.data))
-            .catch(() => {})
-            .finally(() => setTxLoading(false));
-    }, [selectedId, tab, transactions]);
+        loadTransactions(from, to);
+    }, [selectedId, tab, transactions, from, to, loadTransactions]);
 
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => {
@@ -418,13 +432,42 @@ export default function CompaniesPage() {
 
                                 {/* Transactions */}
                                 {tab === "transactions" && (
-                                    txLoading ? (
-                                        <div className="flex items-center justify-center py-16 text-muted-foreground"><Loader2 size={20} className="animate-spin" /></div>
-                                    ) : !transactions ? null : transactions.invVouchers.length === 0 ? (
-                                        <CustomerEmptyState icon={<span className="text-3xl">🧾</span>} message="No transactions found" />
-                                    ) : (
-                                        <TransactionsTable invVouchers={transactions.invVouchers} />
-                                    )
+                                    <>
+                                        <div className="flex items-center gap-3 border-b bg-card px-6 py-2.5 flex-wrap">
+                                            <span className="text-sm font-semibold shrink-0">Transactions</span>
+                                            <div className="flex items-center gap-2 ml-auto flex-wrap">
+                                                <label className="text-xs text-muted-foreground">From</label>
+                                                <TallyDateInput
+                                                    value={from}
+                                                    onValueChange={(v) => { setFrom(v); loadTransactions(v, to); }}
+                                                    className="h-7 w-36 text-xs"
+                                                />
+                                                <label className="text-xs text-muted-foreground">To</label>
+                                                <TallyDateInput
+                                                    value={to}
+                                                    onValueChange={(v) => { setTo(v); loadTransactions(from, v); }}
+                                                    className="h-7 w-36 text-xs"
+                                                />
+                                                <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs" onClick={() => loadTransactions(from, to)}>
+                                                    <RefreshCw size={12} className="mr-1" />
+                                                    Refresh
+                                                </Button>
+                                                <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs" onClick={() => window.print()}>
+                                                    <Printer size={12} />
+                                                </Button>
+                                            </div>
+                                        </div>
+
+                                        <div className="p-2">
+                                            {txLoading ? (
+                                                <div className="flex items-center justify-center py-16 text-muted-foreground"><Loader2 size={20} className="animate-spin" /></div>
+                                            ) : !transactions ? null : transactions.invVouchers.length === 0 ? (
+                                                <CustomerEmptyState icon={<span className="text-3xl">🧾</span>} message="No transactions found" />
+                                            ) : (
+                                                <TransactionsTable invVouchers={transactions.invVouchers} />
+                                            )}
+                                        </div>
+                                    </>
                                 )}
                             </div>
                         </>

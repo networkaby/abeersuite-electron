@@ -3,7 +3,10 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { parseRange } from "@/modules/accountancy/lib/period";
-import { sumReceiptAllocations, loadTenderLines } from "@/modules/accountancy/lib/outstandings";
+import {
+    CUSTOMER_ACCOUNT_OPENING_SELECT,
+    loadCustomerTransactionVouchers,
+} from "@/modules/customer/lib/customerTransactions";
 
 // GET /api/person/[id]/transactions?from=YYYY-MM-DD&to=YYYY-MM-DD
 //
@@ -25,67 +28,17 @@ export async function GET(
 
     try {
         const account = await prisma.account.findFirst({
-            where:  { personId },
-            select: { id: true },
+            where: { personId },
+            select: CUSTOMER_ACCOUNT_OPENING_SELECT,
         });
 
-        const rawVouchers = account
-            ? await prisma.voucherDetail.findMany({
-                where: {
-                    universalVoucher: { deletedAt: null, date: { gte: from, lte: to } },   // 5D-8 lifecycle + 5D-10 date on spine
-                    OR: [
-                        { universalVoucher: { partyAccountId: account.id } },   // 5D-4: party on spine
-                        // Legacy rows resolve via the partyType+partyId pair.
-                        { partyType: "customer", partyId: personId },
-                    ],
-                },
-                select: {
-                    id: true,
-                    totalAmount: true,
-                    universalVoucherId: true,
-                    universalVoucher: { select: { createdById: true, partyAccountId: true, voucherNo: true, status: true, date: true, type: true, branch: { select: { name: true } } } },   // 5D-2 creator + 5D-4 party + 5D-6 ref + 5D-8 status + 5D-10 date + 5D-11 type + 5D-12 branch
-                },
-                orderBy: { universalVoucher: { date: "desc" } },   // 5D-10
-            })
-            : [];
-
-        // amountPaid = Σ(non-AR tenders on this voucher) + Σ(later RECEIPT
-        // VoucherAllocations against this voucher's spine). Mirrors the per-bill
-        // paid calc in src/modules/accountancy/lib/outstandings.ts (loadOpenBills)
-        // so customer Transactions and Receivables agree.
-        const uvIds = rawVouchers
-            .map((v) => v.universalVoucherId)
-            .filter((x): x is number => x !== null);
-        // RECEIPT settlements + up-front tenders, both via the spine (universalVoucherId).
-        const [paidBySpine, tendersBySpine] = await Promise.all([
-            sumReceiptAllocations(prisma, uvIds),
-            loadTenderLines(prisma, uvIds),
-        ]);
-        // 5D-2: resolve creator names from each row's spine createdById.
-        const creatorIds = [...new Set(rawVouchers.map((v) => v.universalVoucher?.createdById).filter((x): x is number => x != null))];
-        const creatorById = new Map(
-            (creatorIds.length === 0 ? [] : await prisma.user.findMany({ where: { id: { in: creatorIds } }, select: { id: true, name: true } }))
-                .map((u) => [u.id, u.name]),
+        const invVouchers = await loadCustomerTransactionVouchers(
+            prisma,
+            account,
+            { partyType: "customer", partyId: personId },
+            from,
+            to,
         );
-
-        const invVouchers = rawVouchers.map((v) => {
-            const arAccountId = v.universalVoucher?.partyAccountId ?? account?.id ?? null;
-            const nonArTenderSum = (v.universalVoucherId !== null ? (tendersBySpine.get(v.universalVoucherId) ?? []) : [])
-                .reduce((s, t) => s + (t.accountId === arAccountId ? 0 : t.amount), 0);
-            const jePaid = v.universalVoucherId !== null ? (paidBySpine[v.universalVoucherId] ?? 0) : 0;
-            const amountPaid = nonArTenderSum + jePaid;
-            return {
-                id:         v.id,
-                reference:  v.universalVoucher?.voucherNo ?? "",
-                type:       v.universalVoucher?.type,
-                status:     v.universalVoucher?.status ?? "DRAFT",
-                date:       v.universalVoucher?.date,   // 5D-10: date on spine
-                totalAmount: v.totalAmount,
-                amountPaid: amountPaid.toFixed(2),
-                branch:     v.universalVoucher?.branch ?? null,
-                createdBy:  v.universalVoucher?.createdById != null ? { name: creatorById.get(v.universalVoucher.createdById) ?? null } : null,
-            };
-        });
 
         return NextResponse.json({ invVouchers });
     } catch (e) {

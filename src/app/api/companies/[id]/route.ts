@@ -90,6 +90,9 @@ export async function GET(
         creditLimit: company.account!.creditLimit,
         accountGroupId: company.account!.group?.id ?? null,
         accountGroupName: company.account!.group?.name ?? null,
+        openingBalance: company.account!.openingBalance,
+        openingBalanceType: company.account!.openingBalanceType,
+        openingBalanceDate: company.account!.openingBalanceDate,
         devices: company.account!.devices.map((d) => ({
             ...d,
             tickets: d.repairs

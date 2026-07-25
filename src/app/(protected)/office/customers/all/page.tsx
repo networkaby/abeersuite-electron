@@ -60,6 +60,9 @@ type PersonDetail = {
     creditLimit: string | null;
     accountGroupName: string | null;
     customerGroupId: number | null;
+    openingBalance: string | null;
+    openingBalanceType: "DEBIT" | "CREDIT" | null;
+    openingBalanceDate: string | null;
     noDiscount: boolean;
     qualityLog: unknown;
     name: string;
@@ -79,6 +82,9 @@ type CompanyDetail = {
     creditLimit: string | null;
     accountGroupName: string | null;
     customerGroupId: number | null;
+    openingBalance: string | null;
+    openingBalanceType: "DEBIT" | "CREDIT" | null;
+    openingBalanceDate: string | null;
     noDiscount: boolean;
     qualityLog: unknown;
     name: string;
