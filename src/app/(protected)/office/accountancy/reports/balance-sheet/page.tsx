@@ -116,7 +116,12 @@ function GroupBlock({ node, depth, expanded, toggle, onLedger, onGroup }: {
     onGroup: (id: number) => void;
 }) {
     const isOpen = expanded.has(node.id);
-    const hasContent = node.children.length > 0 || node.ledgers.length > 0;
+    // Sundry Debtors carries one ledger per customer/school — most sit at zero.
+    // Hide the zero-balance ones here so the block only lists actual debtors.
+    const visibleLedgers = node.name === "Sundry Debtors"
+        ? node.ledgers.filter((l) => l.closing !== 0)
+        : node.ledgers;
+    const hasContent = node.children.length > 0 || visibleLedgers.length > 0;
     const balance = node.rolledUpClosing;
     const weight: AmountWeight = depth === 0 ? "group" : "subGroup";
 
@@ -153,7 +158,7 @@ function GroupBlock({ node, depth, expanded, toggle, onLedger, onGroup }: {
                             onLedger={onLedger} onGroup={onGroup}
                         />
                     ))}
-                    {node.ledgers.map((l) => (
+                    {visibleLedgers.map((l) => (
                         <tr
                             key={`l-${l.id}`}
                             className="cursor-pointer hover:bg-primary/5"
