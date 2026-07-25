@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import axios from "axios";
 import { useRouter } from "next/navigation";
@@ -13,6 +13,9 @@ import { toast } from "sonner";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { formatDrCr } from "@/shared/lib/format/moneyInr";
 import { cn } from "@/shared/lib/format/utils";
+import { DEFAULT_PARTY_SORT, sortParties, type PartySort } from "@/modules/customer/lib/partySort";
+import { PartySortToggle } from "@/modules/customer/components/PartySortToggle";
+import { PartyInactiveToggle } from "@/modules/customer/components/PartyInactiveToggle";
 import { useDebouncedValue } from "@/shared/hooks";
 import { PRIORITY_META } from "@/utils/constants";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -57,6 +60,7 @@ interface CustomerListItem {
     name: string;
     phone: string | null;
     email: string | null;
+    isActive: boolean;
     _count: { companies: number; devices: number };
     account: { id: number; balance: number; normalBalance: "DEBIT" | "CREDIT" } | null;
 }
@@ -70,6 +74,7 @@ interface CustomerDetail {
     openingBalance: string | null;
     openingBalanceType: "DEBIT" | "CREDIT" | null;
     openingBalanceDate: string | null;
+    isActive: boolean;
     noDiscount: boolean;
     qualityLog: unknown;
     name: string;
@@ -88,6 +93,8 @@ type Tab = "transactions" | "profile" | "tickets" | "devices" | "companies" | "l
 export default function CustomersPage() {
     const { data: session } = useSession();
     const [customers, setCustomers] = useState<CustomerListItem[]>([]);
+    const [sort, setSort] = useState<PartySort>(DEFAULT_PARTY_SORT);
+    const [showInactive, setShowInactive] = useState(false);
     const [search, setSearch] = useState("");
     const [selectedId, setSelectedId] = useState<number | null>(null);
     const [detail, setDetail] = useState<CustomerDetail | null>(null);
@@ -109,6 +116,7 @@ export default function CustomersPage() {
     const canManageUsers = hasPermissionWithScope(perms, PERMISSIONS.USERS_EDIT);
     const canManageLoyalty = hasPermissionWithScope(perms, PERMISSIONS.LOYALTY_EDIT);
     const canEditCustomer = hasPermissionWithScope(perms, PERMISSIONS.CUSTOMERS_EDIT);
+    const canDeleteCustomer = hasPermissionWithScope(perms, PERMISSIONS.CUSTOMERS_DELETE);
     // Without this grant the list hides suppliers (Sundry Creditors) — customers only.
     const canSeeCreditors = hasPermissionWithScope(perms, PERMISSIONS.CUSTOMERS_VIEW_CREDITORS);
 
@@ -125,13 +133,14 @@ export default function CustomersPage() {
                 params: {
                     ...(q ? { q } : {}),
                     ...(canSeeCreditors ? {} : { hideCreditors: 1 }),
+                    ...(showInactive ? { includeInactive: 1 } : {}),
                 },
             });
             setCustomers(response.data);
         } catch {
             toast.error("Failed to load customers");
         }
-    }, [canSeeCreditors]);
+    }, [canSeeCreditors, showInactive]);
 
     useEffect(() => { loadList(debouncedSearch.trim()); }, [loadList, debouncedSearch]);
 
@@ -183,6 +192,19 @@ export default function CustomersPage() {
             .then((res) => setDetail(res.data))
             .catch(() => { });
     }, [selectedId]);
+
+    // Deleted (hard) or deactivated — either way it drops out of the isActive
+    // list, so close the detail and reload.
+    const handleDeleted = useCallback(() => {
+        setSelectedId(null);
+        loadList(search.trim());
+    }, [loadList, search]);
+
+    // Reactivated — refresh both the open detail and the list (badge/row updates).
+    const handleReactivated = useCallback(() => {
+        refetchDetail();
+        loadList(search.trim());
+    }, [refetchDetail, loadList, search]);
 
     // Load (or reload) transactions for the current customer + period.
     const loadTransactions = useCallback((f: string, t: string) => {
@@ -236,6 +258,11 @@ export default function CustomersPage() {
             .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
         : [];
 
+    const sortedCustomers = useMemo(
+        () => sortParties(customers, sort, { name: (c) => c.name, balance: (c) => c.account?.balance ?? 0 }),
+        [customers, sort],
+    );
+
     return (
         <div className="flex h-full flex-col">
             <header className="flex shrink-0 items-center gap-2 border-b bg-card px-4 py-2">
@@ -257,15 +284,24 @@ export default function CustomersPage() {
                     onSearchChange={setSearch}
                     searchPlaceholder="Search name or phone…"
                     onAdd={() => setShowCreate(true)}
+                    toolbar={
+                        <div className="flex justify-between">
+                            <PartySortToggle sort={sort} onChange={setSort} />
+                            <PartyInactiveToggle checked={showInactive} onChange={setShowInactive} visible={canDeleteCustomer} />
+                        </div>
+                    }
                     isEmpty={customers.length === 0}
                     emptyMessage={search ? "No matches" : "No customers yet"}
                 >
-                    {customers.map((customer) => (
+                    {sortedCustomers.map((customer) => (
                         <Button
                             key={customer.id}
                             asChild
                             variant="ghost"
-                            className="h-auto w-full justify-start rounded-none border-b px-4 py-3"
+                            className={cn(
+                                "h-auto w-full justify-start rounded-none border-b px-4 py-3",
+                                !customer.isActive && "opacity-50",
+                            )}
                         >
                             <Link
                                 href={`/office/customers/${customer.account?.id ?? "#"}`}
@@ -299,6 +335,11 @@ export default function CustomersPage() {
                                             )}
                                         </div>
                                     </div>
+                                    {!customer.isActive && (
+                                        <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                                            Inactive
+                                        </span>
+                                    )}
                                     {customer._count.devices > 0 && (
                                         <span className="text-xs text-muted-foreground">{customer._count.devices}d</span>
                                     )}
@@ -378,8 +419,11 @@ export default function CustomersPage() {
                                         detail={detail}
                                         canEditCustomer={canEditCustomer}
                                         canManageUsers={canManageUsers}
+                                        canDeleteCustomer={canDeleteCustomer}
                                         onSaved={refetchDetail}
                                         onConverted={(companyId) => router.push(`/office/customers/all?companyId=${companyId}`)}
+                                        onDeleted={handleDeleted}
+                                        onReactivated={handleReactivated}
                                     />
                                 )}
 

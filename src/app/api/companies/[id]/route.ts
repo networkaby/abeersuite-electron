@@ -9,6 +9,7 @@ import { handleApiError } from "@/shared/lib/api";
 import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
 import { normaliseGstinState } from "@/shared/lib/gst/validateGstinState";
 import { isValidStateCode } from "@/shared/lib/gst/indianStates";
+import { deleteOrDeactivateCompany } from "@/modules/customer/lib/deleteParty";
 
 const updateSchema = z.object({
     name: z.string().trim().min(1).optional(),
@@ -22,6 +23,9 @@ const updateSchema = z.object({
     // Customer Quality (internal-only) — see PUT /api/person/[id].
     noDiscount:        z.boolean().optional(),
     customerGroupId:   z.number().int().positive().optional().nullable(),
+    // Reactivate (or re-deactivate) — gated separately below on customers:delete,
+    // the same tier that owns DELETE.
+    isActive:          z.boolean().optional(),
 });
 
 export async function GET(
@@ -68,7 +72,7 @@ export async function GET(
         },
     });
 
-    if (!company || !company.isActive) {
+    if (!company) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
@@ -126,6 +130,27 @@ export async function PUT(
     if (error) return error;
     const body = data;
 
+    if (body.isActive !== undefined) {
+        const { response: permResponse } = await requireAnyPermission(PERMISSIONS.CUSTOMERS_DELETE);
+        if (permResponse) return permResponse;
+
+        if (body.isActive) {
+            // A merge/convert tombstone recovers only via Customer Tools Trash
+            // (hard-delete-permitted), never a plain reactivate — its data already
+            // moved to the winning row.
+            const existing = await prisma.company.findUnique({
+                where: { id: Number(id) },
+                select: { mergedIntoCompanyId: true, convertedToPersonId: true },
+            });
+            if (existing?.mergedIntoCompanyId || existing?.convertedToPersonId) {
+                return NextResponse.json(
+                    { error: "This company was merged or converted — recover it from Customer Tools Trash instead" },
+                    { status: 409 },
+                );
+            }
+        }
+    }
+
     let gstinPatch: Partial<{ gstin: string | null; gstStateCode: string | null; gstRegType: "REGULAR" | "COMPOSITION" | "SEZ" | "UNREGISTERED" | null }> | null = null;
     if (body.gstin !== undefined || body.gstStateCode !== undefined) {
         const integrity = normaliseGstinState({
@@ -162,6 +187,7 @@ export async function PUT(
                 }),
                 ...(body.noDiscount !== undefined && { noDiscount: body.noDiscount }),
                 ...(body.customerGroupId !== undefined && { customerGroupId: body.customerGroupId }),
+                ...(body.isActive !== undefined && { isActive: body.isActive }),
             },
         });
         return NextResponse.json(company);
@@ -178,14 +204,9 @@ export async function DELETE(
     if (response) return response;
 
     const { id } = await params;
-    const hasDevices = await prisma.device.count({ where: { account: { companyId: Number(id) } } });
-    if (hasDevices > 0) {
-        return NextResponse.json({ error: "Cannot deactivate a company with devices" }, { status: 409 });
+    const result = await deleteOrDeactivateCompany(Number(id));
+    if (result.outcome === "blocked") {
+        return NextResponse.json({ error: result.reason }, { status: 409 });
     }
-
-    const company = await prisma.company.update({
-        where: { id: Number(id) },
-        data: { isActive: false },
-    });
-    return NextResponse.json(company);
+    return NextResponse.json({ ok: true, outcome: result.outcome });
 }

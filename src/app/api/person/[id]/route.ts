@@ -8,6 +8,7 @@ import { handleApiError } from "@/shared/lib/api";
 import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
 import { normaliseGstinState } from "@/shared/lib/gst/validateGstinState";
 import { isValidStateCode } from "@/shared/lib/gst/indianStates";
+import { deleteOrDeactivatePerson } from "@/modules/customer/lib/deleteParty";
 
 const updateSchema = z.object({
     name: z.string().trim().min(1).optional(),
@@ -22,6 +23,9 @@ const updateSchema = z.object({
     // rest of the party writes.
     noDiscount:        z.boolean().optional(),
     customerGroupId:   z.number().int().positive().optional().nullable(),
+    // Reactivate (or re-deactivate) — gated separately below on customers:delete,
+    // the same tier that owns DELETE.
+    isActive:          z.boolean().optional(),
 });
 
 export async function GET(
@@ -70,7 +74,7 @@ export async function GET(
         },
     });
 
-    if (!person || !person.isActive) {
+    if (!person) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
@@ -121,6 +125,27 @@ export async function PUT(
     if (error) return error;
     const body = data;
 
+    if (body.isActive !== undefined) {
+        const { response: permResponse } = await requireAnyPermission(PERMISSIONS.CUSTOMERS_DELETE);
+        if (permResponse) return permResponse;
+
+        if (body.isActive) {
+            // A merge/convert tombstone recovers only via Customer Tools Trash
+            // (hard-delete-permitted), never a plain reactivate — its data already
+            // moved to the winning row.
+            const existing = await prisma.person.findUnique({
+                where: { id: Number(id) },
+                select: { mergedIntoPersonId: true, convertedToCompanyId: true },
+            });
+            if (existing?.mergedIntoPersonId || existing?.convertedToCompanyId) {
+                return NextResponse.json(
+                    { error: "This person was merged or converted — recover it from Customer Tools Trash instead" },
+                    { status: 409 },
+                );
+            }
+        }
+    }
+
     // GSTIN ↔ state-code guard runs only when the caller sent a GST field —
     // otherwise the row's stored values stay untouched.
     let gstinPatch: Partial<{ gstin: string | null; gstStateCode: string | null; gstRegType: "REGULAR" | "COMPOSITION" | "SEZ" | "UNREGISTERED" | null }> | null = null;
@@ -163,6 +188,7 @@ export async function PUT(
                 }),
                 ...(body.noDiscount !== undefined && { noDiscount: body.noDiscount }),
                 ...(body.customerGroupId !== undefined && { customerGroupId: body.customerGroupId }),
+                ...(body.isActive !== undefined && { isActive: body.isActive }),
             },
         });
         return NextResponse.json(person);
@@ -179,14 +205,9 @@ export async function DELETE(
     if (response) return response;
 
     const { id } = await params;
-    const hasDevices = await prisma.device.count({ where: { account: { personId: Number(id) } } });
-    if (hasDevices > 0) {
-        return NextResponse.json({ error: "Cannot deactivate a person with devices" }, { status: 409 });
+    const result = await deleteOrDeactivatePerson(Number(id));
+    if (result.outcome === "blocked") {
+        return NextResponse.json({ error: result.reason }, { status: 409 });
     }
-
-    const person = await prisma.person.update({
-        where: { id: Number(id) },
-        data: { isActive: false },
-    });
-    return NextResponse.json(person);
+    return NextResponse.json({ ok: true, outcome: result.outcome });
 }

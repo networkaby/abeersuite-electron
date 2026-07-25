@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import axios from "axios";
 import Link from "next/link";
@@ -13,6 +13,9 @@ import { toast } from "sonner";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { formatDrCr } from "@/shared/lib/format/moneyInr";
 import { cn } from "@/shared/lib/format/utils";
+import { DEFAULT_PARTY_SORT, sortParties, type PartySort } from "@/modules/customer/lib/partySort";
+import { PartySortToggle } from "@/modules/customer/components/PartySortToggle";
+import { PartyInactiveToggle } from "@/modules/customer/components/PartyInactiveToggle";
 import { useDebouncedValue } from "@/shared/hooks";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
@@ -56,6 +59,7 @@ interface CompanyListItem {
     name: string;
     phone: string | null;
     companyReg: string | null;
+    isActive: boolean;
     _count: { customers: number; devices: number };
     account: { id: number; balance: number; normalBalance: "DEBIT" | "CREDIT" } | null;
 }
@@ -69,6 +73,7 @@ interface CompanyDetail {
     openingBalance: string | null;
     openingBalanceType: "DEBIT" | "CREDIT" | null;
     openingBalanceDate: string | null;
+    isActive: boolean;
     noDiscount: boolean;
     qualityLog: unknown;
     name: string;
@@ -97,9 +102,12 @@ export default function CompaniesPage() {
     const canManageLoyalty = hasPermissionWithScope(perms, PERMISSIONS.LOYALTY_EDIT);
     // Companies share the Contacts (customers:*) permission set — see role page.
     const canEditCompany = hasPermissionWithScope(perms, PERMISSIONS.CUSTOMERS_EDIT);
+    const canDeleteCompany = hasPermissionWithScope(perms, PERMISSIONS.CUSTOMERS_DELETE);
     // Without this grant the list hides suppliers (Sundry Creditors) — customers only.
     const canSeeCreditors = hasPermissionWithScope(perms, PERMISSIONS.CUSTOMERS_VIEW_CREDITORS);
     const [companies, setCompanies] = useState<CompanyListItem[]>([]);
+    const [sort, setSort] = useState<PartySort>(DEFAULT_PARTY_SORT);
+    const [showInactive, setShowInactive] = useState(false);
     const [search, setSearch] = useState("");
     const [selectedId, setSelectedId] = useState<number | null>(null);
     const [detail, setDetail] = useState<CompanyDetail | null>(null);
@@ -125,13 +133,14 @@ export default function CompaniesPage() {
                 params: {
                     ...(q ? { q } : {}),
                     ...(canSeeCreditors ? {} : { hideCreditors: 1 }),
+                    ...(showInactive ? { includeInactive: 1 } : {}),
                 },
             });
             setCompanies(response.data);
         } catch {
             toast.error("Failed to load companies");
         }
-    }, [canSeeCreditors]);
+    }, [canSeeCreditors, showInactive]);
 
     useEffect(() => { loadList(debouncedSearch.trim()); }, [loadList, debouncedSearch]);
 
@@ -204,6 +213,19 @@ export default function CompaniesPage() {
             .catch(() => {});
     }, [selectedId]);
 
+    // Deleted (hard) or deactivated — either way it drops out of the isActive
+    // list, so close the detail and reload.
+    const handleDeleted = useCallback(() => {
+        setSelectedId(null);
+        loadList(search.trim());
+    }, [loadList, search]);
+
+    // Reactivated — refresh both the open detail and the list (badge/row updates).
+    const handleReactivated = useCallback(() => {
+        refetchDetail();
+        loadList(search.trim());
+    }, [refetchDetail, loadList, search]);
+
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!form.name.trim()) { toast.error("Company name is required"); return; }
@@ -237,6 +259,11 @@ export default function CompaniesPage() {
         }
     };
 
+    const sortedCompanies = useMemo(
+        () => sortParties(companies, sort, { name: (c) => c.name, balance: (c) => c.account?.balance ?? 0 }),
+        [companies, sort],
+    );
+
     return (
         <div className="flex h-full flex-col overflow-hidden bg-card">
             <header className="flex shrink-0 items-center gap-2 border-b bg-card px-4 py-2">
@@ -259,15 +286,25 @@ export default function CompaniesPage() {
                     onSearchChange={setSearch}
                     searchPlaceholder="Search name, phone, reg…"
                     onAdd={() => setShowCreate(true)}
+                    toolbar={
+                        <>
+                            <PartySortToggle sort={sort} onChange={setSort} />
+                            <PartyInactiveToggle checked={showInactive} onChange={setShowInactive} visible={canDeleteCompany} />
+                        </>
+                    }
                     isEmpty={companies.length === 0}
                     emptyMessage={search ? "No matches" : "No companies yet"}
                 >
-                    {companies.map((company) => (
+                    {sortedCompanies.map((company) => (
                         <Button
                             key={company.id}
                             type="button"
                             variant="ghost"
-                            className={`h-auto w-full justify-start rounded-none border-b px-4 py-3 ${selectedId === company.id ? "bg-muted" : ""}`}
+                            className={cn(
+                                "h-auto w-full justify-start rounded-none border-b px-4 py-3",
+                                selectedId === company.id && "bg-muted",
+                                !company.isActive && "opacity-50",
+                            )}
                             onClick={() => setSelectedId(company.id)}
                         >
                             <div className="flex w-full items-center gap-3 text-left">
@@ -372,8 +409,11 @@ export default function CompaniesPage() {
                                     <CompanyProfileTab
                                         detail={detail}
                                         canEditCompany={canEditCompany}
+                                        canDeleteCompany={canDeleteCompany}
                                         onSaved={refetchDetail}
                                         onConverted={(personId) => router.push(`/office/customers/all?personId=${personId}`)}
+                                        onDeleted={handleDeleted}
+                                        onReactivated={handleReactivated}
                                     />
                                 )}
 

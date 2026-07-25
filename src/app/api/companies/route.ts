@@ -28,21 +28,33 @@ export async function GET(req: Request) {
     // A role without `customers:view:creditors` passes this to hide suppliers
     // (Sundry Creditors) from the browse list — debtors and un-grouped stay in.
     const hideCreditors = searchParams.get("hideCreditors") === "1";
+    // Browse-only "Show inactive" toggle — see /api/person for the mirror.
+    const includeInactive = searchParams.get("includeInactive") === "1";
 
     try {
         const companies = await prisma.company.findMany({
             where: {
-                isActive: true,
-                ...(hideCreditors
-                    ? { NOT: { account: { is: { group: { is: { name: ACCOUNT_GROUPS.SUNDRY_CREDITORS } } } } } }
-                    : {}),
-                ...(q ? {
-                    OR: [
-                        { name: { contains: q, mode: "insensitive" } },
-                        { phones: { some: { phone: { contains: q } } } },
-                        { companyReg: { contains: q, mode: "insensitive" } },
-                    ],
-                } : {}),
+                AND: [
+                    // "Show inactive" surfaces plain deactivated parties only — merge/convert
+                    // tombstones stay exclusively in the Customer Tools Trash, their own
+                    // recovery path (hard-delete, not reactivate-in-place).
+                    includeInactive
+                        ? { OR: [
+                            { isActive: true },
+                            { isActive: false, mergedIntoCompanyId: null, convertedToPersonId: null },
+                        ] }
+                        : { isActive: true },
+                    ...(hideCreditors
+                        ? [{ NOT: { account: { is: { group: { is: { name: ACCOUNT_GROUPS.SUNDRY_CREDITORS } } } } } }]
+                        : []),
+                    ...(q ? [{
+                        OR: [
+                            { name: { contains: q, mode: "insensitive" as const } },
+                            { phones: { some: { phone: { contains: q } } } },
+                            { companyReg: { contains: q, mode: "insensitive" as const } },
+                        ],
+                    }] : []),
+                ],
             },
             orderBy: { createdAt: "desc" },
             include: {

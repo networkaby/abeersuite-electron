@@ -26,6 +26,8 @@ import { LoyaltyPanel } from "@/modules/loyalty/components/LoyaltyPanel";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { formatDrCr } from "@/shared/lib/format/moneyInr";
 import { cn } from "@/shared/lib/format/utils";
+import { DEFAULT_PARTY_SORT, sortParties, type PartySort } from "@/modules/customer/lib/partySort";
+import { PartySortToggle } from "@/modules/customer/components/PartySortToggle";
 import { PRIORITY_META } from "@/utils/constants";
 import { initials } from "@/modules/customer/lib/initials";
 import type { Ticket, CustomerDevice } from "@/modules/customer/lib/customerTypes";
@@ -37,6 +39,7 @@ import CompanyLinkPanel from "@/modules/customer/components/CompanyLinkPanel";
 import PersonProfileTab from "@/modules/customer/components/PersonProfileTab";
 import CompanyProfileTab from "@/modules/customer/components/CompanyProfileTab";
 import CustomerQualityTab from "@/modules/customer/components/CustomerQualityTab";
+import { PartyInactiveToggle } from "@/modules/customer/components/PartyInactiveToggle";
 
 type AccountRef = { id: number; balance: number; normalBalance: "DEBIT" | "CREDIT" } | null;
 
@@ -44,6 +47,7 @@ type PersonRow = {
     id: number;
     name: string;
     phone: string | null;
+    isActive: boolean;
     account: AccountRef;
 };
 
@@ -51,12 +55,13 @@ type CompanyRow = {
     id: number;
     name: string;
     phone: string | null;
+    isActive: boolean;
     account: AccountRef;
 };
 
 type CombinedListItem =
-    | { kind: "person"; id: number; name: string; phone: string | null; accountId: number | null; account: AccountRef }
-    | { kind: "company"; id: number; name: string; phone: string | null; accountId: number | null; account: AccountRef };
+    | { kind: "person"; id: number; name: string; phone: string | null; isActive: boolean; accountId: number | null; account: AccountRef }
+    | { kind: "company"; id: number; name: string; phone: string | null; isActive: boolean; accountId: number | null; account: AccountRef };
 
 type PersonDetail = {
     id: number;
@@ -67,6 +72,7 @@ type PersonDetail = {
     openingBalance: string | null;
     openingBalanceType: "DEBIT" | "CREDIT" | null;
     openingBalanceDate: string | null;
+    isActive: boolean;
     noDiscount: boolean;
     qualityLog: unknown;
     name: string;
@@ -89,6 +95,7 @@ type CompanyDetail = {
     openingBalance: string | null;
     openingBalanceType: "DEBIT" | "CREDIT" | null;
     openingBalanceDate: string | null;
+    isActive: boolean;
     noDiscount: boolean;
     qualityLog: unknown;
     name: string;
@@ -116,6 +123,7 @@ export default function AllCustomersPage() {
     const { data: session } = useSession();
     const [people, setPeople] = useState<PersonRow[]>([]);
     const [companies, setCompanies] = useState<CompanyRow[]>([]);
+    const [sort, setSort] = useState<PartySort>(DEFAULT_PARTY_SORT);
     const [search, setSearch] = useState("");
     const [selected, setSelected] = useState<SelectedItem | null>(null);
     const [personDetail, setPersonDetail] = useState<PersonDetail | null>(null);
@@ -127,12 +135,14 @@ export default function AllCustomersPage() {
     const [txLoading, setTxLoading] = useState(false);
     const [personLinkKey, setPersonLinkKey] = useState(0);
     const [companyLinkKey, setCompanyLinkKey] = useState(0);
+    const [showInactive, setShowInactive] = useState(false);
 
     const perms = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
     // hasPermissionWithScope covers admin:bypass AND the CRUD ladder (only the
     // highest rung is stored — e.g. customers:delete implies edit).
     const canManageUsers = hasPermissionWithScope(perms, PERMISSIONS.USERS_EDIT);
     const canEditCustomer = hasPermissionWithScope(perms, PERMISSIONS.CUSTOMERS_EDIT);
+    const canDeleteCustomer = hasPermissionWithScope(perms, PERMISSIONS.CUSTOMERS_DELETE);
     const canManageLoyalty = hasPermissionWithScope(perms, PERMISSIONS.LOYALTY_EDIT);
     // Without this grant both lists hide suppliers (Sundry Creditors) — customers only.
     const canSeeCreditors = hasPermissionWithScope(perms, PERMISSIONS.CUSTOMERS_VIEW_CREDITORS);
@@ -140,14 +150,16 @@ export default function AllCustomersPage() {
     // Server-side search across both lists. The old in-browser filter only saw
     // the first page of people the API returned, so matches beyond it vanished.
     const debouncedSearch = useDebouncedValue(search, 300);
-    useEffect(() => {
+    const reloadLists = useCallback(() => {
         const params = {
             ...(debouncedSearch.trim() ? { q: debouncedSearch.trim() } : {}),
             ...(canSeeCreditors ? {} : { hideCreditors: 1 }),
+            ...(showInactive ? { includeInactive: 1 } : {}),
         };
         axios.get<PersonRow[]>("/api/person", { params }).then((res) => setPeople(res.data)).catch(() => setPeople([]));
         axios.get<CompanyRow[]>("/api/companies", { params }).then((res) => setCompanies(res.data)).catch(() => setCompanies([]));
-    }, [debouncedSearch, canSeeCreditors]);
+    }, [debouncedSearch, canSeeCreditors, showInactive]);
+    useEffect(() => { reloadLists(); }, [reloadLists]);
 
     // Pre-select a row from URL query params on mount.  Day Book / register
     // tables link here as /office/customers/all?personId=<id> or ?companyId=<id>
@@ -155,10 +167,10 @@ export default function AllCustomersPage() {
     // the right customer already selected.
     const searchParams = useSearchParams();
     useEffect(() => {
-        const personId  = searchParams.get("personId");
+        const personId = searchParams.get("personId");
         const companyId = searchParams.get("companyId");
         // eslint-disable-next-line react-hooks/set-state-in-effect
-        if (personId)  setSelected({ kind: "person",  id: Number(personId) });
+        if (personId) setSelected({ kind: "person", id: Number(personId) });
         else if (companyId) setSelected({ kind: "company", id: Number(companyId) });
         // Intentionally only react to query-param changes — list-click selection
         // is owned by the existing onClick handler below.
@@ -236,7 +248,7 @@ export default function AllCustomersPage() {
         axios
             .get<CustomerTransactions>(url)
             .then((r) => setTransactions(r.data))
-            .catch(() => {})
+            .catch(() => { })
             .finally(() => setTxLoading(false));
     }, [selected, personTab, companyTab, transactions]);
 
@@ -258,7 +270,7 @@ export default function AllCustomersPage() {
         setPersonLinkKey(k => k + 1);
         axios.get<PersonDetail>(`/api/person/${selected.id}`)
             .then((res) => setPersonDetail(res.data))
-            .catch(() => {});
+            .catch(() => { });
     }, [selected]);
 
     const handleCompanyLinked = useCallback(() => {
@@ -266,29 +278,51 @@ export default function AllCustomersPage() {
         setCompanyLinkKey(k => k + 1);
         axios.get<CompanyDetail>(`/api/companies/${selected.id}`)
             .then((res) => setCompanyDetail(res.data))
-            .catch(() => {});
+            .catch(() => { });
     }, [selected]);
 
     const refetchPersonDetail = useCallback(() => {
         if (!selected || selected.kind !== "person") return;
         axios.get<PersonDetail>(`/api/person/${selected.id}`)
             .then((res) => setPersonDetail(res.data))
-            .catch(() => {});
+            .catch(() => { });
     }, [selected]);
 
     const refetchCompanyDetail = useCallback(() => {
         if (!selected || selected.kind !== "company") return;
         axios.get<CompanyDetail>(`/api/companies/${selected.id}`)
             .then((res) => setCompanyDetail(res.data))
-            .catch(() => {});
+            .catch(() => { });
     }, [selected]);
 
+    // Deleted (hard) or deactivated — either way it drops out of the isActive
+    // lists, so close the detail and reload both.
+    const handleDeleted = useCallback(() => {
+        setSelected(null);
+        reloadLists();
+    }, [reloadLists]);
+
+    // Reactivated — refresh both the open detail and the lists (badge/row updates).
+    const handlePersonReactivated = useCallback(() => {
+        refetchPersonDetail();
+        reloadLists();
+    }, [refetchPersonDetail, reloadLists]);
+
+    const handleCompanyReactivated = useCallback(() => {
+        refetchCompanyDetail();
+        reloadLists();
+    }, [refetchCompanyDetail, reloadLists]);
+
     const merged = useMemo<CombinedListItem[]>(
-        () => [
-            ...people.map((p) => ({ kind: "person" as const, id: p.id, name: p.name, phone: p.phone, accountId: p.account?.id ?? null, account: p.account })),
-            ...companies.map((c) => ({ kind: "company" as const, id: c.id, name: c.name, phone: c.phone, accountId: c.account?.id ?? null, account: c.account })),
-        ],
-        [people, companies]
+        () => sortParties(
+            [
+                ...people.map((p) => ({ kind: "person" as const, id: p.id, name: p.name, phone: p.phone, isActive: p.isActive, accountId: p.account?.id ?? null, account: p.account })),
+                ...companies.map((c) => ({ kind: "company" as const, id: c.id, name: c.name, phone: c.phone, isActive: c.isActive, accountId: c.account?.id ?? null, account: c.account })),
+            ],
+            sort,
+            { name: (item) => item.name, balance: (item) => item.account?.balance ?? 0 },
+        ),
+        [people, companies, sort]
     );
 
     const personTickets: (Ticket & { device: CustomerDevice })[] = personDetail
@@ -316,355 +350,376 @@ export default function AllCustomersPage() {
                 </nav>
             </header>
             <div className="flex flex-1 overflow-hidden">
-            <EntityListPanel
-                title="All Customers"
-                icon={<User size={15} className="text-primary" />}
-                count={people.length + companies.length}
-                search={search}
-                onSearchChange={setSearch}
-                searchPlaceholder="Search name or phone…"
-                isEmpty={merged.length === 0}
-                emptyMessage={search ? "No matches" : "No customers yet"}
-            >
-                {merged.map((item) => {
-                    const Icon = item.kind === "person" ? User : Building2;
-                    const isActive = selected?.kind === item.kind && selected.id === item.id;
-                    return (
-                        <Button
-                            key={`${item.kind}-${item.id}`}
-                            asChild
-                            variant="ghost"
-                            className={`h-auto w-full justify-start rounded-none border-b px-4 py-3 ${isActive ? "bg-muted" : ""}`}
-                        >
-                            <Link
-                                href={`/office/customers/${item.accountId ?? "#"}`}
-                                onClick={(e) => {
-                                    if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey) return;
-                                    e.preventDefault();
-                                    setSelected({ kind: item.kind, id: item.id });
-                                }}
+                <EntityListPanel
+                    title="All Customers"
+                    icon={<User size={15} className="text-primary" />}
+                    count={people.length + companies.length}
+                    search={search}
+                    onSearchChange={setSearch}
+                    searchPlaceholder="Search name or phone…"
+                    toolbar={
+                        <div className="flex justify-between">
+                            <PartySortToggle sort={sort} onChange={setSort} />
+                            <PartyInactiveToggle checked={showInactive} onChange={setShowInactive} visible={canDeleteCustomer} />
+                        </div>
+                    }
+                    isEmpty={merged.length === 0}
+                    emptyMessage={search ? "No matches" : "No customers yet"}
+                >
+                    {merged.map((item) => {
+                        const Icon = item.kind === "person" ? User : Building2;
+                        const isActive = selected?.kind === item.kind && selected.id === item.id;
+                        return (
+                            <Button
+                                key={`${item.kind}-${item.id}`}
+                                asChild
+                                variant="ghost"
+                                className={cn(
+                                    "h-auto w-full justify-start rounded-none border-b px-4 py-3",
+                                    isActive && "bg-muted",
+                                    !item.isActive && "opacity-50",
+                                )}
                             >
-                                <div className="flex w-full items-center gap-3 text-left">
-                                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-none bg-muted text-xs font-bold">
-                                        {initials(item.name)}
-                                    </div>
-                                    <div className="min-w-0 flex-1">
-                                        <p className="truncate text-sm font-medium">{item.name}</p>
-                                        <div className="mt-0.5 flex items-center justify-between gap-2">
-                                            <p className="truncate text-xs text-muted-foreground">{item.phone || "No phone"}</p>
-                                            {item.account && (
-                                                <span
-                                                    className={cn(
-                                                        "shrink-0 rounded px-1.5 py-0.5 text-xs font-mono font-medium",
-                                                        item.account.balance === 0
-                                                            ? "bg-muted text-muted-foreground"
-                                                            : item.account.balance < 0
-                                                                ? "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300"
-                                                                : "bg-muted text-foreground",
-                                                    )}
-                                                >
-                                                    {formatDrCr(item.account.balance, item.account.normalBalance)}
-                                                </span>
-                                            )}
+                                <Link
+                                    href={`/office/customers/${item.accountId ?? "#"}`}
+                                    onClick={(e) => {
+                                        if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey) return;
+                                        e.preventDefault();
+                                        setSelected({ kind: item.kind, id: item.id });
+                                    }}
+                                >
+                                    <div className="flex w-full items-center gap-3 text-left">
+                                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-none bg-muted text-xs font-bold">
+                                            {initials(item.name)}
                                         </div>
-                                    </div>
-                                    <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
-                                        <Icon size={10} className="mr-1" />
-                                        {item.kind === "person" ? "Person" : "Company"}
-                                    </Badge>
-                                </div>
-                            </Link>
-                        </Button>
-                    );
-                })}
-            </EntityListPanel>
-
-            <section className="flex flex-1 bg-muted/30">
-                {!selected && (
-                    <CustomerEmptyState message="Select a person or company from the list to open details." />
-                )}
-
-                {selected && detailLoading && (
-                    <div className="m-auto text-muted-foreground">
-                        <Loader2 size={20} className="animate-spin" />
-                    </div>
-                )}
-
-                {selected && !detailLoading && personDetail && (
-                    <div className="flex w-full flex-col overflow-hidden rounded-lg border bg-card">
-                        <div className="border-b bg-card px-6 py-4">
-                            <div className="flex items-start justify-between gap-4">
-                                <div className="flex items-center gap-3">
-                                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-none bg-primary text-sm font-bold text-primary-foreground">
-                                        {initials(personDetail.name)}
-                                    </div>
-                                    <div>
-                                        <h2 className="text-xl font-bold">{personDetail.name}</h2>
-                                        <div className="mt-1 flex flex-wrap items-center gap-3">
-                                            {personDetail.phone && <span className="flex items-center gap-1 text-xs text-muted-foreground"><Phone size={11} />{personDetail.phone}</span>}
-                                            {personDetail.address && <span className="flex items-center gap-1 text-xs text-muted-foreground"><MapPin size={11} />{personDetail.address}</span>}
-                                            {personDetail.email && <span className="text-xs text-muted-foreground">{personDetail.email}</span>}
-                                            <span className="text-xs text-muted-foreground">Since {formatDate(personDetail.createdAt)}</span>
+                                        <div className="min-w-0 flex-1">
+                                            <p className="truncate text-sm font-medium">{item.name}</p>
+                                            <div className="mt-0.5 flex items-center justify-between gap-2">
+                                                <p className="truncate text-xs text-muted-foreground">{item.phone || "No phone"}</p>
+                                                {item.account && (
+                                                    <span
+                                                        className={cn(
+                                                            "shrink-0 rounded px-1.5 py-0.5 text-xs font-mono font-medium",
+                                                            item.account.balance === 0
+                                                                ? "bg-muted text-muted-foreground"
+                                                                : item.account.balance < 0
+                                                                    ? "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300"
+                                                                    : "bg-muted text-foreground",
+                                                        )}
+                                                    >
+                                                        {formatDrCr(item.account.balance, item.account.normalBalance)}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
+                                        {!item.isActive && (
+                                            <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                                                Inactive
+                                            </span>
+                                        )}
+                                        <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
+                                            <Icon size={10} className="mr-1" />
+                                            {item.kind === "person" ? "Person" : "Company"}
+                                        </Badge>
                                     </div>
-                                </div>
-                                <Button asChild type="button" variant="outline" size="icon-sm">
-                                    <Link href={`/office/social/users/${personDetail.id}`} title="Social profile">
-                                        <ExternalLink size={14} />
-                                    </Link>
-                                </Button>
-                            </div>
-                            <div className="mt-3 flex flex-wrap gap-2">
-                                <Badge variant="outline"><Smartphone size={11} /> {personDetail.devices.length} device{personDetail.devices.length !== 1 ? "s" : ""}</Badge>
-                                <Badge variant="outline"><Building2 size={11} /> {personDetail.companies.length} compan{personDetail.companies.length !== 1 ? "ies" : "y"}</Badge>
-                                <Badge variant="outline">{personTickets.length} ticket{personTickets.length !== 1 ? "s" : ""}</Badge>
-                            </div>
+                                </Link>
+                            </Button>
+                        );
+                    })}
+                </EntityListPanel>
+
+                <section className="flex flex-1 bg-muted/30">
+                    {!selected && (
+                        <CustomerEmptyState message="Select a person or company from the list to open details." />
+                    )}
+
+                    {selected && detailLoading && (
+                        <div className="m-auto text-muted-foreground">
+                            <Loader2 size={20} className="animate-spin" />
                         </div>
+                    )}
 
-                        <div className="border-b bg-card px-6">
-                            <div className="flex gap-2 py-2">
-                                {(["transactions", "profile", "tickets", "devices", "companies", "loyalty", "quality"] as PersonTab[]).map((item) => (
-                                    <Button key={item} type="button" size="sm" variant={personTab === item ? "default" : "ghost"} onClick={() => handlePersonTabChange(item)}>
-                                        {item}
+                    {selected && !detailLoading && personDetail && (
+                        <div className="flex w-full flex-col overflow-hidden rounded-lg border bg-card">
+                            <div className="border-b bg-card px-6 py-4">
+                                <div className="flex items-start justify-between gap-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-none bg-primary text-sm font-bold text-primary-foreground">
+                                            {initials(personDetail.name)}
+                                        </div>
+                                        <div>
+                                            <h2 className="text-xl font-bold">{personDetail.name}</h2>
+                                            <div className="mt-1 flex flex-wrap items-center gap-3">
+                                                {personDetail.phone && <span className="flex items-center gap-1 text-xs text-muted-foreground"><Phone size={11} />{personDetail.phone}</span>}
+                                                {personDetail.address && <span className="flex items-center gap-1 text-xs text-muted-foreground"><MapPin size={11} />{personDetail.address}</span>}
+                                                {personDetail.email && <span className="text-xs text-muted-foreground">{personDetail.email}</span>}
+                                                <span className="text-xs text-muted-foreground">Since {formatDate(personDetail.createdAt)}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <Button asChild type="button" variant="outline" size="icon-sm">
+                                        <Link href={`/office/social/users/${personDetail.id}`} title="Social profile">
+                                            <ExternalLink size={14} />
+                                        </Link>
                                     </Button>
-                                ))}
+                                </div>
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                    <Badge variant="outline"><Smartphone size={11} /> {personDetail.devices.length} device{personDetail.devices.length !== 1 ? "s" : ""}</Badge>
+                                    <Badge variant="outline"><Building2 size={11} /> {personDetail.companies.length} compan{personDetail.companies.length !== 1 ? "ies" : "y"}</Badge>
+                                    <Badge variant="outline">{personTickets.length} ticket{personTickets.length !== 1 ? "s" : ""}</Badge>
+                                </div>
                             </div>
-                        </div>
 
-                        <div className={`flex-1 overflow-y-auto ${personTab === "transactions" ? "" : "p-6"}`}>
-                            {personTab === "profile" && (
-                                <PersonProfileTab
-                                    detail={personDetail}
-                                    canEditCustomer={canEditCustomer}
-                                    canManageUsers={canManageUsers}
-                                    onSaved={refetchPersonDetail}
-                                    onConverted={(companyId) => setSelected({ kind: "company", id: companyId })}
-                                />
-                            )}
+                            <div className="border-b bg-card px-6">
+                                <div className="flex gap-2 py-2">
+                                    {(["transactions", "profile", "tickets", "devices", "companies", "loyalty", "quality"] as PersonTab[]).map((item) => (
+                                        <Button key={item} type="button" size="sm" variant={personTab === item ? "default" : "ghost"} onClick={() => handlePersonTabChange(item)}>
+                                            {item}
+                                        </Button>
+                                    ))}
+                                </div>
+                            </div>
 
-                            {personTab === "tickets" && (
-                                personTickets.length === 0 ? (
-                                    <CustomerEmptyState icon={<span className="text-3xl">🎫</span>} message="No tickets for this customer yet" />
-                                ) : (
-                                    <Card>
-                                        <CardContent className="px-0 pt-0">
-                                            <Table>
-                                                <TableHeader>
-                                                    <TableRow>
-                                                        <TableHead>Ticket</TableHead>
-                                                        <TableHead>Device</TableHead>
-                                                        <TableHead>Status</TableHead>
-                                                        <TableHead>Priority</TableHead>
-                                                        <TableHead>Date</TableHead>
-                                                    </TableRow>
-                                                </TableHeader>
-                                                <TableBody>
-                                                    {personTickets.map((ticket) => (
-                                                        <TableRow key={ticket.id}>
-                                                            <TableCell className="font-mono text-xs text-muted-foreground">#{ticket.id}</TableCell>
-                                                            <TableCell>
-                                                                <span className="text-sm font-medium">{ticket.device.brand} {ticket.device.model}</span>
-                                                                <span className="block text-xs text-muted-foreground">{ticket.device.type}</span>
-                                                            </TableCell>
-                                                            <TableCell><Badge className={ticket.ticketStatus.color}>{ticket.ticketStatus.label}</Badge></TableCell>
-                                                            <TableCell><Badge className={PRIORITY_META[ticket.priority]?.color ?? ""}>{PRIORITY_META[ticket.priority]?.label ?? ticket.priority}</Badge></TableCell>
-                                                            <TableCell className="text-xs text-muted-foreground">{formatDate(ticket.createdAt)}</TableCell>
+                            <div className={`flex-1 overflow-y-auto ${personTab === "transactions" ? "" : "p-6"}`}>
+                                {personTab === "profile" && (
+                                    <PersonProfileTab
+                                        detail={personDetail}
+                                        canEditCustomer={canEditCustomer}
+                                        canManageUsers={canManageUsers}
+                                        canDeleteCustomer={canDeleteCustomer}
+                                        onSaved={refetchPersonDetail}
+                                        onConverted={(companyId) => setSelected({ kind: "company", id: companyId })}
+                                        onDeleted={handleDeleted}
+                                        onReactivated={handlePersonReactivated}
+                                    />
+                                )}
+
+                                {personTab === "tickets" && (
+                                    personTickets.length === 0 ? (
+                                        <CustomerEmptyState icon={<span className="text-3xl">🎫</span>} message="No tickets for this customer yet" />
+                                    ) : (
+                                        <Card>
+                                            <CardContent className="px-0 pt-0">
+                                                <Table>
+                                                    <TableHeader>
+                                                        <TableRow>
+                                                            <TableHead>Ticket</TableHead>
+                                                            <TableHead>Device</TableHead>
+                                                            <TableHead>Status</TableHead>
+                                                            <TableHead>Priority</TableHead>
+                                                            <TableHead>Date</TableHead>
                                                         </TableRow>
-                                                    ))}
-                                                </TableBody>
-                                            </Table>
-                                        </CardContent>
-                                    </Card>
-                                )
-                            )}
+                                                    </TableHeader>
+                                                    <TableBody>
+                                                        {personTickets.map((ticket) => (
+                                                            <TableRow key={ticket.id}>
+                                                                <TableCell className="font-mono text-xs text-muted-foreground">#{ticket.id}</TableCell>
+                                                                <TableCell>
+                                                                    <span className="text-sm font-medium">{ticket.device.brand} {ticket.device.model}</span>
+                                                                    <span className="block text-xs text-muted-foreground">{ticket.device.type}</span>
+                                                                </TableCell>
+                                                                <TableCell><Badge className={ticket.ticketStatus.color}>{ticket.ticketStatus.label}</Badge></TableCell>
+                                                                <TableCell><Badge className={PRIORITY_META[ticket.priority]?.color ?? ""}>{PRIORITY_META[ticket.priority]?.label ?? ticket.priority}</Badge></TableCell>
+                                                                <TableCell className="text-xs text-muted-foreground">{formatDate(ticket.createdAt)}</TableCell>
+                                                            </TableRow>
+                                                        ))}
+                                                    </TableBody>
+                                                </Table>
+                                            </CardContent>
+                                        </Card>
+                                    )
+                                )}
 
-                            {personTab === "devices" && (
-                                personDetail.devices.length === 0 ? (
-                                    <CustomerEmptyState icon={<span className="text-3xl">📱</span>} message="No devices registered yet" />
-                                ) : (
-                                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                                        {personDetail.devices.map((device) => (
-                                            <Card key={device.id}>
-                                                <CardContent className="pt-4">
-                                                    <div className="flex items-start gap-3">
-                                                        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted">
-                                                            <Smartphone size={16} className="text-muted-foreground" />
+                                {personTab === "devices" && (
+                                    personDetail.devices.length === 0 ? (
+                                        <CustomerEmptyState icon={<span className="text-3xl">📱</span>} message="No devices registered yet" />
+                                    ) : (
+                                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                                            {personDetail.devices.map((device) => (
+                                                <Card key={device.id}>
+                                                    <CardContent className="pt-4">
+                                                        <div className="flex items-start gap-3">
+                                                            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted">
+                                                                <Smartphone size={16} className="text-muted-foreground" />
+                                                            </div>
+                                                            <div className="min-w-0">
+                                                                <p className="truncate text-sm font-semibold">{device.brand} {device.model}</p>
+                                                                <p className="text-xs text-muted-foreground">{device.type}</p>
+                                                            </div>
                                                         </div>
-                                                        <div className="min-w-0">
-                                                            <p className="truncate text-sm font-semibold">{device.brand} {device.model}</p>
-                                                            <p className="text-xs text-muted-foreground">{device.type}</p>
-                                                        </div>
-                                                    </div>
-                                                    <p className="mt-3 text-xs text-muted-foreground">{device.tickets.length} ticket{device.tickets.length !== 1 ? "s" : ""}</p>
-                                                </CardContent>
-                                            </Card>
-                                        ))}
-                                    </div>
-                                )
-                            )}
+                                                        <p className="mt-3 text-xs text-muted-foreground">{device.tickets.length} ticket{device.tickets.length !== 1 ? "s" : ""}</p>
+                                                    </CardContent>
+                                                </Card>
+                                            ))}
+                                        </div>
+                                    )
+                                )}
 
-                            {personTab === "companies" && (
-                                <CustomerLinkPanel
-                                    key={personLinkKey}
-                                    customerId={personDetail.id}
-                                    initialLinks={personDetail.companies}
-                                    onLinked={handlePersonLinked}
-                                />
-                            )}
+                                {personTab === "companies" && (
+                                    <CustomerLinkPanel
+                                        key={personLinkKey}
+                                        customerId={personDetail.id}
+                                        initialLinks={personDetail.companies}
+                                        onLinked={handlePersonLinked}
+                                    />
+                                )}
 
-                            {personTab === "loyalty" && (
-                                <LoyaltyPanel accountId={personDetail.accountId} canManage={canManageLoyalty} />
-                            )}
+                                {personTab === "loyalty" && (
+                                    <LoyaltyPanel accountId={personDetail.accountId} canManage={canManageLoyalty} />
+                                )}
 
-                            {personTab === "quality" && (
-                                <CustomerQualityTab
-                                    key={`pq-${personDetail.id}`}
-                                    party={{ kind: "person", id: personDetail.id }}
-                                    initialNoDiscount={personDetail.noDiscount}
-                                    initialQualityLog={personDetail.qualityLog}
-                                    canEditCustomer={canEditCustomer}
-                                    onSaved={refetchPersonDetail}
-                                />
-                            )}
+                                {personTab === "quality" && (
+                                    <CustomerQualityTab
+                                        key={`pq-${personDetail.id}`}
+                                        party={{ kind: "person", id: personDetail.id }}
+                                        initialNoDiscount={personDetail.noDiscount}
+                                        initialQualityLog={personDetail.qualityLog}
+                                        canEditCustomer={canEditCustomer}
+                                        onSaved={refetchPersonDetail}
+                                    />
+                                )}
 
-                            {personTab === "transactions" && (
-                                txLoading ? (
-                                    <div className="flex items-center justify-center py-16 text-muted-foreground"><Loader2 size={20} className="animate-spin" /></div>
-                                ) : !transactions ? null : transactions.invVouchers.length === 0 ? (
-                                    <CustomerEmptyState icon={<span className="text-3xl">🧾</span>} message="No transactions found" />
-                                ) : (
-                                    <TransactionsTable invVouchers={transactions.invVouchers} />
-                                )
-                            )}
+                                {personTab === "transactions" && (
+                                    txLoading ? (
+                                        <div className="flex items-center justify-center py-16 text-muted-foreground"><Loader2 size={20} className="animate-spin" /></div>
+                                    ) : !transactions ? null : transactions.invVouchers.length === 0 ? (
+                                        <CustomerEmptyState icon={<span className="text-3xl">🧾</span>} message="No transactions found" />
+                                    ) : (
+                                        <TransactionsTable invVouchers={transactions.invVouchers} />
+                                    )
+                                )}
+                            </div>
                         </div>
-                    </div>
-                )}
+                    )}
 
-                {selected && !detailLoading && companyDetail && (
-                    <div className="flex w-full flex-col overflow-hidden rounded-lg border bg-card">
-                        <div className="border-b bg-card px-6 py-4">
-                            <div className="flex items-start justify-between gap-4">
-                                <div className="flex items-center gap-3">
-                                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-none bg-primary text-sm font-bold text-primary-foreground">
-                                        {initials(companyDetail.name)}
-                                    </div>
-                                    <div>
-                                        <h2 className="text-xl font-bold">{companyDetail.name}</h2>
-                                        <div className="mt-1 flex flex-wrap items-center gap-3">
-                                            {companyDetail.phone && <span className="flex items-center gap-1 text-xs text-muted-foreground"><Phone size={11} />{companyDetail.phone}</span>}
-                                            {companyDetail.address && <span className="flex items-center gap-1 text-xs text-muted-foreground"><MapPin size={11} />{companyDetail.address}</span>}
-                                            {companyDetail.email && <span className="text-xs text-muted-foreground">{companyDetail.email}</span>}
-                                            {companyDetail.companyReg && <span className="text-xs text-muted-foreground">Reg: {companyDetail.companyReg}</span>}
-                                            <span className="text-xs text-muted-foreground">Since {formatDate(companyDetail.createdAt)}</span>
+                    {selected && !detailLoading && companyDetail && (
+                        <div className="flex w-full flex-col overflow-hidden rounded-lg border bg-card">
+                            <div className="border-b bg-card px-6 py-4">
+                                <div className="flex items-start justify-between gap-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-none bg-primary text-sm font-bold text-primary-foreground">
+                                            {initials(companyDetail.name)}
+                                        </div>
+                                        <div>
+                                            <h2 className="text-xl font-bold">{companyDetail.name}</h2>
+                                            <div className="mt-1 flex flex-wrap items-center gap-3">
+                                                {companyDetail.phone && <span className="flex items-center gap-1 text-xs text-muted-foreground"><Phone size={11} />{companyDetail.phone}</span>}
+                                                {companyDetail.address && <span className="flex items-center gap-1 text-xs text-muted-foreground"><MapPin size={11} />{companyDetail.address}</span>}
+                                                {companyDetail.email && <span className="text-xs text-muted-foreground">{companyDetail.email}</span>}
+                                                {companyDetail.companyReg && <span className="text-xs text-muted-foreground">Reg: {companyDetail.companyReg}</span>}
+                                                <span className="text-xs text-muted-foreground">Since {formatDate(companyDetail.createdAt)}</span>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                                <Button asChild type="button" variant="outline" size="icon-sm">
-                                    <Link href={`/office/social/users/${companyDetail.id}`} title="Social profile">
-                                        <ExternalLink size={14} />
-                                    </Link>
-                                </Button>
-                            </div>
-                            <div className="mt-3 flex flex-wrap gap-2">
-                                <Badge variant="outline"><User size={11} /> {companyDetail.customers.length} contact{companyDetail.customers.length !== 1 ? "s" : ""}</Badge>
-                                <Badge variant="outline"><Smartphone size={11} /> {companyDetail.devices.length} device{companyDetail.devices.length !== 1 ? "s" : ""}</Badge>
-                                <Badge variant="outline">{companyDetail.devices.flatMap((d) => d.tickets).length} ticket{companyDetail.devices.flatMap((d) => d.tickets).length !== 1 ? "s" : ""}</Badge>
-                            </div>
-                        </div>
-
-                        <div className="border-b bg-card px-6">
-                            <div className="flex gap-2 py-2">
-                                {(["transactions", "profile", "contacts", "devices", "loyalty", "quality"] as CompanyTab[]).map((item) => (
-                                    <Button key={item} type="button" size="sm" variant={companyTab === item ? "default" : "ghost"} onClick={() => handleCompanyTabChange(item)}>
-                                        {item}
+                                    <Button asChild type="button" variant="outline" size="icon-sm">
+                                        <Link href={`/office/social/users/${companyDetail.id}`} title="Social profile">
+                                            <ExternalLink size={14} />
+                                        </Link>
                                     </Button>
-                                ))}
+                                </div>
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                    <Badge variant="outline"><User size={11} /> {companyDetail.customers.length} contact{companyDetail.customers.length !== 1 ? "s" : ""}</Badge>
+                                    <Badge variant="outline"><Smartphone size={11} /> {companyDetail.devices.length} device{companyDetail.devices.length !== 1 ? "s" : ""}</Badge>
+                                    <Badge variant="outline">{companyDetail.devices.flatMap((d) => d.tickets).length} ticket{companyDetail.devices.flatMap((d) => d.tickets).length !== 1 ? "s" : ""}</Badge>
+                                </div>
+                            </div>
+
+                            <div className="border-b bg-card px-6">
+                                <div className="flex gap-2 py-2">
+                                    {(["transactions", "profile", "contacts", "devices", "loyalty", "quality"] as CompanyTab[]).map((item) => (
+                                        <Button key={item} type="button" size="sm" variant={companyTab === item ? "default" : "ghost"} onClick={() => handleCompanyTabChange(item)}>
+                                            {item}
+                                        </Button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className={`flex-1 overflow-y-auto ${companyTab === "transactions" ? "" : "p-6"}`}>
+                                {companyTab === "profile" && (
+                                    <CompanyProfileTab
+                                        detail={companyDetail}
+                                        canEditCompany={canEditCustomer}
+                                        canDeleteCompany={canDeleteCustomer}
+                                        onSaved={refetchCompanyDetail}
+                                        onConverted={(personId) => setSelected({ kind: "person", id: personId })}
+                                        onDeleted={handleDeleted}
+                                        onReactivated={handleCompanyReactivated}
+                                    />
+                                )}
+
+                                {companyTab === "contacts" && (
+                                    <CompanyLinkPanel
+                                        key={companyLinkKey}
+                                        companyId={companyDetail.id}
+                                        initialLinks={companyDetail.customers}
+                                        onLinked={handleCompanyLinked}
+                                    />
+                                )}
+
+                                {companyTab === "devices" && (
+                                    companyDetail.devices.length === 0 ? (
+                                        <CustomerEmptyState icon={<span className="text-3xl">📱</span>} message="No devices registered to this company" />
+                                    ) : (
+                                        <Card>
+                                            <CardContent className="px-0 pt-0">
+                                                <Table>
+                                                    <TableHeader>
+                                                        <TableRow>
+                                                            <TableHead>Device</TableHead>
+                                                            <TableHead>Type</TableHead>
+                                                            <TableHead>Latest Ticket</TableHead>
+                                                            <TableHead>Status</TableHead>
+                                                            <TableHead>Tickets</TableHead>
+                                                        </TableRow>
+                                                    </TableHeader>
+                                                    <TableBody>
+                                                        {companyDetail.devices.map((device) => {
+                                                            const latest = device.tickets[0];
+                                                            return (
+                                                                <TableRow key={device.id}>
+                                                                    <TableCell><span className="text-sm font-medium">{device.brand} {device.model}</span></TableCell>
+                                                                    <TableCell className="text-xs text-muted-foreground">{device.type}</TableCell>
+                                                                    <TableCell className="font-mono text-xs text-muted-foreground">{latest ? `#${latest.id}` : "—"}</TableCell>
+                                                                    <TableCell>{latest ? <Badge className={latest.ticketStatus.color}>{latest.ticketStatus.label}</Badge> : "—"}</TableCell>
+                                                                    <TableCell className="text-xs text-muted-foreground">{device.tickets.length}</TableCell>
+                                                                </TableRow>
+                                                            );
+                                                        })}
+                                                    </TableBody>
+                                                </Table>
+                                            </CardContent>
+                                        </Card>
+                                    )
+                                )}
+
+                                {companyTab === "loyalty" && (
+                                    <LoyaltyPanel accountId={companyDetail.accountId} canManage={canManageLoyalty} />
+                                )}
+
+                                {companyTab === "quality" && (
+                                    <CustomerQualityTab
+                                        key={`cq-${companyDetail.id}`}
+                                        party={{ kind: "company", id: companyDetail.id }}
+                                        initialNoDiscount={companyDetail.noDiscount}
+                                        initialQualityLog={companyDetail.qualityLog}
+                                        canEditCustomer={canEditCustomer}
+                                        onSaved={refetchCompanyDetail}
+                                    />
+                                )}
+
+                                {companyTab === "transactions" && (
+                                    txLoading ? (
+                                        <div className="flex items-center justify-center py-16 text-muted-foreground"><Loader2 size={20} className="animate-spin" /></div>
+                                    ) : !transactions ? null : transactions.invVouchers.length === 0 ? (
+                                        <CustomerEmptyState icon={<span className="text-3xl">🧾</span>} message="No transactions found" />
+                                    ) : (
+                                        <TransactionsTable invVouchers={transactions.invVouchers} />
+                                    )
+                                )}
                             </div>
                         </div>
-
-                        <div className={`flex-1 overflow-y-auto ${companyTab === "transactions" ? "" : "p-6"}`}>
-                            {companyTab === "profile" && (
-                                <CompanyProfileTab
-                                    detail={companyDetail}
-                                    canEditCompany={canEditCustomer}
-                                    onSaved={refetchCompanyDetail}
-                                    onConverted={(personId) => setSelected({ kind: "person", id: personId })}
-                                />
-                            )}
-
-                            {companyTab === "contacts" && (
-                                <CompanyLinkPanel
-                                    key={companyLinkKey}
-                                    companyId={companyDetail.id}
-                                    initialLinks={companyDetail.customers}
-                                    onLinked={handleCompanyLinked}
-                                />
-                            )}
-
-                            {companyTab === "devices" && (
-                                companyDetail.devices.length === 0 ? (
-                                    <CustomerEmptyState icon={<span className="text-3xl">📱</span>} message="No devices registered to this company" />
-                                ) : (
-                                    <Card>
-                                        <CardContent className="px-0 pt-0">
-                                            <Table>
-                                                <TableHeader>
-                                                    <TableRow>
-                                                        <TableHead>Device</TableHead>
-                                                        <TableHead>Type</TableHead>
-                                                        <TableHead>Latest Ticket</TableHead>
-                                                        <TableHead>Status</TableHead>
-                                                        <TableHead>Tickets</TableHead>
-                                                    </TableRow>
-                                                </TableHeader>
-                                                <TableBody>
-                                                    {companyDetail.devices.map((device) => {
-                                                        const latest = device.tickets[0];
-                                                        return (
-                                                            <TableRow key={device.id}>
-                                                                <TableCell><span className="text-sm font-medium">{device.brand} {device.model}</span></TableCell>
-                                                                <TableCell className="text-xs text-muted-foreground">{device.type}</TableCell>
-                                                                <TableCell className="font-mono text-xs text-muted-foreground">{latest ? `#${latest.id}` : "—"}</TableCell>
-                                                                <TableCell>{latest ? <Badge className={latest.ticketStatus.color}>{latest.ticketStatus.label}</Badge> : "—"}</TableCell>
-                                                                <TableCell className="text-xs text-muted-foreground">{device.tickets.length}</TableCell>
-                                                            </TableRow>
-                                                        );
-                                                    })}
-                                                </TableBody>
-                                            </Table>
-                                        </CardContent>
-                                    </Card>
-                                )
-                            )}
-
-                            {companyTab === "loyalty" && (
-                                <LoyaltyPanel accountId={companyDetail.accountId} canManage={canManageLoyalty} />
-                            )}
-
-                            {companyTab === "quality" && (
-                                <CustomerQualityTab
-                                    key={`cq-${companyDetail.id}`}
-                                    party={{ kind: "company", id: companyDetail.id }}
-                                    initialNoDiscount={companyDetail.noDiscount}
-                                    initialQualityLog={companyDetail.qualityLog}
-                                    canEditCustomer={canEditCustomer}
-                                    onSaved={refetchCompanyDetail}
-                                />
-                            )}
-
-                            {companyTab === "transactions" && (
-                                txLoading ? (
-                                    <div className="flex items-center justify-center py-16 text-muted-foreground"><Loader2 size={20} className="animate-spin" /></div>
-                                ) : !transactions ? null : transactions.invVouchers.length === 0 ? (
-                                    <CustomerEmptyState icon={<span className="text-3xl">🧾</span>} message="No transactions found" />
-                                ) : (
-                                    <TransactionsTable invVouchers={transactions.invVouchers} />
-                                )
-                            )}
-                        </div>
-                    </div>
-                )}
-            </section>
+                    )}
+                </section>
             </div>
         </div>
     );

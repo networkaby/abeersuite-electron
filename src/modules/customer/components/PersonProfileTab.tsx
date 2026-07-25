@@ -8,6 +8,7 @@ import AccountClassificationCard from "./AccountClassificationCard";
 import CustomerGroupCard from "./CustomerGroupCard";
 import DevicesMiniGrid from "./DevicesMiniGrid";
 import CustomerEmergencyPasswordResetCard from "./CustomerEmergencyPasswordResetCard";
+import DeletePartyCard from "./DeletePartyCard";
 
 type ProfileData = ComponentProps<typeof PersonProfileEdit>["profile"];
 
@@ -26,6 +27,7 @@ interface Props {
         openingBalance?: string | number | null;
         openingBalanceType?: "DEBIT" | "CREDIT" | null;
         openingBalanceDate?: string | null;
+        isActive?: boolean;
         name: string;
         address: string | null;
         phones: ProfileData["phones"];
@@ -34,12 +36,19 @@ interface Props {
     };
     canEditCustomer: boolean;
     canManageUsers: boolean;
+    canDeleteCustomer: boolean;
     onSaved: () => void;
     /** Navigate to the new company after a Person → Company conversion. */
     onConverted: (companyId: number) => void;
+    /** The person was deleted or deactivated — close the detail view. */
+    onDeleted: (outcome: "deleted" | "deactivated") => void;
+    /** The person was reactivated — refetch the detail. */
+    onReactivated: () => void;
 }
 
-export default function PersonProfileTab({ detail, canEditCustomer, canManageUsers, onSaved, onConverted }: Props) {
+export default function PersonProfileTab({
+    detail, canEditCustomer, canManageUsers, canDeleteCustomer, onSaved, onConverted, onDeleted, onReactivated,
+}: Props) {
     return (
         <div className="space-y-6">
             <PersonProfileEdit
@@ -95,6 +104,13 @@ export default function PersonProfileTab({ detail, canEditCustomer, canManageUse
             </fieldset>
             <DevicesMiniGrid devices={detail.devices} />
             {canManageUsers && <CustomerEmergencyPasswordResetCard customerId={detail.id} />}
+            <DeletePartyCard
+                party={{ type: "person", id: detail.id, name: detail.name }}
+                isActive={detail.isActive ?? true}
+                canDelete={canDeleteCustomer}
+                onDeleted={onDeleted}
+                onReactivated={onReactivated}
+            />
         </div>
     );
 }

@@ -16,6 +16,8 @@ interface EntityListPanelProps {
     searchPlaceholder?: string;
     onAdd?: () => void;
     addLabel?: string;
+    /** Optional row rendered under the search box — e.g. a sort toggle. */
+    toolbar?: React.ReactNode;
     emptyMessage?: string;
     isEmpty: boolean;
     className?: string;
@@ -34,6 +36,7 @@ export function EntityListPanel({
     searchPlaceholder = "Search…",
     onAdd,
     addLabel = "Add",
+    toolbar,
     emptyMessage = "No items",
     isEmpty,
     className,
@@ -65,6 +68,7 @@ export function EntityListPanel({
                         className="pl-9"
                     />
                 </div>
+                {toolbar}
             </div>
 
             {/* Force the Radix viewport's inner wrapper to block so rows fill the

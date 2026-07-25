@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { ContactConflictError } from "@/modules/customer/lib/contactWrite";
-import { handleApiError, parsePagination, validateRequest } from "@/shared/lib/api";
+import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { effectiveAccountBalance } from "@/modules/accountancy/lib/balance";
 import { defaultNormalBalanceForGroupType } from "@/modules/accountancy/lib/groupNature";
@@ -155,7 +155,9 @@ export async function GET(req: Request) {
     // browse list ONLY; the lookup path below is never filtered so party pickers
     // (repair service slips, vouchers) still find suppliers.
     const hideCreditors = searchParams.get("hideCreditors") === "1";
-    const { take, page } = parsePagination(searchParams);
+    // Browse-only "Show inactive" toggle — Trash-lite: lets a customers:delete
+    // holder find and reactivate a previously deactivated party.
+    const includeInactive = searchParams.get("includeInactive") === "1";
 
     try {
         if (phone) return NextResponse.json(await lookupAccounts(phone, group, { wide }));
@@ -165,22 +167,30 @@ export async function GET(req: Request) {
 
         const persons = await prisma.person.findMany({
             where: {
-                isActive: true,
-                // Exclude only Sundry Creditors; debtors and un-grouped stay in.
-                ...(hideCreditors
-                    ? { NOT: { account: { is: { group: { is: { name: ACCOUNT_GROUPS.SUNDRY_CREDITORS } } } } } }
-                    : {}),
-                ...(q ? {
-                    OR: [
-                        { name: { contains: q, mode: "insensitive" } },
-                        { phones: { some: { phone: { contains: q } } } },
-                        { emails: { some: { email: { contains: q, mode: "insensitive" } } } },
-                    ],
-                } : {}),
+                AND: [
+                    // "Show inactive" surfaces plain deactivated parties only — merge/convert
+                    // tombstones stay exclusively in the Customer Tools Trash, their own
+                    // recovery path (hard-delete, not reactivate-in-place).
+                    includeInactive
+                        ? { OR: [
+                            { isActive: true },
+                            { isActive: false, mergedIntoPersonId: null, convertedToCompanyId: null },
+                        ] }
+                        : { isActive: true },
+                    // Exclude only Sundry Creditors; debtors and un-grouped stay in.
+                    ...(hideCreditors
+                        ? [{ NOT: { account: { is: { group: { is: { name: ACCOUNT_GROUPS.SUNDRY_CREDITORS } } } } } }]
+                        : []),
+                    ...(q ? [{
+                        OR: [
+                            { name: { contains: q, mode: "insensitive" as const } },
+                            { phones: { some: { phone: { contains: q } } } },
+                            { emails: { some: { email: { contains: q, mode: "insensitive" as const } } } },
+                        ],
+                    }] : []),
+                ],
             },
             orderBy: { createdAt: "desc" },
-            take,
-            skip: (page - 1) * take,
             include: {
                 _count: { select: { companies: true } },
                 phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }] },

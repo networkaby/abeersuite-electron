@@ -7,6 +7,7 @@ import AccountOpeningBalanceCard from "./AccountOpeningBalanceCard";
 import AccountClassificationCard from "./AccountClassificationCard";
 import CustomerGroupCard from "./CustomerGroupCard";
 import DevicesMiniGrid from "./DevicesMiniGrid";
+import DeletePartyCard from "./DeletePartyCard";
 
 type ProfileData = ComponentProps<typeof CompanyProfileEdit>["profile"];
 
@@ -24,6 +25,7 @@ interface Props {
         openingBalance?: string | number | null;
         openingBalanceType?: "DEBIT" | "CREDIT" | null;
         openingBalanceDate?: string | null;
+        isActive?: boolean;
         name: string;
         address: string | null;
         companyReg: string | null;
@@ -32,12 +34,19 @@ interface Props {
         devices: ComponentProps<typeof DevicesMiniGrid>["devices"];
     };
     canEditCompany: boolean;
+    canDeleteCompany: boolean;
     onSaved: () => void;
     /** Navigate to the new person after a Company → Person conversion. */
     onConverted: (personId: number) => void;
+    /** The company was deleted or deactivated — close the detail view. */
+    onDeleted: (outcome: "deleted" | "deactivated") => void;
+    /** The company was reactivated — refetch the detail. */
+    onReactivated: () => void;
 }
 
-export default function CompanyProfileTab({ detail, canEditCompany, onSaved, onConverted }: Props) {
+export default function CompanyProfileTab({
+    detail, canEditCompany, canDeleteCompany, onSaved, onConverted, onDeleted, onReactivated,
+}: Props) {
     return (
         <div className="space-y-6">
             <CompanyProfileEdit
@@ -94,6 +103,13 @@ export default function CompanyProfileTab({ detail, canEditCompany, onSaved, onC
                 />
             </fieldset>
             <DevicesMiniGrid devices={detail.devices} />
+            <DeletePartyCard
+                party={{ type: "company", id: detail.id, name: detail.name }}
+                isActive={detail.isActive ?? true}
+                canDelete={canDeleteCompany}
+                onDeleted={onDeleted}
+                onReactivated={onReactivated}
+            />
         </div>
     );
 }
