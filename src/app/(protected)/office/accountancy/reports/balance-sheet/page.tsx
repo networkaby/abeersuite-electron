@@ -24,7 +24,7 @@ type GroupTypeStr = "ASSET" | "LIABILITY";
 
 interface LedgerNode {
     id: number; name: string; closing: number;
-    customerId: number | null; companyId: number | null;
+    personId: number | null; companyId: number | null;
 }
 interface GroupNode {
     id: number; name: string; type: GroupTypeStr; sortOrder: number;
@@ -112,7 +112,7 @@ function GroupBlock({ node, depth, expanded, toggle, onLedger, onGroup }: {
     depth: number;
     expanded: Set<number>;
     toggle: (id: number) => void;
-    onLedger: (id: number) => void;
+    onLedger: (ledger: LedgerNode) => void;
     onGroup: (id: number) => void;
 }) {
     const isOpen = expanded.has(node.id);
@@ -162,7 +162,7 @@ function GroupBlock({ node, depth, expanded, toggle, onLedger, onGroup }: {
                         <tr
                             key={`l-${l.id}`}
                             className="cursor-pointer hover:bg-primary/5"
-                            onClick={() => onLedger(l.id)}
+                            onClick={() => onLedger(l)}
                         >
                             <td
                                 className="py-0.5 text-[14px] text-muted-foreground"
@@ -215,12 +215,19 @@ export default function BalanceSheetPage() {
         return next;
     });
 
-    const goLedger = (id: number) => {
+    const goLedger = (ledger: LedgerNode) => {
+        const { id, personId, companyId } = ledger;
         if (id === -1) {
             router.push(`/office/inventory/stock-summary?ref=balance-sheet&asOf=${asOf}`);
             return;
         }
         if (id <= 0) return;
+        // Party-linked ledgers (Sundry Debtors/Creditors) open in the customer
+        // module instead of the raw account ledger.
+        if (personId || companyId) {
+            router.push(`/office/customers/${id}`);
+            return;
+        }
         router.push(accountLedgerUrl(id, { asOf }));
     };
     const goGroup = (id: number) =>
