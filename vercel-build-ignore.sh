@@ -1,10 +1,19 @@
+
+
 #!/bin/bash
 
-# Check if NEXTAUTH_URL is https://shop.networkservice.in
+# Check if this is the webhook-only project (shop.networkservice.in)
 if [[ "$NEXTAUTH_URL" == "https://shop.networkservice.in" ]]; then
-  echo "🛑 shop.networkservice.in detected - webhook only (skipping automatic Git builds)"
-  exit 0  # Skip automatic builds
+  # This is the webhook-only project
+  if [[ -z "$VERCEL_GIT_COMMIT_MESSAGE" ]] || [[ "$VERCEL_GIT_COMMIT_MESSAGE" == "" ]]; then
+    echo "✅ Webhook deployment detected - proceeding with build"
+    exit 1  # Proceed with build
+  else
+    echo "🛑 Git commit detected - skipping build"
+    exit 0  # Skip build
+  fi
 else
-  echo "✅ Other URL detected - proceeding with automatic builds"
-  exit 1  # Proceed with automatic builds
+  # This is the auto-deploy project - always build
+  echo "✅ Auto-deploy project - proceeding with build"
+  exit 1
 fi
