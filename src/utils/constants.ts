@@ -666,7 +666,7 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     { label: "Thermal Printer", href: "/office/settings/printer-settings", icon: Printer, permission: "settings:manage" },
     { label: "QR Display", href: "/office/settings/qr-display-settings", icon: QrCode, permission: "settings:manage" },
     { label: "Print Templates", href: "/office/settings/voucher-templates", icon: FileText, permission: "settings:manage", sidebarKey: "voucher-templates" },
-    { label: "Print Preview", href: "/office/settings/voucher-templates/preview", icon: FileText, permission: "settings:manage", sidebarKey: "voucher-preview" },
+    // { label: "Print Preview", href: "/office/settings/voucher-templates/preview", icon: FileText, permission: "settings:manage", sidebarKey: "voucher-preview" },
     { label: "Backup & Restore", href: "/office/settings/backup-restore", icon: Database, permission: "settings:manage" },
     { label: "Downloads", href: "/office/settings/downloads", icon: Download, permission: "settings:manage" },
     { label: "Item Import", href: "/office/settings/item-import", icon: Upload, permission: "inventory:masters:edit" },
