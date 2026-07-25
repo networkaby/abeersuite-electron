@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { normaliseGstinState } from "@/shared/lib/gst/validateGstinState";
@@ -207,10 +208,7 @@ export async function runCustomerImport(req: CustomerImportRequest): Promise<Cus
         if (!name) errors.push("name is required");
 
         const phones = pickPhones(v);
-        const emails = pickEmails(v);
-        if (phones.length === 0 && emails.length === 0) {
-            errors.push("at least one phone or email is required");
-        }
+        let emails = pickEmails(v);
         for (const e of emails) {
             if (!isProbablyEmail(e)) errors.push(`email "${e}" is not a valid address`);
         }
@@ -303,6 +301,20 @@ export async function runCustomerImport(req: CustomerImportRequest): Promise<Cus
         const creditLimit = parseAmount(v.creditLimit);
         if (creditLimit === null) errors.push(`creditLimit "${v.creditLimit}" is not a valid number`);
         if ((creditLimit ?? 0) < 0) errors.push(`creditLimit "${v.creditLimit}" must be positive`);
+
+        // A phone or email is normally required so the customer is reachable.
+        // Bulk-migrated ledger-only parties (a GST number or a carried-forward
+        // balance, but no captured contact) are still worth importing — stamp a
+        // random placeholder email so the row has a contact key instead of
+        // rejecting it. randomUUID keeps it unique across rows and files, so it
+        // can never accidentally dedupe-match a different no-contact party.
+        if (phones.length === 0 && emails.length === 0) {
+            if (gstin || openingBalance != null) {
+                emails = [`no-contact.${randomUUID()}@placeholder.invalid`];
+            } else {
+                errors.push("at least one phone or email is required (or a GST number / opening balance)");
+            }
+        }
 
         // In-batch dedupe — flag a row claiming a contact that an earlier row already claimed.
         for (const p of phones) {

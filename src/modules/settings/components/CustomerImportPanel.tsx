@@ -137,7 +137,16 @@ export function CustomerImportPanel() {
         return set;
     }, [mapping]);
 
-    const hasRequired = mappedFields.has("name") && (mappedFields.has("phone1") || mappedFields.has("email1"));
+    // A row normally needs a phone or email to be reachable. Contact-less
+    // ledger-only rows (GST number or a carried-forward balance, no captured
+    // contact) are still importable — the backend stamps a placeholder email
+    // for those — so mapping a GSTIN/balance column also satisfies this gate.
+    const hasContactColumn = mappedFields.has("phone1") || mappedFields.has("email1");
+    const hasFallbackColumn = mappedFields.has("gstin")
+        || mappedFields.has("receivableBalance")
+        || mappedFields.has("payableBalance")
+        || mappedFields.has("openingBalance");
+    const hasRequired = mappedFields.has("name") && (hasContactColumn || hasFallbackColumn);
 
     async function handleFile(f: File | null) {
         setFile(f);
@@ -291,8 +300,10 @@ export function CustomerImportPanel() {
                         <h2 className="text-sm font-semibold">2. Map your columns</h2>
                         <p className="text-xs text-muted-foreground">
                             Pick which Person field each of your columns maps to. <strong>Name</strong> plus at least
-                            one of <strong>Phone — primary</strong> or <strong>Email — primary</strong> are required;
-                            everything else is optional. Use <strong>Receivable Balance</strong> +{" "}
+                            one of <strong>Phone — primary</strong> or <strong>Email — primary</strong> are required —
+                            unless the row is a contact-less ledger-only party, in which case a{" "}
+                            <strong>GSTIN</strong> or an opening balance column stands in for it (a placeholder email
+                            is stamped so the row still has a contact key). Use <strong>Receivable Balance</strong> +{" "}
                             <strong>Payable Balance</strong> as two columns, OR a single signed{" "}
                             <strong>Opening Balance</strong> (positive = receivable, negative = payable) — never both.
                             Unmapped columns are ignored.
@@ -345,7 +356,8 @@ export function CustomerImportPanel() {
                     {!hasRequired && (
                         <p className="text-[11px] text-amber-600">
                             Map at least <strong>Name</strong> and one of <strong>Phone — primary</strong> /{" "}
-                            <strong>Email — primary</strong> to continue.
+                            <strong>Email — primary</strong> — or, for contact-less rows, a <strong>GSTIN</strong> /
+                            opening balance column — to continue.
                         </p>
                     )}
                 </section>
