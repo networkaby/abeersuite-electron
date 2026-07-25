@@ -43,6 +43,7 @@ export default function ChartOfAccountsPage() {
     const [editingId, setEditingId] = useState<number | null>(null);
     const [editName, setEditName] = useState("");
     const [editDesc, setEditDesc] = useState("");
+    const [editNormalBalance, setEditNormalBalance] = useState<NormalBalance>("DEBIT");
     const [saving, setSaving] = useState(false);
 
     const [newForm, setNewForm] = useState({
@@ -76,12 +77,15 @@ export default function ChartOfAccountsPage() {
         setEditingId(a.id);
         setEditName(a.name);
         setEditDesc(a.description ?? "");
+        setEditNormalBalance(a.normalBalance);
     };
 
     const saveEdit = async (id: number) => {
         setSaving(true);
         try {
-            await axios.patch(`/api/accountancy/gl-accounts/${id}`, { name: editName, description: editDesc });
+            await axios.patch(`/api/accountancy/gl-accounts/${id}`, {
+                name: editName, description: editDesc, normalBalance: editNormalBalance,
+            });
             toast.success("Updated");
             setEditingId(null);
             load();
@@ -241,14 +245,18 @@ export default function ChartOfAccountsPage() {
 
             {/* Account groups */}
             {grouped.map(({ type, rows }) => rows.length === 0 ? null : (
-                <AccountSection key={type} type={type} rows={rows} editingId={editingId} editName={editName} editDesc={editDesc} saving={saving}
+                <AccountSection key={type} type={type} rows={rows} editingId={editingId} editName={editName} editDesc={editDesc}
+                    editNormalBalance={editNormalBalance} saving={saving}
                     onStartEdit={startEdit} onSetEditName={setEditName} onSetEditDesc={setEditDesc}
+                    onSetEditNormalBalance={setEditNormalBalance}
                     onSaveEdit={saveEdit} onCancelEdit={() => setEditingId(null)} onToggleActive={toggleActive} onDelete={deleteAccount} />
             ))}
 
             {ungrouped.length > 0 && (
-                <AccountSection type={null} rows={ungrouped} editingId={editingId} editName={editName} editDesc={editDesc} saving={saving}
+                <AccountSection type={null} rows={ungrouped} editingId={editingId} editName={editName} editDesc={editDesc}
+                    editNormalBalance={editNormalBalance} saving={saving}
                     onStartEdit={startEdit} onSetEditName={setEditName} onSetEditDesc={setEditDesc}
+                    onSetEditNormalBalance={setEditNormalBalance}
                     onSaveEdit={saveEdit} onCancelEdit={() => setEditingId(null)} onToggleActive={toggleActive} onDelete={deleteAccount} />
             )}
             </div>
@@ -262,10 +270,12 @@ type SectionProps = {
     editingId: number | null;
     editName: string;
     editDesc: string;
+    editNormalBalance: NormalBalance;
     saving: boolean;
     onStartEdit: (a: GlAccount) => void;
     onSetEditName: (s: string) => void;
     onSetEditDesc: (s: string) => void;
+    onSetEditNormalBalance: (v: NormalBalance) => void;
     onSaveEdit: (id: number) => void;
     onCancelEdit: () => void;
     onToggleActive: (a: GlAccount) => void;
@@ -273,8 +283,8 @@ type SectionProps = {
 };
 
 function AccountSection({
-    type, rows, editingId, editName, editDesc, saving,
-    onStartEdit, onSetEditName, onSetEditDesc, onSaveEdit, onCancelEdit, onToggleActive, onDelete,
+    type, rows, editingId, editName, editDesc, editNormalBalance, saving,
+    onStartEdit, onSetEditName, onSetEditDesc, onSetEditNormalBalance, onSaveEdit, onCancelEdit, onToggleActive, onDelete,
 }: SectionProps) {
     const colorClass = type ? GL_TYPE_COLORS[type] : "bg-muted text-muted-foreground";
     const label = type ?? "UNGROUPED";
@@ -327,7 +337,20 @@ function AccountSection({
                                 </span>
                             </td>
                             <td className="px-5 py-3">
-                                <span className="text-xs text-muted-foreground">{a.normalBalance}</span>
+                                {editingId === a.id ? (
+                                    <Select
+                                        value={editNormalBalance}
+                                        onValueChange={(v) => onSetEditNormalBalance(v as NormalBalance)}
+                                    >
+                                        <SelectTrigger className="h-8 w-28"><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="DEBIT">DEBIT</SelectItem>
+                                            <SelectItem value="CREDIT">CREDIT</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                ) : (
+                                    <span className="text-xs text-muted-foreground">{a.normalBalance}</span>
+                                )}
                             </td>
                             <td className="px-5 py-3 text-right font-mono">
                                 <span className={a.balance < 0 ? "text-destructive" : "text-foreground"}>

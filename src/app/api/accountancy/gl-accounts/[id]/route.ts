@@ -12,6 +12,9 @@ const updateSchema = z.object({
     name: z.string().trim().min(1).optional(),
     description: z.string().trim().optional().nullable(),
     isActive: z.boolean().optional(),
+    // Corrects mis-set ledgers (e.g. a Liability-group account wrongly created
+    // DEBIT-normal) — normally fixed at creation, but data mistakes happen.
+    normalBalance: z.enum(["DEBIT", "CREDIT"]).optional(),
     // Opening-balance fields can be edited inline on the chart-of-accounts row.
     openingBalance:     z.number().nonnegative().nullish(),
     openingBalanceType: z.enum(["DEBIT", "CREDIT"]).nullish(),
@@ -64,9 +67,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         const updated = await prisma.account.update({
             where: { id: Number(id) },
             data: {
-                ...(b.name        !== undefined ? { name: b.name } : {}),
-                ...(b.description !== undefined ? { description: b.description } : {}),
-                ...(b.isActive    !== undefined ? { isActive: b.isActive } : {}),
+                ...(b.name          !== undefined ? { name: b.name } : {}),
+                ...(b.description   !== undefined ? { description: b.description } : {}),
+                ...(b.isActive      !== undefined ? { isActive: b.isActive } : {}),
+                ...(b.normalBalance !== undefined ? { normalBalance: b.normalBalance } : {}),
                 ...(b.openingBalance     !== undefined ? { openingBalance:     b.openingBalance     } : {}),
                 ...(b.openingBalanceType !== undefined ? { openingBalanceType: b.openingBalanceType } : {}),
                 ...(b.openingBalanceDate !== undefined ? {
