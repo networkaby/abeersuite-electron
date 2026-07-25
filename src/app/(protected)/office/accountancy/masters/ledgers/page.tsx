@@ -13,8 +13,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { fmt } from "@/utils/constants";
 import { GroupCombobox } from "@/modules/accountancy/components/GroupCombobox";
+import { TallyDateInput } from "@/shared/components/TallyDateInput";
 
 type GroupType  = "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE";
 
@@ -32,6 +36,24 @@ interface LedgerRow {
      *  Contra deposit slip. */
     bankJson: unknown;
 }
+
+type NewLedgerForm = {
+    name: string;
+    groupId: number | null;
+    description: string;
+    openingBalance: string;
+    openingBalanceType: "DEBIT" | "CREDIT";
+    openingBalanceDate: string;
+};
+
+const createNewLedgerForm = (): NewLedgerForm => ({
+    name: "",
+    groupId: null,
+    description: "",
+    openingBalance: "",
+    openingBalanceType: "DEBIT",
+    openingBalanceDate: new Date().toISOString().slice(0, 10),
+});
 
 // Bank particulars are shown only for ledgers under a Bank group (seeded
 // "Bank Accounts" / "Bank OD A/c").
@@ -148,9 +170,7 @@ export default function LedgersPage() {
     const [showAdd, setShowAdd]   = useState(false);
     const [saving, setSaving]     = useState(false);
 
-    const [newForm, setNewForm] = useState<{ name: string; groupId: number | null; description: string }>({
-        name: "", groupId: null, description: "",
-    });
+    const [newForm, setNewForm] = useState<NewLedgerForm>(createNewLedgerForm);
     const [newBank, setNewBank] = useState<BankFields>(EMPTY_BANK);
 
     // Inline ledger edit (name + parent group + bank particulars)
@@ -232,6 +252,16 @@ export default function LedgersPage() {
     const addLedger = async () => {
         if (!newForm.name.trim()) { toast.error("Name is required"); return; }
         if (!newForm.groupId) { toast.error("Group is required"); return; }
+        const hasOpeningBalance = newForm.openingBalance.trim() !== "";
+        const openingBalance = Number(newForm.openingBalance);
+        if (hasOpeningBalance && (!Number.isFinite(openingBalance) || openingBalance <= 0)) {
+            toast.error("Opening balance must be greater than zero");
+            return;
+        }
+        if (hasOpeningBalance && !newForm.openingBalanceDate) {
+            toast.error("Opening balance date is required");
+            return;
+        }
         setSaving(true);
         const newGroupIsBank = isBankGroupName(allFlat.find((g) => g.id === newForm.groupId)?.name);
         try {
@@ -241,10 +271,15 @@ export default function LedgersPage() {
                 groupId:       newForm.groupId,
                 description:   newForm.description.trim() || null,
                 ...(newGroupIsBank && hasBankData(newBank) ? { bankJson: newBank } : {}),
+                ...(hasOpeningBalance ? {
+                    openingBalance,
+                    openingBalanceType: newForm.openingBalanceType,
+                    openingBalanceDate: newForm.openingBalanceDate,
+                } : {}),
             });
             toast.success("Ledger created");
             setShowAdd(false);
-            setNewForm({ name: "", groupId: null, description: "" });
+            setNewForm(createNewLedgerForm());
             setNewBank(EMPTY_BANK);
             load();
         } catch (err: unknown) {
@@ -320,6 +355,46 @@ export default function LedgersPage() {
                                 onChange={(e) => setNewForm((f) => ({ ...f, description: e.target.value }))}
                                 placeholder="Optional"
                             />
+                        </div>
+                        <div className="col-span-2 space-y-3 rounded-md border border-border bg-muted/30 p-4">
+                            <p className="text-sm font-medium text-foreground">
+                                Opening Balance <span className="font-normal text-muted-foreground">— optional</span>
+                            </p>
+                            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                                <div className="space-y-1.5">
+                                    <Label>Amount (₹)</Label>
+                                    <Input
+                                        type="text"
+                                        inputMode="decimal"
+                                        value={newForm.openingBalance}
+                                        onChange={(e) => setNewForm((f) => ({ ...f, openingBalance: e.target.value }))}
+                                        placeholder="0.00"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <Label>Dr / Cr</Label>
+                                    <Select
+                                        value={newForm.openingBalanceType}
+                                        onValueChange={(value) => setNewForm((f) => ({
+                                            ...f,
+                                            openingBalanceType: value as "DEBIT" | "CREDIT",
+                                        }))}
+                                    >
+                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="DEBIT">Debit</SelectItem>
+                                            <SelectItem value="CREDIT">Credit</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="space-y-1.5">
+                                    <Label>As of</Label>
+                                    <TallyDateInput
+                                        value={newForm.openingBalanceDate}
+                                        onValueChange={(iso) => setNewForm((f) => ({ ...f, openingBalanceDate: iso }))}
+                                    />
+                                </div>
+                            </div>
                         </div>
                     </div>
                     {/* Bank particulars — only for ledgers under a Bank group;

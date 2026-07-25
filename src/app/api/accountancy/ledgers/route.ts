@@ -6,6 +6,7 @@ import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { reconcileOpeningSuspense } from "@/modules/accountancy/lib/openingBalance";
 
 // Bank-ledger particulars (ledgers under the Bank groups) — printed on the
 // Contra deposit slip. All-blank → stored as null. (Kept local: route files
@@ -29,6 +30,21 @@ const createSchema = z.object({
     normalBalance: z.enum(["DEBIT", "CREDIT"]).optional(),
     sortOrder:   z.number().int().min(0).max(9999).optional(),
     bankJson:    bankJsonSchema.nullish(),
+    // Same master opening model used by Accountancy → Masters → Opening Balance.
+    openingBalance:     z.number().positive().nullish(),
+    openingBalanceType: z.enum(["DEBIT", "CREDIT"]).nullish(),
+    openingBalanceDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish(),
+}).superRefine((value, ctx) => {
+    const hasAmount = value.openingBalance != null;
+    const hasType = value.openingBalanceType != null;
+    const hasDate = value.openingBalanceDate != null;
+    if (hasAmount === hasType && hasAmount === hasDate) return;
+
+    ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Opening balance amount, Dr / Cr, and date must be provided together",
+        path: ["openingBalance"],
+    });
 });
 
 // GET /api/accountancy/ledgers
@@ -103,9 +119,13 @@ export async function POST(req: Request) {
                 code:          body.code ?? null,
                 description:   body.description ?? null,
                 normalBalance: body.normalBalance ?? null,
+                openingBalance:     body.openingBalance ?? null,
+                openingBalanceType: body.openingBalanceType ?? null,
+                openingBalanceDate: body.openingBalanceDate ? new Date(body.openingBalanceDate) : null,
                 ...(body.bankJson && !emptyBank(body.bankJson) ? { bankJson: body.bankJson } : {}),
             },
         });
+        if (body.openingBalance != null) await reconcileOpeningSuspense();
         return NextResponse.json(account, { status: 201 });
     } catch (e) {
         if (e instanceof Error && e.message.includes("Unique constraint")) {
