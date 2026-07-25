@@ -187,7 +187,14 @@ export function ItemImportPanel() {
         return set;
     }, [mapping]);
 
-    const hasRequired = mappedFields.has("name") && mappedFields.has("unit") && mappedFields.has("sku");
+    /// Patch mode only ever updates existing products, so SKU (the match key)
+    /// is the single mandatory column — map SKU + HSN, or SKU + opening rate
+    /// and qty, and just those columns are written. Skip/Replace can create
+    /// rows, so they still need the full identity set.
+    const hasRequired =
+        mode === "patch"
+            ? mappedFields.has("sku")
+            : mappedFields.has("name") && mappedFields.has("unit") && mappedFields.has("sku");
 
     /// Column index the operator pointed at Unit, or -1.
     const unitColumnIndex = useMemo(() => headers.findIndex((h) => mapping[h] === "unit"), [headers, mapping]);
@@ -378,9 +385,19 @@ export function ItemImportPanel() {
                     <div>
                         <h2 className="text-sm font-semibold">2. Map your columns</h2>
                         <p className="text-xs text-muted-foreground">
-                            Pick which product field each of your columns maps to. <strong>Name</strong> and{" "}
-                            <strong>Unit</strong> are required; everything else is optional. Unmapped columns are
-                            ignored.
+                            Pick which product field each of your columns maps to.{" "}
+                            {mode === "patch" ? (
+                                <>
+                                    In Patch mode only <strong>SKU</strong> is required — map just the columns you want
+                                    to update.
+                                </>
+                            ) : (
+                                <>
+                                    <strong>Name</strong>, <strong>SKU</strong> and <strong>Unit</strong> are required;
+                                    everything else is optional.
+                                </>
+                            )}{" "}
+                            Unmapped columns are ignored.
                         </p>
                     </div>
                     <div className="overflow-x-auto">
@@ -429,7 +446,16 @@ export function ItemImportPanel() {
                     </div>
                     {!hasRequired && (
                         <p className="text-[11px] text-amber-600">
-                            Map at least <strong>Name</strong>, <strong>SKU</strong> and <strong>Unit</strong> to continue.
+                            {mode === "patch" ? (
+                                <>
+                                    Map <strong>SKU</strong> to continue.
+                                </>
+                            ) : (
+                                <>
+                                    Map at least <strong>Name</strong>, <strong>SKU</strong> and <strong>Unit</strong>{" "}
+                                    to continue.
+                                </>
+                            )}
                         </p>
                     )}
                 </section>
