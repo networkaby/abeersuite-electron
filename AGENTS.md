@@ -26,7 +26,7 @@ Project almost complete. Focus:
 Databases:
 
 - Two separate DBs: **demo db** and **live DB**.
-- `CURRENT_DB = demo` → may reset freely. _(Change to `live` on production data — then no full reset. Update when connected DB changes.)_
+- `CURRENT_DB = live DB` → may reset freely. _(Change to `live` on production data — then no full reset. Update when connected DB changes.)_
 
 ### Evolving concepts
 
