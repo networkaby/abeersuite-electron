@@ -30,3 +30,20 @@ export function phoneMatchKey(raw: string | null | undefined): string | null {
 export function phoneKeyVariants(key: string): string[] {
     return [key, `0${key}`, `91${key}`, `+91${key}`];
 }
+
+/**
+ * Display formatter for a raw SMDR caller/dialed number (audit trail, not the
+ * match key). India (country code 91, with or without a leading ISD/STD 0) is
+ * shown as a bare 10-digit number; anything else is assumed genuinely
+ * international and shown as "+<code> <number>". Falls back to the input
+ * unchanged when it's too short to split (e.g. an internal extension).
+ */
+export function formatCallerNumber(raw: string | null | undefined): string {
+    if (!raw) return "—";
+    const digits = raw.replace(/\D/g, "");
+    if (digits.length < 10) return raw;
+    const last10 = digits.slice(-10);
+    const prefix = digits.slice(0, -10).replace(/^0+/, "");
+    if (prefix === "" || prefix === "91") return last10;
+    return `+${prefix} ${last10}`;
+}

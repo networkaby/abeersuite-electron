@@ -14,7 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
     Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
-import { formatDateTime } from "@/shared/lib/format";
+import { formatDateTime, formatCallerNumber } from "@/shared/lib/format";
 import type { MissedMode } from "@/shared/lib/calls";
 import CreatePersonDialog from "@/shared/components/CreatePersonDialog";
 
@@ -203,7 +203,7 @@ export default function CallLogWorkspace() {
                             <tr key={c.id} className={`border-t ${c.spam ? "bg-red-50/60" : ""}`}>
                                 <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">{formatDateTime(c.occurredAt)}</td>
                                 <td className="whitespace-nowrap px-3 py-2"><DirectionCell c={c} /></td>
-                                <td className="whitespace-nowrap px-3 py-2 font-medium">{c.rawNumber ?? "—"}</td>
+                                <td className="whitespace-nowrap px-3 py-2 font-medium">{formatCallerNumber(c.rawNumber)}</td>
                                 <td className="px-3 py-2">
                                     {c.customer ? (
                                         <span className="inline-flex items-center gap-1.5">
@@ -225,7 +225,7 @@ export default function CallLogWorkspace() {
                                             <StickyNote size={15} />
                                         </Button>
                                         {!c.customer && c.rawNumber && (
-                                            <Button variant="ghost" size="icon" className="h-8 w-8" title="Create lead from this number" onClick={() => setLeadPhone(c.rawNumber)}>
+                                            <Button variant="ghost" size="icon" className="h-8 w-8" title="Create lead from this number" onClick={() => setLeadPhone(formatCallerNumber(c.rawNumber))}>
                                                 <UserPlus size={15} />
                                             </Button>
                                         )}
