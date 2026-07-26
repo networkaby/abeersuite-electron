@@ -15,6 +15,7 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { auth } from "@/auth";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
+import { effectiveAccountBalance, EFFECTIVE_BALANCE_SELECT_FIELDS } from "@/modules/accountancy/lib/balance";
 import { z } from "zod";
 
 export async function GET(req: NextRequest) {
@@ -40,7 +41,7 @@ export async function GET(req: NextRequest) {
             const counters = await prisma.posCounter.findMany({
                 orderBy: [{ branchId: "asc" }, { name: "asc" }],
                 include: {
-                    tillAccount:         { select: { id: true, name: true, balance: true } },
+                    tillAccount:         { select: { id: true, name: true, ...EFFECTIVE_BALANCE_SELECT_FIELDS } },
                     branch:              { select: { id: true, name: true } },
                     paymentAccounts: {
                         orderBy: { sortOrder: "asc" },
@@ -69,7 +70,7 @@ export async function GET(req: NextRequest) {
                 tillAccount: {
                     id:      c.tillAccount.id,
                     name:    c.tillAccount.name,
-                    balance: c.tillAccount.balance.toString(),
+                    balance: String(effectiveAccountBalance(c.tillAccount)),
                 },
                 paymentAccounts: c.paymentAccounts,
                 allowedExpenseAccountIds: c.allowedExpenseAccountIds,
@@ -109,7 +110,7 @@ export async function GET(req: NextRequest) {
             where:   { branchId, isActive: true },
             orderBy: { name: "asc" },
             include: {
-                tillAccount: { select: { id: true, name: true, balance: true } },
+                tillAccount: { select: { id: true, name: true, ...EFFECTIVE_BALANCE_SELECT_FIELDS } },
                 shifts: {
                     where:  { status: { in: ["OPEN", "AWAITING_HANDOVER"] } },
                     select: { id: true, status: true, userId: true, user: { select: { name: true } }, openedAt: true },
@@ -127,7 +128,7 @@ export async function GET(req: NextRequest) {
             tillAccount: {
                 id:      c.tillAccount.id,
                 name:    c.tillAccount.name,
-                balance: c.tillAccount.balance.toString(),
+                balance: String(effectiveAccountBalance(c.tillAccount)),
             },
             activeShift: c.shifts[0] ?? null,
             // Device lock — ShiftOpenDialog compares this to the PC's bridge deviceId.
@@ -202,7 +203,7 @@ export async function POST(req: NextRequest) {
                     isActive:      true,
                 },
                 include: {
-                    tillAccount: { select: { id: true, name: true, balance: true } },
+                    tillAccount: { select: { id: true, name: true, ...EFFECTIVE_BALANCE_SELECT_FIELDS } },
                     branch:      { select: { id: true, name: true } },
                 },
             });
@@ -217,7 +218,7 @@ export async function POST(req: NextRequest) {
             tillAccount: {
                 id:      counter.tillAccount.id,
                 name:    counter.tillAccount.name,
-                balance: counter.tillAccount.balance.toString(),
+                balance: String(effectiveAccountBalance(counter.tillAccount)),
             },
         }, { status: 201 });
     } catch (e) {

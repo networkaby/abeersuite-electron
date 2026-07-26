@@ -19,6 +19,7 @@ import { auth } from "@/auth";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { sumPaise, sumShiftCashSalesPaise } from "@/modules/pos/lib/shiftMath";
+import { effectiveAccountBalance, EFFECTIVE_BALANCE_SELECT_FIELDS } from "@/modules/accountancy/lib/balance";
 
 type Person = { id: number; name: string };
 
@@ -73,7 +74,7 @@ export async function GET(req: NextRequest) {
             orderBy: [{ branchId: "asc" }, { name: "asc" }],
             include: {
                 branch:      { select: { id: true, name: true } },
-                tillAccount: { select: { id: true, name: true, balance: true } },
+                tillAccount: { select: { id: true, name: true, ...EFFECTIVE_BALANCE_SELECT_FIELDS } },
                 // Latest shift only — enough to classify occupied vs free.
                 shifts: {
                     orderBy: { openedAt: "desc" },
@@ -90,7 +91,7 @@ export async function GET(req: NextRequest) {
         });
 
         const cards = await Promise.all(counters.map(async (c) => {
-            const tillBalancePaise = BigInt(Math.round(Number(c.tillAccount.balance) * 100));
+            const tillBalancePaise = BigInt(Math.round(effectiveAccountBalance(c.tillAccount) * 100));
             const shift = c.shifts[0] ?? null;
             const live  = !!shift && (shift.status === "OPEN" || shift.status === "AWAITING_HANDOVER");
 

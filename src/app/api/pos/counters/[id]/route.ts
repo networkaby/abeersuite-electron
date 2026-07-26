@@ -7,6 +7,7 @@ import { requireAnyPermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest, handleApiError, pickDefined } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { effectiveAccountBalance, EFFECTIVE_BALANCE_SELECT_FIELDS } from "@/modules/accountancy/lib/balance";
 
 // One payment account on the counter. `id` present = update that row; absent =
 // create. `accountId` is the bank/cash-style ledger debited when collected here.
@@ -48,7 +49,7 @@ const updateSchema = z.object({
 });
 
 const counterInclude = {
-    tillAccount: { select: { id: true, name: true, balance: true } },
+    tillAccount: { select: { id: true, name: true, ...EFFECTIVE_BALANCE_SELECT_FIELDS } },
     branch:      { select: { id: true, name: true } },
     paymentAccounts: {
         orderBy: { sortOrder: "asc" as const },
@@ -196,7 +197,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             tillAccount: {
                 id:      updated.tillAccount.id,
                 name:    updated.tillAccount.name,
-                balance: updated.tillAccount.balance.toString(),
+                balance: String(effectiveAccountBalance(updated.tillAccount)),
             },
             paymentAccounts: updated.paymentAccounts,
             allowedExpenseAccountIds: updated.allowedExpenseAccountIds,
@@ -220,7 +221,7 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
 
         const counter = await prisma.posCounter.findUnique({
             where: { id },
-            include: { _count: { select: { shifts: true } }, tillAccount: { select: { id: true, balance: true } } },
+            include: { _count: { select: { shifts: true } }, tillAccount: { select: { id: true, ...EFFECTIVE_BALANCE_SELECT_FIELDS } } },
         });
         if (!counter) return NextResponse.json({ error: "Counter not found" }, { status: 404 });
 
@@ -230,7 +231,7 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
                 { status: 400 },
             );
         }
-        if (Number(counter.tillAccount.balance) !== 0) {
+        if (Math.abs(effectiveAccountBalance(counter.tillAccount)) > 0.005) {
             return NextResponse.json(
                 { error: "Cannot delete: till account has a non-zero balance. Sweep to vault first." },
                 { status: 400 },

@@ -16,6 +16,20 @@ export type AccountForEffectiveBalance = {
     openingBalanceDate: Date | null;
 };
 
+/** Prisma `select` fields required to compute `effectiveAccountBalance` — spread
+ *  this into any `tillAccount`/`account` select instead of hand-listing the
+ *  fields, so every reader of an account's current balance folds in the
+ *  master opening the same way (e.g. POS till accounts, which are routinely
+ *  opened with a master `openingBalance` instead of a GL voucher). */
+export const EFFECTIVE_BALANCE_SELECT_FIELDS = {
+    balance:            true,
+    normalBalance:      true,
+    openingBalance:     true,
+    openingBalanceType: true,
+    openingBalanceDate: true,
+    group:              { select: { type: true } },
+} as const;
+
 /**
  * Cheap list-view balance: cached `Account.balance` (GL movements only) plus
  * the master opening balance folded in at read time — same shape used by the

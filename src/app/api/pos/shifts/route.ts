@@ -17,6 +17,7 @@ import { auth } from "@/auth";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { postContra } from "@/modules/accountancy/lib/postContra";
+import { effectiveAccountBalance, EFFECTIVE_BALANCE_SELECT_FIELDS } from "@/modules/accountancy/lib/balance";
 
 const openSchema = z.object({
     counterId:       z.number().int().positive(),
@@ -127,7 +128,7 @@ export async function POST(req: NextRequest) {
     // Resolve the counter + verify it belongs to this branch.
     const counter = await prisma.posCounter.findUnique({
         where:   { id: body.counterId },
-        include: { tillAccount: { select: { id: true, name: true, balance: true } } },
+        include: { tillAccount: { select: { id: true, name: true, ...EFFECTIVE_BALANCE_SELECT_FIELDS } } },
     });
     if (!counter) return NextResponse.json({ error: "Counter not found" }, { status: 404 });
     if (counter.branchId !== branchId) {
@@ -207,8 +208,11 @@ export async function POST(req: NextRequest) {
         );
     }
 
-    // The existing till balance is the carry-over from the last close.
-    const carryOverPaise = Math.round(Number(counter.tillAccount.balance) * 100);
+    // The existing till balance is the carry-over from the last close. Folds
+    // in the till's master opening balance (effectiveAccountBalance) — some
+    // tills are funded via an opening-balance entry rather than a GL voucher,
+    // and the raw `Account.balance` cache alone would miss that.
+    const carryOverPaise = Math.round(effectiveAccountBalance(counter.tillAccount) * 100);
     const totalFloatPaise = carryOverPaise + body.vaultTopUpPaise;
 
     try {
