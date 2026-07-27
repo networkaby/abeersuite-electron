@@ -1,7 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth, userCanVoucherKind } from "@/shared/lib/auth/permissions";
-import { invNextRef, calcLineTotals, calcVoucherTotals, apportionVoucherDiscount } from "@/modules/inventory/lib/stock";
+import { invNextRef, calcLineTotals, calcVoucherTotals } from "@/modules/inventory/lib/stock";
 import { round2 } from "@/shared/lib/format";
 import { InvVoucherType, Prisma, type InvVoucherDeliveryMode } from "@/generated/prisma/client";
 import { buildPartyJson, readPartyName, readPartyPhone, readPartyAddress } from "@/shared/lib/accountancy/partySnapshot";
@@ -375,7 +375,7 @@ export async function POST(req: NextRequest) {
     //    rupee value and the operator can see probable P/L. No tax /
     //    discount on these lines — amount = qty × rate.
     //  • Trading vouchers go through the full calcLineTotals path.
-    let computedLines = lines.map((l) => {
+    const computedLines = lines.map((l) => {
         const rate = l.rate ?? 0;
         if (isPhysicalStock || isBranchTransfer) {
             return { ...l, rate: 0, discountAmt: 0, taxAmount: 0, amount: 0 };
@@ -408,54 +408,30 @@ export async function POST(req: NextRequest) {
     // means opposite (Dr Expense → bill goes DOWN). Mirror on purchase.
     const chargesNet = charges.reduce((s, c) => s + Number(c.amount), 0);
 
-    // ── Bill-level discount → apportioned onto the lines, BEFORE tax ────────
-    // The header discount is split across the lines by value and netted in
-    // pre-tax, so GST posts on the discounted value (CGST Act §15(3)(a)) —
-    // the same appropriation Tally does for a discount ledger flagged into
-    // the assessable value, and the same shape /api/pos/sale already posts
-    // for the per-line spend-tier discount.
+    // ── Bill-level discount → subtracted AFTER tax ──────────────────────────
+    // Deliberate, by decision (2026-07-28): a LINE discount reduces the price
+    // and GST is charged on the reduced value (calcLineTotals above), but the
+    // HEADER discount comes off the tax-inclusive bottom line — GST stays on
+    // the undiscounted value.
     //
-    // `line.discountAmt` keeps the operator's OWN per-line discount only. The
-    // apportioned share is a derived allocation, not an input, so it lives in
-    // the voucher-level discountAmt + grossed-up subtotal below — otherwise an
-    // edit round-trip through the form would re-apply it on top of itself.
+    // This knowingly deviates from CGST Act §15(3)(a) / the Tally treatment,
+    // which excludes an on-invoice discount from the taxable value. Parked in
+    // PROJECT_BRAIN.md; do not "fix" it by apportioning onto the lines without
+    // agreement — that was tried (6c6c1027) and reverted, because it saved a
+    // line whose taxAmount/amount no longer satisfied the row's own invariant
+    // (amount = qty × rate − discountAmt + taxAmount), so re-opening the
+    // voucher for edit recomputed a total short by the discount's GST.
     //
-    // `discountAmt` stays the TAX-INCLUSIVE rupee figure the operator typed —
-    // the meaning it has always had, so vouchers saved before apportionment
-    // existed still re-hydrate and convert correctly. The gross-up below uses
-    // the same inclusive figure, so the JE foots either way; the only cost is
-    // that Sales and Discount Allowed each carry the discount's GST share.
-    const billShares   = apportionVoucherDiscount(computedLines, overallDiscount);
+    // Clamped to the line subtotal so an over-typed discount can't drive
+    // totalAmount negative.
     const billDiscIncl = round2(Math.min(overallDiscount, lineSubtotal));
-    if (billDiscIncl > 0) {
-        computedLines = computedLines.map((l, i) => {
-            if (billShares[i] <= 0) return l;
-            const { taxAmount: lineTax, amount } = calcLineTotals({
-                quantity:    l.quantity,
-                rate:        l.rate,
-                discountPct: 0,
-                discountAmt: l.discountAmt + billShares[i],
-                taxRate:     l.taxRate ?? 0,
-            });
-            return { ...l, taxAmount: lineTax, amount };
-        });
-    }
-
-    // Lines already carry the netting, so the discount enters the totals via
-    // the grossed-up subtotal (mirrors /api/pos/sale) and the JE still foots:
-    //   Cr Sales            = subtotal − taxAmount  (goods)
-    //   Dr Discount Allowed = billDiscIncl          (as typed)
-    //   Cr GST              = taxAmount             (recomputed on the discounted base)
-    const netTotals = calcVoucherTotals(
+    const { subtotal, taxAmount, totalAmount } = calcVoucherTotals(
         computedLines,
         Number(shippingAmt),
-        0,                      // discount enters via the grossed-up subtotal below
+        billDiscIncl,
         Number(roundOff),
         chargesNet,
     );
-    const subtotal    = round2(netTotals.subtotal + billDiscIncl);
-    const taxAmount   = netTotals.taxAmount;
-    const totalAmount = netTotals.totalAmount;
 
     // Validate tenders sum to totalAmount when supplied. Operator UX: when
     // the form's "Balance" auto-fill row was rendered, it's included in
@@ -564,10 +540,8 @@ export async function POST(req: NextRequest) {
                     shippingAmt,
                     roundOff,
                     discountPct: discountPct != null ? Number(discountPct) : null,
-                    // Tax-INCLUSIVE, as typed (clamped to the bill) — unchanged
-                    // meaning, so legacy vouchers stay readable. It is apportioned
-                    // onto the lines pre-tax above; the grossed-up `subtotal` keeps
-                    // totalAmount = subtotal − discountAmt + … reconciling.
+                    // Tax-INCLUSIVE, as typed (clamped to the bill) — subtracted
+                    // from the bottom line: totalAmount = subtotal − discountAmt + …
                     discountAmt: billDiscIncl > 0 ? billDiscIncl : null,
                     ...(typeof showPrices === "boolean" ? { showPrices } : {}),
                     subtotal,

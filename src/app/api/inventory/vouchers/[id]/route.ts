@@ -1,7 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
-import { calcLineTotals, calcVoucherTotals, apportionVoucherDiscount } from "@/modules/inventory/lib/stock";
+import { calcLineTotals, calcVoucherTotals } from "@/modules/inventory/lib/stock";
 import { round2 } from "@/shared/lib/format";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import { reapplyTradingVoucherInPlace } from "@/modules/accountancy/lib/reapplyTradingVoucher";
@@ -247,42 +247,21 @@ export async function PATCH(req: Request, { params }: Params) {
         // Tax-bearing charges (POS services) count at GROSS — net + their GST —
         // mirroring /api/pos/sale, so totalAmount still balances the re-posted JE.
         const chargesNet = (charges ?? []).reduce((s, c) => s + Number(c.amount) + Number(c.taxAmount ?? 0), 0);
-        // ── Bill-level discount → apportioned onto the lines, BEFORE tax ────
-        // Same treatment as POST /api/inventory/vouchers: GST posts on the
-        // discounted value (CGST Act §15(3)(a)). `discountAmt` is tax-INCLUSIVE
-        // both on the wire and in the column, so a voucher saved before
-        // apportionment existed re-computes correctly with no backfill.
+        // ── Bill-level discount → subtracted AFTER tax ──────────────────────
+        // Same treatment as POST /api/inventory/vouchers (see the note there):
+        // a LINE discount reduces the taxable value, the HEADER discount comes
+        // off the tax-inclusive bottom line. Clamped so an over-typed discount
+        // can't drive totalAmount negative.
         const lineSubtotal = computedLines.reduce((s, l) => s + l.amount, 0);
         const requested    = discountAmt ?? (existing.discountAmt != null ? Number(existing.discountAmt) : 0);
-        const billShares   = apportionVoucherDiscount(computedLines, requested);
         billDiscIncl = round2(Math.min(Math.max(0, requested), lineSubtotal));
-        if (billDiscIncl > 0) {
-            computedLines = computedLines.map((l, i) => {
-                if (billShares[i] <= 0) return l;
-                const { taxAmount: lineTax, amount } = calcLineTotals({
-                    quantity:    l.quantity,
-                    rate:        l.rate,
-                    discountPct: 0,
-                    discountAmt: l.discountAmt + billShares[i],
-                    taxRate:     l.taxRate ?? 0,
-                });
-                return { ...l, taxAmount: lineTax, amount };
-            });
-        }
-        // Lines carry the netting, so the discount enters via the grossed-up
-        // subtotal and the re-posted JE still foots (see POST for the legs).
-        const netTotals = calcVoucherTotals(
+        totals = calcVoucherTotals(
             computedLines,
             shippingAmt ?? Number(existing.shippingAmt),
-            0,                      // discount enters via the grossed-up subtotal
+            billDiscIncl,
             roundOff    ?? Number(existing.roundOff),
             chargesNet,
         );
-        totals = {
-            subtotal:    round2(netTotals.subtotal + billDiscIncl),
-            taxAmount:   netTotals.taxAmount,
-            totalAmount: netTotals.totalAmount,
-        };
     }
 
     const wasPosted = existing.universalVoucher?.status === "POSTED";   // 5D-8
