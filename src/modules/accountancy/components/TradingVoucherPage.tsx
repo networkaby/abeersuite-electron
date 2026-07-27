@@ -69,6 +69,7 @@ import { Switch } from "@/components/ui/switch";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { extractApiError } from "@/shared/lib/api";
 import { parseDecimalInput, round2, todayIso } from "@/shared/lib/format";
+import { apportionVoucherDiscount } from "@/modules/inventory/lib/stock";
 import { fmt } from "@/utils/constants";
 import { LifecycleActions } from "@/modules/accountancy/components/LifecycleActions";
 import { VoucherTopBar } from "@/modules/accountancy/components/VoucherTopBar";
@@ -991,9 +992,30 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
     const totalQty = lines.reduce((s, l) => s + (parseFloat(l.quantity) || 0), 0);
     const totalFreeQty = lines.reduce((s, l) => s + (parseFloat(l.freeQty) || 0), 0);
     const totalDisc = computed.reduce((s, c) => s + c.discAmt, 0);
-    const totalTax = computed.reduce((s, c) => s + c.taxAmt, 0);
     const shipping = parseFloat(header.shippingAmt) || 0;
     const overallDiscount = prefs.overallDiscount ? (parseFloat(header.discountAmt) || 0) : 0;
+    // The bill-level discount is apportioned onto the lines PRE-tax when the
+    // voucher saves (see apportionVoucherDiscount), so the GST shown here has to
+    // be tax on the DISCOUNTED value — otherwise the screen would disagree with
+    // the voucher that gets stored and printed. `lineSubtotal` and `grandTotal`
+    // are unaffected: netting per line reduces the inclusive total by exactly
+    // the same rupees as subtracting it at the bottom.
+    const billShares = apportionVoucherDiscount(
+        computed.map((c, i) => ({ amount: c.amount, taxRate: parseFloat(lines[i].taxRate) || 0 })),
+        overallDiscount,
+    );
+    // Per-line GST after the bill discount is apportioned in — rounded per line
+    // exactly as calcLineTotals does on the server, so this is literally what
+    // each row saves as. The row displays it (see the TAX AMT cell): showing the
+    // pre-discount figure would leave the column not summing to its own total,
+    // and would contradict the voucher that gets stored and printed.
+    const lineNetTax = computed.map((c, i) => {
+        const r = parseFloat(lines[i].taxRate) || 0;
+        if (r <= 0) return 0;
+        const taxable = Math.max(0, c.amount / (1 + r / 100) - billShares[i]);
+        return round2(taxable * (r / 100));
+    });
+    const totalTax = round2(lineNetTax.reduce((s, x) => s + x, 0));
     const roundOff = enableRoundOff ? (parseFloat(header.roundOff) || 0) : 0;
     // Signed sum of additional GL legs. Positive on a sale-side voucher
     // means body-direction (Cr Income → bill UP); negative means opposite
@@ -1719,8 +1741,15 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                                                         <input
                                                             type="text"
                                                             inputMode="decimal"
-                                                            value={line.taxAmount}
+                                                            // With a bill-level discount the line's tax is
+                                                            // derived (its share is netted in before GST), so
+                                                            // it shows the saved figure and stops being a
+                                                            // free-text override until the discount is cleared.
+                                                            value={overallDiscount > 0
+                                                                ? (lineNetTax[i] > 0 ? lineNetTax[i].toFixed(2) : "")
+                                                                : line.taxAmount}
                                                             onChange={(e) => setLineTaxAmount(line.id, parseDecimalInput(e.target.value))}
+                                                            readOnly={overallDiscount > 0}
                                                             className={cell}
                                                             tabIndex={-1}
                                                         />

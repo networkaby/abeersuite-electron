@@ -135,6 +135,47 @@ export function calcVoucherTotals(
     return { subtotal, taxAmount, totalAmount };
 }
 
+// ── Bill-level discount, apportioned onto the lines ───────────────────────────
+
+/** Split a voucher-level, tax-INCLUSIVE discount back across the lines as a
+ *  PRE-tax reduction, in proportion to each line's value.
+ *
+ *  GST rule (CGST Act §15(3)(a)): a discount recorded on the invoice is
+ *  excluded from the transaction value, so tax must be charged on the
+ *  DISCOUNTED value — not on the gross with the discount knocked off at the
+ *  bottom. Tally does the same: a bill-level discount ledger flagged "include
+ *  in assessable value calculation" is *appropriated* across the items by
+ *  value before tax is computed.
+ *
+ *  `lines[].amount` is the tax-inclusive line total AFTER any per-line
+ *  discount (calcLineTotals' `amount`) — the base Tally appropriates by. Each
+ *  line's inclusive share is de-grossed by that line's OWN tax rate, so a
+ *  mixed-rate bill stays correct per slab (and rate-wise GSTR-1 still foots).
+ *
+ *  Returns the EXTRA pre-tax discount per line; add it to that line's own
+ *  discountAmt and re-run calcLineTotals. The rounding remainder lands on the
+ *  largest line so the parts always sum to the whole.
+ */
+export function apportionVoucherDiscount(
+    lines: { amount: number; taxRate?: number }[],
+    discountIncl: number,
+): number[] {
+    const zeros = lines.map(() => 0);
+    const total = lines.reduce((s, l) => s + l.amount, 0);
+    if (!(discountIncl > 0) || total <= 0) return zeros;
+    // Never discount more than the bill is worth — taxable can't go negative.
+    const capped = Math.min(discountIncl, total);
+    const exact  = lines.map((l) => (capped * (l.amount / total)) / (1 + (l.taxRate ?? 0) / 100));
+    const shares = exact.map(round2);
+    const drift  = round2(exact.reduce((s, x) => s + x, 0) - shares.reduce((s, x) => s + x, 0));
+    if (Math.abs(drift) >= 0.005) {
+        let big = 0;
+        for (let i = 1; i < lines.length; i++) if (lines[i].amount > lines[big].amount) big = i;
+        shares[big] = round2(shares[big] + drift);
+    }
+    return shares;
+}
+
 // ── Shipping GST rate (composite-supply rule) ─────────────────────────────────
 
 /** GST rate (%) the shipping charge inherits from the bill's lines.

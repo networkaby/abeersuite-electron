@@ -1,7 +1,8 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
-import { calcLineTotals, calcVoucherTotals } from "@/modules/inventory/lib/stock";
+import { calcLineTotals, calcVoucherTotals, apportionVoucherDiscount } from "@/modules/inventory/lib/stock";
+import { round2 } from "@/shared/lib/format";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import { reapplyTradingVoucherInPlace } from "@/modules/accountancy/lib/reapplyTradingVoucher";
 import { auditSnapshot } from "@/modules/accountancy/lib/voucherLifecycle";
@@ -221,6 +222,9 @@ export async function PATCH(req: Request, { params }: Params) {
         mrpPaise?: number; discountPct?: number; discountAmt: number; taxRate?: number; taxAmount: number; amount: number;
         direction?: "CONSUME" | "PRODUCE";
     })[] | undefined;
+    // Tax-INCLUSIVE bill discount actually applied (clamped to the bill) — what
+    // gets stored. Stays 0 when this PATCH doesn't touch the lines.
+    let billDiscIncl = 0;
 
     if (lines?.length) {
         computedLines = lines.map((l) => {
@@ -243,13 +247,42 @@ export async function PATCH(req: Request, { params }: Params) {
         // Tax-bearing charges (POS services) count at GROSS — net + their GST —
         // mirroring /api/pos/sale, so totalAmount still balances the re-posted JE.
         const chargesNet = (charges ?? []).reduce((s, c) => s + Number(c.amount) + Number(c.taxAmount ?? 0), 0);
-        totals = calcVoucherTotals(
+        // ── Bill-level discount → apportioned onto the lines, BEFORE tax ────
+        // Same treatment as POST /api/inventory/vouchers: GST posts on the
+        // discounted value (CGST Act §15(3)(a)). `discountAmt` is tax-INCLUSIVE
+        // both on the wire and in the column, so a voucher saved before
+        // apportionment existed re-computes correctly with no backfill.
+        const lineSubtotal = computedLines.reduce((s, l) => s + l.amount, 0);
+        const requested    = discountAmt ?? (existing.discountAmt != null ? Number(existing.discountAmt) : 0);
+        const billShares   = apportionVoucherDiscount(computedLines, requested);
+        billDiscIncl = round2(Math.min(Math.max(0, requested), lineSubtotal));
+        if (billDiscIncl > 0) {
+            computedLines = computedLines.map((l, i) => {
+                if (billShares[i] <= 0) return l;
+                const { taxAmount: lineTax, amount } = calcLineTotals({
+                    quantity:    l.quantity,
+                    rate:        l.rate,
+                    discountPct: 0,
+                    discountAmt: l.discountAmt + billShares[i],
+                    taxRate:     l.taxRate ?? 0,
+                });
+                return { ...l, taxAmount: lineTax, amount };
+            });
+        }
+        // Lines carry the netting, so the discount enters via the grossed-up
+        // subtotal and the re-posted JE still foots (see POST for the legs).
+        const netTotals = calcVoucherTotals(
             computedLines,
             shippingAmt ?? Number(existing.shippingAmt),
-            discountAmt ?? (existing.discountAmt != null ? Number(existing.discountAmt) : 0),
+            0,                      // discount enters via the grossed-up subtotal
             roundOff    ?? Number(existing.roundOff),
             chargesNet,
         );
+        totals = {
+            subtotal:    round2(netTotals.subtotal + billDiscIncl),
+            taxAmount:   netTotals.taxAmount,
+            totalAmount: netTotals.totalAmount,
+        };
     }
 
     const wasPosted = existing.universalVoucher?.status === "POSTED";   // 5D-8
@@ -353,7 +386,11 @@ export async function PATCH(req: Request, { params }: Params) {
                     ...(shippingAmt      !== undefined ? { shippingAmt }     : {}),
                     ...(roundOff         !== undefined ? { roundOff }        : {}),
                     ...(discountPct      !== undefined ? { discountPct }     : {}),
-                    ...(discountAmt      !== undefined ? { discountAmt }     : {}),
+                    // Clamped to the bill when the lines were recomputed, so an
+                    // over-discount can't drive totalAmount negative.
+                    ...(discountAmt      !== undefined
+                        ? { discountAmt: computedLines ? (billDiscIncl > 0 ? billDiscIncl : null) : discountAmt }
+                        : {}),
                     ...(totals ? totals : {}),
                     ...(newSettlementJson !== undefined ? { settlementJson: newSettlementJson } : {}),
                 },
