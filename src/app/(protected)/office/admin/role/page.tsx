@@ -34,6 +34,7 @@ import {
     NewRoleDialog,
     RoleList,
     PosVoucherSection,
+    RecordEligibilitySection,
     QuickActionsSection,
     WorkAccessSection,
     SidebarVisibilitySection,
@@ -488,6 +489,11 @@ export default function RolePage() {
                                                         defaultOpen={false}
                                                     />
                                                 ))}
+                                                <RecordEligibilitySection
+                                                    selected={selected}
+                                                    onTogglePerm={togglePerm}
+                                                    rowOffered={kindOffered}
+                                                />
                                             </div>
                                         )}
                                     </CardContent>

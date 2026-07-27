@@ -40,6 +40,8 @@ import {
     NO_COPY_ROLE,
     MATRIX_ROWS,
     CORE_MATRIX_COLUMN_GROUPS,
+    RECORD_ELIGIBILITY_ROWS,
+    INLINE_HIDDEN_MATRIX_ROW_KEYS,
     toSharedMatrixRow,
     SIDEBAR_LINK_MATRIX_ROW_KEY,
     SIDEBAR_LINK_EXTRA_TOGGLE,
@@ -50,6 +52,7 @@ import {
     type Role,
     type RoleForm,
 } from "@/modules/admin/lib/roleMatrixConfig";
+import type { MatrixRow } from "@/shared/components/PermissionMatrix";
 
 export function RoleFields({
     form,
@@ -487,6 +490,38 @@ export function PosVoucherSection({
     );
 }
 
+// Non-voucher, user-creatable "record" resources — repair tickets, help tickets,
+// deals, tasks, contacts — as one create/edit/delete matrix, same visual language
+// as the voucher eligibility cards right above it. Sits directly above Quick
+// Actions so a role's create "+" chip and its actual edit/delete grant read as
+// one decision, instead of hunting for it under Sidebar links further down.
+export function RecordEligibilitySection({
+    selected,
+    onTogglePerm,
+    rowOffered,
+}: {
+    selected: Set<string>;
+    onTogglePerm: (id: string) => void;
+    // Department-pool gate, same rule as the voucher matrices: a row is offered if
+    // the pool carries ANY of its ids (or the role is all-access / already holds one).
+    rowOffered: (row: MatrixRow) => boolean;
+}) {
+    const rows = RECORD_ELIGIBILITY_ROWS.filter(rowOffered);
+    if (rows.length === 0) return null;
+    return (
+        <SharedPermissionMatrix
+            title="Records — eligibility"
+            description="Create / edit / delete for non-voucher records — repair tickets, help tickets, deals, tasks and contacts. Each is independent — a role can have Create without Edit."
+            rows={rows}
+            columnGroups={CORE_MATRIX_COLUMN_GROUPS}
+            selected={selected}
+            onTogglePerm={onTogglePerm}
+            collapsible
+            defaultOpen={false}
+        />
+    );
+}
+
 // Repair + POS). Ticking a chip grants that create permission, which makes the "+"
 // show in the role's button bar. Reads/writes the same `selected` set as the
 // matrix, so the two views stay in sync.
@@ -704,7 +739,11 @@ export function SidebarVisibilitySection({
         });
     const matrixRowForLink = (node: SidebarChildRow) => {
         const rowKey = SIDEBAR_LINK_MATRIX_ROW_KEY[node.permissionId];
-        return rowKey ? MATRIX_ROWS.find((row) => row.key === rowKey) : undefined;
+        // The five RECORD_ELIGIBILITY_ROWS keys render their CRUD table in the
+        // top-level Records card instead — no inline table here, just the plain
+        // nav-visibility chip (see INLINE_HIDDEN_MATRIX_ROW_KEYS).
+        if (!rowKey || INLINE_HIDDEN_MATRIX_ROW_KEYS.has(rowKey)) return undefined;
+        return MATRIX_ROWS.find((row) => row.key === rowKey);
     };
 
     // A single yes/no capability chip (extra toggle) — shared by the per-link

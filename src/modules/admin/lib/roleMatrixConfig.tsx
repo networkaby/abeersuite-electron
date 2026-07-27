@@ -509,6 +509,25 @@ export const toSharedMatrixRow = (row: (typeof MATRIX_ROWS)[number]): MatrixRow 
     };
 };
 
+// Flat "record" resources — non-voucher, user-creatable things with a plain
+// create/edit/delete grant (Repair, Help Desk, Deals, Tasks, Contacts). Rendered
+// as their OWN eligibility card near the top of the page, same visual language as
+// the voucher matrices and sitting directly above Quick Actions — these are
+// exactly what the "New X" quick-action chips create, so seeing create/edit/
+// delete together with the "+" chip reads as one decision instead of two.
+const RECORD_ROW_KEYS = ["tickets", "help", "deals", "tasks", "contacts"] as const;
+export const RECORD_ELIGIBILITY_ROWS: MatrixRow[] = RECORD_ROW_KEYS
+    .map((key) => MATRIX_ROWS.find((r) => r.key === key))
+    .filter((r): r is (typeof MATRIX_ROWS)[number] => Boolean(r))
+    .map(toSharedMatrixRow);
+
+// These five now render in the top-level Records eligibility card, so their
+// inline chevron/table under Sidebar links is suppressed (same grant, one place
+// to edit it) — the sidebar LINK chip itself (ui:sidebar:*, nav visibility) still
+// renders there as normal; only the CRUD table moves up. See matrixRowForLink in
+// RolePageSections.tsx.
+export const INLINE_HIDDEN_MATRIX_ROW_KEYS = new Set<string>(RECORD_ROW_KEYS);
+
 // Sidebar links whose resource also carries a granular CRUD row in MATRIX_ROWS
 // (Users, Role, Organisation…) — keyed by the link's `ui:sidebar:*` permission id
 // → the matching MATRIX_ROWS key. The Sidebar links card expands that row inline
