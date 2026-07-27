@@ -682,16 +682,23 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                 ));
                 if (isEditing) return;
                 // Prefer the account the operator last picked as "Received In"
-                // on this voucher kind; fall back to Cash-in-Hand, then the
-                // first available cash/bank ledger.
+                // on this voucher kind, else the house till.
                 let lastId: number | null = null;
                 try {
                     const raw = window.localStorage.getItem(LAST_PAYMENT_KEY);
                     lastId = raw ? Number(raw) : null;
                 } catch { /* ignore */ }
+                // Every cash ledger has code = null, so the API's `ORDER BY code`
+                // can't order them — "first Cash-in-Hand" was arbitrary DB row
+                // order and drifted between a counter till and the vault
+                // between sessions. Name the intent instead: a fresh operator
+                // (nothing remembered on this PC) starts on Petty Cash, with
+                // the Vault as the fallback when no Petty Cash ledger exists.
+                const cashInHand = cb.filter((a) => a.group?.name === ACCOUNT_GROUPS.CASH_IN_HAND);
                 const cash = (lastId != null ? cb.find((a) => a.id === lastId) : undefined)
-                    ?? cb.find((a) => a.group?.name === ACCOUNT_GROUPS.CASH_IN_HAND)
-                    ?? cb[0] ?? null;
+                    ?? cashInHand.find((a) => /petty/i.test(a.name))
+                    ?? cashInHand.find((a) => /vault/i.test(a.name))
+                    ?? cashInHand[0] ?? cb[0] ?? null;
                 if (!paymentAccount) {
                     setPaymentAccount(cash);
                 }
