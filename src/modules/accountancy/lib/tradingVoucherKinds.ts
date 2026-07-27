@@ -5,7 +5,7 @@
 // trading-voucher kinds.
 
 import type { SelectedProduct } from "@/modules/inventory/components/InvProductCombobox";
-import { parseDecimalInput } from "@/shared/lib/format";
+import { parseDecimalInput, round2 } from "@/shared/lib/format";
 
 // ── Per-line state ─────────────────────────────────────────────────────────
 
@@ -50,6 +50,13 @@ export const newLine = (): LineState => ({
 });
 
 export type CalcOpts = { applyDiscount?: boolean; applyTax?: boolean; rateInclTax?: boolean };
+// Rounds `amount` to 2dp so it matches what's shown per-line and what the
+// server independently re-derives (calcLineTotals in modules/inventory/lib/
+// stock.ts). A tax-inclusive rate that doesn't divide evenly (e.g. ₹2100
+// incl. 18% → ₹1779.661016... excl.) otherwise carries float precision past
+// 2dp into lineSubtotal/grandTotal, drifting a paisa or two from the sum of
+// the rounded per-line AMOUNT cells the operator actually sees — which then
+// trips the server's tenders-sum-must-match-total check.
 export function calcLine(l: LineState, opts: CalcOpts = {}) {
     const { applyDiscount = true, applyTax = true, rateInclTax = false } = opts;
     const qty = parseFloat(l.quantity) || 0;
@@ -62,7 +69,7 @@ export function calcLine(l: LineState, opts: CalcOpts = {}) {
     const discAmt = applyDiscount ? (parseFloat(l.discountAmt) || 0) : 0;
     const taxable = gross - discAmt;
     const taxAmt = applyTax ? (parseFloat(l.taxAmount) || 0) : 0;
-    return { gross, discAmt, taxAmt, amount: taxable + taxAmt };
+    return { gross, discAmt, taxAmt, amount: round2(taxable + taxAmt) };
 }
 
 

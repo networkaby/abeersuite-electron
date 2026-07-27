@@ -68,7 +68,7 @@ import { ParentVoucherPicker } from "@/modules/inventory/components/ParentVouche
 import { Switch } from "@/components/ui/switch";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { extractApiError } from "@/shared/lib/api";
-import { parseDecimalInput } from "@/shared/lib/format";
+import { parseDecimalInput, round2 } from "@/shared/lib/format";
 import { fmt } from "@/utils/constants";
 import { LifecycleActions } from "@/modules/accountancy/components/LifecycleActions";
 import { VoucherTopBar } from "@/modules/accountancy/components/VoucherTopBar";
@@ -267,6 +267,12 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
     // the `tenders` state below. Removed in Layer 7g.
     const [paymentAccount, setPaymentAccount] = useState<GlAccount | null>(null);
     const [cashBankAccounts, setCashBankAccounts] = useState<GlAccount[]>([]);
+    // Remembers the last "Received In" account the operator picked on this
+    // voucher kind (e.g. switched Cash → a specific Bank), so the next new
+    // voucher opens with that same account instead of always resetting to
+    // Cash-in-Hand. Scoped per kind — a Sale's bank pick shouldn't leak into
+    // Purchase's tender default.
+    const LAST_PAYMENT_KEY = `voucherPage.lastPaymentAccountId.${kind}`;
 
     // Multi-tender state. Each row = one Dr (sale) / one Cr (purchase) on
     // the counter side of the JE. Customer-AR portion is auto-computed as
@@ -675,8 +681,17 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                     a.group?.name !== ACCOUNT_GROUPS.BANK_ACCOUNTS,
                 ));
                 if (isEditing) return;
-                // Default to "Cash-in-Hand" if available, else first hit.
-                const cash = cb.find((a) => a.group?.name === ACCOUNT_GROUPS.CASH_IN_HAND) ?? cb[0] ?? null;
+                // Prefer the account the operator last picked as "Received In"
+                // on this voucher kind; fall back to Cash-in-Hand, then the
+                // first available cash/bank ledger.
+                let lastId: number | null = null;
+                try {
+                    const raw = window.localStorage.getItem(LAST_PAYMENT_KEY);
+                    lastId = raw ? Number(raw) : null;
+                } catch { /* ignore */ }
+                const cash = (lastId != null ? cb.find((a) => a.id === lastId) : undefined)
+                    ?? cb.find((a) => a.group?.name === ACCOUNT_GROUPS.CASH_IN_HAND)
+                    ?? cb[0] ?? null;
                 if (!paymentAccount) {
                     setPaymentAccount(cash);
                 }
@@ -973,7 +988,11 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
     // means body-direction (Cr Income → bill UP); negative means opposite
     // (Dr Expense → bill DOWN). See InvVoucherCharge in inventory.prisma.
     const chargesNet = charges.reduce((s, c) => s + (parseFloat(c.amount) || 0), 0);
-    const grandTotal = lineSubtotal - overallDiscount + shipping + roundOff + chargesNet;
+    // Rounded to 2dp — matches the server's calcVoucherTotals so this form's
+    // own "does it foot?" check (and the tenders auto-fill below) never
+    // drifts a paisa from what /api/inventory/vouchers recomputes and
+    // validates against.
+    const grandTotal = round2(lineSubtotal - overallDiscount + shipping + roundOff + chargesNet);
     // Sum of operator-typed tender rows. `received` (legacy single field)
     // is also tallied so the form keeps working until UI fully migrates.
     const tendersSum = tenders.reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
@@ -1006,19 +1025,20 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
         setHeader((h) => ({ ...h, discountAmt: amt, discountPct: pct > 0 ? pct.toFixed(2) : "" }));
     };
 
-    // Live profit
-    const lineProfits = lines.map((l) => {
+    // Live profit — revenue must be tax-EXCLUSIVE (cost basis never includes
+    // GST), so this reuses `computed[i].gross/discAmt` from calcLine above
+    // instead of re-reading l.rate directly. l.rate is the *displayed* rate,
+    // which under the "Price incl. tax" preference is GST-inclusive; reading
+    // it raw here previously counted the GST portion as profit.
+    const lineProfits = lines.map((l, i) => {
         const qty = parseFloat(l.quantity) || 0;
-        const rate = parseFloat(l.rate) || 0;
         const cost = l.product?.costPrice ?? 0;
-        const disc = prefs.lineDiscount ? (parseFloat(l.discountAmt) || 0) : 0;
-        const gross = qty * rate;
-        const revenue = gross - disc;
-        const costTotal = qty * cost;
-        return { id: l.id, name: l.product?.name ?? "—", qty, cost, revenue, profit: revenue - costTotal };
+        const revenue = round2(computed[i].gross - computed[i].discAmt);
+        const costTotal = round2(qty * cost);
+        return { id: l.id, name: l.product?.name ?? "—", qty, cost, revenue, profit: round2(revenue - costTotal) };
     });
-    const totalLineProfit = lineProfits.reduce((s, p) => s + p.profit, 0);
-    const estimatedProfit = totalLineProfit - overallDiscount;
+    const totalLineProfit = round2(lineProfits.reduce((s, p) => s + p.profit, 0));
+    const estimatedProfit = round2(totalLineProfit - overallDiscount);
     const margin = grandTotal > 0 ? (estimatedProfit / grandTotal) * 100 : 0;
 
     const reset = () => {
@@ -1463,6 +1483,11 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                                     <ScanLine size={13} className="text-muted-foreground/60 mx-auto" />
                                 </th>
                                 <th rowSpan={2} className="px-2 py-2 text-left font-medium min-w-[180px] align-bottom">ITEM</th>
+                                {prefs.lineDescription && (
+                                    <th rowSpan={2} className="px-1 py-2 text-left font-medium w-40 align-bottom">
+                                        <span className="hidden sm:inline">Note</span>
+                                    </th>
+                                )}
                                 {prefs.mrpHint && (
                                     <th rowSpan={2} className="px-1 py-2 text-right font-medium w-16 align-bottom">MRP</th>
                                 )}
@@ -1568,6 +1593,28 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                                                     autoFocus={(i === 0 && !line.product) || line.id === lastFocusRowId}
                                                 />
                                             </td>
+                                            {prefs.lineDescription && (
+                                                <td className="px-1 py-1">
+                                                    {/* Desktop: note sits open next to the item, out of tab order
+                                                        so rapid Item→Qty→Price entry doesn't stop here. */}
+                                                    <Input
+                                                        value={line.description}
+                                                        onChange={(e) => updateLine(line.id, { description: e.target.value })}
+                                                        placeholder="Note"
+                                                        tabIndex={-1}
+                                                        className="hidden sm:block h-7 text-xs"
+                                                    />
+                                                    {/* Small screen: unchanged toggle behaviour, just moved up front. */}
+                                                    <Button
+                                                        variant="ghost" size="icon-xs"
+                                                        className={`sm:hidden ${line.showDescription ? "text-primary" : "text-muted-foreground/60 hover:text-foreground"}`}
+                                                        onClick={() => updateLine(line.id, { showDescription: !line.showDescription })}
+                                                        title="Toggle note"
+                                                    >
+                                                        <StickyNote size={12} />
+                                                    </Button>
+                                                </td>
+                                            )}
                                             {prefs.mrpHint && (
                                                 <td className="px-1 py-1 text-right text-xs tabular-nums">
                                                     {/* PURCHASE: editable MRP so the product master stays current.
@@ -1695,27 +1742,12 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                                                     className={`${cell} text-right font-mono font-medium`}
                                                 />
                                             </td>
-                                            <td className="px-1 py-1 text-center">
-                                                {/* Right action cell now only holds the note toggle —
-                                                    delete moved to the leftmost row-number cell. */}
-                                                <div className="flex items-center justify-end gap-1">
-                                                    {prefs.lineDescription && (
-                                                        <Button
-                                                            variant="ghost" size="icon-xs"
-                                                            className={`${line.showDescription ? "text-primary" : "text-muted-foreground/60 hover:text-foreground opacity-0 group-hover:opacity-100"} transition-opacity`}
-                                                            onClick={() => updateLine(line.id, { showDescription: !line.showDescription })}
-                                                            title="Toggle note"
-                                                        >
-                                                            <StickyNote size={12} />
-                                                        </Button>
-                                                    )}
-                                                </div>
-                                            </td>
+                                            <td className="px-1 py-1 text-center" />
                                         </tr>
                                         {prefs.lineDescription && line.showDescription && (
-                                            <tr className="border-b border-border/50 bg-muted/10">
+                                            <tr className="border-b border-border/50 bg-muted/10 sm:hidden">
                                                 <td />
-                                                <td colSpan={14} className="px-3 py-1.5">
+                                                <td colSpan={15} className="px-3 py-1.5">
                                                     <Input
                                                         value={line.description}
                                                         onChange={(e) => updateLine(line.id, { description: e.target.value })}
@@ -1729,7 +1761,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                                 );
                             })}
                             <tr>
-                                <td colSpan={14} className="px-5 py-2 border-b border-border/50">
+                                <td colSpan={15} className="px-5 py-2 border-b border-border/50">
                                     <Button variant="ghost" size="sm" className="text-primary h-auto py-1 text-xs" onClick={addLine}>
                                         <Plus size={12} className="mr-1" /> Add Row
                                     </Button>
@@ -1739,6 +1771,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                             <tr className="bg-muted/40 text-xs font-semibold tabular-nums">
                                 <td />
                                 <td className="px-2 py-1.5 text-muted-foreground uppercase">Total</td>
+                                {prefs.lineDescription && <td />}
                                 {prefs.mrpHint && <td />}
                                 <td className="px-1 py-1.5 text-right">{totalQty || ""}</td>
                                 {prefs.freeQty && <td className="px-1 py-1.5 text-right">{totalFreeQty || ""}</td>}
@@ -2106,7 +2139,14 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                                             />
                                             <GlAccountCombobox
                                                 value={t.accountId}
-                                                onChange={(acc) => setTenders((rows) => rows.map((r, i) => i === idx ? { ...r, account: acc, accountId: acc?.id ?? null } : r))}
+                                                onChange={(acc) => {
+                                                    setTenders((rows) => rows.map((r, i) => i === idx ? { ...r, account: acc, accountId: acc?.id ?? null } : r));
+                                                    // Remember the primary "Received In" pick for next time.
+                                                    if (idx === 0 && acc?.id != null) {
+                                                        try { window.localStorage.setItem(LAST_PAYMENT_KEY, String(acc.id)); }
+                                                        catch { /* ignore */ }
+                                                    }
+                                                }}
                                                 accounts={cashBankAccounts}
                                                 placeholder="Cash / Bank"
                                                 className="h-8 text-xs"

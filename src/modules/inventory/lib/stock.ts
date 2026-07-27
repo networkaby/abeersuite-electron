@@ -1,5 +1,6 @@
 import { InvVoucherType, type Prisma } from "@/generated/prisma/client";
 import { nextRefFromSeries } from "@/modules/accountancy/lib/balance";
+import { round2 } from "@/shared/lib/format";
 
 // ── Reference number generation ───────────────────────────────────────────────
 
@@ -89,17 +90,27 @@ export type VoucherLineInput = {
     taxRate:     number;
 };
 
-/** Compute per-line amounts: discountAmt, taxAmount, amount */
+/**
+ * Compute per-line amounts: discountAmt, taxAmount, amount.
+ *
+ * Rounds discountAmt / taxAmount / amount to 2dp (paise) at each stage —
+ * same convention the line-entry UI uses when it stores a typed/derived
+ * taxAmount via `.toFixed(2)`. Without this, a tax-inclusive rate that
+ * doesn't divide evenly (e.g. ₹2100 incl. 18% → ₹1779.661016...) carries
+ * float precision past 2dp, and the server's re-derived total drifts a
+ * paisa or two from the client's rounded-per-line total — tripping the
+ * tenders-sum-must-match-total check on an otherwise-correct invoice.
+ */
 export function calcLineTotals(l: VoucherLineInput): {
     discountAmt: number;
     taxAmount:   number;
     amount:      number;
 } {
     const gross      = l.quantity * l.rate;
-    const discAmt    = l.discountAmt > 0 ? l.discountAmt : gross * (l.discountPct / 100);
+    const discAmt    = round2(l.discountAmt > 0 ? l.discountAmt : gross * (l.discountPct / 100));
     const taxable    = gross - discAmt;
-    const taxAmount  = taxable * (l.taxRate / 100);
-    const amount     = taxable + taxAmount;
+    const taxAmount  = round2(taxable * (l.taxRate / 100));
+    const amount     = round2(taxable + taxAmount);
     return { discountAmt: discAmt, taxAmount, amount };
 }
 
@@ -118,9 +129,9 @@ export function calcVoucherTotals(
     roundOff    = 0,
     chargesNet  = 0,
 ): { subtotal: number; taxAmount: number; totalAmount: number } {
-    const subtotal  = lines.reduce((s, l) => s + l.amount, 0);
-    const taxAmount = lines.reduce((s, l) => s + l.taxAmount, 0);
-    const totalAmount = subtotal + shippingAmt - discountAmt + roundOff + chargesNet;
+    const subtotal  = round2(lines.reduce((s, l) => s + l.amount, 0));
+    const taxAmount = round2(lines.reduce((s, l) => s + l.taxAmount, 0));
+    const totalAmount = round2(subtotal + shippingAmt - discountAmt + roundOff + chargesNet);
     return { subtotal, taxAmount, totalAmount };
 }
 
