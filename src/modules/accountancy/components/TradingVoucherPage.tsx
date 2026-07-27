@@ -1484,7 +1484,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                                 </th>
                                 <th rowSpan={2} className="px-2 py-2 text-left font-medium min-w-[180px] align-bottom">ITEM</th>
                                 {prefs.lineDescription && (
-                                    <th rowSpan={2} className="px-1 py-2 text-left font-medium w-40 align-bottom">
+                                    <th rowSpan={2} className="px-1 py-2 text-left font-medium w-52 align-bottom">
                                         <span className="hidden sm:inline">Note</span>
                                     </th>
                                 )}
