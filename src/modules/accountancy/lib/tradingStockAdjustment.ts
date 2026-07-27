@@ -12,6 +12,8 @@
 // on net profit" can do `closingStock - openingStock`.
 
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { toNumber } from "@/modules/accountancy/lib/balance";
+import { loadUnitCostMap, resolveCostMethod } from "@/modules/inventory/lib/costBasis";
 import { getClosingStockValue } from "./closingStock";
 
 export type TradingStockAdjustment = {
@@ -23,37 +25,68 @@ export type TradingStockAdjustment = {
 
 /**
  * Approximate opening stock by walking back from the live closing-stock
- * valuation: opening = current - net stock IN during the period + net stock
- * OUT during the period. This is the same formula the P&L route uses
- * inline at `src/app/api/accountancy/reports/profit-loss/route.ts`.
+ * valuation:
+ *
+ *   opening = closing − (goods received at cost) + (goods issued at cost)
+ *
+ * BOTH ends of that walk must be on the SAME basis as the closing valuation,
+ * which is cost (`valuation.ts` walks inward lots only). Inward ledger rows
+ * already carry cost in `rate`, but OUTWARD rows carry the SELLING rate — the
+ * POS/sale posters stamp `line.unitPrice`. Summing outward `rate` therefore
+ * made opening = closing + sales value, which forced
+ * `Sales + Closing − Opening` to exactly zero on every period. So the issued
+ * side is priced from the shared derived cost basis instead — the same map
+ * the Bill-wise Profit report uses, so the two reports agree by construction.
  *
  * Returns 0 if the math goes negative (defensive — happens when the
  * InvStockLedger has historical entries we can't reverse-engineer).
+ *
+ * Known limitation: `closing` is the LIVE valuation, not an as-at-`to`
+ * valuation, so a report for a closed past period still starts from today's
+ * stock. A true as-of walk needs a dated quantity replay (InvProduct.stock is
+ * a live cache) — parked, tracked in PROJECT_BRAIN.
  */
 export async function computeTradingStockAdjustment(
     from: Date,
     to:   Date,
 ): Promise<TradingStockAdjustment> {
     const stockNow = await getClosingStockValue();
+    // Same method that valued `closing`, so both ends of the walk agree.
+    // (FIFO / MONTHLY_AVG degrade to WEIGHTED_AVG for the issued side — a
+    // per-unit FIFO replay isn't worth it here, same trade-off as BI.)
+    const costMethod = resolveCostMethod(stockNow.method);
 
-    const stockMoves = await prisma.invStockLedger.findMany({
-        where: { date: { gte: from, lte: to } },
-        select: { inQty: true, outQty: true, rate: true },
-    });
+    // POSTED / non-deleted only — matches valuation.ts and the GL aggregates.
+    const periodWhere = {
+        date: { gte: from, lte: to },
+        universalVoucher: { status: "POSTED" as const, deletedAt: null },
+    };
 
-    // PR 3 dropped product.costPaise — outward rows now use their own row
-    // rate as the cost basis (matches the ledger walk). This is an
-    // approximation; the trading P&L number it feeds is itself an estimate.
-    let netInValue  = 0;
-    let netOutValue = 0;
-    for (const m of stockMoves) {
-        const r = Number(m.rate);
-        netInValue  += Number(m.inQty)  * r;
-        netOutValue += Number(m.outQty) * r;
+    const [inRows, outSums] = await Promise.all([
+        prisma.invStockLedger.findMany({
+            where:  { ...periodWhere, inQty: { gt: 0 } },
+            select: { inQty: true, rate: true },
+        }),
+        prisma.invStockLedger.groupBy({
+            by:    ["productId"],
+            where: { ...periodWhere, outQty: { gt: 0 } },
+            _sum:  { outQty: true },
+        }),
+    ]);
+
+    // Goods received: inward `rate` IS the cost basis.
+    let receivedAtCost = 0;
+    for (const r of inRows) receivedAtCost += toNumber(r.inQty) * toNumber(r.rate);
+
+    // Goods issued: priced from the derived cost basis, never the row rate.
+    const costMap = await loadUnitCostMap(outSums.map((s) => s.productId), to, costMethod);
+    let issuedAtCost = 0;
+    for (const s of outSums) {
+        issuedAtCost += toNumber(s._sum.outQty ?? 0) * (costMap.get(s.productId)?.unitCost ?? 0);
     }
 
     const closingStock = stockNow.computed;
-    const openingStock = Math.max(0, closingStock - netInValue + netOutValue);
+    const openingStock = Math.max(0, closingStock - receivedAtCost + issuedAtCost);
 
     return {
         openingStock,

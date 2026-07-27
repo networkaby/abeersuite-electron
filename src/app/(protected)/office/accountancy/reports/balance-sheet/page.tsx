@@ -324,7 +324,7 @@ export default function BalanceSheetPage() {
                                 {profitOnLiab > 0 && (
                                     <tr
                                         className="cursor-pointer hover:bg-primary/5"
-                                        onClick={() => router.push(`/office/accountancy/reports/profit-loss?from=${data.fyStart.slice(0, 10)}&to=${asOf}&ref=balance-sheet`)}
+                                        onClick={() => router.push(`/office/accountancy/reports/profit-loss?from=${toIsoDate(new Date(data.fyStart))}&to=${asOf}&ref=balance-sheet`)}
                                     >
                                         <td className="py-1 pl-2">
                                             <span className="font-semibold text-sm text-foreground hover:underline">Profit &amp; Loss A/c</span>
@@ -376,7 +376,7 @@ export default function BalanceSheetPage() {
                                 {lossOnAsset > 0 && (
                                     <tr
                                         className="cursor-pointer hover:bg-primary/5"
-                                        onClick={() => router.push(`/office/accountancy/reports/profit-loss?from=${data.fyStart.slice(0, 10)}&to=${asOf}&ref=balance-sheet`)}
+                                        onClick={() => router.push(`/office/accountancy/reports/profit-loss?from=${toIsoDate(new Date(data.fyStart))}&to=${asOf}&ref=balance-sheet`)}
                                     >
                                         <td className="py-1 pl-2">
                                             <span className="font-semibold text-sm text-foreground hover:underline">Profit &amp; Loss A/c (loss)</span>
