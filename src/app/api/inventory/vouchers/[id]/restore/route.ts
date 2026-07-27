@@ -27,7 +27,10 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     const voucher = { ...voucherRow, lines: goodsLines, type: voucherRow.universalVoucher?.type ?? "", branchId: voucherRow.universalVoucher?.branchId ?? "", status: voucherRow.universalVoucher?.status ?? "DRAFT", deletedAt: voucherRow.universalVoucher?.deletedAt ?? null };
 
     const isPurchase = voucher.type === "PURCHASE" || voucher.type === "GRN";
-    const isSale     = voucher.type === "SALE"     || voucher.type === "CHALLAN";
+    // POS = counter sale: moves stock OUT like SALE. Delete/cancel put those units
+    // back, so restore — their inverse — must take them out again. Omitting POS
+    // here re-applied the GL but left the stock inflated for good.
+    const isSale     = voucher.type === "SALE"     || voucher.type === "POS" || voucher.type === "CHALLAN";
 
     try {
         ensureRestorable(voucher);

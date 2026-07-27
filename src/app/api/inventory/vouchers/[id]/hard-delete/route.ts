@@ -1,12 +1,11 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAuth, userCanVoucherKind } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { toNumber, balanceDelta } from "@/modules/accountancy/lib/balance";
 import { auditSnapshot, isPosted, isDeleted, isCancelled, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const schema = z.object({ reason: z.string().trim().min(1, "Delete reason is required") });
 
@@ -19,7 +18,7 @@ const schema = z.object({ reason: z.string().trim().min(1, "Delete reason is req
 // posted (not already cancelled / soft-deleted) the cached stock + Account.balance
 // are restored first.
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response, user } = await requirePermission(PERMISSIONS.ADMIN_BYPASS);
+    const { response, user } = await requireAuth();
     if (response) return response;
 
     const { id } = await params;
@@ -50,6 +49,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         }),
     } : null;
     if (!voucher) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    // Per-kind delete gate — same key the UI uses to show the button
+    // (`canHardDelete = canDelete = requiredVoucherPermission(type, "delete")`)
+    // and the same gate the accountancy hard-delete route applies. Removal is
+    // recoverable (the whole graph is snapshotted to AuditLog = the Recycle Bin),
+    // so it rides the voucher matrix rather than a separate admin-only gate.
+    // Channel kinds (POS, POS_ORDER, ONLINE_ORDER, ONLINE_INVOICE) have no matrix
+    // row and pass through — they are gated by their channel.
+    if (!userCanVoucherKind(user, voucher.type, "delete")) {
+        return NextResponse.json({ error: "You do not have permission to delete this voucher kind." }, { status: 403 });
+    }
 
     const needsReversal = isPosted(voucher) && !isDeleted(voucher) && !isCancelled(voucher);
 

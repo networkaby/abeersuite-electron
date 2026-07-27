@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireAuth, userCanVoucher } from "@/shared/lib/auth/permissions";
+import { requireAuth, userCanVoucherKind } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { toNumber, balanceDelta } from "@/modules/accountancy/lib/balance";
 import { setSpineLifecycle } from "@/modules/accountancy/lib/transactionEngine";
@@ -32,10 +32,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     // 5D-8/5D-11/5D-12: status/deletedAt + type + branch live on the spine — attach for the helpers + guards + stock rows.
     const voucher = { ...voucherRow, lines: goodsLines, type: voucherRow.universalVoucher?.type ?? "", branchId: voucherRow.universalVoucher?.branchId ?? "", status: voucherRow.universalVoucher?.status ?? "DRAFT", deletedAt: voucherRow.universalVoucher?.deletedAt ?? null };
 
-    // Per-kind delete gate (additive): the per-kind delete key OR the generic
-    // `inventory:voucher:delete` that gated this route before — superset, so no
-    // one loses access; per-kind holders gain it.
-    if (!userCanVoucher(user, voucher.type, "delete")) {
+    // Per-kind delete gate. Kinds WITH a matrix row need their delete key; the
+    // channel kinds (POS, POS_ORDER, ONLINE_ORDER, ONLINE_INVOICE) have no row
+    // and pass through — they are gated by their channel, not by the voucher
+    // matrix. Same helper the create / post routes use, so all four lifecycle
+    // actions treat the channel kinds identically.
+    if (!userCanVoucherKind(user, voucher.type, "delete")) {
         return NextResponse.json({ error: "You do not have permission to delete this voucher kind." }, { status: 403 });
     }
 
