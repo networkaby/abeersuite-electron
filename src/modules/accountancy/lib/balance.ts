@@ -1,5 +1,5 @@
 import { defaultNormalBalanceForGroupType } from "./groupNature";
-import { dateOnOrBefore } from "@/shared/lib/format/formatDate";
+import { dateOnOrBefore, businessToday } from "@/shared/lib/format/formatDate";
 
 export type LineForBalance = {
     type: "DEBIT" | "CREDIT";
@@ -123,7 +123,13 @@ export async function nextRefFromSeries(
         throw new Error(`VoucherSeries for kind '${kind}' not found. Visit Settings → Year Ending to initialise.`);
     }
 
-    const today = new Date();
+    // Compare CALENDAR DAYS, not instants. `fyClosingDate` returns UTC midnight
+    // of the last day of the FY, so an instant-valued "today" tested `>` the
+    // moment the clock passed 00:00 UTC — i.e. the series rolled into the new
+    // financial year during 31 March itself (06:00 IST), numbering that day's
+    // vouchers under the wrong FY. `businessToday()` is UTC midnight of the
+    // SHOP's day, so 31 Mar is not > 31 Mar and the roll happens on 1 April.
+    const today = businessToday();
     if (current.fyStartYear != null) {
         const closing = fyClosingDate(current.fyStartYear, config.restartMonth, config.restartDay);
         if (today > closing) {
