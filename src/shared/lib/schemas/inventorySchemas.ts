@@ -35,14 +35,36 @@ const productCodeSchema = z
             ctx.addIssue({ code: "custom", message: "UPC must be 12 digits", path: ["value"] });
     });
 
-export const invUnitCreateSchema = z.object({
+const invUnitFields = z.object({
     code: z.string().trim().min(1).max(32),
     label: z.string().trim().min(1).max(120),
     decimals: z.coerce.number().int().min(0).max(6).optional().default(0),
     isActive: z.boolean().optional().default(true),
+    // Compound unit ("Dozen of 12 Nos"). Both null = a plain base unit.
+    // Whole factors only — fractions are handled by picking a smaller base unit.
+    baseUnitId:       z.coerce.number().int().positive().nullish(),
+    conversionFactor: z.coerce.number().int().min(2).max(100_000).nullish(),
 });
 
-export const invUnitUpdateSchema = invUnitCreateSchema.partial();
+/** A unit is either fully base (neither field) or fully compound (both). */
+const compoundPairIsComplete = (v: { baseUnitId?: number | null; conversionFactor?: number | null }) =>
+    (v.baseUnitId == null) === (v.conversionFactor == null);
+
+const COMPOUND_PAIR_MSG = {
+    message: "A compound unit needs BOTH a base unit and a conversion factor",
+    path: ["conversionFactor"],
+};
+
+export const invUnitCreateSchema = invUnitFields.refine(compoundPairIsComplete, COMPOUND_PAIR_MSG);
+
+// .partial() must run on the raw object — a refined schema is a ZodEffects and
+// has no .partial(). The pair check is re-applied after narrowing.
+export const invUnitUpdateSchema = invUnitFields.partial().refine(
+    (v) => v.baseUnitId === undefined && v.conversionFactor === undefined
+        ? true                      // neither field being edited — nothing to check
+        : compoundPairIsComplete(v),
+    COMPOUND_PAIR_MSG,
+);
 
 /// Movement-band overrides (days since last sale) — null = inherit up the
 /// chain (parent group/category → org defaults). Shared by group + category.

@@ -10,6 +10,7 @@ import { parseIdParam } from "@/shared/lib/api";
 import { pickDefined } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { regenerateProductNamesSafe } from "@/modules/inventory/lib/regenerateNames";
+import { checkCompoundChange } from "@/modules/inventory/lib/unitCompoundGuard";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { response } = await requirePermission(PERMISSIONS.INVENTORY_MASTERS_EDIT);
@@ -25,6 +26,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             const clash = await prisma.invUnit.findFirst({ where: { code, NOT: { id } } });
             if (clash) return NextResponse.json({ error: "Unit code already exists" }, { status: 409 });
         }
+        // Setting/changing the conversion re-reads existing stock — only allowed
+        // while no product on this unit holds any.
+        const guard = await checkCompoundChange(id, b.baseUnitId, b.conversionFactor);
+        if (!guard.ok) return NextResponse.json({ error: guard.message }, { status: 400 });
+
         const row = await prisma.invUnit.update({
             where: { id },
             data: pickDefined({
@@ -32,7 +38,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 label: b.label,
                 decimals: b.decimals,
                 isActive: b.isActive,
+                baseUnitId: b.baseUnitId,
+                conversionFactor: b.conversionFactor,
             }),
+            include: { baseUnit: { select: { id: true, code: true, label: true } } },
         });
         revalidateTag(INV_UNITS_TAG, { expire: 0 });
         // A renamed unit code changes the generated name of every product using it.

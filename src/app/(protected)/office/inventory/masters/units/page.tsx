@@ -24,9 +24,16 @@ type InvUnit = {
     label: string;
     decimals: number;
     isActive: boolean;
+    /** null = this IS a base unit. Set = compound ("Dozen of 12 Nos"). */
+    baseUnitId: number | null;
+    conversionFactor: number | null;
+    baseUnit: { id: number; code: string; label: string } | null;
 };
 
-const empty = { code: "", label: "", decimals: "0", isActive: true };
+const empty = {
+    code: "", label: "", decimals: "0", isActive: true,
+    baseUnitId: "", conversionFactor: "",
+};
 
 export default function InventoryUnitsPage() {
     const [rows, setRows] = useState<InvUnit[]>([]);
@@ -63,22 +70,36 @@ export default function InventoryUnitsPage() {
             toast.error("Code is required");
             return;
         }
+        // Compound is all-or-nothing: a base unit without a factor (or the
+        // reverse) has no readable meaning.
+        const baseUnitId = form.baseUnitId ? parseInt(form.baseUnitId, 10) : null;
+        const conversionFactor = form.conversionFactor.trim()
+            ? parseInt(form.conversionFactor, 10)
+            : null;
+        if ((baseUnitId == null) !== (conversionFactor == null)) {
+            toast.error("A compound unit needs both a base unit and a conversion factor");
+            return;
+        }
+        if (conversionFactor != null && conversionFactor < 2) {
+            toast.error("Conversion factor must be 2 or more");
+            return;
+        }
         setSaving(true);
         try {
+            const payload = {
+                label: form.label.trim(),
+                decimals: parseInt(form.decimals, 10) || 0,
+                isActive: form.isActive,
+                baseUnitId,
+                conversionFactor,
+            };
             if (adding) {
-                await axios.post("/api/inventory/units", {
-                    code: form.code.trim(),
-                    label: form.label.trim(),
-                    decimals: parseInt(form.decimals, 10) || 0,
-                    isActive: form.isActive,
-                });
+                await axios.post("/api/inventory/units", { ...payload, code: form.code.trim() });
                 toast.success("Unit created");
             } else if (editId != null) {
                 await axios.patch(`/api/inventory/units/${editId}`, {
+                    ...payload,
                     code: form.code.trim() || undefined,
-                    label: form.label.trim(),
-                    decimals: parseInt(form.decimals, 10) || 0,
-                    isActive: form.isActive,
                 });
                 toast.success("Unit updated");
             }
@@ -137,6 +158,57 @@ export default function InventoryUnitsPage() {
                             </label>
                         </div>
                     </div>
+
+                    {/* Compound unit — "Dozen of 12 Nos". Stock is always STORED in
+                        the base unit; this only changes how it is displayed. */}
+                    <div className="space-y-2 border-t border-border pt-3">
+                        <p className="text-sm font-medium">Compound unit <span className="font-normal text-muted-foreground">(optional)</span></p>
+                        <p className="text-xs text-muted-foreground">
+                            Leave blank for a base unit. Otherwise name the <strong>immediate</strong> parent and how many of it
+                            this unit holds — <span className="font-mono">1 KM = 1000 M</span>, <span className="font-mono">1 M = 100 CM</span>.
+                            Chains are fine: the parent may itself be a compound unit. Stock is always stored in the
+                            chain’s smallest unit, so 1,015,005 CM shows as “10 KM 150 M 5 CM”.
+                        </p>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                            <div className="space-y-2">
+                                <Label>Base unit</Label>
+                                <select
+                                    className="border-input bg-background h-9 w-full border px-2 text-sm"
+                                    value={form.baseUnitId}
+                                    onChange={(e) => setForm((f) => ({ ...f, baseUnitId: e.target.value }))}
+                                >
+                                    <option value="">— none (this is a base unit) —</option>
+                                    {/* Any unit may be a parent — chains are allowed
+                                        (KM → M → CM). Only self is excluded here;
+                                        loops and depth are refused server-side. */}
+                                    {rows
+                                        .filter((u) => u.id !== editId)
+                                        .map((u) => (
+                                            <option key={u.id} value={String(u.id)}>
+                                                {u.code} — {u.label}
+                                                {u.baseUnit && u.conversionFactor ? ` (= ${u.conversionFactor} ${u.baseUnit.code})` : ""}
+                                            </option>
+                                        ))}
+                                </select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Base units per {form.code.trim().toUpperCase() || "unit"}</Label>
+                                <Input
+                                    inputMode="numeric"
+                                    placeholder="e.g. 12"
+                                    value={form.conversionFactor}
+                                    onChange={(e) => setForm((f) => ({ ...f, conversionFactor: e.target.value }))}
+                                />
+                            </div>
+                        </div>
+                        {!adding ? (
+                            <p className="text-xs text-amber-600 dark:text-amber-500">
+                                Changing the conversion is blocked while products on this unit still hold stock —
+                                it would re-read their existing quantities.
+                            </p>
+                        ) : null}
+                    </div>
+
                     <div className="flex gap-2">
                         <Button type="button" onClick={save} disabled={saving}>
                             Save
@@ -154,6 +226,7 @@ export default function InventoryUnitsPage() {
                         <TableRow>
                             <TableHead>Code</TableHead>
                             <TableHead>Label</TableHead>
+                            <TableHead>Conversion</TableHead>
                             <TableHead className="text-right">Decimals</TableHead>
                             <TableHead> </TableHead>
                         </TableRow>
@@ -161,13 +234,13 @@ export default function InventoryUnitsPage() {
                     <TableBody>
                         {loading ? (
                             <TableRow>
-                                <TableCell colSpan={4} className="text-muted-foreground">
+                                <TableCell colSpan={5} className="text-muted-foreground">
                                     Loading…
                                 </TableCell>
                             </TableRow>
                         ) : rows.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={4} className="text-muted-foreground">
+                                <TableCell colSpan={5} className="text-muted-foreground">
                                     No units yet.
                                 </TableCell>
                             </TableRow>
@@ -176,6 +249,13 @@ export default function InventoryUnitsPage() {
                                 <TableRow key={u.id}>
                                     <TableCell className="font-mono text-sm">{u.code}</TableCell>
                                     <TableCell>{u.label}</TableCell>
+                                    <TableCell className="text-sm">
+                                        {u.baseUnit && u.conversionFactor ? (
+                                            <span className="font-mono">1 {u.code} = {u.conversionFactor} {u.baseUnit.code}</span>
+                                        ) : (
+                                            <span className="text-muted-foreground">base unit</span>
+                                        )}
+                                    </TableCell>
                                     <TableCell className="text-right">{u.decimals}</TableCell>
                                     <TableCell className="text-right space-x-2">
                                         {!u.isActive ? <Badge variant="outline">inactive</Badge> : null}
@@ -192,6 +272,8 @@ export default function InventoryUnitsPage() {
                                                     label: u.label,
                                                     decimals: String(u.decimals),
                                                     isActive: u.isActive,
+                                                    baseUnitId: u.baseUnitId != null ? String(u.baseUnitId) : "",
+                                                    conversionFactor: u.conversionFactor != null ? String(u.conversionFactor) : "",
                                                 });
                                             }}
                                         >

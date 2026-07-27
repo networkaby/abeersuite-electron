@@ -6,6 +6,7 @@ import {
     VALUATION_METHODS,
     type ValuationMethod,
 } from "@/modules/inventory/lib/valuation";
+import { unitTiers } from "@/modules/inventory/lib/unitFormat";
 
 // Heavy aggregation: all active products + a per-product inward-lot valuation
 // walk. Give Vercel headroom past the default 10s function limit so large
@@ -39,7 +40,7 @@ export async function GET(req: Request) {
         : orgDefault;
     const branchId = searchParams.get("branchId") ?? null;
 
-    const [products, branches] = await Promise.all([
+    const [products, branches, allUnits] = await Promise.all([
         prisma.invProduct.findMany({
             where:   { isActive: true },
             orderBy: { name: "asc" },
@@ -50,7 +51,7 @@ export async function GET(req: Request) {
                 stock:             true,
                 lowStockThreshold: true,
                 effectiveSalePricePaise: true,
-                unit:     { select: { code: true, label: true } },
+                unit: { select: { id: true, code: true, label: true } },
                 group:    { select: { id: true, name: true } },
                 brand:    { select: { id: true, name: true } },
                 category: { select: { id: true, name: true } },
@@ -58,7 +59,18 @@ export async function GET(req: Request) {
             },
         }),
         prisma.branch.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
+        // Whole master (~15 rows) — unit chains are resolved here rather than
+        // client-side so the UI never has to walk KM → M → CM itself.
+        prisma.invUnit.findMany({ select: { id: true, code: true, baseUnitId: true, conversionFactor: true } }),
     ]);
+
+    // Tiers per unit, computed once — many products share a unit.
+    const tiersByUnit = new Map<number, ReturnType<typeof unitTiers>>();
+    const tiersFor = (unitId: number) => {
+        let t = tiersByUnit.get(unitId);
+        if (!t) { t = unitTiers(unitId, allUnits); tiersByUnit.set(unitId, t); }
+        return t;
+    };
 
     // Resolve effective stock per product for the requested scope
     const effectiveStock = (p: typeof products[number]): number => {
@@ -82,7 +94,9 @@ export async function GET(req: Request) {
             stock,
             lowStockThreshold: p.lowStockThreshold,
             effectiveSalePricePaise: p.effectiveSalePricePaise,
-            unit:              p.unit,
+            // `tiers` largest-first, each factor in ROOT units — lets the UI
+            // print "10 KM 150 M 5 CM" from the single stored integer.
+            unit:              { ...p.unit, tiers: tiersFor(p.unit.id) },
             group:             p.group,
             brand:             p.brand,
             category:          p.category,

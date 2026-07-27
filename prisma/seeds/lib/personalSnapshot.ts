@@ -269,7 +269,15 @@ export async function exportPersonal(prisma: Db): Promise<PersonalSnapshot> {
 
     // ── Inventory / tax masters ──
     const gstRates = (await prisma.gstRate.findMany()).map((r) => omit(r, ["id"]));
-    const invUnits = (await prisma.invUnit.findMany()).map((r) => omit(r, ["id", "createdAt", "updatedAt"]));
+    // Units are self-referencing (a compound unit like DOZ points at a base
+    // unit like NOS). Keep the base as a CODE pointer — Int ids don't survive a
+    // reseed into a different DB. Mirrors the invCategories parentName pattern.
+    const unitRows = await prisma.invUnit.findMany();
+    const unitCodeById = new Map(unitRows.map((u) => [u.id, u.code]));
+    const invUnits = unitRows.map((u) => ({
+        ...omit(u, ["id", "baseUnitId", "createdAt", "updatedAt"]),
+        baseUnitCode: u.baseUnitId != null ? unitCodeById.get(u.baseUnitId) ?? null : null,
+    }));
     const invBrands = (await prisma.invBrand.findMany()).map((r) => omit(r, ["id", "createdAt", "updatedAt"]));
     const invWarrantyTerms = (await prisma.invWarrantyTerm.findMany()).map((r) => omit(r, ["id", "createdAt", "updatedAt"]));
     // Self-ref: keep parent as a name pointer (resolved on import); drop the Int id/parentId.
@@ -398,7 +406,21 @@ export async function importPersonal(prisma: Db, snap: PersonalSnapshot): Promis
     // ── Phase 1: dependency-free masters ──
     for (const r of snap.gstRates) await put(prisma.gstRate, { label: r.label }, r);
     count("gstRates", snap.gstRates.length);
-    for (const r of snap.invUnits) await put(prisma.invUnit, { code: r.code }, r);
+    // Units (self-ref): pass 1 without the base pointer, pass 2 link by code —
+    // a compound unit's base may appear later in the list. Snapshots captured
+    // before compound units existed simply carry no baseUnitCode and stay base.
+    for (const r of snap.invUnits) {
+        const { baseUnitCode: _baseUnitCode, ...data } = r;
+        await put(prisma.invUnit, { code: r.code }, data);
+    }
+    for (const r of snap.invUnits) {
+        if (!r.baseUnitCode) continue;
+        const [base, self] = await Promise.all([
+            prisma.invUnit.findUnique({ where: { code: r.baseUnitCode as string }, select: { id: true } }),
+            prisma.invUnit.findUnique({ where: { code: r.code as string }, select: { id: true } }),
+        ]);
+        if (base && self) await prisma.invUnit.update({ where: { id: self.id }, data: { baseUnitId: base.id } });
+    }
     count("invUnits", snap.invUnits.length);
     for (const r of snap.invBrands) await put(prisma.invBrand, { name: r.name }, r);
     count("invBrands", snap.invBrands.length);

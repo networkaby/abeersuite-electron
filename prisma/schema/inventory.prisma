@@ -1,5 +1,16 @@
 // ── Inventory masters + stock vouchers ───────────────────────────────────────
 
+/// Units form CHAINS: each names its IMMEDIATE parent and how many of it it
+/// holds — "1 KM = 1000 M", "1 M = 100 CM". A unit with no parent is a ROOT
+/// (base) unit. A unit's true size is the PRODUCT of its chain
+/// (KM = 1000 x 100 = 100,000 CM), and two units are RELATED — interchangeable
+/// on a voucher line — when they share a root.
+///
+/// Quantities are ALWAYS stored in the ROOT unit: `InvProduct.stock`,
+/// `openingStock` and `InvStockLedger.inQty/outQty` never hold a converted
+/// value. The chain is purely a rendering of that single integer —
+/// 1,015,005 CM displays as "10 KM 150 M 5 CM" — which keeps valuation,
+/// costing and the Int stock cache untouched by the feature.
 model InvUnit {
   id        Int      @id @default(autoincrement())
   code      String   @unique
@@ -8,6 +19,18 @@ model InvUnit {
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  /// IMMEDIATE parent unit. null = this is a root (base) unit.
+  /// Chains may be several rungs deep (KM -> M -> CM); cycles and excessive
+  /// depth are refused by unitCompoundGuard, not by the schema.
+  baseUnitId       Int?
+  baseUnit         InvUnit?  @relation("UnitBase", fields: [baseUnitId], references: [id])
+  derivedUnits     InvUnit[] @relation("UnitBase")
+  /// How many of the IMMEDIATE parent make one of this unit (1 KM = 1000 M ->
+  /// 1000, even though KM is 100,000 CM). null on root units. Whole numbers
+  /// only: fractions are handled by choosing a finer root unit (1.5 kg is
+  /// entered as 1500 g), never by a fractional quantity.
+  conversionFactor Int?
 
   products      InvProduct[]
   orgDefaultFor OrgDefaults[]

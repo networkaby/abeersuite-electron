@@ -1080,8 +1080,35 @@ async function main() {
             create: { code: u.code, label: u.label, decimals: u.decimals, isActive: true },
         });
     }
+
+    // Unit CHAINS — each row names its IMMEDIATE parent ("1 GROSS = 12 DOZ",
+    // "1 DOZ = 12 NOS"), so a unit's true size is the product of its chain.
+    // Quantities are always STORED in the chain's smallest unit; the chain is
+    // only how they are displayed (54 NOS reads as "4 DOZ 6 NOS").
+    //
+    // Order matters: a parent must be upserted before its child, so GROSS
+    // follows DOZ. Seeded after the base-unit loop above.
+    //
+    // Deliberately NOT applied to SET / BOX / PKT: their contents vary per
+    // product, so a single org-wide factor would be a lie — the admin sets
+    // those in Inventory → Masters → Units where they are consistent.
+    // Weight/length chains (G→KG→TONNE, CM→M→KM) are trade-specific and
+    // likewise left to the admin.
+    const INV_COMPOUND_UNITS = [
+        { code: "DOZ",   label: "Dozen", base: "NOS", factor: 12 },
+        { code: "GROSS", label: "Gross", base: "DOZ", factor: 12 },
+    ];
+    for (const c of INV_COMPOUND_UNITS) {
+        const base = await prisma.invUnit.findUnique({ where: { code: c.base }, select: { id: true } });
+        if (!base) continue;
+        await prisma.invUnit.upsert({
+            where:  { code: c.code },
+            update: { label: c.label, baseUnitId: base.id, conversionFactor: c.factor, isActive: true },
+            create: { code: c.code, label: c.label, decimals: 0, baseUnitId: base.id, conversionFactor: c.factor, isActive: true },
+        });
+    }
     const defaultUnit = await prisma.invUnit.findUnique({ where: { code: "UNIT" } });
-    console.log(`      ✓ ${INV_UNITS.length} inventory units seeded\n`);
+    console.log(`      ✓ ${INV_UNITS.length} inventory units + ${INV_COMPOUND_UNITS.length} compound units seeded\n`);
 
     // ── Section 10: Inventory Warranty Term master ─────────────────────
     // Universal across trades (every business sells things with some warranty
