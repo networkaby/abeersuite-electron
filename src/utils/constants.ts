@@ -765,7 +765,8 @@ export const VOUCHER_CREATE_PERMISSION_BY_ACTION: Record<string, string> = Objec
 export const BUTTON_BAR_ACTIONS: ButtonBarAction[] = [
     // "More +" opens the all-create-actions dialog. Gated like any create action
     // (own permission → tick in the role's Quick Actions), rendered first.
-
+    { label: "New Deal +", subtitle: "Add a deal to the pipeline", icon: Network, variant: "outline", action: "new-deal", permission: "deals:create" },
+    { label: "New Task +", subtitle: "Add an internal work item", icon: ListChecks, variant: "outline", action: "new-task", permission: "tasks:create" },
     {
         label: "Repair +", subtitle: "Open repair intake", icon: Wrench, variant: "default",
         action: "new-ticket",
@@ -799,8 +800,7 @@ export const BUTTON_BAR_ACTIONS: ButtonBarAction[] = [
     // Links from other modules — folded in so the bar is one complete, always-on set.
     { label: "Person +", subtitle: "Create a new person", icon: Users, variant: "outline", action: "new-person", permission: "customers:create" },
     { label: "Companies +", subtitle: "Create a new company", icon: Building2, variant: "outline", action: "new-company", permission: "customers:create" },
-    { label: "New Deal +", subtitle: "Add a deal to the pipeline", icon: Network, variant: "outline", action: "new-deal", permission: "deals:create" },
-    { label: "New Task +", subtitle: "Add an internal work item", icon: ListChecks, variant: "outline", action: "new-task", permission: "tasks:create" },
+
 
     { label: "More +", subtitle: "All create actions", icon: Grid2x2, variant: "outline", action: "more", permission: "quick-actions:more" },
 
