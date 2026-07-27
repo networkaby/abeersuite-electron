@@ -17,6 +17,7 @@ import {
     VOUCHER_ROWS_BY_GROUP,
     POS_BLOCK_SHIFT_IDS,
     POOL_EXEMPT_PERMISSION_IDS,
+    SIDEBAR_LINK_GRANULAR_IDS,
     EMPTY_ROLE,
     NO_COPY_ROLE,
     roleToForm,
@@ -138,12 +139,32 @@ export default function RolePage() {
 
     const permissionById = useMemo(() => new Map(allPerms.map((permission) => [permission.id, permission])), [allPerms]);
 
+    // Granular create/edit/delete ids unlocked because their owning sidebar link is
+    // pooled. The pool carries MODULE VISIBILITY (`ui:sidebar:*`), never the granular
+    // level — so without this the editor would hide a chip (e.g. "New Task") that the
+    // save API would happily accept. Mirrors the same unlock the API does, keeping
+    // "what the editor offers" == "what the API saves".
+    const unlockedByPooledLink = useMemo(() => {
+        if (poolIds === null) return null;
+        return new Set(
+            Object.entries(SIDEBAR_LINK_GRANULAR_IDS)
+                .filter(([linkId]) => poolIds.has(linkId))
+                .flatMap(([, granularIds]) => granularIds),
+        );
+    }, [poolIds]);
+
     // Department lens — a permission is offered if it's in the active role's
-    // department pool. A currently-granted permission is always shown (so nothing
-    // granted is ever hidden), even in the defensive case it sits outside the pool.
+    // department pool (or unlocked by a pooled link). A currently-granted permission
+    // is always shown (so nothing granted is ever hidden), even in the defensive
+    // case it sits outside the pool.
     const inLens = useCallback(
-        (id: string) => POOL_EXEMPT_PERMISSION_IDS.has(id) || poolIds === null || poolIds.has(id) || selected.has(id),
-        [poolIds, selected],
+        (id: string) =>
+            POOL_EXEMPT_PERMISSION_IDS.has(id) ||
+            poolIds === null ||
+            poolIds.has(id) ||
+            unlockedByPooledLink?.has(id) ||
+            selected.has(id),
+        [poolIds, unlockedByPooledLink, selected],
     );
 
     const filtered = (search.trim()

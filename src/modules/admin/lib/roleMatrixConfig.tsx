@@ -242,6 +242,31 @@ export const MATRIX_ROWS: {
                 deleteOwn: "help:delete", deleteBranch: "help:delete", deleteOrg: "help:delete",
             },
         },
+        // CRM deals and internal Administration tasks — same flat CRUD shape as the
+        // two ticket families above. Neither carries a branch radius, so the own/
+        // branch/org cells all resolve to the same flat id.
+        {
+            key: "deals",
+            label: "Deals",
+            module: "crm",
+            cells: {
+                viewOwn: "deals:create", viewBranch: "deals:create", viewOrg: "deals:create",
+                create: "deals:create",
+                editOwn: "deals:edit", editBranch: "deals:edit", editOrg: "deals:edit",
+                deleteOwn: "deals:delete", deleteBranch: "deals:delete", deleteOrg: "deals:delete",
+            },
+        },
+        {
+            key: "tasks",
+            label: "Tasks",
+            module: "administration",
+            cells: {
+                viewOwn: "tasks:create", viewBranch: "tasks:create", viewOrg: "tasks:create",
+                create: "tasks:create",
+                editOwn: "tasks:edit", editBranch: "tasks:edit", editOrg: "tasks:edit",
+                deleteOwn: "tasks:delete", deleteBranch: "tasks:delete", deleteOrg: "tasks:delete",
+            },
+        },
         {
             key: "users",
             label: "Users",
@@ -492,6 +517,11 @@ export const toSharedMatrixRow = (row: (typeof MATRIX_ROWS)[number]): MatrixRow 
 export const SIDEBAR_LINK_MATRIX_ROW_KEY: Record<string, string> = {
     // Repair — the "All Repair" link expands the ticket create/edit/delete matrix.
     [sidebarChildPermissionId("repair", "all-repair")]: "tickets",
+    // Help Desk / CRM Deals / Administration Work Board — each board link expands
+    // its own record's create/edit/delete matrix, same as the repair ticket above.
+    [sidebarChildPermissionId("help", "help-desk")]: "help",
+    [sidebarChildPermissionId("crm", "deals")]: "deals",
+    [sidebarChildPermissionId("administration", "work-board")]: "tasks",
     [sidebarChildPermissionId("admin", "users")]: "users",
     [sidebarChildPermissionId("admin", "role")]: "roles",
     [sidebarChildPermissionId("admin", "branches")]: "branches",

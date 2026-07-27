@@ -173,11 +173,15 @@ export const PERMISSION_CATALOG: PermissionSeed[] = [
     { id: "tickets:edit", label: "Edit tickets", module: "repair", description: "Edit a repair ticket's device, problem, priority, cost and notes." },
     { id: "tickets:delete", label: "Delete tickets", module: "repair", description: "Delete a repair ticket." },
 
-    // crm / administration — quick-create gates for the "New Deal +" / "New Task +"
-    // actions. UI-visibility only (gate the "+" in the Quick Actions bar / its tick);
-    // the deals and work-board pages themselves ride their sidebar links.
+    // crm / administration — the deal and internal-task resources, same flat
+    // create / edit / delete shape as tickets (no branch radius). View rides the
+    // Deals / Work Board sidebar link; these gate the actions on the record.
     { id: "deals:create", label: "Create deals", module: "crm", description: "Add a deal to the CRM pipeline (the New Deal + quick action)." },
+    { id: "deals:edit", label: "Edit deals", module: "crm", description: "Edit a deal's title, value, source, priority, owner and follow-up; move it between pipeline stages." },
+    { id: "deals:delete", label: "Delete deals", module: "crm", description: "Delete a deal from the CRM pipeline." },
     { id: "tasks:create", label: "Create tasks", module: "administration", description: "Add an internal work item on the Administration board (the New Task + quick action)." },
+    { id: "tasks:edit", label: "Edit tasks", module: "administration", description: "Edit an internal work item's title, description, category, priority, assignee and due date; move it between stages." },
+    { id: "tasks:delete", label: "Delete tasks", module: "administration", description: "Delete an internal work item from the Administration board." },
 
     // help — the front-desk enquiry ticket (Help Desk board + POS counter Enquiry
     // button). View rides the help sidebar link; these gate create / edit / delete

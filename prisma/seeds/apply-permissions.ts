@@ -31,15 +31,13 @@ dotenv.config({ path: ".env" });
 // The permissions to add for the CURRENT change. Keep these identical to the rows
 // added in bootstrap-seed.ts. `systemOnly` rows are upserted but NOT granted to R1.
 const ADDITIONS: { id: string; label: string; module: string; description: string; systemOnly?: boolean }[] = [
-    // Help Desk module (front-desk enquiry tickets — counter + office).
-    { id: "ui:sidebar:help:help-desk", label: "Help Desk → Help Desk", module: "ui", description: "Show the \"Help Desk\" link under Help Desk in the sidebar." },
-    { id: "help:create", label: "Create help tickets", module: "help", description: "Log a front-desk enquiry (the New Help + quick action and the POS counter Enquiry button)." },
-    { id: "help:edit", label: "Edit help tickets", module: "help", description: "Advise, move stage, close with an outcome, and convert a help ticket into a repair / deal / sale." },
-    { id: "help:delete", label: "Delete help tickets", module: "help", description: "Delete a help ticket." },
-    // CRM → Reconnect (customer-centric re-engagement page). Rides only its sidebar link.
-    { id: "ui:sidebar:crm:reconnect", label: "CRM → Reconnect", module: "ui", description: "Show the \"Reconnect\" link under CRM in the sidebar." },
-    // CRM → Call Log (raw PBX call stream + triage). Rides only its sidebar link.
-    { id: "ui:sidebar:crm:call-log", label: "CRM → Call Log", module: "ui", description: "Show the \"Call Log\" link under CRM in the sidebar." },
+    // Deals / Tasks edit + delete — completing the flat create/edit/delete set for
+    // the two boards so the Role page can grant each level independently (same
+    // shape as tickets / help). CREATE already exists; only the two new rungs here.
+    { id: "deals:edit", label: "Edit deals", module: "crm", description: "Edit a deal's title, value, source, priority, owner and follow-up; move it between pipeline stages." },
+    { id: "deals:delete", label: "Delete deals", module: "crm", description: "Delete a deal from the CRM pipeline." },
+    { id: "tasks:edit", label: "Edit tasks", module: "administration", description: "Edit an internal work item's title, description, category, priority, assignee and due date; move it between stages." },
+    { id: "tasks:delete", label: "Delete tasks", module: "administration", description: "Delete an internal work item from the Administration board." },
 ];
 
 const ADMIN_ROLE_ID = "R1";

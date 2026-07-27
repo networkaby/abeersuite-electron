@@ -92,11 +92,16 @@ export const PERMISSIONS = {
     TICKETS_EDIT:                       "tickets:edit",
     TICKETS_DELETE:                     "tickets:delete",
 
-    // CRM / Administration quick-create gates — control whether the "New Deal +" /
-    // "New Task +" quick action shows in the bar (and its Role Quick Actions tick).
-    // UI-visibility gates only, matching the ungated-→-gated move for these actions.
+    // CRM / Administration — the deal and internal-task resources, same flat
+    // create / edit / delete shape as tickets (no branch radius). CREATE also gates
+    // the "New Deal +" / "New Task +" quick action; EDIT / DELETE gate the buttons
+    // on the detail dialog. UI-visibility only, like the other resource families.
     DEALS_CREATE:                       "deals:create",
+    DEALS_EDIT:                         "deals:edit",
+    DEALS_DELETE:                       "deals:delete",
     TASKS_CREATE:                       "tasks:create",
+    TASKS_EDIT:                         "tasks:edit",
+    TASKS_DELETE:                       "tasks:delete",
 
     // Help Desk — front-desk enquiry tickets (Help board + POS counter Enquiry).
     // CREATE gates logging one; EDIT gates advise / close-with-outcome / convert;
