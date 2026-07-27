@@ -11,9 +11,6 @@
 // This helper returns both values so anyone needing "trading stock impact
 // on net profit" can do `closingStock - openingStock`.
 
-import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { toNumber } from "@/modules/accountancy/lib/balance";
-import { loadUnitCostMap, resolveCostMethod } from "@/modules/inventory/lib/costBasis";
 import { getClosingStockValue } from "./closingStock";
 
 export type TradingStockAdjustment = {
@@ -24,73 +21,38 @@ export type TradingStockAdjustment = {
 };
 
 /**
- * Approximate opening stock by walking back from the live closing-stock
- * valuation:
+ * Both ends are valued AS AT their own date — closing as at `to`, opening as at
+ * the instant before `from` (closing of the previous day is the opening of this
+ * one). Each is an independent dated valuation: quantity replayed from the
+ * stock ledger up to that date, priced from the lot history that existed then.
  *
- *   opening = closing − (goods received at cost) + (goods issued at cost)
+ * This replaced a reverse-walk (`opening = closing − received + issued`) that
+ * anchored BOTH figures to today's live stock, so a report for a closed period
+ * showed today's stock against that period's sales. Worse, the issued leg
+ * summed the outward ledger `rate` — which is the SELLING price, not cost —
+ * making `Sales + Closing − Opening` collapse to exactly zero on every period.
  *
- * BOTH ends of that walk must be on the SAME basis as the closing valuation,
- * which is cost (`valuation.ts` walks inward lots only). Inward ledger rows
- * already carry cost in `rate`, but OUTWARD rows carry the SELLING rate — the
- * POS/sale posters stamp `line.unitPrice`. Summing outward `rate` therefore
- * made opening = closing + sales value, which forced
- * `Sales + Closing − Opening` to exactly zero on every period. So the issued
- * side is priced from the shared derived cost basis instead — the same map
- * the Bill-wise Profit report uses, so the two reports agree by construction.
- *
- * Returns 0 if the math goes negative (defensive — happens when the
- * InvStockLedger has historical entries we can't reverse-engineer).
- *
- * Known limitation: `closing` is the LIVE valuation, not an as-at-`to`
- * valuation, so a report for a closed past period still starts from today's
- * stock. A true as-of walk needs a dated quantity replay (InvProduct.stock is
- * a live cache) — parked, tracked in PROJECT_BRAIN.
+ * Deliberately a read-time replay: nothing is stamped at post time and no
+ * snapshot table is maintained, so voucher posting (and bulk seeding) is
+ * untouched. Rides the existing @@index([productId, date]).
  */
 export async function computeTradingStockAdjustment(
     from: Date,
     to:   Date,
 ): Promise<TradingStockAdjustment> {
-    const stockNow = await getClosingStockValue();
-    // Same method that valued `closing`, so both ends of the walk agree.
-    // (FIFO / MONTHLY_AVG degrade to WEIGHTED_AVG for the issued side — a
-    // per-unit FIFO replay isn't worth it here, same trade-off as BI.)
-    const costMethod = resolveCostMethod(stockNow.method);
+    // Opening = value at the close of the day before the period starts.
+    // InvStockLedger.date is a DATE column, so 1ms before `from` cleanly
+    // excludes `from`'s own day and includes every prior day.
+    const openingAsOf = new Date(from.getTime() - 1);
 
-    // POSTED / non-deleted only — matches valuation.ts and the GL aggregates.
-    const periodWhere = {
-        date: { gte: from, lte: to },
-        universalVoucher: { status: "POSTED" as const, deletedAt: null },
-    };
-
-    const [inRows, outSums] = await Promise.all([
-        prisma.invStockLedger.findMany({
-            where:  { ...periodWhere, inQty: { gt: 0 } },
-            select: { inQty: true, rate: true },
-        }),
-        prisma.invStockLedger.groupBy({
-            by:    ["productId"],
-            where: { ...periodWhere, outQty: { gt: 0 } },
-            _sum:  { outQty: true },
-        }),
-    ]);
-
-    // Goods received: inward `rate` IS the cost basis.
-    let receivedAtCost = 0;
-    for (const r of inRows) receivedAtCost += toNumber(r.inQty) * toNumber(r.rate);
-
-    // Goods issued: priced from the derived cost basis, never the row rate.
-    const costMap = await loadUnitCostMap(outSums.map((s) => s.productId), to, costMethod);
-    let issuedAtCost = 0;
-    for (const s of outSums) {
-        issuedAtCost += toNumber(s._sum.outQty ?? 0) * (costMap.get(s.productId)?.unitCost ?? 0);
-    }
-
-    const closingStock = stockNow.computed;
-    const openingStock = Math.max(0, closingStock - receivedAtCost + issuedAtCost);
+    // First call resolves the org's valuation method; the second reuses it so
+    // both ends of the period are valued on the same basis.
+    const closing = await getClosingStockValue(undefined, to);
+    const opening = await getClosingStockValue(closing.method, openingAsOf);
 
     return {
-        openingStock,
-        closingStock,
-        adjustment: closingStock - openingStock,
+        openingStock: opening.computed,
+        closingStock: closing.computed,
+        adjustment:   closing.computed - opening.computed,
     };
 }

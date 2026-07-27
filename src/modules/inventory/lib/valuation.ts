@@ -38,7 +38,12 @@ export interface ProductValuation {
     qty: number;
     /** ₹ per unit, method-dependent. 0 when cost basis unknown. */
     unitCost: number;
-    /** ₹ — qty × unitCost. 0 when qty ≤ 0. */
+    /**
+     * ₹ — qty × unitCost. NEGATIVE when stock is negative (Tally convention:
+     * goods sold before their purchase was entered carry a negative value, so
+     * `COGS = Opening + Purchases − Closing` stays true). 0 only when qty is 0
+     * or no cost basis exists.
+     */
     value: number;
     method: ValuationMethod;
     fallback?: "no-receipt-history" | "no-cost-basis";
@@ -57,8 +62,12 @@ type Lot = { date: Date; id: number; qty: number; rate: number };
  *     (NO voucher.type filter — PHYSICAL_STOCK rows stamp a rate at post time).
  *   • A synthetic first lot per product when openingStock > 0 && openingRate
  *     is set, sorted oldest-first by date.
+ *
+ * `asOf` caps the lot history at a date, so a report for a closed period prices
+ * stock from the purchase history that existed THEN, not from purchases that
+ * landed afterwards. Omit for the live (up-to-now) valuation.
  */
-async function loadInwardLots(productIds: number[]): Promise<Map<number, Lot[]>> {
+async function loadInwardLots(productIds: number[], asOf?: Date): Promise<Map<number, Lot[]>> {
     if (productIds.length === 0) return new Map();
 
     const [rows, masters] = await Promise.all([
@@ -66,6 +75,7 @@ async function loadInwardLots(productIds: number[]): Promise<Map<number, Lot[]>>
             where:   {
                 productId: { in: productIds },
                 inQty:     { gt: 0 },
+                ...(asOf ? { date: { lte: asOf } } : {}),
                 universalVoucher:   { status: "POSTED", deletedAt: null },
             },
             select:  { id: true, productId: true, date: true, inQty: true, rate: true },
@@ -93,8 +103,12 @@ async function loadInwardLots(productIds: number[]): Promise<Map<number, Lot[]>>
         const openQty  = m.openingStock != null ? toNumber(m.openingStock) : 0;
         const openRate = m.openingRate != null ? toNumber(m.openingRate) : 0;
         if (!(openQty > 0) || !(openRate > 0)) continue;
+        // Undated opening (the norm — openingStockDate is null on every product
+        // today) counts from the beginning of time, so it survives any `asOf`.
+        const openingDate = m.openingStockDate ?? new Date(0);
+        if (asOf && openingDate > asOf) continue;
         const openingLot: Lot = {
-            date: m.openingStockDate ?? new Date(0),
+            date: openingDate,
             id:   -1, // synthetic; never collides with InvStockLedger.id (positive)
             qty:  openQty,
             rate: openRate,
@@ -133,6 +147,14 @@ async function loadOpeningRates(productIds: number[]): Promise<Map<number, numbe
 
 // ── Per-method math ─────────────────────────────────────────────────────────
 
+// Tally convention: NEGATIVE stock is valued NEGATIVELY, not clamped to zero.
+// Goods sold before their purchase is entered (stock arrives in January, the
+// bill lands in February) leave a negative balance. Valuing that at ₹0 would
+// silently overstate gross profit for the whole window between the sale and
+// the late purchase entry — `COGS = Opening + Purchases − Closing` only holds
+// if a negative closing carries its real negative value.
+const valueOf = (qty: number, unitCost: number) => qty * unitCost;
+
 function lastInward(p: ProductMaster, lots: Lot[]): ProductValuation {
     const qty = p.stock ?? 0;
     const unitCost = lots[lots.length - 1].rate;
@@ -140,7 +162,7 @@ function lastInward(p: ProductMaster, lots: Lot[]): ProductValuation {
         productId: p.id,
         qty,
         unitCost,
-        value: qty > 0 ? qty * unitCost : 0,
+        value: valueOf(qty, unitCost),
         method: "LAST_INWARD",
     };
 }
@@ -158,7 +180,7 @@ function weightedAvg(p: ProductMaster, lots: Lot[]): ProductValuation {
         productId: p.id,
         qty,
         unitCost,
-        value: qty > 0 ? qty * unitCost : 0,
+        value: valueOf(qty, unitCost),
         method: "WEIGHTED_AVG",
     };
 }
@@ -171,7 +193,7 @@ function simpleAvg(p: ProductMaster, lots: Lot[]): ProductValuation {
         productId: p.id,
         qty,
         unitCost,
-        value: qty > 0 ? qty * unitCost : 0,
+        value: valueOf(qty, unitCost),
         method: "SIMPLE_AVG",
     };
 }
@@ -183,8 +205,14 @@ function simpleAvg(p: ProductMaster, lots: Lot[]): ProductValuation {
 // against perfectly matched inward/outward totals.
 function fifo(p: ProductMaster, lots: Lot[]): ProductValuation {
     const qty = p.stock ?? 0;
-    if (qty <= 0) {
+    if (qty === 0) {
         return { productId: p.id, qty, unitCost: 0, value: 0, method: "FIFO" };
+    }
+    if (qty < 0) {
+        // Oversold — there are no surviving lots to walk, so the shortfall is
+        // carried at the most recent inward rate (what the replacement costs).
+        const unitCost = lots[lots.length - 1].rate;
+        return { productId: p.id, qty, unitCost, value: valueOf(qty, unitCost), method: "FIFO" };
     }
     let remaining = qty;
     let accValue = 0;
@@ -249,7 +277,7 @@ function monthlyAvg(p: ProductMaster, lots: Lot[]): ProductValuation {
         productId: p.id,
         qty,
         unitCost,
-        value: qty > 0 ? qty * unitCost : 0,
+        value: valueOf(qty, unitCost),
         method: "MONTHLY_AVG",
     };
 }
@@ -259,11 +287,12 @@ function monthlyAvg(p: ProductMaster, lots: Lot[]): ProductValuation {
 export async function valueStockBatch(
     products: ProductMaster[],
     method: ValuationMethod,
+    asOf?: Date,
 ): Promise<Map<number, ProductValuation>> {
     const out = new Map<number, ProductValuation>();
     if (products.length === 0) return out;
 
-    const lotsByProduct = await loadInwardLots(products.map((p) => p.id));
+    const lotsByProduct = await loadInwardLots(products.map((p) => p.id), asOf);
 
     // Track products that need the opening-rate fallback (no lots at all,
     // or MONTHLY_AVG with no month lots that fell back through LAST_INWARD
@@ -303,7 +332,7 @@ export async function valueStockBatch(
                     productId: p.id,
                     qty,
                     unitCost: openingRate,
-                    value: qty > 0 ? qty * openingRate : 0,
+                    value: valueOf(qty, openingRate),
                     method,
                     fallback: "no-receipt-history",
                 });
@@ -355,6 +384,69 @@ export async function valueStockOrgTotal(method: ValuationMethod): Promise<{
         select: { id: true, stock: true },
     });
     const values = await valueStockBatch(products, method);
+    let total = 0;
+    let count = 0;
+    for (const v of values.values()) {
+        if (v.value === 0) continue;
+        total += v.value;
+        count += 1;
+    }
+    return { computed: total, productCount: count, method };
+}
+
+// ── As-at-a-date org total (time-travel) ──────────────────────────────────────
+//
+// `valueStockOrgTotal` above reads the LIVE `InvProduct.stock` cache, so it can
+// only ever answer "what is stock worth right now". Reports for a closed period
+// (P&L Opening/Closing Stock, a back-dated Balance Sheet) need "what was stock
+// worth ON that date" — both halves dated:
+//
+//   qty  as-at = openingStock master + Σ(inQty − outQty) for rows dated ≤ asOf
+//   cost as-at = the lot walk, capped at asOf (see loadInwardLots)
+//
+// Deliberately a READ-TIME replay: no snapshot table, no per-voucher stamping,
+// nothing added to the posting path — so seeding purchases/sales is unaffected.
+// It rides the existing @@index([productId, date]) on InvStockLedger.
+//
+// The live cache stays the fast path for everything current (POS scan,
+// available-to-sell, reorder). This is only for dated questions.
+export async function valueStockOrgTotalAsOf(
+    asOf: Date,
+    method: ValuationMethod,
+): Promise<{
+    computed:     number;
+    productCount: number;
+    method:       ValuationMethod;
+}> {
+    const [masters, moves] = await Promise.all([
+        prisma.invProduct.findMany({
+            where:  { stock: { not: null } },   // null = stock not tracked
+            select: { id: true, openingStock: true },
+        }),
+        prisma.invStockLedger.groupBy({
+            by:    ["productId"],
+            where: {
+                date: { lte: asOf },
+                universalVoucher: { status: "POSTED", deletedAt: null },
+            },
+            _sum:  { inQty: true, outQty: true },
+        }),
+    ]);
+
+    const movementByProduct = new Map<number, number>();
+    for (const m of moves) {
+        movementByProduct.set(m.productId, toNumber(m._sum.inQty ?? 0) - toNumber(m._sum.outQty ?? 0));
+    }
+
+    // Same formula recomputeProductStock uses for "now", just date-capped:
+    // openingStock is a master column, NOT a ledger row, so it is folded in
+    // separately (exactly as GL folds Account.openingBalance into its closing).
+    const products: ProductMaster[] = masters.map((m) => ({
+        id:    m.id,
+        stock: toNumber(m.openingStock ?? 0) + (movementByProduct.get(m.id) ?? 0),
+    }));
+
+    const values = await valueStockBatch(products, method, asOf);
     let total = 0;
     let count = 0;
     for (const v of values.values()) {

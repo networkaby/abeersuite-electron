@@ -7,7 +7,9 @@
 // callers that don't care can omit the arg to use the org default.
 
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { valueStockOrgTotal, type ValuationMethod } from "@/modules/inventory/lib/valuation";
+import {
+    valueStockOrgTotal, valueStockOrgTotalAsOf, type ValuationMethod,
+} from "@/modules/inventory/lib/valuation";
 
 export type ClosingStockResult = {
     /** Computed valuation in rupees (live). */
@@ -18,11 +20,20 @@ export type ClosingStockResult = {
     method: ValuationMethod;
 };
 
+/**
+ * Closing stock valuation. Omit `asOf` for the LIVE value (stock right now);
+ * pass a date for the value as it stood on that date — needed by any report
+ * rendering a closed period (P&L trading account, a back-dated Balance Sheet),
+ * which would otherwise show today's stock against last year's sales.
+ */
 export async function getClosingStockValue(
     method?: ValuationMethod,
+    asOf?:   Date,
 ): Promise<ClosingStockResult> {
     const resolvedMethod = method ?? await loadOrgDefaultValuationMethod();
-    const r = await valueStockOrgTotal(resolvedMethod);
+    const r = asOf
+        ? await valueStockOrgTotalAsOf(asOf, resolvedMethod)
+        : await valueStockOrgTotal(resolvedMethod);
     return { computed: r.computed, productCount: r.productCount, method: r.method };
 }
 

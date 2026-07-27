@@ -47,8 +47,11 @@ export async function GET(req: Request) {
         const liabilities = tree.filter((n) => n.type === "LIABILITY");
         const assets      = tree.filter((n) => n.type === "ASSET");
 
-        // ── Closing Stock (live valuation) ──────────────────────────────
-        const stockResult = await getClosingStockValue(overrideMethod);
+        // ── Closing Stock (valued AS AT `asOf`, not live) ───────────────
+        // A back-dated Balance Sheet must show the stock that existed on that
+        // date, not today's — otherwise it can't tie to the P&L for the same
+        // period, whose Closing Stock is also as-at.
+        const stockResult = await getClosingStockValue(overrideMethod, asOf);
         const stockGlBalance = (() => {
             // Sum of GL balance for accounts under "Stock-in-Hand" group
             let s = 0;
