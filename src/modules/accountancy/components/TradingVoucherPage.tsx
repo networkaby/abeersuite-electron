@@ -68,7 +68,7 @@ import { ParentVoucherPicker } from "@/modules/inventory/components/ParentVouche
 import { Switch } from "@/components/ui/switch";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { extractApiError } from "@/shared/lib/api";
-import { parseDecimalInput, round2 } from "@/shared/lib/format";
+import { parseDecimalInput, round2, todayIso } from "@/shared/lib/format";
 import { fmt } from "@/utils/constants";
 import { LifecycleActions } from "@/modules/accountancy/components/LifecycleActions";
 import { VoucherTopBar } from "@/modules/accountancy/components/VoucherTopBar";
@@ -96,7 +96,11 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
     const router = useRouter();
     const searchParams = useSearchParams();
     const activeBranchId = useActiveBranchStore((s) => s.activeBranchId);
-    const today = new Date().toISOString().slice(0, 10);
+    // LOCAL calendar day, not the UTC one. `toISOString()` converts the instant
+    // to UTC first, so between 00:00 and 05:30 IST it yields YESTERDAY — the
+    // voucher date (line ~326 and the New-Sale reset) would silently pre-fill a
+    // day early on any bill raised before dawn.
+    const today = todayIso();
 
     // Close / Cancel / Back — go back if there's tab history, otherwise fall
     // Close / back behaviour:
@@ -1061,7 +1065,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
         setTenders([newTender(cash)]);
         partyPickerRef.current?.clear();
         partyPickerRef.current?.focus();
-        const t = new Date().toISOString().slice(0, 10);
+        const t = todayIso();   // local calendar day — see the `today` note above
         setHeader({
             date: t, description: "", shippingAmt: "", roundOff: "", received: "",
             discountPct: "", discountAmt: "",

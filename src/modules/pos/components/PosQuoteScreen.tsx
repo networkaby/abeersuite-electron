@@ -21,7 +21,7 @@ import { PosScreenShell } from "@/modules/pos/components/PosScreenShell";
 import { usePosBilling } from "@/modules/pos/hooks/usePosBilling";
 import { qrDisplay } from "@/modules/pos/lib/qrDisplay";
 import { extractApiError } from "@/shared/lib/api";
-import { formatInr } from "@/shared/lib/format";
+import { formatInr, todayIso } from "@/shared/lib/format";
 import type { PartySearchAndCreateHandle } from "@/shared/components/PartySearchAndCreate";
 
 type QuoteMode = "order" | "estimate";
@@ -170,7 +170,7 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
         if (advance > b.total + 0.01) { toast.error("Advance can't exceed the order total"); return; }
         b.setSubmitting(true);
         try {
-            const today = new Date().toISOString().slice(0, 10);
+            const today = todayIso();
             const lines = cart.map((l) => ({
                 productId: l.productId,
                 description: `${l.sku} — ${l.name}${l.description ? ` · ${l.description}` : ""}`,

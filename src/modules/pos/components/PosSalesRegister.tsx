@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { fmt } from "@/utils/constants";
+import { todayIso } from "@/shared/lib/format";
 import { ActiveShiftBar, type ActiveShift } from "@/modules/pos/components/ActiveShiftBar";
 import { ShiftOpenDialog } from "@/modules/pos/components/ShiftOpenDialog";
 
@@ -152,7 +153,7 @@ export function PosSalesRegister() {
     }
 
     // ── Till cash book (ledger) ──────────────────────────────────────────────
-    const todayISO = new Date().toISOString().slice(0, 10);
+    const todayISO = todayIso();
     const [counters, setCounters]   = useState<CounterOpt[]>([]);
     const [counterId, setCounterId] = useState<number | null>(null);
     const [ledger, setLedger]       = useState<LedgerData | null>(null);

@@ -17,7 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { fmt } from "@/utils/constants";
-import { formatDate } from "@/shared/lib/format/formatDate";
+import { formatDate, todayIso } from "@/shared/lib/format/formatDate";
 import { cn } from "@/shared/lib/format/utils";
 import { EntityListPanel } from "@/shared/components/EntityListPanel";
 import { BreadcrumbBar } from "@/shared/components/BreadcrumbBar";
@@ -103,7 +103,7 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 function today(): string {
-    return new Date().toISOString().slice(0, 10);
+    return todayIso();
 }
 
 function startOfYear(): string {

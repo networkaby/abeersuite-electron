@@ -21,7 +21,7 @@ import { qrDisplay } from "@/modules/pos/lib/qrDisplay";
 import { computePriceLadder } from "@/modules/pos/lib/priceLadder";
 import type { VoucherTemplateDefaults } from "@/shared/lib/print/voucherTemplateDefaults";
 import { extractApiError } from "@/shared/lib/api";
-import { formatInr } from "@/shared/lib/format";
+import { formatInr, todayIso, toDateOnly } from "@/shared/lib/format";
 import type { PartySearchAndCreateHandle } from "@/shared/components/PartySearchAndCreate";
 
 // Charge rows carry taxAmount through the edit round-trip — POS-service rows
@@ -227,7 +227,10 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
         }
         b.setSubmitting(true);
         try {
-            const today = new Date().toISOString().slice(0, 10);
+            // LOCAL calendar day — `toISOString()` shifts to UTC first, which
+            // before 05:30 IST would stamp the sale (issueDate, below) with
+            // YESTERDAY's date.
+            const today = todayIso();
             const due = new Date(); due.setDate(due.getDate() + 30);
             const splitSummary = summaryParts.join(" + ");
             const tail =
@@ -267,7 +270,7 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
             const { data } = await axios.post<{ voucherId: number; voucherRef: string; pointsEarned: number; pointsRedeemed: number; milestoneBonus: number; milestoneCoupons: string[]; loyaltyBalance: number; couponDiscount: number; couponCode: string | null; posTemplate: VoucherTemplateDefaults; surplusCollected: number; arrearCleared: number; advanceCredited: number; receiptVoucherId: number | null; receiptVoucherRef: string | null }>("/api/pos/sale", {
                 accountId: snapshot.account.id,
                 issueDate: today,
-                dueDate: due.toISOString().slice(0, 10),
+                dueDate: toDateOnly(due),   // local day, same reason as `today`
                 notes: `POS sale (discount ${b.discountPct}%${b.effRedeemPts > 0 ? `, ${b.effRedeemPts} pts redeemed` : ""}${b.appliedCoupon ? `, coupon ${b.appliedCoupon.code ?? b.appliedCoupon.name}` : ""}) | Payments: ${splitSummary}${tail}`,
                 lines: cart.filter((l) => l.kind !== "service").map((l) => ({
                     productId: l.productId,

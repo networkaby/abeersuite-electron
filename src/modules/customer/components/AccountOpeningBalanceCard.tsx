@@ -5,6 +5,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import { Scale } from "lucide-react";
 import { formatRupees } from "@/shared/lib/format/moneyInr";
+import { todayIso } from "@/shared/lib/format/formatDate";
 import { extractApiError } from "@/shared/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,7 +45,7 @@ function sanitize(raw: string): string {
     return cleaned.slice(0, firstDot + 1) + cleaned.slice(firstDot + 1).replace(/\./g, "");
 }
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => todayIso();
 
 export default function AccountOpeningBalanceCard({
     accountId, initialAmount, initialType, initialDate, canEdit, onSaved,

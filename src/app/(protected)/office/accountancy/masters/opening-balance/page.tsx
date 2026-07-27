@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { fmt } from "@/utils/constants";
+import { todayIso } from "@/shared/lib/format";
 
 type AccountRow = {
     id: number; code: string; name: string;
@@ -185,7 +186,7 @@ function AccountOpeningSection({
         accountId: 0,
         amount: "",
         type: "DEBIT" as "DEBIT" | "CREDIT",
-        asOfDate: new Date().toISOString().slice(0, 10),
+        asOfDate: todayIso(),
     });
     const [saving, setSaving] = useState(false);
 
@@ -371,7 +372,7 @@ function ProductOpeningSection({
         productId: 0,
         qty: "",
         rate: "",
-        asOfDate: new Date().toISOString().slice(0, 10),
+        asOfDate: todayIso(),
     });
     const [saving, setSaving] = useState(false);
 
@@ -548,7 +549,7 @@ function QuickCreateAccountDialog({
         // Optional opening balance — written straight to the new Account row.
         openingAmount: "",
         openingType: "DEBIT" as "DEBIT" | "CREDIT",
-        openingDate: new Date().toISOString().slice(0, 10),
+        openingDate: todayIso(),
     });
     const [saving, setSaving] = useState(false);
 
@@ -571,7 +572,7 @@ function QuickCreateAccountDialog({
 
     const reset = () => setForm({
         code: "", name: "", groupId: "", normalBalance: "DEBIT",
-        openingAmount: "", openingType: "DEBIT", openingDate: new Date().toISOString().slice(0, 10),
+        openingAmount: "", openingType: "DEBIT", openingDate: todayIso(),
     });
 
     const save = async () => {
@@ -694,7 +695,7 @@ function QuickCreateProductDialog({
     const [form, setForm] = useState({
         sku: "", name: "", unitId: "",
         priceRupees: "",
-        openingQty: "", openingRate: "", openingDate: new Date().toISOString().slice(0, 10),
+        openingQty: "", openingRate: "", openingDate: todayIso(),
     });
     const [saving, setSaving] = useState(false);
 
@@ -707,7 +708,7 @@ function QuickCreateProductDialog({
 
     const reset = () => setForm({
         sku: "", name: "", unitId: "", priceRupees: "",
-        openingQty: "", openingRate: "", openingDate: new Date().toISOString().slice(0, 10),
+        openingQty: "", openingRate: "", openingDate: todayIso(),
     });
 
     const rupeesToPaise = (r: string): number | null => {

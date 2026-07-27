@@ -19,6 +19,7 @@ import {
 import { fmt } from "@/utils/constants";
 import { GroupCombobox } from "@/modules/accountancy/components/GroupCombobox";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
+import { todayIso } from "@/shared/lib/format";
 
 type GroupType = "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE";
 
@@ -55,7 +56,7 @@ const createNewLedgerForm = (): NewLedgerForm => ({
     description: "",
     openingBalance: "",
     openingBalanceType: "DEBIT",
-    openingBalanceDate: new Date().toISOString().slice(0, 10),
+    openingBalanceDate: todayIso(),
 });
 
 // Bank particulars are shown only for ledgers under a Bank group (seeded
@@ -223,7 +224,7 @@ export default function LedgersPage() {
         setEditOpeningBalanceDate(
             l.openingBalanceDate
                 ? new Date(l.openingBalanceDate).toISOString().slice(0, 10)
-                : new Date().toISOString().slice(0, 10),
+                : todayIso(),
         );
     };
 
