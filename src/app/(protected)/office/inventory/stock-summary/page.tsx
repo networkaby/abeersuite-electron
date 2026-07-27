@@ -22,7 +22,6 @@ import { InvProductDialog } from "@/modules/inventory/components/InvProductDialo
 import { useEscape } from "@/shared/hooks";
 import { BreadcrumbBar } from "@/shared/components/BreadcrumbBar";
 import { TableScrollArea } from "@/shared/components/TableScrollArea";
-import { formatQtyInTiers } from "@/modules/inventory/lib/unitFormat";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -35,13 +34,8 @@ type Row = {
     stock: number;
     lowStockThreshold: number;
     pricePaise: number | null;
-    unit: {
-        id: number;
-        code: string;
-        label: string;
-        /** Largest-first rungs of the unit's chain; factor is in ROOT units. */
-        tiers?: { code: string; factor: number }[];
-    };
+    /** Stock is stored in THIS unit — the one the voucher was typed in. */
+    unit: { id: number; code: string; label: string };
     group: { id: number; name: string } | null;
     brand: { id: number; name: string } | null;
     category: { id: number; name: string } | null;
@@ -573,7 +567,7 @@ export default function StockSummaryPage() {
                                                         </>
                                                     )}
                                                     <td className="px-3 py-1.5 text-right font-mono">
-                                                        {formatQtyInTiers(r.stock, r.unit.tiers ?? [])}
+                                                        {r.stock} {r.unit.code}
                                                     </td>
                                                     <td className="px-3 py-1.5 text-right font-mono text-muted-foreground">
                                                         {r.valuation.unitCost > 0
@@ -723,7 +717,7 @@ export default function StockSummaryPage() {
                                             {r.brand?.name ?? <span className="text-muted-foreground/50">—</span>}
                                         </td>
                                         <td className="px-3 py-1.5 text-right font-mono">
-                                            {formatQtyInTiers(r.stock, r.unit.tiers ?? [])}
+                                            {r.stock} {r.unit.code}
                                         </td>
                                         <td className="px-3 py-1.5 text-right font-mono text-muted-foreground">
                                             {r.valuation.unitCost > 0

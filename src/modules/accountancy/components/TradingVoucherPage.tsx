@@ -1805,7 +1805,10 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
 
                 {/* ── Footer: actions + totals ─────────────────────────────── */}
                 <div className="relative border-t border-border bg-card">
-                    {showProfit && (
+                    {/* `!isEditing` repeated here, not just on the toggle: the panel
+                        must never render with stubbed (zero) costs even if the flag
+                        were left set from a prior new-sale session. */}
+                    {showProfit && !isEditing && (
                         <div className="absolute inset-0 z-20 bg-card/95 backdrop-blur-sm border-t border-border px-6 py-3 overflow-auto">
                             <div className="flex items-center justify-between mb-2">
                                 <h3 className="text-sm font-semibold">Estimated Profit (live)</h3>
@@ -2274,11 +2277,22 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                         )}
                     </div>
                 }
-                extraButtons={copy.showProfit ? (
+                extraButtons={
+                    // Hidden while EDITING: an existing voucher's lines are rebuilt
+                    // as product stubs with `costPrice: null` (see the edit-load
+                    // mapping), so every line would price at cost 0 and report the
+                    // whole sale as profit. Populating real costs would add a
+                    // cost-map query to every voucher open; snapshotting cost at
+                    // save time needs a `costAtSale` column and a second cost source
+                    // that could drift from the derived cost BI and the P&L use.
+                    // The panel is decision support for pricing a NEW sale, so it is
+                    // simply not offered on edit — absent beats wrong.
+                    copy.showProfit && !isEditing ? (
                     <Button variant="outline" onClick={() => setShowProfit((s) => !s)} title="Show estimated profit (live)">
                         {showProfit ? "Hide" : "Show"} Profit
                     </Button>
-                ) : undefined}
+                    ) : undefined
+                }
             />
             <Dialog open={closeDialogOpen} onOpenChange={setCloseDialogOpen}>
                 {/* Keyboard: Esc → Stay (handled natively by Radix Dialog).

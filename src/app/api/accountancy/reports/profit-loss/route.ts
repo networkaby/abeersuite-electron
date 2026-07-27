@@ -43,7 +43,24 @@ export async function GET(req: Request) {
         const { openingStock, closingStock } = await computeTradingStockAdjustment(from, to);
 
         // ── Row totals from rolled-up tree ──────────────────────────────
-        const sumRoot = (n?: { rolledUpClosing: number }) => n ? Math.abs(n.rolledUpClosing) : 0;
+        //
+        // A P&L reports the PERIOD's activity, so this nets the period's
+        // debits and credits — NOT `rolledUpClosing`, which is
+        // `opening + period` and therefore carries every earlier transaction
+        // into the window. Using closing made the report correct only when
+        // `from` was the start of the books: pick any later start (a single
+        // day, a month) and it silently showed cumulative-to-date figures
+        // instead of that period's.
+        //
+        // Income is credit-natured, expense debit-natured; abs() keeps every
+        // row positive for display, exactly as before.
+        const sumRoot = (n?: { rolledUpDebits: number; rolledUpCredits: number; type: string }) => {
+            if (!n) return 0;
+            const period = n.type === "INCOME"
+                ? n.rolledUpCredits - n.rolledUpDebits
+                : n.rolledUpDebits - n.rolledUpCredits;
+            return Math.abs(period);
+        };
 
         const trading = {
             debit: {

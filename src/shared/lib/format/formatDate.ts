@@ -23,6 +23,44 @@ export function parseIsoDateOnly(iso: string): Date {
     return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
 }
 
+// ── Query boundaries for Postgres DATE columns ──────────────────────────────
+//
+// `UniversalVoucher.date`, `InvStockLedger.date` etc. are `@db.Date` — a plain
+// calendar date with NO time. Postgres truncates whatever timestamp you compare
+// against them down to a date.
+//
+// So a boundary built at LOCAL midnight is wrong east of UTC: in IST, local
+// midnight on 27 Jul is 26 Jul 18:30 UTC, which truncates to **26 Jul** — the
+// window silently starts a day early and a report for "27th" also returns the
+// 26th. (West of UTC the same flaw lands on the `to` end instead.) Pinning the
+// boundary to UTC midnight makes it land exactly on the intended date literal,
+// on any server, in any timezone.
+//
+// Use these ONLY for date-column query bounds. For form inputs and display,
+// `parseIsoDateOnly` / `toDateOnly` (local components) remain correct.
+
+const isoParts = (d: string | Date): [number, number, number] => {
+    if (d instanceof Date) return [d.getFullYear(), d.getMonth(), d.getDate()];
+    const m = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(d);
+    if (!m) {
+        const p = new Date(d);
+        return [p.getFullYear(), p.getMonth(), p.getDate()];
+    }
+    return [Number(m[1]), Number(m[2]) - 1, Number(m[3])];
+};
+
+/** First instant of the given calendar day, as a DATE-column-safe bound. */
+export function startOfDayUtc(d: string | Date): Date {
+    const [y, m, day] = isoParts(d);
+    return new Date(Date.UTC(y, m, day, 0, 0, 0, 0));
+}
+
+/** Last instant of the given calendar day, as a DATE-column-safe bound. */
+export function endOfDayUtc(d: string | Date): Date {
+    const [y, m, day] = isoParts(d);
+    return new Date(Date.UTC(y, m, day, 23, 59, 59, 999));
+}
+
 /** Compare two dates as calendar dates (yyyy-mm-dd strings) — timezone-safe.
  *  Returns true when a <= b at the calendar-day level. */
 export function dateOnOrBefore(a: Date | string, b: Date | string): boolean {

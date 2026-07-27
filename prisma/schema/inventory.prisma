@@ -6,11 +6,19 @@
 /// (KM = 1000 x 100 = 100,000 CM), and two units are RELATED — interchangeable
 /// on a voucher line — when they share a root.
 ///
-/// Quantities are ALWAYS stored in the ROOT unit: `InvProduct.stock`,
-/// `openingStock` and `InvStockLedger.inQty/outQty` never hold a converted
-/// value. The chain is purely a rendering of that single integer —
-/// 1,015,005 CM displays as "10 KM 150 M 5 CM" — which keeps valuation,
-/// costing and the Int stock cache untouched by the feature.
+/// STORAGE CONTRACT: a quantity is stored in the PRODUCT'S OWN unit — exactly
+/// as typed on the voucher. `InvProduct.stock`, `openingStock` and
+/// `InvStockLedger.inQty/outQty` are NEVER converted. A product on KM holds
+/// whole KM; a product on CM holds whole CM. So nothing in valuation, costing
+/// or the Int stock cache is affected by a chain existing.
+///
+/// The chain is therefore INERT today — it records how units relate, ready for
+/// a per-line unit picker. It is deliberately NOT used to convert or to render
+/// a mixed quantity ("4 DOZ 6 NOS"): that needs root storage, which in turn
+/// needs the picker, because a DOZ line cannot express 6 nos without a
+/// fraction — and fractional quantities are never used (a finer unit is
+/// chosen instead). Adopting the picker later means a one-time migration:
+/// multiply stored stock by the chain factor for products on a compound unit.
 model InvUnit {
   id        Int      @id @default(autoincrement())
   code      String   @unique

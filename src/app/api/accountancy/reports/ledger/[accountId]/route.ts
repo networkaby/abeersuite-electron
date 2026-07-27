@@ -7,7 +7,9 @@ import { resolveSourceBatch } from "@/modules/accountancy/lib/journalEntrySource
 import { ledgerStatusFilterUv } from "@/modules/accountancy/lib/aggregateLedger";
 import { defaultNormalBalanceForGroupType } from "@/modules/accountancy/lib/groupNature";
 import { handleApiError } from "@/shared/lib/api";
-import { dateOnOrBefore, parseIsoDateOnly, toDateOnly } from "@/shared/lib/format/formatDate";
+import {
+    dateOnOrBefore, toDateOnly, startOfDayUtc, endOfDayUtc,
+} from "@/shared/lib/format/formatDate";
 
 // GET /api/accountancy/reports/ledger/[accountId]?from=YYYY-MM-DD&to=YYYY-MM-DD
 export async function GET(req: Request, { params }: { params: Promise<{ accountId: string }> }) {
@@ -19,21 +21,13 @@ export async function GET(req: Request, { params }: { params: Promise<{ accountI
     const fromParam = searchParams.get("from");
     const toParam = searchParams.get("to");
 
-    const now = new Date();
+    // UTC-pinned bounds — `UniversalVoucher.date` is a DATE column, so a
+    // local-midnight `from` truncates to the PREVIOUS day in IST and the
+    // ledger silently opens with the day before its start date.
     const from = fromParam
-        ? parseIsoDateOnly(fromParam)
-        : new Date(now.getFullYear(), 0, 1);
-    const to = toParam
-        ? (() => {
-            const d = parseIsoDateOnly(toParam);
-            d.setHours(23, 59, 59, 999);
-            return d;
-        })()
-        : (() => {
-            const d = new Date();
-            d.setHours(23, 59, 59, 999);
-            return d;
-        })();
+        ? startOfDayUtc(fromParam)
+        : new Date(Date.UTC(new Date().getFullYear(), 0, 1));
+    const to = endOfDayUtc(toParam ?? new Date());
 
     const account = await prisma.account.findUnique({
         where: { id: Number(accountId) },
