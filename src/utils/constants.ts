@@ -108,7 +108,7 @@ export type ModuleCreateAction = {
     href?: string;
     /** Open the href in a new browser tab. */
     newTab?: boolean;
-    action?: "more" | "new-ticket" | "new-help-ticket" | "new-person" | "new-company" | "new-journal-voucher" | "new-debit-note" | "new-contra" | "new-payment" | "new-receipt" | "new-credit-note" | "new-sale" | "new-purchase" | "new-sale-return" | "new-purchase-return" | "new-estimate" | "new-sales-order" | "new-purchase-order" | "new-grn" | "new-challan" | "new-manufacturing-journal" | "new-physical-stock" | "new-branch-transfer" | "new-rejection-in" | "new-rejection-out";
+    action?: "more" | "new-ticket" | "new-help-ticket" | "new-person" | "new-company" | "new-deal" | "new-task" | "new-journal-voucher" | "new-debit-note" | "new-contra" | "new-payment" | "new-receipt" | "new-credit-note" | "new-sale" | "new-purchase" | "new-sale-return" | "new-purchase-return" | "new-estimate" | "new-sales-order" | "new-purchase-order" | "new-grn" | "new-challan" | "new-manufacturing-journal" | "new-physical-stock" | "new-branch-transfer" | "new-rejection-in" | "new-rejection-out";
     pipelineRef?: "default";
     permission?: string | null;
     disabled?: boolean;
@@ -455,7 +455,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         dashboardHref: "/office/crm/deals",
         pathPrefixes: ["/office/crm"],
         createActions: [
-            { label: "New Deal +", subtitle: "Add a deal to the pipeline", icon: Network, variant: "default", href: "/office/crm/deals?new=1", permission: "deals:create" },
+            { label: "New Deal +", subtitle: "Add a deal to the pipeline", icon: Network, variant: "default", action: "new-deal", permission: "deals:create" },
         ],
         children: [
             { label: "Deals", icon: ClipboardList, href: "/office/crm/deals" },
@@ -586,7 +586,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         dashboardHref: "/office/administration",
         pathPrefixes: ["/office/administration"],
         createActions: [
-            { label: "New Task +", subtitle: "Add an internal work item", icon: ListChecks, variant: "default", href: "/office/administration?new=1", permission: "tasks:create" },
+            { label: "New Task +", subtitle: "Add an internal work item", icon: ListChecks, variant: "default", action: "new-task", permission: "tasks:create" },
         ],
         children: [
             { label: "Work Board", icon: ListChecks, href: "/office/administration" },
@@ -799,8 +799,8 @@ export const BUTTON_BAR_ACTIONS: ButtonBarAction[] = [
     // Links from other modules — folded in so the bar is one complete, always-on set.
     { label: "Person +", subtitle: "Create a new person", icon: Users, variant: "outline", action: "new-person", permission: "customers:create" },
     { label: "Companies +", subtitle: "Create a new company", icon: Building2, variant: "outline", action: "new-company", permission: "customers:create" },
-    { label: "New Deal +", subtitle: "Add a deal to the pipeline", icon: Network, variant: "outline", href: "/office/crm/deals?new=1", permission: "deals:create" },
-    { label: "New Task +", subtitle: "Add an internal work item", icon: ListChecks, variant: "outline", href: "/office/administration?new=1", permission: "tasks:create" },
+    { label: "New Deal +", subtitle: "Add a deal to the pipeline", icon: Network, variant: "outline", action: "new-deal", permission: "deals:create" },
+    { label: "New Task +", subtitle: "Add an internal work item", icon: ListChecks, variant: "outline", action: "new-task", permission: "tasks:create" },
 
     { label: "More +", subtitle: "All create actions", icon: Grid2x2, variant: "outline", action: "more", permission: "quick-actions:more" },
 

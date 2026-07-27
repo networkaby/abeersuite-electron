@@ -19,6 +19,9 @@ import CreatePersonDialog from "@/shared/components/CreatePersonDialog";
 import CreateCompanyDialog from "@/shared/components/CreateCompanyDialog";
 import AllCreateActionsDialog from "@/shared/components/AllCreateActionsDialog";
 import { HelpQuickForm } from "@/modules/help/components";
+import { DealFormDialog } from "@/modules/deals/components";
+import { TaskFormDialog } from "@/modules/administration/components";
+import type { DealPositionOption } from "@/modules/deals/lib/types";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
@@ -126,8 +129,12 @@ export default function ButtonBar({ user }: { user?: UserType }) {
     });
 
     const { setOpen: openQuickTicket, setInitialPipelineId } = useQuickTicketStore();
-    const { personOpen, companyOpen, helpOpen, setPersonOpen, setCompanyOpen, setHelpOpen } = useCreateDialogStore();
+    const {
+        personOpen, companyOpen, helpOpen, dealOpen, taskOpen,
+        setPersonOpen, setCompanyOpen, setHelpOpen, setDealOpen, setTaskOpen,
+    } = useCreateDialogStore();
     // GL voucher stores removed — those kinds now navigate to full-page routes.
+    const [positions, setPositions] = useState<DealPositionOption[]>([]);
 
     const permissions = user?.permissions ?? [];
     const isAdmin = permissions.includes(PERMISSIONS.ADMIN_BYPASS);
@@ -146,6 +153,15 @@ export default function ButtonBar({ user }: { user?: UserType }) {
             .catch(() => { });
     }, []);
 
+    useEffect(() => {
+        axios
+            .get<{ id: string; title: string; branch?: { name: string } | null }[]>("/api/positions")
+            .then((res) => {
+                setPositions(res.data.map((p) => ({ id: p.id, title: p.title, branchName: p.branch?.name ?? null })));
+            })
+            .catch(() => { });
+    }, []);
+
     const handleAction = (action: ModuleCreateAction) => {
         if (action.disabled) return;
         if (action.action === "more") {
@@ -159,6 +175,10 @@ export default function ButtonBar({ user }: { user?: UserType }) {
             setCompanyOpen(true);
         } else if (action.action === "new-help-ticket") {
             setHelpOpen(true);
+        } else if (action.action === "new-deal") {
+            setDealOpen(true);
+        } else if (action.action === "new-task") {
+            setTaskOpen(true);
         }
     };
 
@@ -357,6 +377,8 @@ export default function ButtonBar({ user }: { user?: UserType }) {
             <CreatePersonDialog open={personOpen} onOpenChange={setPersonOpen} />
             <CreateCompanyDialog open={companyOpen} onOpenChange={setCompanyOpen} />
             <HelpQuickForm open={helpOpen} onOpenChange={setHelpOpen} onSaved={() => { /* no list on-screen to refresh */ }} />
+            <DealFormDialog open={dealOpen} onOpenChange={setDealOpen} positions={positions} deal={null} onSaved={() => { /* no list on-screen to refresh */ }} />
+            <TaskFormDialog open={taskOpen} onOpenChange={setTaskOpen} positions={positions} task={null} onSaved={() => { /* no list on-screen to refresh */ }} />
             <ActionContextMenu menu={ctxMenu} onClose={() => setCtxMenu(null)} />
         </>
     );
