@@ -467,6 +467,10 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
             partyId: number | null;
             partyPhone: string | null;
             partyAddress: string | null;
+            /// Canonical party ledger from the voucher spine (universalVoucher
+            /// .partyAccountId). Needed to tell the auto-appended AR tender row
+            /// apart from real cash/bank tenders on edit-load.
+            accountId: number | null;
             paymentMode?: string | null;
             paymentAccountId?: number | null;
             creditPeriodDays: number | null;
@@ -592,6 +596,10 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                             : "customer",
                         name: v.partyName ?? "",
                         phone: v.partyPhone ?? null,
+                        // Without this the save path can't recompute the AR
+                        // remainder row, so an edited total no longer foots
+                        // against the tenders and the API rejects the save.
+                        accountId: v.accountId ?? null,
                     } as PickedParty);
                 }
 
@@ -620,11 +628,15 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                 // Hydrate tender rows. Each saved tender carries the
                 // resolved Account (name + code) so the picker labels render
                 // immediately without a second lookup. Filter out the
-                // party-AR row (auto-recomputed below from the Balance);
+                // party-AR row (auto-recomputed on save from the Balance);
                 // operator-edited tender rows persist as typed.
-                const partyAccountId = v.partyId != null && v.partyType === "customer"
-                    ? null  // resolved through person→account dance; skip for now
-                    : null;
+                //
+                // The AR row is what the customer still OWES — it is not money
+                // received. Hydrating it would show the unpaid balance as a
+                // "Received In" row (labelled "Cash / Bank", since the party
+                // ledger isn't in the cash/bank list) and re-post it as a
+                // receipt that never happened.
+                const partyAccountId = v.accountId ?? null;
                 if (v.tenders && v.tenders.length > 0) {
                     setTenders(v.tenders
                         .filter((t) => partyAccountId == null || t.accountId !== partyAccountId)
