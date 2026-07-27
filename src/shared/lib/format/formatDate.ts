@@ -1,3 +1,5 @@
+import { BUSINESS_TIME_ZONE } from "@/shared/lib/constants/business";
+
 export function formatDate(d: Date | string): string {
     return new Date(d).toLocaleDateString("en-GB", {
         day: "numeric", month: "short", year: "numeric",
@@ -61,6 +63,20 @@ export function endOfDayUtc(d: string | Date): Date {
     return new Date(Date.UTC(y, m, day, 23, 59, 59, 999));
 }
 
+/** The calendar date of a UTC-pinned bound, as yyyy-mm-dd.
+ *
+ *  The mirror of `startOfDayUtc` / `endOfDayUtc`: those turn a calendar date
+ *  into a query bound, this turns the bound back into the calendar date. Use it
+ *  whenever a report echoes its period back to the client — sending the raw
+ *  `...T23:59:59.999Z` bound instead makes the browser re-read it as an instant
+ *  and print the NEXT day east of UTC. `toDateOnly` (local components) is wrong
+ *  here for the same reason. */
+export function toDateOnlyUtc(d: Date): string {
+    const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+    const day = String(d.getUTCDate()).padStart(2, "0");
+    return `${d.getUTCFullYear()}-${m}-${day}`;
+}
+
 /** Compare two dates as calendar dates (yyyy-mm-dd strings) — timezone-safe.
  *  Returns true when a <= b at the calendar-day level. */
 export function dateOnOrBefore(a: Date | string, b: Date | string): boolean {
@@ -79,19 +95,18 @@ export function todayIso(): string {
 
 // ── Business-timezone "today", for SERVER code ──────────────────────────────
 //
-// `todayIso()` above is correct in the BROWSER, where "local" means the shop's
-// own clock. On the server it is wrong: Vercel Functions run in UTC regardless
-// of where the shop is, so `new Date()` there reads server time, not shop time.
-// Between 00:00 and 05:30 IST a server-side "today" would stamp a voucher with
-// YESTERDAY's date.
+// This is the ONLY place a timezone is involved. A date the user TYPES is a
+// plain calendar date and needs none — `new Date("2026-07-28")` parses as UTC
+// midnight, landing exactly on the intended day in a `@db.Date` column.
 //
-// `TZ` can't fix this — Vercel reserves that env-var name, so it can't be set
-// per-project. Intl needs no such setting: it computes calendar parts for any
-// named zone directly, on any server, regardless of the server's own clock.
+// The fallback is the problem. `todayIso()` above is correct in the BROWSER,
+// where "local" means the shop's own clock. On the server it is wrong: Vercel
+// Functions run in UTC regardless of where the shop is, so `new Date()` there
+// reads server time, not shop time. Between 00:00 and 05:30 IST a server-side
+// "today" would stamp a voucher with YESTERDAY's date.
 //
-// Single named constant so a future multi-region shop is a one-line change,
-// not a re-grep of every call site.
-const BUSINESS_TIME_ZONE = "Asia/Kolkata";
+// The zone itself lives in `src/shared/lib/constants/business.ts` — one editable
+// line, so a future multi-region shop is not a re-grep of every call site.
 
 /** Today as yyyy-mm-dd in the SHOP's timezone — for server code stamping a
  *  voucher/order/refund date from "now". Never use `todayIso()` /
@@ -103,6 +118,13 @@ export function businessTodayIso(): string {
     }).formatToParts(new Date());
     const get = (t: string) => parts.find((p) => p.type === t)!.value;
     return `${get("year")}-${get("month")}-${get("day")}`;
+}
+
+/** `businessTodayIso()` as a DATE-column-safe `Date` — the fallback for records
+ *  with no user-entered date (`UniversalVoucher.date`, `InvStockLedger.date`, …).
+ *  Use this instead of `new Date()` wherever the server invents a date. */
+export function businessToday(): Date {
+    return startOfDayUtc(businessTodayIso());
 }
 
 export function formatDateTime(d: Date | string): string {

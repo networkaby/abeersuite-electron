@@ -8,6 +8,7 @@ import {
 import { buildGroupTree, type GroupNode } from "@/modules/accountancy/lib/groupTree";
 import { getClosingStockValue } from "@/modules/accountancy/lib/closingStock";
 import { VALUATION_METHODS, type ValuationMethod } from "@/modules/inventory/lib/valuation";
+import { toDateOnlyUtc } from "@/shared/lib/format/formatDate";
 
 // Heavy aggregation: full-GL closing balances + a whole-inventory stock
 // valuation walk. Give Vercel headroom past the default 10s function limit so
@@ -107,8 +108,9 @@ export async function GET(req: Request) {
         const netPl   = await netProfitLoss(fyStart, asOf);
 
         return NextResponse.json({
-            asOf:         asOf.toISOString(),
-            fyStart:      fyStart.toISOString(),
+            // Plain calendar dates, not the UTC query bounds — see toDateOnlyUtc.
+            asOf:         toDateOnlyUtc(asOf),
+            fyStart:      toDateOnlyUtc(fyStart),
             liabilities,
             assets,
             netProfitLoss: netPl,        // Liabilities side adjustment

@@ -393,6 +393,7 @@ export default function InventoryDetailsPage() {
                                     <TallyDateInput
                                         value={to}
                                         onValueChange={setTo}
+                                        monthMode="end"
                                         className="h-7 w-36 text-xs"
                                     />
                                     <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs" onClick={handleRefresh}>

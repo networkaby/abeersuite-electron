@@ -1,7 +1,7 @@
 {
   "_meta": {
     "version": 1,
-    "exportedAt": "2026-07-20T16:48:45.958Z",
+    "exportedAt": "2026-07-27T04:12:20.738Z",
     "note": "Personal config snapshot — everything except tickets, vouchers, customers, products."
   },
   "singletons": {
@@ -17,6 +17,12 @@
       "valuationMethod": "WEIGHTED_AVG",
       "defaultSaleCreditPeriod": 0,
       "defaultPurchaseCreditPeriod": 0,
+      "defaultLeadTimeDays": 3,
+      "reorderSlowAfterDays": 30,
+      "reorderNonMovingAfterDays": 90,
+      "reorderDeadAfterDays": 180,
+      "reorderNewItemDays": 60,
+      "clearanceMarginCutoffPct": "1",
       "defaultCurrencySymbol": "₹",
       "barcodeBandsJson": [
         {
@@ -74,8 +80,15 @@
       "shippingPoolGroupId": {
         "name": "Additional Purchase Cost"
       },
-      "shopPublishRulesJson": null,
-      "shopOutOfStockPolicy": "NOTIFY",
+      "shopPublishRulesJson": {
+        "mrp": true,
+        "image": true,
+        "price": true,
+        "stock": true,
+        "category": true,
+        "description": true
+      },
+      "shopOutOfStockPolicy": "BACKORDER",
       "posEstimateShowDiscountsJson": {
         "tier": false,
         "coupon": false,
@@ -90,7 +103,7 @@
       "gstStateCode": "18",
       "identityJson": {
         "pan": "AXEPJR673R",
-        "logoUrl": "",
+        "logoUrl": "/logo.svg",
         "tagline": "IT hardware & components — delivered fast across India"
       },
       "addressJson": {
@@ -376,292 +389,7 @@
       "isActive": true
     }
   ],
-  "invBrands": [
-    {
-      "name": "Hola",
-      "isActive": true
-    },
-    {
-      "name": "iBall",
-      "isActive": true
-    },
-    {
-      "name": "Intex",
-      "isActive": true
-    },
-    {
-      "name": "Logitech",
-      "isActive": true
-    },
-    {
-      "name": "Luminous",
-      "isActive": true
-    },
-    {
-      "name": "Microtek",
-      "isActive": true
-    },
-    {
-      "name": "Nvidia",
-      "isActive": true
-    },
-    {
-      "name": "Stanley",
-      "isActive": true
-    },
-    {
-      "name": "Zebronics",
-      "isActive": true
-    },
-    {
-      "name": "Generic",
-      "isActive": true
-    },
-    {
-      "name": "Special",
-      "isActive": true
-    },
-    {
-      "name": "Kodak",
-      "isActive": true
-    },
-    {
-      "name": "EVM",
-      "isActive": true
-    },
-    {
-      "name": "Lapcare",
-      "isActive": true
-    },
-    {
-      "name": "Prodot",
-      "isActive": true
-    },
-    {
-      "name": "Bindal",
-      "isActive": true
-    },
-    {
-      "name": "Coconut",
-      "isActive": true
-    },
-    {
-      "name": "HP",
-      "isActive": true
-    },
-    {
-      "name": "HCL",
-      "isActive": true
-    },
-    {
-      "name": "Intel",
-      "isActive": true
-    },
-    {
-      "name": "Lenovo",
-      "isActive": true
-    },
-    {
-      "name": "LG",
-      "isActive": true
-    },
-    {
-      "name": "MSI",
-      "isActive": true
-    },
-    {
-      "name": "Samsung",
-      "isActive": true
-    },
-    {
-      "name": "Sony",
-      "isActive": true
-    },
-    {
-      "name": "Corsair",
-      "isActive": true
-    },
-    {
-      "name": "Crucial",
-      "isActive": true
-    },
-    {
-      "name": "Kingston",
-      "isActive": true
-    },
-    {
-      "name": "SanDisk",
-      "isActive": true
-    },
-    {
-      "name": "Seagate",
-      "isActive": true
-    },
-    {
-      "name": "Toshiba",
-      "isActive": true
-    },
-    {
-      "name": "Transcend",
-      "isActive": true
-    },
-    {
-      "name": "WD",
-      "isActive": true
-    },
-    {
-      "name": "Brother",
-      "isActive": true
-    },
-    {
-      "name": "Canon",
-      "isActive": true
-    },
-    {
-      "name": "Epson",
-      "isActive": true
-    },
-    {
-      "name": "Kyocera",
-      "isActive": true
-    },
-    {
-      "name": "Lexmark",
-      "isActive": true
-    },
-    {
-      "name": "Panasonic",
-      "isActive": true
-    },
-    {
-      "name": "Ricoh",
-      "isActive": true
-    },
-    {
-      "name": "TVS",
-      "isActive": true
-    },
-    {
-      "name": "Xerox",
-      "isActive": true
-    },
-    {
-      "name": "Annke",
-      "isActive": true
-    },
-    {
-      "name": "Axis",
-      "isActive": true
-    },
-    {
-      "name": "Bosch",
-      "isActive": true
-    },
-    {
-      "name": "CP Plus",
-      "isActive": true
-    },
-    {
-      "name": "Dahua",
-      "isActive": true
-    },
-    {
-      "name": "Ezviz",
-      "isActive": true
-    },
-    {
-      "name": "Godrej",
-      "isActive": true
-    },
-    {
-      "name": "Hanwha",
-      "isActive": true
-    },
-    {
-      "name": "Hikvision",
-      "isActive": true
-    },
-    {
-      "name": "Honeywell",
-      "isActive": true
-    },
-    {
-      "name": "Reolink",
-      "isActive": true
-    },
-    {
-      "name": "Zicom",
-      "isActive": true
-    },
-    {
-      "name": "Cisco",
-      "isActive": true
-    },
-    {
-      "name": "D-Link",
-      "isActive": true
-    },
-    {
-      "name": "Grandstream",
-      "isActive": true
-    },
-    {
-      "name": "Netgear",
-      "isActive": true
-    },
-    {
-      "name": "Tenda",
-      "isActive": true
-    },
-    {
-      "name": "TP-Link",
-      "isActive": true
-    },
-    {
-      "name": "Ubiquiti",
-      "isActive": true
-    },
-    {
-      "name": "APC",
-      "isActive": true
-    },
-    {
-      "name": "Beetel",
-      "isActive": true
-    },
-    {
-      "name": "Belkin",
-      "isActive": true
-    },
-    {
-      "name": "Acer",
-      "isActive": true
-    },
-    {
-      "name": "AMD",
-      "isActive": true
-    },
-    {
-      "name": "Apple",
-      "isActive": true
-    },
-    {
-      "name": "Asus",
-      "isActive": true
-    },
-    {
-      "name": "Dell",
-      "isActive": true
-    },
-    {
-      "name": "Gigabyte",
-      "isActive": true
-    },
-    {
-      "name": "Boat",
-      "isActive": true
-    }
-  ],
+  "invBrands": [],
   "invWarrantyTerms": [
     {
       "name": "No Warranty",
@@ -730,228 +458,8 @@
       "isActive": true
     }
   ],
-  "invCategories": [
-    {
-      "name": "Office Stationary",
-      "slug": null,
-      "isActive": true,
-      "parentName": null
-    },
-    {
-      "name": "Home Security",
-      "slug": null,
-      "isActive": true,
-      "parentName": null
-    },
-    {
-      "name": "Computer Parts",
-      "slug": null,
-      "isActive": true,
-      "parentName": null
-    }
-  ],
-  "invProductGroups": [
-    {
-      "name": "SD Card",
-      "isActive": true,
-      "gstRateId": null,
-      "hsnCode": null,
-      "taxability": null,
-      "parentName": "Memory Card"
-    },
-    {
-      "name": "NVME",
-      "isActive": true,
-      "gstRateId": null,
-      "hsnCode": null,
-      "taxability": null,
-      "parentName": "SSD"
-    },
-    {
-      "name": "Sata SSD",
-      "isActive": true,
-      "gstRateId": null,
-      "hsnCode": null,
-      "taxability": null,
-      "parentName": "SSD"
-    },
-    {
-      "name": "Toner",
-      "isActive": true,
-      "gstRateId": null,
-      "hsnCode": null,
-      "taxability": null,
-      "parentName": "Printer Consumables"
-    },
-    {
-      "name": "Ink Bottle",
-      "isActive": true,
-      "gstRateId": null,
-      "hsnCode": null,
-      "taxability": null,
-      "parentName": "Printer Consumables"
-    },
-    {
-      "name": "Toner Powder",
-      "isActive": true,
-      "gstRateId": null,
-      "hsnCode": null,
-      "taxability": null,
-      "parentName": "Printer Consumables"
-    },
-    {
-      "name": "USB Cable",
-      "isActive": true,
-      "gstRateId": null,
-      "hsnCode": null,
-      "taxability": null,
-      "parentName": "Computer Cables"
-    },
-    {
-      "name": "VGA Cable",
-      "isActive": true,
-      "gstRateId": null,
-      "hsnCode": null,
-      "taxability": null,
-      "parentName": "Computer Cables"
-    },
-    {
-      "name": "Copier Paper",
-      "isActive": true,
-      "gstRateId": null,
-      "hsnCode": null,
-      "taxability": null,
-      "parentName": "Papers"
-    },
-    {
-      "name": "A4 Copier Paper",
-      "isActive": true,
-      "gstRateId": null,
-      "hsnCode": null,
-      "taxability": null,
-      "parentName": "Copier Paper"
-    },
-    {
-      "name": "LGL Copier Paper",
-      "isActive": true,
-      "gstRateId": null,
-      "hsnCode": null,
-      "taxability": null,
-      "parentName": "Copier Paper"
-    },
-    {
-      "name": "Photo Paper A4",
-      "isActive": true,
-      "gstRateId": null,
-      "hsnCode": null,
-      "taxability": null,
-      "parentName": "Papers"
-    },
-    {
-      "name": "HD CCTV",
-      "isActive": true,
-      "gstRateId": null,
-      "hsnCode": null,
-      "taxability": null,
-      "parentName": "CCTV"
-    },
-    {
-      "name": "IP CCTV",
-      "isActive": true,
-      "gstRateId": null,
-      "hsnCode": null,
-      "taxability": null,
-      "parentName": "CCTV"
-    },
-    {
-      "name": "CCTV HD Dome",
-      "isActive": true,
-      "gstRateId": null,
-      "hsnCode": null,
-      "taxability": null,
-      "parentName": "HD CCTV"
-    },
-    {
-      "name": "CCTV IP Dome",
-      "isActive": true,
-      "gstRateId": null,
-      "hsnCode": null,
-      "taxability": null,
-      "parentName": "IP CCTV"
-    },
-    {
-      "name": "CCTV HD Bullet",
-      "isActive": true,
-      "gstRateId": null,
-      "hsnCode": null,
-      "taxability": null,
-      "parentName": "HD CCTV"
-    },
-    {
-      "name": "CCTV IP Bullet",
-      "isActive": true,
-      "gstRateId": null,
-      "hsnCode": null,
-      "taxability": null,
-      "parentName": "IP CCTV"
-    },
-    {
-      "name": "SSD",
-      "isActive": true,
-      "gstRateId": null,
-      "hsnCode": null,
-      "taxability": null,
-      "parentName": null
-    },
-    {
-      "name": "Memory Card",
-      "isActive": true,
-      "gstRateId": null,
-      "hsnCode": null,
-      "taxability": null,
-      "parentName": null
-    },
-    {
-      "name": "Printer Consumables",
-      "isActive": true,
-      "gstRateId": null,
-      "hsnCode": null,
-      "taxability": null,
-      "parentName": null
-    },
-    {
-      "name": "Computer Cables",
-      "isActive": true,
-      "gstRateId": null,
-      "hsnCode": null,
-      "taxability": null,
-      "parentName": null
-    },
-    {
-      "name": "Papers",
-      "isActive": true,
-      "gstRateId": null,
-      "hsnCode": null,
-      "taxability": null,
-      "parentName": null
-    },
-    {
-      "name": "Tank Printer",
-      "isActive": true,
-      "gstRateId": null,
-      "hsnCode": null,
-      "taxability": null,
-      "parentName": null
-    },
-    {
-      "name": "CCTV",
-      "isActive": true,
-      "gstRateId": null,
-      "hsnCode": null,
-      "taxability": null,
-      "parentName": null
-    }
-  ],
+  "invCategories": [],
+  "invProductGroups": [],
   "invAttributeMasters": [],
   "strategyPoints": [
     {
@@ -2605,6 +2113,69 @@
       "fontSizePx": 12
     },
     {
+      "kind": "ONLINE_INVOICE",
+      "headerLine1": "",
+      "headerLine2": "Tax Invoice (Online Order)",
+      "addressBlock": "",
+      "gstinLine": "",
+      "phoneLine": "",
+      "logoUrl": "",
+      "showLogo": true,
+      "showLogoThermal": false,
+      "showHeaderText": false,
+      "showHeaderTextThermal": true,
+      "showAddress": true,
+      "showAddressThermal": true,
+      "showBranchAddress": false,
+      "showBranchAddressThermal": false,
+      "showGstin": true,
+      "showGstinThermal": true,
+      "showPhone": true,
+      "showPhoneThermal": true,
+      "showTaxSummary": true,
+      "showTaxSummaryThermal": true,
+      "showMrp": true,
+      "showMrpThermal": true,
+      "showSignature": true,
+      "showSignatureThermal": false,
+      "showQrCode": false,
+      "showBarcode": true,
+      "showBarcodeThermal": true,
+      "showBank": true,
+      "showBankThermal": false,
+      "showTicket": true,
+      "showTicketThermal": true,
+      "showTicketTl": true,
+      "showDate": true,
+      "showDateThermal": true,
+      "showDateTl": true,
+      "showRef": true,
+      "showRefThermal": true,
+      "showRefTl": true,
+      "showDevice": false,
+      "showDeviceThermal": false,
+      "showDeviceTl": false,
+      "showFooter": true,
+      "showFooterThermal": true,
+      "showFooterTl": true,
+      "showSentBy": true,
+      "showSentByThermal": true,
+      "showReceivedBy": true,
+      "showReceivedByThermal": true,
+      "showPreparedBy": true,
+      "showPreparedByThermal": true,
+      "showFindings": true,
+      "showFindingsThermal": true,
+      "termsText": "1. We declare that this invoice shows the actual price of the goods described herein and that all particulars are true and correct.\n2. Sold items cannot be returned. Warranty support is provided exclusively by the manufacturer \n    or their authorized service center. A bill is mandatory for any type of after-sales support.",
+      "footerLine": "Feel free to call us at 8876996996 for any assistance. Thank you. Visit Again!",
+      "signatureLabel": "Authorised Signatory",
+      "disclaimerLine": "This is a computer-generated document and does not require a signature.",
+      "defaultPaper": "A4",
+      "paperWidthMm": 80,
+      "fontFamily": "Courier New, monospace",
+      "fontSizePx": 12
+    },
+    {
       "kind": "SALE",
       "headerLine1": "",
       "headerLine2": "Tax Invoice",
@@ -2764,6 +2335,13 @@
       "name": "Bank Accounts",
       "type": "ASSET",
       "sortOrder": 60,
+      "isActive": true,
+      "parentName": "Current Assets"
+    },
+    {
+      "name": "Payment Gateway",
+      "type": "ASSET",
+      "sortOrder": 0,
       "isActive": true,
       "parentName": "Current Assets"
     },
@@ -2938,35 +2516,141 @@
   ],
   "accounts": [
     {
-      "name": "SBI CC A/c 873",
-      "code": "1010",
-      "normalBalance": "DEBIT",
+      "name": "ShipRoket COD",
+      "code": null,
+      "normalBalance": null,
       "description": null,
       "isActive": true,
       "groupId": {
-        "name": "Bank Accounts"
+        "name": "Payment Gateway"
       },
       "creditLimit": null,
-      "bankJson": {
-        "ifsc": "SBIN0008462",
-        "branch": "Abhayapuri",
-        "bankName": "State Bank of India",
-        "beneficiary": "Network Service",
-        "accountNumber": "33605435873"
-      },
+      "bankJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
       "parentName": null
     },
     {
-      "name": "Cash",
-      "code": "1000",
+      "name": "PhonePe",
+      "code": null,
+      "normalBalance": null,
+      "description": "UPI Payment",
+      "isActive": true,
+      "groupId": {
+        "name": "Payment Gateway"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "parentName": null
+    },
+    {
+      "name": "Plant & Machinery",
+      "code": null,
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
       "groupId": {
-        "name": "Cash-in-Hand"
+        "name": "Fixed Assets"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "parentName": null
+    },
+    {
+      "name": "Advance to Suppliers",
+      "code": null,
+      "normalBalance": "DEBIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Loans & Advances (Asset)"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "parentName": null
+    },
+    {
+      "name": "Salary & Wages",
+      "code": "6200",
+      "normalBalance": "DEBIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Indirect Expenses"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "parentName": null
+    },
+    {
+      "name": "Accounts Receivable",
+      "code": "1100",
+      "normalBalance": "DEBIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Sundry Debtors"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "parentName": null
+    },
+    {
+      "name": "IGST",
+      "code": null,
+      "normalBalance": "CREDIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Duties & Taxes"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "parentName": null
+    },
+    {
+      "name": "Razorpay",
+      "code": null,
+      "normalBalance": null,
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Payment Gateway"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "parentName": null
+    },
+    {
+      "name": "Payu",
+      "code": null,
+      "normalBalance": null,
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Payment Gateway"
       },
       "creditLimit": null,
       "bankJson": null,
@@ -3088,55 +2772,7 @@
       "parentName": null
     },
     {
-      "name": "Plant & Machinery",
-      "code": null,
-      "normalBalance": "DEBIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Fixed Assets"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
-      "name": "Advance to Suppliers",
-      "code": null,
-      "normalBalance": "DEBIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Loans & Advances (Asset)"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
-      "name": "Salary & Wages",
-      "code": "6200",
-      "normalBalance": "DEBIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Indirect Expenses"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
-      "name": "Cash – Counter 2 New Room – Head Office",
+      "name": "Cash – Counter 23 rakesh – Head Office",
       "code": null,
       "normalBalance": "DEBIT",
       "description": null,
@@ -3152,13 +2788,45 @@
       "parentName": null
     },
     {
-      "name": "Accounts Receivable",
-      "code": "1100",
+      "name": "CGST",
+      "code": null,
+      "normalBalance": "CREDIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Duties & Taxes"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "parentName": null
+    },
+    {
+      "name": "Shipping Income",
+      "code": null,
+      "normalBalance": "CREDIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Indirect Incomes"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "parentName": null
+    },
+    {
+      "name": "Petty Cash",
+      "code": null,
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
       "groupId": {
-        "name": "Sundry Debtors"
+        "name": "Cash-in-Hand"
       },
       "creditLimit": null,
       "bankJson": null,
@@ -3184,13 +2852,51 @@
       "parentName": null
     },
     {
-      "name": "IGST",
-      "code": null,
+      "name": "SBI CC A/c 873",
+      "code": "1010",
       "normalBalance": "CREDIT",
+      "description": "",
+      "isActive": true,
+      "groupId": {
+        "name": "Bank OD A/c"
+      },
+      "creditLimit": null,
+      "bankJson": {
+        "ifsc": "SBIN0008462",
+        "branch": "Abhayapuri",
+        "bankName": "State Bank of India",
+        "beneficiary": "Network Service",
+        "accountNumber": "33605435873"
+      },
+      "openingBalance": "534077.44",
+      "openingBalanceType": "CREDIT",
+      "openingBalanceDate": "2026-07-24T00:00:00.000Z",
+      "parentName": null
+    },
+    {
+      "name": "Bandhan Bank Loan 0193",
+      "code": null,
+      "normalBalance": null,
       "description": null,
       "isActive": true,
       "groupId": {
-        "name": "Duties & Taxes"
+        "name": "Unsecured Loans"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "openingBalance": "341564",
+      "openingBalanceType": "CREDIT",
+      "openingBalanceDate": "2026-07-24T00:00:00.000Z",
+      "parentName": null
+    },
+    {
+      "name": "Cashfree",
+      "code": null,
+      "normalBalance": null,
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Payment Gateway"
       },
       "creditLimit": null,
       "bankJson": null,
@@ -3200,19 +2906,47 @@
       "parentName": null
     },
     {
-      "name": "Petty Cash",
+      "name": "Bankdhan Bank Current A/c  0020",
       "code": null,
-      "normalBalance": "DEBIT",
+      "normalBalance": null,
       "description": null,
       "isActive": true,
       "groupId": {
-        "name": "Cash-in-Hand"
+        "name": "Bank Accounts"
       },
       "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
+      "bankJson": {
+        "ifsc": "BDBL0002540",
+        "branch": "Abhayapuri",
+        "bankName": "Bandhan Bank",
+        "beneficiary": "Network Service",
+        "accountNumber": "2010003160020"
+      },
+      "openingBalance": "36569.19",
+      "openingBalanceType": "DEBIT",
+      "openingBalanceDate": "2026-07-25T00:00:00.000Z",
+      "parentName": null
+    },
+    {
+      "name": "Bandhan Bank SB 4022",
+      "code": null,
+      "normalBalance": null,
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Bank Accounts"
+      },
+      "creditLimit": null,
+      "bankJson": {
+        "ifsc": "BDBL0002540",
+        "branch": "Abhayapuri",
+        "bankName": "Bandhan Bank",
+        "beneficiary": "Sahanas Parbin",
+        "accountNumber": "20200081634022"
+      },
+      "openingBalance": "9144",
+      "openingBalanceType": "DEBIT",
+      "openingBalanceDate": "2026-07-24T00:00:00.000Z",
       "parentName": null
     },
     {
@@ -3406,6 +3140,22 @@
       "parentName": null
     },
     {
+      "name": "New Room",
+      "code": null,
+      "normalBalance": null,
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Fixed Assets"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "openingBalance": "400000",
+      "openingBalanceType": "DEBIT",
+      "openingBalanceDate": "2026-07-24T00:00:00.000Z",
+      "parentName": null
+    },
+    {
       "name": "TDS",
       "code": null,
       "normalBalance": "CREDIT",
@@ -3438,22 +3188,6 @@
       "parentName": null
     },
     {
-      "name": "Discount Allowed",
-      "code": null,
-      "normalBalance": "DEBIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Indirect Expenses"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
       "name": "Service Charges Income",
       "code": "4000",
       "normalBalance": "CREDIT",
@@ -3461,86 +3195,6 @@
       "isActive": true,
       "groupId": {
         "name": "Direct Incomes"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
-      "name": "Cash – Counter 2 Old Room – Head Office",
-      "code": null,
-      "normalBalance": "DEBIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Cash-in-Hand"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
-      "name": "Sales A/c",
-      "code": null,
-      "normalBalance": "CREDIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Sales Accounts"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
-      "name": "CGST",
-      "code": null,
-      "normalBalance": "CREDIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Duties & Taxes"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
-      "name": "SGST",
-      "code": null,
-      "normalBalance": "CREDIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Duties & Taxes"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
-      "name": "Round Off",
-      "code": null,
-      "normalBalance": "CREDIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Indirect Incomes"
       },
       "creditLimit": null,
       "bankJson": null,
@@ -3630,7 +3284,39 @@
       "parentName": null
     },
     {
-      "name": "Cash – Counter 1 – Head Office",
+      "name": "Provision for Tax",
+      "code": null,
+      "normalBalance": "CREDIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Provisions"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "parentName": null
+    },
+    {
+      "name": "Sales A/c",
+      "code": null,
+      "normalBalance": "CREDIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Sales Accounts"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "parentName": null
+    },
+    {
+      "name": "Cash – Counter 24 aka – Head Office",
       "code": null,
       "normalBalance": "DEBIT",
       "description": null,
@@ -3646,13 +3332,13 @@
       "parentName": null
     },
     {
-      "name": "Provision for Tax",
+      "name": "Discount Allowed",
       "code": null,
-      "normalBalance": "CREDIT",
+      "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
       "groupId": {
-        "name": "Provisions"
+        "name": "Indirect Expenses"
       },
       "creditLimit": null,
       "bankJson": null,
@@ -3695,22 +3381,6 @@
     },
     {
       "name": "Discount Received",
-      "code": null,
-      "normalBalance": "CREDIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Indirect Incomes"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
-      "name": "Shipping Income",
       "code": null,
       "normalBalance": "CREDIT",
       "description": null,
@@ -3928,13 +3598,13 @@
       },
       "creditLimit": null,
       "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
+      "openingBalance": "9503",
+      "openingBalanceType": "DEBIT",
+      "openingBalanceDate": "2026-07-24T00:00:00.000Z",
       "parentName": null
     },
     {
-      "name": "Cash – Counter 1 Old Room – Head Office",
+      "name": "Cash – Counter 21 naba – Head Office",
       "code": null,
       "normalBalance": "DEBIT",
       "description": null,
@@ -3944,9 +3614,9 @@
       },
       "creditLimit": null,
       "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
+      "openingBalance": "25109",
+      "openingBalanceType": "DEBIT",
+      "openingBalanceDate": "2026-07-24T00:00:00.000Z",
       "parentName": null
     },
     {
@@ -4222,22 +3892,6 @@
       "parentName": null
     },
     {
-      "name": "SBI POS",
-      "code": null,
-      "normalBalance": null,
-      "description": "Swipe Machine",
-      "isActive": true,
-      "groupId": {
-        "name": "Bank Accounts"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
       "name": "Prepaid Expenses",
       "code": "1300",
       "normalBalance": "DEBIT",
@@ -4270,38 +3924,6 @@
       "parentName": null
     },
     {
-      "name": "Cash – Counter 1 New Room – Head Office",
-      "code": null,
-      "normalBalance": "DEBIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Cash-in-Hand"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
-      "name": "PhonePe",
-      "code": null,
-      "normalBalance": null,
-      "description": "UPI Payment",
-      "isActive": true,
-      "groupId": {
-        "name": "Bank Accounts"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
       "name": "Freight Charges",
       "code": null,
       "normalBalance": "DEBIT",
@@ -4325,6 +3947,134 @@
       "isActive": true,
       "groupId": {
         "name": "Indirect Expenses"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "parentName": null
+    },
+    {
+      "name": "SBI POS",
+      "code": null,
+      "normalBalance": null,
+      "description": "Swipe Machine",
+      "isActive": true,
+      "groupId": {
+        "name": "Payment Gateway"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "parentName": null
+    },
+    {
+      "name": "Cash – Counter 22 Prokash – Head Office",
+      "code": null,
+      "normalBalance": "DEBIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Cash-in-Hand"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "parentName": null
+    },
+    {
+      "name": "KreditBee",
+      "code": null,
+      "normalBalance": null,
+      "description": "sum of total emi",
+      "isActive": true,
+      "groupId": {
+        "name": "Unsecured Loans"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "openingBalance": "92952",
+      "openingBalanceType": "CREDIT",
+      "openingBalanceDate": "2026-07-24T00:00:00.000Z",
+      "parentName": null
+    },
+    {
+      "name": "Wife Loan @ 2%",
+      "code": null,
+      "normalBalance": null,
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Unsecured Loans"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "openingBalance": "90000",
+      "openingBalanceType": "CREDIT",
+      "openingBalanceDate": "2026-07-24T00:00:00.000Z",
+      "parentName": null
+    },
+    {
+      "name": "Mother in Law @ 1%",
+      "code": null,
+      "normalBalance": null,
+      "description": "loan from mother in low",
+      "isActive": true,
+      "groupId": {
+        "name": "Unsecured Loans"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "openingBalance": "100000",
+      "openingBalanceType": "CREDIT",
+      "openingBalanceDate": "2026-07-24T00:00:00.000Z",
+      "parentName": null
+    },
+    {
+      "name": "Suspense A/c",
+      "code": null,
+      "normalBalance": null,
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Suspense A/c"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "openingBalance": "1825",
+      "openingBalanceType": "CREDIT",
+      "openingBalanceDate": "2026-07-24T00:00:00.000Z",
+      "parentName": null
+    },
+    {
+      "name": "Round Off",
+      "code": null,
+      "normalBalance": "CREDIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Indirect Incomes"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "parentName": null
+    },
+    {
+      "name": "SGST",
+      "code": null,
+      "normalBalance": "CREDIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Duties & Taxes"
       },
       "creditLimit": null,
       "bankJson": null,
@@ -4617,58 +4367,16 @@
       "isAllAccess": true
     },
     {
-      "id": "DEP-REPAIR",
-      "name": "Repairs",
-      "description": "Device diagnosis and repair",
+      "id": "DEP-OP",
+      "name": "Managment",
+      "description": "Day To Day Business Work",
       "branchId": null,
       "isAllAccess": false
     },
     {
       "id": "DEP-SALES",
-      "name": "Sales",
+      "name": "Sales Counter",
       "description": "Sales and customer acquisition",
-      "branchId": null,
-      "isAllAccess": false
-    },
-    {
-      "id": "DEP-DESK",
-      "name": "Front Desk",
-      "description": "Customer intake, calls, and receipts",
-      "branchId": null,
-      "isAllAccess": false
-    },
-    {
-      "id": "DEP-FIN",
-      "name": "Finance",
-      "description": "Accounts, invoices, and reporting",
-      "branchId": null,
-      "isAllAccess": false
-    },
-    {
-      "id": "DEP-HR",
-      "name": "HR",
-      "description": "People operations and recruitment",
-      "branchId": null,
-      "isAllAccess": false
-    },
-    {
-      "id": "DEP-IT",
-      "name": "IT / Admin",
-      "description": "Systems, infrastructure, and admin",
-      "branchId": null,
-      "isAllAccess": false
-    },
-    {
-      "id": "DEP-DESP",
-      "name": "Despatch",
-      "description": "Courier, logistics, and shipping",
-      "branchId": null,
-      "isAllAccess": false
-    },
-    {
-      "id": "DEP-OP",
-      "name": "Managment",
-      "description": "Day To Day Business Work",
       "branchId": null,
       "isAllAccess": false
     }
@@ -4683,626 +4391,834 @@
       "departmentId": "DEP-ADMIN"
     },
     {
-      "id": "R3",
-      "label": "Counter Manager",
-      "color": "bg-blue-100 text-blue-600",
-      "rank": 10,
-      "isSystem": false,
-      "departmentId": "DEP-SALES"
-    },
-    {
-      "id": "R4",
-      "label": "Branch Manager",
+      "id": "R2",
+      "label": "Branch Manager Role",
       "color": "bg-blue-100 text-blue-600",
       "rank": 20,
       "isSystem": false,
       "departmentId": "DEP-OP"
     },
     {
-      "id": "R2",
-      "label": "Counter Manager Jr",
+      "id": "R3",
+      "label": "Counter Operator",
       "color": "bg-blue-100 text-blue-600",
-      "rank": 5,
+      "rank": 20,
       "isSystem": false,
       "departmentId": "DEP-SALES"
     }
   ],
   "rolePermissions": [
     {
-      "roleId": "R1",
-      "permissionId": "tickets:create"
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:bi:basket-analysis"
     },
     {
-      "roleId": "R1",
-      "permissionId": "tickets:edit"
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:bi:stock-health"
     },
     {
-      "roleId": "R3",
-      "permissionId": "ui:sidebar:workspace:inbox"
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:bi:discount-impact"
     },
     {
-      "roleId": "R3",
-      "permissionId": "ui:sidebar:workspace:pos"
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:bi:fsn-dead-stock"
     },
     {
-      "roleId": "R3",
-      "permissionId": "ui:sidebar:workspace:work-flow"
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:bi:branch-comparison"
     },
     {
-      "roleId": "R3",
-      "permissionId": "pos:shift:open"
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:bi:abc-analysis"
     },
     {
-      "roleId": "R3",
-      "permissionId": "pos:shift:close"
-    },
-    {
-      "roleId": "R3",
-      "permissionId": "pos:shift:drop"
-    },
-    {
-      "roleId": "R3",
-      "permissionId": "pos:voucher:create:expense"
-    },
-    {
-      "roleId": "R3",
-      "permissionId": "pos:voucher:create:receipt"
-    },
-    {
-      "roleId": "R3",
-      "permissionId": "pos:voucher:create:order"
-    },
-    {
-      "roleId": "R3",
-      "permissionId": "pos:voucher:create:estimate"
-    },
-    {
-      "roleId": "R3",
-      "permissionId": "pos:voucher:create:sale-return"
-    },
-    {
-      "roleId": "R3",
-      "permissionId": "pos:voucher:create:sale"
-    },
-    {
-      "roleId": "R3",
-      "permissionId": "ui:sidebar:settings:thermal-printer"
-    },
-    {
-      "roleId": "R3",
-      "permissionId": "ui:sidebar:settings:qr-display"
-    },
-    {
-      "roleId": "R3",
-      "permissionId": "ui:sidebar:settings:downloads"
-    },
-    {
-      "roleId": "R3",
-      "permissionId": "ui:sidebar:customers:person"
-    },
-    {
-      "roleId": "R3",
-      "permissionId": "ui:sidebar:customers:companies"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "tickets:delete"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "finance:voucher:post:payment"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "finance:voucher:post:receipt"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "finance:voucher:post:contra"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "inventory:voucher:post:sale"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "inventory:voucher:post:purchase"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "inventory:voucher:post:sale-return"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "inventory:voucher:post:purchase-return"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "inventory:voucher:post:grn"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "inventory:voucher:post:manufacturing-journal"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "inventory:voucher:post:rejection-in"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "inventory:voucher:post:rejection-out"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "inventory:voucher:post:estimate"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "inventory:voucher:post:sales-order"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "inventory:voucher:post:purchase-order"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:workspace:pos"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "pos:voucher:create:expense"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "pos:voucher:create:receipt"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "pos:voucher:create:estimate"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "pos:voucher:create:order"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "pos:voucher:create:sale-return"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "pos:voucher:create:sale"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "pos:shift:open"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "pos:shift:close"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "pos:shift:drop"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:workspace:work-flow"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:workspace:inbox"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:pos:shift-reports"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:pos:counters"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "pos:shift:force-close"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:customers:person"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:customers:companies"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "customers:view:creditors"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:repair:all-repair"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:accountancy:daybook"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:accountancy:pending-inventory"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:accountancy:stock-summary"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "customers:edit"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:accountancy:account-ledger"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:accountancy:bank-book"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:accountancy:cash-book"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:accountancy:loans-book"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:accountancy:balance-sheet"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:accountancy:profit-loss-a-c"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:accountancy:financial-insights"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:accountancy:trial-balance"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:accountancy:receivables"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:accountancy:payables"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:accountancy:cash-flow"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:accountancy:fund-flow"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:accountancy:ratio-analysis"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:accountancy:statistics"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:accountancy:bank-reconciliation"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:accountancy:masters"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:accountancy:account-groups"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:accountancy:ledgers"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:accountancy:chart-of-accounts"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:accountancy:opening-balance"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "accountancy:masters:edit"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "products:edit"
-    },
-    {
-      "roleId": "R4",
+      "roleId": "R2",
       "permissionId": "ui:sidebar:inventory:products"
     },
     {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:inventory:masters"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:inventory:brands"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:inventory:units"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:inventory:categories"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:inventory:groups"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:inventory:warranty-terms"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:inventory:attribute-masters"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:inventory:gst-rates"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:inventory:boms"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "inventory:masters:edit"
-    },
-    {
-      "roleId": "R4",
+      "roleId": "R2",
       "permissionId": "ui:sidebar:inventory:item-ledger"
     },
     {
-      "roleId": "R4",
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:inventory:reorder"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:inventory:masters"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "inventory:masters:edit"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:inventory:boms"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:inventory:gst-rates"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:inventory:attribute-masters"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:inventory:warranty-terms"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:inventory:groups"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:inventory:categories"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:inventory:units"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:inventory:brands"
+    },
+    {
+      "roleId": "R2",
       "permissionId": "ui:sidebar:crm:deals"
     },
     {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:orders:orders-board"
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:crm:reconnect"
     },
     {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:orders:delivery"
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:crm:call-log"
     },
     {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:orders:refunds"
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:help:help-desk"
     },
     {
-      "roleId": "R4",
+      "roleId": "R2",
       "permissionId": "ui:sidebar:e-commerce:orders"
     },
     {
-      "roleId": "R4",
+      "roleId": "R2",
       "permissionId": "ui:sidebar:e-commerce:products"
     },
     {
-      "roleId": "R4",
+      "roleId": "R2",
       "permissionId": "ui:sidebar:administration:work-board"
     },
     {
-      "roleId": "R4",
+      "roleId": "R2",
       "permissionId": "ui:sidebar:retention:coupons"
     },
     {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:retention:gift-cards"
-    },
-    {
-      "roleId": "R4",
+      "roleId": "R2",
       "permissionId": "coupons:edit"
     },
     {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:retention:loyalty"
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:retention:gift-cards"
     },
     {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:retention:spend-tiers"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "tiers:edit"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "loyalty:edit"
-    },
-    {
-      "roleId": "R4",
+      "roleId": "R2",
       "permissionId": "gift-cards:edit"
     },
     {
-      "roleId": "R4",
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:retention:loyalty"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "loyalty:edit"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:retention:spend-tiers"
+    },
+    {
+      "roleId": "R2",
       "permissionId": "ui:sidebar:pricing-strategy:strategies"
     },
     {
-      "roleId": "R4",
+      "roleId": "R2",
       "permissionId": "pricing:strategy:set"
     },
     {
-      "roleId": "R4",
+      "roleId": "R2",
       "permissionId": "ui:sidebar:pricing-strategy:costing"
     },
     {
-      "roleId": "R4",
+      "roleId": "R2",
       "permissionId": "pricing:costing:manage"
     },
     {
-      "roleId": "R4",
+      "roleId": "R2",
       "permissionId": "ui:sidebar:pricing-strategy:needs-attention"
     },
     {
-      "roleId": "R4",
+      "roleId": "R2",
       "permissionId": "ui:sidebar:pricing-strategy:update-print-labels"
     },
     {
-      "roleId": "R4",
+      "roleId": "R2",
       "permissionId": "pricing:labels:apply"
     },
     {
-      "roleId": "R4",
+      "roleId": "R2",
+      "permissionId": "tiers:edit"
+    },
+    {
+      "roleId": "R2",
       "permissionId": "ui:sidebar:compliance:outward-supplies"
     },
     {
-      "roleId": "R4",
+      "roleId": "R2",
       "permissionId": "ui:sidebar:compliance:inward-supplies"
     },
     {
-      "roleId": "R4",
+      "roleId": "R2",
       "permissionId": "ui:sidebar:compliance:net-gst-liability"
     },
     {
-      "roleId": "R4",
+      "roleId": "R2",
       "permissionId": "ui:sidebar:compliance:hsn-summary"
     },
     {
-      "roleId": "R4",
+      "roleId": "R2",
       "permissionId": "ui:sidebar:compliance:tax-classification"
     },
     {
-      "roleId": "R4",
-      "permissionId": "compliance:tax:edit"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:admin:users"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "users:create"
-    },
-    {
-      "roleId": "R4",
+      "roleId": "R2",
       "permissionId": "ui:sidebar:admin:org-chart"
     },
     {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:admin:role"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "roles:create"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:admin:branches"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "branches:create"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:admin:departments"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "departments:create"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:admin:positions"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "positions:create"
-    },
-    {
-      "roleId": "R4",
+      "roleId": "R2",
       "permissionId": "ui:sidebar:admin:pos-counters"
     },
     {
-      "roleId": "R4",
+      "roleId": "R2",
       "permissionId": "pos-counters:edit"
     },
     {
-      "roleId": "R4",
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:admin:positions"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "positions:create"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:admin:departments"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "departments:create"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:admin:branches"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "branches:create"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:admin:role"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "roles:create"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:admin:users"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "users:create"
+    },
+    {
+      "roleId": "R2",
       "permissionId": "ui:sidebar:settings:organisation"
     },
     {
-      "roleId": "R4",
+      "roleId": "R2",
       "permissionId": "ui:sidebar:settings:org-defaults"
     },
     {
-      "roleId": "R4",
+      "roleId": "R2",
       "permissionId": "ui:sidebar:settings:e-commerce"
     },
     {
-      "roleId": "R4",
+      "roleId": "R2",
       "permissionId": "ui:sidebar:settings:payment-methods"
     },
     {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:settings:workflow"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:settings:naming-convention"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:settings:year-ending"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:settings:customer-tools"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:settings:customer-import"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:settings:item-import"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:settings:downloads"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:settings:backup-restore"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:settings:voucher-templates"
-    },
-    {
-      "roleId": "R4",
-      "permissionId": "ui:sidebar:settings:qr-display"
-    },
-    {
-      "roleId": "R4",
+      "roleId": "R2",
       "permissionId": "ui:sidebar:settings:thermal-printer"
     },
     {
-      "roleId": "R1",
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:couriers"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:standard-courier"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:qr-display"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:pos-services"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:voucher-templates"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:customer-groups"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:customer-tools"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:customer-import"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:year-ending"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:item-import"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:naming-convention"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:downloads"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:workflow"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:backup-restore"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:credit-limit"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "finance:voucher:post:payment"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "finance:voucher:post:journal"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "finance:voucher:post:debit-note"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "finance:voucher:post:credit-note"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "finance:voucher:post:contra"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "finance:voucher:post:receipt"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "inventory:voucher:post:purchase-return"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "inventory:voucher:post:sale-return"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "inventory:voucher:post:purchase"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "inventory:voucher:post:sale"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "inventory:voucher:post:grn"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "inventory:voucher:post:rejection-out"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "inventory:voucher:post:rejection-in"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "inventory:voucher:post:manufacturing-journal"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "inventory:voucher:post:branch-transfer"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "inventory:voucher:post:physical-stock"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "inventory:voucher:post:challan"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "inventory:voucher:post:sales-order"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "inventory:voucher:post:purchase-order"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "inventory:voucher:post:estimate"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:workspace:pos"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "pos:voucher:create:sale"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "pos:voucher:create:expense"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "pos:voucher:create:receipt"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "pos:voucher:create:estimate"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "pos:voucher:create:sale-return"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "pos:voucher:create:order"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "pos:shift:open"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "pos:shift:close"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "pos:shift:drop"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:workspace:inbox"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:workspace:work-flow"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:pos:shift-reports"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:pos:counters"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "pos:shift:force-close"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:customers:person"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:customers:companies"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "customers:view:creditors"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:repair:all-repair"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:repair:device-location"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "customers:edit"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "tickets:edit"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:accountancy:daybook"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:accountancy:pending-inventory"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:accountancy:stock-summary"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "products:edit"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:accountancy:account-ledger"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "accountancy:masters:edit"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:accountancy:bank-book"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:accountancy:cash-book"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:accountancy:loans-book"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:accountancy:balance-sheet"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:accountancy:profit-loss-a-c"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:accountancy:vouchers-register"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:accountancy:financial-insights"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:accountancy:bank-reconciliation"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:accountancy:trial-balance"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:accountancy:receivables"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:accountancy:payables"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:accountancy:cash-flow"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:accountancy:fund-flow"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:accountancy:ratio-analysis"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:accountancy:statistics"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:accountancy:masters"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:accountancy:account-groups"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:accountancy:ledgers"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:accountancy:chart-of-accounts"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:accountancy:opening-balance"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:bi:customer-profit"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:bi:bill-profit"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:bi:top-customers"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:bi:rfm-segmentation"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:bi:party-sale-purchase"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:bi:item-profit"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:bi:item-by-party"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:bi:inactive-customers"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:bi:sales-trend"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:bi:price-variance"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:bi:movement-register"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:bi:supplier-purchases"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:bi:stock-turnover"
+    },
+    {
+      "roleId": "R3",
+      "permissionId": "ui:sidebar:crm:deals"
+    },
+    {
+      "roleId": "R3",
+      "permissionId": "ui:sidebar:crm:reconnect"
+    },
+    {
+      "roleId": "R3",
+      "permissionId": "ui:sidebar:crm:call-log"
+    },
+    {
+      "roleId": "R3",
+      "permissionId": "ui:sidebar:help:help-desk"
+    },
+    {
+      "roleId": "R3",
+      "permissionId": "ui:sidebar:e-commerce:orders"
+    },
+    {
+      "roleId": "R3",
+      "permissionId": "ui:sidebar:e-commerce:products"
+    },
+    {
+      "roleId": "R3",
+      "permissionId": "ui:sidebar:administration:work-board"
+    },
+    {
+      "roleId": "R3",
+      "permissionId": "ui:sidebar:settings:thermal-printer"
+    },
+    {
+      "roleId": "R3",
+      "permissionId": "ui:sidebar:workspace:pos"
+    },
+    {
+      "roleId": "R3",
+      "permissionId": "pos:voucher:create:sale"
+    },
+    {
+      "roleId": "R3",
+      "permissionId": "pos:voucher:create:expense"
+    },
+    {
+      "roleId": "R3",
+      "permissionId": "pos:voucher:create:receipt"
+    },
+    {
+      "roleId": "R3",
+      "permissionId": "pos:voucher:create:estimate"
+    },
+    {
+      "roleId": "R3",
+      "permissionId": "pos:voucher:create:sale-return"
+    },
+    {
+      "roleId": "R3",
+      "permissionId": "pos:voucher:create:order"
+    },
+    {
+      "roleId": "R3",
+      "permissionId": "pos:shift:open"
+    },
+    {
+      "roleId": "R3",
+      "permissionId": "pos:shift:close"
+    },
+    {
+      "roleId": "R3",
+      "permissionId": "pos:shift:drop"
+    },
+    {
+      "roleId": "R3",
+      "permissionId": "ui:sidebar:workspace:inbox"
+    },
+    {
+      "roleId": "R3",
+      "permissionId": "ui:sidebar:workspace:work-flow"
+    },
+    {
+      "roleId": "R3",
+      "permissionId": "ui:sidebar:customers:person"
+    },
+    {
+      "roleId": "R3",
+      "permissionId": "ui:sidebar:customers:companies"
+    },
+    {
+      "roleId": "R3",
+      "permissionId": "ui:sidebar:repair:all-repair"
+    },
+    {
+      "roleId": "R3",
+      "permissionId": "ui:sidebar:repair:device-location"
+    },
+    {
+      "roleId": "R3",
       "permissionId": "customers:create"
     },
     {
+      "roleId": "R3",
+      "permissionId": "tickets:create"
+    },
+    {
+      "roleId": "R3",
+      "permissionId": "ui:sidebar:settings:downloads"
+    },
+    {
+      "roleId": "R3",
+      "permissionId": "ui:sidebar:settings:qr-display"
+    },
+    {
       "roleId": "R1",
-      "permissionId": "customers:edit"
+      "permissionId": "accountancy:masters:delete"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "compliance:tax:edit"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "branches:delete"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "departments:delete"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "pos-counters:delete"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "positions:delete"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "roles:delete"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "settings:manage"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "users:delete"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "tasks:create"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "quick-actions:more"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "coupons:delete"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "gift-cards:delete"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "deals:create"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "tiers:delete"
     },
     {
       "roleId": "R1",
@@ -5314,191 +5230,7 @@
     },
     {
       "roleId": "R1",
-      "permissionId": "settings:manage"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "branches:create"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "branches:edit"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "branches:delete"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "departments:create"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "departments:edit"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "departments:delete"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "positions:create"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:settings:downloads"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:settings:qr-display"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:settings:thermal-printer"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:workspace:pos"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "pos:shift:open"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "pos:shift:close"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "pos:shift:drop"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "pos:voucher:create:sale"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:customers:companies"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:customers:person"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "pos:voucher:create:sale-return"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "pos:voucher:create:estimate"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "pos:voucher:create:receipt"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "positions:edit"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "positions:delete"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "pos-counters:create"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "pos-counters:edit"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "pos-counters:delete"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "users:create"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "users:edit"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "users:delete"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "roles:create"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "roles:edit"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "roles:delete"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "finance:voucher:create:payment"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "finance:voucher:post:payment"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "finance:voucher:cancel:payment"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "finance:voucher:delete:payment"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "finance:voucher:create:receipt"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "finance:voucher:post:receipt"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "finance:voucher:cancel:receipt"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "finance:voucher:delete:receipt"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "finance:voucher:create:contra"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "finance:voucher:post:contra"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "finance:voucher:cancel:contra"
-    },
-    {
-      "roleId": "R1",
       "permissionId": "finance:voucher:delete:contra"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "finance:voucher:create:credit-note"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "finance:voucher:post:credit-note"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "finance:voucher:cancel:credit-note"
     },
     {
       "roleId": "R1",
@@ -5506,31 +5238,7 @@
     },
     {
       "roleId": "R1",
-      "permissionId": "finance:voucher:create:debit-note"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "finance:voucher:post:debit-note"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "finance:voucher:cancel:debit-note"
-    },
-    {
-      "roleId": "R1",
       "permissionId": "finance:voucher:delete:debit-note"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "finance:voucher:create:journal"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "finance:voucher:post:journal"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "finance:voucher:cancel:journal"
     },
     {
       "roleId": "R1",
@@ -5538,23 +5246,15 @@
     },
     {
       "roleId": "R1",
-      "permissionId": "products:create"
+      "permissionId": "finance:voucher:delete:payment"
     },
     {
       "roleId": "R1",
-      "permissionId": "products:edit"
+      "permissionId": "finance:voucher:delete:receipt"
     },
     {
       "roleId": "R1",
-      "permissionId": "products:delete"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:masters:create"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:masters:edit"
+      "permissionId": "help:delete"
     },
     {
       "roleId": "R1",
@@ -5562,7 +5262,59 @@
     },
     {
       "roleId": "R1",
-      "permissionId": "pricing:strategy:set"
+      "permissionId": "inventory:voucher:delete:branch-transfer"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "inventory:voucher:delete:challan"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "inventory:voucher:delete:estimate"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "inventory:voucher:delete:grn"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "inventory:voucher:delete:manufacturing-journal"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "inventory:voucher:delete:physical-stock"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "inventory:voucher:delete:purchase"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "inventory:voucher:delete:purchase-order"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "inventory:voucher:delete:purchase-return"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "inventory:voucher:delete:rejection-in"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "inventory:voucher:delete:rejection-out"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "inventory:voucher:delete:sale"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "inventory:voucher:delete:sale-return"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "inventory:voucher:delete:sales-order"
     },
     {
       "roleId": "R1",
@@ -5574,659 +5326,15 @@
     },
     {
       "roleId": "R1",
-      "permissionId": "inventory:voucher:create:sale"
+      "permissionId": "pricing:strategy:set"
     },
     {
       "roleId": "R1",
-      "permissionId": "inventory:voucher:post:sale"
+      "permissionId": "products:delete"
     },
     {
       "roleId": "R1",
-      "permissionId": "inventory:voucher:cancel:sale"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:voucher:delete:sale"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:voucher:create:purchase"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:voucher:post:purchase"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:voucher:cancel:purchase"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:voucher:delete:purchase"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:voucher:create:sale-return"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:voucher:post:sale-return"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:voucher:cancel:sale-return"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:voucher:delete:sale-return"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:voucher:create:purchase-return"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:voucher:post:purchase-return"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:voucher:cancel:purchase-return"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:voucher:delete:purchase-return"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:voucher:create:grn"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:voucher:post:grn"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:voucher:cancel:grn"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:voucher:delete:grn"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:voucher:create:challan"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:voucher:post:challan"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:voucher:cancel:challan"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:voucher:delete:challan"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:voucher:create:physical-stock"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:voucher:post:physical-stock"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:voucher:cancel:physical-stock"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:voucher:delete:physical-stock"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:voucher:create:branch-transfer"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:voucher:post:branch-transfer"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:voucher:cancel:branch-transfer"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:voucher:delete:branch-transfer"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:voucher:create:manufacturing-journal"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:voucher:post:manufacturing-journal"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:voucher:cancel:manufacturing-journal"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:voucher:delete:manufacturing-journal"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:voucher:create:rejection-in"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:voucher:post:rejection-in"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:voucher:cancel:rejection-in"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:voucher:delete:rejection-in"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:voucher:create:rejection-out"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:voucher:post:rejection-out"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:voucher:cancel:rejection-out"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:voucher:delete:rejection-out"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:voucher:create:estimate"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:voucher:post:estimate"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:voucher:cancel:estimate"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:voucher:delete:estimate"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:voucher:create:sales-order"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:voucher:post:sales-order"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:voucher:cancel:sales-order"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:voucher:delete:sales-order"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:voucher:create:purchase-order"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:voucher:post:purchase-order"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:voucher:cancel:purchase-order"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "inventory:voucher:delete:purchase-order"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:workspace:inbox"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:workspace:work-flow"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:workspace:pos"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:pos:shift-reports"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:pos:counters"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:customers:person"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:customers:companies"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:repair:all-repair"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:repair:device-location"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:accountancy:daybook"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:accountancy:pending-inventory"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:accountancy:stock-summary"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:accountancy:account-ledger"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:accountancy:bank-book"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:accountancy:cash-book"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:accountancy:loans-book"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:accountancy:balance-sheet"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:accountancy:profit-loss-a-c"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:accountancy:financial-insights"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:accountancy:trial-balance"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:accountancy:receivables"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:accountancy:payables"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:accountancy:cash-flow"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:accountancy:fund-flow"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:accountancy:ratio-analysis"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:accountancy:statistics"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:accountancy:bank-reconciliation"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:accountancy:vouchers-register"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:accountancy:recycle-bin"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:accountancy:masters"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:accountancy:account-groups"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:accountancy:ledgers"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:accountancy:chart-of-accounts"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:accountancy:opening-balance"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:inventory:products"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:inventory:item-ledger"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:inventory:masters"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:inventory:brands"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:inventory:units"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:inventory:categories"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:inventory:groups"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:inventory:warranty-terms"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:inventory:attribute-masters"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:inventory:gst-rates"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:inventory:boms"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:crm:deals"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:orders:orders-board"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:orders:delivery"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:orders:refunds"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:e-commerce:orders"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:e-commerce:products"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:administration:work-board"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:retention:coupons"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:retention:gift-cards"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:retention:loyalty"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:retention:spend-tiers"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:pricing-strategy:strategies"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:pricing-strategy:costing"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:pricing-strategy:needs-attention"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:pricing-strategy:update-print-labels"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:compliance:outward-supplies"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:compliance:inward-supplies"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:compliance:net-gst-liability"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:compliance:hsn-summary"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:compliance:tax-classification"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:admin:users"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:admin:org-chart"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:admin:role"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:admin:branches"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:admin:departments"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:admin:positions"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:admin:pos-counters"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:settings:organisation"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:settings:org-defaults"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:settings:e-commerce"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:settings:payment-methods"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:settings:pos-services"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:settings:credit-limit"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:settings:workflow"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:settings:naming-convention"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:settings:year-ending"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:settings:thermal-printer"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:settings:qr-display"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:settings:voucher-templates"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:settings:backup-restore"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:settings:downloads"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:settings:item-import"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:settings:customer-import"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:settings:customer-tools"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "pos:voucher:create:sale"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "pos:voucher:cancel:sale"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "pos:voucher:delete:sale"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "pos:voucher:create:sale-return"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "pos:voucher:cancel:sale-return"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "pos:voucher:delete:sale-return"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "pos:voucher:create:order"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "pos:voucher:cancel:order"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "pos:voucher:delete:order"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "pos:voucher:create:estimate"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "pos:voucher:cancel:estimate"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "pos:voucher:delete:estimate"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "pos:voucher:create:receipt"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "pos:voucher:cancel:receipt"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "pos:voucher:delete:receipt"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "pos:voucher:create:expense"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "pos:voucher:cancel:expense"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "pos:voucher:delete:expense"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "pos:shift:open"
+      "permissionId": "loyalty:delete"
     },
     {
       "roleId": "R1",
@@ -6242,70 +5350,598 @@
     },
     {
       "roleId": "R1",
-      "permissionId": "compliance:tax:edit"
+      "permissionId": "pos:shift:open"
     },
     {
       "roleId": "R1",
-      "permissionId": "accountancy:masters:create"
+      "permissionId": "pos:voucher:delete:estimate"
     },
     {
       "roleId": "R1",
-      "permissionId": "accountancy:masters:edit"
+      "permissionId": "pos:voucher:delete:expense"
     },
     {
       "roleId": "R1",
-      "permissionId": "accountancy:masters:delete"
+      "permissionId": "pos:voucher:delete:order"
     },
     {
       "roleId": "R1",
-      "permissionId": "loyalty:create"
+      "permissionId": "pos:voucher:delete:receipt"
     },
     {
       "roleId": "R1",
-      "permissionId": "loyalty:edit"
+      "permissionId": "pos:voucher:delete:sale"
     },
     {
       "roleId": "R1",
-      "permissionId": "loyalty:delete"
+      "permissionId": "pos:voucher:delete:sale-return"
     },
     {
       "roleId": "R1",
-      "permissionId": "coupons:create"
+      "permissionId": "tickets:delete"
     },
     {
       "roleId": "R1",
-      "permissionId": "coupons:edit"
+      "permissionId": "work:W1"
     },
     {
       "roleId": "R1",
-      "permissionId": "coupons:delete"
+      "permissionId": "ui:sidebar:accountancy:account-groups"
     },
     {
       "roleId": "R1",
-      "permissionId": "gift-cards:create"
+      "permissionId": "ui:sidebar:accountancy:account-ledger"
     },
     {
       "roleId": "R1",
-      "permissionId": "gift-cards:edit"
+      "permissionId": "ui:sidebar:accountancy:balance-sheet"
     },
     {
       "roleId": "R1",
-      "permissionId": "gift-cards:delete"
+      "permissionId": "ui:sidebar:accountancy:bank-book"
     },
     {
       "roleId": "R1",
-      "permissionId": "tiers:create"
+      "permissionId": "ui:sidebar:accountancy:bank-reconciliation"
     },
     {
       "roleId": "R1",
-      "permissionId": "tiers:edit"
+      "permissionId": "ui:sidebar:accountancy:cash-book"
     },
     {
       "roleId": "R1",
-      "permissionId": "tiers:delete"
+      "permissionId": "ui:sidebar:accountancy:cash-flow"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:accountancy:chart-of-accounts"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:accountancy:daybook"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:accountancy:financial-insights"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:accountancy:fund-flow"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:accountancy:ledgers"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:accountancy:loans-book"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:accountancy:masters"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:accountancy:opening-balance"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:accountancy:payables"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:accountancy:pending-inventory"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:accountancy:profit-loss-a-c"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:accountancy:ratio-analysis"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:accountancy:receivables"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:accountancy:recycle-bin"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:accountancy:statistics"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:accountancy:stock-summary"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:accountancy:trial-balance"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:accountancy:vouchers-register"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:admin:branches"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:admin:departments"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:admin:org-chart"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:admin:pos-counters"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:admin:positions"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:admin:role"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:admin:users"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:administration:work-board"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:bi:abc-analysis"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:bi:basket-analysis"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:bi:bill-profit"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:bi:branch-comparison"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:bi:customer-profit"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:bi:discount-impact"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:bi:fsn-dead-stock"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:bi:inactive-customers"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:bi:item-by-party"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:bi:item-profit"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:bi:movement-register"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:bi:party-sale-purchase"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:bi:price-variance"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:bi:rfm-segmentation"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:bi:sales-trend"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:bi:stock-health"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:bi:stock-turnover"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:bi:supplier-purchases"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:bi:top-customers"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:compliance:hsn-summary"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:compliance:inward-supplies"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:compliance:net-gst-liability"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:compliance:outward-supplies"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:compliance:tax-classification"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:crm:call-log"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:crm:deals"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:crm:reconnect"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:customers:companies"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:customers:person"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:e-commerce:orders"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:e-commerce:products"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:help:help-desk"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:inventory:attribute-masters"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:inventory:boms"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:inventory:brands"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:inventory:categories"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:inventory:groups"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:inventory:gst-rates"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:inventory:item-ledger"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:inventory:masters"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:inventory:products"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:inventory:reorder"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:inventory:units"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:inventory:warranty-terms"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:pos:counters"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:pos:shift-reports"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:pricing-strategy:costing"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:pricing-strategy:needs-attention"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:pricing-strategy:strategies"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:pricing-strategy:update-print-labels"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:repair:all-repair"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:repair:device-location"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:retention:coupons"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:retention:gift-cards"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:retention:loyalty"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:retention:spend-tiers"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:settings:backup-restore"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:settings:couriers"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:settings:credit-limit"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:settings:customer-groups"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:settings:customer-import"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:settings:customer-tools"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:settings:downloads"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:settings:e-commerce"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:settings:item-import"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:settings:naming-convention"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:settings:org-defaults"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:settings:organisation"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:settings:payment-methods"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:settings:pos-services"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:settings:qr-display"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:settings:standard-courier"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:settings:thermal-printer"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:settings:voucher-templates"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:settings:workflow"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:settings:year-ending"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:workspace:inbox"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:workspace:pos"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:workspace:work-flow"
     }
   ],
   "departmentPermissions": [
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:pos:shift-reports"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:pos:counters"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:customers:person"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:customers:companies"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:repair:all-repair"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:repair:device-location"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:administration:work-board"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:e-commerce:orders"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:e-commerce:products"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:help:help-desk"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:organisation"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:org-defaults"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:e-commerce"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:payment-methods"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:couriers"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:standard-courier"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:pos-services"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:credit-limit"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:workflow"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:naming-convention"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:year-ending"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:thermal-printer"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:qr-display"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:voucher-templates"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:backup-restore"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:downloads"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:item-import"
+    },
     {
       "departmentId": "DEP-SALES",
       "permissionId": "ui:sidebar:settings:customer-import"
@@ -6316,87 +5952,639 @@
     },
     {
       "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:settings:downloads"
+      "permissionId": "ui:sidebar:settings:customer-groups"
     },
     {
       "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:settings:e-commerce"
+      "permissionId": "ui:sidebar:crm:deals"
     },
     {
       "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:settings:item-import"
+      "permissionId": "ui:sidebar:crm:reconnect"
     },
     {
       "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:settings:naming-convention"
+      "permissionId": "ui:sidebar:crm:call-log"
     },
     {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:settings:org-defaults"
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:create:purchase"
     },
     {
-      "departmentId": "DEP-SALES",
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:post:purchase"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:cancel:purchase"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:delete:purchase"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:create:purchase-order"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:post:purchase-order"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:cancel:purchase-order"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:delete:purchase-order"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:create:sales-order"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:post:sales-order"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:cancel:sales-order"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:delete:sales-order"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:create:estimate"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:post:estimate"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:cancel:estimate"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:delete:estimate"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:create:grn"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:post:grn"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:cancel:grn"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:delete:grn"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:create:challan"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:post:challan"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:cancel:challan"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:delete:challan"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:create:physical-stock"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:post:physical-stock"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:cancel:physical-stock"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:delete:physical-stock"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:create:branch-transfer"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:post:branch-transfer"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:cancel:branch-transfer"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:delete:branch-transfer"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:create:manufacturing-journal"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:post:manufacturing-journal"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:cancel:manufacturing-journal"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:delete:manufacturing-journal"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:create:rejection-in"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:post:rejection-in"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:cancel:rejection-in"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:delete:rejection-in"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:create:rejection-out"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:post:rejection-out"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:cancel:rejection-out"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:delete:rejection-out"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:create:purchase-return"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:post:purchase-return"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:cancel:purchase-return"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:delete:purchase-return"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:create:sale-return"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:post:sale-return"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:cancel:sale-return"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:delete:sale-return"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:create:sale"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:post:sale"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:cancel:sale"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "inventory:voucher:delete:sale"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "finance:voucher:create:payment"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "finance:voucher:post:payment"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "finance:voucher:cancel:payment"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "finance:voucher:delete:payment"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "finance:voucher:create:receipt"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "finance:voucher:post:receipt"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "finance:voucher:cancel:receipt"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "finance:voucher:delete:receipt"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "finance:voucher:create:contra"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "finance:voucher:post:contra"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "finance:voucher:cancel:contra"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "finance:voucher:delete:contra"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "finance:voucher:create:credit-note"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "finance:voucher:post:credit-note"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "finance:voucher:cancel:credit-note"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "finance:voucher:delete:credit-note"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "finance:voucher:create:debit-note"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "finance:voucher:post:debit-note"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "finance:voucher:cancel:debit-note"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "finance:voucher:delete:debit-note"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "finance:voucher:create:journal"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "finance:voucher:post:journal"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "finance:voucher:cancel:journal"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "finance:voucher:delete:journal"
+    },
+    {
+      "departmentId": "DEP-OP",
       "permissionId": "ui:sidebar:settings:organisation"
     },
     {
-      "departmentId": "DEP-SALES",
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:settings:org-defaults"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:settings:e-commerce"
+    },
+    {
+      "departmentId": "DEP-OP",
       "permissionId": "ui:sidebar:settings:payment-methods"
     },
     {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:settings:qr-display"
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:settings:couriers"
     },
     {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:settings:thermal-printer"
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:settings:standard-courier"
     },
     {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:settings:voucher-templates"
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:settings:pos-services"
     },
     {
-      "departmentId": "DEP-SALES",
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:settings:credit-limit"
+    },
+    {
+      "departmentId": "DEP-OP",
       "permissionId": "ui:sidebar:settings:workflow"
     },
     {
-      "departmentId": "DEP-SALES",
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:settings:naming-convention"
+    },
+    {
+      "departmentId": "DEP-OP",
       "permissionId": "ui:sidebar:settings:year-ending"
     },
     {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:pos:shift-reports"
-    },
-    {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:pos:counters"
-    },
-    {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:customers:person"
-    },
-    {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:customers:companies"
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:settings:thermal-printer"
     },
     {
       "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:pos:shift-reports"
+      "permissionId": "ui:sidebar:settings:qr-display"
     },
     {
       "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:pos:counters"
+      "permissionId": "ui:sidebar:settings:voucher-templates"
     },
     {
       "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:customers:person"
+      "permissionId": "ui:sidebar:settings:backup-restore"
     },
     {
       "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:customers:companies"
+      "permissionId": "ui:sidebar:settings:downloads"
     },
     {
       "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:repair:all-repair"
+      "permissionId": "ui:sidebar:settings:item-import"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:settings:customer-import"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:settings:customer-tools"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:settings:customer-groups"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:help:help-desk"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:admin:users"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:admin:org-chart"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:admin:role"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:admin:branches"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:admin:departments"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:admin:positions"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:admin:pos-counters"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:crm:deals"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:crm:reconnect"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:crm:call-log"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:compliance:outward-supplies"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:compliance:inward-supplies"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:compliance:net-gst-liability"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:compliance:hsn-summary"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:compliance:tax-classification"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:inventory:products"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:inventory:item-ledger"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:inventory:reorder"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:inventory:masters"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:inventory:brands"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:inventory:units"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:inventory:categories"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:inventory:groups"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:inventory:warranty-terms"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:inventory:attribute-masters"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:inventory:gst-rates"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:inventory:boms"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:bi:customer-profit"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:bi:bill-profit"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:bi:top-customers"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:bi:rfm-segmentation"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:bi:party-sale-purchase"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:bi:item-profit"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:bi:item-by-party"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:bi:abc-analysis"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:bi:fsn-dead-stock"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:bi:stock-health"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:bi:stock-turnover"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:bi:movement-register"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:bi:sales-trend"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:bi:branch-comparison"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:bi:discount-impact"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:bi:basket-analysis"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:bi:supplier-purchases"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:bi:price-variance"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:bi:inactive-customers"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:pricing-strategy:strategies"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:pricing-strategy:costing"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:pricing-strategy:needs-attention"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:pricing-strategy:update-print-labels"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:retention:coupons"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:retention:gift-cards"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:retention:loyalty"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:retention:spend-tiers"
     },
     {
       "departmentId": "DEP-OP",
@@ -6500,527 +6688,23 @@
     },
     {
       "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:inventory:products"
+      "permissionId": "ui:sidebar:administration:work-board"
     },
     {
       "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:inventory:item-ledger"
+      "permissionId": "ui:sidebar:repair:all-repair"
     },
     {
       "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:inventory:masters"
+      "permissionId": "ui:sidebar:repair:device-location"
     },
     {
       "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:inventory:brands"
+      "permissionId": "ui:sidebar:customers:person"
     },
     {
       "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:inventory:units"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:inventory:categories"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:inventory:groups"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:inventory:warranty-terms"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:inventory:attribute-masters"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:inventory:gst-rates"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:inventory:boms"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:retention:coupons"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:retention:gift-cards"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:retention:loyalty"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:retention:spend-tiers"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:pricing-strategy:strategies"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:pricing-strategy:costing"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:pricing-strategy:needs-attention"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:pricing-strategy:update-print-labels"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:compliance:outward-supplies"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:compliance:inward-supplies"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:compliance:net-gst-liability"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:compliance:hsn-summary"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:compliance:tax-classification"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "finance:voucher:create:payment"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "finance:voucher:post:payment"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "finance:voucher:cancel:payment"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "finance:voucher:delete:payment"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "finance:voucher:create:receipt"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "finance:voucher:post:receipt"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "finance:voucher:cancel:receipt"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "finance:voucher:delete:receipt"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "finance:voucher:create:contra"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "finance:voucher:post:contra"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "finance:voucher:cancel:contra"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "finance:voucher:delete:contra"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "finance:voucher:create:credit-note"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "finance:voucher:post:credit-note"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "finance:voucher:cancel:credit-note"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "finance:voucher:delete:credit-note"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "finance:voucher:create:debit-note"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "finance:voucher:post:debit-note"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "finance:voucher:cancel:debit-note"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "finance:voucher:delete:debit-note"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "finance:voucher:create:journal"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "finance:voucher:post:journal"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "finance:voucher:cancel:journal"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "finance:voucher:delete:journal"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:create:sale"
-    },
-    {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:settings:backup-restore"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:post:sale"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:cancel:sale"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:delete:sale"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:create:purchase"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:post:purchase"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:cancel:purchase"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:delete:purchase"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:create:sale-return"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:post:sale-return"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:cancel:sale-return"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:delete:sale-return"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:create:purchase-return"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:post:purchase-return"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:cancel:purchase-return"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:delete:purchase-return"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:create:manufacturing-journal"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:post:manufacturing-journal"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:cancel:manufacturing-journal"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:delete:manufacturing-journal"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:create:estimate"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:post:estimate"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:cancel:estimate"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:delete:estimate"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:create:challan"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:post:challan"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:cancel:challan"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:delete:challan"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:create:grn"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:post:grn"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:cancel:grn"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:delete:grn"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:create:physical-stock"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:post:physical-stock"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:cancel:physical-stock"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:delete:physical-stock"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:create:branch-transfer"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:post:branch-transfer"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:cancel:branch-transfer"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:delete:branch-transfer"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:create:rejection-in"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:post:rejection-in"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:cancel:rejection-in"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:delete:rejection-in"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:create:rejection-out"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:post:rejection-out"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:cancel:rejection-out"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:delete:rejection-out"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:create:purchase-order"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:post:purchase-order"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:cancel:purchase-order"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:delete:purchase-order"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:create:sales-order"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:post:sales-order"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:cancel:sales-order"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "inventory:voucher:delete:sales-order"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:admin:users"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:admin:org-chart"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:admin:role"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:admin:branches"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:admin:departments"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:admin:positions"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:admin:pos-counters"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:settings:organisation"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:settings:org-defaults"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:settings:e-commerce"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:settings:payment-methods"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:settings:workflow"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:settings:naming-convention"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:settings:year-ending"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:settings:thermal-printer"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:settings:qr-display"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:settings:voucher-templates"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:settings:backup-restore"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:settings:downloads"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:settings:item-import"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:settings:customer-import"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:settings:customer-tools"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:crm:deals"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:orders:orders-board"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:orders:delivery"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:orders:refunds"
+      "permissionId": "ui:sidebar:customers:companies"
     },
     {
       "departmentId": "DEP-OP",
@@ -7032,7 +6716,11 @@
     },
     {
       "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:administration:work-board"
+      "permissionId": "ui:sidebar:pos:shift-reports"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:pos:counters"
     }
   ],
   "positions": [
@@ -7044,18 +6732,18 @@
       "parentPositionId": null
     },
     {
-      "id": "BM-HQ",
-      "title": "Branch Manager",
-      "branchId": "BR-HQ",
-      "departmentId": "DEP-OP",
-      "parentPositionId": null
-    },
-    {
       "id": "POS-SYSADMIN",
       "title": "System Administrator",
       "branchId": null,
       "departmentId": "DEP-ADMIN",
       "parentPositionId": null
+    },
+    {
+      "id": "BM-HQ",
+      "title": "Branch Manager",
+      "branchId": "BR-HQ",
+      "departmentId": "DEP-OP",
+      "parentPositionId": "POS-SYSADMIN"
     },
     {
       "id": "SALE-COUNTER",
@@ -7074,8 +6762,12 @@
   ],
   "positionRoles": [
     {
+      "positionId": "POS-SYSADMIN",
+      "roleId": "R1"
+    },
+    {
       "positionId": "BM-HQ",
-      "roleId": "R4"
+      "roleId": "R2"
     },
     {
       "positionId": "SALE-COUNTER",
@@ -7083,67 +6775,12 @@
     },
     {
       "positionId": "SALE-J-COUNTER",
-      "roleId": "R2"
-    },
-    {
-      "positionId": "POS-SYSADMIN",
-      "roleId": "R1"
+      "roleId": "R3"
     }
   ],
   "users": [
     {
-      "name": "Akramul Jakir",
-      "email": "akramul@networkservice.in",
-      "role": null,
-      "title": null,
-      "scope": "OWN",
-      "avatarUrl": null,
-      "coverUrl": null,
-      "phone": null,
-      "birthday": null,
-      "bio": null,
-      "linkedIn": null,
-      "twitter": null,
-      "instagram": null,
-      "facebook": null,
-      "managerEmail": null
-    },
-    {
-      "name": "Admin",
-      "email": "admin@networkservice.in",
-      "role": "R1",
-      "title": null,
-      "scope": "OWN",
-      "avatarUrl": null,
-      "coverUrl": null,
-      "phone": null,
-      "birthday": null,
-      "bio": null,
-      "linkedIn": null,
-      "twitter": null,
-      "instagram": null,
-      "facebook": null,
-      "managerEmail": null
-    },
-    {
-      "name": "Nabajyoti Das",
-      "email": "naba@networkservice.in",
-      "role": null,
-      "title": null,
-      "scope": "OWN",
-      "avatarUrl": "https://res.cloudinary.com/dolxss5ha/image/upload/v1784025621/avatars/hd5ptkiqivqmkcglp0wy.jpg",
-      "coverUrl": null,
-      "phone": "6002831524",
-      "birthday": "2002-07-20T00:00:00.000Z",
-      "bio": null,
-      "linkedIn": null,
-      "twitter": null,
-      "instagram": null,
-      "facebook": null,
-      "managerEmail": null
-    },
-    {
-      "name": "Prokash Karmakar",
+      "name": "Prokash Karamkar",
       "email": "prokash@networkservice.in",
       "role": null,
       "title": null,
@@ -7160,8 +6797,42 @@
       "managerEmail": null
     },
     {
-      "name": "Rakesh Biswash",
+      "name": "Akramul Jakir",
+      "email": "admin@networkservice.in",
+      "role": "R1",
+      "title": null,
+      "scope": "OWN",
+      "avatarUrl": null,
+      "coverUrl": null,
+      "phone": null,
+      "birthday": null,
+      "bio": null,
+      "linkedIn": null,
+      "twitter": null,
+      "instagram": null,
+      "facebook": null,
+      "managerEmail": null
+    },
+    {
+      "name": "Rakesh Biswas",
       "email": "rakesh@networkservice.in",
+      "role": null,
+      "title": null,
+      "scope": "OWN",
+      "avatarUrl": null,
+      "coverUrl": null,
+      "phone": null,
+      "birthday": null,
+      "bio": null,
+      "linkedIn": null,
+      "twitter": null,
+      "instagram": null,
+      "facebook": null,
+      "managerEmail": null
+    },
+    {
+      "name": "Nabajoty Das",
+      "email": "naba@networkservice.in",
       "role": null,
       "title": null,
       "scope": "OWN",
@@ -7188,12 +6859,6 @@
       "userId": {
         "email": "rakesh@networkservice.in"
       },
-      "positionId": "EXE"
-    },
-    {
-      "userId": {
-        "email": "rakesh@networkservice.in"
-      },
       "positionId": "BM-HQ"
     },
     {
@@ -7207,67 +6872,330 @@
         "email": "prokash@networkservice.in"
       },
       "positionId": "SALE-J-COUNTER"
+    },
+    {
+      "userId": {
+        "email": "rakesh@networkservice.in"
+      },
+      "positionId": "EXE"
     }
   ],
   "userPermissions": [],
-  "paymentGateways": [],
-  "deliveryMethods": [
+  "paymentGateways": [
     {
-      "kind": "OWN_BOY",
-      "displayName": "Local delivery",
-      "isActive": true,
-      "sortOrder": 0,
-      "configJson": { "pincodes": [], "flatPaise": 4900, "freeAbovePaise": 0, "baseGrams": 500, "stepGrams": 500, "neighbourhoods": {} }
+      "provider": "razorpay",
+      "displayName": "Razorpay",
+      "environment": "TEST",
+      "enabledForCounter": false,
+      "enabledForOnline": true,
+      "configJson": {
+        "settlementAccountId": 6898
+      },
+      "sortOrder": 10,
+      "isActive": true
     },
+    {
+      "provider": "pay_on_delivery",
+      "displayName": "Pay on delivery",
+      "environment": "TEST",
+      "enabledForCounter": false,
+      "enabledForOnline": false,
+      "configJson": {
+        "area": {
+          "mode": "except",
+          "states": [],
+          "pincodePrefixes": []
+        },
+        "settlementAccountId": 6921
+      },
+      "sortOrder": 0,
+      "isActive": true
+    },
+    {
+      "provider": "payu",
+      "displayName": "PayU",
+      "environment": "TEST",
+      "enabledForCounter": false,
+      "enabledForOnline": true,
+      "configJson": {
+        "settlementAccountId": 6899
+      },
+      "sortOrder": 20,
+      "isActive": false
+    },
+    {
+      "provider": "cashfree",
+      "displayName": "Cashfree",
+      "environment": "TEST",
+      "enabledForCounter": false,
+      "enabledForOnline": true,
+      "configJson": {
+        "settlementAccountId": 6900
+      },
+      "sortOrder": 30,
+      "isActive": false
+    }
+  ],
+  "deliveryMethods": [
     {
       "kind": "CUSTOM",
       "displayName": "Standard courier",
       "isActive": true,
       "sortOrder": 1,
-      "configJson": { "flatPaise": 9900, "freeAbovePaise": 500000 }
+      "configJson": {
+        "mode": "FLAT",
+        "services": [
+          {
+            "mode": "ZONE",
+            "name": "INDIA POST",
+            "zones": [
+              {
+                "name": "All India",
+                "states": [],
+                "addlPaise": 3800,
+                "basePaise": 13600,
+                "isDefault": true,
+                "pincodePrefixes": []
+              }
+            ],
+            "isActive": true,
+            "baseGrams": 2000,
+            "stepGrams": 1000,
+            "codPercent": 1.6,
+            "codFlatPaise": 2000,
+            "freeAbovePaise": 0
+          }
+        ],
+        "flatPaise": 9900,
+        "codPercent": 0,
+        "codFlatPaise": 0,
+        "freeAbovePaise": 500000
+      }
     },
     {
       "kind": "SHIPROCKET",
       "displayName": "Shiprocket",
-      "isActive": false,
+      "isActive": true,
       "sortOrder": 2,
-      "configJson": { "pickupLocation": "Primary", "pickupPincode": "", "defaultItemWeightGrams": 500, "length": 15, "breadth": 15, "height": 10 }
+      "configJson": {
+        "height": 10,
+        "length": 15,
+        "breadth": 15,
+        "exclude": {
+          "states": [],
+          "pincodePrefixes": [
+            "783384"
+          ]
+        },
+        "pickupPincode": "783384",
+        "pickupLocation": "Primary",
+        "defaultItemWeightGrams": 500
+      }
     },
     {
       "kind": "SHIPWAY",
       "displayName": "Shipway",
-      "isActive": false,
+      "isActive": true,
       "sortOrder": 3,
-      "configJson": { "pickupLocation": "Primary", "pickupPincode": "", "defaultItemWeightGrams": 500, "length": 15, "breadth": 15, "height": 10 }
+      "configJson": {
+        "height": 10,
+        "length": 15,
+        "breadth": 15,
+        "exclude": {
+          "states": [],
+          "pincodePrefixes": [
+            "783384"
+          ]
+        },
+        "pickupPincode": "783384",
+        "pickupLocation": "Primary",
+        "defaultItemWeightGrams": 500
+      }
+    },
+    {
+      "kind": "OWN_BOY",
+      "displayName": "Local delivery",
+      "isActive": true,
+      "sortOrder": 0,
+      "configJson": {
+        "pincodes": [],
+        "vehicles": [
+          {
+            "name": "Quick Delivery 30 Minutes",
+            "isActive": true,
+            "baseGrams": 30000,
+            "stepGrams": 10000,
+            "freeAbovePaise": 500000,
+            "maxWeightGrams": 50000,
+            "neighbourhoods": {
+              "783380": {
+                "Barpara": {
+                  "addlPaise": 2000,
+                  "basePaise": 5000,
+                  "neighbourhoods": [
+                    {
+                      "name": "LIC Office"
+                    }
+                  ]
+                }
+              },
+              "783384": {
+                "Abhayapuri": {
+                  "addlPaise": 1000,
+                  "basePaise": 2000,
+                  "neighbourhoods": [
+                    {
+                      "name": "Nama bazar"
+                    },
+                    {
+                      "name": "College Market"
+                    },
+                    {
+                      "name": "Rajib Bhawan"
+                    }
+                  ]
+                },
+                "Lengtisinga": {
+                  "addlPaise": 1000,
+                  "basePaise": 2000,
+                  "neighbourhoods": [
+                    {
+                      "name": "Lockdown Bazar"
+                    },
+                    {
+                      "name": "BoroBhanga"
+                    },
+                    {
+                      "name": "Lengtisinga Bazar"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "name": "Same Day Delivery",
+            "isActive": true,
+            "baseGrams": 500,
+            "stepGrams": 500,
+            "freeAbovePaise": 0,
+            "neighbourhoods": {
+              "783380": {
+                "Barpara": {
+                  "addlPaise": 10000,
+                  "basePaise": 10000,
+                  "neighbourhoods": [
+                    {
+                      "name": "LIC Office"
+                    }
+                  ]
+                }
+              },
+              "783384": {
+                "Abhayapuri": {
+                  "addlPaise": 3000,
+                  "basePaise": 3000,
+                  "neighbourhoods": [
+                    {
+                      "name": "Nama bazar"
+                    },
+                    {
+                      "name": "College Market"
+                    },
+                    {
+                      "name": "Rajib Bhawan"
+                    }
+                  ]
+                },
+                "Lengtisinga": {
+                  "addlPaise": 5000,
+                  "basePaise": 5000,
+                  "neighbourhoods": [
+                    {
+                      "name": "Lockdown Bazar"
+                    },
+                    {
+                      "name": "BoroBhanga"
+                    },
+                    {
+                      "name": "Lengtisinga Bazar"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "name": "Store Pickup",
+            "isActive": true,
+            "baseGrams": 500,
+            "stepGrams": 500,
+            "freeAbovePaise": 0,
+            "neighbourhoods": {}
+          }
+        ],
+        "baseGrams": 50000,
+        "flatPaise": 0,
+        "stepGrams": 50000,
+        "freeAbovePaise": 500000,
+        "neighbourhoods": {}
+      }
+    },
+    {
+      "kind": "FREE_DELIVERY",
+      "displayName": "Free delivery",
+      "isActive": false,
+      "sortOrder": 5,
+      "configJson": {
+        "exclude": {
+          "states": [],
+          "pincodePrefixes": [
+            "783384"
+          ]
+        },
+        "include": {
+          "states": [],
+          "pincodePrefixes": [
+            "783384"
+          ]
+        }
+      }
+    },
+    {
+      "kind": "STORE_PICKUP",
+      "displayName": "Pickup from store",
+      "isActive": true,
+      "sortOrder": 4,
+      "configJson": {
+        "note": "Collect Within 3 Working Days , 10AM to 8PM, Saturday to Thursday, Friday Close.",
+        "include": {
+          "states": [],
+          "pincodePrefixes": [
+            "783384"
+          ]
+        }
+      }
     }
   ],
+  "customerGroups": [],
   "posCounters": [
     {
       "branchId": "BR-HQ",
-      "name": "Counter 1 New Room",
+      "name": "Counter 22 Prokash",
       "tillAccountId": {
         "code": null,
-        "name": "Cash – Counter 1 New Room – Head Office"
+        "name": "Cash – Counter 22 Prokash – Head Office"
       },
       "allowedExpenseAccountIds": [],
-      "isActive": true
+      "isActive": true,
+      "epbxExtension": "22"
     },
     {
       "branchId": "BR-HQ",
-      "name": "Counter 2 New Room",
+      "name": "Counter 21 naba",
       "tillAccountId": {
         "code": null,
-        "name": "Cash – Counter 2 New Room – Head Office"
-      },
-      "allowedExpenseAccountIds": [],
-      "isActive": true
-    },
-    {
-      "branchId": "BR-HQ",
-      "name": "Counter 1 Old Room",
-      "tillAccountId": {
-        "code": null,
-        "name": "Cash – Counter 1 Old Room – Head Office"
+        "name": "Cash – Counter 21 naba – Head Office"
       },
       "allowedExpenseAccountIds": [
         {
@@ -7283,14 +7211,15 @@
           "name": "Tea & Donation Exp"
         }
       ],
-      "isActive": true
+      "isActive": true,
+      "epbxExtension": "21"
     },
     {
       "branchId": "BR-HQ",
-      "name": "Counter 2 Old Room",
+      "name": "Counter 24 aka",
       "tillAccountId": {
         "code": null,
-        "name": "Cash – Counter 2 Old Room – Head Office"
+        "name": "Cash – Counter 24 aka – Head Office"
       },
       "allowedExpenseAccountIds": [
         {
@@ -7298,24 +7227,26 @@
           "name": "Tea & Donation Exp"
         }
       ],
-      "isActive": true
+      "isActive": true,
+      "epbxExtension": "24"
     },
     {
       "branchId": "BR-HQ",
-      "name": "Counter 1",
+      "name": "Counter 23 rakesh",
       "tillAccountId": {
         "code": null,
-        "name": "Cash – Counter 1 – Head Office"
+        "name": "Cash – Counter 23 rakesh – Head Office"
       },
       "allowedExpenseAccountIds": [],
-      "isActive": true
+      "isActive": true,
+      "epbxExtension": "23"
     }
   ],
   "posPaymentAccounts": [
     {
       "counterId": {
         "branchId": "BR-HQ",
-        "name": "Counter 1 New Room"
+        "name": "Counter 22 Prokash"
       },
       "channel": "UPI",
       "label": "PhonePe",
@@ -7333,7 +7264,7 @@
     {
       "counterId": {
         "branchId": "BR-HQ",
-        "name": "Counter 1 New Room"
+        "name": "Counter 22 Prokash"
       },
       "channel": "CARD",
       "label": "SBI Swipe",
@@ -7351,7 +7282,7 @@
     {
       "counterId": {
         "branchId": "BR-HQ",
-        "name": "Counter 2 New Room"
+        "name": "Counter 24 aka"
       },
       "channel": "UPI",
       "label": "PhonePe",
@@ -7369,7 +7300,7 @@
     {
       "counterId": {
         "branchId": "BR-HQ",
-        "name": "Counter 2 New Room"
+        "name": "Counter 24 aka"
       },
       "channel": "CARD",
       "label": "SBI Swipe",
@@ -7387,7 +7318,7 @@
     {
       "counterId": {
         "branchId": "BR-HQ",
-        "name": "Counter 1 Old Room"
+        "name": "Counter 23 rakesh"
       },
       "channel": "UPI",
       "label": "PhonePe",
@@ -7405,7 +7336,7 @@
     {
       "counterId": {
         "branchId": "BR-HQ",
-        "name": "Counter 1 Old Room"
+        "name": "Counter 23 rakesh"
       },
       "channel": "CARD",
       "label": "SBI Swipe",
@@ -7423,7 +7354,7 @@
     {
       "counterId": {
         "branchId": "BR-HQ",
-        "name": "Counter 2 Old Room"
+        "name": "Counter 21 naba"
       },
       "channel": "UPI",
       "label": "PhonePe",
@@ -7441,7 +7372,7 @@
     {
       "counterId": {
         "branchId": "BR-HQ",
-        "name": "Counter 2 Old Room"
+        "name": "Counter 21 naba"
       },
       "channel": "CARD",
       "label": "SBI Swipe",
@@ -7495,17 +7426,6 @@
       "isDefault": true,
       "isActive": true,
       "order": 0,
-      "entityType": "ticket"
-    },
-    {
-      "id": "P2",
-      "name": "customer-support",
-      "label": "Customer Support",
-      "description": "General customer support tickets not related to repairs",
-      "color": "bg-teal-100 text-teal-700",
-      "isDefault": false,
-      "isActive": true,
-      "order": 2,
       "entityType": "ticket"
     },
     {
@@ -7584,10 +7504,30 @@
       "isActive": true,
       "order": 6,
       "entityType": "deal"
+    },
+    {
+      "id": "P2",
+      "name": "help-desk",
+      "label": "Help Desk",
+      "description": "Front-desk enquiries & first response — price, availability, technical info, warranty help",
+      "color": "bg-teal-100 text-teal-700",
+      "isDefault": false,
+      "isActive": true,
+      "order": 2,
+      "entityType": "help"
     }
   ],
-  "workGroups": [],
+  "workGroups": [
+    {
+      "id": "G1",
+      "label": "calling",
+      "color": "#96D345",
+      "order": 1,
+      "permissionId": null
+    }
+  ],
   "works": [],
+  "workGroupWorks": [],
   "ticketStatuses": [
     {
       "id": "S18",
@@ -7601,6 +7541,8 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P3"
@@ -7617,6 +7559,8 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P5"
@@ -7633,6 +7577,8 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P3"
@@ -7649,6 +7595,8 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P1"
@@ -7665,6 +7613,26 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
+      "workId": null,
+      "startWorkerId": null,
+      "pipelineId": "P1"
+    },
+    {
+      "id": "S1",
+      "label": "Received",
+      "color": "bg-gray-100 text-gray-600",
+      "order": 1,
+      "isTerminal": false,
+      "isEntryPoint": true,
+      "actionLabel": null,
+      "warrantyScope": "any",
+      "leavePrompt": "Confirm the device and accessories are logged before moving on.",
+      "announceOnEntry": false,
+      "etaText": null,
+      "resolveTimeHours": 24,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P1"
@@ -7681,6 +7649,8 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P1"
@@ -7697,6 +7667,8 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P1"
@@ -7713,6 +7685,8 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P3"
@@ -7729,6 +7703,8 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P6"
@@ -7745,25 +7721,29 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P4"
     },
     {
-      "id": "S10",
-      "label": "New Request",
-      "color": "bg-gray-100 text-gray-600",
-      "order": 1,
+      "id": "S3",
+      "label": "Repairing",
+      "color": "bg-blue-100 text-blue-700",
+      "order": 3,
       "isTerminal": false,
-      "isEntryPoint": true,
+      "isEntryPoint": false,
       "actionLabel": null,
       "warrantyScope": "any",
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": 24,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
-      "pipelineId": "P2"
+      "pipelineId": "P1"
     },
     {
       "id": "S25",
@@ -7777,6 +7757,8 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P4"
@@ -7793,6 +7775,8 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P8"
@@ -7809,6 +7793,8 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P9"
@@ -7825,38 +7811,26 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P5"
     },
     {
-      "id": "S11",
-      "label": "In Triage",
-      "color": "bg-yellow-100 text-yellow-700",
-      "order": 2,
+      "id": "S10",
+      "label": "Open",
+      "color": "bg-gray-100 text-gray-600",
+      "order": 1,
       "isTerminal": false,
-      "isEntryPoint": false,
+      "isEntryPoint": true,
       "actionLabel": null,
       "warrantyScope": "any",
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
-      "workId": null,
-      "startWorkerId": null,
-      "pipelineId": "P2"
-    },
-    {
-      "id": "S13",
-      "label": "In Progress",
-      "color": "bg-indigo-100 text-indigo-600",
-      "order": 4,
-      "isTerminal": false,
-      "isEntryPoint": false,
-      "actionLabel": null,
-      "warrantyScope": "any",
-      "leavePrompt": null,
-      "announceOnEntry": false,
-      "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P2"
@@ -7873,25 +7847,11 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P1"
-    },
-    {
-      "id": "S14",
-      "label": "Pending Customer",
-      "color": "bg-orange-100 text-orange-600",
-      "order": 5,
-      "isTerminal": false,
-      "isEntryPoint": false,
-      "actionLabel": null,
-      "warrantyScope": "any",
-      "leavePrompt": null,
-      "announceOnEntry": false,
-      "etaText": null,
-      "workId": null,
-      "startWorkerId": null,
-      "pipelineId": "P2"
     },
     {
       "id": "S30",
@@ -7905,6 +7865,8 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P5"
@@ -7921,6 +7883,8 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P5"
@@ -7937,6 +7901,8 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P7"
@@ -7953,6 +7919,8 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P9"
@@ -7969,25 +7937,11 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P9"
-    },
-    {
-      "id": "S12",
-      "label": "Assigned",
-      "color": "bg-blue-100 text-blue-600",
-      "order": 3,
-      "isTerminal": false,
-      "isEntryPoint": false,
-      "actionLabel": null,
-      "warrantyScope": "any",
-      "leavePrompt": null,
-      "announceOnEntry": false,
-      "etaText": null,
-      "workId": null,
-      "startWorkerId": null,
-      "pipelineId": "P2"
     },
     {
       "id": "S38",
@@ -8001,6 +7955,8 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P6"
@@ -8017,25 +7973,11 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P8"
-    },
-    {
-      "id": "S15",
-      "label": "Resolved",
-      "color": "bg-green-100 text-green-600",
-      "order": 6,
-      "isTerminal": false,
-      "isEntryPoint": false,
-      "actionLabel": null,
-      "warrantyScope": "any",
-      "leavePrompt": null,
-      "announceOnEntry": false,
-      "etaText": null,
-      "workId": null,
-      "startWorkerId": null,
-      "pipelineId": "P2"
     },
     {
       "id": "S42",
@@ -8049,22 +7991,26 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P7"
     },
     {
-      "id": "S16",
-      "label": "Closed",
-      "color": "bg-gray-100 text-gray-400",
-      "order": 7,
-      "isTerminal": true,
+      "id": "S11",
+      "label": "Reviewing",
+      "color": "bg-yellow-100 text-yellow-700",
+      "order": 2,
+      "isTerminal": false,
       "isEntryPoint": false,
       "actionLabel": null,
       "warrantyScope": "any",
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P2"
@@ -8081,6 +8027,8 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P7"
@@ -8097,6 +8045,8 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P7"
@@ -8113,6 +8063,8 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P1"
@@ -8129,6 +8081,8 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P1"
@@ -8145,6 +8099,8 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P7"
@@ -8161,6 +8117,8 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P8"
@@ -8177,6 +8135,8 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P6"
@@ -8193,6 +8153,8 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P1"
@@ -8209,25 +8171,11 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P5"
-    },
-    {
-      "id": "S3",
-      "label": "Repairing",
-      "color": "bg-blue-100 text-blue-700",
-      "order": 3,
-      "isTerminal": false,
-      "isEntryPoint": false,
-      "actionLabel": null,
-      "warrantyScope": "any",
-      "leavePrompt": null,
-      "announceOnEntry": false,
-      "etaText": null,
-      "workId": null,
-      "startWorkerId": null,
-      "pipelineId": "P1"
     },
     {
       "id": "S20",
@@ -8241,6 +8189,8 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P3"
@@ -8257,6 +8207,8 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P3"
@@ -8273,6 +8225,8 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P3"
@@ -8289,6 +8243,8 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P4"
@@ -8305,6 +8261,8 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P3"
@@ -8321,25 +8279,11 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P4"
-    },
-    {
-      "id": "S1",
-      "label": "Received",
-      "color": "bg-gray-100 text-gray-600",
-      "order": 1,
-      "isTerminal": false,
-      "isEntryPoint": true,
-      "actionLabel": null,
-      "warrantyScope": "any",
-      "leavePrompt": "Confirm the device and accessories are logged before moving on.",
-      "announceOnEntry": false,
-      "etaText": null,
-      "workId": null,
-      "startWorkerId": null,
-      "pipelineId": "P1"
     },
     {
       "id": "S61",
@@ -8353,6 +8297,8 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P1"
@@ -8369,6 +8315,8 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P8"
@@ -8385,9 +8333,29 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P1"
+    },
+    {
+      "id": "S16",
+      "label": "Closed",
+      "color": "bg-gray-100 text-gray-400",
+      "order": 3,
+      "isTerminal": true,
+      "isEntryPoint": false,
+      "actionLabel": null,
+      "warrantyScope": "any",
+      "leavePrompt": null,
+      "announceOnEntry": false,
+      "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
+      "workId": null,
+      "startWorkerId": null,
+      "pipelineId": "P2"
     },
     {
       "id": "S45",
@@ -8401,6 +8369,8 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P7"
@@ -8417,6 +8387,8 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P7"
@@ -8433,6 +8405,8 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P4"
@@ -8449,6 +8423,8 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P8"
@@ -8465,6 +8441,8 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P8"
@@ -8481,6 +8459,8 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P6"
@@ -8497,6 +8477,8 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P7"
@@ -8513,6 +8495,8 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P8"
@@ -8529,6 +8513,8 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P5"
@@ -8545,6 +8531,8 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P6"
@@ -8561,6 +8549,8 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P6"
@@ -8577,6 +8567,8 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P6"
@@ -8593,6 +8585,8 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P1"
@@ -8609,6 +8603,8 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P9"

@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { fmt } from "@/utils/constants";
-import { indianFiscalYearStart } from "@/modules/accountancy/lib/period";
+import { indianFiscalYearStart, fmtPeriodDate } from "@/modules/accountancy/lib/period";
 import { accountLedgerUrl } from "@/modules/accountancy/lib/accountLedgerUrl";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
@@ -45,12 +45,6 @@ interface PLData {
     };
     grossProfit: number;
     netProfit: number;
-}
-
-function fmtIndianDate(iso: string): string {
-    return new Date(iso).toLocaleDateString("en-GB", {
-        day: "2-digit", month: "short", year: "numeric",
-    });
 }
 
 // Three-column amount layout — matches Tally's stepped placement:
@@ -236,7 +230,7 @@ export default function ProfitLossPage() {
                                     {" › "}
                                 </>
                             )}
-                            {data ? `${fmtIndianDate(data.from)} to ${fmtIndianDate(data.to)}` : "…"}
+                            {data ? `${fmtPeriodDate(data.from)} to ${fmtPeriodDate(data.to)}` : "…"}
                         </p>
                     </div>
                 </div>
@@ -247,7 +241,7 @@ export default function ProfitLossPage() {
                     </div>
                     <div className="space-y-1">
                         <Label>To</Label>
-                        <TallyDateInput value={to} onValueChange={setTo} className="w-auto" />
+                        <TallyDateInput value={to} onValueChange={setTo} monthMode="end" className="w-auto" />
                     </div>
                     <Button onClick={load}>Refresh</Button>
                     <Button variant="outline" onClick={() => window.print()} title="Print"><Printer size={14} /></Button>

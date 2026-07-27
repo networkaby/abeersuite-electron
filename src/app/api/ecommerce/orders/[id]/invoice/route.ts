@@ -3,6 +3,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { Prisma } from "@/generated/prisma/client";
 import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
+import { requestBusinessDate } from "@/shared/lib/api/requestBusinessDate";
 import { resolveProductTax } from "@/modules/inventory/lib/gstResolver";
 import { stateCodeForName } from "@/shared/lib/gst/indianStates";
 import { syncVoucherLinks } from "@/modules/accountancy/lib/voucherLinks";
@@ -79,7 +80,7 @@ async function findLinkedInvoice(orderId: number) {
     });
 }
 
-export async function POST(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
     const { user, response } = await requireModuleAccess("e-commerce");
     if (response) return response;
     const { id } = await ctx.params;
@@ -316,7 +317,7 @@ export async function POST(_req: NextRequest, ctx: { params: Promise<{ id: strin
         }
 
         const receiptVoucherId = Number(addr.receiptVoucherId) || null;
-        const voucherDate = new Date();
+        const voucherDate = requestBusinessDate(req);
         const description = `Online sale — Order #${oid}`;
 
         let allocated = false;

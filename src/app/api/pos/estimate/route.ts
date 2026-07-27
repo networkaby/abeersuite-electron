@@ -4,6 +4,7 @@ import { requirePosVoucher } from "@/shared/lib/auth/permissions";
 import { resolveActiveBranchId, BranchAccessError } from "@/shared/lib/auth/activeBranch";
 import { handleApiError } from "@/shared/lib/api";
 import { createPosQuoteVoucher, type PosQuoteBody } from "@/modules/pos/lib/posQuoteVoucher";
+import { requestBusinessDate } from "@/shared/lib/api/requestBusinessDate";
 
 /**
  * POST /api/pos/estimate — O2C POS Estimate mode.
@@ -32,7 +33,7 @@ export async function POST(req: NextRequest) {
 
     try {
         const body = (await req.json()) as PosQuoteBody;
-        const result = await createPosQuoteVoucher({ type: "POS_ESTIMATE", branchId, userId: user!.id, body });
+        const result = await createPosQuoteVoucher({ type: "POS_ESTIMATE", branchId, userId: user!.id, body, today: requestBusinessDate(req) });
         return NextResponse.json(result, { status: 201 });
     } catch (e) {
         return handleApiError(e, "Failed to save estimate");

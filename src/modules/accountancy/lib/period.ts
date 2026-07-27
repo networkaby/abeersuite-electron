@@ -8,7 +8,7 @@
 // 26 Jul 18:30 UTC, truncating to the 26th), which made every report silently
 // include the day before its start date. Pinning to UTC also makes the result
 // identical on a dev machine in IST and a server running UTC.
-import { startOfDayUtc, endOfDayUtc, toDateOnly } from "@/shared/lib/format/formatDate";
+import { startOfDayUtc, endOfDayUtc, toDateOnly, parseIsoDateOnly, businessTodayIso } from "@/shared/lib/format/formatDate";
 
 export type PeriodRange = { from: Date; to: Date };
 
@@ -19,16 +19,21 @@ export type PeriodRange = { from: Date; to: Date };
  *  work: one passing an already UTC-pinned bound (parseAsOf), and one passing
  *  nothing. Without that, an asOf of 31 Mar 23:59:59Z would read as 1 Apr in
  *  IST and jump a whole fiscal year. */
-export function indianFiscalYearStart(today = startOfDayUtc(new Date())): Date {
+export function indianFiscalYearStart(today = startOfDayUtc(businessTodayIso())): Date {
     const y = today.getUTCFullYear();
     const m = today.getUTCMonth(); // Jan = 0, Apr = 3
     const fyYear = m < 3 ? y - 1 : y;
     return new Date(Date.UTC(fyYear, 3, 1, 0, 0, 0, 0));
 }
 
+// The `?? businessTodayIso()` fallbacks below are the only timezone-sensitive
+// bit: a date the caller SENDS is already a plain calendar date, but when it
+// omits one we must answer "today" from the shop's clock — `new Date()` here
+// would read Vercel's UTC clock and start the report a day early before 05:30.
+
 export function parseAsOf(searchParams: URLSearchParams): Date {
     const v = searchParams.get("asOf");
-    return endOfDayUtc(v ?? new Date());
+    return endOfDayUtc(v ?? businessTodayIso());
 }
 
 export function parseRange(searchParams: URLSearchParams): PeriodRange {
@@ -36,11 +41,23 @@ export function parseRange(searchParams: URLSearchParams): PeriodRange {
     const toParam   = searchParams.get("to");
     return {
         from: fromParam ? startOfDayUtc(fromParam) : indianFiscalYearStart(),
-        to:   endOfDayUtc(toParam ?? new Date()),
+        to:   endOfDayUtc(toParam ?? businessTodayIso()),
     };
 }
 
 /** Format a Date as yyyy-mm-dd using local calendar components (NOT UTC). */
 export function formatDateInput(d: Date): string {
     return toDateOnly(d);
+}
+
+/** Render a report period date ("2026-07-28" → "28 Jul 2026") for report headers.
+ *
+ *  Takes the PLAIN calendar date the API echoes back, never a timestamp. Feeding
+ *  a `…T23:59:59.999Z` bound to `new Date()` here is what made every report
+ *  header print one day past its own To picker. `parseIsoDateOnly` keeps the
+ *  calendar components intact in any timezone. */
+export function fmtPeriodDate(isoDate: string): string {
+    return parseIsoDateOnly(isoDate).toLocaleDateString("en-GB", {
+        day: "2-digit", month: "short", year: "numeric",
+    });
 }

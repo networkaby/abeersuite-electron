@@ -292,7 +292,7 @@ export function PosSalesRegister() {
                 )}
                 <TallyDateInput value={rangeFrom} onValueChange={setRangeFrom} className="h-9 w-32" placeholder="From" />
                 <span className="text-sm text-muted-foreground">–</span>
-                <TallyDateInput value={rangeTo} onValueChange={setRangeTo} className="h-9 w-32" placeholder="To" />
+                <TallyDateInput value={rangeTo} onValueChange={setRangeTo} monthMode="end" className="h-9 w-32" placeholder="To" />
                 <Button variant="outline" size="sm" className="h-9" onClick={() => { setRangeFrom(todayISO); setRangeTo(todayISO); }}>Today</Button>
                 {(rangeFrom || rangeTo) && (
                     <Button variant="ghost" size="sm" className="h-9 text-muted-foreground" onClick={() => { setRangeFrom(""); setRangeTo(""); }}>Clear</Button>

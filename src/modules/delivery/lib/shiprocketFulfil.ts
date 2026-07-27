@@ -15,6 +15,7 @@ import {
     type SrAdhocItem,
 } from "./shiprocket";
 import { DELIVERY_STAGE } from "./shiprocketStatus";
+import { businessTodayIso } from "@/shared/lib/format/formatDate";
 
 type ShipAddress = {
     name?: string;
@@ -98,7 +99,7 @@ export async function pushDeliveryToShiprocket(deliveryTicketId: number): Promis
     if (!shipmentId) {
         const created = await shiprocketCreateAdhoc({
             order_id: `WEB-${del.orderId}`,
-            order_date: new Date().toISOString().slice(0, 10),
+            order_date: businessTodayIso(),
             pickup_location: String(cfg.pickupLocation),
             billing_customer_name: firstName,
             billing_last_name: lastName,

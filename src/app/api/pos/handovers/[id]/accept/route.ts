@@ -26,6 +26,7 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { postContra } from "@/modules/accountancy/lib/postContra";
 import { computeExpectedCash, computeVariance, sumPaise, sumShiftCashSalesPaise } from "@/modules/pos/lib/shiftMath";
 import { enginePost } from "@/modules/accountancy/lib/transactionEngine";
+import { requestBusinessDate } from "@/shared/lib/api/requestBusinessDate";
 
 const acceptSchema = z.object({
     countedByBPaise: z.number().int().min(0),
@@ -140,7 +141,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 // place), posted as a JOURNAL voucher.
                 const { journalEntryId } = await enginePost(tx, {
                     type:        "JOURNAL",
-                    date:        new Date(),
+                    date:        requestBusinessDate(req),
                     description: `Shift #${fromShift.id} handover variance — ${tillDiscrepancy > 0 ? "short" : "over"} ₹${absRupees}`,
                     glLines:     lines,
                     stockMoves:  [],
@@ -153,7 +154,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             if (toVaultPaise > BigInt(0)) {
                 const rupees = Number(toVaultPaise) / 100;
                 const closing = await postContra(tx, {
-                    date:      new Date(),
+                    date:      requestBusinessDate(req),
                     narration: `Handover close — ${fromShift.counter.name} → Vault (${fromShift.branch.name})`,
                     userId:    user!.id,
                     lines: [

@@ -14,7 +14,7 @@
 import * as React from "react";
 
 import { Input } from "@/components/ui/input";
-import { useTallyDate } from "@/shared/hooks/useTallyDate";
+import { useTallyDate, type MonthMode } from "@/shared/hooks/useTallyDate";
 
 type InputProps = React.ComponentProps<typeof Input>;
 
@@ -23,10 +23,14 @@ export interface TallyDateInputProps extends Omit<InputProps, "value" | "onChang
     value: string;
     /** Called with the new ISO yyyy-mm-dd on blur / Enter when parsing succeeds. */
     onValueChange: (iso: string) => void;
+    /** How a bare month name (e.g. "feb") resolves. Default "start" (1st of
+     *  month) — fits single-date and "From" fields. Pass "end" on "To" fields
+     *  so it resolves to the last day of the month instead. */
+    monthMode?: MonthMode;
 }
 
-export function TallyDateInput({ value, onValueChange, placeholder, inputMode, ...rest }: TallyDateInputProps) {
-    const { display, onChange, onBlur, onFocus, onKeyDown } = useTallyDate(value, onValueChange);
+export function TallyDateInput({ value, onValueChange, placeholder, inputMode, monthMode, ...rest }: TallyDateInputProps) {
+    const { display, onChange, onBlur, onFocus, onKeyDown } = useTallyDate(value, onValueChange, monthMode);
     return (
         <Input
             type="text"

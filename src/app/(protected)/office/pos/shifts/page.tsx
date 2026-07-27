@@ -95,7 +95,7 @@ export default function ShiftsReportPage() {
                     From
                     <TallyDateInput value={from} onValueChange={setFrom} className="h-8 w-36 text-xs" />
                     To
-                    <TallyDateInput value={to} onValueChange={setTo} className="h-8 w-36 text-xs" />
+                    <TallyDateInput value={to} onValueChange={setTo} monthMode="end" className="h-8 w-36 text-xs" />
                 </div>
             </div>
 

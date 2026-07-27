@@ -4,6 +4,7 @@ import { aggregateRange, loadNormalBalanceMap } from "@/modules/accountancy/lib/
 import { buildGroupTree, type GroupNode } from "@/modules/accountancy/lib/groupTree";
 import { getClosingStockValue } from "@/modules/accountancy/lib/closingStock";
 import { handleApiError } from "@/shared/lib/api";
+import { businessToday } from "@/shared/lib/format/formatDate";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 
 // GET /api/accountancy/reports/ratio-analysis?asOf=YYYY-MM-DD
@@ -15,7 +16,7 @@ export async function GET(req: Request) {
 
     const { searchParams } = new URL(req.url);
     const asOfParam = searchParams.get("asOf");
-    const asOf = asOfParam ? new Date(asOfParam) : new Date();
+    const asOf = asOfParam ? new Date(asOfParam) : businessToday();
     asOf.setHours(23, 59, 59, 999);
     const fyYear = asOf.getMonth() < 3 ? asOf.getFullYear() - 1 : asOf.getFullYear();
     const from = new Date(fyYear, 3, 1, 0, 0, 0, 0);

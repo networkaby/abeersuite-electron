@@ -109,7 +109,7 @@ export default function StockLedgerPage() {
                 </div>
                 <div className="space-y-1">
                     <Label>To</Label>
-                    <TallyDateInput value={to} onValueChange={setTo} className="w-36" />
+                    <TallyDateInput value={to} onValueChange={setTo} monthMode="end" className="w-36" />
                 </div>
                 <Button onClick={load} disabled={loading || !productId}>
                     {loading ? <Loader2 size={14} className="animate-spin mr-1" /> : null}

@@ -4,6 +4,8 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { validateRequest } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { runCustomerImport } from "@/shared/lib/import/customerImport";
+import { requestBusinessDate } from "@/shared/lib/api/requestBusinessDate";
+import { toDateOnlyUtc } from "@/shared/lib/format/formatDate";
 
 // `z.record(enum, ...)` in Zod 4 enforces every enum key — not what we want
 // here since most CSV rows fill only a subset. Use plain string keys; the
@@ -33,6 +35,7 @@ export async function POST(req: Request) {
         rows: data.rows,
         mode: data.mode,
         dryRun: true,
+        today: toDateOnlyUtc(requestBusinessDate(req)),
     });
     return NextResponse.json(result);
 }

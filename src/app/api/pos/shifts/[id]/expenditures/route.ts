@@ -20,6 +20,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { engineCreateVoucher } from "@/modules/accountancy/lib/transactionEngine";
+import { requestBusinessDate } from "@/shared/lib/api/requestBusinessDate";
 
 const expenditureSchema = z.object({
     amountPaise:      z.number().int().positive(),
@@ -82,7 +83,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             // — created + posted (mirror JE + balance deltas), branch-stamped to the shift.
             const voucher = await engineCreateVoucher(tx, {
                 type:      "PAYMENT",
-                date:      new Date(),
+                date:      requestBusinessDate(req),
                 userId:    user!.id,
                 narration: `POS expenditure — ${data.description}`,
                 lines: [

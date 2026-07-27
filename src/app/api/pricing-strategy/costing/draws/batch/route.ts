@@ -5,6 +5,7 @@ import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { costPoolAllocateBatchSchema } from "@/shared/lib/schemas/costPoolSchemas";
 import { getEntryRemainingPaise } from "@/modules/pricing-strategy/lib/costPool";
+import { requestBusinessDate } from "@/shared/lib/api/requestBusinessDate";
 
 // POST /api/pricing-strategy/costing/draws/batch — allocate one pool entry's
 // freight across the product lines of a purchase/GRN voucher in one shot.
@@ -32,7 +33,7 @@ export async function POST(req: Request) {
             );
         }
 
-        const date = data.date ? new Date(data.date) : new Date();
+        const date = data.date ? new Date(data.date) : requestBusinessDate(req);
         await prisma.additionalCostAllocation.createMany({
             data: data.lines.map((l) => ({
                 kind: "ALLOCATION" as const,

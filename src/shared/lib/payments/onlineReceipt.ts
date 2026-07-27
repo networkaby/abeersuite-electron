@@ -12,6 +12,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { settlementAccountIdOf } from "@/modules/pos/lib/paymentGateways";
 import { postReceiptVoucher } from "@/modules/accountancy/lib/postReceiptVoucher";
+import { businessToday } from "@/shared/lib/format/formatDate";
 
 /** Seeded HQ branch — the online channel runs under HQ (see bootstrap §1). */
 const HQ_BRANCH_ID = "BR-HQ";
@@ -97,7 +98,7 @@ export async function postOnlineOrderReceipt(opts: {
                     description: `${label} ref ${paymentRef}`,
                 },
             ],
-            date: new Date(),
+            date: businessToday(),
             userId: actorId,
             narration: `Online payment via ${label} for Order #${ticketId} — auto-posted`,
             branchId: branch?.id,

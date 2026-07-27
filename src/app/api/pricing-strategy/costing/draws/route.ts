@@ -5,6 +5,7 @@ import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { costPoolDrawCreateSchema } from "@/shared/lib/schemas/costPoolSchemas";
 import { getEntryRemainingPaise } from "@/modules/pricing-strategy/lib/costPool";
+import { requestBusinessDate } from "@/shared/lib/api/requestBusinessDate";
 
 // GET /api/pricing-strategy/costing/draws — draw history.
 //   ?productId=N       → allocations for one product
@@ -127,7 +128,7 @@ export async function POST(req: Request) {
             );
         }
 
-        const date = data.date ? new Date(data.date) : new Date();
+        const date = data.date ? new Date(data.date) : requestBusinessDate(req);
         const draw = await prisma.additionalCostAllocation.create({
             data: {
                 kind: data.kind,

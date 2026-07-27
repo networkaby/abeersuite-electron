@@ -4,6 +4,8 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { validateRequest } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { runCustomerImport } from "@/shared/lib/import/customerImport";
+import { requestBusinessDate } from "@/shared/lib/api/requestBusinessDate";
+import { toDateOnlyUtc } from "@/shared/lib/format/formatDate";
 
 const rowSchema = z.object({
     rowIndex: z.number().int().min(0),
@@ -32,6 +34,7 @@ export async function POST(req: Request) {
             rows: data.rows,
             mode: data.mode,
             dryRun: false,
+            today: toDateOnlyUtc(requestBusinessDate(req)),
         });
         return NextResponse.json(result);
     } catch (err) {

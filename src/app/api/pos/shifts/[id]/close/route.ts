@@ -31,6 +31,7 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { postContra } from "@/modules/accountancy/lib/postContra";
 import { computeExpectedCash, computeVariance, sumPaise, sumShiftCashSalesPaise, buildShiftTenderBreakdown } from "@/modules/pos/lib/shiftMath";
 import { enginePost } from "@/modules/accountancy/lib/transactionEngine";
+import { requestBusinessDate } from "@/shared/lib/api/requestBusinessDate";
 
 const closeSchema = z.object({
     declaredCashPaise:  z.number().int().min(0),
@@ -150,7 +151,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 // engine's GL-line shape.
                 const { journalEntryId } = await enginePost(tx, {
                     type:        "JOURNAL",
-                    date:        new Date(),
+                    date:        requestBusinessDate(req),
                     description: `Shift #${shift.id} variance — ${variance > 0 ? "over" : "short"} ₹${absRupees}`,
                     glLines:     lines,
                     stockMoves:  [],
@@ -163,7 +164,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             if (toVaultPaise > BigInt(0)) {
                 const rupees = Number(toVaultPaise) / 100;
                 const closing = await postContra(tx, {
-                    date:      new Date(),
+                    date:      requestBusinessDate(req),
                     narration: `Shift close — ${shift.counter.name} → Vault (${shift.branch.name})`,
                     userId:    user!.id,
                     lines: [

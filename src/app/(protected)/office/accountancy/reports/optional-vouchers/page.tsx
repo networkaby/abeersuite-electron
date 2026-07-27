@@ -160,7 +160,7 @@ export default function OptionalVouchersPage() {
                 </div>
                 <div className="flex items-end gap-2">
                     <div className="space-y-1"><Label>From</Label><TallyDateInput value={from} onValueChange={setFrom} className="w-auto" /></div>
-                    <div className="space-y-1"><Label>To</Label><TallyDateInput value={to} onValueChange={setTo} className="w-auto" /></div>
+                    <div className="space-y-1"><Label>To</Label><TallyDateInput value={to} onValueChange={setTo} monthMode="end" className="w-auto" /></div>
                     <Button onClick={() => { setPage(1); load(1, search, typeFilter); }}>Refresh</Button>
                 </div>
             </div>

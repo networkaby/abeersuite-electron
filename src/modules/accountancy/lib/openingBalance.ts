@@ -5,6 +5,7 @@
 // will fall in line.
 
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { businessToday } from "@/shared/lib/format/formatDate";
 
 const SUSPENSE_NAME = "Difference in Opening Balances";
 
@@ -51,7 +52,7 @@ export async function reconcileOpeningSuspense(): Promise<void> {
         data: {
             openingBalance:     Math.abs(diff),
             openingBalanceType: diff > 0 ? "CREDIT" : "DEBIT",
-            openingBalanceDate: new Date(),
+            openingBalanceDate: businessToday(),
         },
     });
 }

@@ -481,7 +481,7 @@ export default function PendingVouchersPage() {
                     </div>
                     <div className="flex items-end gap-2 flex-wrap">
                         <div className="space-y-1"><Label>From</Label><TallyDateInput value={from} onValueChange={setFrom} className="w-auto" /></div>
-                        <div className="space-y-1"><Label>To</Label><TallyDateInput value={to} onValueChange={setTo} className="w-auto" /></div>
+                        <div className="space-y-1"><Label>To</Label><TallyDateInput value={to} onValueChange={setTo} monthMode="end" className="w-auto" /></div>
                         {branches.length > 1 && (
                             <div className="space-y-1">
                                 <Label>Branch</Label>

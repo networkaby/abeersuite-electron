@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
+import { businessToday } from "@/shared/lib/format/formatDate";
 import { aggregateClosingAsOf, loadNormalBalanceMap } from "@/modules/accountancy/lib/aggregateLedger";
 import { buildGroupTree, type GroupNode } from "@/modules/accountancy/lib/groupTree";
 
@@ -33,7 +34,7 @@ export async function GET() {
     if (response) return response;
 
     try {
-        const asOf = new Date();
+        const asOf = businessToday();
         asOf.setHours(23, 59, 59, 999);
 
         const nbMap = await loadNormalBalanceMap();

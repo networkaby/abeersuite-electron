@@ -3,6 +3,7 @@ import { Prisma, type InvVoucherType } from "@/generated/prisma/client";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
+import { requestBusinessDate } from "@/shared/lib/api/requestBusinessDate";
 import { invNextRef } from "@/modules/inventory/lib/stock";
 import { engineCreateSpine } from "@/modules/accountancy/lib/transactionEngine";
 
@@ -16,7 +17,7 @@ import { engineCreateSpine } from "@/modules/accountancy/lib/transactionEngine";
 //
 // Cancelled / soft-deleted sources are allowed (a "make a corrected copy"
 // flow is normal). Hard-deleted sources 404 because the row is gone.
-export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { response, user } = await requireAuth();
     if (response) return response;
 
@@ -40,7 +41,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
         const created = await prisma.$transaction(async (tx) => {
             const srcType = source.universalVoucher!.type as InvVoucherType;   // 5D-11: type on the spine
             const reference = await invNextRef(tx, srcType, user!.id);
-            const today = new Date();
+            const today = requestBusinessDate(req);
 
             // Phase 5 5.0c/5C: spine FIRST (the document anchor) — the duplicate is
             // a fresh DRAFT; POST attaches its GL lines + flips it.

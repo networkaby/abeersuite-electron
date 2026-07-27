@@ -125,7 +125,7 @@ export function BookPage({
                     </div>
                     <div className="space-y-1">
                         <Label>To</Label>
-                        <TallyDateInput value={to} onValueChange={setTo} className="w-auto" />
+                        <TallyDateInput value={to} onValueChange={setTo} monthMode="end" className="w-auto" />
                     </div>
                     <Button onClick={load}>Refresh</Button>
                 </div>

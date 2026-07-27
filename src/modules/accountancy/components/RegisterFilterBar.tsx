@@ -77,7 +77,7 @@ export function RegisterFilterBar({
                     <span className="pb-1.5 text-xs text-muted-foreground">→</span>
                     <div className="flex flex-col gap-1">
                         <label className="text-xs font-medium text-muted-foreground">To</label>
-                        <TallyDateInput value={to} onValueChange={handleTo} className="h-8 w-36" />
+                        <TallyDateInput value={to} onValueChange={handleTo} monthMode="end" className="h-8 w-36" />
                     </div>
                 </div>
 

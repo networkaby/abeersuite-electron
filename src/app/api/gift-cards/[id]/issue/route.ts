@@ -5,6 +5,7 @@ import { validateRequest, handleApiError, parseIdParam } from "@/shared/lib/api"
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { giftCardIssueSchema } from "@/shared/lib/schemas/giftCardSchemas";
 import { enginePost } from "@/modules/accountancy/lib/transactionEngine";
+import { requestBusinessDate } from "@/shared/lib/api/requestBusinessDate";
 
 // POST /api/gift-cards/[id]/issue — SELL a DRAFT card. Posts a balanced JE
 // Dr <payment ledger> / Cr "Gift Card Liability" for the card's value, writes an
@@ -48,7 +49,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             // UI yet; the description carries the meaning).
             await enginePost(tx, {
                 type:        "JOURNAL",
-                date:        new Date(),
+                date:        requestBusinessDate(req),
                 description: `Gift card sold: ${card.code}`,
                 glLines: [
                     { accountId: payAccount.id, type: "DEBIT",  amount: value, description: `Gift card ${card.code}` },

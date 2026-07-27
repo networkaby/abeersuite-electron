@@ -83,7 +83,7 @@ export default function AllVouchersPage() {
                     </div>
                     <div className="flex flex-col gap-1">
                         <label className="text-xs font-medium text-muted-foreground">To</label>
-                        <TallyDateInput value={to} onValueChange={setTo} className="h-8 w-40" />
+                        <TallyDateInput value={to} onValueChange={setTo} monthMode="end" className="h-8 w-40" />
                     </div>
                     <div className="flex flex-col gap-1">
                         <label className="text-xs font-medium text-muted-foreground">Kind contains</label>

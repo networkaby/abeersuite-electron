@@ -11,3 +11,4 @@ export { extractApiError } from "./extractApiError";
 export { parseIdParam } from "./parseIdParam";
 export { pickDefined } from "./pickDefined";
 export { generateNextOpaqueId } from "./generateNextOpaqueId";
+export { requestBusinessDate } from "./requestBusinessDate";

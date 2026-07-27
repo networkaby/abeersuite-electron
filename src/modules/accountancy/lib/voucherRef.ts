@@ -1,6 +1,8 @@
 // Shared helpers for VoucherSeries reference assembly.
 // Used by nextRefFromSeries (server) and the Year Ending UI preview (client).
 
+import { businessToday } from "@/shared/lib/format/formatDate";
+
 export type YearFormat = "CALENDAR" | "CALENDAR_SHORT" | "FY_SHORT" | "FY_LONG";
 export type PartName = "type" | "user" | "year" | "number";
 
@@ -34,9 +36,14 @@ export function formatYear(fyStartYear: number, format: string): string {
     }
 }
 
-/** Indian fiscal year start (Apr 1). Returns the calendar year of FY start. */
-export function indianFyStartYear(today = new Date()): number {
-    return today.getMonth() < 3 ? today.getFullYear() - 1 : today.getFullYear();
+/** Indian fiscal year start (Apr 1). Returns the calendar year of FY start.
+ *
+ *  Defaults to the SHOP's day, and reads UTC components — the default and every
+ *  caller-supplied date (`new Date("2026-04-01")`) are UTC-pinned. Reading local
+ *  parts off those made the first hours of 1 April fall back into the OLD
+ *  financial year, so vouchers numbered then got the previous FY's series. */
+export function indianFyStartYear(today = businessToday()): number {
+    return today.getUTCMonth() < 3 ? today.getUTCFullYear() - 1 : today.getUTCFullYear();
 }
 
 /**
@@ -44,8 +51,8 @@ export function indianFyStartYear(today = new Date()): number {
  * If today is before the restart day this calendar year, FY starts last year.
  * restartMonth is 1-12, restartDay is 1-31.
  */
-export function fyStartYearFor(restartMonth: number, restartDay: number, today = new Date()): number {
-    const cy = today.getFullYear();
+export function fyStartYearFor(restartMonth: number, restartDay: number, today = businessToday()): number {
+    const cy = today.getUTCFullYear();
     const restartThisYear = new Date(Date.UTC(cy, restartMonth - 1, restartDay));
     return today < restartThisYear ? cy - 1 : cy;
 }

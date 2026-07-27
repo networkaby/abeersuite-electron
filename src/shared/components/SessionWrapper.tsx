@@ -3,6 +3,7 @@
 import { SessionProvider, useSession } from "next-auth/react";
 import { useEffect, useRef } from "react";
 import axios from "axios";
+import { stampRequestContext } from "@/shared/lib/http";
 
 // Staff-only wrapper (mounted by every (protected) layout, never the portal).
 // Adds two layers that make "logout" actually stick across tabs:
@@ -11,6 +12,12 @@ import axios from "axios";
 //   2. Server-side revocation catch — any API 401 (e.g. a token revoked via
 //      tokensValidFrom after logout) kicks the tab to login on its next request,
 //      so a logged-out till can't keep transacting.
+//
+// It also stamps the staff machine's calendar day on every request. Being
+// staff-only is the point: the portal never mounts this, so a CUSTOMER-side
+// write carries no date header and the server falls back to the shop's timezone
+// constant. Most POS/office components still call bare `axios`, which does not
+// inherit the `http` instance's interceptors — hence the global registration.
 
 let redirecting = false;
 function goLogin() {
@@ -38,7 +45,11 @@ function SessionGuard() {
                 return Promise.reject(err);
             },
         );
-        return () => axios.interceptors.response.eject(id);
+        const reqId = axios.interceptors.request.use(stampRequestContext);
+        return () => {
+            axios.interceptors.response.eject(id);
+            axios.interceptors.request.eject(reqId);
+        };
     }, []);
 
     return null;

@@ -17,6 +17,7 @@ import { createSystemInboxNotifications } from "@/modules/message/lib/inbox";
 import { spawnShopRefund } from "@/modules/refund/lib/refund";
 import { ORDER_STAGE } from "@/modules/order/lib/orderPipeline";
 import { round2 } from "@/shared/lib/format";
+import { requestBusinessDate } from "@/shared/lib/api/requestBusinessDate";
 
 // POST /api/ecommerce/orders/[id]/return — one-click FULL return of a shop
 // order, in either of the two real-world cases (they differ in who caused the
@@ -179,7 +180,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
             const description = `Online return — Order #${oid} (${modeLabel}) against ${invSpine.voucherNo ?? ""}`;
             const spineId = await engineCreateSpine(tx, {
                 type: "SALE_RETURN",
-                date: new Date(),
+                date: requestBusinessDate(req),
                 description,
                 voucherNo: vRef,
                 partyAccountId,
@@ -235,7 +236,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
                 id: voucher.id,
                 type: "SALE_RETURN",
                 reference: vRef,
-                date: new Date(),
+                date: requestBusinessDate(req),
                 description,
                 partyJson: voucher.partyJson,
                 subtotal: voucher.subtotal,
@@ -277,7 +278,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
                     universalVoucherId: spineId,
                     productId: l.line.productId,
                     branchId,
-                    date: new Date(),
+                    date: requestBusinessDate(req),
                     inQty: l.qty,
                     outQty: 0,
                     rate: l.rate,

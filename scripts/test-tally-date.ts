@@ -43,6 +43,22 @@ const cases: [string, string | null][] = [
     ["31feb",        null],
 ];
 
+// Bare month, default monthMode ("start") — 1st of month, current year.
+const startCases: [string, string | null][] = [
+    ["feb",          "01/02/2026"],
+    ["FEB",          "01/02/2026"],
+    ["february",     "01/02/2026"],
+    ["dec",          "01/12/2026"],
+    ["fe",           null], // < 3 chars — not a month prefix
+];
+
+// Bare month, monthMode "end" — last day of month, current year.
+const endCases: [string, string | null][] = [
+    ["feb",          "28/02/2026"],
+    ["apr",          "30/04/2026"],
+    ["dec",          "31/12/2026"],
+];
+
 let pass = 0;
 let fail = 0;
 for (const [input, expected] of cases) {
@@ -52,6 +68,22 @@ for (const [input, expected] of cases) {
     if (ok) pass++;
     else fail++;
     console.log(`${ok ? "PASS" : "FAIL"}  "${input}" -> ${got}  (expected ${expected})`);
+}
+for (const [input, expected] of startCases) {
+    const parsed = parseTallyDate(input, today, "start");
+    const got = parsed ? isoToDisplay(toIsoDate(parsed)) : null;
+    const ok = got === expected;
+    if (ok) pass++;
+    else fail++;
+    console.log(`${ok ? "PASS" : "FAIL"}  "${input}" (start) -> ${got}  (expected ${expected})`);
+}
+for (const [input, expected] of endCases) {
+    const parsed = parseTallyDate(input, today, "end");
+    const got = parsed ? isoToDisplay(toIsoDate(parsed)) : null;
+    const ok = got === expected;
+    if (ok) pass++;
+    else fail++;
+    console.log(`${ok ? "PASS" : "FAIL"}  "${input}" (end) -> ${got}  (expected ${expected})`);
 }
 console.log(`\n${pass}/${pass + fail} passed`);
 process.exit(fail > 0 ? 1 : 0);

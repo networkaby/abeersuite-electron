@@ -190,7 +190,7 @@ export default function TicketsPage() {
                         </SelectContent>
                     </Select>
                     <TallyDateInput value={dateFrom} onValueChange={setDateFrom} placeholder="From date" className={activeCls(dateFrom)} />
-                    <TallyDateInput value={dateTo} onValueChange={setDateTo} placeholder="To date" className={activeCls(dateTo)} />
+                    <TallyDateInput value={dateTo} onValueChange={setDateTo} monthMode="end" placeholder="To date" className={activeCls(dateTo)} />
                 </div>
 
                 {/* Results count + clear */}

@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { fmt } from "@/utils/constants";
-import { indianFiscalYearStart } from "@/modules/accountancy/lib/period";
+import { indianFiscalYearStart, fmtPeriodDate } from "@/modules/accountancy/lib/period";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import { defaultNormalBalanceForGroupType } from "@/modules/accountancy/lib/groupNature";
@@ -33,10 +33,6 @@ interface TBData {
     from: string; to: string;
     tree: GroupNode[];
     totals: { opening: number; debits: number; credits: number; closing: number };
-}
-
-function fmtIndianDate(iso: string): string {
-    return new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 }
 
 /**
@@ -256,12 +252,12 @@ export default function TrialBalancePage() {
                 <div>
                     <h1 className="text-2xl font-bold text-foreground">Trial Balance</h1>
                     <p className="text-sm text-muted-foreground mt-0.5">
-                        {data ? `${fmtIndianDate(data.from)} to ${fmtIndianDate(data.to)}` : "…"}
+                        {data ? `${fmtPeriodDate(data.from)} to ${fmtPeriodDate(data.to)}` : "…"}
                     </p>
                 </div>
                 <div className="flex items-end gap-2">
                     <div className="space-y-1"><Label>From</Label><TallyDateInput value={from} onValueChange={setFrom} className="w-auto" /></div>
-                    <div className="space-y-1"><Label>To</Label><TallyDateInput value={to} onValueChange={setTo} className="w-auto" /></div>
+                    <div className="space-y-1"><Label>To</Label><TallyDateInput value={to} onValueChange={setTo} monthMode="end" className="w-auto" /></div>
                     <Button variant="outline" onClick={() => setShowEmpty((v) => !v)} title="Toggle visibility of groups / ledgers with no activity">
                         {showEmpty ? "Hide empty" : "Show all"}
                     </Button>

@@ -16,6 +16,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { postReceiptVoucher } from "@/modules/accountancy/lib/postReceiptVoucher";
+import { requestBusinessDate } from "@/shared/lib/api/requestBusinessDate";
 
 const receiptSchema = z.object({
     accountId: z.number().int().positive(),   // party AR ledger to credit
@@ -86,7 +87,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             const r = await postReceiptVoucher(tx, {
                 customerAccountId: party.id,
                 tenders,
-                date:      new Date(),
+                date:      requestBusinessDate(req),
                 userId:    user!.id,
                 branchId:  shift.branchId,
                 narration: data.note ? `POS receipt — ${data.note}` : `POS receipt from ${party.name}`,

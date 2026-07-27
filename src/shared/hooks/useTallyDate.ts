@@ -17,6 +17,11 @@
 //   15/04/2025             → full dd/mm/yyyy
 //   15042025               → DDMMYYYY (8 digits, no separators)
 //   2026-04-15             → native ISO accepted
+//   feb / february         → bare month (3+ letter prefix), current year —
+//                             resolves to the 1st (`monthMode: "start"`, the
+//                             default — voucher/single-date fields, and "From"
+//                             fields) or the last day of the month
+//                             (`monthMode: "end"` — "To" fields)
 //
 // Trigger: blur + Enter only. Invalid input keeps the raw text in the box and
 // leaves the ISO value at the previous good date so callers don't need to
@@ -25,6 +30,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const MONTH_NAMES = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"] as const;
+
+/** How a bare month name (e.g. "feb") resolves: 1st of month, or last day of month. */
+export type MonthMode = "start" | "end";
 
 /** Build a Date guarding against rollover (e.g. Feb 31 → Mar 3). Returns null if y/m/d don't round-trip. */
 function makeDate(y: number, m: number, d: number): Date | null {
@@ -48,7 +56,7 @@ function expandYear(raw: string): number {
 }
 
 /** Parse a Tally-style shorthand into a Date. Returns null for any unrecognised input. */
-export function parseTallyDate(input: string, today: Date = new Date()): Date | null {
+export function parseTallyDate(input: string, today: Date = new Date(), monthMode: MonthMode = "start"): Date | null {
     const s = input.trim().toLowerCase();
     if (!s) return null;
 
@@ -72,6 +80,17 @@ export function parseTallyDate(input: string, today: Date = new Date()): Date | 
     // ── ISO yyyy-mm-dd (native input fallthrough) ──
     const iso = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(s);
     if (iso) return makeDate(Number(iso[1]), Number(iso[2]), Number(iso[3]));
+
+    // ── Bare month name/prefix, no day (e.g. feb, february) ──
+    // "start" → 1st of month; "end" → last day of month.
+    if (/^[a-z]+$/.test(s)) {
+        const month = monthFromPrefix(s);
+        if (month != null) {
+            const year = today.getFullYear();
+            const day = monthMode === "end" ? new Date(year, month, 0).getDate() : 1;
+            return makeDate(year, month, day);
+        }
+    }
 
     // ── dd<monthname>[yy|yyyy]?  (e.g. 23feb, 23 feb, 23mar25) ──
     const monAlpha = /^(\d{1,2})\s*([a-z]+)\s*(\d{2}|\d{4})?$/.exec(s);
@@ -133,7 +152,7 @@ export function isoToDisplay(iso: string): string {
  * current `display` string. Display defaults to dd/mm/yyyy; raw text is kept
  * verbatim while the user is typing.
  */
-export function useTallyDate(value: string, onValueChange: (iso: string) => void): {
+export function useTallyDate(value: string, onValueChange: (iso: string) => void, monthMode: MonthMode = "start"): {
     display: string;
     onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
     onBlur: () => void;
@@ -169,7 +188,7 @@ export function useTallyDate(value: string, onValueChange: (iso: string) => void
             }
             return;
         }
-        const parsed = parseTallyDate(trimmed);
+        const parsed = parseTallyDate(trimmed, new Date(), monthMode);
         if (parsed) {
             const iso = toIsoDate(parsed);
             setDisplay(isoToDisplay(iso));
@@ -179,7 +198,7 @@ export function useTallyDate(value: string, onValueChange: (iso: string) => void
             }
         }
         // Invalid: keep raw text, leave ISO at last good value
-    }, [display, onValueChange]);
+    }, [display, onValueChange, monthMode]);
 
     return {
         display,

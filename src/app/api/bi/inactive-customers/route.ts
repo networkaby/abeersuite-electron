@@ -2,7 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { loadMarginLines, r2 } from "@/modules/bi/lib/marginEngine";
-import { endOfDayUtc } from "@/shared/lib/format/formatDate";
+import { endOfDayUtc, businessTodayIso } from "@/shared/lib/format/formatDate";
 
 export const maxDuration = 60;
 
@@ -28,7 +28,7 @@ export async function GET(req: Request) {
     // The base start is stepped back in UTC components (Date.UTC rolls a
     // negative month over correctly), NOT via startOfDayUtc — that helper reads
     // LOCAL parts off a Date, which would drift a day against a UTC-pinned `to`.
-    const to = endOfDayUtc(new Date());
+    const to = endOfDayUtc(businessTodayIso());
     const from = new Date(Date.UTC(
         to.getUTCFullYear(),
         to.getUTCMonth() - BASE_WINDOW_MONTHS,

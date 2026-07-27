@@ -18,6 +18,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { fmt } from "@/utils/constants";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
+import { fmtPeriodDate } from "@/modules/accountancy/lib/period";
 import { accountLedgerUrl } from "@/modules/accountancy/lib/accountLedgerUrl";
 
 type GroupTypeStr = "ASSET" | "LIABILITY";
@@ -62,12 +63,6 @@ interface BalanceSheetData {
         computed: number; postedToGl: number; diff: number; productCount: number;
         method: ValuationMethod;
     };
-}
-
-function fmtIndianDate(iso: string): string {
-    return new Date(iso).toLocaleDateString("en-GB", {
-        day: "2-digit", month: "short", year: "numeric",
-    });
 }
 
 // Tally-style THREE-column amount layout with depth-aware visual weight:
@@ -265,7 +260,7 @@ export default function BalanceSheetPage() {
                 <div>
                     <h1 className="text-2xl font-bold text-foreground">Balance Sheet</h1>
                     <p className="text-sm text-muted-foreground mt-0.5">
-                        Period: {data ? `${fmtIndianDate(data.fyStart)} as at ${fmtIndianDate(data.asOf)}` : "…"}
+                        Period: {data ? `${fmtPeriodDate(data.fyStart)} as at ${fmtPeriodDate(data.asOf)}` : "…"}
                     </p>
                 </div>
                 <div className="flex items-end gap-2">
@@ -308,7 +303,7 @@ export default function BalanceSheetPage() {
                     <div className="flex flex-col overflow-hidden rounded-lg border border-border bg-card shadow-sm">
                         <div className="border-b border-border bg-muted/40 px-4 py-2.5 flex items-baseline justify-between">
                             <h2 className="font-bold text-foreground">Liabilities</h2>
-                            <span className="text-xs text-muted-foreground">as at {fmtIndianDate(data.asOf)}</span>
+                            <span className="text-xs text-muted-foreground">as at {fmtPeriodDate(data.asOf)}</span>
                         </div>
                         <table className="w-full text-sm">
                             <tbody>
@@ -324,7 +319,7 @@ export default function BalanceSheetPage() {
                                 {profitOnLiab > 0 && (
                                     <tr
                                         className="cursor-pointer hover:bg-primary/5"
-                                        onClick={() => router.push(`/office/accountancy/reports/profit-loss?from=${toIsoDate(new Date(data.fyStart))}&to=${asOf}&ref=balance-sheet`)}
+                                        onClick={() => router.push(`/office/accountancy/reports/profit-loss?from=${data.fyStart}&to=${asOf}&ref=balance-sheet`)}
                                     >
                                         <td className="py-1 pl-2">
                                             <span className="font-semibold text-sm text-foreground hover:underline">Profit &amp; Loss A/c</span>
@@ -358,7 +353,7 @@ export default function BalanceSheetPage() {
                     <div className="flex flex-col overflow-hidden rounded-lg border border-border bg-card shadow-sm">
                         <div className="border-b border-border bg-muted/40 px-4 py-2.5 flex items-baseline justify-between">
                             <h2 className="font-bold text-foreground">Assets</h2>
-                            <span className="text-xs text-muted-foreground">as at {fmtIndianDate(data.asOf)}</span>
+                            <span className="text-xs text-muted-foreground">as at {fmtPeriodDate(data.asOf)}</span>
                         </div>
                         <table className="w-full text-sm">
                             <tbody>
@@ -376,7 +371,7 @@ export default function BalanceSheetPage() {
                                 {lossOnAsset > 0 && (
                                     <tr
                                         className="cursor-pointer hover:bg-primary/5"
-                                        onClick={() => router.push(`/office/accountancy/reports/profit-loss?from=${toIsoDate(new Date(data.fyStart))}&to=${asOf}&ref=balance-sheet`)}
+                                        onClick={() => router.push(`/office/accountancy/reports/profit-loss?from=${data.fyStart}&to=${asOf}&ref=balance-sheet`)}
                                     >
                                         <td className="py-1 pl-2">
                                             <span className="font-semibold text-sm text-foreground hover:underline">Profit &amp; Loss A/c (loss)</span>

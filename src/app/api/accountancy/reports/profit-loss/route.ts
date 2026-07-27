@@ -2,9 +2,11 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { parseRange } from "@/modules/accountancy/lib/period";
 import { aggregateRange, loadNormalBalanceMap } from "@/modules/accountancy/lib/aggregateLedger";
-import { buildGroupTree } from "@/modules/accountancy/lib/groupTree";
+import { buildGroupTree, type GroupNode } from "@/modules/accountancy/lib/groupTree";
 import { computeTradingStockAdjustment } from "@/modules/accountancy/lib/tradingStockAdjustment";
+import { toPeriodOnlyTree } from "@/modules/accountancy/lib/periodOnlyTree";
 import { handleApiError } from "@/shared/lib/api";
+import { toDateOnlyUtc } from "@/shared/lib/format/formatDate";
 
 // Heavy aggregation: full-range GL groupBy + whole-inventory stock valuation.
 // Give Vercel headroom past the default 10s function limit so large datasets
@@ -94,12 +96,22 @@ export async function GET(req: Request) {
         const pnlCr = pnl.credit.indirectIncomes + pnl.credit.grossProfitBrought;
         const netProfit = pnlCr - pnlDr;
 
+        // Rows go out period-only so they reconcile with the totals above.
+        const periodTree = (n?: GroupNode) => (n ? toPeriodOnlyTree(n, n.type) : undefined);
+
         return NextResponse.json({
-            from: from.toISOString(),
-            to:   to.toISOString(),
+            // Plain calendar dates — NOT the UTC query bounds. Echoing
+            // `to.toISOString()` ("…T23:59:59.999Z") made the browser re-read it
+            // as an instant and print the next day in IST.
+            from: toDateOnlyUtc(from),
+            to:   toDateOnlyUtc(to),
             trees: {
-                salesAccounts, purchaseAccounts, directIncomes, directExpenses,
-                indirectIncomes, indirectExpenses,
+                salesAccounts:    periodTree(salesAccounts),
+                purchaseAccounts: periodTree(purchaseAccounts),
+                directIncomes:    periodTree(directIncomes),
+                directExpenses:   periodTree(directExpenses),
+                indirectIncomes:  periodTree(indirectIncomes),
+                indirectExpenses: periodTree(indirectExpenses),
             },
             trading,
             pnl,

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { getLedgerOutstanding } from "@/modules/accountancy/lib/outstandings";
 import { handleApiError } from "@/shared/lib/api";
+import { businessToday } from "@/shared/lib/format/formatDate";
 
 // GET /api/accountancy/reports/ledger-outstandings/:ledgerId?asOf=YYYY-MM-DD
 // Open bills for a single party ledger, with ageing buckets.
@@ -20,7 +21,7 @@ export async function GET(
 
     const { searchParams } = new URL(req.url);
     const asOfParam = searchParams.get("asOf");
-    const asOf = asOfParam ? new Date(asOfParam) : new Date();
+    const asOf = asOfParam ? new Date(asOfParam) : businessToday();
     asOf.setHours(23, 59, 59, 999);
 
     try {

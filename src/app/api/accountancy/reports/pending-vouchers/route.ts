@@ -16,6 +16,7 @@ import { InvVoucherType, VoucherStatus, type Prisma } from "@/generated/prisma/c
 import { requireBranchAccess, BranchAccessError } from "@/shared/lib/auth/activeBranch";
 import { auth } from "@/auth";
 import { readPartyName } from "@/shared/lib/accountancy/partySnapshot";
+import { businessToday } from "@/shared/lib/format/formatDate";
 
 type PendingType =
     | "CHALLAN" | "GRN" | "REJECTION_IN" | "REJECTION_OUT";
@@ -135,7 +136,7 @@ export async function GET(req: NextRequest) {
         lines: v.universalVoucherId != null ? (linesByUv.get(v.universalVoucherId) ?? []) : [],
     }));
 
-    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const today = businessToday();
     const shaped = rows.map((v) => {
         const d = new Date(v.universalVoucher!.date); d.setHours(0, 0, 0, 0);   // 5D-10: date on spine
         const daysOpen = Math.max(0, Math.floor((today.getTime() - d.getTime()) / 86_400_000));

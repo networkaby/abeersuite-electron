@@ -17,6 +17,7 @@ import { auth } from "@/auth";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { postContra } from "@/modules/accountancy/lib/postContra";
+import { requestBusinessDate } from "@/shared/lib/api/requestBusinessDate";
 import { effectiveAccountBalance, EFFECTIVE_BALANCE_SELECT_FIELDS } from "@/modules/accountancy/lib/balance";
 
 const openSchema = z.object({
@@ -222,7 +223,7 @@ export async function POST(req: NextRequest) {
             if (body.vaultTopUpPaise > 0) {
                 const rupees = body.vaultTopUpPaise / 100;
                 const contra = await postContra(tx, {
-                    date:      new Date(),
+                    date:      requestBusinessDate(req),
                     narration: `Shift opening top-up — ${counter.name} @ ${branch!.name}`,
                     userId:    user!.id,
                     lines: [

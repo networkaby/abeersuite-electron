@@ -29,6 +29,7 @@ import { z } from "zod";
 import { buildPartyJson, readPartyName } from "@/shared/lib/accountancy/partySnapshot";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
+import { requestBusinessDate } from "@/shared/lib/api/requestBusinessDate";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { invNextRef, calcLineTotals } from "@/modules/inventory/lib/stock";
 import { recordStockMovement } from "@/modules/inventory/lib/stockMovement";
@@ -179,7 +180,7 @@ export async function POST(req: Request) {
 
         // ── Transaction ───────────────────────────────────────────────────────
         const result = await prisma.$transaction(async (tx) => {
-            const today = new Date();
+            const today = requestBusinessDate(req);
 
             // 1. SALE_RETURN InvVoucher + refund tender row.
             const vRef = await invNextRef(tx, "SALE_RETURN");

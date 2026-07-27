@@ -29,7 +29,7 @@ export function BiFilterBar({
             </div>
             <div className="space-y-1">
                 <Label>To</Label>
-                <TallyDateInput value={to} onValueChange={onTo} className="w-auto" />
+                <TallyDateInput value={to} onValueChange={onTo} monthMode="end" className="w-auto" />
             </div>
             <div className="space-y-1">
                 <Label>Branch</Label>

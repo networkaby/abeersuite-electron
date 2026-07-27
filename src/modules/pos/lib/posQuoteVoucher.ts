@@ -68,8 +68,11 @@ export async function createPosQuoteVoucher(opts: {
     branchId: string;
     userId: number;
     body: PosQuoteBody;
+    /** "Today" when the body carries no date — the caller's
+     *  `requestBusinessDate(req)`, so a quote saved at 01:00 gets the shop's day. */
+    today: Date;
 }): Promise<{ voucherId: number; reference: string; dealId: number | null }> {
-    const { type, branchId, userId, body } = opts;
+    const { type, branchId, userId, body, today } = opts;
     const lines = Array.isArray(body.lines) ? body.lines : [];
     if (lines.length === 0) throw new Error("At least one line item required");
     for (const l of lines) {
@@ -152,7 +155,7 @@ export async function createPosQuoteVoucher(opts: {
         // stock) → spine POSTED with no GL lines, gate-neutral.
         const spineId = await engineCreateSpine(tx, {
             type,
-            date:           body.date ? new Date(body.date) : new Date(),
+            date:           body.date ? new Date(body.date) : today,
             description,
             voucherNo:    reference,
             partyAccountId: body.accountId ?? null,

@@ -178,7 +178,7 @@ export default function DayBookPage() {
                     <span className="pb-1.5 text-muted-foreground text-xs">→</span>
                     <div className="flex flex-col gap-1">
                         <label className="text-xs font-medium text-muted-foreground">To</label>
-                        <TallyDateInput value={filters.to} onValueChange={filters.handleTo} className="h-8 w-36" />
+                        <TallyDateInput value={filters.to} onValueChange={filters.handleTo} monthMode="end" className="h-8 w-36" />
                     </div>
                 </div>
 

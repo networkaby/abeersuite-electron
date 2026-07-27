@@ -178,11 +178,14 @@ src/shared/
 ├─ hooks/        cross-cutting hooks (index.ts barrel)
 ├─ types/        cross-cutting types
 └─ lib/
-   ├─ api/       validateRequest, parsePagination, handleApiError, opaque-id gen
+   ├─ api/       validateRequest, parsePagination, handleApiError, opaque-id gen,
+   │             requestBusinessDate (staff browser date via x-business-date, else shop timezone)
    ├─ auth/      permissions, permissionScope, posVoucherMatrix, voucherMatrix, sidebarModules,
    │             authorizeStaff/Portal, departmentPool, revokeSessions, loginRateLimit
    ├─ accountancy/ settlement, partySnapshot, checkCreditLimit, voucherBinding, outstandings, denomJson
-   ├─ format/    moneyInr (paise), round2, formatDate, numberWords
+   ├─ constants/ ACCOUNT_GROUPS, PERMISSIONS, BUSINESS_TIME_ZONE (the shop's zone — one editable line)
+   ├─ format/    moneyInr (paise), round2, numberWords; formatDate — calendar-date helpers
+   │             (startOfDayUtc/endOfDayUtc query bounds, toDateOnlyUtc echo, businessToday/Iso fallback)
    ├─ prisma/    prismaClient singleton
    └─ print/     voucher/receipt templates (A4 + thermal), per-kind bespoke bodies — bank deposit slip, cash handover slip, money receipt, journal (Dr/Cr), invoice
 ```

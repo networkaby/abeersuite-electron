@@ -8,7 +8,7 @@ import { ledgerStatusFilterUv } from "@/modules/accountancy/lib/aggregateLedger"
 import { defaultNormalBalanceForGroupType } from "@/modules/accountancy/lib/groupNature";
 import { handleApiError } from "@/shared/lib/api";
 import {
-    dateOnOrBefore, toDateOnly, startOfDayUtc, endOfDayUtc,
+    dateOnOrBefore, toDateOnly, startOfDayUtc, endOfDayUtc, businessTodayIso,
 } from "@/shared/lib/format/formatDate";
 
 // GET /api/accountancy/reports/ledger/[accountId]?from=YYYY-MM-DD&to=YYYY-MM-DD
@@ -24,10 +24,12 @@ export async function GET(req: Request, { params }: { params: Promise<{ accountI
     // UTC-pinned bounds — `UniversalVoucher.date` is a DATE column, so a
     // local-midnight `from` truncates to the PREVIOUS day in IST and the
     // ledger silently opens with the day before its start date.
+    // Defaults answer "today" from the SHOP's clock, not the server's.
+    const businessToday = businessTodayIso();
     const from = fromParam
         ? startOfDayUtc(fromParam)
-        : new Date(Date.UTC(new Date().getFullYear(), 0, 1));
-    const to = endOfDayUtc(toParam ?? new Date());
+        : new Date(Date.UTC(Number(businessToday.slice(0, 4)), 0, 1));
+    const to = endOfDayUtc(toParam ?? businessToday);
 
     const account = await prisma.account.findUnique({
         where: { id: Number(accountId) },

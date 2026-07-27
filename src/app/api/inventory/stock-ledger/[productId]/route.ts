@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { toNumber } from "@/modules/accountancy/lib/balance";
 import { handleApiError } from "@/shared/lib/api";
+import { businessToday } from "@/shared/lib/format/formatDate";
 import { resolveActiveBranchId } from "@/shared/lib/auth/activeBranch";
 import { auth } from "@/auth";
 import { readPartyName } from "@/shared/lib/accountancy/partySnapshot";
@@ -30,7 +31,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ prod
     }
 
     const from = fromParam ? new Date(fromParam) : new Date(new Date().getFullYear(), 0, 1);
-    const to   = toParam   ? new Date(toParam)   : new Date();
+    const to   = toParam   ? new Date(toParam)   : businessToday();
     to.setHours(23, 59, 59, 999);
 
     const product = await prisma.invProduct.findUnique({

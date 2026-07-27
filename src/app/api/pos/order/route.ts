@@ -6,6 +6,7 @@ import { resolveActiveBranchId, BranchAccessError } from "@/shared/lib/auth/acti
 import { handleApiError } from "@/shared/lib/api";
 import { createPosQuoteVoucher, type PosQuoteBody } from "@/modules/pos/lib/posQuoteVoucher";
 import { postReceiptVoucher } from "@/modules/accountancy/lib/postReceiptVoucher";
+import { requestBusinessDate } from "@/shared/lib/api/requestBusinessDate";
 import { holdRedemptions, type RedemptionIntent } from "@/modules/order/lib/redemptionHold";
 
 // An advance payment line — null paymentAccountId = CASH (the till); else one of
@@ -95,7 +96,7 @@ export async function POST(req: NextRequest) {
         }
 
         // ── Create the order voucher (always) ───────────────────────────────────
-        const order = await createPosQuoteVoucher({ type: "POS_ORDER", branchId, userId: user!.id, body });
+        const order = await createPosQuoteVoucher({ type: "POS_ORDER", branchId, userId: user!.id, body, today: requestBusinessDate(req) });
 
         // ── Hold any reward redemptions applied to the order (2b) ────────────────
         // GL-silent: loyalty / coupon / gift-card value is recorded as HELD against the
@@ -114,7 +115,7 @@ export async function POST(req: NextRequest) {
                 const rv = await postReceiptVoucher(tx, {
                     customerAccountId: body.accountId!,
                     tenders,
-                    date: new Date(),
+                    date: requestBusinessDate(req),
                     userId: user!.id,
                     branchId: shiftBranchId,
                     narration: `Advance against ${order.reference}`,

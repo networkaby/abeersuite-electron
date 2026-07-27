@@ -5,6 +5,7 @@ import { normaliseGstinState } from "@/shared/lib/gst/validateGstinState";
 import { isValidStateCode } from "@/shared/lib/gst/indianStates";
 import { reconcileOpeningSuspense } from "@/modules/accountancy/lib/openingBalance";
 import { CUSTOMER_IMPORT_FIELDS, type CustomerImportField } from "./customerImportFields";
+import { businessTodayIso } from "@/shared/lib/format/formatDate";
 
 export { CUSTOMER_IMPORT_FIELDS };
 export type { CustomerImportField };
@@ -39,6 +40,9 @@ export interface CustomerImportRequest {
     rows: CustomerImportRowInput[];
     mode: ImportMode;
     dryRun: boolean;
+    /** Staff browser's calendar day (yyyy-mm-dd), for rows with no opening date.
+     *  Falls back to the shop's timezone constant when the caller omits it. */
+    today?: string;
 }
 
 export interface RowResult {
@@ -431,7 +435,7 @@ export async function runCustomerImport(req: CustomerImportRequest): Promise<Cus
         (g === "Sundry Debtors" ? debtorsGroup?.id : creditorsGroup?.id) ?? null;
 
     const anyOpening = validRows.some((v) => v.openingBalance != null && v.openingBalance !== 0);
-    const today = new Date().toISOString().slice(0, 10);
+    const today = req.today ?? businessTodayIso();
 
     // ── Split work: bulk-insert new rows; per-row for updates (rare on imports).
     const newRows = validRows.filter((v) => v.existingId == null);
@@ -648,7 +652,7 @@ export async function runCustomerImport(req: CustomerImportRequest): Promise<Cus
                             accountPatch.openingBalance = v.openingBalance;
                             accountPatch.openingBalanceType = v.openingType!;
                             accountPatch.openingBalanceDate = new Date(
-                                v.openingDate ?? new Date().toISOString().slice(0, 10),
+                                v.openingDate ?? today,
                             );
                         }
                         if (v.creditLimit != null && v.creditLimit > 0) {

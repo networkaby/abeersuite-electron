@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { getOutstandings } from "@/modules/accountancy/lib/outstandings";
 import { handleApiError } from "@/shared/lib/api";
+import { businessToday } from "@/shared/lib/format/formatDate";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 
 // Heavy aggregation: account-hierarchy walk + unbounded open-bills scan per
@@ -17,7 +18,7 @@ export async function GET(req: Request) {
 
     const { searchParams } = new URL(req.url);
     const asOfParam = searchParams.get("asOf");
-    const asOf = asOfParam ? new Date(asOfParam) : new Date();
+    const asOf = asOfParam ? new Date(asOfParam) : businessToday();
     asOf.setHours(23, 59, 59, 999);
 
     try {

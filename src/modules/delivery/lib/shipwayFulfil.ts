@@ -16,6 +16,7 @@ import {
     type ShipwayOrderItem,
 } from "./shipway";
 import { DELIVERY_STAGE } from "./shiprocketStatus";
+import { businessTodayIso } from "@/shared/lib/format/formatDate";
 
 type ShipAddress = {
     name?: string;
@@ -151,7 +152,7 @@ export async function pushDeliveryToShipway(deliveryTicketId: number): Promise<S
         box_length: String(Number(cfg.length) || 15),
         box_breadth: String(Number(cfg.breadth) || 15),
         box_height: String(Number(cfg.height) || 10),
-        order_date: new Date().toISOString().slice(0, 10),
+        order_date: businessTodayIso(),
     });
 
     // Pickup request + tracking URL are best-effort — never lose the AWB over them.

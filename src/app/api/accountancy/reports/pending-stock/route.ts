@@ -10,6 +10,7 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { requireBranchAccess, BranchAccessError } from "@/shared/lib/auth/activeBranch";
 import { auth } from "@/auth";
 import { InvVoucherType, VoucherStatus, type Prisma } from "@/generated/prisma/client";
+import { businessToday } from "@/shared/lib/format/formatDate";
 
 type PendingType = "CHALLAN" | "GRN" | "REJECTION_IN" | "REJECTION_OUT";
 
@@ -90,7 +91,7 @@ export async function GET(req: NextRequest) {
         lines: v.universalVoucherId != null ? (linesByUv.get(v.universalVoucherId) ?? []) : [],
     }));
 
-    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const today = businessToday();
 
     type StockLine = {
         voucherId:  number;

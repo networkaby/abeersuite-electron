@@ -23,6 +23,7 @@ import { z } from "zod";
 import { buildPartyJson } from "@/shared/lib/accountancy/partySnapshot";
 import { requirePosVoucher } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
+import { requestBusinessDate } from "@/shared/lib/api/requestBusinessDate";
 import { invNextRef } from "@/modules/inventory/lib/stock";
 import { recordStockMovement } from "@/modules/inventory/lib/stockMovement";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
@@ -122,7 +123,7 @@ export async function POST(req: Request) {
 
         // ── Transaction ──────────────────────────────────────────────────────
         const result = await prisma.$transaction(async (tx) => {
-            const today = new Date();
+            const today = requestBusinessDate(req);
 
             const vRef = await invNextRef(tx, "SALE_RETURN");
             // Phase 5 5.0/5C: spine FIRST; enginePost attaches GL via existingSpineId.

@@ -145,8 +145,10 @@ export function AccountLedgerExplorer({
     });
     const [detail, setDetail] = useState<LedgerDetail | null>(null);
     const [detailLoading, setDetailLoading] = useState(false);
-    const [from, setFrom] = useState(toIsoDate(indianFiscalYearStart()));
-    const [to, setTo] = useState(toIsoDate(new Date()));
+    // Date params on the URL come from a drill-in (P&L, Balance Sheet, Trial Balance, …
+    // pass ?accountId=&from=&to=). Honour them instead of always defaulting.
+    const [from, setFrom] = useState(params.get("from") ?? toIsoDate(indianFiscalYearStart()));
+    const [to, setTo] = useState(params.get("to") ?? toIsoDate(new Date()));
 
     const reloadAccounts = useCallback(() => {
         return axios
@@ -393,6 +395,7 @@ export function AccountLedgerExplorer({
                                         <TallyDateInput
                                             value={to}
                                             onValueChange={(v) => { setTo(v); if (selectedId) loadDetail(selectedId, from, v); }}
+                                            monthMode="end"
                                             className="h-7 w-36 text-xs"
                                         />
                                         <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs" onClick={handleRefresh}>
