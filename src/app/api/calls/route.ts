@@ -41,6 +41,9 @@ const callPayloadSchema = z.object({
     status: z.string().trim().optional(),
     timestamp: z.string().trim().optional(),
     raw: z.string().optional(),
+    // Hostname of the counter PC whose bridge pushed this record. Optional — an
+    // older bridge that predates the field simply sends nothing.
+    sourceHost: z.string().trim().max(255).optional(),
 });
 
 type CallPayload = z.infer<typeof callPayloadSchema>;
@@ -90,8 +93,31 @@ function mapPayloadToCall(p: CallPayload, occurredAt: Date, receivedAt: Date): P
         occurredAt,
         receivedAt,
         raw: p.raw ?? null,
+        sourceHost: p.sourceHost ?? null,
         note: null,
     };
+}
+
+/**
+ * A second PC pushed a call we already have. Record its hostname in the winner's
+ * `alsoPushedBy` list so a bridge that runs but never wins the race is still
+ * visible for troubleshooting. Best-effort and deliberately un-transactional:
+ * this is read-only diagnostics, so a lost concurrent update costs nothing and
+ * must never fail the caller's request.
+ */
+async function noteLosingPusher(
+    existing: { id: number; sourceHost: string | null; alsoPushedBy: unknown },
+    host: string | undefined,
+): Promise<void> {
+    const name = host?.trim();
+    if (!name || name === existing.sourceHost) return;
+    const current = Array.isArray(existing.alsoPushedBy)
+        ? (existing.alsoPushedBy as unknown[]).filter((h): h is string => typeof h === "string")
+        : [];
+    if (current.includes(name)) return;
+    await prisma.call
+        .update({ where: { id: existing.id }, data: { alsoPushedBy: [...current, name] } })
+        .catch(() => { /* diagnostics only — never break the push */ });
 }
 
 export async function POST(req: Request) {
@@ -105,6 +131,19 @@ export async function POST(req: Request) {
 
     const { data, error } = await validateRequest(req, callPayloadSchema);
     if (error) return error;
+
+    // An external call with no caller number at all (CLI not delivered by the
+    // telecom trunk — confirmed from raw SMDR, not something we failed to parse)
+    // carries no identifying value. Skip storing it rather than accumulate rows
+    // that can never match a customer. INTERNAL/UNKNOWN calls are untouched —
+    // they never carry a customer number in the first place, so blank there is
+    // normal, not this case.
+    if (data.callType === "INCOMING" && !data.callerNumber?.trim()) {
+        return NextResponse.json({ success: true, skipped: true, reason: "no caller number" });
+    }
+    if (data.callType === "OUTGOING" && !data.dialedNumber?.trim()) {
+        return NextResponse.json({ success: true, skipped: true, reason: "no dialed number" });
+    }
 
     try {
         const receivedAt = data.timestamp ? new Date(data.timestamp) : new Date();
@@ -122,8 +161,11 @@ export async function POST(req: Request) {
             // findFirst (not findUnique): works whether or not `raw` carries the DB
             // unique constraint yet. Race-proofing comes from the INSERT + P2002
             // catch below once the @unique is pushed.
-            const existing = await prisma.call.findFirst({ where: { raw: rawLine }, select: { id: true } });
-            if (existing) return NextResponse.json({ success: true, id: existing.id, duplicate: true });
+            const existing = await prisma.call.findFirst({ where: { raw: rawLine }, select: { id: true, sourceHost: true, alsoPushedBy: true } });
+            if (existing) {
+                await noteLosingPusher(existing, data.sourceHost);
+                return NextResponse.json({ success: true, id: existing.id, duplicate: true });
+            }
         }
 
         const createData = mapPayloadToCall(data, occurredAt, safeReceivedAt);
@@ -149,8 +191,9 @@ export async function POST(req: Request) {
             // modules/customer/lib/contactWrite.ts).
             if ((e as { code?: string })?.code === "P2002") {
                 const dup = rawLine
-                    ? await prisma.call.findFirst({ where: { raw: rawLine }, select: { id: true } })
+                    ? await prisma.call.findFirst({ where: { raw: rawLine }, select: { id: true, sourceHost: true, alsoPushedBy: true } })
                     : null;
+                if (dup) await noteLosingPusher(dup, data.sourceHost);
                 return NextResponse.json({ success: true, id: dup?.id ?? null, duplicate: true });
             }
             throw e;
@@ -184,6 +227,15 @@ export async function GET(req: Request) {
         }
         if (spam === "1") and.push({ spam: true });
         else and.push({ spam: false });
+
+        // Date range on the call's own occurredAt (IST wall-clock, as the PBX
+        // recorded it). `from`/`to` are yyyy-mm-dd; `to` is inclusive of that
+        // whole day, so a same-day from==to returns that day's calls.
+        const dayRe = /^\d{4}-\d{2}-\d{2}$/;
+        const from = sp.get("from")?.trim();
+        const to = sp.get("to")?.trim();
+        if (from && dayRe.test(from)) and.push({ occurredAt: { gte: new Date(`${from}T00:00:00+05:30`) } });
+        if (to && dayRe.test(to)) and.push({ occurredAt: { lte: new Date(`${to}T23:59:59.999+05:30`) } });
         // Miscall tri-state: only → just miscalls; exclude → hide them; all → no-op.
         if (missedMode === "only") and.push(MISSED_CALL_WHERE);
         else if (missedMode === "exclude") and.push({ NOT: MISSED_CALL_WHERE });
@@ -264,6 +316,10 @@ export async function GET(req: Request) {
             missed: isMissedCall(c.direction, c.speechSec, c.durationSec),
             note: c.note,
             spam: c.spam,
+            sourceHost: c.sourceHost,
+            alsoPushedBy: Array.isArray(c.alsoPushedBy)
+                ? (c.alsoPushedBy as unknown[]).filter((h): h is string => typeof h === "string")
+                : [],
             occurredAt: c.occurredAt.toISOString(),
             customer: c.phone ? (ownerByKey.get(c.phone) ?? null) : null,
         }));

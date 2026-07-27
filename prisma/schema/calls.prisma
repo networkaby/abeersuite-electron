@@ -59,6 +59,19 @@ model Call {
   // NULLs as distinct, so internal/old-bridge rows with no raw line never clash.)
   raw String? @unique
 
+  // Which physical PC's bridge WON the race to push this record — os.hostname()
+  // of the counter machine running combined-bridge. Plain indexed column (not
+  // JSON) because the "which bridges are alive" report groups on it. Null for
+  // rows written before the bridge started sending it.
+  sourceHost String?
+
+  // The other PCs that pushed this same call but arrived after the winner and
+  // were dropped as duplicates — shape: ["PC-B", "PC-C"]. Read-only diagnostics
+  // (spotting a bridge that runs but never wins), so JSON in one column rather
+  // than a table: the data is tiny, never queried relationally, and an
+  // occasional lost concurrent update costs nothing here.
+  alsoPushedBy Json?
+
   // Staff-editable, empty at creation (a call is logged with no note).
   note String?
 
@@ -76,4 +89,6 @@ model Call {
   @@index([phone])
   @@index([occurredAt])
   @@index([spam])
+  // Backs the "which bridges are alive" lookup (latest call per sourceHost).
+  @@index([sourceHost, occurredAt])
 }

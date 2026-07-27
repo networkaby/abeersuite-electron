@@ -1,11 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import {
     PhoneIncoming, PhoneOutgoing, PhoneMissed, ArrowLeftRight, HelpCircle,
-    User, Building2, UserPlus, ShieldAlert, ShieldCheck, StickyNote, RefreshCw, Search,
+    User, Building2, UserPlus, ShieldAlert, ShieldCheck, StickyNote, RefreshCw, Search, CalendarDays,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,6 +36,11 @@ interface CallItem {
     missed: boolean;
     note: string | null;
     spam: boolean;
+    // Hostname of the counter PC whose bridge pushed this record. Null on rows
+    // logged before the bridge started reporting it.
+    sourceHost: string | null;
+    // Other PCs that pushed the same call but lost the de-dupe race.
+    alsoPushedBy: string[];
     occurredAt: string;
     customer: { kind: "person" | "company"; id: number; name: string } | null;
 }
@@ -63,6 +68,17 @@ function DirectionCell({ c }: { c: CallItem }) {
     return <span className="inline-flex items-center gap-1 text-muted-foreground"><HelpCircle size={15} /> Unknown</span>;
 }
 
+/** yyyy-mm-dd in the browser's local (IST) calendar — matches the API's day filter. */
+function toDayStr(d: Date): string {
+    const p = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+/** Day label used for the group-header rows that break the list up by date. */
+function dayLabel(iso: string): string {
+    return new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+}
+
 export default function CallLogWorkspace() {
     const [items, setItems] = useState<CallItem[]>([]);
     const [total, setTotal] = useState(0);
@@ -74,6 +90,12 @@ export default function CallLogWorkspace() {
     const [missedMode, setMissedMode] = useState<MissedMode>("all");
     const [showSpam, setShowSpam] = useState(false);
     const [showInternal, setShowInternal] = useState(false);
+    const [dateFrom, setDateFrom] = useState("");
+    const [dateTo, setDateTo] = useState("");
+
+    // Which physical PC's bridge pushed each call. Off by default — it's a
+    // diagnostic, not something staff need while working the list.
+    const [showHost, setShowHost] = useState(false);
 
     // Dialogs
     const [leadPhone, setLeadPhone] = useState<string | null>(null);
@@ -81,40 +103,63 @@ export default function CallLogWorkspace() {
     const [noteDraft, setNoteDraft] = useState("");
     const [noteSaving, setNoteSaving] = useState(false);
 
-    const fetchCalls = useCallback(async () => {
+    // Page 1 replaces the list; any later page appends to it ("Load more"), so
+    // scrolling back through older calls never loses what's already on screen.
+    const load = useCallback(async (targetPage: number) => {
         setLoading(true);
         try {
             const params = new URLSearchParams();
-            params.set("page", String(page));
+            params.set("page", String(targetPage));
             params.set("limit", String(PAGE_SIZE));
             if (search.trim()) params.set("search", search.trim());
             if (missedMode !== "all") params.set("missed", missedMode);
             if (showSpam) params.set("spam", "1");
             if (showInternal) params.set("direction", "all");
+            if (dateFrom) params.set("from", dateFrom);
+            if (dateTo) params.set("to", dateTo);
             const { data } = await axios.get<CallsResponse>(`/api/calls?${params.toString()}`);
-            setItems(data.items);
+            setItems((prev) => (targetPage === 1 ? data.items : [...prev, ...data.items]));
             setTotal(data.pagination.total);
+            setPage(targetPage);
         } catch {
             toast.error("Failed to load calls");
         } finally {
             setLoading(false);
         }
-    }, [page, search, missedMode, showSpam, showInternal]);
+    }, [search, missedMode, showSpam, showInternal, dateFrom, dateTo]);
 
-    useEffect(() => { void fetchCalls(); }, [fetchCalls]);
+    // `load` changes identity whenever a filter changes, which restarts the list
+    // from page 1 — no separate page-reset effect needed.
+    useEffect(() => { void load(1); }, [load]);
 
-    // Reset to page 1 whenever a filter changes.
-    useEffect(() => { setPage(1); }, [search, missedMode, showSpam, showInternal]);
+    /** Apply a preset day range. Passing null clears the range (= all dates). */
+    const setRange = (days: number | null, mode: "last" | "single" | "month" = "last") => {
+        if (days === null) { setDateFrom(""); setDateTo(""); return; }
+        const now = new Date();
+        if (mode === "month") {
+            setDateFrom(toDayStr(new Date(now.getFullYear(), now.getMonth(), 1)));
+            setDateTo(toDayStr(now));
+            return;
+        }
+        const start = new Date(now);
+        start.setDate(start.getDate() - days);
+        if (mode === "single") { setDateFrom(toDayStr(start)); setDateTo(toDayStr(start)); return; }
+        setDateFrom(toDayStr(start));
+        setDateTo(toDayStr(now));
+    };
 
     const toggleSpam = async (c: CallItem) => {
         try {
             await axios.patch(`/api/calls/${c.id}`, { spam: !c.spam });
             toast.success(!c.spam ? "Number flagged as spam" : "Spam flag removed");
-            void fetchCalls();
+            void load(1);
         } catch {
             toast.error("Failed to update spam flag");
         }
     };
+
+    // Base columns + the optional "Pushed by" one; drives every colSpan.
+    const colCount = showHost ? 9 : 8;
 
     const openNote = (c: CallItem) => { setNoteFor(c); setNoteDraft(c.note ?? ""); };
     const saveNote = async () => {
@@ -124,7 +169,7 @@ export default function CallLogWorkspace() {
             await axios.patch(`/api/calls/${noteFor.id}`, { note: noteDraft.trim() || null });
             toast.success("Note saved");
             setNoteFor(null);
-            void fetchCalls();
+            void load(1);
         } catch {
             toast.error("Failed to save note");
         } finally {
@@ -132,7 +177,7 @@ export default function CallLogWorkspace() {
         }
     };
 
-    const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    
 
     return (
         <div className="flex h-full flex-col gap-3 p-4">
@@ -172,12 +217,35 @@ export default function CallLogWorkspace() {
                 <label className="flex items-center gap-2 text-sm">
                     <Checkbox checked={showSpam} onCheckedChange={(v) => setShowSpam(v === true)} /> Spam
                 </label>
+                <label className="flex items-center gap-2 text-sm" title="Show which counter PC's bridge pushed each call">
+                    <Checkbox checked={showHost} onCheckedChange={(v) => setShowHost(v === true)} /> Pushed by
+                </label>
                 <div className="ml-auto flex items-center gap-2 text-sm text-muted-foreground">
                     <span>{total} call{total === 1 ? "" : "s"}</span>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => void fetchCalls()} disabled={loading}>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => void load(1)} disabled={loading}>
                         <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
                     </Button>
                 </div>
+            </div>
+
+            {/* Date range — most lookups are "recent" or "one specific day", so
+                presets cover them and the two inputs handle anything else. */}
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+                <CalendarDays size={15} className="text-muted-foreground" />
+                {([
+                    ["Today", () => setRange(0, "single")],
+                    ["Yesterday", () => setRange(1, "single")],
+                    ["Last 7 days", () => setRange(6)],
+                    ["This month", () => setRange(0, "month")],
+                ] as const).map(([label, apply]) => (
+                    <Button key={label} variant="outline" size="sm" className="h-8" onClick={apply}>{label}</Button>
+                ))}
+                <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="h-8 w-[9.5rem]" aria-label="From date" />
+                <span className="text-muted-foreground">to</span>
+                <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="h-8 w-[9.5rem]" aria-label="To date" />
+                {(dateFrom || dateTo) && (
+                    <Button variant="ghost" size="sm" className="h-8" onClick={() => setRange(null)}>Clear</Button>
+                )}
             </div>
 
             {/* List */}
@@ -190,6 +258,7 @@ export default function CallLogWorkspace() {
                             <th className="px-3 py-2 font-medium">Number</th>
                             <th className="px-3 py-2 font-medium">Customer</th>
                             <th className="px-3 py-2 font-medium">Ext / Trunk</th>
+                            {showHost && <th className="px-3 py-2 font-medium">Pushed by</th>}
                             <th className="px-3 py-2 font-medium">Duration</th>
                             <th className="px-3 py-2 font-medium">Note</th>
                             <th className="px-3 py-2 text-right font-medium">Actions</th>
@@ -197,10 +266,19 @@ export default function CallLogWorkspace() {
                     </thead>
                     <tbody>
                         {items.length === 0 && !loading && (
-                            <tr><td colSpan={8} className="px-3 py-10 text-center text-muted-foreground">No calls found.</td></tr>
+                            <tr><td colSpan={colCount} className="px-3 py-10 text-center text-muted-foreground">No calls found.</td></tr>
                         )}
-                        {items.map((c) => (
-                            <tr key={c.id} className={`border-t ${c.spam ? "bg-red-50/60" : ""}`}>
+                        {items.map((c, i) => (
+                          <Fragment key={c.id}>
+                            {/* Day divider — landmarks while scanning a long list. */}
+                            {(i === 0 || dayLabel(items[i - 1].occurredAt) !== dayLabel(c.occurredAt)) && (
+                                <tr className="border-t bg-muted/40">
+                                    <td colSpan={colCount} className="px-3 py-1.5 text-xs font-medium text-muted-foreground">
+                                        {dayLabel(c.occurredAt)}
+                                    </td>
+                                </tr>
+                            )}
+                            <tr className={`border-t ${c.spam ? "bg-red-50/60" : ""}`}>
                                 <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">{formatDateTime(c.occurredAt)}</td>
                                 <td className="whitespace-nowrap px-3 py-2"><DirectionCell c={c} /></td>
                                 <td className="whitespace-nowrap px-3 py-2 font-medium">{formatCallerNumber(c.rawNumber)}</td>
@@ -217,6 +295,19 @@ export default function CallLogWorkspace() {
                                 <td className="whitespace-nowrap px-3 py-2 text-xs text-muted-foreground">
                                     {[c.fromExt && `from ${c.fromExt}`, c.toExt && `to ${c.toExt}`, c.trunk].filter(Boolean).join(" · ") || "—"}
                                 </td>
+                                {showHost && (
+                                    <td className="whitespace-nowrap px-3 py-2 text-xs text-muted-foreground">
+                                        {c.sourceHost ?? <span className="text-muted-foreground/50">—</span>}
+                                        {c.alsoPushedBy.length > 0 && (
+                                            <span
+                                                className="block text-[11px] text-muted-foreground/60"
+                                                title="Also pushed this call, but arrived after the winner"
+                                            >
+                                                also {c.alsoPushedBy.join(", ")}
+                                            </span>
+                                        )}
+                                    </td>
+                                )}
                                 <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">{c.missed ? "—" : durationLabel(c.speechSec || c.durationSec)}</td>
                                 <td className="max-w-[16rem] truncate px-3 py-2 text-muted-foreground">{c.note ?? ""}</td>
                                 <td className="whitespace-nowrap px-3 py-2 text-right">
@@ -239,24 +330,27 @@ export default function CallLogWorkspace() {
                                     </div>
                                 </td>
                             </tr>
+                          </Fragment>
                         ))}
                     </tbody>
                 </table>
             </div>
 
-            {/* Pagination */}
+            {/* Load more — appends the next page rather than replacing the list, so
+                you keep your place instead of jumping back to the top. */}
             <div className="flex items-center justify-between text-sm text-muted-foreground">
-                <span>Page {page} of {totalPages}</span>
-                <div className="flex gap-2">
-                    <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</Button>
-                    <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>Next</Button>
-                </div>
+                <span>Showing {items.length} of {total}</span>
+                {items.length < total && (
+                    <Button variant="outline" size="sm" disabled={loading} onClick={() => void load(page + 1)}>
+                        {loading ? "Loading…" : "Load more"}
+                    </Button>
+                )}
             </div>
 
             {/* Create-lead dialog (person), phone prefilled */}
             <CreatePersonDialog
                 open={leadPhone !== null}
-                onOpenChange={(o) => { if (!o) { setLeadPhone(null); void fetchCalls(); } }}
+                onOpenChange={(o) => { if (!o) { setLeadPhone(null); void load(1); } }}
                 initialPhone={leadPhone ?? undefined}
             />
 
