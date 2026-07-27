@@ -6,6 +6,7 @@ import { toNumber } from "@/modules/accountancy/lib/balance";
 import { readPartyName, readPartyPhone, readPartyAddress } from "@/shared/lib/accountancy/partySnapshot";
 import { canConvert } from "@/modules/accountancy/lib/convertMap";
 import { editFormUrl } from "@/modules/inventory/lib/voucherFormUrls";
+import { businessTodayIso } from "@/shared/lib/format/formatDate";
 
 // POST /api/inventory/vouchers/[id]/convert   body: { targetKind }
 //
@@ -110,7 +111,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             ? `${sourceNarration} · Converted from ${sourceRef}`
             : `Converted from ${sourceRef}`;
 
-        const today = new Date().toISOString().slice(0, 10);
+        // Server clock is UTC regardless of where the shop is — business-zone
+        // "today" so a conversion run between 00:00-05:30 IST isn't stamped
+        // with yesterday's date.
+        const today = businessTodayIso();
         const cookie = req.headers.get("cookie") ?? "";
         // Carry percentage discounts only (they recompute identically); absolute
         // discounts are left for the operator to re-apply on the editable draft.

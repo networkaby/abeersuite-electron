@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { assertRefundStatus, getRefundForPayout, markRefundPaid, REFUND_STAGE } from "@/modules/refund/lib/refund";
+import { businessTodayIso } from "@/shared/lib/format/formatDate";
 
 // PATCH /api/refunds/[id]/status  body { statusId } — move a refund along P9
 // (validates the seeded transition graph). Moving to Refunded (S59) posts the GL
@@ -50,7 +51,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                     return NextResponse.json({ error: "Couldn't resolve the advance to refund (customer / cash ledger). Pay it back manually.", code: "PAYOUT_UNRESOLVED" }, { status: 409 });
                 }
                 const cookie = req.headers.get("cookie") ?? "";
-                const today = new Date().toISOString().slice(0, 10);
+                // Server clock is UTC regardless of where the shop is —
+                // business-zone "today" so a refund run between 00:00-05:30 IST
+                // isn't stamped with yesterday's date.
+                const today = businessTodayIso();
                 const narration = `Refund of advance${payout.orderRef ? ` — ${payout.orderRef}` : ""}`;
                 const createRes = await fetch(new URL("/api/accountancy/vouchers", req.url), {
                     method: "POST",

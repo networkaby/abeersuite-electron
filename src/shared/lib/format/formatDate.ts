@@ -77,6 +77,34 @@ export function todayIso(): string {
     return toDateOnly(new Date());
 }
 
+// ── Business-timezone "today", for SERVER code ──────────────────────────────
+//
+// `todayIso()` above is correct in the BROWSER, where "local" means the shop's
+// own clock. On the server it is wrong: Vercel Functions run in UTC regardless
+// of where the shop is, so `new Date()` there reads server time, not shop time.
+// Between 00:00 and 05:30 IST a server-side "today" would stamp a voucher with
+// YESTERDAY's date.
+//
+// `TZ` can't fix this — Vercel reserves that env-var name, so it can't be set
+// per-project. Intl needs no such setting: it computes calendar parts for any
+// named zone directly, on any server, regardless of the server's own clock.
+//
+// Single named constant so a future multi-region shop is a one-line change,
+// not a re-grep of every call site.
+const BUSINESS_TIME_ZONE = "Asia/Kolkata";
+
+/** Today as yyyy-mm-dd in the SHOP's timezone — for server code stamping a
+ *  voucher/order/refund date from "now". Never use `todayIso()` /
+ *  `new Date().toISOString()` server-side for this; both read the wrong clock. */
+export function businessTodayIso(): string {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+        timeZone: BUSINESS_TIME_ZONE,
+        year: "numeric", month: "2-digit", day: "2-digit",
+    }).formatToParts(new Date());
+    const get = (t: string) => parts.find((p) => p.type === t)!.value;
+    return `${get("year")}-${get("month")}-${get("day")}`;
+}
+
 export function formatDateTime(d: Date | string): string {
     return new Date(d).toLocaleString("en-GB", {
         day: "numeric", month: "short", year: "numeric",

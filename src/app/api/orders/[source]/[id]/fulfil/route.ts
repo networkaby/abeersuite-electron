@@ -8,6 +8,7 @@ import { checkCreditLimit, CreditLimitError } from "@/shared/lib/accountancy/che
 import { executeRedemptions } from "@/modules/order/lib/redemptionHold";
 import { readPartyName } from "@/shared/lib/accountancy/partySnapshot";
 import { syncVoucherLink } from "@/modules/accountancy/lib/voucherLinks";
+import { businessTodayIso } from "@/shared/lib/format/formatDate";
 
 // POST /api/orders/[source]/[id]/fulfil
 //
@@ -89,7 +90,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ sou
             throw e;
         }
 
-        const today = new Date().toISOString().slice(0, 10);
+        // Server clock is UTC regardless of where the shop is — business-zone
+        // "today" so a fulfilment run between 00:00-05:30 IST isn't stamped
+        // with yesterday's date.
+        const today = businessTodayIso();
         const cookie = req.headers.get("cookie") ?? "";
 
         // 1. Create a DRAFT SALE from the order (reuses the trading-voucher route).
