@@ -1,3 +1,4 @@
+export * from "./addInterval";
 export * from "./entityColor";
 export * from "./formatDate";
 export * from "./timeAgo";

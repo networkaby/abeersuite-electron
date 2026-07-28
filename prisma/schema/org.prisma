@@ -77,17 +77,18 @@ model Position {
   parentPositionId String?
   createdAt        DateTime @default(now())
 
-  branch          Branch?        @relation(fields: [branchId], references: [id])
-  department      Department?    @relation(fields: [departmentId], references: [id])
-  parent          Position?      @relation("PositionHierarchy", fields: [parentPositionId], references: [id])
-  children        Position[]     @relation("PositionHierarchy")
+  branch          Branch?          @relation(fields: [branchId], references: [id])
+  department      Department?      @relation(fields: [departmentId], references: [id])
+  parent          Position?        @relation("PositionHierarchy", fields: [parentPositionId], references: [id])
+  children        Position[]       @relation("PositionHierarchy")
   roleTemplates   PositionRole[]
   holders         UserPosition[]
   // Tickets (tasks / deals / …) assigned to this seat, resolved live to the holder.
-  assignedTickets Ticket[]       @relation("TicketAssignedPosition")
+  assignedTickets Ticket[]         @relation("TicketAssignedPosition")
+  taskRecurrences TaskRecurrence[] @relation("TaskRecurrenceAssignedPosition")
   // Contacts (CRM) owned by this seat
-  ownedPersons    Person[]       @relation("PersonOwnerPosition")
-  ownedCompanies  Company[]      @relation("CompanyOwnerPosition")
+  ownedPersons    Person[]         @relation("PersonOwnerPosition")
+  ownedCompanies  Company[]        @relation("CompanyOwnerPosition")
 }
 
 model UserPosition {

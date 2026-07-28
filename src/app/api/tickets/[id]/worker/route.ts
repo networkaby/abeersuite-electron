@@ -11,6 +11,7 @@ import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
+import { addInterval } from "@/shared/lib/format/addInterval";
 
 const workerUpdateSchema = z.object({
     // The outcome target is EITHER a worker (route within/around the stage) OR a
@@ -52,21 +53,6 @@ function phaseForAttempt(phases: RetryPhase[], k: number): RetryPhase | null {
     let acc = 0;
     for (const p of phases) { acc += p.times; if (k <= acc) return p; }
     return null;
-}
-
-// Now + (every × unit), calendar-correct for month/year (not 30/365-day approximations).
-function addInterval(unit: string, every: number): Date {
-    const d = new Date();
-    switch (unit) {
-        case "minute": d.setMinutes(d.getMinutes() + every); break;
-        case "hour":   d.setHours(d.getHours() + every); break;
-        case "day":    d.setDate(d.getDate() + every); break;
-        case "week":   d.setDate(d.getDate() + every * 7); break;
-        case "month":  d.setMonth(d.getMonth() + every); break;
-        case "year":   d.setFullYear(d.getFullYear() + every); break;
-        default:       d.setMinutes(d.getMinutes() + every);
-    }
-    return d;
 }
 
 // PATCH /api/tickets/[id]/worker
@@ -245,7 +231,7 @@ export async function PATCH(
                 landingWorkerId = currentSub.id;          // stay put, snoozed until due
                 retryCount = fails;
                 retryKeyId = currentSub.id;
-                wakeAt = addInterval(phase.unit, phase.every);
+                wakeAt = addInterval(new Date(), phase.unit, phase.every);
             } else if (currentSub.failWorkerId) {
                 landingWorkerId = currentSub.failWorkerId;  // schedule exhausted → the unsuccess route (give up)
                 exhaustedFrom = currentSub.label;

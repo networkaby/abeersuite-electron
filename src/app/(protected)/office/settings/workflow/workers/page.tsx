@@ -33,18 +33,13 @@ import { WARRANTY_SCOPE_OPTIONS } from "@/utils/constants";
 import { badgeColor } from "@/shared/lib/format/entityColor";
 import { ColorPicker, randomColor } from "@/shared/components/ColorPicker";
 import { ACTION_TYPES } from "@/modules/repairing/lib/actionTypes";
+import { INTERVAL_UNITS, type IntervalUnit } from "@/shared/lib/format/addInterval";
 
 // Retry-schedule channels, densest → sparsest. Each is an optional row in the
 // worker dialog's "Attempts" tab; a filled row (every N × T times) becomes a phase.
-const RETRY_UNITS = [
-    { key: "minute", label: "Minute", abbr: "m" },
-    { key: "hour", label: "Hour", abbr: "h" },
-    { key: "day", label: "Day", abbr: "d" },
-    { key: "week", label: "Week", abbr: "w" },
-    { key: "month", label: "Month", abbr: "mo" },
-    { key: "year", label: "Year", abbr: "y" },
-] as const;
-type RetryUnit = (typeof RETRY_UNITS)[number]["key"];
+// Shared with recurring tasks — same vocabulary, same calendar math.
+const RETRY_UNITS = INTERVAL_UNITS;
+type RetryUnit = IntervalUnit;
 type RetryRow = { every: string; times: string };
 type RetryRows = Record<RetryUnit, RetryRow>;
 const BLANK_RETRY_ROWS = (): RetryRows =>

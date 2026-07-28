@@ -66,6 +66,7 @@ model Account {
   company                  Company?                   @relation(fields: [companyId], references: [id])
   devices                  Device[]
   tickets                  Ticket[]                   @relation("TicketAccount")
+  taskRecurrences          TaskRecurrence[]           @relation("TaskRecurrenceAccount")
   // Phase 5 5D-4: InvVoucher.accountId dropped — the party lives on the spine
   // (UniversalVoucher.partyAccountId), so no InvVoucher back-relation here.
   // POS reverse rels

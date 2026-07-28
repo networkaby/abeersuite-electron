@@ -45,6 +45,7 @@ import {
     ClipboardCheck,
     BarChart3,
     ListChecks,
+    Repeat,
     Percent,
     Printer,
     QrCode,
@@ -90,6 +91,13 @@ export type ModuleChild = {
     label: string;
     icon: LucideIcon;
     href?: string;
+    /**
+     * Stable slug for the sidebar-visibility permission id
+     * (`ui:sidebar:<module>:<sidebarKey>`). Defaults to slug(label) when omitted —
+     * set it when the display label may change but the granted permission id
+     * must stay put. Read by sidebarModules.ts (makeChildren).
+     */
+    sidebarKey?: string;
     /** Open the href in a new browser tab (e.g. standalone POS). */
     newTab?: boolean;
     action?: "new-ticket";
@@ -590,7 +598,9 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         ],
         children: [
             { label: "Work Board", icon: ListChecks, href: "/office/administration" },
-
+            // sidebarKey pinned so renaming the label can never change the minted
+            // permission id (ui:sidebar:administration:recurring-tasks) and drop grants.
+            { label: "Recurring Tasks", sidebarKey: "recurring-tasks", icon: Repeat, href: "/office/administration/recurring" },
         ],
     },
 

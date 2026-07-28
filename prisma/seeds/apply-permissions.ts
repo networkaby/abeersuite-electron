@@ -31,13 +31,17 @@ dotenv.config({ path: ".env" });
 // The permissions to add for the CURRENT change. Keep these identical to the rows
 // added in bootstrap-seed.ts. `systemOnly` rows are upserted but NOT granted to R1.
 const ADDITIONS: { id: string; label: string; module: string; description: string; systemOnly?: boolean }[] = [
-    // Deals / Tasks edit + delete — completing the flat create/edit/delete set for
-    // the two boards so the Role page can grant each level independently (same
-    // shape as tickets / help). CREATE already exists; only the two new rungs here.
-    { id: "deals:edit", label: "Edit deals", module: "crm", description: "Edit a deal's title, value, source, priority, owner and follow-up; move it between pipeline stages." },
-    { id: "deals:delete", label: "Delete deals", module: "crm", description: "Delete a deal from the CRM pipeline." },
-    { id: "tasks:edit", label: "Edit tasks", module: "administration", description: "Edit an internal work item's title, description, category, priority, assignee and due date; move it between stages." },
-    { id: "tasks:delete", label: "Delete tasks", module: "administration", description: "Delete an internal work item from the Administration board." },
+    // Recurring Tasks nav link (Administration). Derived automatically by
+    // sidebarPermissionSeeds() from the MODULE_SECTIONS child in utils/constants.ts —
+    // the row below just mirrors it so an existing DB gets it without a full seed.
+    // No tasks:* additions: a recurrence is a task definition and reuses
+    // tasks:create / tasks:edit / tasks:delete.
+    {
+        id: "ui:sidebar:administration:recurring-tasks",
+        label: "Administration → Recurring Tasks",
+        module: "ui",
+        description: 'Show the "Recurring Tasks" link under Administration in the sidebar.',
+    },
 ];
 
 const ADMIN_ROLE_ID = "R1";

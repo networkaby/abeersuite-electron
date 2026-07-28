@@ -88,6 +88,9 @@ const TRANSACTION_TABLES = [
     // rows off Ticket, but they're listed for clarity.
     "TicketDelivery", "TicketRefund", "TicketDeal", "TicketRepair",
     "TicketLog", "TicketParticipant", "Ticket", "Device",
+    // Recurring-task templates (Administration). Listed AFTER Ticket: the FK is
+    // onDelete SetNull, so the tickets must go first.
+    "TaskRecurrence",
     "WallPostLike", "WallPostComment", "WallPost", "SocialConnection", "CustomerSocialProfile",
     "ChatMessage", "ChatRoomMember", "ChatRoom",
     "PersonPortalCredential",

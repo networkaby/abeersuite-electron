@@ -4,6 +4,7 @@ import { requireAuth, requireModuleAccess } from "@/shared/lib/auth/permissions"
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { createTaskSchema } from "@/shared/lib/schemas/taskSchema";
 import { buildTaskActor } from "@/modules/administration/lib/taskActor";
+import { runTaskRecurrences } from "@/modules/administration/lib/runTaskRecurrences";
 
 /** Administration work board rides the seeded internal-management pipeline. */
 const ADMIN_PIPELINE_ID = "P4";
@@ -36,6 +37,8 @@ export const TASK_TICKET_SELECT = {
     dueAt: true,      // → dueDate
     closedAt: true,   // → completedAt
     sortOrder: true,  // → order
+    recurrenceId: true, // set only on tickets a TaskRecurrence generated
+    occurrenceNo: true,
     createdAt: true,
     updatedAt: true,
     ticketStatus: { select: { id: true, label: true, color: true, order: true, isTerminal: true } },
@@ -47,6 +50,7 @@ type TaskTicketRow = {
     id: number; title: string | null; notes: string | null; category: string | null;
     priority: string; pipelineId: string | null; status: string; assignedPositionId: string | null;
     createdBy: unknown; dueAt: Date | null; closedAt: Date | null; sortOrder: number;
+    recurrenceId: number | null; occurrenceNo: number | null;
     createdAt: Date; updatedAt: Date; ticketStatus: unknown; assignedPosition: unknown;
     _count: { logs: number };
 };
@@ -57,6 +61,7 @@ export function flattenTask(t: TaskTicketRow) {
         pipelineId: t.pipelineId, status: t.status, assignedPositionId: t.assignedPositionId,
         assignedPosition: t.assignedPosition, createdBy: t.createdBy,
         dueDate: t.dueAt, completedAt: t.closedAt, order: t.sortOrder,
+        recurrenceId: t.recurrenceId, occurrenceNo: t.occurrenceNo,
         createdAt: t.createdAt, updatedAt: t.updatedAt, ticketStatus: t.ticketStatus,
         _count: { comments: t._count.logs },
     };
@@ -68,6 +73,10 @@ export async function GET(req: Request) {
     try {
         const { searchParams } = new URL(req.url);
         const pipelineId = searchParams.get("pipelineId") ?? ADMIN_PIPELINE_ID;
+        // Materialise any recurring tasks that have fallen due. The repo has no
+        // cron — the board read IS the trigger (same compute-on-read pattern as
+        // the Work Inbox snooze). Best-effort: never 500 the board.
+        await runTaskRecurrences().catch(() => { });
         const tasks = await prisma.ticket.findMany({
             where: { pipelineId },
             orderBy: [{ sortOrder: "asc" }, { createdAt: "desc" }],

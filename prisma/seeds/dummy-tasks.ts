@@ -33,6 +33,34 @@ const DEMO_TASKS = [
     { title: "Update staff attendance policy", description: "Drafted and circulated to managers.", category: "HR", priority: "LOW" as const, status: "S28" },
 ] as const;
 
+// Recurring-task templates — one of each shape. The generator (runTaskRecurrences)
+// materialises the occurrences on the next board read, so the board fills itself.
+// anchorAt is back-dated 2 periods so the catch-up path is visible in dev.
+const DEMO_RECURRENCES = [
+    {
+        title: "Shop rent",
+        notes: "Pay the landlord and collect the receipt.",
+        category: "Finance",
+        priority: "HIGH" as const,
+        unit: "month",
+        every: 1,
+        totalCount: null,          // endless
+        monthsBack: 2,
+        amountPaise: 2_500_000,    // ₹25,000
+    },
+    {
+        title: "Shop loan EMI",
+        notes: "Instalment auto-debits — confirm the bank statement.",
+        category: "Finance",
+        priority: "URGENT" as const,
+        unit: "month",
+        every: 1,
+        totalCount: 12,            // fixed instalment run
+        monthsBack: 2,
+        amountPaise: 1_845_000,    // ₹18,450
+    },
+] as const;
+
 async function main() {
     console.log("\n⚠️  DUMMY DATA — demo Administration work-board tasks. DO NOT run in production.\n");
 
@@ -64,7 +92,7 @@ async function main() {
     // Tasks are owned by Positions (seats). Spread across whatever seats exist.
     const positions = await prisma.position.findMany({ select: { id: true }, orderBy: { title: "asc" } });
 
-    console.log(`[1/1] Creating ${DEMO_TASKS.length} tasks on pipeline ${PIPELINE_ID}…`);
+    console.log(`[1/2] Creating ${DEMO_TASKS.length} tasks on pipeline ${PIPELINE_ID}…`);
     let i = 0;
     for (const t of DEMO_TASKS) {
         const assignedPositionId = positions.length ? positions[i % positions.length].id : null;
@@ -85,7 +113,32 @@ async function main() {
         i++;
     }
 
-    console.log(`\n✅ Seeded ${DEMO_TASKS.length} demo tasks. Open /office/administration to view the board.`);
+    console.log(`\n[2/2] Creating ${DEMO_RECURRENCES.length} recurring tasks…`);
+    for (const r of DEMO_RECURRENCES) {
+        const anchorAt = new Date();
+        anchorAt.setMonth(anchorAt.getMonth() - r.monthsBack);
+        anchorAt.setHours(9, 0, 0, 0);
+        await prisma.taskRecurrence.create({
+            data: {
+                title: r.title,
+                notes: r.notes,
+                category: r.category,
+                priority: r.priority,
+                pipelineId: PIPELINE_ID,
+                assignedPositionId: positions.length ? positions[0].id : null,
+                unit: r.unit,
+                every: r.every,
+                totalCount: r.totalCount,
+                anchorAt,
+                amountPaise: r.amountPaise,
+                createdBy,
+            },
+        });
+        console.log(`  + ${r.title} — every ${r.every} ${r.unit}${r.totalCount ? ` × ${r.totalCount}` : " (no end)"}`);
+    }
+
+    console.log(`\n✅ Seeded ${DEMO_TASKS.length} demo tasks + ${DEMO_RECURRENCES.length} recurring tasks.`);
+    console.log("   Open /office/administration — the recurring occurrences appear on first load.");
     console.log("   Run pnpm seed:hard-clean to remove them.\n");
 }
 

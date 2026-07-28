@@ -67,6 +67,9 @@ export interface TaskDto {
     dueDate: string | null;
     completedAt: string | null;
     order: number;
+    /** Set only on tasks a TaskRecurrence generated — drives the repeat chip. */
+    recurrenceId: number | null;
+    occurrenceNo: number | null;
     createdAt: string;
     updatedAt: string;
     ticketStatus: TaskStage;
@@ -77,4 +80,42 @@ export interface TaskDto {
 
 export interface TaskDetailDto extends TaskDto {
     comments: TaskCommentDto[];
+}
+
+// ── Recurring tasks ───────────────────────────────────────────────────────────
+
+/** A task repeats by calendar unit; minute/hour stay worker-retry-only. */
+export type RecurrenceUnit = "day" | "week" | "month" | "year";
+
+/**
+ * A recurring-task template. `totalCount` is the whole instalment-vs-rent
+ * distinction: a number means a fixed run ("#3 of 12"), null means endless.
+ * `amountPaise` is decision support only — nothing is ever posted to the ledger.
+ */
+export interface TaskRecurrenceDto {
+    id: number;
+    title: string;
+    description: string | null;
+    category: string | null;
+    priority: TaskPriority;
+    pipelineId: string;
+    assignedPositionId: string | null;
+    assignedPosition: TaskAssignedPosition | null;
+    unit: RecurrenceUnit;
+    every: number;
+    totalCount: number | null;
+    /** Due date of occurrence #1 and the permanent anchor for every later one. */
+    anchorAt: string;
+    lastOccurrenceNo: number;
+    leadDays: number;
+    isActive: boolean;
+    endedAt: string | null;
+    amountPaise: number | null;
+    accountId: number | null;
+    /** Computed server-side so the UI never re-implements the interval math. */
+    nextDueAt: string | null;
+    generatedCount: number;
+    createdBy: TaskActor;
+    createdAt: string;
+    updatedAt: string;
 }

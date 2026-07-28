@@ -61,8 +61,18 @@ model Ticket {
   parentWorkerId String?
   context        Json?
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  // ── Recurrence provenance (Administration recurring tasks) ──────────────────
+  // Set ONLY on tickets a TaskRecurrence generated. The pair is the IDEMPOTENCY
+  // KEY: Postgres treats NULLs as distinct, so ordinary tickets are unaffected,
+  // but the same occurrence can never be inserted twice — even when two board
+  // loads sweep at the same instant. Deliberately NOT parentTicketId: that column
+  // belongs to the spawn-child sub-pipeline concept, and mixing the two would make
+  // a generated rent task look like a spawned child to the workflow engine.
+  recurrenceId Int?
+  occurrenceNo Int?
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
   // When the ticket entered its CURRENT main status (`status`). Stamped only on a
   // real status change — unlike `updatedAt`, which bumps on any edit — so the
   // status-resolve-time SLA (TicketStatus.resolveTimeHours) is measured honestly.
@@ -70,11 +80,13 @@ model Ticket {
   statusEnteredAt DateTime? @default(now())
 
   // ── Spine relations (local, cheap) ──────────────────────────────────────────
-  pipeline     Pipeline?     @relation(fields: [pipelineId], references: [id])
-  ticketStatus TicketStatus  @relation(fields: [status], references: [id])
-  ticketWorker TicketWorker? @relation(fields: [workerId], references: [id])
-  parent       Ticket?       @relation("TicketChildren", fields: [parentTicketId], references: [id])
-  children     Ticket[]      @relation("TicketChildren")
+  pipeline     Pipeline?       @relation(fields: [pipelineId], references: [id])
+  ticketStatus TicketStatus    @relation(fields: [status], references: [id])
+  ticketWorker TicketWorker?   @relation(fields: [workerId], references: [id])
+  parent       Ticket?         @relation("TicketChildren", fields: [parentTicketId], references: [id])
+  children     Ticket[]        @relation("TicketChildren")
+  // SetNull — deleting the recurrence keeps the tasks it already generated as history.
+  recurrence   TaskRecurrence? @relation("TicketRecurrence", fields: [recurrenceId], references: [id], onDelete: SetNull)
 
   logs         TicketLog[]
   participants TicketParticipant[]
@@ -87,6 +99,7 @@ model Ticket {
   refund   TicketRefund?
   help     TicketHelp?
 
+  @@unique([recurrenceId, occurrenceNo])
   @@index([parentTicketId])
   @@index([status])
   @@index([pipelineId, status])
@@ -94,6 +107,7 @@ model Ticket {
   @@index([accountId])
   @@index([createdAt])
   @@index([wakeAt])
+  @@index([recurrenceId])
 }
 
 // ── Detail: Repair (device-based service ticket) ──────────────────────────────
@@ -177,12 +191,12 @@ model TicketOrder {
   shippingName    String?
   shippingAddress Json?
 
-  totalPaise          Int     @default(0)
+  totalPaise          Int      @default(0)
   // Shipping charge the customer picked at checkout (paise). The chosen courier
   // is stored in `courier` (kind: SHIPROCKET | SHIPWAY | CUSTOM | OWN_BOY |
   // STORE_PICKUP | FREE_DELIVERY). Grand total on
   // the bill = totalPaise (goods) + shippingChargePaise. GL posting stays manual.
-  shippingChargePaise Int     @default(0)
+  shippingChargePaise Int      @default(0)
   // Spend-tier discount FROZEN at checkout (same engine as POS: tier% × cost).
   // totalPaise above is already NET of this discount — the gateway charges the
   // discounted amount. tierDiscountPaise = the inclusive (customer-facing) ₹
@@ -211,7 +225,7 @@ model TicketOrder {
   // balance still covers the frozen points (422 otherwise).
   loyaltyRedeemPoints Int      @default(0)
   loyaltyRedeemPaise  Int      @default(0)
-  razorpayOrderId     String? @unique
+  razorpayOrderId     String?  @unique
   razorpayPaymentId   String?
   courier             String?
   trackingNumber      String?
@@ -228,11 +242,11 @@ model TicketOrder {
 }
 
 model TicketOrderLine {
-  id             Int @id @default(autoincrement())
-  orderTicketId  Int
-  productId      Int
-  quantity       Int @default(1)
-  unitPricePaise Int
+  id                Int @id @default(autoincrement())
+  orderTicketId     Int
+  productId         Int
+  quantity          Int @default(1)
+  unitPricePaise    Int
   // Whole-line spend-tier discount, PRE-TAX paise, frozen at checkout
   // (tier% × costExcl × qty, clamped to the line's pre-tax value — POS
   // formula). unitPricePaise stays the GROSS tag; the invoice conversion
@@ -431,4 +445,64 @@ model ServiceCenter {
   address   String?
   createdAt DateTime       @default(now())
   repairs   TicketRepair[]
+}
+
+// ── Recurring task definition (Administration board) ──────────────────────────
+// ONE template that generates task Tickets on a schedule. It expresses both shapes
+// the shop needs with a single nullable field:
+//   • fixed count — 12 monthly EMI instalments  (totalCount = 12 → "#3 of 12")
+//   • endless     — rent on the 5th, for ever   (totalCount = null → "Aug 2026")
+// The {unit, every} vocabulary is the SAME one TicketWorker.retrySchedule uses, and
+// both share the calendar math in src/shared/lib/format/addInterval.ts.
+//
+// GL-silent by design: amountPaise is decision support only — nothing is ever posted
+// to the ledger from here. accountId is the sanctioned workflow→Account bridge, and
+// answers "which loan / which landlord", nothing more.
+model TaskRecurrence {
+  id Int @id @default(autoincrement())
+
+  // ── Template copied onto every generated Ticket ─────────────────────────────
+  title              String
+  notes              String?
+  category           String?
+  priority           Priority  @default(MEDIUM)
+  pipelineId         String    @default("P4")
+  assignedPositionId String?
+  assignedPosition   Position? @relation("TaskRecurrenceAssignedPosition", fields: [assignedPositionId], references: [id])
+
+  // ── Schedule ────────────────────────────────────────────────────────────────
+  // unit ∈ day | week | month | year (a task never recurs by minute/hour).
+  unit             String   @default("month")
+  every            Int      @default(1)
+  // null = endless (rent). A number = fixed instalment count (EMI).
+  totalCount       Int?
+  // Due date of occurrence #1 AND the permanent anchor. Every later due date is
+  // anchorAt + (n-1)×(every·unit), computed FROM THE ANCHOR — never from the previous
+  // occurrence — so a 31st anchor clamps to 30 Jun / 28 Feb and RECOVERS to 31 Jul
+  // instead of drifting earlier for ever.
+  anchorAt         DateTime
+  // Monotonic cursor: the highest occurrence number ever generated. It only advances,
+  // so deleting a generated task never makes it come back.
+  lastOccurrenceNo Int      @default(0)
+  // Create the task this many days BEFORE its due date (0 = on the day).
+  leadDays         Int      @default(0)
+
+  // ── Lifecycle ───────────────────────────────────────────────────────────────
+  isActive Boolean   @default(true) // pause / resume
+  endedAt  DateTime? // stamped when totalCount is reached, or when stopped by hand
+
+  // ── Decision support only (paise, like TicketDeal.valuePaise). NO GL. ───────
+  amountPaise Int?
+  accountId   Int?
+  account     Account? @relation("TaskRecurrenceAccount", fields: [accountId], references: [id])
+
+  createdBy Json     @default("{}") // frozen ActorSnapshot — the honest author
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tickets Ticket[] @relation("TicketRecurrence")
+
+  @@index([isActive, endedAt])
+  @@index([assignedPositionId])
+  @@index([accountId])
 }
