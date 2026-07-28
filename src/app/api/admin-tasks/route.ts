@@ -39,6 +39,7 @@ export const TASK_TICKET_SELECT = {
     sortOrder: true,  // → order
     recurrenceId: true, // set only on tickets a TaskRecurrence generated
     occurrenceNo: true,
+    context: true,      // → amountPaise (recurring instalment/rent figure)
     createdAt: true,
     updatedAt: true,
     ticketStatus: { select: { id: true, label: true, color: true, order: true, isTerminal: true } },
@@ -50,10 +51,19 @@ type TaskTicketRow = {
     id: number; title: string | null; notes: string | null; category: string | null;
     priority: string; pipelineId: string | null; status: string; assignedPositionId: string | null;
     createdBy: unknown; dueAt: Date | null; closedAt: Date | null; sortOrder: number;
-    recurrenceId: number | null; occurrenceNo: number | null;
+    recurrenceId: number | null; occurrenceNo: number | null; context: unknown;
     createdAt: Date; updatedAt: Date; ticketStatus: unknown; assignedPosition: unknown;
     _count: { logs: number };
 };
+
+/** `context` is a soft payload; the only key the board reads is the recurring
+ *  instalment/rent figure. Lift it to a first-class field rather than leaking
+ *  the whole JSON blob to the client. */
+function amountFromContext(context: unknown): number | null {
+    if (!context || typeof context !== "object") return null;
+    const v = (context as { amountPaise?: unknown }).amountPaise;
+    return typeof v === "number" ? v : null;
+}
 
 export function flattenTask(t: TaskTicketRow) {
     return {
@@ -62,6 +72,7 @@ export function flattenTask(t: TaskTicketRow) {
         assignedPosition: t.assignedPosition, createdBy: t.createdBy,
         dueDate: t.dueAt, completedAt: t.closedAt, order: t.sortOrder,
         recurrenceId: t.recurrenceId, occurrenceNo: t.occurrenceNo,
+        amountPaise: amountFromContext(t.context),
         createdAt: t.createdAt, updatedAt: t.updatedAt, ticketStatus: t.ticketStatus,
         _count: { comments: t._count.logs },
     };

@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { MessageSquare, CalendarClock, Repeat } from "lucide-react";
 import UserAvatar from "@/shared/components/UserAvatar";
 import { PRIORITY_META } from "@/utils/constants";
-import { formatDate } from "@/shared/lib/format";
+import { formatDate, formatRupeesFromPaise } from "@/shared/lib/format";
 import { useNow } from "@/shared/hooks";
 import type { TaskDto, TaskPriority } from "../lib/types";
 
@@ -70,6 +70,12 @@ export default function TaskCard({
                 {task.recurrenceId != null && (
                     <span className="inline-flex items-center gap-1 rounded bg-primary/10 px-1.5 py-0.5 text-[11px] text-primary">
                         <Repeat className="size-3" />#{task.occurrenceNo}
+                    </span>
+                )}
+                {/* Decision support only — the figure to pay/collect, never posted. */}
+                {task.amountPaise != null && (
+                    <span className="inline-block rounded bg-muted px-1.5 py-0.5 text-[11px] font-medium tabular-nums">
+                        {formatRupeesFromPaise(task.amountPaise)}
                     </span>
                 )}
             </div>

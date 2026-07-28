@@ -36,7 +36,18 @@ export const createTaskRecurrenceSchema = z.object({
 
 export const updateTaskRecurrenceSchema = createTaskRecurrenceSchema
     .partial()
-    .extend({ isActive: z.boolean().optional() })
+    .extend({
+        // `.partial()` marks a field optional but does NOT strip its `.default()` —
+        // an omitted `unit`/`every`/`leadDays` would still arrive as month/1/0. The
+        // PATCH route compares those against the stored row to freeze the schedule,
+        // so a defaulted value reads as a CHANGE: pausing a *daily* recurrence (a
+        // body of just `{isActive}`) would 400 with "schedule cannot be changed".
+        // Redeclare them without defaults so "absent" really means absent.
+        unit: recurrenceUnitSchema.optional(),
+        every: z.coerce.number().int().min(1).max(60).optional(),
+        leadDays: z.coerce.number().int().min(0).max(90).optional(),
+        isActive: z.boolean().optional(),
+    })
     .refine((d) => Object.keys(d).length > 0, "No fields to update");
 
 export type CreateTaskRecurrenceInput = z.infer<typeof createTaskRecurrenceSchema>;

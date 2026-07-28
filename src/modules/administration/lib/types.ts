@@ -70,6 +70,9 @@ export interface TaskDto {
     /** Set only on tasks a TaskRecurrence generated — drives the repeat chip. */
     recurrenceId: number | null;
     occurrenceNo: number | null;
+    /** The recurrence's instalment/rent figure, lifted off `Ticket.context`.
+     *  Decision support shown on the card — never posted to the ledger. */
+    amountPaise: number | null;
     createdAt: string;
     updatedAt: string;
     ticketStatus: TaskStage;
