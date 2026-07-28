@@ -15,14 +15,13 @@ import { PathBreadcrumb } from "@/shared/components/PathBreadcrumb";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
-type RoomType = "SYSTEM_INBOX" | "PERSONAL_INBOX" | "ROLE_GROUP" | "ORG_GROUP" | "DIRECT_MESSAGE";
+type RoomType = "SYSTEM_INBOX" | "PERSONAL_INBOX" | "ORG_GROUP" | "DIRECT_MESSAGE";
 
 type Room = {
     id: string;
     key: string;
     type: RoomType;
     name: string;
-    roleId: string | null;
     unreadCount: number;
     messageCount: number;
     latestMessage: {
@@ -166,7 +165,7 @@ export default function InboxModule({
     useEffect(() => {
         if (rooms.length === 0 || activeRoomId) return;
         const sectionTypes: Record<string, RoomType[]> = {
-            groups: ["ROLE_GROUP", "ORG_GROUP"],
+            groups: ["ORG_GROUP"],
             users:  ["DIRECT_MESSAGE"],
             system: ["SYSTEM_INBOX"],
         };
@@ -387,7 +386,7 @@ export default function InboxModule({
 
     // ── Derived ──────────────────────────────────────────────────────────────────
 
-    const groupRooms  = rooms.filter((r) => r.type === "ROLE_GROUP" || r.type === "ORG_GROUP");
+    const groupRooms  = rooms.filter((r) => r.type === "ORG_GROUP");
     const dmRooms     = rooms.filter((r) => r.type === "DIRECT_MESSAGE");
     const systemRooms = rooms.filter((r) => r.type === "SYSTEM_INBOX");
 

@@ -4,7 +4,6 @@ import type { ResolvedUser } from "@/shared/lib/auth/permissions";
 const ROOM_KEY = {
     system:  (userId: number)              => `system:${userId}`,
     personal:(userId: number)              => `personal:${userId}`,
-    role:    (roleId: string)              => `role:${roleId}`,
     org:     ()                            => "org:all",
     dm:      (a: number, b: number)        => `dm:${Math.min(a,b)}:${Math.max(a,b)}`,
 } as const;
@@ -12,9 +11,8 @@ const ROOM_KEY = {
 type RoomSeed = {
     key: string;
     name: string;
-    type: "SYSTEM_INBOX" | "PERSONAL_INBOX" | "ROLE_GROUP" | "ORG_GROUP" | "DIRECT_MESSAGE";
+    type: "SYSTEM_INBOX" | "PERSONAL_INBOX" | "ORG_GROUP" | "DIRECT_MESSAGE";
     ownerUserId?: number | null;
-    roleId?: string | null;
 };
 
 async function ensureRoom(seed: RoomSeed) {
@@ -24,7 +22,6 @@ async function ensureRoom(seed: RoomSeed) {
             name: seed.name,
             type: seed.type,
             ownerUserId: seed.ownerUserId ?? null,
-            roleId: seed.roleId ?? null,
             isActive: true,
         },
         create: {
@@ -32,7 +29,6 @@ async function ensureRoom(seed: RoomSeed) {
             name: seed.name,
             type: seed.type,
             ownerUserId: seed.ownerUserId ?? null,
-            roleId: seed.roleId ?? null,
         },
     });
 }
@@ -45,7 +41,12 @@ async function ensureMembership(roomId: string, userId: number) {
     });
 }
 
-export async function ensureCoreRoomsForUser(user: Pick<ResolvedUser, "id" | "roles">) {
+// TODO: branch- / department-wise groups replace the dropped role groups.
+// `ResolvedUser` already carries `branchIds` / `departmentIds`, so this is a
+// like-for-like swap of what role rooms did — it needs ChatRoom.branchId /
+// .departmentId columns plus BRANCH_GROUP / DEPARTMENT_GROUP enum values,
+// i.e. one `prisma db push`. See PROJECT_BRAIN.md.
+export async function ensureCoreRoomsForUser(user: Pick<ResolvedUser, "id">) {
     const existing = await prisma.chatRoom.findUnique({
         where: { key: ROOM_KEY.system(user.id) },
         select: { id: true },
@@ -67,17 +68,6 @@ export async function ensureCoreRoomsForUser(user: Pick<ResolvedUser, "id" | "ro
     await Promise.all([
         ensureMembership(systemRoom.id, user.id),
         ensureMembership(orgRoom.id, user.id),
-        ...user.roles
-            .filter(Boolean)
-            .map(async (roleId) => {
-                const roleRoom = await ensureRoom({
-                    key: ROOM_KEY.role(roleId),
-                    name: `${roleId} Group`,
-                    type: "ROLE_GROUP",
-                    roleId,
-                });
-                await ensureMembership(roleRoom.id, user.id);
-            }),
     ]);
 }
 
@@ -109,7 +99,6 @@ export async function listAccessibleRooms(user: ResolvedUser) {
             OR: [
                 { ownerUserId: user.id },
                 { type: "ORG_GROUP" },
-                { roleId: { in: user.roles.filter(Boolean) } },
                 {
                     type: "DIRECT_MESSAGE",
                     members: { some: { userId: user.id } },
@@ -169,7 +158,6 @@ export async function listAccessibleRooms(user: ResolvedUser) {
         key: room.key,
         type: room.type,
         name: room.name,
-        roleId: room.roleId,
         unreadCount: unreadCounts.get(room.id) ?? 0,
         messageCount: room._count.messages,
         latestMessage: room.messages[0] ?? null,
@@ -184,7 +172,6 @@ export async function getAccessibleRoom(user: ResolvedUser, roomId: string) {
             OR: [
                 { ownerUserId: user.id },
                 { type: "ORG_GROUP" },
-                { roleId: { in: user.roles.filter(Boolean) } },
                 {
                     type: "DIRECT_MESSAGE",
                     members: { some: { userId: user.id } },
@@ -266,7 +253,7 @@ export async function createSystemInboxNotifications({
     });
 
     for (const user of users) {
-        await ensureCoreRoomsForUser({ id: user.id, roles: user.role ? [user.role] : [] });
+        await ensureCoreRoomsForUser({ id: user.id });
         const room = await prisma.chatRoom.findUnique({
             where: { key: ROOM_KEY.system(user.id) },
             select: { id: true },

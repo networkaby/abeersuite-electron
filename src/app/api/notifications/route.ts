@@ -7,7 +7,7 @@ export async function GET() {
     const { user, response } = await requireAuth();
     if (response) return response;
 
-    await ensureCoreRoomsForUser({ id: user.id, roles: user.roles });
+    await ensureCoreRoomsForUser({ id: user.id });
     const room = await prisma.chatRoom.findUnique({
         where: { key: `system:${user.id}` },
         include: {

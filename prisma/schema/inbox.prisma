@@ -1,7 +1,9 @@
+// Groups are the optional layer; user-to-user DM is the core of the inbox.
+// TODO: add BRANCH_GROUP / DEPARTMENT_GROUP (with ChatRoom.branchId /
+// .departmentId) to replace the dropped ROLE_GROUP.
 enum ChatRoomType {
   SYSTEM_INBOX
   PERSONAL_INBOX
-  ROLE_GROUP
   ORG_GROUP
   DIRECT_MESSAGE
 }
@@ -17,18 +19,15 @@ model ChatRoom {
   type        ChatRoomType
   name        String
   ownerUserId Int?
-  roleId      String?
   isActive    Boolean          @default(true)
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
   ownerUser   User?            @relation("OwnedChatRooms", fields: [ownerUserId], references: [id])
-  role        Role?            @relation(fields: [roleId], references: [id])
   members     ChatRoomMember[]
   messages    ChatMessage[]
 
   @@index([type])
   @@index([ownerUserId])
-  @@index([roleId])
 }
 
 model ChatRoomMember {

@@ -16,7 +16,6 @@ model Role {
   users         User[]
   positionRoles PositionRole[]
   permissions   RolePermission[]
-  chatRooms     ChatRoom[]
 }
 
 model Permission {
