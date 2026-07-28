@@ -20,7 +20,7 @@ import {
     BreadcrumbPage, BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { useEscape } from "@/shared/hooks";
-import { BookOpen, Loader2, RefreshCw, Printer } from "lucide-react";
+import { BookOpen, Loader2, RefreshCw, Printer, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,6 +35,7 @@ import { indianFiscalYearStart } from "@/modules/accountancy/lib/period";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import { BookPage } from "@/modules/accountancy/components/BookPage";
 import { CreateLedgerDialog } from "@/modules/accountancy/components/CreateLedgerDialog";
+import { EditLedgerDialog, type EditableLedger } from "@/modules/accountancy/components/EditLedgerDialog";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -49,6 +50,13 @@ interface LedgerListItem {
     isActive: boolean;
     group: { id: number; name: string; type: string } | null;
     _count: { lines: number };
+    // Present on the flat GL list response (/api/accountancy/ledgers) but not
+    // needed for the list/search UI — carried through so the Edit dialog can
+    // be opened without a second fetch.
+    bankJson?: unknown;
+    openingBalance?: number | null;
+    openingBalanceType?: NormalBalance | null;
+    openingBalanceDate?: string | null;
 }
 
 interface SourceDoc {
@@ -138,6 +146,7 @@ export function AccountLedgerExplorer({
 
     const [allAccounts, setAllAccounts] = useState<LedgerListItem[]>([]);
     const [createOpen, setCreateOpen] = useState(false);
+    const [editOpen, setEditOpen] = useState(false);
     const [search, setSearch] = useState("");
     const [selectedId, setSelectedId] = useState<number | null>(() => {
         const id = params.get("accountId");
@@ -218,6 +227,22 @@ export function AccountLedgerExplorer({
     const periodCredit = detail?.rows.reduce((s, r) => s + (r.credit ?? 0), 0) ?? 0;
     const netMovement = detail ? detail.closingBalance - detail.openingBalance : 0;
 
+    // The flat GL list (allAccounts) carries bankJson/openingBalance fields
+    // the ledger-detail report doesn't return — look the selected account up
+    // there so Edit opens pre-filled without a second fetch.
+    const editSource = selectedId ? allAccounts.find((a) => a.id === selectedId) : undefined;
+    const editTarget: EditableLedger | null = editSource
+        ? {
+            id: editSource.id,
+            name: editSource.name,
+            groupId: editSource.group?.id ?? null,
+            bankJson: editSource.bankJson,
+            openingBalance: editSource.openingBalance,
+            openingBalanceType: editSource.openingBalanceType,
+            openingBalanceDate: editSource.openingBalanceDate,
+        }
+        : null;
+
     return (
         <div className="flex h-full flex-col overflow-hidden bg-card">
             {/* Breadcrumb bar */}
@@ -264,6 +289,7 @@ export function AccountLedgerExplorer({
                     searchPlaceholder="Search name, code, or group…"
                     onAdd={() => setCreateOpen(true)}
                     addLabel="Create"
+                    onTitleClick={selectedId ? () => setSelectedId(null) : undefined}
                     isEmpty={filtered.length === 0}
                     emptyMessage={search ? "No matches" : (emptyMessage ?? "No accounts")}
                 >
@@ -361,6 +387,15 @@ export function AccountLedgerExplorer({
                                             </Badge>
                                         </div>
                                     </div>
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-7 px-2.5 text-xs"
+                                        onClick={() => setEditOpen(true)}
+                                    >
+                                        <Pencil size={12} className="mr-1" />
+                                        Edit
+                                    </Button>
                                 </div>
 
                                 {/* 4-stat row */}
@@ -518,6 +553,17 @@ export function AccountLedgerExplorer({
                 onCreated={(acc) => {
                     reloadAccounts();
                     setSelectedId(acc.id);
+                }}
+            />
+
+            {/* Edit-ledger dialog — opened from the account summary strip. */}
+            <EditLedgerDialog
+                open={editOpen}
+                onOpenChange={setEditOpen}
+                ledger={editTarget}
+                onSaved={() => {
+                    reloadAccounts();
+                    if (selectedId) loadDetail(selectedId, from, to);
                 }}
             />
         </div>
