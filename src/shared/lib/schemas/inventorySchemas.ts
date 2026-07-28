@@ -133,10 +133,10 @@ const productPricing = {
 
 // Books-beginning opening stock — written directly to the InvProduct row, no
 // voucher in between. openingValue is computed server-side from qty × rate.
+// Universal opening — no date; always effective from the start of the books.
 const productOpening = {
     openingStock:     z.number().nonnegative().nullish(),         // qty (Decimal in DB)
     openingRate:      z.number().nonnegative().nullish(),         // rupees (Decimal in DB)
-    openingStockDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish(),
 };
 
 export const invProductCreateSchema = z.object({

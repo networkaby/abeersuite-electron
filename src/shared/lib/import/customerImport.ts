@@ -5,7 +5,6 @@ import { normaliseGstinState } from "@/shared/lib/gst/validateGstinState";
 import { isValidStateCode } from "@/shared/lib/gst/indianStates";
 import { reconcileOpeningSuspense } from "@/modules/accountancy/lib/openingBalance";
 import { CUSTOMER_IMPORT_FIELDS, type CustomerImportField } from "./customerImportFields";
-import { businessTodayIso } from "@/shared/lib/format/formatDate";
 
 export { CUSTOMER_IMPORT_FIELDS };
 export type { CustomerImportField };
@@ -40,9 +39,6 @@ export interface CustomerImportRequest {
     rows: CustomerImportRowInput[];
     mode: ImportMode;
     dryRun: boolean;
-    /** Staff browser's calendar day (yyyy-mm-dd), for rows with no opening date.
-     *  Falls back to the shop's timezone constant when the caller omits it. */
-    today?: string;
 }
 
 export interface RowResult {
@@ -101,13 +97,6 @@ function parseAmount(raw: string | undefined): number | null | undefined {
     const n = Number(cleaned);
     if (!Number.isFinite(n)) return null;
     return n;
-}
-
-function parseDate(raw: string | undefined): string | null | undefined {
-    if (raw == null || raw.trim() === "") return undefined;
-    const trimmed = raw.trim();
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return null;
-    return trimmed;
 }
 
 function parseKind(raw: string | undefined): CustomerKind | null | undefined {
@@ -188,7 +177,6 @@ export async function runCustomerImport(req: CustomerImportRequest): Promise<Cus
         accountGroup: "Sundry Debtors" | "Sundry Creditors";
         openingBalance: number | null;
         openingType: "DEBIT" | "CREDIT" | null;
-        openingDate: string | null;
         creditLimit: number | null;
     }> = [];
 
@@ -299,9 +287,6 @@ export async function runCustomerImport(req: CustomerImportRequest): Promise<Cus
             openingType = signedOpening! >= 0 ? "DEBIT" : "CREDIT";
         }
 
-        const openingDate = parseDate(v.openingDate);
-        if (openingDate === null) errors.push(`openingDate "${v.openingDate}" must be YYYY-MM-DD`);
-
         const creditLimit = parseAmount(v.creditLimit);
         if (creditLimit === null) errors.push(`creditLimit "${v.creditLimit}" is not a valid number`);
         if ((creditLimit ?? 0) < 0) errors.push(`creditLimit "${v.creditLimit}" must be positive`);
@@ -406,7 +391,6 @@ export async function runCustomerImport(req: CustomerImportRequest): Promise<Cus
             accountGroup,
             openingBalance,
             openingType,
-            openingDate: openingDate ?? null,
             creditLimit: creditLimit ?? null,
         });
     }
@@ -435,7 +419,6 @@ export async function runCustomerImport(req: CustomerImportRequest): Promise<Cus
         (g === "Sundry Debtors" ? debtorsGroup?.id : creditorsGroup?.id) ?? null;
 
     const anyOpening = validRows.some((v) => v.openingBalance != null && v.openingBalance !== 0);
-    const today = req.today ?? businessTodayIso();
 
     // ── Split work: bulk-insert new rows; per-row for updates (rare on imports).
     const newRows = validRows.filter((v) => v.existingId == null);
@@ -503,7 +486,6 @@ export async function runCustomerImport(req: CustomerImportRequest): Promise<Cus
                 groupId: number | null;
                 openingBalance?: number;
                 openingBalanceType?: "DEBIT" | "CREDIT";
-                openingBalanceDate?: Date;
                 creditLimit?: number;
             }> = [];
 
@@ -526,7 +508,6 @@ export async function runCustomerImport(req: CustomerImportRequest): Promise<Cus
                     ...(v.openingBalance != null && v.openingBalance !== 0 && {
                         openingBalance: v.openingBalance,
                         openingBalanceType: v.openingType!,
-                        openingBalanceDate: new Date(v.openingDate ?? today),
                     }),
                     ...(v.creditLimit != null && v.creditLimit > 0 && {
                         creditLimit: v.creditLimit,
@@ -644,16 +625,12 @@ export async function runCustomerImport(req: CustomerImportRequest): Promise<Cus
                             groupId?: number | null;
                             openingBalance?: number;
                             openingBalanceType?: "DEBIT" | "CREDIT";
-                            openingBalanceDate?: Date;
                             creditLimit?: number;
                         } = { name: v.data.name };
                         if (v.openingBalance != null && v.openingBalance !== 0) {
                             accountPatch.groupId = groupIdFor(v.accountGroup);
                             accountPatch.openingBalance = v.openingBalance;
                             accountPatch.openingBalanceType = v.openingType!;
-                            accountPatch.openingBalanceDate = new Date(
-                                v.openingDate ?? today,
-                            );
                         }
                         if (v.creditLimit != null && v.creditLimit > 0) {
                             accountPatch.creditLimit = v.creditLimit;

@@ -181,7 +181,7 @@ export async function POST(req: Request) {
                 openingStock:     b.openingStock ?? null,
                 openingRate:      b.openingRate  ?? null,
                 openingValue:     productOpeningValue(b),
-                openingStockDate: b.openingStockDate ? new Date(b.openingStockDate) : null,
+                openingStockDate: null,
                 // GST classification — all null by default (resolver cascades at read time).
                 gstRateId:  b.gstRateId  ?? null,
                 hsnCode:    b.hsnCode    ?? null,

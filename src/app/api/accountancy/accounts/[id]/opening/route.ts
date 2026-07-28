@@ -8,12 +8,12 @@ import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 // PUT /api/accountancy/accounts/[id]/opening
-// Sets opening balance + Dr/Cr type + as-of date on a ledger account.
-// Pass null amount to clear an opening balance.
+// Sets opening balance + Dr/Cr type on a ledger account. Universal opening —
+// no per-account date; always effective from the start of the books, whether
+// imported or created fresh. Pass null amount to clear an opening balance.
 const schema = z.object({
     amount:          z.number().nullable(),
     type:            z.enum(["DEBIT", "CREDIT"]).nullable(),
-    asOfDate:        z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
 });
 
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -30,7 +30,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
             data: {
                 openingBalance:     data.amount,
                 openingBalanceType: data.type,
-                openingBalanceDate: data.asOfDate ? new Date(data.asOfDate) : null,
+                openingBalanceDate: null,
             },
         });
         await reconcileOpeningSuspense();

@@ -153,12 +153,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                     openingStock: b.openingStock ?? null,
                     openingRate:  b.openingRate  ?? null,
                     openingValue: productOpeningValue(b),
+                    // Universal opening — no date; always from the start of the books.
+                    openingStockDate: null,
                     // Sync running caches via shared helper. Explicit
                     // costPaise (Pricing tab) wins over opening-derived cost.
                     ...syncProductCacheFromOpening(b),
-                } : {}),
-                ...(b.openingStockDate !== undefined ? {
-                    openingStockDate: b.openingStockDate ? new Date(b.openingStockDate) : null,
                 } : {}),
                 // GST classification — null clears the override and re-enables cascade.
                 ...(b.gstRateId  !== undefined ? { gstRateId:  b.gstRateId  } : {}),

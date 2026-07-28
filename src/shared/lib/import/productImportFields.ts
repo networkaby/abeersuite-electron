@@ -26,6 +26,5 @@ export const PRODUCT_IMPORT_FIELDS = [
     "mrp",
     "openingStock",
     "openingRate",
-    "openingDate",
 ] as const;
 export type ProductImportField = (typeof PRODUCT_IMPORT_FIELDS)[number];

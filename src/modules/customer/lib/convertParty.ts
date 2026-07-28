@@ -819,7 +819,6 @@ export async function mergeParty(
             balance: true,
             openingBalance: true,
             openingBalanceType: true,
-            openingBalanceDate: true,
         } as const;
         const [winnerAcct, loserAcct] = await Promise.all([
             tx.account.findUniqueOrThrow({ where: { id: winnerAccountId }, select: accountSelect }),
@@ -842,20 +841,14 @@ export async function mergeParty(
         const openMag = Math.abs(openSigned);
         const openType: "DEBIT" | "CREDIT" | null = openMag === 0 ? null : openSigned > 0 ? "DEBIT" : "CREDIT";
 
-        // Date: prefer the earlier non-null opening date so historical entries
-        // stay anchored to whichever party started keeping books first.
-        const dates = [winnerAcct.openingBalanceDate, loserAcct.openingBalanceDate].filter((d): d is Date => d != null);
-        const openDate = dates.length > 0
-            ? new Date(Math.min(...dates.map(d => d.getTime())))
-            : null;
-
         await tx.account.update({
             where: { id: winnerAccountId },
             data: {
                 balance: summedBalance.toFixed(2),
                 openingBalance: openMag === 0 ? null : openMag.toFixed(2),
                 openingBalanceType: openType,
-                openingBalanceDate: openDate,
+                // Universal opening — no date; always from the start of the books.
+                openingBalanceDate: null,
             },
         });
 

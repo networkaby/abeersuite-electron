@@ -22,8 +22,6 @@ import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { GroupCombobox } from "@/modules/accountancy/components/GroupCombobox";
-import { TallyDateInput } from "@/shared/components/TallyDateInput";
-import { todayIso } from "@/shared/lib/format/formatDate";
 
 type GroupType = "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE";
 
@@ -77,14 +75,12 @@ export function CreateLedgerDialog({
         description: string;
         openingBalance: string;
         openingBalanceType: "DEBIT" | "CREDIT";
-        openingBalanceDate: string;
     }>({
         name: "",
         groupId: null,
         description: "",
         openingBalance: "",
         openingBalanceType: "DEBIT",
-        openingBalanceDate: todayIso(),
     });
 
     // Reset the form and load the group list whenever the dialog opens.
@@ -96,7 +92,6 @@ export function CreateLedgerDialog({
             description: "",
             openingBalance: "",
             openingBalanceType: "DEBIT",
-            openingBalanceDate: todayIso(),
         });
         axios.get<GroupNode[]>("/api/accountancy/account-groups")
             .then((r) => setGroups(flattenGroups(r.data)))
@@ -109,13 +104,12 @@ export function CreateLedgerDialog({
         if (!form.name.trim()) { toast.error("Name is required"); return; }
         if (!form.groupId) { toast.error("Group is required"); return; }
 
-        // Opening balance is optional, but if ANY part is filled all three
-        // must be provided (matches the backend createSchema superRefine rule
-        // and the Masters → Ledgers create-inline pattern).
+        // Opening balance is optional, but if the amount is filled the Dr/Cr
+        // type must be too (matches the backend createSchema superRefine rule).
+        // Universal opening — no date; always effective from the start of the books.
         const obAmount = form.openingBalance.trim();
         const obType = form.openingBalanceType;
-        const obDate = form.openingBalanceDate;
-        const hasAny = obAmount !== "" || !!obType || !!obDate;
+        const hasAny = obAmount !== "" || !!obType;
         if (hasAny) {
             if (obAmount === "") { toast.error("Opening balance amount is required"); return; }
             const amount = Number(obAmount);
@@ -123,7 +117,6 @@ export function CreateLedgerDialog({
                 toast.error("Opening balance must be greater than zero");
                 return;
             }
-            if (!obDate) { toast.error("Opening balance date is required"); return; }
         }
 
         setSaving(true);
@@ -136,7 +129,6 @@ export function CreateLedgerDialog({
                 description: string | null;
                 openingBalance?: number;
                 openingBalanceType?: "DEBIT" | "CREDIT";
-                openingBalanceDate?: string;
             } = {
                 name: form.name.trim(),
                 groupId: form.groupId,
@@ -145,7 +137,6 @@ export function CreateLedgerDialog({
             if (hasAny) {
                 payload.openingBalance = Number(obAmount);
                 payload.openingBalanceType = obType;
-                payload.openingBalanceDate = obDate;
             }
             const r = await axios.post<CreatedLedger>("/api/accountancy/ledgers", payload);
             toast.success("Ledger created");
@@ -207,9 +198,9 @@ export function CreateLedgerDialog({
                     </div>
                     <div className="col-span-2 space-y-3 rounded-md border border-border bg-muted/30 p-4">
                         <p className="text-sm font-medium text-foreground">
-                            Opening Balance <span className="font-normal text-muted-foreground">— optional, set all three if used</span>
+                            Opening Balance <span className="font-normal text-muted-foreground">— optional, set both if used</span>
                         </p>
-                        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                             <div className="space-y-1.5">
                                 <Label>Amount (₹)</Label>
                                 <Input
@@ -235,13 +226,6 @@ export function CreateLedgerDialog({
                                         <SelectItem value="CREDIT">Credit</SelectItem>
                                     </SelectContent>
                                 </Select>
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label>As of</Label>
-                                <TallyDateInput
-                                    value={form.openingBalanceDate}
-                                    onValueChange={(iso) => setForm((f) => ({ ...f, openingBalanceDate: iso }))}
-                                />
                             </div>
                         </div>
                     </div>

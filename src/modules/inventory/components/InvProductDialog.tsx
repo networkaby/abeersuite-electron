@@ -120,7 +120,6 @@ function rowToForm(p: InvProductRow): InvProductFormState {
         mrpRupees:   paiseToRupees(p.mrpPaise),
         openingQty:  p.openingStock != null ? String(p.openingStock) : "",
         openingRate: p.openingRate  != null ? String(p.openingRate)  : "",
-        openingDate: p.openingStockDate ? p.openingStockDate.slice(0, 10) : "",
         attrs: p.attrsJson
             ? Object.entries(p.attrsJson).map(([key, value]) => ({ key, value: String(value) }))
             : [],
@@ -303,7 +302,6 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
             mrpPaise:   rupeesToPaise(form.mrpRupees),
             openingStock:     form.openingQty.trim()  === "" ? null : Number(form.openingQty),
             openingRate:      form.openingRate.trim() === "" ? null : Number(form.openingRate),
-            openingStockDate: form.openingDate || null,
             attrsJson: form.attrs.filter((a) => a.key.trim()).length > 0
                 ? Object.fromEntries(form.attrs.filter((a) => a.key.trim()).map((a) => [a.key.trim(), a.value.trim()]))
                 : null,

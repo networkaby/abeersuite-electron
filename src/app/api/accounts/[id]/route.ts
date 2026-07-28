@@ -14,11 +14,12 @@ type Params = { params: Promise<{ id: string }> };
 // null = no credit (cash-only), 0 behaves identically, a positive value grants
 // that much credit headroom. `accountGroup` flips the ledger between Sundry
 // Debtors (customer) and Sundry Creditors (supplier) — resolved to a groupId
-// server-side so the client never needs the group's primary key. The three
+// server-side so the client never needs the group's primary key. The
 // `opening*` fields mirror the Accountancy Masters opening-balance editor —
 // same columns, just reachable at customers:edit instead of
 // accountancy-masters:edit so front-desk staff can set it while onboarding
-// a customer. Pass a null amount to clear.
+// a customer. Universal opening — no date; always from the start of the
+// books. Pass a null amount to clear.
 const updateSchema = z.object({
     creditLimit: z.number().min(0).nullable().optional(),
     accountGroup: z
@@ -26,7 +27,6 @@ const updateSchema = z.object({
         .optional(),
     openingBalance:     z.number().nullable().optional(),
     openingBalanceType: z.enum(["DEBIT", "CREDIT"]).nullable().optional(),
-    openingBalanceDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
 }).refine(
     (d) => d.creditLimit !== undefined || d.accountGroup !== undefined || d.openingBalance !== undefined,
     { message: "Nothing to update" },
@@ -136,7 +136,8 @@ export async function PATCH(req: Request, { params }: Params) {
         openingPatch = {
             openingBalance:     data.openingBalance,
             openingBalanceType: data.openingBalance === null ? null : data.openingBalanceType!,
-            openingBalanceDate: data.openingBalance === null ? null : (data.openingBalanceDate ? new Date(data.openingBalanceDate) : null),
+            // Universal opening — no date; always from the start of the books.
+            openingBalanceDate: null,
         };
     }
 

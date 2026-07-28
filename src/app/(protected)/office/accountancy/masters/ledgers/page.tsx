@@ -18,8 +18,6 @@ import {
 } from "@/components/ui/select";
 import { fmt } from "@/utils/constants";
 import { GroupCombobox } from "@/modules/accountancy/components/GroupCombobox";
-import { TallyDateInput } from "@/shared/components/TallyDateInput";
-import { todayIso } from "@/shared/lib/format";
 import {
     type BankFields, EMPTY_BANK, hasBankData, parseBank, BANK_FIELD_LABELS, isBankGroupName,
 } from "@/modules/accountancy/lib/bankParticulars";
@@ -41,7 +39,6 @@ interface LedgerRow {
     bankJson: unknown;
     openingBalance: number | null;
     openingBalanceType: "DEBIT" | "CREDIT" | null;
-    openingBalanceDate: string | null;
 }
 
 type NewLedgerForm = {
@@ -50,7 +47,6 @@ type NewLedgerForm = {
     description: string;
     openingBalance: string;
     openingBalanceType: "DEBIT" | "CREDIT";
-    openingBalanceDate: string;
 };
 
 const createNewLedgerForm = (): NewLedgerForm => ({
@@ -59,7 +55,6 @@ const createNewLedgerForm = (): NewLedgerForm => ({
     description: "",
     openingBalance: "",
     openingBalanceType: "DEBIT",
-    openingBalanceDate: todayIso(),
 });
 
 interface GroupNode {
@@ -156,7 +151,6 @@ export default function LedgersPage() {
     const [editBank, setEditBank] = useState<BankFields>(EMPTY_BANK);
     const [editOpeningBalance, setEditOpeningBalance] = useState("");
     const [editOpeningBalanceType, setEditOpeningBalanceType] = useState<"DEBIT" | "CREDIT">("DEBIT");
-    const [editOpeningBalanceDate, setEditOpeningBalanceDate] = useState("");
     const [savingLedger, setSavingLedger] = useState(false);
 
     const load = useCallback(() => {
@@ -193,11 +187,6 @@ export default function LedgersPage() {
         setEditBank(parseBank(l.bankJson));
         setEditOpeningBalance(l.openingBalance ? String(l.openingBalance) : "");
         setEditOpeningBalanceType(l.openingBalanceType ?? "DEBIT");
-        setEditOpeningBalanceDate(
-            l.openingBalanceDate
-                ? new Date(l.openingBalanceDate).toISOString().slice(0, 10)
-                : todayIso(),
-        );
     };
 
     const saveLedger = async (id: number) => {
@@ -206,10 +195,6 @@ export default function LedgersPage() {
         const openingBalance = Number(editOpeningBalance);
         if (hasOpeningBalance && (!Number.isFinite(openingBalance) || openingBalance < 0)) {
             toast.error("Opening balance must be a valid non-negative number");
-            return;
-        }
-        if (hasOpeningBalance && !editOpeningBalanceDate) {
-            toast.error("Opening balance date is required");
             return;
         }
         setSavingLedger(true);
@@ -225,11 +210,9 @@ export default function LedgersPage() {
             if (hasOpeningBalance) {
                 payload.openingBalance = openingBalance;
                 payload.openingBalanceType = editOpeningBalanceType;
-                payload.openingBalanceDate = editOpeningBalanceDate;
             } else {
                 payload.openingBalance = null;
                 payload.openingBalanceType = null;
-                payload.openingBalanceDate = null;
             }
             await axios.patch(`/api/accountancy/ledgers/${id}`, payload);
             toast.success("Ledger updated");
@@ -264,10 +247,6 @@ export default function LedgersPage() {
             toast.error("Opening balance must be greater than zero");
             return;
         }
-        if (hasOpeningBalance && !newForm.openingBalanceDate) {
-            toast.error("Opening balance date is required");
-            return;
-        }
         setSaving(true);
         const newGroupIsBank = isBankGroupName(allFlat.find((g) => g.id === newForm.groupId)?.name);
         try {
@@ -280,7 +259,6 @@ export default function LedgersPage() {
                 ...(hasOpeningBalance ? {
                     openingBalance,
                     openingBalanceType: newForm.openingBalanceType,
-                    openingBalanceDate: newForm.openingBalanceDate,
                 } : {}),
             });
             toast.success("Ledger created");
@@ -366,7 +344,7 @@ export default function LedgersPage() {
                                 <p className="text-sm font-medium text-foreground">
                                     Opening Balance <span className="font-normal text-muted-foreground">— optional</span>
                                 </p>
-                                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                                     <div className="space-y-1.5">
                                         <Label>Amount (₹)</Label>
                                         <Input
@@ -392,13 +370,6 @@ export default function LedgersPage() {
                                                 <SelectItem value="CREDIT">Credit</SelectItem>
                                             </SelectContent>
                                         </Select>
-                                    </div>
-                                    <div className="space-y-1.5">
-                                        <Label>As of</Label>
-                                        <TallyDateInput
-                                            value={newForm.openingBalanceDate}
-                                            onValueChange={(iso) => setNewForm((f) => ({ ...f, openingBalanceDate: iso }))}
-                                        />
                                     </div>
                                 </div>
                             </div>
@@ -587,7 +558,7 @@ export default function LedgersPage() {
                                                             <p className="text-sm font-medium text-foreground">
                                                                 Opening Balance <span className="font-normal text-muted-foreground">— leave blank to clear</span>
                                                             </p>
-                                                            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                                                            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                                                                 <div className="space-y-1.5">
                                                                     <Label className="text-xs">Amount (₹)</Label>
                                                                     <Input
@@ -611,14 +582,6 @@ export default function LedgersPage() {
                                                                             <SelectItem value="CREDIT">Credit</SelectItem>
                                                                         </SelectContent>
                                                                     </Select>
-                                                                </div>
-                                                                <div className="space-y-1.5">
-                                                                    <Label className="text-xs">As of</Label>
-                                                                    <TallyDateInput
-                                                                        value={editOpeningBalanceDate}
-                                                                        onValueChange={(iso) => setEditOpeningBalanceDate(iso)}
-                                                                        className="h-8 text-sm"
-                                                                    />
                                                                 </div>
                                                             </div>
                                                         </div>

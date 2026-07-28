@@ -5,7 +5,6 @@ import { RefreshCw, Trash2 } from "lucide-react";
 import { flattenTree, treeLabel, type MasterKind } from "@/modules/inventory/components/InventoryMasterDropdownQuickDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -55,11 +54,10 @@ export type InvProductFormState = {
     priceRupees: string;
     mrpRupees:   string;
     // Opening stock — written directly to InvProduct.openingStock /
-    // openingRate / openingValue / openingStockDate. Tally-style: this is
-    // qty held at books-beginning, NOT a transactional movement.
+    // openingRate / openingValue. Tally-style: this is qty held at
+    // books-beginning, NOT a transactional movement — universal, no date.
     openingQty:    string;
     openingRate:   string;
-    openingDate:   string;
     /** Custom attribute pairs — stored as attrsJson in DB. */
     attrs: Array<{ key: string; value: string }>;
     // GST classification — all optional; empty = "inherit from group/org-default".
@@ -90,7 +88,6 @@ export const emptyInvProductForm: InvProductFormState = {
     mrpRupees:   "",
     openingQty:  "",
     openingRate: "",
-    openingDate: "",
     attrs: [],
     // GST fields — always empty on create; never prefilled.
     gstRateId:  "",
@@ -774,10 +771,10 @@ export function InvProductFormFields({
             <TabsContent value="opening" className={tabPanel}>
                 <p className="text-xs text-muted-foreground mb-3">
                     Books-beginning quantity for migration from another system. Saved directly to{" "}
-                    <code>InvProduct.openingStock / openingRate / openingValue</code>. Reports use this on{" "}
-                    <em>{"as of"}</em> date and after; vouchers add or subtract from there.
+                    <code>InvProduct.openingStock / openingRate / openingValue</code>. Always effective from
+                    the start of the books; vouchers add or subtract from there.
                 </p>
-                <div className="grid gap-4 sm:grid-cols-3">
+                <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
                         <Label>Opening qty</Label>
                         <Input
@@ -797,14 +794,6 @@ export function InvProductFormFields({
                             placeholder="0.00"
                         />
                         <p className="text-[11px] text-muted-foreground">Cost per unit at books-beginning.</p>
-                    </div>
-                    <div className="space-y-2">
-                        <Label>As of</Label>
-                        <TallyDateInput
-                            value={form.openingDate}
-                            onValueChange={(iso) => setForm((f) => ({ ...f, openingDate: iso }))}
-                        />
-                        <p className="text-[11px] text-muted-foreground">Books-beginning date.</p>
                     </div>
                 </div>
                 <p className="text-xs text-muted-foreground mt-3">

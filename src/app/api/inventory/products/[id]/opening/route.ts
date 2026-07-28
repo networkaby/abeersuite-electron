@@ -8,11 +8,12 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { productOpeningValue, syncProductCacheFromOpening } from "@/modules/inventory/lib/stockValue";
 
 // PUT /api/inventory/products/[id]/opening
-// Sets opening stock qty, rate, and value on a product master.
+// Sets opening stock qty, rate, and value on a product master. Universal
+// opening — no per-product date; always effective from the start of the
+// books, whether imported or created fresh.
 const schema = z.object({
     qty:      z.number().nullable(),
     rate:     z.number().nullable(),
-    asOfDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
 });
 
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -34,7 +35,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
                 openingStock:     data.qty,
                 openingRate:      data.rate,
                 openingValue:     productOpeningValue(opening),
-                openingStockDate: data.asOfDate ? new Date(data.asOfDate) : null,
+                openingStockDate: null,
                 // PR 3 simplified this to just `stock` — the opening rate
                 // seeds cost via the synthetic first lot in loadInwardLots,
                 // so no cache column needs touching.

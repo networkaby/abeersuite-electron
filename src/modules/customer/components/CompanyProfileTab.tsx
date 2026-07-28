@@ -82,7 +82,6 @@ export default function CompanyProfileTab({
                     accountId={detail.accountId}
                     initialAmount={detail.openingBalance ?? null}
                     initialType={detail.openingBalanceType ?? null}
-                    initialDate={detail.openingBalanceDate ?? null}
                     canEdit
                     onSaved={onSaved}
                 />

@@ -16,9 +16,9 @@ const updateSchema = z.object({
     // DEBIT-normal) — normally fixed at creation, but data mistakes happen.
     normalBalance: z.enum(["DEBIT", "CREDIT"]).optional(),
     // Opening-balance fields can be edited inline on the chart-of-accounts row.
+    // Universal opening — no date; always effective from the start of the books.
     openingBalance:     z.number().nonnegative().nullish(),
     openingBalanceType: z.enum(["DEBIT", "CREDIT"]).nullish(),
-    openingBalanceDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish(),
 });
 
 // GET /api/accountancy/gl-accounts/[id]
@@ -73,9 +73,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 ...(b.normalBalance !== undefined ? { normalBalance: b.normalBalance } : {}),
                 ...(b.openingBalance     !== undefined ? { openingBalance:     b.openingBalance     } : {}),
                 ...(b.openingBalanceType !== undefined ? { openingBalanceType: b.openingBalanceType } : {}),
-                ...(b.openingBalanceDate !== undefined ? {
-                    openingBalanceDate: b.openingBalanceDate ? new Date(b.openingBalanceDate) : null,
-                } : {}),
+                ...(b.openingBalance !== undefined ? { openingBalanceDate: null } : {}),
             },
         });
         return NextResponse.json(updated);

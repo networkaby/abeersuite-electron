@@ -239,7 +239,6 @@ export function AccountLedgerExplorer({
             bankJson: editSource.bankJson,
             openingBalance: editSource.openingBalance,
             openingBalanceType: editSource.openingBalanceType,
-            openingBalanceDate: editSource.openingBalanceDate,
         }
         : null;
 

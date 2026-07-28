@@ -148,13 +148,6 @@ function toNumber(raw: string | undefined): number | null | undefined {
     return n;
 }
 
-function toDate(raw: string | undefined): string | null | undefined {
-    if (raw == null || raw.trim() === "") return undefined;
-    const trimmed = raw.trim();
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return null;
-    return trimmed;
-}
-
 export async function runProductImport(req: ProductImportRequest): Promise<ProductImportResult> {
     let masters = await loadMasters();
 
@@ -267,7 +260,6 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
             mrpPaise: number | null;
             openingStock: number | null;
             openingRate: number | null;
-            openingDate: string | null;
         };
     }> = [];
 
@@ -375,8 +367,6 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
         if (openingStock === null && present.has("openingStock")) errors.push(`openingStock "${v.openingStock}" is not a valid number`);
         const openingRate = toNumber(v.openingRate);
         if (openingRate === null && present.has("openingRate")) errors.push(`openingRate "${v.openingRate}" is not a valid number`);
-        const openingDate = toDate(v.openingDate);
-        if (openingDate === null && present.has("openingDate")) errors.push(`openingDate "${v.openingDate}" must be YYYY-MM-DD`);
 
         const resolved = {
             unitCode: unitId != null ? masters.units.get(norm(unitRaw ?? ""))?.code : null,
@@ -445,7 +435,6 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
                 mrpPaise: mrpPaise ?? null,
                 openingStock: openingStock ?? null,
                 openingRate: openingRate ?? null,
-                openingDate: openingDate ?? null,
             },
         });
     }
@@ -510,7 +499,6 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
             openingStock: v.data.openingStock,
             openingRate: v.data.openingRate,
             openingValue: openingValueComputed,
-            openingStockDate: v.data.openingDate ? new Date(v.data.openingDate) : null,
             // `cachePatch` provides `costPaise` (derived from openingRate) and
             // `stock`. `costPaise` is not importable directly (see
             // productImportFields.ts) — opening rate is the only path in.
@@ -561,11 +549,10 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
         // Opening fields move as a group — if any are touched, recompute the
         // derived openingValue + cache columns. Untouched openings stay null
         // here (not written) so the existing stored values survive.
-        const openingTouched = p.has("openingStock") || p.has("openingRate") || p.has("openingDate");
+        const openingTouched = p.has("openingStock") || p.has("openingRate");
         if (openingTouched) {
             if (p.has("openingStock")) out.openingStock = v.data.openingStock;
             if (p.has("openingRate"))  out.openingRate  = v.data.openingRate;
-            if (p.has("openingDate"))  out.openingStockDate = v.data.openingDate ? new Date(v.data.openingDate) : null;
             // Recompute openingValue + cache only when we have BOTH opening
             // stock and opening rate (either from this CSV or already on the
             // row). Safe approximation: only write the derivatives when both

@@ -26,7 +26,6 @@ const FIELD_LABELS: Record<ProductImportField, string> = {
     mrp: "MRP / Max retail price (₹)",
     openingStock: "Opening stock qty — books-beginning physical count",
     openingRate: "Opening rate (₹/unit) — books-beginning rate",
-    openingDate: "Opening date (YYYY-MM-DD) — books-beginning",
 };
 
 /// Visual groups in the mapping dropdown — `<optgroup>` headers so the
@@ -38,7 +37,7 @@ const FIELD_GROUPS: Array<{ label: string; fields: ProductImportField[] }> = [
     { label: "Identifiers",      fields: ["modelNo", "barcode1"] },
     { label: "Tax",              fields: ["hsnCode", "gstRate", "taxability"] },
     { label: "Pricing",          fields: ["salePrice", "mrp"] },
-    { label: "Opening stock (books-beginning)", fields: ["openingStock", "openingRate", "openingDate"] },
+    { label: "Opening stock (books-beginning)", fields: ["openingStock", "openingRate"] },
 ];
 
 const IGNORE = "__ignore__" as const;
@@ -138,7 +137,6 @@ function autoSuggestField(header: string): ProductImportField | typeof IGNORE {
     // since most supplier CSVs use those names for the physical count.
     if (/^(openingstock|stock|qty|quantity|openingqty|stockonhand|currentstock|currentstockqty|currentstockquantity|onhand)$/.test(h)) return "openingStock";
     if (/^(openingrate|stockrate|stockvalue)$/.test(h)) return "openingRate";
-    if (/^(openingdate|stockdate|asofdate|booksbeginning|booksbeginningdate)$/.test(h)) return "openingDate";
     return IGNORE;
 }
 

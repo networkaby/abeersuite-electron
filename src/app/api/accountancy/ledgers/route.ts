@@ -47,18 +47,18 @@ const createSchema = z.object({
     sortOrder: z.number().int().min(0).max(9999).optional(),
     bankJson: bankJsonSchema.nullish(),
     // Same master opening model used by Accountancy → Masters → Opening Balance.
+    // Universal opening — no per-ledger date; always effective from the start
+    // of the books, whether imported or created fresh.
     openingBalance: z.number().positive().nullish(),
     openingBalanceType: z.enum(["DEBIT", "CREDIT"]).nullish(),
-    openingBalanceDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish(),
 }).superRefine((value, ctx) => {
     const hasAmount = value.openingBalance != null;
     const hasType = value.openingBalanceType != null;
-    const hasDate = value.openingBalanceDate != null;
-    if (hasAmount === hasType && hasAmount === hasDate) return;
+    if (hasAmount === hasType) return;
 
     ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Opening balance amount, Dr / Cr, and date must be provided together",
+        message: "Opening balance amount and Dr / Cr must be provided together",
         path: ["openingBalance"],
     });
 });
@@ -137,7 +137,7 @@ export async function POST(req: Request) {
                 normalBalance: body.normalBalance ?? null,
                 openingBalance: body.openingBalance ?? null,
                 openingBalanceType: body.openingBalanceType ?? null,
-                openingBalanceDate: body.openingBalanceDate ? new Date(body.openingBalanceDate) : null,
+                openingBalanceDate: null,
                 ...(body.bankJson && !emptyBank(body.bankJson) ? { bankJson: body.bankJson } : {}),
             },
         });

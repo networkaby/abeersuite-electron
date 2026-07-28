@@ -21,8 +21,6 @@ import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { GroupCombobox } from "@/modules/accountancy/components/GroupCombobox";
-import { TallyDateInput } from "@/shared/components/TallyDateInput";
-import { todayIso } from "@/shared/lib/format";
 import {
     type BankFields, EMPTY_BANK, hasBankData, parseBank, BANK_FIELD_LABELS, isBankGroupName,
 } from "@/modules/accountancy/lib/bankParticulars";
@@ -53,7 +51,6 @@ export interface EditableLedger {
     bankJson?: unknown;
     openingBalance?: number | null;
     openingBalanceType?: "DEBIT" | "CREDIT" | null;
-    openingBalanceDate?: string | null;
 }
 
 export function EditLedgerDialog({
@@ -76,7 +73,6 @@ export function EditLedgerDialog({
     const [bank, setBank] = useState<BankFields>(EMPTY_BANK);
     const [openingBalance, setOpeningBalance] = useState("");
     const [openingBalanceType, setOpeningBalanceType] = useState<"DEBIT" | "CREDIT">("DEBIT");
-    const [openingBalanceDate, setOpeningBalanceDate] = useState("");
 
     // Reset the form from the target ledger and load the group list whenever
     // the dialog opens.
@@ -87,9 +83,6 @@ export function EditLedgerDialog({
         setBank(parseBank(ledger.bankJson));
         setOpeningBalance(ledger.openingBalance ? String(ledger.openingBalance) : "");
         setOpeningBalanceType(ledger.openingBalanceType ?? "DEBIT");
-        setOpeningBalanceDate(
-            ledger.openingBalanceDate ? ledger.openingBalanceDate.slice(0, 10) : todayIso(),
-        );
         axios.get<GroupNode[]>("/api/accountancy/account-groups")
             .then((r) => setGroups(flattenGroups(r.data)))
             .catch(() => { /* group list is optional */ });
@@ -102,10 +95,6 @@ export function EditLedgerDialog({
         const amount = Number(openingBalance);
         if (hasOpening && (!Number.isFinite(amount) || amount < 0)) {
             toast.error("Opening balance must be a valid non-negative number");
-            return;
-        }
-        if (hasOpening && !openingBalanceDate) {
-            toast.error("Opening balance date is required");
             return;
         }
 
@@ -121,11 +110,9 @@ export function EditLedgerDialog({
             if (hasOpening) {
                 payload.openingBalance = amount;
                 payload.openingBalanceType = openingBalanceType;
-                payload.openingBalanceDate = openingBalanceDate;
             } else {
                 payload.openingBalance = null;
                 payload.openingBalanceType = null;
-                payload.openingBalanceDate = null;
             }
             await axios.patch(`/api/accountancy/ledgers/${ledger.id}`, payload);
             toast.success("Ledger updated");
@@ -167,7 +154,7 @@ export function EditLedgerDialog({
                         <p className="text-sm font-medium text-foreground">
                             Opening Balance <span className="font-normal text-muted-foreground">— leave blank to clear</span>
                         </p>
-                        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                             <div className="space-y-1.5">
                                 <Label>Amount (₹)</Label>
                                 <Input
@@ -190,10 +177,6 @@ export function EditLedgerDialog({
                                         <SelectItem value="CREDIT">Credit</SelectItem>
                                     </SelectContent>
                                 </Select>
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label>As of</Label>
-                                <TallyDateInput value={openingBalanceDate} onValueChange={setOpeningBalanceDate} />
                             </div>
                         </div>
                     </div>

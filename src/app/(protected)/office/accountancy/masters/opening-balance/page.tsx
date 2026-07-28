@@ -1,8 +1,9 @@
 "use client";
 // Opening Balance management — summary + inline editor.
-// Used during mid-year migration when an organisation switches to the app
-// from another system. Set Books Beginning From on the company, then enter
-// per-account / per-product opening figures here.
+// Used during migration when an organisation switches to the app from
+// another system. Universal opening — no per-account/per-product date;
+// every figure here is always effective from the start of the books,
+// whether imported or created fresh.
 
 import { useEffect, useState, useCallback } from "react";
 import axios from "axios";
@@ -10,7 +11,6 @@ import { toast } from "sonner";
 import { Loader2, AlertTriangle, CheckCircle, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { Label } from "@/components/ui/label";
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -20,17 +20,14 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { fmt } from "@/utils/constants";
-import { todayIso } from "@/shared/lib/format";
 
 type AccountRow = {
     id: number; code: string; name: string;
     openingBalance: number; openingBalanceType: "DEBIT" | "CREDIT" | null;
-    openingBalanceDate: string | null;
 };
 type ProductRow = {
     id: number; sku: string; name: string;
     openingStock: number; openingRate: number | null; openingValue: number | null;
-    openingStockDate: string | null;
     unit: { code: string; label: string };
 };
 type Summary = {
@@ -102,8 +99,7 @@ export default function OpeningBalancePage() {
                 <div>
                     <h1 className="text-2xl font-bold">Opening Balance</h1>
                     <p className="text-sm text-muted-foreground mt-0.5">
-                        Per-account opening figures for migration from another system. Set <strong>Books Beginning From</strong>
-                        {" "}on the company, then enter balances here as of that date.
+                        Per-account opening figures for migration from another system — always effective from the start of the books.
                     </p>
                 </div>
 
@@ -186,7 +182,6 @@ function AccountOpeningSection({
         accountId: 0,
         amount: "",
         type: "DEBIT" as "DEBIT" | "CREDIT",
-        asOfDate: todayIso(),
     });
     const [saving, setSaving] = useState(false);
 
@@ -206,7 +201,6 @@ function AccountOpeningSection({
                 ...f,
                 amount: String(existing.openingBalance ?? ""),
                 type: existing.openingBalanceType ?? "DEBIT",
-                asOfDate: existing.openingBalanceDate?.slice(0, 10) ?? f.asOfDate,
             }));
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -221,11 +215,10 @@ function AccountOpeningSection({
             await axios.put(`/api/accountancy/accounts/${form.accountId}/opening`, {
                 amount: amount === 0 ? null : amount,
                 type: amount === 0 ? null : form.type,
-                asOfDate: amount === 0 ? null : form.asOfDate,
             });
             toast.success("Opening balance saved");
             setShowAdd(false);
-            setForm({ accountId: 0, amount: "", type: "DEBIT", asOfDate: form.asOfDate });
+            setForm({ accountId: 0, amount: "", type: "DEBIT" });
             onChanged();
         } catch (err: unknown) {
             const msg = axios.isAxiosError(err) ? err.response?.data?.error : "Failed";
@@ -259,7 +252,7 @@ function AccountOpeningSection({
             />
 
             {showAdd && (
-                <div className="border-b border-border bg-muted/30 px-5 py-4 grid grid-cols-2 md:grid-cols-5 gap-3 items-end">
+                <div className="border-b border-border bg-muted/30 px-5 py-4 grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
                     <div className="space-y-1.5 md:col-span-2">
                         <Label>Account</Label>
                         <Select
@@ -291,11 +284,7 @@ function AccountOpeningSection({
                             </SelectContent>
                         </Select>
                     </div>
-                    <div className="space-y-1.5">
-                        <Label>As of</Label>
-                        <TallyDateInput value={form.asOfDate} onValueChange={(iso) => setForm((f) => ({ ...f, asOfDate: iso }))} />
-                    </div>
-                    <div className="md:col-span-5 flex justify-end gap-2 pt-1">
+                    <div className="md:col-span-4 flex justify-end gap-2 pt-1">
                         <Button variant="outline" onClick={() => setShowAdd(false)}>Close</Button>
                         <Button onClick={save} disabled={saving || !form.accountId}>
                             {saving && <Loader2 size={14} className="animate-spin" />} Save
@@ -313,7 +302,6 @@ function AccountOpeningSection({
                     <thead className="border-b border-border bg-muted text-xs text-muted-foreground">
                         <tr>
                             <th className="px-5 py-2 text-left font-medium">Account</th>
-                            <th className="px-5 py-2 text-left font-medium">As of</th>
                             <th className="px-5 py-2 text-right font-medium">Debit</th>
                             <th className="px-5 py-2 text-right font-medium">Credit</th>
                         </tr>
@@ -324,9 +312,6 @@ function AccountOpeningSection({
                                 onClick={() => { setShowAdd(true); setForm((f) => ({ ...f, accountId: a.id })); }}>
                                 <td className="px-5 py-2">
                                     <span className="font-medium">{a.name}</span>
-                                </td>
-                                <td className="px-5 py-2 text-muted-foreground text-xs">
-                                    {a.openingBalanceDate ? new Date(a.openingBalanceDate).toLocaleDateString("en-GB") : "—"}
                                 </td>
                                 <td className="px-5 py-2 text-right font-mono">
                                     {a.openingBalanceType === "DEBIT" ? fmt(Number(a.openingBalance)) : <span className="text-muted-foreground/40">—</span>}
@@ -372,7 +357,6 @@ function ProductOpeningSection({
         productId: 0,
         qty: "",
         rate: "",
-        asOfDate: todayIso(),
     });
     const [saving, setSaving] = useState(false);
 
@@ -391,7 +375,6 @@ function ProductOpeningSection({
                 ...f,
                 qty: String(existing.openingStock ?? ""),
                 rate: String(existing.openingRate ?? ""),
-                asOfDate: existing.openingStockDate?.slice(0, 10) ?? f.asOfDate,
             }));
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -407,11 +390,10 @@ function ProductOpeningSection({
             await axios.put(`/api/inventory/products/${form.productId}/opening`, {
                 qty: qty === 0 ? null : qty,
                 rate: qty === 0 ? null : (Number.isFinite(rate) ? rate : null),
-                asOfDate: qty === 0 ? null : form.asOfDate,
             });
             toast.success("Opening stock saved");
             setShowAdd(false);
-            setForm({ productId: 0, qty: "", rate: "", asOfDate: form.asOfDate });
+            setForm({ productId: 0, qty: "", rate: "" });
             onChanged();
         } catch (err: unknown) {
             const msg = axios.isAxiosError(err) ? err.response?.data?.error : "Failed";
@@ -445,7 +427,7 @@ function ProductOpeningSection({
             />
 
             {showAdd && (
-                <div className="border-b border-border bg-muted/30 px-5 py-4 grid grid-cols-2 md:grid-cols-5 gap-3 items-end">
+                <div className="border-b border-border bg-muted/30 px-5 py-4 grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
                     <div className="space-y-1.5 md:col-span-2">
                         <Label>Product</Label>
                         <Select
@@ -473,11 +455,7 @@ function ProductOpeningSection({
                             onChange={(e) => setForm((f) => ({ ...f, rate: e.target.value }))}
                             placeholder="0.00" />
                     </div>
-                    <div className="space-y-1.5">
-                        <Label>As of</Label>
-                        <TallyDateInput value={form.asOfDate} onValueChange={(iso) => setForm((f) => ({ ...f, asOfDate: iso }))} />
-                    </div>
-                    <div className="md:col-span-5 flex justify-end gap-2 pt-1">
+                    <div className="md:col-span-4 flex justify-end gap-2 pt-1">
                         <Button variant="outline" onClick={() => setShowAdd(false)}>Close</Button>
                         <Button onClick={save} disabled={saving || !form.productId}>
                             {saving && <Loader2 size={14} className="animate-spin" />} Save
@@ -549,7 +527,6 @@ function QuickCreateAccountDialog({
         // Optional opening balance — written straight to the new Account row.
         openingAmount: "",
         openingType: "DEBIT" as "DEBIT" | "CREDIT",
-        openingDate: todayIso(),
     });
     const [saving, setSaving] = useState(false);
 
@@ -572,7 +549,7 @@ function QuickCreateAccountDialog({
 
     const reset = () => setForm({
         code: "", name: "", groupId: "", normalBalance: "DEBIT",
-        openingAmount: "", openingType: "DEBIT", openingDate: todayIso(),
+        openingAmount: "", openingType: "DEBIT",
     });
 
     const save = async () => {
@@ -589,7 +566,6 @@ function QuickCreateAccountDialog({
                 normalBalance: form.normalBalance,
                 openingBalance: hasOpening ? opening : null,
                 openingBalanceType: hasOpening ? form.openingType : null,
-                openingBalanceDate: hasOpening ? form.openingDate : null,
             });
             toast.success(`Account "${form.name}" created`);
             reset();
@@ -643,7 +619,7 @@ function QuickCreateAccountDialog({
                     {/* Opening balance — written straight to Account columns. */}
                     <div className="rounded-md border border-border bg-muted/30 p-3 space-y-2">
                         <p className="text-xs font-medium">Opening balance <span className="text-muted-foreground font-normal">(optional)</span></p>
-                        <div className="grid grid-cols-3 gap-2">
+                        <div className="grid grid-cols-2 gap-2">
                             <div className="space-y-1">
                                 <Label className="text-xs">Amount (₹)</Label>
                                 <Input
@@ -662,13 +638,6 @@ function QuickCreateAccountDialog({
                                         <SelectItem value="CREDIT">Credit</SelectItem>
                                     </SelectContent>
                                 </Select>
-                            </div>
-                            <div className="space-y-1">
-                                <Label className="text-xs">As of</Label>
-                                <TallyDateInput
-                                    value={form.openingDate}
-                                    onValueChange={(iso) => setForm((f) => ({ ...f, openingDate: iso }))}
-                                />
                             </div>
                         </div>
                     </div>
@@ -695,7 +664,7 @@ function QuickCreateProductDialog({
     const [form, setForm] = useState({
         sku: "", name: "", unitId: "",
         priceRupees: "",
-        openingQty: "", openingRate: "", openingDate: todayIso(),
+        openingQty: "", openingRate: "",
     });
     const [saving, setSaving] = useState(false);
 
@@ -708,7 +677,7 @@ function QuickCreateProductDialog({
 
     const reset = () => setForm({
         sku: "", name: "", unitId: "", priceRupees: "",
-        openingQty: "", openingRate: "", openingDate: todayIso(),
+        openingQty: "", openingRate: "",
     });
 
     const rupeesToPaise = (r: string): number | null => {
@@ -732,7 +701,6 @@ function QuickCreateProductDialog({
                 savedSalePricePaise: rupeesToPaise(form.priceRupees),
                 openingStock: hasOpening ? openingQty : null,
                 openingRate: hasOpening ? (Number.isFinite(openingRate) ? openingRate : null) : null,
-                openingStockDate: hasOpening ? form.openingDate : null,
             });
             toast.success(`Product "${form.name}" created`);
             reset();
@@ -782,7 +750,7 @@ function QuickCreateProductDialog({
                     {/* Opening stock — written straight to InvProduct columns. */}
                     <div className="rounded-md border border-border bg-muted/30 p-3 space-y-2">
                         <p className="text-xs font-medium">Opening stock <span className="text-muted-foreground font-normal">(optional)</span></p>
-                        <div className="grid grid-cols-3 gap-2">
+                        <div className="grid grid-cols-2 gap-2">
                             <div className="space-y-1">
                                 <Label className="text-xs">Qty</Label>
                                 <Input
@@ -799,13 +767,6 @@ function QuickCreateProductDialog({
                                     value={form.openingRate}
                                     onChange={(e) => setForm((f) => ({ ...f, openingRate: e.target.value }))}
                                     placeholder="0.00"
-                                />
-                            </div>
-                            <div className="space-y-1">
-                                <Label className="text-xs">As of</Label>
-                                <TallyDateInput
-                                    value={form.openingDate}
-                                    onValueChange={(iso) => setForm((f) => ({ ...f, openingDate: iso }))}
                                 />
                             </div>
                         </div>

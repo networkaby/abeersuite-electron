@@ -34,16 +34,14 @@ const updateSchema = z.object({
     bankJson: bankJsonSchema.nullable().optional(),
     openingBalance: z.number().nullable().optional(),
     openingBalanceType: z.enum(["DEBIT", "CREDIT"]).nullable().optional(),
-    openingBalanceDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
 }).superRefine((value, ctx) => {
     if (value.openingBalance === undefined) return;
     const hasAmount = value.openingBalance != null;
     const hasType = value.openingBalanceType != null;
-    const hasDate = value.openingBalanceDate != null;
-    if (hasAmount === hasType && hasAmount === hasDate) return;
+    if (hasAmount === hasType) return;
     ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Opening balance amount, Dr / Cr, and date must be provided together",
+        message: "Opening balance amount and Dr / Cr must be provided together",
         path: ["openingBalance"],
     });
 });
@@ -85,7 +83,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                     ? {
                         openingBalance: body.openingBalance,
                         openingBalanceType: body.openingBalanceType,
-                        openingBalanceDate: body.openingBalanceDate ? new Date(body.openingBalanceDate) : null,
+                        // Universal opening — no per-ledger date, always from the start of the books.
+                        openingBalanceDate: null,
                     }
                     : {}),
             },

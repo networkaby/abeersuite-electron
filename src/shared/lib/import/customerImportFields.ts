@@ -43,7 +43,6 @@ export const CUSTOMER_IMPORT_FIELDS = [
     "receivableBalance",
     "payableBalance",
     "openingBalance",
-    "openingDate",
     "creditLimit",
 ] as const;
 export type CustomerImportField = (typeof CUSTOMER_IMPORT_FIELDS)[number];

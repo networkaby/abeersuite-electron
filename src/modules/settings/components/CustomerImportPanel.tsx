@@ -30,7 +30,6 @@ const FIELD_LABELS: Record<CustomerImportField, string> = {
     receivableBalance: "Receivable balance — Dr",
     payableBalance: "Payable balance — Cr",
     openingBalance: "Opening balance (signed: + Dr, − Cr)",
-    openingDate: "Opening date (YYYY-MM-DD)",
     creditLimit: "Credit limit",
 };
 
@@ -43,7 +42,7 @@ const FIELD_GROUPS: Array<{ label: string; fields: CustomerImportField[] }> = [
     { label: "Emails", fields: ["email1", "email2", "email3"] },
     { label: "GST", fields: ["gstin", "gstStateCode", "gstRegType", "shippingStateCode"] },
     { label: "Company only", fields: ["companyReg", "taxId"] },
-    { label: "Opening balance (pick one shape)", fields: ["receivableBalance", "payableBalance", "openingBalance", "openingDate"] },
+    { label: "Opening balance (pick one shape)", fields: ["receivableBalance", "payableBalance", "openingBalance"] },
     { label: "Other", fields: ["creditLimit"] },
 ];
 
@@ -107,7 +106,6 @@ function autoSuggestField(header: string): CustomerImportField | typeof IGNORE {
     if (/^(receivable|receivablebalance|receivableamount|debit|debitbalance|drbalance|openingdr|openingreceivable)$/.test(h)) return "receivableBalance";
     if (/^(payable|payablebalance|payableamount|credit|creditbalance|crbalance|openingcr|openingpayable)$/.test(h)) return "payableBalance";
     if (/^(openingbalance|opening|ob|balance|signedbalance|netbalance)$/.test(h)) return "openingBalance";
-    if (/^(openingdate|asofdate|balancedate|obdate|asof)$/.test(h)) return "openingDate";
     if (/^(creditlimit|crlimit|limit|maxcredit)$/.test(h)) return "creditLimit";
     return IGNORE;
 }
