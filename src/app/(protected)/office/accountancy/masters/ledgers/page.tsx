@@ -19,8 +19,15 @@ import {
 import { fmt } from "@/utils/constants";
 import { GroupCombobox } from "@/modules/accountancy/components/GroupCombobox";
 import {
-    type BankFields, EMPTY_BANK, hasBankData, parseBank, BANK_FIELD_LABELS, isBankGroupName,
+    type BankFields, EMPTY_BANK, hasBankData, parseBank, BANK_FIELD_LABELS, isBankGroupName, isOdGroupName,
 } from "@/modules/accountancy/lib/bankParticulars";
+import {
+    type LoanFields, EMPTY_LOAN, hasLoanData, parseLoan, LOAN_FIELD_LABELS, isLoanGroupName,
+} from "@/modules/accountancy/lib/loanParticulars";
+import {
+    type CreditCardFields, EMPTY_CREDIT_CARD, hasCreditCardData, parseCreditCard,
+    CREDIT_CARD_FIELD_LABELS, isCreditCardGroupName,
+} from "@/modules/accountancy/lib/creditCardParticulars";
 
 type GroupType = "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE";
 
@@ -37,6 +44,10 @@ interface LedgerRow {
     /** Bank-ledger particulars (Bank-group ledgers only) — printed on the
      *  Contra deposit slip. */
     bankJson: unknown;
+    /** Loan-ledger particulars (Loans (Liability) / Secured / Unsecured Loans). */
+    loanJson: unknown;
+    /** Credit-card-ledger particulars (Credit Card group). */
+    creditCardJson: unknown;
     openingBalance: number | null;
     openingBalanceType: "DEBIT" | "CREDIT" | null;
 }
@@ -143,12 +154,16 @@ export default function LedgersPage() {
 
     const [newForm, setNewForm] = useState<NewLedgerForm>(createNewLedgerForm);
     const [newBank, setNewBank] = useState<BankFields>(EMPTY_BANK);
+    const [newLoan, setNewLoan] = useState<LoanFields>(EMPTY_LOAN);
+    const [newCreditCard, setNewCreditCard] = useState<CreditCardFields>(EMPTY_CREDIT_CARD);
 
     // Inline ledger edit (name + parent group + bank particulars + opening balance)
     const [editLedgerId, setEditLedgerId] = useState<number | null>(null);
     const [editName, setEditName] = useState("");
     const [editGroupId, setEditGroupId] = useState<number | null>(null);
     const [editBank, setEditBank] = useState<BankFields>(EMPTY_BANK);
+    const [editLoan, setEditLoan] = useState<LoanFields>(EMPTY_LOAN);
+    const [editCreditCard, setEditCreditCard] = useState<CreditCardFields>(EMPTY_CREDIT_CARD);
     const [editOpeningBalance, setEditOpeningBalance] = useState("");
     const [editOpeningBalanceType, setEditOpeningBalanceType] = useState<"DEBIT" | "CREDIT">("DEBIT");
     const [savingLedger, setSavingLedger] = useState(false);
@@ -185,6 +200,8 @@ export default function LedgersPage() {
         setEditName(l.name);
         setEditGroupId(l.groupId);
         setEditBank(parseBank(l.bankJson));
+        setEditLoan(parseLoan(l.loanJson));
+        setEditCreditCard(parseCreditCard(l.creditCardJson));
         setEditOpeningBalance(l.openingBalance ? String(l.openingBalance) : "");
         setEditOpeningBalanceType(l.openingBalanceType ?? "DEBIT");
     };
@@ -198,14 +215,19 @@ export default function LedgersPage() {
             return;
         }
         setSavingLedger(true);
-        const editGroupIsBank = isBankGroupName(allFlat.find((g) => g.id === editGroupId)?.name);
+        const editGroupName = allFlat.find((g) => g.id === editGroupId)?.name;
+        const editGroupIsBank = isBankGroupName(editGroupName);
+        const editGroupIsLoan = isLoanGroupName(editGroupName);
+        const editGroupIsCreditCard = isCreditCardGroupName(editGroupName);
         try {
             const payload: Record<string, unknown> = {
                 name: editName.trim(),
                 groupId: editGroupId,
-                // Bank-group ledgers carry their particulars; moving a ledger
-                // out of the Bank group clears them.
+                // Group-specific particulars; moving a ledger out of the
+                // matching group clears them.
                 bankJson: editGroupIsBank && hasBankData(editBank) ? editBank : null,
+                loanJson: editGroupIsLoan && hasLoanData(editLoan) ? editLoan : null,
+                creditCardJson: editGroupIsCreditCard && hasCreditCardData(editCreditCard) ? editCreditCard : null,
             };
             if (hasOpeningBalance) {
                 payload.openingBalance = openingBalance;
@@ -248,7 +270,10 @@ export default function LedgersPage() {
             return;
         }
         setSaving(true);
-        const newGroupIsBank = isBankGroupName(allFlat.find((g) => g.id === newForm.groupId)?.name);
+        const newGroupName = allFlat.find((g) => g.id === newForm.groupId)?.name;
+        const newGroupIsBank = isBankGroupName(newGroupName);
+        const newGroupIsLoan = isLoanGroupName(newGroupName);
+        const newGroupIsCreditCard = isCreditCardGroupName(newGroupName);
         try {
             // normalBalance is left unset → inherited from the group's nature.
             await axios.post("/api/accountancy/ledgers", {
@@ -256,6 +281,8 @@ export default function LedgersPage() {
                 groupId: newForm.groupId,
                 description: newForm.description.trim() || null,
                 ...(newGroupIsBank && hasBankData(newBank) ? { bankJson: newBank } : {}),
+                ...(newGroupIsLoan && hasLoanData(newLoan) ? { loanJson: newLoan } : {}),
+                ...(newGroupIsCreditCard && hasCreditCardData(newCreditCard) ? { creditCardJson: newCreditCard } : {}),
                 ...(hasOpeningBalance ? {
                     openingBalance,
                     openingBalanceType: newForm.openingBalanceType,
@@ -265,6 +292,8 @@ export default function LedgersPage() {
             setShowAdd(false);
             setNewForm(createNewLedgerForm());
             setNewBank(EMPTY_BANK);
+            setNewLoan(EMPTY_LOAN);
+            setNewCreditCard(EMPTY_CREDIT_CARD);
             load();
         } catch (err: unknown) {
             const msg = axios.isAxiosError(err) ? err.response?.data?.error : "Failed";
@@ -386,6 +415,52 @@ export default function LedgersPage() {
                                             <Input
                                                 value={newBank[key]}
                                                 onChange={(e) => setNewBank((b) => ({ ...b, [key]: e.target.value }))}
+                                                placeholder={placeholder}
+                                            />
+                                        </div>
+                                    ))}
+                                    {isOdGroupName(allFlat.find((g) => g.id === newForm.groupId)?.name) && (
+                                        <div className="space-y-1.5">
+                                            <Label>OD Limit (₹) <span className="font-normal text-muted-foreground">— optional</span></Label>
+                                            <Input
+                                                value={newBank.limit}
+                                                onChange={(e) => setNewBank((b) => ({ ...b, limit: e.target.value }))}
+                                                placeholder="500000"
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                        {/* Loan particulars — Loans (Liability) / Secured / Unsecured Loans. */}
+                        {isLoanGroupName(allFlat.find((g) => g.id === newForm.groupId)?.name) && (
+                            <div className="space-y-3 rounded-md border border-border bg-muted/30 p-4">
+                                <p className="text-sm font-medium text-foreground">Loan Details <span className="font-normal text-muted-foreground">— optional, informational</span></p>
+                                <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
+                                    {LOAN_FIELD_LABELS.map(({ key, label, placeholder }) => (
+                                        <div key={key} className="space-y-1.5">
+                                            <Label>{label}</Label>
+                                            <Input
+                                                value={newLoan[key]}
+                                                onChange={(e) => setNewLoan((l) => ({ ...l, [key]: e.target.value }))}
+                                                placeholder={placeholder}
+                                            />
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        {/* Credit card particulars — Credit Card group only. */}
+                        {isCreditCardGroupName(allFlat.find((g) => g.id === newForm.groupId)?.name) && (
+                            <div className="space-y-3 rounded-md border border-border bg-muted/30 p-4">
+                                <p className="text-sm font-medium text-foreground">Credit Card Details <span className="font-normal text-muted-foreground">— optional, informational</span></p>
+                                <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
+                                    {CREDIT_CARD_FIELD_LABELS.map(({ key, label, placeholder }) => (
+                                        <div key={key} className="space-y-1.5">
+                                            <Label>{label}</Label>
+                                            <Input
+                                                value={newCreditCard[key]}
+                                                onChange={(e) => setNewCreditCard((c) => ({ ...c, [key]: e.target.value }))}
                                                 placeholder={placeholder}
                                             />
                                         </div>
@@ -596,6 +671,55 @@ export default function LedgersPage() {
                                                                             <Input
                                                                                 value={editBank[key]}
                                                                                 onChange={(e) => setEditBank((b) => ({ ...b, [key]: e.target.value }))}
+                                                                                placeholder={placeholder}
+                                                                                className="h-8 text-sm"
+                                                                            />
+                                                                        </div>
+                                                                    ))}
+                                                                    {isOdGroupName(allFlat.find((g) => g.id === editGroupId)?.name) && (
+                                                                        <div className="space-y-1.5">
+                                                                            <Label className="text-xs">OD Limit (₹) <span className="font-normal text-muted-foreground">— optional</span></Label>
+                                                                            <Input
+                                                                                value={editBank.limit}
+                                                                                onChange={(e) => setEditBank((b) => ({ ...b, limit: e.target.value }))}
+                                                                                placeholder="500000"
+                                                                                className="h-8 text-sm"
+                                                                            />
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                        {/* Loan particulars — Loans (Liability) / Secured / Unsecured Loans. */}
+                                                        {isLoanGroupName(allFlat.find((g) => g.id === editGroupId)?.name) && (
+                                                            <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3">
+                                                                <p className="text-sm font-medium text-foreground">Loan Details <span className="font-normal text-muted-foreground">— optional, informational</span></p>
+                                                                <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+                                                                    {LOAN_FIELD_LABELS.map(({ key, label, placeholder }) => (
+                                                                        <div key={key} className="space-y-1.5">
+                                                                            <Label className="text-xs">{label}</Label>
+                                                                            <Input
+                                                                                value={editLoan[key]}
+                                                                                onChange={(e) => setEditLoan((l) => ({ ...l, [key]: e.target.value }))}
+                                                                                placeholder={placeholder}
+                                                                                className="h-8 text-sm"
+                                                                            />
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                        {/* Credit card particulars — Credit Card group only. */}
+                                                        {isCreditCardGroupName(allFlat.find((g) => g.id === editGroupId)?.name) && (
+                                                            <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3">
+                                                                <p className="text-sm font-medium text-foreground">Credit Card Details <span className="font-normal text-muted-foreground">— optional, informational</span></p>
+                                                                <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+                                                                    {CREDIT_CARD_FIELD_LABELS.map(({ key, label, placeholder }) => (
+                                                                        <div key={key} className="space-y-1.5">
+                                                                            <Label className="text-xs">{label}</Label>
+                                                                            <Input
+                                                                                value={editCreditCard[key]}
+                                                                                onChange={(e) => setEditCreditCard((c) => ({ ...c, [key]: e.target.value }))}
                                                                                 placeholder={placeholder}
                                                                                 className="h-8 text-sm"
                                                                             />

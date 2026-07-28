@@ -54,6 +54,8 @@ interface LedgerListItem {
     // needed for the list/search UI — carried through so the Edit dialog can
     // be opened without a second fetch.
     bankJson?: unknown;
+    loanJson?: unknown;
+    creditCardJson?: unknown;
     openingBalance?: number | null;
     openingBalanceType?: NormalBalance | null;
     openingBalanceDate?: string | null;
@@ -92,6 +94,9 @@ interface LedgerDetail {
     to: string;
     openingBalance: number;
     closingBalance: number;
+    // Available draw against the sanctioned facility limit (Bank OD A/c /
+    // Credit Card ledgers only) — null when not applicable or no limit set.
+    availableLimit: number | null;
     rows: LedgerRow[];
 }
 
@@ -237,6 +242,8 @@ export function AccountLedgerExplorer({
             name: editSource.name,
             groupId: editSource.group?.id ?? null,
             bankJson: editSource.bankJson,
+            loanJson: editSource.loanJson,
+            creditCardJson: editSource.creditCardJson,
             openingBalance: editSource.openingBalance,
             openingBalanceType: editSource.openingBalanceType,
         }
@@ -397,8 +404,9 @@ export function AccountLedgerExplorer({
                                     </Button>
                                 </div>
 
-                                {/* 4-stat row */}
-                                <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                                {/* Stat row — 5 columns when this is a Bank OD A/c / Credit Card
+                                    ledger with a limit set (adds "Available"), else 4. */}
+                                <div className={`mt-4 grid grid-cols-2 gap-3 ${detail.availableLimit != null ? "sm:grid-cols-5" : "sm:grid-cols-4"}`}>
                                     <StatBox label="Opening" value={drCr(detail.openingBalance, detail.account.normalBalance)} />
                                     <StatBox label="Period Debit" value={periodDebit ? fmt(periodDebit) : "—"} />
                                     <StatBox label="Period Credit" value={periodCredit ? fmt(periodCredit) : "—"} />
@@ -410,6 +418,14 @@ export function AccountLedgerExplorer({
                                             ? `${netMovement > 0 ? "+" : ""}${fmt(netMovement)} net`
                                             : undefined}
                                     />
+                                    {detail.availableLimit != null && (
+                                        <StatBox
+                                            label="Available"
+                                            value={fmt(detail.availableLimit)}
+                                            warn={detail.availableLimit < 0}
+                                            sub={detail.availableLimit < 0 ? "over limit" : undefined}
+                                        />
+                                    )}
                                 </div>
                             </div>
 
@@ -576,19 +592,22 @@ function StatBox({
     value,
     sub,
     emphasis = false,
+    warn = false,
 }: {
     label: string;
     value: string;
     sub?: string;
     emphasis?: boolean;
+    /** Styles the value as a destructive warning — e.g. usage past a facility limit. */
+    warn?: boolean;
 }) {
     return (
         <div className={cn(
             "rounded-lg border px-3 py-2.5",
-            emphasis ? "border-primary/30 bg-primary/5" : "border-border bg-background",
+            warn ? "border-destructive/30 bg-destructive/5" : emphasis ? "border-primary/30 bg-primary/5" : "border-border bg-background",
         )}>
             <p className="text-xs text-muted-foreground mb-0.5">{label}</p>
-            <p className={cn("text-sm font-semibold font-mono", emphasis && "text-primary")}>{value}</p>
+            <p className={cn("text-sm font-semibold font-mono", warn ? "text-destructive" : emphasis && "text-primary")}>{value}</p>
             {sub && <p className="text-[10px] text-muted-foreground mt-0.5 font-mono">{sub}</p>}
         </div>
     );

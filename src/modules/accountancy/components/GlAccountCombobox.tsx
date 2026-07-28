@@ -20,6 +20,10 @@ export interface GlAccount {
     balance?: number;
     normalBalance?: "DEBIT" | "CREDIT" | null;
     group?: { id?: number; name?: string | null; type?: string | null } | null;
+    // Carried through so BalanceHint can compute an "Available" figure for
+    // Bank OD A/c / Credit Card ledgers — see facilityLimit.ts.
+    bankJson?: unknown;
+    creditCardJson?: unknown;
 }
 
 type Props = {

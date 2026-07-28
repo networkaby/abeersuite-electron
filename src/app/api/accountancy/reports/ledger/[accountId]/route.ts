@@ -6,6 +6,7 @@ import { balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
 import { resolveSourceBatch } from "@/modules/accountancy/lib/journalEntrySource";
 import { ledgerStatusFilterUv } from "@/modules/accountancy/lib/aggregateLedger";
 import { defaultNormalBalanceForGroupType } from "@/modules/accountancy/lib/groupNature";
+import { availableBalance } from "@/modules/accountancy/lib/facilityLimit";
 import { handleApiError } from "@/shared/lib/api";
 import {
     dateOnOrBefore, toDateOnly, startOfDayUtc, endOfDayUtc, businessTodayIso,
@@ -145,6 +146,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ accountI
             to: toDateOnly(to),
             openingBalance,
             closingBalance: runningBalance,
+            // Available draw against the sanctioned facility limit (Bank OD A/c /
+            // Credit Card ledgers only) — null when not applicable or no limit set.
+            availableLimit: availableBalance({ group: account.group, bankJson: account.bankJson, creditCardJson: account.creditCardJson, balance: runningBalance }),
             rows,
         });
     } catch (e) {

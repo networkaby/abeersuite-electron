@@ -110,6 +110,10 @@ export type MoneyFlowKind = "PAYMENT" | "RECEIPT" | "CONTRA" | "CREDIT_NOTE" | "
 
 const CASH_BANK_GROUPS = [ACCOUNT_GROUPS.CASH_IN_HAND, ACCOUNT_GROUPS.BANK_ACCOUNTS] as const;
 const isCashOrBank      = (a: GlAccount) => CASH_BANK_GROUPS.includes(a.group?.name as typeof CASH_BANK_GROUPS[number]);
+// Contra also allows OD (overdraft) ledgers as a Transfer to/from leg — Payment
+// and Receipt keep the plain cash/bank filter above.
+const CONTRA_GROUPS     = [...CASH_BANK_GROUPS, ACCOUNT_GROUPS.BANK_OD] as const;
+const isContraEligible  = (a: GlAccount) => CONTRA_GROUPS.includes(a.group?.name as typeof CONTRA_GROUPS[number]);
 const isSundryDebtor    = (a: GlAccount) => a.group?.name === ACCOUNT_GROUPS.SUNDRY_DEBTORS;
 const isSundryCreditor  = (a: GlAccount) => a.group?.name === ACCOUNT_GROUPS.SUNDRY_CREDITORS;
 
@@ -167,14 +171,14 @@ const PER_KIND: Record<MoneyFlowKind, KindConfig> = {
         title:                "Contra Voucher",
         topLabel:             "Transfer to",
         rowsHeader:           "Transfer from",
-        topPlaceholder:       "Cash-in-Hand / Bank Account…",
-        rowPlaceholder:       "Cash-in-Hand / Bank Account…",
+        topPlaceholder:       "Cash-in-Hand / Bank / OD Account…",
+        rowPlaceholder:       "Cash-in-Hand / Bank / OD Account…",
         narrationPlaceholder: "e.g. Deposit cash to HDFC current account",
         topSide:              "DEBIT",
         rowSide:              "CREDIT",
         topPickerKind:        "ledger",
-        topFilter:            isCashOrBank,
-        rowFilter:            isCashOrBank,
+        topFilter:            isContraEligible,
+        rowFilter:            isContraEligible,
         listPath:             "/office/accountancy/vouchers-registers/contras",
     },
     CREDIT_NOTE: {
@@ -393,7 +397,11 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
     const rowAccounts = accounts.filter(copy.rowFilter);
     const topAccount  = effectiveTopAccountId ? accountById.get(effectiveTopAccountId) : undefined;
 
-    const topIsBank  = isContra && topAccount?.group?.name === ACCOUNT_GROUPS.BANK_ACCOUNTS;
+    // "Bank-like" = Bank Accounts or Bank OD A/c — both are a real cash/cheque
+    // movement at the counter, so depositing into either behaves the same way.
+    const isBankLikeAcct = (a?: GlAccount) =>
+        a?.group?.name === ACCOUNT_GROUPS.BANK_ACCOUNTS || a?.group?.name === ACCOUNT_GROUPS.BANK_OD;
+    const topIsBank  = isContra && isBankLikeAcct(topAccount);
     const isCashAcct = (a?: GlAccount) => a?.group?.name === ACCOUNT_GROUPS.CASH_IN_HAND;
     // Cash "Transfer from" rows — each gets its own side panel while capture is on.
     const cashRows = isContra && denomOn

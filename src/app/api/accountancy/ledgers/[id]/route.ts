@@ -20,10 +20,35 @@ const bankJsonSchema = z.object({
     accountNumber: z.string().trim().max(40).default(""),
     ifsc: z.string().trim().max(20).default(""),
     beneficiary: z.string().trim().max(120).default(""),
+    limit: z.string().trim().max(20).default(""),
 });
 
 const emptyBank = (b: z.infer<typeof bankJsonSchema>): boolean =>
-    !b.bankName && !b.branch && !b.accountNumber && !b.ifsc && !b.beneficiary;
+    !b.bankName && !b.branch && !b.accountNumber && !b.ifsc && !b.beneficiary && !b.limit;
+
+const loanJsonSchema = z.object({
+    lender: z.string().trim().max(120).default(""),
+    loanAccountNumber: z.string().trim().max(40).default(""),
+    principalAmount: z.string().trim().max(20).default(""),
+    interestRate: z.string().trim().max(10).default(""),
+    tenureMonths: z.string().trim().max(10).default(""),
+    emiAmount: z.string().trim().max(20).default(""),
+});
+
+const emptyLoan = (l: z.infer<typeof loanJsonSchema>): boolean =>
+    !l.lender && !l.loanAccountNumber && !l.principalAmount && !l.interestRate && !l.tenureMonths && !l.emiAmount;
+
+const creditCardJsonSchema = z.object({
+    bankName: z.string().trim().max(120).default(""),
+    cardNetwork: z.string().trim().max(40).default(""),
+    cardNumber: z.string().trim().max(20).default(""),
+    billingDay: z.string().trim().max(10).default(""),
+    dueDay: z.string().trim().max(10).default(""),
+    limit: z.string().trim().max(20).default(""),
+});
+
+const emptyCreditCard = (c: z.infer<typeof creditCardJsonSchema>): boolean =>
+    !c.bankName && !c.cardNetwork && !c.cardNumber && !c.billingDay && !c.dueDay && !c.limit;
 
 const updateSchema = z.object({
     name: z.string().trim().min(1).max(200).optional(),
@@ -32,6 +57,8 @@ const updateSchema = z.object({
     description: z.string().trim().max(1000).nullable().optional(),
     isActive: z.boolean().optional(),
     bankJson: bankJsonSchema.nullable().optional(),
+    loanJson: loanJsonSchema.nullable().optional(),
+    creditCardJson: creditCardJsonSchema.nullable().optional(),
     openingBalance: z.number().nullable().optional(),
     openingBalanceType: z.enum(["DEBIT", "CREDIT"]).nullable().optional(),
 }).superRefine((value, ctx) => {
@@ -78,6 +105,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 // undefined = untouched; null / all-blank clears the stored value.
                 ...(body.bankJson !== undefined
                     ? { bankJson: body.bankJson && !emptyBank(body.bankJson) ? body.bankJson : Prisma.DbNull }
+                    : {}),
+                ...(body.loanJson !== undefined
+                    ? { loanJson: body.loanJson && !emptyLoan(body.loanJson) ? body.loanJson : Prisma.DbNull }
+                    : {}),
+                ...(body.creditCardJson !== undefined
+                    ? { creditCardJson: body.creditCardJson && !emptyCreditCard(body.creditCardJson) ? body.creditCardJson : Prisma.DbNull }
                     : {}),
                 ...(body.openingBalance !== undefined
                     ? {

@@ -10,6 +10,11 @@ export const ACCOUNT_GROUPS = {
     SUNDRY_CREDITORS:  "Sundry Creditors",
     CASH_IN_HAND:      "Cash-in-Hand",
     BANK_ACCOUNTS:     "Bank Accounts",
+    BANK_OD:           "Bank OD A/c",
+    CREDIT_CARD:       "Credit Card",
+    LOANS_LIABILITY:   "Loans (Liability)",
+    SECURED_LOANS:     "Secured Loans",
+    UNSECURED_LOANS:   "Unsecured Loans",
     // The only two groups whose ledgers carry inventory items in a voucher.
     // Sales Accounts → Sales A/c, Parts Revenue, Shop Sales Revenue, Sales Returns.
     // Purchase Accounts → Purchase A/c, Purchase Returns.

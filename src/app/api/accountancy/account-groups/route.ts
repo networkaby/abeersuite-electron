@@ -31,6 +31,10 @@ type LedgerRow = {
     /** Bank-ledger particulars (Bank-group ledgers only) — edited on the
      *  masters Ledgers page, printed on the Contra deposit slip. */
     bankJson: unknown;
+    /** Loan-ledger particulars (Loans (Liability) / Secured / Unsecured Loans). */
+    loanJson: unknown;
+    /** Credit-card-ledger particulars (Credit Card group). */
+    creditCardJson: unknown;
     openingBalance: number | null;
     openingBalanceType: "DEBIT" | "CREDIT" | null;
     openingBalanceDate: string | null;
@@ -137,7 +141,8 @@ export async function GET(req: Request) {
                 select: {
                     id: true, name: true, code: true, normalBalance: true,
                     isActive: true, personId: true, companyId: true, groupId: true,
-                    bankJson: true, openingBalance: true, openingBalanceType: true,
+                    bankJson: true, loanJson: true, creditCardJson: true,
+                    openingBalance: true, openingBalanceType: true,
                     openingBalanceDate: true,
                 },
             }),

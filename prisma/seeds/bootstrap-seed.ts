@@ -18,7 +18,7 @@
 //   • Workflow: 9 Pipelines, 63 TicketStatuses, 8 Works (1 gated → work:*
 //     permissions), 43 Workers, status + worker transitions
 //   • Org structure: 1 Branch (HQ), 8 Departments, Role ranks
-//   • Chart of accounts: 28 AccountGroups (Tally tree) + ~50 GL ledgers
+//   • Chart of accounts: 29 AccountGroups (Tally tree) + ~50 GL ledgers
 //     **Stock-in-Hand group is intentionally empty** — closing-stock value is
 //     derived live by `getClosingStockValue` and injected as a synthetic
 //     ledger at report time (`balance-sheet/route.ts`). DO NOT seed real
@@ -779,6 +779,7 @@ async function main() {
     // Sub-groups
     await upsertGroup("Reserves & Surplus",       "LIABILITY", 10, capitalAccountId);
     await upsertGroup("Bank OD A/c",              "LIABILITY", 10, loansLiabilityId);
+    await upsertGroup("Credit Card",              "LIABILITY", 15, loansLiabilityId);
     await upsertGroup("Secured Loans",            "LIABILITY", 20, loansLiabilityId);
     await upsertGroup("Unsecured Loans",          "LIABILITY", 30, loansLiabilityId);
     await upsertGroup("Duties & Taxes",           "LIABILITY", 10, currentLiabilitiesId);

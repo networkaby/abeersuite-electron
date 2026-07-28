@@ -33,10 +33,38 @@ const bankJsonSchema = z.object({
     accountNumber: z.string().trim().max(40).default(""),
     ifsc: z.string().trim().max(20).default(""),
     beneficiary: z.string().trim().max(120).default(""),
+    // Bank OD A/c only — sanctioned overdraft ceiling. See facilityLimit.ts.
+    limit: z.string().trim().max(20).default(""),
 });
 
 const emptyBank = (b: z.infer<typeof bankJsonSchema>): boolean =>
-    !b.bankName && !b.branch && !b.accountNumber && !b.ifsc && !b.beneficiary;
+    !b.bankName && !b.branch && !b.accountNumber && !b.ifsc && !b.beneficiary && !b.limit;
+
+// Loan-ledger particulars (Loans (Liability) / Secured Loans / Unsecured Loans).
+const loanJsonSchema = z.object({
+    lender: z.string().trim().max(120).default(""),
+    loanAccountNumber: z.string().trim().max(40).default(""),
+    principalAmount: z.string().trim().max(20).default(""),
+    interestRate: z.string().trim().max(10).default(""),
+    tenureMonths: z.string().trim().max(10).default(""),
+    emiAmount: z.string().trim().max(20).default(""),
+});
+
+const emptyLoan = (l: z.infer<typeof loanJsonSchema>): boolean =>
+    !l.lender && !l.loanAccountNumber && !l.principalAmount && !l.interestRate && !l.tenureMonths && !l.emiAmount;
+
+// Credit-card-ledger particulars (Credit Card group).
+const creditCardJsonSchema = z.object({
+    bankName: z.string().trim().max(120).default(""),
+    cardNetwork: z.string().trim().max(40).default(""),
+    cardNumber: z.string().trim().max(20).default(""),
+    billingDay: z.string().trim().max(10).default(""),
+    dueDay: z.string().trim().max(10).default(""),
+    limit: z.string().trim().max(20).default(""),
+});
+
+const emptyCreditCard = (c: z.infer<typeof creditCardJsonSchema>): boolean =>
+    !c.bankName && !c.cardNetwork && !c.cardNumber && !c.billingDay && !c.dueDay && !c.limit;
 
 const createSchema = z.object({
     name: z.string().trim().min(1).max(200),
@@ -46,6 +74,8 @@ const createSchema = z.object({
     normalBalance: z.enum(["DEBIT", "CREDIT"]).optional(),
     sortOrder: z.number().int().min(0).max(9999).optional(),
     bankJson: bankJsonSchema.nullish(),
+    loanJson: loanJsonSchema.nullish(),
+    creditCardJson: creditCardJsonSchema.nullish(),
     // Same master opening model used by Accountancy → Masters → Opening Balance.
     // Universal opening — no per-ledger date; always effective from the start
     // of the books, whether imported or created fresh.
@@ -139,6 +169,8 @@ export async function POST(req: Request) {
                 openingBalanceType: body.openingBalanceType ?? null,
                 openingBalanceDate: null,
                 ...(body.bankJson && !emptyBank(body.bankJson) ? { bankJson: body.bankJson } : {}),
+                ...(body.loanJson && !emptyLoan(body.loanJson) ? { loanJson: body.loanJson } : {}),
+                ...(body.creditCardJson && !emptyCreditCard(body.creditCardJson) ? { creditCardJson: body.creditCardJson } : {}),
             },
         });
         if (body.openingBalance != null) await reconcileOpeningSuspense();

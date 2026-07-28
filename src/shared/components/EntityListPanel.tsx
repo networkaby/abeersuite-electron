@@ -16,6 +16,9 @@ interface EntityListPanelProps {
     searchPlaceholder?: string;
     onAdd?: () => void;
     addLabel?: string;
+    /** If provided, the title becomes clickable (e.g. to reset a master-detail
+     *  view back to its summary/overview state). */
+    onTitleClick?: () => void;
     /** Optional row rendered under the search box — e.g. a sort toggle. */
     toolbar?: React.ReactNode;
     emptyMessage?: string;
@@ -36,6 +39,7 @@ export function EntityListPanel({
     searchPlaceholder = "Search…",
     onAdd,
     addLabel = "Add",
+    onTitleClick,
     toolbar,
     emptyMessage = "No items",
     isEmpty,
@@ -47,7 +51,17 @@ export function EntityListPanel({
             <div className="flex items-center justify-between border-b px-4 py-3">
                 <div className="flex items-center gap-2">
                     {icon}
-                    <span className="text-sm font-semibold">{title}</span>
+                    {onTitleClick ? (
+                        <button
+                            type="button"
+                            onClick={onTitleClick}
+                            className="text-sm font-semibold hover:underline underline-offset-2"
+                        >
+                            {title}
+                        </button>
+                    ) : (
+                        <span className="text-sm font-semibold">{title}</span>
+                    )}
                     <Badge variant="outline">{count}</Badge>
                 </div>
                 {onAdd && (

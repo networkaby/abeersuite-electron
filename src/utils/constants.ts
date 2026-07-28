@@ -312,6 +312,9 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Bank Book", icon: Banknote, href: "/office/accountancy/bank-ledgers", permission: "finance:voucher:create" },
             { label: "Cash Book", icon: Wallet, href: "/office/accountancy/cash-ledgers", permission: "finance:voucher:create" },
             { label: "Loans Book", icon: Banknote, href: "/office/accountancy/loan-ledgers", permission: "finance:voucher:create" },
+            // Spending capacity = cash + bank + wallets, plus unused OD / card / BNPL
+            // headroom. UI-only design preview for now (mock numbers, nothing wired).
+            { label: "Usable Fund", icon: HandCoins, href: "/office/accountancy/usable-fund", sidebarKey: "usable-fund" },
 
             { label: "Balance Sheet", icon: FolderTree, href: "/office/accountancy/reports/balance-sheet" },
             { label: "Profit & Loss A/c", icon: BookOpen, href: "/office/accountancy/reports/profit-loss" },

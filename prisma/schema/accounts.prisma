@@ -50,8 +50,20 @@ model Account {
   // Bank-ledger details — set only on ledgers under the "Bank Accounts" /
   // "Bank OD A/c" groups; printed on the Contra deposit slip so each bank
   // account carries its own particulars. Shape mirrors Organisation.bankJson:
-  // { bankName, branch, accountNumber, ifsc, beneficiary }
+  // { bankName, branch, accountNumber, ifsc, beneficiary, limit }
+  // `limit` (Bank OD A/c only) is the sanctioned overdraft ceiling — optional,
+  // purely informational, and drives the "Available" hint (see facilityLimit.ts).
   bankJson Json?
+
+  // Loan-ledger details — set only on ledgers under "Loans (Liability)" /
+  // "Secured Loans" / "Unsecured Loans". Shape: { lender, loanAccountNumber,
+  // principalAmount, interestRate, tenureMonths, emiAmount }
+  loanJson Json?
+
+  // Credit-card-ledger details — set only on ledgers under the "Credit Card"
+  // group. Shape: { bankName, cardNetwork, cardNumber, billingDay, dueDay,
+  // limit }. `limit` drives the "Available" hint like the OD limit above.
+  creditCardJson Json?
 
   // Tally-style opening balance — entered on the master, dated at booksBeginningFrom.
   // Imbalance across all accounts auto-parks to the seeded "Difference in Opening Balances" suspense ledger.
