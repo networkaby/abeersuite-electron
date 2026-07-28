@@ -346,6 +346,11 @@ model VoucherPrintTemplate {
   // so customers can pay in. Off by default; admin enables where wanted.
   showBank                 Boolean @default(false)
   showBankThermal          Boolean @default(false)
+  // Party's running ledger balance beside the bill's own balance-due —
+  // "Previous balance" / "Closing balance". Off by default: it exposes the
+  // customer's whole outstanding on a document that may be handed to anyone.
+  showPartyBalance         Boolean @default(false)
+  showPartyBalanceThermal  Boolean @default(false)
 
   // Service Shipping Label meta fields — which lines print on the label's bottom
   // strip. Device defaults OFF (naming contents invites courier theft). A4 flag

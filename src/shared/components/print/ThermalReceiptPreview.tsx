@@ -27,6 +27,28 @@ export interface ThermalReceiptLine {
     description: string;
     quantity:    number;
     amount:      number; // line total (post-tax inclusive or pre-tax, caller's choice)
+    /// ── Tally-style tax-invoice columns (A4 goods table) ────────────────────
+    /// All optional: a column only renders when at least one line supplies it,
+    /// so a bare qty/rate voucher keeps the plain three-column table.
+    /// Free-text remark typed on the voucher line — prints indented under the
+    /// item name, never in place of it.
+    note?:       string | null;
+    /// Resolved HSN (goods) / SAC (services) code — groups the rate-wise summary.
+    hsn?:        string | null;
+    /// Unit label for the `per` column ("Nos", "Ream").
+    unit?:       string | null;
+    /// Pre-tax line value. When set, the A4 table prints EXCLUSIVE amounts and
+    /// carries the GST as `Output CGST/SGST` rows under the table (Tally ladder),
+    /// so the goods total, the ledger rows and the HSN summary all reconcile.
+    taxable?:    number | null;
+    /// Unit rate to print. Pairs with `taxable` (i.e. exclusive) when that is set.
+    rate?:       number | null;
+    /// Line discount in rupees, deducted from the pre-tax base.
+    discount?:   number | null;
+    /// GST on this line — `taxRate` is the full rate (18), halved per side for
+    /// an intra-state supply.
+    taxRate?:    number | null;
+    taxAmount?:  number | null;
     /// Customer-ladder snapshots (tax-inclusive line totals, rupees). Optional —
     /// when set, the A4 "C" density shows a struck MRP next to the line.
     mrp?:        number | null;
@@ -115,6 +137,26 @@ export interface ThermalReceiptSample {
     hsnSummary?: ReceiptHsnRow[] | null;
     /// Buyer GSTIN — printed on the receipt for B2B tax invoices.
     partyGstin?: string | null;
+    /// Buyer's state + code ("Assam, Code : 18") — printed under the Bill-To
+    /// block; with the place of supply it justifies the CGST+SGST vs IGST split.
+    partyState?: string | null;
+    /// Terms of payment ("Credit — 30 days" / "Cash") and, for a credit sale,
+    /// the derived due date. Null → the row is skipped.
+    paymentTerms?: string | null;
+    dueDate?:      string | null;
+    /// Tally-style ledger rows printed UNDER the goods table and above the
+    /// grand total — bill discount, service charges, shipping, round-off.
+    /// Signed: a negative amount prints as `(-)x.xx`.
+    charges?: ReceiptDiscountRow[] | null;
+    /// Rounding adjustment. Printed as the LAST ledger row, after the GST legs,
+    /// because it rounds the tax-inclusive figure — same place Tally puts it.
+    roundOff?: number | null;
+    /// Money already received against this voucher, one row per tender ledger.
+    /// Comes from the settlement, so a reprint reflects payments as of now.
+    receipts?: ReceiptDiscountRow[] | null;
+    /// Outstanding after `receipts`. null / 0 → the balance line is hidden, so a
+    /// fully-paid counter bill never shouts "Balance due Rs. 0.00".
+    balanceDue?: number | null;
     /// Party ledger balance around a money voucher (RECEIPT/PAYMENT slips),
     /// preformatted with Dr/Cr (e.g. "Rs. 7,315.00 Dr"). Null/absent → hidden
     /// (walk-in customers have no ledger account).
@@ -432,12 +474,9 @@ function DefaultThermalMiddle({ template, sample }: { template: VoucherTemplateD
                 </>
             )}
 
-            {sample.notes && (
-                <>
-                    <div className="hr" />
-                    <div className="small" style={{ whiteSpace: "pre-wrap" }}>{sample.notes}</div>
-                </>
-            )}
+            {/* No narration on the counter slip either — it is internal
+                bookkeeping text, not customer-facing. Per-line item notes still
+                print with their item. */}
         </>
     );
 }

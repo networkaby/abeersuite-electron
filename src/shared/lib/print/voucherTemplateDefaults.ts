@@ -373,6 +373,9 @@ export interface VoucherTemplateDefaults {
     showSignature: boolean;          showSignatureThermal: boolean;
     showBarcode: boolean;            showBarcodeThermal: boolean;
     showBank: boolean;               showBankThermal: boolean;   // shop bank details block
+    // Party's running ledger balance (Previous / Closing) beside the bill's own
+    // balance-due. Off by default — it discloses the customer's whole account.
+    showPartyBalance: boolean;       showPartyBalanceThermal: boolean;
     showQrCode: boolean; // dormant (not yet rendered)
     // Service Shipping Label meta fields (bottom strip). Base flag = A4/A5/A6
     // sheets; Thermal = 80mm roll; Tl = Thermal Label 100×50 (die-cut). Ignored
@@ -427,6 +430,7 @@ export function buildVoucherTemplateDefaults(kind: VoucherTemplateKind): Voucher
         showSignature: WITH_SIGNATURE.has(kind),         showSignatureThermal: WITH_SIGNATURE.has(kind),
         showBarcode: BARCODE_KINDS.has(kind),            showBarcodeThermal: BARCODE_KINDS.has(kind),
         showBank: false,                                 showBankThermal: false,
+        showPartyBalance: false,                         showPartyBalanceThermal: false,
         showQrCode: false,
         // Label meta — device hidden by default (theft), the rest shown.
         showTicket: true,                                showTicketThermal: true,          showTicketTl: true,
@@ -493,6 +497,7 @@ export type VoucherPrintTemplateRow = {
     showQrCode?: boolean | null;
     showBarcode?: boolean | null;             showBarcodeThermal?: boolean | null;
     showBank?: boolean | null;                showBankThermal?: boolean | null;
+    showPartyBalance?: boolean | null;        showPartyBalanceThermal?: boolean | null;
     // Label meta fields — optional so reads tolerate the pre-`db push` window.
     showTicket?: boolean | null;              showTicketThermal?: boolean | null;              showTicketTl?: boolean | null;
     showDate?: boolean | null;                showDateThermal?: boolean | null;                showDateTl?: boolean | null;
@@ -550,6 +555,8 @@ export function rowToVoucherTemplateDefaults(row: VoucherPrintTemplateRow): Vouc
         showBarcodeThermal:       row.showBarcodeThermal       ?? f.showBarcodeThermal,
         showBank:                 row.showBank                 ?? f.showBank,
         showBankThermal:          row.showBankThermal          ?? f.showBankThermal,
+        showPartyBalance:         row.showPartyBalance         ?? f.showPartyBalance,
+        showPartyBalanceThermal:  row.showPartyBalanceThermal  ?? f.showPartyBalanceThermal,
         showTicket:               row.showTicket               ?? f.showTicket,
         showTicketThermal:        row.showTicketThermal        ?? f.showTicketThermal,
         showTicketTl:             row.showTicketTl             ?? f.showTicketTl,
@@ -609,6 +616,7 @@ export function resolveTemplateForFormat(
         showSignature:     t.showSignatureThermal,
         showBarcode:       t.showBarcodeThermal,
         showBank:          t.showBankThermal,
+        showPartyBalance:  t.showPartyBalanceThermal,
         showSentBy:        t.showSentByThermal,
         showReceivedBy:    t.showReceivedByThermal,
         showPreparedBy:    t.showPreparedByThermal,

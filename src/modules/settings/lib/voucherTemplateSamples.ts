@@ -72,6 +72,13 @@ export const SAMPLE_PARCEL_LABEL: ParcelLabelData = {
     footer:  "Handle with care",
 };
 
+/** Sample-only date shift — the credit-sale due date in the preview. */
+function addSampleDays(iso: string, days: number): string {
+    const d = new Date(`${iso}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + days);
+    return d.toISOString().slice(0, 10);
+}
+
 export function buildSampleForKind(kind: VoucherTemplateKind): ThermalReceiptSample {
     const today = new Date().toISOString().slice(0, 10);
     const productLines: ThermalReceiptSample["lines"] = [
@@ -104,14 +111,46 @@ export function buildSampleForKind(kind: VoucherTemplateKind): ThermalReceiptSam
             // Formal TAX INVOICE — REAL per-line prices + tax. NOT the price-hiding
             // ladder (that's POS-only): a SALE is often B2B, so the buyer needs the
             // true line value + GSTIN for input-tax-credit.
+            //
+            // Shows the full Tally goods table: HSN · per · line note · line
+            // discount, with the bill charges and the GST legs as ledger rows
+            // under the items. Amounts are PRE-TAX so the printed column adds up
+            // (2,257.12 goods + 500 + 120 + 406.28 GST − 0.40 round-off = 3,283).
             return {
                 reference: "SV/26-27/0017", date: today,
                 partyName: "Acme Traders", partyPhone: null,
                 partyGstin: "18ABCDE1234F1Z5",
-                lines: productLines,
-                subtotal: 2694, taxAmount: 484.92, total: 3178.92,
+                partyState: "Assam, Code : 18",
+                paymentTerms: "Credit — 30 days",
+                dueDate: addSampleDays(today, 30),
+                lines: [
+                    { description: "Logitech B100 USB Mouse", quantity: 2, amount: 506.78, taxable: 506.78,
+                      hsn: "8471", unit: "Nos", mrp: 399, taxRate: 18, taxAmount: 91.22 },
+                    { description: "HP Laptop 14s Charger", quantity: 1, amount: 1270.34, taxable: 1270.34,
+                      hsn: "8504", unit: "Nos", mrp: 1799, taxRate: 18, taxAmount: 228.66,
+                      note: "For 14s-fq1092 series only" },
+                    { description: "TP-Link Cat6 Cable 5m", quantity: 3, amount: 480, taxable: 480,
+                      hsn: "8544", unit: "Nos", mrp: 249, taxRate: 18, taxAmount: 86.40, discount: 25.92 },
+                ],
+                subtotal: 2257.12, taxAmount: 406.28, total: 3283,
                 notes: null,
-                taxBreakdown: intraBreakdown,
+                taxBreakdown: { kind: "INTRA", cgst: 203.14, sgst: 203.14, placeOfSupplyName: "Assam" },
+                hsnSummary: [
+                    { hsn: "8471", ratePct: 18, taxable: 506.78,  cgst: 45.61,  sgst: 45.61,  total: 91.22 },
+                    { hsn: "8504", ratePct: 18, taxable: 1270.34, cgst: 114.33, sgst: 114.33, total: 228.66 },
+                    { hsn: "8544", ratePct: 18, taxable: 480,     cgst: 43.20,  sgst: 43.20,  total: 86.40 },
+                ],
+                charges: [
+                    { label: "Installation & Setup Charges", amount: 500 },
+                    { label: "Shipping", amount: 120 },
+                ],
+                roundOff: -0.40,
+                receipts: [{ label: "Cash", amount: 2000 }],
+                balanceDue: 1283,
+                // Party's running account — printed only when the template's
+                // "Party balance" toggle is on.
+                balanceBefore: "Rs. 12,400.00 Dr",
+                balanceAfter:  "Rs. 13,683.00 Dr",
                 branchAddress: SAMPLE_BRANCH_ADDRESS,
             };
         case "POS":

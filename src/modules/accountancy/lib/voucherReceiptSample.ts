@@ -14,6 +14,12 @@ import { readPartyName } from "@/shared/lib/accountancy/partySnapshot";
 import { getOrganisation } from "@/shared/lib/org/getOrganisation";
 import { parseBankJson } from "@/shared/lib/org/organisationView";
 import { parseDenomJson } from "@/shared/lib/accountancy/denomJson";
+import { resolveProductTaxBatch } from "@/modules/inventory/lib/gstResolver";
+import { computeGstSplit, gstinDerivedStateCode } from "@/shared/lib/gst/computeGstSplit";
+import { stateNameForCode } from "@/shared/lib/gst/indianStates";
+import { round2 } from "@/shared/lib/format";
+import { partyBalanceAroundVoucher } from "@/shared/lib/accountancy/partyLedgerBalance";
+import { loadTenderLines } from "@/modules/accountancy/lib/outstandings";
 
 // ── Cross-source receipt sample builder ─────────────────────────────────────
 //
@@ -66,6 +72,35 @@ const partyAccountSelect = {
     company: { select: { name: true, gstin: true, phones: { take: 1, orderBy: [{ isPrimary: "desc" }] } } },
 } satisfies Prisma.AccountSelect;
 
+/**
+ * Settlement JSON written by the trading voucher form — the tender + charge
+ * INPUT re-rendered for edit. Money/reporting read the posted spine; the print
+ * only needs the labels and amounts, so a loose read is enough.
+ */
+function readSettlement(raw: unknown): {
+    tenders: { accountId: number; amount: number }[];
+    charges: { accountId: number; amount: number; description?: string }[];
+} {
+    const j = (raw ?? {}) as Record<string, unknown>;
+    const arr = (v: unknown) => (Array.isArray(v) ? v : []) as Record<string, unknown>[];
+    const num = (v: unknown) => (typeof v === "number" ? v : Number(v) || 0);
+    return {
+        tenders: arr(j.tenders).map((t) => ({ accountId: num(t.accountId), amount: num(t.amount) })),
+        charges: arr(j.charges).map((c) => ({
+            accountId:   num(c.accountId),
+            amount:      num(c.amount),
+            description: typeof c.description === "string" ? c.description : undefined,
+        })),
+    };
+}
+
+/** Add `days` to an ISO date string, keeping the ISO shape. */
+function addDaysIso(iso: string, days: number): string {
+    const d = new Date(`${iso}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + days);
+    return d.toISOString().slice(0, 10);
+}
+
 // ── Inventory voucher (SALE / PURCHASE / returns / GRN / CHALLAN / …) ────────
 async function buildInvSample(id: number): Promise<VoucherReceiptData> {
     const vRow = await prisma.voucherDetail.findUnique({
@@ -76,7 +111,7 @@ async function buildInvSample(id: number): Promise<VoucherReceiptData> {
     // Phase 5 5C: goods lines hang off the spine.
     const invLines = await prisma.voucherInventoryLine.findMany({
         where:   { universalVoucherId: vRow.universalVoucherId ?? -1 },
-        include: { product: { select: { sku: true, name: true } } },
+        include: { product: { select: { id: true, sku: true, name: true, unit: { select: { label: true } } } } },
     });
     // 5D-4: resolve the party ledger from the spine's partyAccountId.
     const account = vRow.universalVoucher?.partyAccountId != null
@@ -92,12 +127,25 @@ async function buildInvSample(id: number): Promise<VoucherReceiptData> {
         if (sku && desc.startsWith(`${sku} — `)) return desc.slice(sku.length + 3);
         return desc || l.product?.name || "";
     };
+    // On the office trading form `description` is the per-line NOTE, not the
+    // item name — it is only the name on POS-style rows that carry no product.
+    // Print the product name as the item and the note under it; using the note
+    // as the name (the old behaviour) silently renamed the item on the invoice.
+    const itemName = (l: (typeof v.lines)[number]): string => l.product?.name || lineName(l);
+    const itemNote = (l: (typeof v.lines)[number]): string | null => {
+        const desc = (l.description ?? "").trim();
+        if (!desc || !l.product?.name) return null;
+        // Only suppress it when it merely repeats the item name — otherwise it
+        // is a genuine remark the user typed and belongs on the invoice.
+        return desc === l.product.name ? null : desc;
+    };
 
     let subtotal  = toNumber(v.subtotal);
     let taxAmount = toNumber(v.taxAmount);
     let total     = toNumber(v.totalAmount);
     let lines = v.lines.map((l) => ({
-        description: lineName(l),
+        description: itemName(l),
+        note:        itemNote(l),
         quantity:    toNumber(l.quantity),
         amount:      toNumber(l.amount),
     }));
@@ -115,7 +163,7 @@ async function buildInvSample(id: number): Promise<VoucherReceiptData> {
             lines = v.lines.map((l) => {
                 const qty = toNumber(l.quantity);
                 const tagUnit = l.savedSalePricePaise != null ? l.savedSalePricePaise / 100 : toNumber(l.rate);
-                return { description: lineName(l), quantity: qty, amount: tagUnit * qty };
+                return { description: itemName(l), note: itemNote(l), quantity: qty, amount: tagUnit * qty };
             });
             total = lines.reduce((s, l) => s + l.amount, 0);
             subtotal = total;
@@ -123,17 +171,205 @@ async function buildInvSample(id: number): Promise<VoucherReceiptData> {
         }
     }
 
+    // ── Tally tax-invoice extras ────────────────────────────────────────────
+    // Per-line HSN/unit/GST plus the bill-level ledger rows (discount, charges,
+    // shipping, round-off) and the settlement, so the A4 goods table can print
+    // one continuous column of figures that ends at the grand total. Everything
+    // is optional — a voucher with no tax and no charges just prints fewer rows.
+    const productIds = [...new Set(v.lines.map((l) => l.productId))];
+    const [resolvedTax, org] = await Promise.all([
+        productIds.length ? resolveProductTaxBatch({ productIds }) : Promise.resolve(null),
+        getOrganisation(),
+    ]);
+
+    const goodsTax      = v.lines.reduce((s, l) => s + toNumber(l.taxAmount), 0);
+    const shippingGross = toNumber(v.shippingAmt);
+    const shippingTax   = toNumber(v.shippingTaxAmt);
+    const shippingNet   = shippingGross - shippingTax;
+    const billDiscount  = toNumber(v.discountAmt ?? 0);
+    const roundOff      = toNumber(v.roundOff);
+    const settlement    = readSettlement(v.settlementJson);
+
+    // Ledger-row and tender labels come from the account names.
+    const settleAcctIds = [...new Set(
+        [...settlement.charges, ...settlement.tenders].map((r) => r.accountId),
+    )].filter((id) => id > 0);
+    const settleNames = settleAcctIds.length
+        ? new Map((await prisma.account.findMany({
+            where:  { id: { in: settleAcctIds } },
+            select: { id: true, name: true },
+        })).map((a) => [a.id, a.name]))
+        : new Map<number, string>();
+
+    // Buyer state drives the CGST+SGST vs IGST split. The buyer's GSTIN carries
+    // its own state code and IS the registration, so it wins; then the voucher's
+    // place of supply; then the seller's state (a walk-in is intra-state).
+    const buyerStateCode = gstinDerivedStateCode(party.gstin)
+        || (v.placeOfSupply ?? "")
+        || org.gstStateCode;
+    const split = computeGstSplit({
+        taxAmount:       goodsTax + shippingTax,
+        sellerStateCode: org.gstStateCode,
+        buyerStateCode,
+    });
+    const stateLabel = (code: string): string | null => {
+        const name = stateNameForCode(code);
+        return name ? `${name}, Code : ${code}` : null;
+    };
+
+    // Pre-tax basis for the goods table. Skipped for the price-privacy estimate
+    // above, whose amounts were rewritten to tag prices with no tax to strip.
+    const taxInvoice = v.universalVoucher?.type !== "POS_ESTIMATE" || taxAmount > 0;
+    if (taxInvoice) {
+        lines = lines.map((ln, i) => {
+            const src     = v.lines[i];
+            const lineTax = toNumber(src.taxAmount);
+            return {
+                ...ln,
+                hsn:       resolvedTax?.products.get(src.productId)?.hsnCode ?? null,
+                unit:      src.product?.unit?.label ?? null,
+                taxable:   ln.amount - lineTax,
+                discount:  toNumber(src.discountAmt) || null,
+                taxRate:   toNumber(src.taxRate) || null,
+                taxAmount: lineTax || null,
+                mrp:       src.mrpPaise != null ? src.mrpPaise / 100 : null,
+            };
+        });
+    }
+
+    // Rate-wise HSN/SAC summary — one row per (code × rate) pair, which is the
+    // grouping GSTR-1 asks for. A line with NO code still belongs here: the tax
+    // breakup is the point, and dropping those lines made the whole table
+    // disappear on bills whose products have no HSN in the master. Its code
+    // cell prints blank, which is the honest signal that master data is missing.
+    const hsnAcc = new Map<string, { hsn: string; ratePct: number; taxable: number; tax: number }>();
+    for (const src of v.lines) {
+        const hsn     = resolvedTax?.products.get(src.productId)?.hsnCode ?? "";
+        const lineTax = toNumber(src.taxAmount);
+        if (lineTax <= 0.005) continue;
+        const ratePct = toNumber(src.taxRate);
+        const key     = `${hsn}|${ratePct}`;
+        const row     = hsnAcc.get(key) ?? { hsn, ratePct, taxable: 0, tax: 0 };
+        row.taxable  += toNumber(src.amount) - lineTax;
+        row.tax      += lineTax;
+        hsnAcc.set(key, row);
+    }
+    const hsnSummary = [...hsnAcc.values()]
+        .sort((a, b) => a.hsn.localeCompare(b.hsn))
+        .map((r) => {
+            // Split in paise with the odd one going to CGST — the same
+            // convention computeGstSplit uses for the ledger rows, so the
+            // summary and the Output CGST/SGST lines never disagree.
+            const paise = Math.round(r.tax * 100);
+            const sgstP = Math.floor(paise / 2);
+            return {
+                hsn:     r.hsn,
+                ratePct: r.ratePct,
+                taxable: round2(r.taxable),
+                cgst:    (paise - sgstP) / 100,
+                sgst:    sgstP / 100,
+                total:   round2(r.tax),
+            };
+        });
+
+    // Ledger rows, in the order Tally stacks them: bill discount, then income
+    // charges, then freight. GST and round-off are appended by the renderer.
+    const charges: { label: string; amount: number }[] = [];
+    if (billDiscount > 0.005) charges.push({ label: "Less : Discount on bill", amount: -billDiscount });
+    for (const c of settlement.charges) {
+        if (Math.abs(c.amount) < 0.005) continue;
+        const name = settleNames.get(c.accountId) ?? "Charges";
+        charges.push({ label: c.description ? `${name} — ${c.description}` : name, amount: c.amount });
+    }
+    if (shippingNet > 0.005) charges.push({ label: "Shipping", amount: shippingNet });
+
+    // ── What has actually been received against this bill ───────────────────
+    // The LEDGER is the truth, not the form's settlement input. Two sources,
+    // exactly as the Outstandings report computes `paid`:
+    //   1. role=TENDER GL lines on this voucher — cash/UPI/bank taken AT the
+    //      counter. The party's own AR leg is excluded: on a credit sale that
+    //      row is the amount still OWED, not money received.
+    //   2. VoucherAllocation rows targeting this voucher — an ADVANCE taken
+    //      before the bill existed, or a RECEIPT entered afterwards. Reading
+    //      these is what makes a reprint show payments made since the sale.
+    const partyAccountId = v.universalVoucher?.partyAccountId ?? null;
+    const uvId = v.universalVoucherId;
+
+    const [tenderLines, allocations] = await Promise.all([
+        uvId != null
+            ? loadTenderLines(prisma, [uvId])
+            : Promise.resolve(new Map<number, { accountId: number; amount: number }[]>()),
+        uvId != null
+            ? prisma.voucherAllocation.findMany({
+                where:  { targetType: "UNIVERSAL_VOUCHER", targetId: uvId },
+                select: { amount: true, method: true, reference: true },
+            })
+            : Promise.resolve([] as { amount: Prisma.Decimal; method: string; reference: string | null }[]),
+    ]);
+
+    const tenders = (uvId != null ? tenderLines.get(uvId) ?? [] : [])
+        .filter((t) => Math.abs(t.amount) > 0.005 && t.accountId !== partyAccountId);
+    const tenderAcctNames = tenders.length
+        ? new Map((await prisma.account.findMany({
+            where:  { id: { in: [...new Set(tenders.map((t) => t.accountId))] } },
+            select: { id: true, name: true },
+        })).map((a) => [a.id, a.name]))
+        : new Map<number, string>();
+
+    const receipts: { label: string; amount: number }[] = tenders.map((t) => ({
+        label:  tenderAcctNames.get(t.accountId) ?? "Received",
+        amount: t.amount,
+    }));
+    for (const a of allocations) {
+        const amt = toNumber(a.amount);
+        if (Math.abs(amt) < 0.005) continue;
+        // An advance is money the customer had already parked with us; a plain
+        // allocation is a receipt entered against this bill later. Naming them
+        // apart matters — the customer wants to see their advance was used.
+        const base = a.method === "ADVANCE" ? "Advance adjusted" : "Payment adjusted";
+        receipts.push({ label: a.reference ? `${base} (${a.reference})` : base, amount: amt });
+    }
+    const balanceDue = round2(total - receipts.reduce((s, r) => s + r.amount, 0));
+
+    const creditDays = v.creditPeriodDays ?? 0;
+    const voucherDate = isoDate(v.universalVoucher!.date);
+
+    // Carried for the money-receipt / journal middles, which print the
+    // narration as the document's own content. The goods tax invoice never
+    // prints it — voucher narration is internal bookkeeping text.
+    const notes = v.universalVoucher?.description?.trim() || null;
+
+    // Party's running account around this bill. Rendered only when the template
+    // opts in (`showPartyBalance`) — it discloses the customer's whole
+    // outstanding on a document that may be handed to anyone.
+    const ledgerBalance = await partyBalanceAroundVoucher(partyAccountId, v.universalVoucherId);
+
     const sample: ThermalReceiptSample = {
         reference:  v.universalVoucher?.voucherNo ?? "",
-        date:       isoDate(v.universalVoucher!.date),   // 5D-10: date on spine
+        date:       voucherDate,   // 5D-10: date on spine
         partyName:  party.name ?? readPartyName(v.partyJson) ?? "Walk-in",
         partyPhone: party.phone,
         partyGstin: party.gstin,
+        partyState: stateLabel(buyerStateCode),
         lines,
         subtotal:  subtotal || null,
         taxAmount: taxAmount || null,
         total,
-        notes:     v.universalVoucher?.description?.trim() || null,
+        notes,
+        taxBreakdown: goodsTax + shippingTax > 0.005
+            ? (split.kind === "INTRA"
+                ? { kind: "INTRA", cgst: split.cgst, sgst: split.sgst, placeOfSupplyName: stateNameForCode(buyerStateCode) }
+                : { kind: "INTER", igst: split.igst, placeOfSupplyName: stateNameForCode(buyerStateCode) })
+            : null,
+        hsnSummary: hsnSummary.length ? hsnSummary : null,
+        charges:    charges.length ? charges : null,
+        roundOff:   roundOff || null,
+        receipts:   receipts.length ? receipts : null,
+        balanceDue: balanceDue > 0.005 ? balanceDue : null,
+        paymentTerms: creditDays > 0 ? `Credit — ${creditDays} days` : null,
+        dueDate:      creditDays > 0 ? addDaysIso(voucherDate, creditDays) : null,
+        balanceBefore: ledgerBalance ? ledgerBalance.format(ledgerBalance.before) : null,
+        balanceAfter:  ledgerBalance ? ledgerBalance.format(ledgerBalance.after)  : null,
     };
 
     const vType = (v.universalVoucher?.type ?? "") as InvVoucherType;   // 5D-11

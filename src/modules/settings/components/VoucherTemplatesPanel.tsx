@@ -86,6 +86,7 @@ const SHOW_HIDE_ELEMENTS: { label: string; a4: BoolTemplateKey; thermal: BoolTem
     { label: "Signature",      a4: "showSignature",     thermal: "showSignatureThermal" },
     { label: "Barcode",        a4: "showBarcode",       thermal: "showBarcodeThermal" },
     { label: "Bank details",   a4: "showBank",          thermal: "showBankThermal" },
+    { label: "Party balance",  a4: "showPartyBalance",  thermal: "showPartyBalanceThermal" },
 ];
 
 // Service Shipping Label meta fields — its own row set with a switch per format:
