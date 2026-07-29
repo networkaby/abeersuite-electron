@@ -80,6 +80,9 @@ const bnplJsonSchema = z.object({
     provider: z.string().trim().max(120).default(""),
     // Sanctioned facility limit. See facilityLimit.ts.
     limit: z.string().trim().max(20).default(""),
+    // Repayment window per purchase, in days — not a fixed monthly due date.
+    // See bnplParticulars.ts.
+    creditDays: z.string().trim().max(10).default(""),
     // Usable Fund fields — "" reads as OTHER / RESTRICTED. See bnplParticulars.ts.
     fundTier: z.enum(["", "INSTANT", "OTHER"]).default(""),
     convertibility: z.enum(["", "CONVERTIBLE", "RESTRICTED", "UNAVAILABLE"]).default(""),
@@ -87,7 +90,7 @@ const bnplJsonSchema = z.object({
 });
 
 const emptyBnpl = (b: z.infer<typeof bnplJsonSchema>): boolean =>
-    !b.provider && !b.limit && !b.fundTier && !b.convertibility && !b.feePct;
+    !b.provider && !b.limit && !b.creditDays && !b.fundTier && !b.convertibility && !b.feePct;
 
 // Wallet-ledger particulars (Wallets group). No limit — a prepaid balance,
 // not a credit facility.

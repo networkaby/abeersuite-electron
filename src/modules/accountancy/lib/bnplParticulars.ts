@@ -8,6 +8,11 @@ import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 export type BnplFields = {
     provider: string;
     limit: string;
+    // Repayment window per purchase, in days — NOT a fixed monthly due date
+    // like a credit card. BNPL bills per transaction: each purchase starts
+    // its own N-day clock, so two purchases days apart can fall due days
+    // apart too. Purely informational (no schedule is computed from it yet).
+    creditDays: string;
     // Usable Fund fields — all optional.
     // fundTier: "" (default) reads as OTHER — a BNPL facility needs its own
     // resolution before it's spendable, unlike a bank balance.
@@ -22,11 +27,11 @@ export type BnplFields = {
 };
 
 export const EMPTY_BNPL: BnplFields = {
-    provider: "", limit: "", fundTier: "", convertibility: "", feePct: "",
+    provider: "", limit: "", creditDays: "", fundTier: "", convertibility: "", feePct: "",
 };
 
 export const hasBnplData = (b: BnplFields): boolean =>
-    !!(b.provider || b.limit || b.fundTier || b.convertibility || b.feePct);
+    !!(b.provider || b.limit || b.creditDays || b.fundTier || b.convertibility || b.feePct);
 
 export function parseBnpl(v: unknown): BnplFields {
     if (v == null || typeof v !== "object" || Array.isArray(v)) return { ...EMPTY_BNPL };
@@ -35,6 +40,7 @@ export function parseBnpl(v: unknown): BnplFields {
     return {
         provider: s(o.provider),
         limit: s(o.limit),
+        creditDays: s(o.creditDays),
         fundTier: s(o.fundTier),
         convertibility: s(o.convertibility),
         feePct: s(o.feePct),
@@ -48,6 +54,7 @@ export function parseBnpl(v: unknown): BnplFields {
 export const BNPL_FIELD_LABELS: { key: keyof Omit<BnplFields, "fundTier" | "convertibility" | "feePct">; label: string; placeholder: string }[] = [
     { key: "provider", label: "Provider", placeholder: "Amazon Pay Later / Flipkart Pay Later" },
     { key: "limit", label: "Facility Limit (₹)", placeholder: "60000" },
+    { key: "creditDays", label: "Credit Days (per purchase)", placeholder: "e.g. 15" },
 ];
 
 export const isBnplGroupName = (name?: string | null): boolean => name === ACCOUNT_GROUPS.BNPL;

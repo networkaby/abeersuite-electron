@@ -62,13 +62,16 @@ const emptyCreditCard = (c: z.infer<typeof creditCardJsonSchema>): boolean =>
 const bnplJsonSchema = z.object({
     provider: z.string().trim().max(120).default(""),
     limit: z.string().trim().max(20).default(""),
+    // Repayment window per purchase, in days — not a fixed monthly due date.
+    // See bnplParticulars.ts.
+    creditDays: z.string().trim().max(10).default(""),
     fundTier: z.enum(["", "INSTANT", "OTHER"]).default(""),
     convertibility: z.enum(["", "CONVERTIBLE", "RESTRICTED", "UNAVAILABLE"]).default(""),
     feePct: z.string().trim().max(10).default(""),
 });
 
 const emptyBnpl = (b: z.infer<typeof bnplJsonSchema>): boolean =>
-    !b.provider && !b.limit && !b.fundTier && !b.convertibility && !b.feePct;
+    !b.provider && !b.limit && !b.creditDays && !b.fundTier && !b.convertibility && !b.feePct;
 
 const walletJsonSchema = z.object({
     provider: z.string().trim().max(120).default(""),

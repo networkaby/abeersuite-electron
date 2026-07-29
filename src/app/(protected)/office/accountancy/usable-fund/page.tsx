@@ -6,7 +6,7 @@
  * LIVE — reads real ledgers from GET /api/accountancy/reports/usable-fund
  * (Cash-in-Hand, Bank Accounts, Bank OD A/c, Credit Card, BNPL A/c, Wallets,
  * Payment Gateway). The API returns per-ledger building blocks only (amount,
- * limit, tier, convertibility, feePct, sharedLimitKey); every bit of
+ * limit, isFacility, magnitudeHeadroom, tier, sharedLimitKey); every bit of
  * netting/summing below happens here, client-side, so the math lives in
  * exactly one place.
  *
@@ -24,9 +24,10 @@
  *
  *   Total Fund = Instant Fund + Other Fund.
  *
- *   Each OTHER-tier ledger carries internal `convertibility` / `feePct`
- *   fields that decide how much of its capacity actually counts toward
- *   Other Fund — deliberately NOT surfaced in the UI, only in the number.
+ *   Tier is a REPORTING split only — it decides which section a ledger is
+ *   listed under, never what that ledger is worth. The same headroom counts
+ *   the same in either section, so moving a ledger between Instant and Other
+ *   shifts the two subtotals but leaves Total Fund unchanged.
  *
  *   Ledgers that share one sanctioned limit (e.g. a primary + add-on credit
  *   card) carry the same `sharedLimitKey`. Headroom is computed against the
@@ -43,7 +44,6 @@
  *      existed. The bnplJson/walletJson/gatewayJson columns are pushed.
  *   2. RESOLVED — masters/ledgers page + EditLedgerDialog both have a
  *      "Usable Fund Tier" control for every group with a tier concept.
- *      `convertibility` / `feePct` still have no control (safe defaults only).
  *   3. Whether buckets also split by branch.
  */
 
@@ -76,12 +76,6 @@ import { toIsoDate } from "@/shared/hooks/useTallyDate";
 /** Which section a ledger appears under. The single knob to move a ledger. */
 type FundTier = "INSTANT" | "OTHER";
 
-/**
- * Internal only — decides how much of an OTHER-tier ledger's capacity counts
- * toward Other Fund. Never shown in the UI.
- */
-type Convertibility = "CONVERTIBLE" | "RESTRICTED" | "UNAVAILABLE";
-
 type FundLedger = {
     name: string;
     note?: string | null;
@@ -89,11 +83,23 @@ type FundLedger = {
     amount: number;
     /** Sanctioned limit — only ledgers that are a credit facility. */
     limit?: number | null;
+    /**
+     * True for a credit-facility ledger (Bank OD / Credit Card / BNPL) as
+     * opposed to a plain balance (Cash / Bank / Wallet / Payment Gateway).
+     * Decides the right fallback in capacityOf() when `limit` is null: a
+     * facility with no limit entered has UNKNOWN headroom (0), not its drawn
+     * balance — showing the amount already owed as spendable would be backwards.
+     */
+    isFacility?: boolean;
+    /**
+     * Credit Card / BNPL only. When true, a credit-side balance (e.g. an
+     * overpayment) does NOT extend headroom past the limit — "drawn" is
+     * treated as a magnitude regardless of which side it landed on. Bank OD
+     * is excluded: it's a real deposit account, so money parked in it beyond
+     * zero genuinely does extend what can still be drawn.
+     */
+    magnitudeHeadroom?: boolean;
     tier: FundTier;
-    /** OTHER-tier ledgers only — internal, not displayed. */
-    convertibility?: Convertibility | null;
-    /** Internal only — applied when convertibility is CONVERTIBLE. */
-    feePct?: number | null;
     /**
      * Set ONLY when this ledger shares its sanctioned limit with one or more
      * sibling ledgers (e.g. a primary + add-on card issued under one combined
@@ -134,6 +140,33 @@ const STYLE_BY_KEY: Record<string, { icon: LucideIcon; tone: string; barTone: st
 };
 const FALLBACK_STYLE = { icon: HandCoins, tone: "text-foreground", barTone: "bg-foreground" };
 
+// Swatches for the "Shared limit" badge — one per shared-limit family, so two
+// families sitting in the same card are told apart at a glance. Red is left
+// out on purpose: it means over-utilisation on the bar below, and shouldn't
+// read as a warning here. Written as whole literal class strings because
+// Tailwind only sees classes it can find in the source.
+const SHARED_KEY_TONES = [
+    "border-sky-300 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-950 dark:text-sky-300",
+    "border-violet-300 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-950 dark:text-violet-300",
+    "border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300",
+    "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300",
+    "border-fuchsia-300 bg-fuchsia-50 text-fuchsia-700 dark:border-fuchsia-800 dark:bg-fuchsia-950 dark:text-fuchsia-300",
+    "border-teal-300 bg-teal-50 text-teal-700 dark:border-teal-800 dark:bg-teal-950 dark:text-teal-300",
+    "border-orange-300 bg-orange-50 text-orange-700 dark:border-orange-800 dark:bg-orange-950 dark:text-orange-300",
+    "border-indigo-300 bg-indigo-50 text-indigo-700 dark:border-indigo-800 dark:bg-indigo-950 dark:text-indigo-300",
+];
+
+/**
+ * Colour for a shared-limit family. Hashed from the key rather than picked at
+ * random, so a family keeps the same swatch across re-renders and reloads —
+ * a colour that changed on every paint couldn't be used to match rows up.
+ */
+const sharedKeyTone = (key: string): string => {
+    let h = 0;
+    for (let i = 0; i < key.length; i++) h = (Math.imul(h, 31) + key.charCodeAt(i)) | 0;
+    return SHARED_KEY_TONES[Math.abs(h) % SHARED_KEY_TONES.length];
+};
+
 // ─── Derivation ──────────────────────────────────────────────────────────────
 
 /** sharedLimitKey → combined amount drawn across every ledger in that family. */
@@ -154,24 +187,26 @@ function sharedDrawnByKey(groups: FundGroup[]): Record<string, number> {
  * amount, not just its own — two cards sharing one limit both show the same
  * (correct) headroom, matching the bank's own app.
  */
-const capacityOf = (l: FundLedger, drawnByKey: Record<string, number>): number => {
-    if (l.limit == null) return l.amount;
-    const drawn = l.sharedLimitKey ? (drawnByKey[l.sharedLimitKey] ?? l.amount) : l.amount;
-    return Math.max(0, l.limit - drawn);
+/**
+ * The amount drawn that this ledger's headroom is measured against — the
+ * FAMILY's combined draw for a shared-limit card, its own otherwise. The row's
+ * "Used" figure renders this exact number, so Limit − Used = Headroom always
+ * holds on screen (a shared-limit sibling shows the family's draw, not just
+ * its own slice — otherwise the three figures wouldn't add up).
+ */
+const drawnOf = (l: FundLedger, drawnByKey: Record<string, number>): number => {
+    const raw = l.sharedLimitKey ? (drawnByKey[l.sharedLimitKey] ?? l.amount) : l.amount;
+    return l.magnitudeHeadroom ? Math.abs(raw) : raw;
 };
 
-/** What this ONE ledger's row shows as counting toward Usable Fund. Do not
- *  sum this across many ledgers directly — see sumFund() below. */
-const netValueOf = (l: FundLedger, drawnByKey: Record<string, number>): number => {
-    const capacity = capacityOf(l, drawnByKey);
-    if (l.tier === "INSTANT") return capacity;
-    if (l.convertibility === "CONVERTIBLE") return capacity * (1 - (l.feePct ?? 0) / 100);
-    return 0; // RESTRICTED / UNAVAILABLE — not counted
+const capacityOf = (l: FundLedger, drawnByKey: Record<string, number>): number => {
+    if (l.limit == null) return l.isFacility ? 0 : l.amount;
+    return Math.max(0, l.limit - drawnOf(l, drawnByKey));
 };
 
 /**
  * Correct total across many ledgers — the function to use instead of
- * `ledgers.reduce((s, l) => s + netValueOf(l), 0)`. Ledgers sharing a
+ * `ledgers.reduce((s, l) => s + capacityOf(l), 0)`. Ledgers sharing a
  * sharedLimitKey contribute their one shared limit's headroom exactly once
  * (the first ledger encountered), not once per ledger in the family.
  */
@@ -183,7 +218,7 @@ const sumFund = (ledgers: FundLedger[], drawnByKey: Record<string, number>): num
             if (countedKeys.has(l.sharedLimitKey)) continue;
             countedKeys.add(l.sharedLimitKey);
         }
-        total += netValueOf(l, drawnByKey);
+        total += capacityOf(l, drawnByKey);
     }
     return total;
 };
@@ -393,6 +428,17 @@ function GroupCard({
     const Icon = group.icon;
     const net = sumFund(ledgers, drawnByKey);
 
+    // Which ledger carries a shared pool's headroom into the group total —
+    // sumFund() counts the first of each family and skips the rest, so the rows
+    // must say which one that is. Without it the visible headrooms appear to
+    // sum to more than the group total.
+    const poolCarrier = new Map<string, string>();
+    for (const l of ledgers) {
+        if (l.sharedLimitKey && !poolCarrier.has(l.sharedLimitKey)) {
+            poolCarrier.set(l.sharedLimitKey, l.name);
+        }
+    }
+
     return (
         <div className="rounded-lg border border-border bg-card shadow-sm">
             {/* Header */}
@@ -425,7 +471,13 @@ function GroupCard({
             {open && (
                 <div className="divide-y divide-border border-t border-border">
                     {ledgers.map((l) => (
-                        <LedgerRow key={l.name} ledger={l} barTone={group.barTone} drawnByKey={drawnByKey} />
+                        <LedgerRow
+                            key={l.name}
+                            ledger={l}
+                            barTone={group.barTone}
+                            drawnByKey={drawnByKey}
+                            poolCarrier={l.sharedLimitKey ? poolCarrier.get(l.sharedLimitKey) : undefined}
+                        />
                     ))}
                 </div>
             )}
@@ -437,28 +489,49 @@ function LedgerRow({
     ledger,
     barTone,
     drawnByKey,
+    poolCarrier,
 }: {
     ledger: FundLedger;
     barTone: string;
     drawnByKey: Record<string, number>;
+    /** Name of the ledger whose row carries this shared pool into the group
+     *  total. Undefined when the ledger doesn't share a limit. */
+    poolCarrier?: string;
 }) {
     const capacity = capacityOf(ledger, drawnByKey);
-    const net = netValueOf(ledger, drawnByKey);
     const isCredit = ledger.limit != null;
-    const pct = isCredit ? Math.min(100, Math.round((ledger.amount / (ledger.limit ?? 1)) * 100)) : 0;
+    const used = drawnOf(ledger, drawnByKey);
+    const pct = isCredit ? Math.max(0, Math.min(100, Math.round((used / (ledger.limit ?? 1)) * 100))) : 0;
     const tight = isCredit && pct >= 90;
+    // Every ledger in a shared family shows the SAME pool position (one limit,
+    // the family's combined draw). Only one of them adds it to the group total.
+    const sharedKey = ledger.sharedLimitKey ?? "";
+    const alreadyCounted = !!sharedKey && poolCarrier !== undefined && poolCarrier !== ledger.name;
 
     return (
         <div className="px-4 py-2.5">
             <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                    <div className="truncate text-sm">{ledger.name}</div>
+                    <div className="flex items-center gap-1.5">
+                        <span className="truncate text-sm">{ledger.name}</span>
+                        {sharedKey && (
+                            <span
+                                title="Shares one sanctioned limit with another ledger — the figures below are the combined position of that shared limit."
+                                className={`shrink-0 rounded border px-1.5 py-px text-[10px] font-medium ${sharedKeyTone(sharedKey)}`}
+                            >
+                                Shared limit
+                            </span>
+                        )}
+                    </div>
                     {ledger.note && (
                         <div className="text-[11px] text-muted-foreground italic">{ledger.note}</div>
                     )}
                 </div>
-                <div className="shrink-0 font-mono text-sm font-medium tabular-nums">
-                    ₹{fmt(net)}
+                <div
+                    className={`shrink-0 font-mono text-sm font-medium tabular-nums ${alreadyCounted ? "text-muted-foreground/60" : ""}`}
+                    title={alreadyCounted ? `Already counted under "${poolCarrier}" — one shared limit, counted once.` : undefined}
+                >
+                    ₹{fmt(capacity)}
                 </div>
             </div>
 
@@ -467,12 +540,17 @@ function LedgerRow({
                 <>
                     <div className="mt-1.5 grid grid-cols-3 gap-2 text-[11px]">
                         <Metric label="Limit" value={ledger.limit ?? 0} />
-                        <Metric label="Used" value={ledger.amount} />
+                        <Metric label="Used" value={used} />
                         <Metric label="Headroom" value={capacity} strong />
                     </div>
                     <div className="mt-1.5">
                         <Bar pct={pct} tone={tight ? "bg-red-500" : barTone} />
                     </div>
+                    {alreadyCounted && (
+                        <div className="mt-1 text-[11px] text-muted-foreground italic">
+                            One shared limit with {poolCarrier} — already counted there, not added again.
+                        </div>
+                    )}
                 </>
             )}
         </div>

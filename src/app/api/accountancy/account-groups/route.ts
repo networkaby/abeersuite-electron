@@ -35,6 +35,12 @@ type LedgerRow = {
     loanJson: unknown;
     /** Credit-card-ledger particulars (Credit Card group). */
     creditCardJson: unknown;
+    /** BNPL-ledger particulars (BNPL A/c group). */
+    bnplJson: unknown;
+    /** Wallet-ledger particulars (Wallets group). */
+    walletJson: unknown;
+    /** Payment-gateway-ledger particulars (Payment Gateway group). */
+    gatewayJson: unknown;
     openingBalance: number | null;
     openingBalanceType: "DEBIT" | "CREDIT" | null;
     openingBalanceDate: string | null;
@@ -142,6 +148,7 @@ export async function GET(req: Request) {
                     id: true, name: true, code: true, normalBalance: true,
                     isActive: true, personId: true, companyId: true, groupId: true,
                     bankJson: true, loanJson: true, creditCardJson: true,
+                    bnplJson: true, walletJson: true, gatewayJson: true,
                     openingBalance: true, openingBalanceType: true,
                     openingBalanceDate: true,
                 },

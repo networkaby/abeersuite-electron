@@ -10,16 +10,16 @@ import { parseCreditCard } from "@/modules/accountancy/lib/creditCardParticulars
 import { parseBnpl } from "@/modules/accountancy/lib/bnplParticulars";
 import { parseWallet } from "@/modules/accountancy/lib/walletParticulars";
 import { parseGateway } from "@/modules/accountancy/lib/gatewayParticulars";
-import { accountLimit, fundTierOf, convertibilityOf, feePctOf } from "@/modules/accountancy/lib/facilityLimit";
+import { accountLimit, fundTierOf, isFacilityGroup, isMagnitudeHeadroomGroup } from "@/modules/accountancy/lib/facilityLimit";
 
 // GET /api/accountancy/reports/usable-fund?asOf=YYYY-MM-DD
 //
 // Real data for every buckets that exists today: Cash-in-Hand, Bank Accounts,
 // Bank OD A/c, Credit Card, BNPL A/c, Wallets, Payment Gateway. Returns
-// per-ledger building blocks only (amount, limit, tier, convertibility,
-// feePct, sharedLimitKey) — the Usable Fund page itself does all the
-// netting/summing (capacityOf / netValueOf / sumFund), so the math lives in
-// exactly one place.
+// per-ledger building blocks only (amount, limit, isFacility, magnitudeHeadroom,
+// tier, sharedLimitKey) — the Usable Fund page itself does
+// all the netting/summing (capacityOf / netValueOf / sumFund), so the math
+// lives in exactly one place.
 
 const BUCKETS = [
     { key: "cash", label: "Cash in Hand", groupName: ACCOUNT_GROUPS.CASH_IN_HAND },
@@ -57,7 +57,9 @@ function noteFor(a: AccountRow): string | null {
         return parts.length ? parts.join(" · ") : null;
     }
     if (groupName === ACCOUNT_GROUPS.BNPL) {
-        return parseBnpl(a.bnplJson).provider || null;
+        const p = parseBnpl(a.bnplJson);
+        const parts = [p.provider || null, p.creditDays ? `${p.creditDays}-day credit` : null].filter(Boolean);
+        return parts.length ? parts.join(" · ") : null;
     }
     if (groupName === ACCOUNT_GROUPS.WALLETS) {
         return parseWallet(a.walletJson).provider || null;
@@ -113,9 +115,15 @@ export async function GET(req: Request) {
                         note: noteFor(account),
                         amount: closingMap.get(a.id) ?? 0,
                         limit: accountLimit(account),
+                        // Facility ledger (Bank OD / Credit Card / BNPL) with no limit
+                        // entered yet — capacity is unknown, not the drawn balance. The
+                        // client's capacityOf() falls back to 0 rather than amount here.
+                        isFacility: isFacilityGroup(a.group?.name),
+                        // Credit Card / BNPL only — a credit-side balance there is capped
+                        // at the limit rather than extending headroom past it. See
+                        // isMagnitudeHeadroomGroup() in facilityLimit.ts.
+                        magnitudeHeadroom: isMagnitudeHeadroomGroup(a.group?.name),
                         tier: fundTierOf(account),
-                        convertibility: convertibilityOf(account),
-                        feePct: feePctOf(account),
                         sharedLimitKey: a.group?.name === ACCOUNT_GROUPS.CREDIT_CARD
                             ? (parseCreditCard(a.creditCardJson).sharedLimitKey || null)
                             : null,

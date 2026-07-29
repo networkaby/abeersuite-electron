@@ -10,22 +10,23 @@
 // draw past the limit and Available goes negative (a visible over-limit flag).
 //
 // ── Usable Fund resolution ───────────────────────────────────────────────────
-// fundTierOf() / netFundValue() below resolve the same per-ledger fields the
-// Usable Fund design preview mocks (see the page's own header comment) —
-// stored as extra keys inside the existing bankJson / creditCardJson blobs
-// (and the bnplJson / walletJson / gatewayJson blobs for their own groups).
-// Each group has its own sensible default when the ledger has never set the
-// field explicitly:
-//   Bank OD A/c     → fundTier defaults to INSTANT.
-//   Credit Card     → fundTier defaults to OTHER, convertibility to CONVERTIBLE.
-//   BNPL A/c        → fundTier defaults to OTHER, convertibility to RESTRICTED
-//                      (normally purchase-only, no cash-out route).
-//   Wallets         → fundTier defaults to OTHER, convertibility to CONVERTIBLE.
-//   Payment Gateway → fundTier defaults to OTHER, convertibility to CONVERTIBLE
-//                      (settlement speed varies by provider — set fundTier to
-//                      INSTANT per-ledger for a fast-settling one).
-// Cash-in-Hand / Bank Accounts ledgers have no override at all — they're
-// always INSTANT, full value, no conversion concept applies.
+// fundTierOf() / netFundValue() below resolve the per-ledger fields the Usable
+// Fund page reports on — stored as extra keys inside the existing bankJson /
+// creditCardJson blobs (and the bnplJson / walletJson / gatewayJson blobs for
+// their own groups). Each group has its own default when the ledger has never
+// set fundTier explicitly:
+//   Bank OD A/c     → INSTANT.
+//   Credit Card     → OTHER.
+//   BNPL A/c        → OTHER.
+//   Wallets         → OTHER.
+//   Payment Gateway → OTHER (settlement speed varies by provider — set fundTier
+//                      to INSTANT per-ledger for a fast-settling one).
+// Cash-in-Hand / Bank Accounts ledgers have no override at all — always INSTANT.
+//
+// fundTier is a REPORTING split only: it decides which section a ledger appears
+// under, never how much that ledger is worth. Headroom is headroom whichever
+// section reports it, so moving a ledger between Instant and Other never
+// changes Instant + Other = Total.
 
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { parseBank } from "@/modules/accountancy/lib/bankParticulars";
@@ -42,6 +43,34 @@ type LimitShaped = {
     walletJson?: unknown;
     gatewayJson?: unknown;
 };
+
+/** Groups that are a credit facility (draw against a sanctioned limit) as
+ *  opposed to a plain balance (Cash / Bank / Wallet / Payment Gateway, where
+ *  the balance itself IS the spendable amount). Used to decide the right
+ *  fallback when no limit has been entered yet — see accountCapacity(). */
+const FACILITY_GROUPS: readonly string[] = [
+    ACCOUNT_GROUPS.BANK_OD,
+    ACCOUNT_GROUPS.CREDIT_CARD,
+    ACCOUNT_GROUPS.BNPL,
+];
+
+export const isFacilityGroup = (groupName?: string | null): boolean =>
+    !!groupName && FACILITY_GROUPS.includes(groupName);
+
+/** Credit Card / BNPL are billing facilities, not deposit accounts — a
+ *  credit-side balance there (an overpayment/refund) doesn't buy extra
+ *  spending power, so their headroom is capped at the sanctioned limit and
+ *  "drawn" is treated as a magnitude regardless of which side it landed on.
+ *  Bank OD is excluded on purpose: it IS a real deposit account, so money
+ *  parked in it beyond zero genuinely extends what can still be drawn —
+ *  signed math there, can exceed the limit. See accountCapacity(). */
+const MAGNITUDE_HEADROOM_GROUPS: readonly string[] = [
+    ACCOUNT_GROUPS.CREDIT_CARD,
+    ACCOUNT_GROUPS.BNPL,
+];
+
+export const isMagnitudeHeadroomGroup = (groupName?: string | null): boolean =>
+    !!groupName && MAGNITUDE_HEADROOM_GROUPS.includes(groupName);
 
 /** The sanctioned limit for this ledger, or null when it's not an OD/Credit
  *  Card/BNPL ledger, or the limit was never entered. */
@@ -79,7 +108,6 @@ export function availableBalance(account: LimitShaped & { balance?: number | nul
 }
 
 export type FundTier = "INSTANT" | "OTHER";
-export type Convertibility = "CONVERTIBLE" | "RESTRICTED" | "UNAVAILABLE";
 
 /** Which Usable Fund section this ledger belongs to, resolved with its
  *  group's default when the ledger never overrode it. Cash-in-Hand / Bank
@@ -105,47 +133,11 @@ export function fundTierOf(account: LimitShaped): FundTier {
     return "INSTANT";
 }
 
-/** OTHER-tier ledgers only — how the ledger's headroom counts toward Other
- *  Fund. Credit Card / Wallets / Payment Gateway default to CONVERTIBLE;
- *  BNPL defaults to RESTRICTED (normally purchase-only, no cash-out route). */
-export function convertibilityOf(account: LimitShaped): Convertibility {
-    const groupName = account.group?.name;
-    if (groupName === ACCOUNT_GROUPS.CREDIT_CARD) {
-        const v = parseCreditCard(account.creditCardJson).convertibility;
-        return v === "RESTRICTED" || v === "UNAVAILABLE" ? v : "CONVERTIBLE";
-    }
-    if (groupName === ACCOUNT_GROUPS.WALLETS) {
-        const v = parseWallet(account.walletJson).convertibility;
-        return v === "RESTRICTED" || v === "UNAVAILABLE" ? v : "CONVERTIBLE";
-    }
-    if (groupName === ACCOUNT_GROUPS.PAYMENT_GATEWAY) {
-        const v = parseGateway(account.gatewayJson).convertibility;
-        return v === "RESTRICTED" || v === "UNAVAILABLE" ? v : "CONVERTIBLE";
-    }
-    if (groupName === ACCOUNT_GROUPS.BNPL) {
-        const v = parseBnpl(account.bnplJson).convertibility;
-        return v === "CONVERTIBLE" || v === "UNAVAILABLE" ? v : "RESTRICTED";
-    }
-    return "RESTRICTED";
-}
-
-/** Processing fee % — Credit Card / BNPL / Wallets / Payment Gateway only,
- *  applied when convertibility is CONVERTIBLE. */
-export function feePctOf(account: LimitShaped): number {
-    const groupName = account.group?.name;
-    const raw =
-        groupName === ACCOUNT_GROUPS.CREDIT_CARD ? parseCreditCard(account.creditCardJson).feePct :
-        groupName === ACCOUNT_GROUPS.BNPL ? parseBnpl(account.bnplJson).feePct :
-        groupName === ACCOUNT_GROUPS.WALLETS ? parseWallet(account.walletJson).feePct :
-        groupName === ACCOUNT_GROUPS.PAYMENT_GATEWAY ? parseGateway(account.gatewayJson).feePct :
-        "";
-    const n = Number(raw);
-    return Number.isFinite(n) ? n : 0;
-}
-
 /**
- * What this ONE ledger counts toward Usable Fund — full balance/headroom for
- * INSTANT, net of the processing fee for CONVERTIBLE, zero otherwise.
+ * What this ONE ledger counts toward Usable Fund — its balance/headroom, full
+ * value. `fundTier` decides only WHICH SECTION the ledger is reported under,
+ * never how much it is worth: the same money is the same money whether it is
+ * reported as Instant or Other.
  *
  * ⚠ Correct ONLY for a Credit Card with no `sharedLimitKey`. A card that
  * shares its sanctioned limit with a sibling (a primary + add-on card issued
@@ -181,17 +173,27 @@ const creditCardSharedKey = (account: LimitShaped): string =>
         ? parseCreditCard(account.creditCardJson).sharedLimitKey
         : "";
 
-/** Capacity (headroom for a facility, balance otherwise), using the combined
- *  drawn amount for a shared-limit card when `combinedDrawnByKey` has it —
- *  falls back to the ledger's own balance otherwise (non-shared, the common case). */
+/**
+ * Capacity — headroom for a facility, balance otherwise. Uses the combined
+ * drawn amount for a shared-limit card when `combinedDrawnByKey` has it,
+ * falling back to the ledger's own balance otherwise (non-shared, the
+ * common case).
+ *
+ * When no limit has been entered: a facility ledger (Bank OD / Credit Card /
+ * BNPL) has UNKNOWN headroom, not the drawn balance — showing the amount
+ * already owed as if it were spendable would be backwards. Only a genuine
+ * balance-type ledger (Cash / Bank / Wallet / Payment Gateway) uses its
+ * balance directly here.
+ */
 function accountCapacity(
     account: LimitShaped & { balance?: number | null },
     combinedDrawnByKey?: Map<string, number>,
 ): number {
     const limit = accountLimit(account);
-    if (limit == null) return account.balance ?? 0;
+    if (limit == null) return isFacilityGroup(account.group?.name) ? 0 : (account.balance ?? 0);
     const key = creditCardSharedKey(account);
-    const drawn = key && combinedDrawnByKey?.has(key) ? combinedDrawnByKey.get(key)! : (account.balance ?? 0);
+    const drawnSigned = key && combinedDrawnByKey?.has(key) ? combinedDrawnByKey.get(key)! : (account.balance ?? 0);
+    const drawn = isMagnitudeHeadroomGroup(account.group?.name) ? Math.abs(drawnSigned) : drawnSigned;
     return Math.max(0, computeAvailable(limit, drawn));
 }
 
@@ -201,11 +203,7 @@ export function netFundValueWithSiblings(
     account: LimitShaped & { balance?: number | null },
     combinedDrawnByKey?: Map<string, number>,
 ): number {
-    const tier = fundTierOf(account);
-    const capacity = accountCapacity(account, combinedDrawnByKey);
-    if (tier === "INSTANT") return capacity;
-    if (convertibilityOf(account) === "CONVERTIBLE") return capacity * (1 - feePctOf(account) / 100);
-    return 0;
+    return accountCapacity(account, combinedDrawnByKey);
 }
 
 /**
