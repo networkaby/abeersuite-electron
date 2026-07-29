@@ -9,7 +9,7 @@ import { defaultNormalBalanceForGroupType } from "@/modules/accountancy/lib/grou
 import { availableBalance } from "@/modules/accountancy/lib/facilityLimit";
 import { handleApiError } from "@/shared/lib/api";
 import {
-    dateOnOrBefore, toDateOnly, startOfDayUtc, endOfDayUtc, businessTodayIso,
+    dateOnOrBefore, toDateOnly, toDateOnlyUtc, startOfDayUtc, endOfDayUtc, businessTodayIso,
 } from "@/shared/lib/format/formatDate";
 
 // GET /api/accountancy/reports/ledger/[accountId]?from=YYYY-MM-DD&to=YYYY-MM-DD
@@ -141,6 +141,11 @@ export async function GET(req: Request, { params }: { params: Promise<{ accountI
                 id: account.id, code: account.code, name: account.name,
                 normalBalance: nb,
                 groupId: account.groupId, groupName: account.group?.name ?? null,
+                // Reconciliation watermark — shown on the detail strip so the
+                // ledger view can say how far this account has been matched
+                // against its statement, and when a human last checked.
+                reconciledThrough: account.reconciledThrough ? toDateOnlyUtc(account.reconciledThrough) : null,
+                reconciledAt:      account.reconciledAt ? account.reconciledAt.toISOString() : null,
             },
             from: toDateOnly(from),
             to: toDateOnly(to),

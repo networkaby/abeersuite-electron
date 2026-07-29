@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth, userCanVoucherKind } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { toNumber, balanceDelta } from "@/modules/accountancy/lib/balance";
+import { retreatReconciliation } from "@/modules/accountancy/lib/reconciliation";
 import { auditSnapshot, isPosted, isDeleted, isCancelled, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
@@ -117,6 +118,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                         const delta = balanceDelta(nb, line.type, toNumber(line.amount));
                         await tx.account.update({ where: { id: line.accountId }, data: { balance: { decrement: delta } } });
                     }
+                    // Removing a posted voucher dirties a reconciled window exactly
+                    // as much as adding one — same retreat as the posting path.
+                    await retreatReconciliation(tx, origJe.lines.map((l) => l.accountId), origJe.date);
                 }
             }
 

@@ -9,7 +9,7 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { reconcileOpeningSuspense } from "@/modules/accountancy/lib/openingBalance";
 import { effectiveAccountBalance, toNumber } from "@/modules/accountancy/lib/balance";
 import { type GroupTypeStr } from "@/modules/accountancy/lib/groupNature";
-import { toDateOnly } from "@/shared/lib/format/formatDate";
+import { toDateOnly, toDateOnlyUtc } from "@/shared/lib/format/formatDate";
 
 type AccountWithGroup = Awaited<ReturnType<typeof prisma.account.findMany>>[number] & {
     group: { id: number; name: string; type: GroupTypeStr } | null;
@@ -21,6 +21,9 @@ function serializeLedger<T extends AccountWithGroup>(a: T) {
         balance: effectiveAccountBalance(a),
         openingBalance: a.openingBalance != null ? toNumber(a.openingBalance) : null,
         openingBalanceDate: a.openingBalanceDate ? toDateOnly(a.openingBalanceDate) : null,
+        // Reconciliation watermark — mirror of the startOfDayUtc write in the
+        // reconcile route (toDateOnly would slip a day west of UTC).
+        reconciledThrough: a.reconciledThrough ? toDateOnlyUtc(a.reconciledThrough) : null,
     };
 }
 

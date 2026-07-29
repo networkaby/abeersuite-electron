@@ -25,6 +25,7 @@ import { round2 } from "@/shared/lib/format";
 import { defaultNormalBalanceForGroupType, type GroupTypeStr } from "./groupNature";
 import { recordStockMovementsBatch, type RecordStockMovementArgs } from "@/modules/inventory/lib/stockMovement";
 import { bindingForType } from "@/shared/lib/accountancy/voucherBinding";
+import { retreatReconciliation } from "./reconciliation";
 
 type Drcr = "DEBIT" | "CREDIT";
 
@@ -162,6 +163,12 @@ export async function engineGlArm(
             data:  { balance: { increment: delta } },
         });
     }
+
+    // A posting dated inside an already-reconciled window invalidates that
+    // reconciliation — pull each affected ledger's watermark back to the day
+    // before this voucher. Placed before the ATTACH/CREATE split so BOTH paths
+    // are covered, and inside the caller's tx so it rolls back with the posting.
+    await retreatReconciliation(tx, lines.map((l) => l.accountId), date);
 
     // ── The single GL writer (Phase 4 G5 — legacy JournalEntry/JournalLine dropped) ─
     // The universal-voucher spine + VoucherGlLine children ARE the GL now.
@@ -416,6 +423,12 @@ export async function enginePostSpine(
         if (!side) continue;
         await tx.account.update({ where: { id: l.accountId }, data: { balance: { increment: balanceDelta(side, l.type, toNumber(l.amount)) } } });
     }
+    // Same reconciliation retreat as engineGlArm — this is the OTHER path a spine
+    // can reach POSTED by (engineCreateVoucher → enginePostSpine), and a DRAFT
+    // moves no balances, so posting is the moment the window turns dirty.
+    const spine = await tx.universalVoucher.findUnique({ where: { id: spineId }, select: { date: true } });
+    if (spine) await retreatReconciliation(tx, ids, spine.date);
+
     await tx.universalVoucher.updateMany({ where: { id: spineId }, data: { status: "POSTED", postedAt, sourceCreatedAt: postedAt } });
 }
 

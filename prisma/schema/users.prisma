@@ -59,6 +59,7 @@ model User {
   giftCardsCreated                 GiftCard[]                 @relation("GiftCardCreatedBy")
   giftCardTxnsCreated              GiftCardTxn[]              @relation("GiftCardTxnCreatedBy")
   additionalCostAllocationsCreated AdditionalCostAllocation[] @relation("AdditionalCostAllocationCreatedBy")
+  ledgersReconciled                Account[]                  @relation("AccountReconciledBy")
 }
 
 // ── QuickNote — per-user scratch pad ──────────────────────────────────────

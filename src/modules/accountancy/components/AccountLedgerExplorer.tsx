@@ -20,7 +20,7 @@ import {
     BreadcrumbPage, BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { useEscape } from "@/shared/hooks";
-import { BookOpen, Loader2, RefreshCw, Printer, Pencil } from "lucide-react";
+import { BookOpen, Loader2, RefreshCw, Printer, Pencil, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -36,6 +36,7 @@ import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import { BookPage } from "@/modules/accountancy/components/BookPage";
 import { CreateLedgerDialog } from "@/modules/accountancy/components/CreateLedgerDialog";
 import { EditLedgerDialog, type EditableLedger } from "@/modules/accountancy/components/EditLedgerDialog";
+import { ReconciledBadge } from "@/modules/accountancy/components/ReconciledBadge";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -89,6 +90,10 @@ interface LedgerDetail {
         id: number; code: string | null; name: string;
         normalBalance: NormalBalance;
         groupId: number | null; groupName: string | null;
+        // Reconciliation watermark — how far this ledger is matched against its
+        // statement (business date), and when a human last checked (instant).
+        reconciledThrough: string | null;
+        reconciledAt: string | null;
     };
     from: string;
     to: string;
@@ -131,7 +136,7 @@ export interface AccountLedgerExplorerProps {
      *  `groupName` should be the parent group when there are sub-groups (the
      *  report flattens descendants). */
     book?: {
-        groupName: string;
+        groupName: string | string[];
         subtitle?: string;
     };
 }
@@ -393,15 +398,26 @@ export function AccountLedgerExplorer({
                                             </Badge>
                                         </div>
                                     </div>
-                                    <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="h-7 px-2.5 text-xs"
-                                        onClick={() => setEditOpen(true)}
-                                    >
-                                        <Pencil size={12} className="mr-1" />
-                                        Edit
-                                    </Button>
+                                    <div className="flex items-start gap-2">
+                                        <ReconciledBadge
+                                            accountId={detail.account.id}
+                                            reconciledThrough={detail.account.reconciledThrough}
+                                            reconciledAt={detail.account.reconciledAt}
+                                            onSaved={() => {
+                                                reloadAccounts();
+                                                if (selectedId) loadDetail(selectedId, from, to);
+                                            }}
+                                        />
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="h-7 px-2.5 text-xs"
+                                            onClick={() => setEditOpen(true)}
+                                        >
+                                            <Pencil size={12} className="mr-1" />
+                                            Edit
+                                        </Button>
+                                    </div>
                                 </div>
 
                                 {/* Stat row — 5 columns when this is a Bank OD A/c / Credit Card
@@ -434,6 +450,12 @@ export function AccountLedgerExplorer({
                                 {/* Filter bar */}
                                 <div className="flex items-center gap-3 border-b bg-card px-6 py-2.5 flex-wrap">
                                     <span className="text-sm font-semibold shrink-0">Transactions</span>
+                                    {detail.account.reconciledThrough && (
+                                        <span className="flex items-center gap-1 text-xs text-red-600/80 dark:text-red-400/80 shrink-0">
+                                            <CheckCircle2 size={11} className="shrink-0" />
+                                            marked rows settled thru {formatDate(detail.account.reconciledThrough)}
+                                        </span>
+                                    )}
                                     <div className="flex items-center gap-2 ml-auto flex-wrap">
                                         <label className="text-xs text-muted-foreground">From</label>
                                         <TallyDateInput
@@ -491,13 +513,30 @@ export function AccountLedgerExplorer({
                                                         No transactions in this period
                                                     </td>
                                                 </tr>
-                                            ) : detail.rows.map((row) => (
+                                            ) : detail.rows.map((row) => {
+                                                // yyyy-mm-dd strings compare lexicographically — reconciledThrough
+                                                // is INCLUSIVE, so a row dated exactly on it is settled.
+                                                const settled = !!detail.account.reconciledThrough
+                                                    && row.date <= detail.account.reconciledThrough;
+                                                return (
                                                 <tr
                                                     key={row.id}
-                                                    className="hover:bg-muted/40 transition-colors"
+                                                    className={cn(
+                                                        "hover:bg-muted/40 transition-colors",
+                                                        // A full-row wash was too heavy across a whole settled statement,
+                                                        // but the border-only version was barely visible at a glance —
+                                                        // a thicker border + a light fill strikes the middle ground.
+                                                        settled && "border-l-4 border-l-red-400 bg-red-50/50 dark:bg-red-900/15",
+                                                    )}
                                                 >
-                                                    <td className="px-4 py-2.5 text-xs text-muted-foreground whitespace-nowrap">
-                                                        {formatDate(row.date)}
+                                                    <td className="px-4 py-2.5 text-xs whitespace-nowrap">
+                                                        <span className={cn(
+                                                            "inline-flex items-center gap-1",
+                                                            settled ? "text-red-700 dark:text-red-300 font-semibold" : "text-muted-foreground",
+                                                        )}>
+                                                            {settled && <CheckCircle2 size={11} className="shrink-0" />}
+                                                            {formatDate(row.date)}
+                                                        </span>
                                                     </td>
                                                     <td className="px-4 py-2.5">
                                                         {row.source ? (
@@ -533,7 +572,8 @@ export function AccountLedgerExplorer({
                                                         {drCr(row.balance, detail.account.normalBalance)}
                                                     </td>
                                                 </tr>
-                                            ))}
+                                                );
+                                            })}
 
                                             {/* Closing balance pseudo-row */}
                                             {detail.rows.length > 0 && (

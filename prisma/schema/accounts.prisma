@@ -101,6 +101,23 @@ model Account {
   openingBalanceType EntryType?
   openingBalanceDate DateTime?  @db.Date
 
+  // Reconciliation watermark — this ledger has been matched against its outside
+  // statement up to AND INCLUDING `reconciledThrough` (a business date; null =
+  // never reconciled). `reconciledAt` is the wall-clock instant a human actually
+  // performed that check, which is normally much LATER than the watermark — you
+  // sit down on 27-Dec and confirm the statement through 15-Oct.
+  //
+  // That gap is where a backdated post can land: a voucher dated 13-Oct entered
+  // on 29-Dec silently changes a balance already certified through 15-Oct. So the
+  // single GL writer (engineGlArm) RETREATS the watermark to the day before any
+  // such entry — 13-Oct dirty → watermark drops to 12-Oct — rather than leaving a
+  // flag that quietly lies. `reconciledAt` is NOT touched by a retreat: it records
+  // when a human last reconciled, and nobody reconciled on 29-Dec.
+  // Same retreat fires on voucher hard-delete. See retreatReconciliation().
+  reconciledThrough DateTime? @db.Date
+  reconciledAt      DateTime?
+  reconciledById    Int?
+
   parent                   Account?                   @relation("AccountHierarchy", fields: [parentId], references: [id])
   children                 Account[]                  @relation("AccountHierarchy")
   group                    AccountGroup?              @relation(fields: [groupId], references: [id])
@@ -129,6 +146,7 @@ model Account {
   giftCardLiabilityConfigs CouponConfig[]             @relation("GiftCardLiabilityLedger")
   giftCardBreakageConfigs  CouponConfig[]             @relation("GiftCardBreakageLedger")
   giftCards                GiftCard[]                 @relation("AccountGiftCards")
+  reconciledBy             User?                      @relation("AccountReconciledBy", fields: [reconciledById], references: [id])
 
   @@index([isActive])
   @@index([personId])

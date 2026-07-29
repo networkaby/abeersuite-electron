@@ -3,6 +3,7 @@ import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
+import { retreatReconciliation } from "@/modules/accountancy/lib/reconciliation";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
@@ -47,6 +48,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                         data: { balance: { decrement: delta } },
                     });
                 }
+                // Removing a posted entry dirties a reconciled window exactly as
+                // much as adding one — same retreat as the posting path.
+                await retreatReconciliation(tx, entry.lines.map((l) => l.accountId), entry.date);
             }
 
             const created = await tx.auditLog.create({

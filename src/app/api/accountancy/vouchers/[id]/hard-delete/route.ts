@@ -5,6 +5,7 @@ import { requireAuth, userCanVoucher } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
 import { auditSnapshot, isPosted, isDeleted, isCancelled, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
+import { retreatReconciliation } from "@/modules/accountancy/lib/reconciliation";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 
@@ -46,6 +47,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                     if (!nb) continue;
                     await tx.account.update({ where: { id: line.accountId }, data: { balance: { decrement: balanceDelta(nb, line.type, toNumber(line.amount)) } } });
                 }
+                // Removing a posted voucher dirties a reconciled window exactly as
+                // much as adding one — same retreat as the posting path.
+                await retreatReconciliation(tx, voucher.lines.map((l) => l.accountId), voucher.date);
             }
 
             // ONE AuditLog row carrying the whole graph (spine + its GL lines) so
