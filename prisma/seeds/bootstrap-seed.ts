@@ -780,6 +780,7 @@ async function main() {
     await upsertGroup("Reserves & Surplus",       "LIABILITY", 10, capitalAccountId);
     await upsertGroup("Bank OD A/c",              "LIABILITY", 10, loansLiabilityId);
     await upsertGroup("Credit Card",              "LIABILITY", 15, loansLiabilityId);
+    await upsertGroup("BNPL A/c",                 "LIABILITY", 17, loansLiabilityId);
     await upsertGroup("Secured Loans",            "LIABILITY", 20, loansLiabilityId);
     await upsertGroup("Unsecured Loans",          "LIABILITY", 30, loansLiabilityId);
     await upsertGroup("Duties & Taxes",           "LIABILITY", 10, currentLiabilitiesId);
@@ -791,6 +792,11 @@ async function main() {
     await upsertGroup("Sundry Debtors",           "ASSET",     40, currentAssetsId);
     await upsertGroup("Cash-in-Hand",             "ASSET",     50, currentAssetsId);
     await upsertGroup("Bank Accounts",            "ASSET",     60, currentAssetsId);
+    await upsertGroup("Wallets",                  "ASSET",     65, currentAssetsId);
+    // "Payment Gateway" (ASSET, under Current Assets) is NOT seeded generically —
+    // it's real-config only (see personal.local.json); a new client adds it
+    // themselves via Accountancy → Masters → Account Groups if they take
+    // payments through a gateway.
 
     // GL ledgers — Stock-in-Hand intentionally has NO children.
     await upsertLedger("Cash",                    "Cash-in-Hand",      "DEBIT",  "1000");

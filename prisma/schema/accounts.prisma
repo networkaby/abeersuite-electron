@@ -50,9 +50,12 @@ model Account {
   // Bank-ledger details — set only on ledgers under the "Bank Accounts" /
   // "Bank OD A/c" groups; printed on the Contra deposit slip so each bank
   // account carries its own particulars. Shape mirrors Organisation.bankJson:
-  // { bankName, branch, accountNumber, ifsc, beneficiary, limit }
+  // { bankName, branch, accountNumber, ifsc, beneficiary, limit, fundTier }
   // `limit` (Bank OD A/c only) is the sanctioned overdraft ceiling — optional,
   // purely informational, and drives the "Available" hint (see facilityLimit.ts).
+  // `fundTier` ("" | "INSTANT" | "OTHER", Bank OD A/c only) overrides which
+  // Usable Fund section this ledger counts toward — "" defaults to INSTANT.
+  // See fundTierOf() in facilityLimit.ts.
   bankJson Json?
 
   // Loan-ledger details — set only on ledgers under "Loans (Liability)" /
@@ -62,8 +65,35 @@ model Account {
 
   // Credit-card-ledger details — set only on ledgers under the "Credit Card"
   // group. Shape: { bankName, cardNetwork, cardNumber, billingDay, dueDay,
-  // limit }. `limit` drives the "Available" hint like the OD limit above.
+  // limit, fundTier, convertibility, feePct }. `limit` drives the "Available"
+  // hint like the OD limit above. `fundTier` ("" | "INSTANT" | "OTHER") defaults
+  // to OTHER; `convertibility` ("" | "CONVERTIBLE" | "RESTRICTED" | "UNAVAILABLE")
+  // defaults to CONVERTIBLE; `feePct` is the processing fee applied when
+  // CONVERTIBLE. See fundTierOf() / netFundValue() in facilityLimit.ts.
   creditCardJson Json?
+
+  // BNPL-ledger details — set only on ledgers under the "BNPL A/c" group.
+  // Shape: { provider, limit, fundTier, convertibility, feePct }. `limit`
+  // drives the "Available" hint like the OD/Credit Card limits above.
+  // `fundTier` defaults to OTHER; `convertibility` defaults to RESTRICTED
+  // (a BNPL facility is normally purchase-only, no cash-out route) — see
+  // fundTierOf() / netFundValue() in facilityLimit.ts.
+  bnplJson Json?
+
+  // Wallet-ledger details — set only on ledgers under the "Wallets" group.
+  // Shape: { provider, fundTier, convertibility, feePct }. No `limit` — a
+  // wallet is a prepaid balance, not a credit facility. `fundTier` defaults
+  // to OTHER; `convertibility` defaults to CONVERTIBLE. See fundTierOf() /
+  // netFundValue() in facilityLimit.ts.
+  walletJson Json?
+
+  // Payment-gateway-ledger details — set only on ledgers under the
+  // "Payment Gateway" group (already live as a real-config group before
+  // this column existed — see personal.local.json). Shape: { provider,
+  // fundTier, convertibility, feePct }. No `limit` — same reasoning as
+  // Wallets. `fundTier` defaults to OTHER; `convertibility` defaults to
+  // CONVERTIBLE. See fundTierOf() / netFundValue() in facilityLimit.ts.
+  gatewayJson Json?
 
   // Tally-style opening balance — entered on the master, dated at booksBeginningFrom.
   // Imbalance across all accounts auto-parks to the seeded "Difference in Opening Balances" suspense ledger.

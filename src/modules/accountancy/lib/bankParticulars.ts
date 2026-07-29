@@ -15,14 +15,19 @@ export type BankFields = {
     // facilityLimit.ts. Left "" when the facility limit isn't tracked (e.g. the
     // account is only ever funded from our own deposits, never drawn against).
     limit: string;
+    // Usable Fund tier override — Bank OD A/c ledgers only. "" (default) reads
+    // as INSTANT, since an OD facility is normally spendable the moment it's
+    // drawn. Set to "OTHER" only for a facility that genuinely isn't. See
+    // fundTierOf() in facilityLimit.ts for the resolved value.
+    fundTier: string;
 };
 
 export const EMPTY_BANK: BankFields = {
-    bankName: "", branch: "", accountNumber: "", ifsc: "", beneficiary: "", limit: "",
+    bankName: "", branch: "", accountNumber: "", ifsc: "", beneficiary: "", limit: "", fundTier: "",
 };
 
 export const hasBankData = (b: BankFields): boolean =>
-    !!(b.bankName || b.branch || b.accountNumber || b.ifsc || b.beneficiary || b.limit);
+    !!(b.bankName || b.branch || b.accountNumber || b.ifsc || b.beneficiary || b.limit || b.fundTier);
 
 export function parseBank(v: unknown): BankFields {
     if (v == null || typeof v !== "object" || Array.isArray(v)) return { ...EMPTY_BANK };
@@ -35,6 +40,7 @@ export function parseBank(v: unknown): BankFields {
         ifsc: s(o.ifsc),
         beneficiary: s(o.beneficiary),
         limit: s(o.limit),
+        fundTier: s(o.fundTier),
     };
 }
 

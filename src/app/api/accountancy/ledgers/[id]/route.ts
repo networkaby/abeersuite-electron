@@ -21,10 +21,12 @@ const bankJsonSchema = z.object({
     ifsc: z.string().trim().max(20).default(""),
     beneficiary: z.string().trim().max(120).default(""),
     limit: z.string().trim().max(20).default(""),
+    // Usable Fund tier override — "" reads as INSTANT. See bankParticulars.ts.
+    fundTier: z.enum(["", "INSTANT", "OTHER"]).default(""),
 });
 
 const emptyBank = (b: z.infer<typeof bankJsonSchema>): boolean =>
-    !b.bankName && !b.branch && !b.accountNumber && !b.ifsc && !b.beneficiary && !b.limit;
+    !b.bankName && !b.branch && !b.accountNumber && !b.ifsc && !b.beneficiary && !b.limit && !b.fundTier;
 
 const loanJsonSchema = z.object({
     lender: z.string().trim().max(120).default(""),
@@ -45,10 +47,48 @@ const creditCardJsonSchema = z.object({
     billingDay: z.string().trim().max(10).default(""),
     dueDay: z.string().trim().max(10).default(""),
     limit: z.string().trim().max(20).default(""),
+    // Usable Fund fields — "" reads as OTHER / CONVERTIBLE. See creditCardParticulars.ts.
+    fundTier: z.enum(["", "INSTANT", "OTHER"]).default(""),
+    convertibility: z.enum(["", "CONVERTIBLE", "RESTRICTED", "UNAVAILABLE"]).default(""),
+    feePct: z.string().trim().max(10).default(""),
+    // Set when this card shares its limit with another card. See creditCardParticulars.ts.
+    sharedLimitKey: z.string().trim().max(60).default(""),
 });
 
 const emptyCreditCard = (c: z.infer<typeof creditCardJsonSchema>): boolean =>
-    !c.bankName && !c.cardNetwork && !c.cardNumber && !c.billingDay && !c.dueDay && !c.limit;
+    !c.bankName && !c.cardNetwork && !c.cardNumber && !c.billingDay && !c.dueDay && !c.limit
+    && !c.fundTier && !c.convertibility && !c.feePct && !c.sharedLimitKey;
+
+const bnplJsonSchema = z.object({
+    provider: z.string().trim().max(120).default(""),
+    limit: z.string().trim().max(20).default(""),
+    fundTier: z.enum(["", "INSTANT", "OTHER"]).default(""),
+    convertibility: z.enum(["", "CONVERTIBLE", "RESTRICTED", "UNAVAILABLE"]).default(""),
+    feePct: z.string().trim().max(10).default(""),
+});
+
+const emptyBnpl = (b: z.infer<typeof bnplJsonSchema>): boolean =>
+    !b.provider && !b.limit && !b.fundTier && !b.convertibility && !b.feePct;
+
+const walletJsonSchema = z.object({
+    provider: z.string().trim().max(120).default(""),
+    fundTier: z.enum(["", "INSTANT", "OTHER"]).default(""),
+    convertibility: z.enum(["", "CONVERTIBLE", "RESTRICTED", "UNAVAILABLE"]).default(""),
+    feePct: z.string().trim().max(10).default(""),
+});
+
+const emptyWallet = (w: z.infer<typeof walletJsonSchema>): boolean =>
+    !w.provider && !w.fundTier && !w.convertibility && !w.feePct;
+
+const gatewayJsonSchema = z.object({
+    provider: z.string().trim().max(120).default(""),
+    fundTier: z.enum(["", "INSTANT", "OTHER"]).default(""),
+    convertibility: z.enum(["", "CONVERTIBLE", "RESTRICTED", "UNAVAILABLE"]).default(""),
+    feePct: z.string().trim().max(10).default(""),
+});
+
+const emptyGateway = (g: z.infer<typeof gatewayJsonSchema>): boolean =>
+    !g.provider && !g.fundTier && !g.convertibility && !g.feePct;
 
 const updateSchema = z.object({
     name: z.string().trim().min(1).max(200).optional(),
@@ -59,6 +99,9 @@ const updateSchema = z.object({
     bankJson: bankJsonSchema.nullable().optional(),
     loanJson: loanJsonSchema.nullable().optional(),
     creditCardJson: creditCardJsonSchema.nullable().optional(),
+    bnplJson: bnplJsonSchema.nullable().optional(),
+    walletJson: walletJsonSchema.nullable().optional(),
+    gatewayJson: gatewayJsonSchema.nullable().optional(),
     openingBalance: z.number().nullable().optional(),
     openingBalanceType: z.enum(["DEBIT", "CREDIT"]).nullable().optional(),
 }).superRefine((value, ctx) => {
@@ -111,6 +154,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                     : {}),
                 ...(body.creditCardJson !== undefined
                     ? { creditCardJson: body.creditCardJson && !emptyCreditCard(body.creditCardJson) ? body.creditCardJson : Prisma.DbNull }
+                    : {}),
+                ...(body.bnplJson !== undefined
+                    ? { bnplJson: body.bnplJson && !emptyBnpl(body.bnplJson) ? body.bnplJson : Prisma.DbNull }
+                    : {}),
+                ...(body.walletJson !== undefined
+                    ? { walletJson: body.walletJson && !emptyWallet(body.walletJson) ? body.walletJson : Prisma.DbNull }
+                    : {}),
+                ...(body.gatewayJson !== undefined
+                    ? { gatewayJson: body.gatewayJson && !emptyGateway(body.gatewayJson) ? body.gatewayJson : Prisma.DbNull }
                     : {}),
                 ...(body.openingBalance !== undefined
                     ? {
