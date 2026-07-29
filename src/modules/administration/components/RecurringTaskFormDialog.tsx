@@ -120,7 +120,7 @@ export default function RecurringTaskFormDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-lg">
+            <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle>{isEdit ? "Edit recurring task" : "New recurring task"}</DialogTitle>
                     <DialogDescription>
@@ -129,79 +129,100 @@ export default function RecurringTaskFormDialog({
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="space-y-4">
-                    <div className="space-y-2">
-                        <Label htmlFor="rec-title">Title</Label>
-                        <Input
-                            id="rec-title"
-                            value={title}
-                            onChange={(e) => setTitle(e.target.value)}
-                            placeholder="e.g. Shop rent · Shop loan EMI"
-                        />
+                <div className="grid gap-6 md:grid-cols-[1fr_260px]">
+                    {/* ── Main fields ─────────────────────────────────────────── */}
+                    <div className="space-y-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="rec-title">Title</Label>
+                            <Input
+                                id="rec-title"
+                                value={title}
+                                onChange={(e) => setTitle(e.target.value)}
+                                placeholder="e.g. Shop rent · Shop loan EMI"
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                Each generated task adds the occurrence — &ldquo;#3 of 12&rdquo; for a fixed
+                                count, or the month for an ongoing one.
+                            </p>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="rec-desc">Description</Label>
+                            <Textarea
+                                id="rec-desc"
+                                value={description}
+                                onChange={(e) => setDescription(e.target.value)}
+                                placeholder="Details, account number, contact…"
+                                rows={2}
+                            />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="rec-category">Category</Label>
+                                <Input
+                                    id="rec-category"
+                                    value={category}
+                                    onChange={(e) => setCategory(e.target.value)}
+                                    placeholder="Finance, Rent…"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Priority</Label>
+                                <Select value={priority} onValueChange={(v) => setPriority(v as TaskPriority)}>
+                                    <SelectTrigger>
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {PRIORITIES.map((p) => (
+                                            <SelectItem key={p} value={p}>
+                                                {PRIORITY_META[p]?.label ?? p}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label>Assign to (position)</Label>
+                                <Select value={assignedPositionId} onValueChange={setAssignedPositionId}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Unassigned" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value={UNASSIGNED}>Unassigned</SelectItem>
+                                        {positions.map((p) => (
+                                            <SelectItem key={p.id} value={p.id}>
+                                                {p.title}
+                                                {p.branchName ? ` · ${p.branchName}` : ""}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="rec-amount">Amount (₹)</Label>
+                                <Input
+                                    id="rec-amount"
+                                    type="number"
+                                    min={0}
+                                    step="0.01"
+                                    value={amount}
+                                    onChange={(e) => setAmount(e.target.value)}
+                                    placeholder="Optional"
+                                />
+                            </div>
+                        </div>
                         <p className="text-xs text-muted-foreground">
-                            Each generated task adds the occurrence — &ldquo;#3 of 12&rdquo; for a fixed
-                            count, or the month for an ongoing one.
+                            Amount is for your reference only — shown on the task, never posted to
+                            the accounts.
                         </p>
                     </div>
 
-                    <div className="space-y-2">
-                        <Label htmlFor="rec-desc">Description</Label>
-                        <Textarea
-                            id="rec-desc"
-                            value={description}
-                            onChange={(e) => setDescription(e.target.value)}
-                            placeholder="Details, account number, contact…"
-                            rows={2}
-                        />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="rec-category">Category</Label>
-                            <Input
-                                id="rec-category"
-                                value={category}
-                                onChange={(e) => setCategory(e.target.value)}
-                                placeholder="Finance, Rent…"
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Priority</Label>
-                            <Select value={priority} onValueChange={(v) => setPriority(v as TaskPriority)}>
-                                <SelectTrigger>
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {PRIORITIES.map((p) => (
-                                        <SelectItem key={p} value={p}>
-                                            {PRIORITY_META[p]?.label ?? p}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    </div>
-
-                    <div className="space-y-2">
-                        <Label>Assign to (position)</Label>
-                        <Select value={assignedPositionId} onValueChange={setAssignedPositionId}>
-                            <SelectTrigger>
-                                <SelectValue placeholder="Unassigned" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value={UNASSIGNED}>Unassigned</SelectItem>
-                                {positions.map((p) => (
-                                    <SelectItem key={p.id} value={p.id}>
-                                        {p.title}
-                                        {p.branchName ? ` · ${p.branchName}` : ""}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-
-                    {/* ── Repeats ─────────────────────────────────────────────── */}
-                    <div className="space-y-4 rounded-lg border bg-muted/30 p-3">
+                    {/* ── Repeats (aside) ─────────────────────────────────────── */}
+                    <div className="space-y-4 rounded-lg border bg-muted/30 p-3 self-start">
                         <p className="text-sm font-medium">Repeats</p>
 
                         {scheduleLocked && (
@@ -211,92 +232,73 @@ export default function RecurringTaskFormDialog({
                             </p>
                         )}
 
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="rec-every">Repeat every</Label>
-                                <div className="flex gap-2">
-                                    <Input
-                                        id="rec-every"
-                                        type="number"
-                                        min={1}
-                                        className="w-20"
-                                        value={every}
-                                        disabled={scheduleLocked}
-                                        onChange={(e) => setEvery(e.target.value)}
-                                    />
-                                    <Select
-                                        value={unit}
-                                        onValueChange={(v) => setUnit(v as RecurrenceUnit)}
-                                        disabled={scheduleLocked}
-                                    >
-                                        <SelectTrigger className="flex-1">
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {UNITS.map((u) => (
-                                                <SelectItem key={u.key} value={u.key}>{u.label}</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="rec-count">Occurrences</Label>
+                        <div className="space-y-2">
+                            <Label htmlFor="rec-every">Repeat every</Label>
+                            <div className="flex gap-2">
                                 <Input
-                                    id="rec-count"
+                                    id="rec-every"
                                     type="number"
                                     min={1}
-                                    value={totalCount}
-                                    onChange={(e) => setTotalCount(e.target.value)}
-                                    placeholder="Blank = no end"
-                                />
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <Label>First due</Label>
-                                <TallyDateTimeInput
-                                    value={anchorAt}
-                                    onValueChange={setAnchorAt}
+                                    className="w-16"
+                                    value={every}
                                     disabled={scheduleLocked}
+                                    onChange={(e) => setEvery(e.target.value)}
                                 />
-                                <p className="text-xs text-muted-foreground">
-                                    Its day of the month is the rule — the 31st becomes the 30th in a
-                                    short month, then comes back to the 31st.
-                                </p>
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="rec-lead">Create in advance</Label>
-                                <div className="flex items-center gap-2">
-                                    <Input
-                                        id="rec-lead"
-                                        type="number"
-                                        min={0}
-                                        className="w-20"
-                                        value={leadDays}
-                                        onChange={(e) => setLeadDays(e.target.value)}
-                                    />
-                                    <span className="text-sm text-muted-foreground">days before due</span>
-                                </div>
+                                <Select
+                                    value={unit}
+                                    onValueChange={(v) => setUnit(v as RecurrenceUnit)}
+                                    disabled={scheduleLocked}
+                                >
+                                    <SelectTrigger className="flex-1">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {UNITS.map((u) => (
+                                            <SelectItem key={u.key} value={u.key}>{u.label}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                             </div>
                         </div>
 
                         <div className="space-y-2">
-                            <Label htmlFor="rec-amount">Amount (₹)</Label>
+                            <Label htmlFor="rec-count">Occurrences</Label>
                             <Input
-                                id="rec-amount"
+                                id="rec-count"
                                 type="number"
-                                min={0}
-                                step="0.01"
-                                value={amount}
-                                onChange={(e) => setAmount(e.target.value)}
-                                placeholder="Optional"
+                                min={1}
+                                value={totalCount}
+                                onChange={(e) => setTotalCount(e.target.value)}
+                                placeholder="Blank = no end"
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label>First due</Label>
+                            <TallyDateTimeInput
+                                value={anchorAt}
+                                onValueChange={setAnchorAt}
+                                disabled={scheduleLocked}
                             />
                             <p className="text-xs text-muted-foreground">
-                                For your reference only — it is shown on the task, never posted to
-                                the accounts.
+                                Its day of the month is the rule — the 31st becomes the 30th in a
+                                short month, then comes back to the 31st.
                             </p>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="rec-lead">Create in advance</Label>
+                            <div className="flex items-center gap-2">
+                                <Input
+                                    id="rec-lead"
+                                    type="number"
+                                    min={0}
+                                    className="w-16"
+                                    value={leadDays}
+                                    onChange={(e) => setLeadDays(e.target.value)}
+                                />
+                                <span className="text-sm text-muted-foreground">days before</span>
+                            </div>
                         </div>
                     </div>
                 </div>
