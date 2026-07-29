@@ -41,6 +41,7 @@ import {
 import { INDIA_STATE_NAMES } from "@/modules/delivery/lib/deliveryMethodConfig";
 import { sanitizePodArea, type PodAreaMode } from "@/shared/lib/payments/payOnDelivery";
 import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/components/GlAccountCombobox";
+import { isOdGroupName } from "@/modules/accountancy/lib/bankParticulars";
 import { Landmark } from "lucide-react";
 
 // ── Types mirroring the API ───────────────────────────────────────────────────
@@ -167,13 +168,16 @@ export default function PaymentMethodsSettingsPage() {
         }
     }, []);
 
-    // Load the ASSET-side ledgers once for the settlement picker. Any asset group
-    // qualifies — Cash-in-Hand, Bank Accounts, or a custom group like "Gateway"
-    // under Current Assets (party ledgers already excluded by the API flag).
+    // Load the ledgers money can settle into. Any asset group qualifies —
+    // Cash-in-Hand, Bank Accounts, or a custom group like "Gateway" under
+    // Current Assets (party ledgers already excluded by the API flag). Bank OD
+    // A/c is added explicitly: it is a normal current account for money
+    // movement even though it reports as a liability (see moneyAccount.ts).
     useEffect(() => {
         axios
             .get<GlAccount[]>("/api/accountancy/gl-accounts?includeParties=false")
-            .then((r) => setGlAccounts(r.data.filter((a) => a.group?.type === "ASSET")))
+            .then((r) => setGlAccounts(r.data.filter((a) =>
+                a.group?.type === "ASSET" || isOdGroupName(a.group?.name))))
             .catch(() => setGlAccounts([]));
     }, []);
 

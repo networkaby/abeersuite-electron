@@ -67,6 +67,7 @@ import { consumeDuplicate } from "@/modules/accountancy/lib/duplicate";
 import { ParentVoucherPicker } from "@/modules/inventory/components/ParentVoucherPicker";
 import { Switch } from "@/components/ui/switch";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
+import { isMoneyGroupName } from "@/modules/accountancy/lib/moneyAccount";
 import { extractApiError } from "@/shared/lib/api";
 import { parseDecimalInput, round2, todayIso } from "@/shared/lib/format";
 import { fmt } from "@/utils/constants";
@@ -675,29 +676,24 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [editVoucherId, isEditing]);
 
-    // Load cash + bank ledgers once and pre-select "Cash-in-Hand" if present.
+    // Load the money ledgers once and pre-select "Cash-in-Hand" if present.
     // Account rows are enriched with their group so we can filter by
-    // ACCOUNT_GROUPS.CASH_IN_HAND / BANK_ACCOUNTS.
+    // cash / bank / OD (see moneyAccount.ts — an OD account is a normal
+    // current account for money movement).
     // In edit mode the default is skipped — a separate effect matches the
     // voucher's saved paymentAccountId once both fetches resolve.
     useEffect(() => {
         axios.get<GlAccount[]>("/api/accountancy/gl-accounts?includeParties=false")
             .then((r) => {
-                const cb = r.data.filter((a) =>
-                    a.group?.name === ACCOUNT_GROUPS.CASH_IN_HAND ||
-                    a.group?.name === ACCOUNT_GROUPS.BANK_ACCOUNTS,
-                );
+                const cb = r.data.filter((a) => isMoneyGroupName(a.group?.name));
                 setCashBankAccounts(cb);
                 // chargeAccounts = every non-party ledger that ISN'T a
-                // cash/bank til (those are tender accounts, picked above).
+                // cash/bank/OD til (those are tender accounts, picked above).
                 // Operators see Packing Income / Discount Allowed /
                 // Service Charges / Insurance etc. in the "+ Add Account"
                 // picker — anything they might want to surface as a
                 // separate JE leg on the voucher.
-                setChargeAccounts(r.data.filter((a) =>
-                    a.group?.name !== ACCOUNT_GROUPS.CASH_IN_HAND &&
-                    a.group?.name !== ACCOUNT_GROUPS.BANK_ACCOUNTS,
-                ));
+                setChargeAccounts(r.data.filter((a) => !isMoneyGroupName(a.group?.name)));
                 if (isEditing) return;
                 // Prefer the account the operator last picked as "Received In"
                 // on this voucher kind, else the house till.

@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { type GlAccount } from "@/modules/accountancy/components/GlAccountCombobox";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
+import { isMoneyGroupName } from "@/modules/accountancy/lib/moneyAccount";
 import { ORDER_STAGE } from "@/modules/order/lib/orderPipeline";
 
 // Phase 1 of the O2C order backbone: one board for orders from every channel
@@ -77,12 +78,11 @@ export function OrdersBoard() {
     }, []);
     useEffect(() => { load(); }, [load]);
 
-    // Cash/bank tills the operator can receive a fulfil payment into (same source
-    // the office voucher form uses for its tender picker).
+    // Cash/bank/OD tills the operator can receive a fulfil payment into (same
+    // source the office voucher form uses for its tender picker).
     useEffect(() => {
         axios.get<GlAccount[]>("/api/accountancy/gl-accounts?includeParties=false")
-            .then((r) => setCashBank(r.data.filter((a) =>
-                a.group?.name === ACCOUNT_GROUPS.CASH_IN_HAND || a.group?.name === ACCOUNT_GROUPS.BANK_ACCOUNTS)))
+            .then((r) => setCashBank(r.data.filter((a) => isMoneyGroupName(a.group?.name))))
             .catch(() => setCashBank([]));
     }, []);
 

@@ -26,6 +26,11 @@ import { extractApiError } from "@/shared/lib/api";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { requiredVoucherPermission } from "@/shared/lib/auth/voucherMatrix";
 import { consumeDuplicate } from "@/modules/accountancy/lib/duplicate";
+import {
+    isMoneyGroupName,
+    isBankLikeGroupName,
+    MONEY_ACCOUNT_PLACEHOLDER,
+} from "@/modules/accountancy/lib/moneyAccount";
 import { voucherPrintPageHref } from "@/modules/accountancy/lib/voucherUrls";
 import { printAfterSaveDefault, thermalDefault } from "@/shared/lib/print/voucherTemplateDefaults";
 import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/components/GlAccountCombobox";
@@ -108,12 +113,9 @@ function snapshotsEqual(a: Snapshot, b: Snapshot): boolean {
 
 export type MoneyFlowKind = "PAYMENT" | "RECEIPT" | "CONTRA" | "CREDIT_NOTE" | "DEBIT_NOTE";
 
-const CASH_BANK_GROUPS = [ACCOUNT_GROUPS.CASH_IN_HAND, ACCOUNT_GROUPS.BANK_ACCOUNTS] as const;
-const isCashOrBank      = (a: GlAccount) => CASH_BANK_GROUPS.includes(a.group?.name as typeof CASH_BANK_GROUPS[number]);
-// Contra also allows OD (overdraft) ledgers as a Transfer to/from leg — Payment
-// and Receipt keep the plain cash/bank filter above.
-const CONTRA_GROUPS     = [...CASH_BANK_GROUPS, ACCOUNT_GROUPS.BANK_OD] as const;
-const isContraEligible  = (a: GlAccount) => CONTRA_GROUPS.includes(a.group?.name as typeof CONTRA_GROUPS[number]);
+// Cash / Bank / OD — see moneyAccount.ts for why OD belongs with the deposit
+// accounts. Payment, Receipt and Contra all draw from this one set.
+const isMoneyAccount    = (a: GlAccount) => isMoneyGroupName(a.group?.name);
 const isSundryDebtor    = (a: GlAccount) => a.group?.name === ACCOUNT_GROUPS.SUNDRY_DEBTORS;
 const isSundryCreditor  = (a: GlAccount) => a.group?.name === ACCOUNT_GROUPS.SUNDRY_CREDITORS;
 
@@ -143,13 +145,13 @@ const PER_KIND: Record<MoneyFlowKind, KindConfig> = {
         title:                "Payment Voucher",
         topLabel:             "Paid from",
         rowsHeader:           "Paid to",
-        topPlaceholder:       "Cash-in-Hand / Bank Account…",
+        topPlaceholder:       MONEY_ACCOUNT_PLACEHOLDER,
         rowPlaceholder:       "Party / expense / income…",
         narrationPlaceholder: "e.g. Office rent for May 2026",
         topSide:              "CREDIT",
         rowSide:              "DEBIT",
         topPickerKind:        "ledger",
-        topFilter:            isCashOrBank,
+        topFilter:            isMoneyAccount,
         rowFilter:            () => true,
         listPath:             "/office/accountancy/vouchers-registers/payments",
     },
@@ -157,13 +159,13 @@ const PER_KIND: Record<MoneyFlowKind, KindConfig> = {
         title:                "Receipt Voucher",
         topLabel:             "Received in",
         rowsHeader:           "Received from",
-        topPlaceholder:       "Cash-in-Hand / Bank Account…",
+        topPlaceholder:       MONEY_ACCOUNT_PLACEHOLDER,
         rowPlaceholder:       "Party / income / refund…",
         narrationPlaceholder: "e.g. Cash received from Acme Corp",
         topSide:              "DEBIT",
         rowSide:              "CREDIT",
         topPickerKind:        "ledger",
-        topFilter:            isCashOrBank,
+        topFilter:            isMoneyAccount,
         rowFilter:            () => true,
         listPath:             "/office/accountancy/vouchers-registers/receipts",
     },
@@ -171,14 +173,14 @@ const PER_KIND: Record<MoneyFlowKind, KindConfig> = {
         title:                "Contra Voucher",
         topLabel:             "Transfer to",
         rowsHeader:           "Transfer from",
-        topPlaceholder:       "Cash-in-Hand / Bank / OD Account…",
-        rowPlaceholder:       "Cash-in-Hand / Bank / OD Account…",
+        topPlaceholder:       MONEY_ACCOUNT_PLACEHOLDER,
+        rowPlaceholder:       MONEY_ACCOUNT_PLACEHOLDER,
         narrationPlaceholder: "e.g. Deposit cash to HDFC current account",
         topSide:              "DEBIT",
         rowSide:              "CREDIT",
         topPickerKind:        "ledger",
-        topFilter:            isContraEligible,
-        rowFilter:            isContraEligible,
+        topFilter:            isMoneyAccount,
+        rowFilter:            isMoneyAccount,
         listPath:             "/office/accountancy/vouchers-registers/contras",
     },
     CREDIT_NOTE: {
@@ -401,8 +403,7 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
 
     // "Bank-like" = Bank Accounts or Bank OD A/c — both are a real cash/cheque
     // movement at the counter, so depositing into either behaves the same way.
-    const isBankLikeAcct = (a?: GlAccount) =>
-        a?.group?.name === ACCOUNT_GROUPS.BANK_ACCOUNTS || a?.group?.name === ACCOUNT_GROUPS.BANK_OD;
+    const isBankLikeAcct = (a?: GlAccount) => isBankLikeGroupName(a?.group?.name);
     const topIsBank  = isContra && isBankLikeAcct(topAccount);
     const isCashAcct = (a?: GlAccount) => a?.group?.name === ACCOUNT_GROUPS.CASH_IN_HAND;
     // Cash "Transfer from" rows — each gets its own side panel while capture is on.
