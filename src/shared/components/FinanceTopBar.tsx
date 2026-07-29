@@ -2,10 +2,11 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import axios from "axios";
 import { fmt } from "@/utils/constants";
 import { hasModuleNavAccess } from "@/shared/lib/auth/permissionScope";
-import { Wallet, Building2, TrendingUp, TrendingDown, RefreshCw, SquareChevronDown, SquareChevronUp, Wrench } from "lucide-react";
+import { Wallet, Building2, TrendingUp, TrendingDown, RefreshCw, SquareChevronDown, SquareChevronUp, Wrench, HandCoins } from "lucide-react";
 import { toast } from "sonner";
 import { usePanelStore } from "@/store/panelStore";
 import { BranchSwitcher } from "@/shared/components/BranchSwitcher";
@@ -37,13 +38,15 @@ function Pill({
     colorClass?: string;
 }) {
     const [open, setOpen] = useState(false);
+    const router = useRouter();
     const negative = value < 0;
+    const hasDropdown = !!detail && detail.length > 1;
 
     return (
         <div className="relative">
             <button
                 type="button"
-                onClick={() => setOpen((o) => !o)}
+                onClick={() => (hasDropdown ? setOpen((o) => !o) : router.push(href))}
                 className={[
                     "flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-colors",
                     "hover:bg-muted/60",
@@ -57,7 +60,7 @@ function Pill({
             </button>
 
             {/* Sub-account dropdown */}
-            {open && detail && detail.length > 1 && (
+            {open && hasDropdown && (
                 <div className="absolute left-0 top-full z-50 mt-1 min-w-[200px] rounded-lg border border-border bg-popover py-1 shadow-lg">
                     {detail.map((d) => (
                         <div
@@ -92,6 +95,7 @@ export default function FinanceTopBar({
 }) {
     const canView = hasModuleNavAccess(permissions, "accountancy");
     const [data, setData] = useState<CashPosition | null>(null);
+    const [instantFund, setInstantFund] = useState<number | null>(null);
     const [loading, setLoading] = useState(false);
     const [recomputing, setRecomputing] = useState(false);
     const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -125,6 +129,10 @@ export default function FinanceTopBar({
             })
             .catch(() => {/* silent — non-critical UI */ })
             .finally(() => setLoading(false));
+        axios
+            .get<{ instantTotal: number }>("/api/accountancy/reports/usable-fund")
+            .then((r) => setInstantFund(r.data.instantTotal))
+            .catch(() => {/* silent — non-critical UI */ });
     }, [canView]);
 
     useEffect(() => {
@@ -154,6 +162,19 @@ export default function FinanceTopBar({
             {/* Metrics — only when permitted */}
             {canView && data ? (
                 <>
+                    {instantFund != null && (
+                        <>
+                            <Pill
+                                icon={<HandCoins size={12} />}
+                                label="Instant Fund"
+                                value={instantFund}
+                                href="/office/accountancy/usable-fund"
+                                colorClass="text-fuchsia-700 dark:text-fuchsia-400"
+                            />
+                            <span className="text-border">|</span>
+                        </>
+                    )}
+
                     <Pill
                         icon={<Wallet size={12} />}
                         label="Cash"

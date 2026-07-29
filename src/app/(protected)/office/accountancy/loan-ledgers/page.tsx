@@ -2,6 +2,16 @@
 
 import { Banknote } from "lucide-react";
 import { AccountLedgerExplorer } from "@/modules/accountancy/components/AccountLedgerExplorer";
+import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
+
+// Credit Card and BNPL A/c are seeded as children of Loans (Liability), so the
+// book lists each as its own table — BookPage prunes a group from its parent's
+// section when that group has a section of its own.
+const BOOK_GROUPS = [
+    ACCOUNT_GROUPS.LOANS_LIABILITY,
+    ACCOUNT_GROUPS.CREDIT_CARD,
+    ACCOUNT_GROUPS.BNPL,
+];
 
 export default function LoanLedgersPage() {
     return (
@@ -9,12 +19,15 @@ export default function LoanLedgersPage() {
             title="Loans Book"
             panelTitle="Loan Accounts"
             panelIcon={<Banknote size={15} className="text-primary" />}
-            // Three groups under Loans (Liability): the parent itself plus secured / unsecured.
-            groupNames={["Loans (Liability)", "Secured Loans", "Unsecured Loans"]}
-            emptyMessage="No loan accounts. Add ledgers under Loans (Liability) / Secured Loans / Unsecured Loans."
-            // BookPage flattens descendants — passing the parent surfaces
-            // Secured + Unsecured loans in the same summary table.
-            book={{ groupName: "Loans (Liability)", subtitle: "All loan ledgers with period totals — pick one to see its register." }}
+            // Panel list walks descendants of these dynamically (AccountLedgerExplorer
+            // fetches the live group tree) — a new sub-group under any of these
+            // shows up automatically, no need to list Secured/Unsecured/Bank OD here.
+            groupNames={BOOK_GROUPS}
+            emptyMessage="No loan accounts. Add ledgers under Loans (Liability) / Secured Loans / Unsecured Loans / Bank OD A/c / Credit Card / BNPL A/c."
+            book={{
+                groupName: BOOK_GROUPS,
+                subtitle: "All loan, credit-card and BNPL ledgers with period totals — pick one to see its register.",
+            }}
         />
     );
 }

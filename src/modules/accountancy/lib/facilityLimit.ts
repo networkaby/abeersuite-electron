@@ -226,3 +226,28 @@ export function netFundTotal(accounts: (LimitShaped & { balance?: number | null 
     }
     return total;
 }
+
+/**
+ * Same as `netFundTotal()`, but only the ledgers reporting under one section
+ * (`fundTierOf(account) === tier`). The combined-drawn map is still built from
+ * ALL accounts passed in (not just the filtered subset), so a shared-limit
+ * family's headroom stays correct even if a sibling sits in the other tier.
+ */
+export function netFundTotalByTier(
+    accounts: (LimitShaped & { balance?: number | null })[],
+    tier: FundTier,
+): number {
+    const combinedDrawnByKey = combinedDrawnByCreditCardKey(accounts);
+    const countedKeys = new Set<string>();
+    let total = 0;
+    for (const a of accounts) {
+        if (fundTierOf(a) !== tier) continue;
+        const key = creditCardSharedKey(a);
+        if (key) {
+            if (countedKeys.has(key)) continue; // this shared pool already counted once
+            countedKeys.add(key);
+        }
+        total += netFundValueWithSiblings(a, combinedDrawnByKey);
+    }
+    return total;
+}

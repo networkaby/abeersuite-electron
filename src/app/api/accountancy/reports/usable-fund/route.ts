@@ -10,7 +10,7 @@ import { parseCreditCard } from "@/modules/accountancy/lib/creditCardParticulars
 import { parseBnpl } from "@/modules/accountancy/lib/bnplParticulars";
 import { parseWallet } from "@/modules/accountancy/lib/walletParticulars";
 import { parseGateway } from "@/modules/accountancy/lib/gatewayParticulars";
-import { accountLimit, fundTierOf, isFacilityGroup, isMagnitudeHeadroomGroup } from "@/modules/accountancy/lib/facilityLimit";
+import { accountLimit, fundTierOf, isFacilityGroup, isMagnitudeHeadroomGroup, netFundTotalByTier } from "@/modules/accountancy/lib/facilityLimit";
 
 // GET /api/accountancy/reports/usable-fund?asOf=YYYY-MM-DD
 //
@@ -132,7 +132,13 @@ export async function GET(req: Request) {
             return { key: b.key, label: b.label, groupName: b.groupName, ledgers };
         }).filter((b) => b.ledgers.length > 0);
 
-        return NextResponse.json({ asOf: asOf.toISOString(), buckets });
+        // Instant Fund total — same figure the Usable Fund page's "Instant"
+        // hero tile shows, computed here too so the top bar can show it
+        // without loading every bucket/ledger.
+        const accountsWithBalance = accounts.map((a) => ({ ...a, balance: closingMap.get(a.id) ?? 0 }));
+        const instantTotal = netFundTotalByTier(accountsWithBalance, "INSTANT");
+
+        return NextResponse.json({ asOf: asOf.toISOString(), buckets, instantTotal });
     } catch (e) {
         return handleApiError(e, "Failed to load usable fund");
     }

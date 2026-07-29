@@ -1,5 +1,6 @@
 export * from "./addInterval";
 export * from "./entityColor";
+export * from "./groupColor";
 export * from "./formatDate";
 export * from "./timeAgo";
 export * from "./moneyInr";

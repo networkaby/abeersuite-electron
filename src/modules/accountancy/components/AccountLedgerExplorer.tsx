@@ -29,6 +29,7 @@ import { fmt } from "@/utils/constants";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { formatDrCr } from "@/shared/lib/format/moneyInr";
 import { cn } from "@/shared/lib/format/utils";
+import { groupColor } from "@/shared/lib/format/groupColor";
 import { EntityListPanel } from "@/shared/components/EntityListPanel";
 import { BreadcrumbBar } from "@/shared/components/BreadcrumbBar";
 import { indianFiscalYearStart } from "@/modules/accountancy/lib/period";
@@ -68,6 +69,14 @@ interface SourceDoc {
     reference?: string;
     number?: string;
     url: string;
+}
+
+// Lightweight group tree (no ledgers/balances) — just enough structure to
+// resolve "this group and everything nested under it" for groupNames.
+interface GroupTreeNode {
+    id: number;
+    name: string;
+    children: GroupTreeNode[];
 }
 
 interface LedgerRow {
@@ -155,6 +164,7 @@ export function AccountLedgerExplorer({
     const params = useSearchParams();
 
     const [allAccounts, setAllAccounts] = useState<LedgerListItem[]>([]);
+    const [groupTree, setGroupTree] = useState<GroupTreeNode[]>([]);
     const [createOpen, setCreateOpen] = useState(false);
     const [editOpen, setEditOpen] = useState(false);
     const [search, setSearch] = useState("");
@@ -178,13 +188,40 @@ export function AccountLedgerExplorer({
 
     useEffect(() => { reloadAccounts(); }, [reloadAccounts]);
 
-    // Apply group-name filter once at the source (so totals/search work on the
-    // already-restricted set). Case-insensitive to tolerate seed casing drift.
+    // Lightweight group tree (id/name/children only) — lets the list filter
+    // walk descendants of groupNames dynamically instead of needing every
+    // sub-group name hardcoded on the page. Loaded once; groups change rarely.
+    useEffect(() => {
+        axios
+            .get<GroupTreeNode[]>("/api/accountancy/account-groups")
+            .then((r) => setGroupTree(r.data))
+            .catch(() => toast.error("Failed to load account groups"));
+    }, []);
+
+    // Resolve groupNames (case-insensitive) to the full set of matched group
+    // ids + every descendant id, so a brand-new sub-group created under e.g.
+    // "Loans (Liability)" is picked up automatically without a code change.
+    const wantedGroupIds = useMemo(() => {
+        if (!groupNames || groupNames.length === 0) return null;
+        const wantedNames = new Set(groupNames.map((n) => n.toLowerCase()));
+        const ids = new Set<number>();
+        const collect = (nodes: GroupTreeNode[], inside: boolean) => {
+            for (const n of nodes) {
+                const included = inside || wantedNames.has(n.name.toLowerCase());
+                if (included) ids.add(n.id);
+                collect(n.children, included);
+            }
+        };
+        collect(groupTree, false);
+        return ids;
+    }, [groupTree, groupNames]);
+
+    // Apply group filter once at the source (so totals/search work on the
+    // already-restricted set).
     const accounts = useMemo(() => {
-        if (!groupNames || groupNames.length === 0) return allAccounts;
-        const wanted = new Set(groupNames.map((n) => n.toLowerCase()));
-        return allAccounts.filter((a) => a.group && wanted.has(a.group.name.toLowerCase()));
-    }, [allAccounts, groupNames]);
+        if (!wantedGroupIds) return allAccounts;
+        return allAccounts.filter((a) => a.group && wantedGroupIds.has(a.group.id));
+    }, [allAccounts, wantedGroupIds]);
 
     const loadDetail = useCallback((id: number, f: string, t: string) => {
         setDetailLoading(true);
@@ -215,6 +252,10 @@ export function AccountLedgerExplorer({
     const handleRefresh = useCallback(() => {
         if (selectedId) loadDetail(selectedId, from, to);
     }, [selectedId, from, to, loadDetail]);
+
+    // Stable identity — BookPage keys its data-loading effect off this, so an
+    // inline arrow here would refetch the trial balance on every render.
+    const selectLedger = useCallback((id: number) => setSelectedId(id), []);
 
     useEscape(() => {
         if (selectedId) setSelectedId(null);
@@ -304,7 +345,9 @@ export function AccountLedgerExplorer({
                     isEmpty={filtered.length === 0}
                     emptyMessage={search ? "No matches" : (emptyMessage ?? "No accounts")}
                 >
-                    {filtered.map((a) => (
+                    {filtered.map((a) => {
+                        const gc = a.group ? groupColor(a.group.name) : null;
+                        return (
                         <button
                             key={a.id}
                             type="button"
@@ -321,11 +364,19 @@ export function AccountLedgerExplorer({
                                 <p className="truncate text-sm font-medium">{a.name}</p>
                                 {/* Group + balance share the second line; the balance
                                     breaks onto its own line here instead of being clipped
-                                    when the name/group is long. */}
+                                    when the name/group is long. Group name is a small
+                                    colour-coded pill so different groups (Unsecured Loans,
+                                    Credit Card, BNPL A/c, …) are visually distinguishable
+                                    at a glance in a mixed list. */}
                                 <div className="mt-0.5 flex items-center justify-between gap-2">
-                                    <p className="truncate text-xs text-muted-foreground">
+                                    <span
+                                        className={cn(
+                                            "truncate rounded px-1.5 py-0.5 text-[11px] font-medium",
+                                            gc ? `${gc.bg} ${gc.text}` : "text-muted-foreground",
+                                        )}
+                                    >
                                         {a.group?.name ?? "Ungrouped"}
-                                    </p>
+                                    </span>
                                     <span
                                         className={cn(
                                             "shrink-0 rounded px-1.5 py-0.5 text-xs font-mono font-medium",
@@ -341,7 +392,8 @@ export function AccountLedgerExplorer({
                                 </div>
                             </div>
                         </button>
-                    ))}
+                        );
+                    })}
                 </EntityListPanel>
 
                 {/* ── Right section: account detail ── */}
@@ -355,7 +407,7 @@ export function AccountLedgerExplorer({
                                     groupName={book.groupName}
                                     autoSingle={false}
                                     compact
-                                    onSelectLedger={(id) => setSelectedId(id)}
+                                    onSelectLedger={selectLedger}
                                 />
                             </div>
                         ) : (

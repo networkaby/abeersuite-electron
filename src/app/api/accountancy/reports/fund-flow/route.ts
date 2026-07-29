@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { parseRange } from "@/modules/accountancy/lib/period";
-import { aggregateRange, loadNormalBalanceMap } from "@/modules/accountancy/lib/aggregateLedger";
+import { aggregateRange, loadNormalBalanceMap, netProfitLoss } from "@/modules/accountancy/lib/aggregateLedger";
 import { buildGroupTree, type GroupNode } from "@/modules/accountancy/lib/groupTree";
 import { handleApiError } from "@/shared/lib/api";
 
@@ -66,27 +66,24 @@ export async function GET(req: Request) {
         const fixedAssetsChange  = delta("Fixed Assets");           // + = purchases of FAs (application)
         const investmentsChange  = delta("Investments");            // + = new investments (application)
         const miscExpensesChange = delta("Misc. Expenses (Asset)");
+        // Every non-current group on the balance sheet must appear here, or its
+        // movement escapes Sources/Applications while still shifting the
+        // independently-computed Working Capital change below — the two would
+        // silently stop reconciling. Branch/Divisions and Suspense are the two
+        // remaining non-current groups besides the five above (see the primary
+        // group list in bootstrap-seed.ts).
+        const branchDivisionsChange = delta("Branch / Divisions");
+        const suspenseChange        = delta("Suspense A/c");
 
-        // Period net profit — derived from income/expense closing values
-        // (simpler than re-running P&L; correct because income/expense balances
-        // are reset by FY-start convention).
-        const incomeClose =
-            Math.abs(closingOf(closingTree, "Sales Accounts")) +
-            Math.abs(closingOf(closingTree, "Direct Incomes"))  +
-            Math.abs(closingOf(closingTree, "Indirect Incomes"));
-        const expenseClose =
-            Math.abs(closingOf(closingTree, "Purchase Accounts")) +
-            Math.abs(closingOf(closingTree, "Direct Expenses"))   +
-            Math.abs(closingOf(closingTree, "Indirect Expenses"));
-        const incomeOpen =
-            Math.abs(closingOf(openingTree, "Sales Accounts")) +
-            Math.abs(closingOf(openingTree, "Direct Incomes"))  +
-            Math.abs(closingOf(openingTree, "Indirect Incomes"));
-        const expenseOpen =
-            Math.abs(closingOf(openingTree, "Purchase Accounts")) +
-            Math.abs(closingOf(openingTree, "Direct Expenses"))   +
-            Math.abs(closingOf(openingTree, "Indirect Expenses"));
-        const periodProfit = (incomeClose - incomeOpen) - (expenseClose - expenseOpen);
+        // Period net profit — the SAME helper the Balance Sheet uses for its
+        // Equity line (aggregateLedger.ts netProfitLoss()), which folds in the
+        // trading stock adjustment. Deriving profit here instead from raw
+        // Sales/Purchase/Direct/Indirect GL deltas (as this route used to)
+        // ignores that stock movement entirely — Stock-in-Hand is never
+        // posted to GL (see bootstrap-seed.ts), so every purchase would hit
+        // expense immediately with nothing netted back out for unsold stock,
+        // producing a profit figure that silently disagreed with the real P&L.
+        const periodProfit = await netProfitLoss(from, to);
 
         const sources: { label: string; amount: number }[] = [];
         const applications: { label: string; amount: number }[] = [];
@@ -107,6 +104,24 @@ export async function GET(req: Request) {
         else if (investmentsChange < 0) sources.push({ label: "Sale of Investments",    amount: -investmentsChange });
 
         if (miscExpensesChange > 0)  applications.push({ label: "Misc. Expenses (deferred)", amount: miscExpensesChange });
+
+        if (branchDivisionsChange > 0) applications.push({ label: "Increase in Branch / Divisions", amount: branchDivisionsChange });
+        else if (branchDivisionsChange < 0) sources.push({ label: "Decrease in Branch / Divisions", amount: -branchDivisionsChange });
+
+        if (suspenseChange > 0)      applications.push({ label: "Increase in Suspense A/c", amount: suspenseChange });
+        else if (suspenseChange < 0) sources.push({ label: "Decrease in Suspense A/c", amount: -suspenseChange });
+
+        // Reconciling plug — mirrors the Balance Sheet's own "Difference in
+        // opening balances" line (balance-sheet/page.tsx). The named lines
+        // above should account for the entire Working Capital movement; if
+        // they don't, it's because some ledger's opening/entry doesn't have a
+        // clean double-entry counterpart (the same root cause the Balance
+        // Sheet already has to plug). Surfacing it here keeps the statement
+        // honest instead of silently failing to reconcile.
+        const explained = sources.reduce((s, r) => s + r.amount, 0) - applications.reduce((s, r) => s + r.amount, 0);
+        const residual = wcChange - explained;
+        if (residual > 0.005)       sources.push({ label: "Unexplained (opening-balance drift)", amount: residual });
+        else if (residual < -0.005) applications.push({ label: "Unexplained (opening-balance drift)", amount: -residual });
 
         const totalSources      = sources.reduce((s, r) => s + r.amount, 0);
         const totalApplications = applications.reduce((s, r) => s + r.amount, 0);
