@@ -104,14 +104,13 @@ export function CreateLedgerDialog({
         if (!form.name.trim()) { toast.error("Name is required"); return; }
         if (!form.groupId) { toast.error("Group is required"); return; }
 
-        // Opening balance is optional, but if the amount is filled the Dr/Cr
-        // type must be too (matches the backend createSchema superRefine rule).
+        // Opening balance is optional. The Dr/Cr select always holds a value, so
+        // the amount alone decides whether an opening balance was entered.
         // Universal opening — no date; always effective from the start of the books.
         const obAmount = form.openingBalance.trim();
         const obType = form.openingBalanceType;
-        const hasAny = obAmount !== "" || !!obType;
+        const hasAny = obAmount !== "";
         if (hasAny) {
-            if (obAmount === "") { toast.error("Opening balance amount is required"); return; }
             const amount = Number(obAmount);
             if (!Number.isFinite(amount) || amount <= 0) {
                 toast.error("Opening balance must be greater than zero");
