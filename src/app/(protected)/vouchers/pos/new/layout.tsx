@@ -14,7 +14,7 @@ export default async function PosRegisterLayout({ children }: { children: React.
     if (user.kind === "customer") redirect("/staff/login?callbackUrl=%2Fvouchers%2Fpos%2Fnew");
 
     return (
-        <SessionWrapper>
+        <SessionWrapper session={session}>
             <div className="fixed inset-0 flex flex-col overflow-hidden bg-background text-foreground">
                 <Toaster position="top-center" richColors />
                 {children}

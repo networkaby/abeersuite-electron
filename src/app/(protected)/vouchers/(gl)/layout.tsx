@@ -17,7 +17,7 @@ export default async function GlVoucherLayout({ children }: { children: React.Re
     if (user.kind === "customer") redirect("/staff/login");
 
     return (
-        <SessionWrapper>
+        <SessionWrapper session={session}>
             <div className="fixed inset-0 flex flex-col overflow-hidden bg-background text-foreground">
                 <Toaster position="top-center" richColors />
                 {children}

@@ -217,15 +217,17 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
     const [loadedLifecycle, setLoadedLifecycle] = useState<{ status: string; deletedAt: string | null; cancelledAt: string | null } | null>(null);
 
     // Inline lifecycle bar permissions — same rules as the row 3-dot menu.
-    const { data: session } = useSession();
+    const { data: session, status: sessionStatus } = useSession();
     const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
     const holds = (id: string | null) => id != null && hasPermissionWithScope(permissions, id);
     const canCancel     = holds(requiredVoucherPermission(kind, "cancel"));
     const canDelete     = holds(requiredVoucherPermission(kind, "delete"));
     const canHardDelete = canDelete;
     // Posting is a separate permission — a create-but-not-post user keeps only Save
-    // Draft. Matches the route's per-kind post check exactly.
-    const canPost = holds(requiredVoucherPermission(kind, "post"));
+    // Draft. Matches the route's per-kind post check exactly. While the session is
+    // still loading, permissions is a false empty [] — don't let that flash Save
+    // hidden; only narrow down once we actually know.
+    const canPost = sessionStatus === "loading" || holds(requiredVoucherPermission(kind, "post"));
     // Voucher's saved paymentAccountId — paired with cashBankAccounts via a
     // dedicated effect so the picker resolves once both have loaded.
     const [pendingPaymentAccountId, setPendingPaymentAccountId] = useState<number | null>(null);

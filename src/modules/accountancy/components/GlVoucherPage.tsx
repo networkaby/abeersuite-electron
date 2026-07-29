@@ -294,7 +294,7 @@ function DenomPanel({ title, denomList, value, onChange }: {
 
 export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; voucherId?: number }) {
     const router = useRouter();
-    const { data: session } = useSession();
+    const { data: session, status: sessionStatus } = useSession();
     const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
     // Per-kind eligibility (generic key OR the kind-specific key). Removal is one
     // action now (soft-delete retired) — both LifecycleActions delete props map to it.
@@ -307,8 +307,10 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
     const canHardDelete = canDelete;
     // Posting is a separate permission. A create-but-not-post user keeps only the
     // Save Draft button — the Save (finalise) button is hidden so they can't try
-    // an action that would 403.
-    const canPost       = holds(vPost);
+    // an action that would 403. While the session is still loading, permissions is
+    // a false empty [] — don't let that flash Save hidden; only narrow down once
+    // we actually know.
+    const canPost       = sessionStatus === "loading" || holds(vPost);
 
     const copy = PER_KIND[kind];
     const isEditing = voucherId != null && Number.isFinite(voucherId);

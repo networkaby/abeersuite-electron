@@ -13,5 +13,5 @@ export default async function PosLayout({ children }: { children: React.ReactNod
     if (!user) redirect("/staff/login?callbackUrl=%2Fvouchers%2Fpos");
     if (user.kind === "customer") redirect("/staff/login?callbackUrl=%2Fvouchers%2Fpos");
 
-    return <SessionWrapper>{children}</SessionWrapper>;
+    return <SessionWrapper session={session}>{children}</SessionWrapper>;
 }

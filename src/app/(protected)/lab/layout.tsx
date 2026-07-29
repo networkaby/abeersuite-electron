@@ -31,7 +31,7 @@ export default async function LabLayout({
     };
 
     return (
-        <SessionWrapper>
+        <SessionWrapper session={session}>
             <div className="flex h-screen flex-col overflow-hidden bg-background">
                 <LabTopBar
                     userName={user.name ?? null}

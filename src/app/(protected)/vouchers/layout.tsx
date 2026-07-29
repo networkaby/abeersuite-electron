@@ -18,5 +18,5 @@ export default async function VouchersLayout({ children }: { children: React.Rea
     if (!user) redirect("/staff/login?callbackUrl=%2Fvouchers");
     if (user.kind === "customer") redirect("/staff/login?callbackUrl=%2Fvouchers");
 
-    return <SessionWrapper>{children}</SessionWrapper>;
+    return <SessionWrapper session={session}>{children}</SessionWrapper>;
 }

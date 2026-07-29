@@ -1,6 +1,7 @@
 "use client";
 
 import { SessionProvider, useSession } from "next-auth/react";
+import type { Session } from "next-auth";
 import { useEffect, useRef } from "react";
 import axios from "axios";
 import { stampRequestContext } from "@/shared/lib/http";
@@ -55,9 +56,23 @@ function SessionGuard() {
     return null;
 }
 
-export default function SessionWrapper({ children }: { children: React.ReactNode }) {
+// `session` should be passed by every (protected) layout — they all already
+// `await auth()` for their redirect guard, so it costs nothing. Without it
+// next-auth discards the server-resolved session and each page load must
+// re-fetch /api/auth/session over the network; until that lands `useSession()`
+// reports status "loading" with no user, so every permission-gated control
+// (Save buttons, lifecycle actions) renders hidden and only appears once the
+// fetch returns — the "UI missing on load, fine after refresh" symptom.
+// Priming it here means useSession() is authenticated on the very first render.
+export default function SessionWrapper({
+    children,
+    session,
+}: {
+    children: React.ReactNode;
+    session?: Session | null;
+}) {
     return (
-        <SessionProvider>
+        <SessionProvider session={session}>
             <SessionGuard />
             {children}
         </SessionProvider>

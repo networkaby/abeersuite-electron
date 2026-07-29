@@ -14,7 +14,7 @@ export default async function PosEstimateLayout({ children }: { children: React.
     if (user.kind === "customer") redirect("/staff/login?callbackUrl=%2Fvouchers%2Fpos%2Festimate");
 
     return (
-        <SessionWrapper>
+        <SessionWrapper session={session}>
             <div className="fixed inset-0 flex flex-col overflow-hidden bg-amber-50 text-foreground dark:bg-amber-950/20">
                 <Toaster position="top-center" richColors />
                 {children}

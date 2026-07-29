@@ -14,7 +14,7 @@ export default async function PosOrderLayout({ children }: { children: React.Rea
     if (user.kind === "customer") redirect("/staff/login?callbackUrl=%2Fvouchers%2Fpos%2Forder");
 
     return (
-        <SessionWrapper>
+        <SessionWrapper session={session}>
             <div className="fixed inset-0 flex flex-col overflow-hidden bg-indigo-50 text-foreground dark:bg-indigo-950/20">
                 <Toaster position="top-center" richColors />
                 {children}

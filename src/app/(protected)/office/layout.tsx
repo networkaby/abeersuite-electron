@@ -35,7 +35,7 @@ export default async function ProtectedLayout({
     const userId = user.id ? parseInt(user.id, 10) : undefined;
 
     return (
-        <SessionWrapper>
+        <SessionWrapper session={session}>
             <div className="flex h-screen flex-col overflow-hidden bg-background">
                 {/* Top bar spans full width — not affected by sidebar/buttonbar width */}
                 <FinanceTopBar permissions={user.permissions ?? []} />
