@@ -48,6 +48,26 @@ export async function GET(req: Request) {
         const liabilities = tree.filter((n) => n.type === "LIABILITY");
         const assets      = tree.filter((n) => n.type === "ASSET");
 
+        // Tally convention: Suspense A/c is catalog-assigned to Assets, but a
+        // ledger with a credit balance (rolledUpClosing < 0 under the
+        // debit-normal Asset convention) reads as a liability, not an asset —
+        // Tally moves it to the Liabilities side and shows it as a normal
+        // positive credit figure there. Relocating (rather than leaving it
+        // negative inside Assets) keeps both sides balanced either way.
+        const suspenseIdx = assets.findIndex((n) => n.name === "Suspense A/c");
+        if (suspenseIdx !== -1 && assets[suspenseIdx].rolledUpClosing < 0) {
+            const [suspense] = assets.splice(suspenseIdx, 1);
+            const flipToCredit = (n: GroupNode): void => {
+                n.rolledUpClosing = -n.rolledUpClosing;
+                for (const l of n.ledgers) l.closing = -l.closing;
+                n.children.forEach(flipToCredit);
+            };
+            flipToCredit(suspense);
+            suspense.type = "LIABILITY";
+            liabilities.push(suspense);
+            liabilities.sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
+        }
+
         // ── Closing Stock (valued AS AT `asOf`, not live) ───────────────
         // A back-dated Balance Sheet must show the stock that existed on that
         // date, not today's — otherwise it can't tie to the P&L for the same
