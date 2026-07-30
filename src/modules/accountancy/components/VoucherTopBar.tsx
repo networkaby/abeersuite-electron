@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, X } from "lucide-react";
+import { ArrowLeft, ExternalLink, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BranchSwitcher } from "@/shared/components/BranchSwitcher";
 
@@ -60,6 +60,15 @@ export function VoucherTopBar({
             </div>
             <div className="flex items-center gap-2">
                 {rightContent}
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => window.open("/office", "_blank", "noopener")}
+                    title="Open Office in a new tab"
+                >
+                    <ExternalLink size={14} /> Office
+                </Button>
                 <BranchSwitcher />
                 <Button type="button" variant="ghost" size="icon-sm" onClick={onClose} title="Close (Esc)" aria-label="Close">
                     <X size={15} />
