@@ -1,13 +1,17 @@
 allowBuilds:
+  '@firebase/util': false
   '@prisma/engines': true
   '@sentry/cli': true
   '@thiagoelg/node-printer': false
   esbuild: true
   msw: true
   prisma: true
+  protobufjs: false
   sharp: false
   unrs-resolver: false
 ignoredBuiltDependencies:
+  - '@firebase/util'
+  - protobufjs
   - '@thiagoelg/node-printer'
   - sharp
   - unrs-resolver

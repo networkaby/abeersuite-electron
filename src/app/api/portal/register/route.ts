@@ -9,6 +9,7 @@ import {
     normalizePortalEmail,
     normalizePortalPhone,
 } from "@/shared/lib/auth/portalIdentifier";
+import { findPortalPerson } from "@/shared/lib/auth/findPortalPerson";
 
 const bodySchema = z.object({
     mode: z.enum(["mobile", "email"]),
@@ -47,27 +48,12 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "An account already exists for this mobile or email" }, { status: 409 });
         }
 
-        // Look up an existing person by stored phone/email rows.
-        let person: { id: number; name: string } | null = null;
-        if (emailNorm) {
-            const match = await prisma.email.findFirst({
-                where: { email: { equals: emailNorm, mode: "insensitive" }, personId: { not: null } },
-                select: { person: { select: { id: true, name: true } } },
-            });
-            person = match?.person ?? null;
-        }
-        if (!person && phoneNorm) {
-            // Phone rows may store the prefixed format; scan candidates and normalise.
-            const phoneCandidates = await prisma.phone.findMany({
-                where: { personId: { not: null } },
-                select: { phone: true, person: { select: { id: true, name: true } } },
-                take: 500,
-            });
-            person =
-                phoneCandidates.find(
-                    (row) => row.phone && normalizePortalPhone(row.phone) === phoneNorm,
-                )?.person ?? null;
-        }
+        // Look up an existing person by stored phone/email rows. Shared with
+        // passwordless sign-in so both agree who an identifier belongs to.
+        let person = await findPortalPerson(prisma, {
+            emailNormalized: emailNorm,
+            phoneNormalized: phoneNorm,
+        });
 
         if (!person) {
             const created = await prisma.$transaction(async (tx) => {

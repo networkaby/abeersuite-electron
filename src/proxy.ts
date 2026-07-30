@@ -68,5 +68,10 @@ export default auth((req) => {
 });
 
 export const config = {
-    matcher: ["/((?!api|_next/static|_next/image|favicon.ico|receipt|shipping-slip|shipping-label).*)"],
+    matcher: [
+        // Skip API, Next internals, print surfaces, and any static file in /public
+        // (anything with a file extension). Without the extension escape, /logo.svg
+        // and friends get auth-redirected to /login and serve HTML instead of the asset.
+        "/((?!api|_next/static|_next/image|favicon.ico|receipt|shipping-slip|shipping-label|.*\\.[\\w]+$).*)",
+    ],
 };
