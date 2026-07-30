@@ -29,3 +29,15 @@ export const ACCOUNT_GROUPS = {
 } as const;
 
 export type AccountGroupName = (typeof ACCOUNT_GROUPS)[keyof typeof ACCOUNT_GROUPS];
+
+/**
+ * Standard `Account.name` strings — Tally-standard ledger names, so they are fixed
+ * and safe to match exactly. Seeded by `prisma/seeds/bootstrap-seed.ts` alongside
+ * the chart of accounts (see `upsertLedger("Petty Cash", "Cash-in-Hand", …)`).
+ *
+ * Match these by equality, never by substring/regex: a fuzzy `/petty/i` scan can
+ * also hit an operator-created till that merely mentions the word.
+ */
+export const ACCOUNT_LEDGERS = {
+    PETTY_CASH: "Petty Cash",
+} as const;

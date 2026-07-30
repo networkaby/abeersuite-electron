@@ -66,7 +66,7 @@ import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/compone
 import { consumeDuplicate } from "@/modules/accountancy/lib/duplicate";
 import { ParentVoucherPicker } from "@/modules/inventory/components/ParentVoucherPicker";
 import { Switch } from "@/components/ui/switch";
-import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
+import { ACCOUNT_LEDGERS } from "@/shared/lib/constants/accounting";
 import { isMoneyGroupName } from "@/modules/accountancy/lib/moneyAccount";
 import { extractApiError } from "@/shared/lib/api";
 import { parseDecimalInput, round2, todayIso } from "@/shared/lib/format";
@@ -89,6 +89,33 @@ import {
 // Re-export so existing importers of the page keep working.
 export type { TradingKind } from "@/modules/accountancy/lib/tradingVoucherKinds";
 
+
+// ── Default "Received In" tender account ─────────────────────────────────────
+// Which cash/bank ledger a NEW voucher opens with. Called by BOTH the first-mount
+// effect and reset()-after-save: reset() used to run its own arbitrary
+// `.find(Cash-in-Hand)` instead, so saving a voucher silently snapped the picker
+// back to whichever till the DB happened to return first (a counter till) even
+// though the operator had chosen another one. Same resolver both paths = the pick
+// survives save-and-continue, not just a fresh page load.
+//
+// Two rungs, deliberately: the account last used on this voucher kind (the
+// localStorage key is per-kind, so a Sale's bank pick can't leak into Purchase),
+// else the Tally-standard Petty Cash ledger — matched by EXACT name, since that
+// name is fixed and bootstrap-seeded. Nothing after that: the old Vault /
+// first-Cash-in-Hand fallbacks resolved to an ARBITRARY counter till, because every
+// cash ledger has code = null and the API's `ORDER BY code` cannot order them. An
+// empty picker the operator must fill is better than a confidently wrong till.
+// `list` is already money ledgers only (isMoneyGroupName), so no group check.
+function pickDefaultTenderAccount(list: GlAccount[], storageKey: string): GlAccount | null {
+    let lastId: number | null = null;
+    try {
+        const raw = window.localStorage.getItem(storageKey);
+        lastId = raw ? Number(raw) : null;
+    } catch { /* ignore — private mode / storage disabled */ }
+    return (lastId != null ? list.find((a) => a.id === lastId) : undefined)
+        ?? list.find((a) => a.name === ACCOUNT_LEDGERS.PETTY_CASH)
+        ?? null;
+}
 
 // ── Component ──────────────────────────────────────────────────────────────
 
@@ -221,8 +248,8 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
     const { data: session, status: sessionStatus } = useSession();
     const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
     const holds = (id: string | null) => id != null && hasPermissionWithScope(permissions, id);
-    const canCancel     = holds(requiredVoucherPermission(kind, "cancel"));
-    const canDelete     = holds(requiredVoucherPermission(kind, "delete"));
+    const canCancel = holds(requiredVoucherPermission(kind, "cancel"));
+    const canDelete = holds(requiredVoucherPermission(kind, "delete"));
     const canHardDelete = canDelete;
     // Posting is a separate permission — a create-but-not-post user keeps only Save
     // Draft. Matches the route's per-kind post check exactly. While the session is
@@ -259,7 +286,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
     // rendered) and on edit mode (party already populated; the picker locks).
     useEffect(() => {
         partyPickerRef.current?.focus();
-         
+
     }, []);
     // CASH walk-in fields — free-form name + phone. Stored on the voucher as
     // partyName / partyPhone strings only; no Person / Account row is created.
@@ -287,11 +314,11 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
     // on save it's appended as a real tender pointing at the party's
     // ledger account so every JE debit is backed by an explicit row.
     type TenderRow = {
-        id:        string;                                                 // stable local id
+        id: string;                                                 // stable local id
         accountId: number | null;
-        account:   GlAccount | null;
-        amount:    string;                                                 // freeform input
-        method:    "CASH" | "BANK_TRANSFER" | "CARD" | "CHEQUE" | "MOBILE_PAYMENT" | "OTHER" | "";
+        account: GlAccount | null;
+        amount: string;                                                 // freeform input
+        method: "CASH" | "BANK_TRANSFER" | "CARD" | "CHEQUE" | "MOBILE_PAYMENT" | "OTHER" | "";
         reference: string;
     };
     const newTender = (account: GlAccount | null = null, amount = ""): TenderRow => ({
@@ -311,18 +338,18 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
     // negative flips. The signed sum (`chargesNet`) is added to the
     // voucher total via calcVoucherTotals.
     type ChargeRow = {
-        id:          string;
-        accountId:   number | null;
-        account:     GlAccount | null;
+        id: string;
+        accountId: number | null;
+        account: GlAccount | null;
         description: string;
-        amount:      string;  // freeform, allows leading minus
+        amount: string;  // freeform, allows leading minus
     };
     const newCharge = (): ChargeRow => ({
         id: `c${Date.now()}${Math.random().toString(36).slice(2, 6)}`,
-        accountId:   null,
-        account:     null,
+        accountId: null,
+        account: null,
         description: "",
-        amount:      "",
+        amount: "",
     });
     const [charges, setCharges] = useState<ChargeRow[]>([]);
     // All non-cash/bank ledgers operators might want to pick — Income /
@@ -369,22 +396,22 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
         // Header: date + description.  Other header fields keep their defaults.
         setHeader((h) => ({
             ...h,
-            date:        dup.date,
+            date: dup.date,
             description: dup.narration ?? "",
         }));
 
         // Lines: map the source's rich line records into LineState.
         type SrcLine = {
-            productId?:   number;
-            quantity?:    number | string;
-            rate?:        number | string;
-            freeQty?:     number | string | null;
+            productId?: number;
+            quantity?: number | string;
+            rate?: number | string;
+            freeQty?: number | string | null;
             discountPct?: number | string;
             discountAmt?: number | string;
-            taxRate?:     number | string;
-            taxAmount?:   number | string;
+            taxRate?: number | string;
+            taxAmount?: number | string;
             description?: string | null;
-            product?:     { id: number; sku: string; name: string; unit?: { code: string; label: string } };
+            product?: { id: number; sku: string; name: string; unit?: { code: string; label: string } };
         };
         const srcLines = dup.lines as SrcLine[];
         const fmtNum = (x: number | string | null | undefined): string => {
@@ -399,25 +426,25 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                 .map((l) => ({
                     id: nextLineId(),
                     product: {
-                        id:       l.product!.id,
-                        sku:      l.product!.sku,
-                        name:     l.product!.name,
+                        id: l.product!.id,
+                        sku: l.product!.sku,
+                        name: l.product!.name,
                         unitCode: l.product!.unit?.code ?? "",
-                        stock:     null,
+                        stock: null,
                         salePrice: null,
                         costPrice: null,
-                        mrp:       null,
+                        mrp: null,
                     },
-                    quantity:        l.quantity != null ? String(typeof l.quantity === "string" ? parseFloat(l.quantity) : l.quantity) : "1",
-                    freeQty:         fmtNum(l.freeQty ?? null),
-                    rate:            l.rate != null ? String(typeof l.rate === "string" ? parseFloat(l.rate) : l.rate) : "",
-                    mrpRupees:       "",
-                    discountPct:     fmtNum(l.discountPct),
-                    discountAmt:     fmtNum(l.discountAmt),
-                    taxRate:         fmtNum(l.taxRate),
-                    taxAmount:       fmtNum(l.taxAmount),
-                    amountInput:     "",
-                    description:     l.description ?? "",
+                    quantity: l.quantity != null ? String(typeof l.quantity === "string" ? parseFloat(l.quantity) : l.quantity) : "1",
+                    freeQty: fmtNum(l.freeQty ?? null),
+                    rate: l.rate != null ? String(typeof l.rate === "string" ? parseFloat(l.rate) : l.rate) : "",
+                    mrpRupees: "",
+                    discountPct: fmtNum(l.discountPct),
+                    discountAmt: fmtNum(l.discountAmt),
+                    taxRate: fmtNum(l.taxRate),
+                    taxAmount: fmtNum(l.taxAmount),
+                    amountInput: "",
+                    description: l.description ?? "",
                     showDescription: !!l.description,
                 })));
         }
@@ -445,7 +472,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                 if (days == null) return;
                 setHeader((h) => ({ ...h, creditPeriodDays: String(days) }));
             })
-            .catch(() => {/* silent — defaults are optional */});
+            .catch(() => {/* silent — defaults are optional */ });
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isEditing]);
 
@@ -644,11 +671,11 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                     setTenders(v.tenders
                         .filter((t) => partyAccountId == null || t.accountId !== partyAccountId)
                         .map((t) => ({
-                            id:        `tdb${t.id}`,
+                            id: `tdb${t.id}`,
                             accountId: t.accountId,
-                            account:   { id: t.account.id, name: t.account.name, code: t.account.code ?? "" } as GlAccount,
-                            amount:    String(Number(t.amount)),
-                            method:    (t.method as TenderRow["method"]) ?? "",
+                            account: { id: t.account.id, name: t.account.name, code: t.account.code ?? "" } as GlAccount,
+                            amount: String(Number(t.amount)),
+                            method: (t.method as TenderRow["method"]) ?? "",
                             reference: t.reference ?? "",
                         })));
                 }
@@ -658,11 +685,11 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                 // signed (operator types positive or "-50" directly).
                 if (v.charges && v.charges.length > 0) {
                     setCharges(v.charges.map((c) => ({
-                        id:          `cdb${c.id}`,
-                        accountId:   c.accountId,
-                        account:     { id: c.account.id, name: c.account.name, code: c.account.code ?? "" } as GlAccount,
+                        id: `cdb${c.id}`,
+                        accountId: c.accountId,
+                        account: { id: c.account.id, name: c.account.name, code: c.account.code ?? "" } as GlAccount,
                         description: c.description ?? "",
-                        amount:      String(Number(c.amount)),
+                        amount: String(Number(c.amount)),
                     })));
                 }
             })
@@ -676,7 +703,8 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [editVoucherId, isEditing]);
 
-    // Load the money ledgers once and pre-select "Cash-in-Hand" if present.
+    // Load the money ledgers once and pre-select the default till (last-used, else
+    // Petty Cash — see pickDefaultTenderAccount).
     // Account rows are enriched with their group so we can filter by
     // cash / bank / OD (see moneyAccount.ts — an OD account is a normal
     // current account for money movement).
@@ -695,24 +723,9 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                 // separate JE leg on the voucher.
                 setChargeAccounts(r.data.filter((a) => !isMoneyGroupName(a.group?.name)));
                 if (isEditing) return;
-                // Prefer the account the operator last picked as "Received In"
-                // on this voucher kind, else the house till.
-                let lastId: number | null = null;
-                try {
-                    const raw = window.localStorage.getItem(LAST_PAYMENT_KEY);
-                    lastId = raw ? Number(raw) : null;
-                } catch { /* ignore */ }
-                // Every cash ledger has code = null, so the API's `ORDER BY code`
-                // can't order them — "first Cash-in-Hand" was arbitrary DB row
-                // order and drifted between a counter till and the vault
-                // between sessions. Name the intent instead: a fresh operator
-                // (nothing remembered on this PC) starts on Petty Cash, with
-                // the Vault as the fallback when no Petty Cash ledger exists.
-                const cashInHand = cb.filter((a) => a.group?.name === ACCOUNT_GROUPS.CASH_IN_HAND);
-                const cash = (lastId != null ? cb.find((a) => a.id === lastId) : undefined)
-                    ?? cashInHand.find((a) => /petty/i.test(a.name))
-                    ?? cashInHand.find((a) => /vault/i.test(a.name))
-                    ?? cashInHand[0] ?? cb[0] ?? null;
+                // Last-used account, else Petty Cash. See pickDefaultTenderAccount
+                // (module scope) — reset()-after-save uses the same resolver.
+                const cash = pickDefaultTenderAccount(cb, LAST_PAYMENT_KEY);
                 if (!paymentAccount) {
                     setPaymentAccount(cash);
                 }
@@ -986,9 +999,9 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                         return { ...l, taxRate: newTaxRate, taxAmount: newTaxAmt > 0 ? newTaxAmt.toFixed(2) : "" };
                     }));
                 })
-                .catch(() => {/* non-fatal — user can set taxRate manually */});
+                .catch(() => {/* non-fatal — user can set taxRate manually */ });
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // ── Totals ────────────────────────────────────────────────────────────
@@ -1072,8 +1085,12 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
         setWalkInName("");
         setWalkInPhone("");
         setPartySnapshot({ balance: 0, address: null });
-        // Re-select "Cash-in-Hand" default so the picker is ready for the next sale.
-        const cash = cashBankAccounts.find((a) => a.group?.name === ACCOUNT_GROUPS.CASH_IN_HAND) ?? cashBankAccounts[0] ?? null;
+        // Re-select the till so the picker is ready for the next sale — via the
+        // SAME resolver first mount uses, so the operator's remembered "Received
+        // In" pick survives save-and-continue. This used to be its own
+        // `.find(Cash-in-Hand)`, which ignored the remembered account and reverted
+        // to an arbitrary counter till on every save.
+        const cash = pickDefaultTenderAccount(cashBankAccounts, LAST_PAYMENT_KEY);
         setPaymentAccount(cash);
         setTenders([newTender(cash)]);
         partyPickerRef.current?.clear();
@@ -1122,8 +1139,8 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
         setSaving(true);
         try {
             // Purchase hides the Invoice Date input; the Bill Date (refDate)
-                // is the user-facing date and drives voucher.date on save.
-                // Falls back to today's date if neither is set.
+            // is the user-facing date and drives voucher.date on save.
+            // Falls back to today's date if neither is set.
             const voucherDate = copy.showVoucherDate
                 ? header.date
                 : (header.refDate || header.date);
@@ -1147,7 +1164,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                 // — Purchase, Sale Return, Purchase Return).
                 ...(copy.refLabel ? {
                     refNumber: header.refNumber.trim() || undefined,
-                    refDate:   header.refDate || undefined,
+                    refDate: header.refDate || undefined,
                 } : {}),
                 // Parent voucher link (GRN→PO, Challan→SO, Rejection→Sale/GRN).
                 ...(parentLink ? { refVoucherId: parentLink.id } : {}),
@@ -1190,8 +1207,8 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                     const validCharges = charges
                         .filter((c) => c.accountId != null && Math.abs(parseFloat(c.amount) || 0) > 0.005)
                         .map((c) => ({
-                            accountId:   c.accountId as number,
-                            amount:      parseFloat(c.amount),
+                            accountId: c.accountId as number,
+                            amount: parseFloat(c.amount),
                             ...(c.description.trim() ? { description: c.description.trim() } : {}),
                         }));
                     return validCharges.length > 0 ? { charges: validCharges } : {};
@@ -1205,8 +1222,8 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                 ...(() => {
                     type TenderPayload = {
                         accountId: number;
-                        amount:    number;
-                        method?:   "CASH" | "BANK_TRANSFER" | "CARD" | "CHEQUE" | "MOBILE_PAYMENT" | "OTHER";
+                        amount: number;
+                        method?: "CASH" | "BANK_TRANSFER" | "CARD" | "CHEQUE" | "MOBILE_PAYMENT" | "OTHER";
                         reference?: string;
                     };
                     const rows: TenderPayload[] = [];
@@ -1215,7 +1232,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                         if (!t.accountId || amt <= 0) continue;
                         rows.push({
                             accountId: t.accountId,
-                            amount:    amt,
+                            amount: amt,
                             ...(t.method ? { method: t.method } : {}),
                             ...(t.reference.trim() ? { reference: t.reference.trim() } : {}),
                         });
@@ -1428,7 +1445,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                     </div>
 
                     {/* Right: invoice meta — label / value grid */}
-                    <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm min-w-[340px] items-center">
+                    <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm min-w-85 items-center">
                         {copy.showVoucherRef && (
                             <>
                                 <label className="text-xs text-muted-foreground text-right">{copy.voucherRefLabel}</label>
@@ -1506,7 +1523,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                                 <th rowSpan={2} className="w-8 px-1 py-2 text-center font-medium align-bottom">
                                     <ScanLine size={13} className="text-muted-foreground/60 mx-auto" />
                                 </th>
-                                <th rowSpan={2} className="px-2 py-2 text-left font-medium min-w-[180px] align-bottom">ITEM</th>
+                                <th rowSpan={2} className="px-2 py-2 text-left font-medium min-w-45 align-bottom">ITEM</th>
                                 {prefs.lineDescription && (
                                     <th rowSpan={2} className="px-1 py-2 text-left font-medium w-52 align-bottom">
                                         <span className="hidden sm:inline">Note</span>
@@ -1966,7 +1983,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                                         setHeader((h) => ({
                                             ...h,
                                             refNumber: parent.reference,
-                                            refDate:   parent.date ? parent.date.slice(0, 10) : h.refDate,
+                                            refDate: parent.date ? parent.date.slice(0, 10) : h.refDate,
                                         }));
                                         // Verbatim line copy — user can edit qty for partial fulfilment.
                                         setLines(parent.lines.length === 0 ? [newLine()] : parent.lines.map((l) => ({
@@ -1981,21 +1998,21 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                                                 costPrice: null,
                                                 mrp: null,
                                             },
-                                            quantity:    String(Number(l.quantity) || 0),
-                                            freeQty:     l.freeQty != null && Number(l.freeQty) > 0 ? String(Number(l.freeQty)) : "",
+                                            quantity: String(Number(l.quantity) || 0),
+                                            freeQty: l.freeQty != null && Number(l.freeQty) > 0 ? String(Number(l.freeQty)) : "",
                                             // Stored rate is EXCLUSIVE → show inclusive when the form is in
                                             // tax-inclusive mode, so the derived voucher's total matches the source.
-                                            rate:        String((() => {
+                                            rate: String((() => {
                                                 const excl = Number(l.rate) || 0;
                                                 const tr = Number(l.taxRate) || 0;
                                                 // Round to 2dp so client + server totals agree (no 1-paise tender mismatch).
                                                 return prefs.rateInclTax && tr > 0 ? Math.round(excl * (1 + tr / 100) * 100) / 100 : excl;
                                             })()),
-                                            mrpRupees:   "",
+                                            mrpRupees: "",
                                             discountPct: Number(l.discountPct) > 0 ? String(Number(l.discountPct)) : "",
                                             discountAmt: Number(l.discountAmt) > 0 ? String(Number(l.discountAmt)) : "",
-                                            taxRate:     Number(l.taxRate)     > 0 ? String(Number(l.taxRate))     : "",
-                                            taxAmount:   Number(l.taxAmount)   > 0 ? String(Number(l.taxAmount))   : "",
+                                            taxRate: Number(l.taxRate) > 0 ? String(Number(l.taxRate)) : "",
+                                            taxAmount: Number(l.taxAmount) > 0 ? String(Number(l.taxAmount)) : "",
                                             amountInput: "",
                                             description: l.description ?? "",
                                             showDescription: !!l.description,
@@ -2305,9 +2322,9 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                     // The panel is decision support for pricing a NEW sale, so it is
                     // simply not offered on edit — absent beats wrong.
                     copy.showProfit && !isEditing ? (
-                    <Button variant="outline" onClick={() => setShowProfit((s) => !s)} title="Show estimated profit (live)">
-                        {showProfit ? "Hide" : "Show"} Profit
-                    </Button>
+                        <Button variant="outline" onClick={() => setShowProfit((s) => !s)} title="Show estimated profit (live)">
+                            {showProfit ? "Hide" : "Show"} Profit
+                        </Button>
                     ) : undefined
                 }
             />
