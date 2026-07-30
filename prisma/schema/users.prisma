@@ -18,6 +18,11 @@ model User {
   /// out of every tab/device at once) and available for password-change / admin
   /// force-logout later. null = never revoked.
   tokensValidFrom                  DateTime?
+  /// Work Inbox "new" marker — stamped when the user opens /office/work-flow-inbox.
+  /// Work arriving after this instant counts as new in the sidebar badge.
+  /// null = never looked, so everything is new (same semantics as
+  /// ChatRoomMember.lastReadAt, which drives the Inbox unread badge).
+  workInboxSeenAt                  DateTime?
   managerId                        Int?
   // public profile
   avatarUrl                        String?

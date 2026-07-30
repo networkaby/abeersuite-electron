@@ -4,7 +4,8 @@ import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
 import { timeAgo, timeUntil, formatDuration } from "@/shared/lib/format/timeAgo";
 import WorkInboxBoard, { type WorkInboxItem } from "@/modules/repairing/components/assignments/WorkInboxBoard";
 import { parseArgs, isUserArg, isEntryArg, argKey, resolveTicketSource, META_PREV_OUTCOME, META_LAST_NOTE, type TicketLike } from "@/modules/repairing/lib/ticketSources";
-import { resolvedUserFromSession, hasPermission } from "@/shared/lib/auth/permissions";
+import { resolvedUserFromSession } from "@/shared/lib/auth/permissions";
+import { passesWorkGate } from "@/modules/repairing/lib/workGate";
 
 // The Work Inbox: every active ticket sitting in a work-bearing worker, as one
 // mixed list (longest-waiting first). New tickets enter their status' entry
@@ -74,7 +75,7 @@ export default async function AssignmentsPage() {
     // caller can't act on are dropped entirely (private to its holders), not just
     // hidden from a filter chip.
     const visibleWorkIds = new Set(
-        works.filter((w) => !w.permissionId || hasPermission(resolvedUser, w.permissionId)).map((w) => w.id)
+        works.filter((w) => passesWorkGate(resolvedUser, w)).map((w) => w.id)
     );
 
     // System-generated log notes (entry/auto-advance/claim/transfer/completion stamps)

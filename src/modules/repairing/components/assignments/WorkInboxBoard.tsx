@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import axios from "axios";
 import Link from "next/link";
 import { Wrench, Clock, CheckCircle2, XCircle, MessageSquare, AlertTriangle } from "lucide-react";
 import WorkActions from "../WorkActions";
@@ -75,6 +76,17 @@ export default function WorkInboxBoard({
     currentUserId: number;
 }) {
     const [filter, setFilter] = useState<string>("all");
+
+    // Opening the board IS "looking at it" — stamp the seen marker so the sidebar
+    // badge's `new` half resets, then tell the badge to recount straight away.
+    useEffect(() => {
+        void (async () => {
+            try {
+                await axios.post("/api/work-inbox/seen");
+                window.dispatchEvent(new CustomEvent("work-inbox:changed"));
+            } catch { /* non-critical */ }
+        })();
+    }, []);
 
     // Chips are derived from whatever groups the caller's visible items actually
     // carry — not a raw WorkGroup table scan. Two same-labeled groups scoped to

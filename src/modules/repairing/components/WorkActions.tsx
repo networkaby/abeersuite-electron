@@ -79,7 +79,11 @@ export default function WorkActions({
     const pendingArgs = pending ? userArgs.filter((a) => argMatchesOutcome(a, pending.kind)) : [];
     // Required outcome fields gate the confirm button until filled.
     const missingRequired = pendingArgs.some((a) => a.required && !(argValues[argKey(a)] ?? "").trim());
-    const refresh = () => { if (onChanged) onChanged(); else router.refresh(); };
+    const refresh = () => {
+        // Work moved → let the sidebar Work Flow badge recount now, not on its next poll.
+        window.dispatchEvent(new CustomEvent("work-inbox:changed"));
+        if (onChanged) onChanged(); else router.refresh();
+    };
     const close = () => { setPending(null); setArgValues({}); };
 
     const start = async () => {
