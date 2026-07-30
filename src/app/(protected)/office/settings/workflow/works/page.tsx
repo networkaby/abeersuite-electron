@@ -253,6 +253,7 @@ function WorkFormBody({ form, set, groups, contextVars }: {
                                                 })}
                                             />
                                             {g.label}
+                                            {g.name && g.name !== g.label && <span className="text-muted-foreground">({g.name})</span>}
                                         </label>
                                     ))}
                                 </div>
@@ -381,7 +382,7 @@ interface Pipeline {
 export default function WorksPage() {
     const [works, setWorks] = useState<Work[]>([]);
     const [pipelines, setPipelines] = useState<Pipeline[]>([]);
-    const [groups, setGroups] = useState<{ id: string; label: string; color: string }[]>([]);
+    const [groups, setGroups] = useState<{ id: string; name: string; label: string; color: string }[]>([]);
     const [loading, setLoading] = useState(true);
 
     const [showCreate, setShowCreate] = useState(false);

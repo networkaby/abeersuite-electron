@@ -16,9 +16,9 @@ import { badgeColor } from "@/shared/lib/format/entityColor";
 import { ColorPicker, randomColor } from "@/shared/components/ColorPicker";
 
 interface Work { id: string; label: string; color: string; }
-interface WorkGroup { id: string; label: string; color: string; order: number; permissionId: string | null; works: Work[]; }
-type FormValues = { label: string; color: string; gated: boolean };
-const BLANK: FormValues = { label: "", color: "bg-gray-100 text-gray-600", gated: false };
+interface WorkGroup { id: string; name: string; label: string; color: string; order: number; permissionId: string | null; works: Work[]; }
+type FormValues = { name: string; label: string; color: string; gated: boolean };
+const BLANK: FormValues = { name: "", label: "", color: "bg-gray-100 text-gray-600", gated: false };
 
 // Module-scope so it keeps a stable identity across the page's re-renders (a dialog
 // defined inside the page component remounts on every keystroke → input loses focus).
@@ -31,12 +31,18 @@ function GroupDialog({ open, onOpenChange, form, setForm, id, onSave, saving }: 
             <DialogContent className="sm:max-w-sm">
                 <DialogHeader>
                     <DialogTitle>{id ? "Edit group" : "New work group"}</DialogTitle>
-                    <DialogDescription>A category for works (e.g. Calling, Repairing). The Work Inbox organises by group.</DialogDescription>
+                    <DialogDescription>A category for works (e.g. Calling, Repairing). The Work Inbox organises by display name.</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4">
                     <div className="space-y-2">
-                        <Label>Label</Label>
+                        <Label>Group name</Label>
+                        <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Repair Calling" />
+                        <p className="text-xs text-muted-foreground">Internal — tells this group apart from others here in Settings. Not shown to staff.</p>
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Display name</Label>
                         <Input value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} placeholder="e.g. Calling" />
+                        <p className="text-xs text-muted-foreground">Shown to staff in the Work Inbox. Groups with the same display name are shown as one to staff.</p>
                     </div>
                     <div className="space-y-2">
                         <Label>Color</Label>
@@ -49,7 +55,7 @@ function GroupDialog({ open, onOpenChange, form, setForm, id, onSave, saving }: 
                 </div>
                 <DialogFooter>
                     <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-                    <Button type="button" onClick={() => onSave(form, id)} disabled={saving || !form.label.trim()}>{saving ? "Saving…" : "Save"}</Button>
+                    <Button type="button" onClick={() => onSave(form, id)} disabled={saving || !form.label.trim() || !form.name.trim()}>{saving ? "Saving…" : "Save"}</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
@@ -107,26 +113,43 @@ export default function WorkGroupsPage() {
                     : groups.length === 0 ? <p className="text-sm text-muted-foreground">No groups yet. Add one, then assign works to it.</p>
                     : (
                         <div className="space-y-3">
-                            {groups.map((g) => (
-                                <Card key={g.id}>
+                            {/* Groups with the same display name (label) are shown to staff as one — e.g. a
+                                per-department "Calling" tag — so collapse them into one section here too,
+                                keyed by label, with each underlying group listed by its own group name. */}
+                            {Array.from(
+                                groups.reduce((sections, g) => {
+                                    (sections.get(g.label) ?? sections.set(g.label, []).get(g.label)!).push(g);
+                                    return sections;
+                                }, new Map<string, WorkGroup[]>()).entries(),
+                            ).map(([label, rows]) => (
+                                <Card key={label}>
                                     <CardHeader className="border-b py-3">
                                         <div className="flex items-center gap-3">
-                                            <Badge {...badgeColor(g.color)}>{g.label}</Badge>
-                                            {g.permissionId ? (
-                                                <Badge variant="outline" className="gap-1 text-amber-700">
-                                                    <Lock size={11} /> Gated
-                                                </Badge>
-                                            ) : (
-                                                <Badge variant="outline" className="text-muted-foreground">Ungated</Badge>
-                                            )}
-                                            <CardTitle className="ml-auto text-sm font-normal text-muted-foreground">{g.works.length} work{g.works.length !== 1 ? "s" : ""}</CardTitle>
-                                            <Button type="button" size="sm" variant="outline" onClick={() => { setEditId(g.id); setEditForm({ label: g.label, color: g.color, gated: !!g.permissionId }); }}><Pencil size={13} /> Edit</Button>
-                                            <Button type="button" size="icon-sm" variant="destructive" onClick={() => remove(g.id)} disabled={deletingId === g.id} title="Delete (works keep, ungrouped)"><Trash2 size={13} /></Button>
+                                            <Badge {...badgeColor(rows[0].color)}>{label}</Badge>
+                                            <CardTitle className="ml-auto text-sm font-normal text-muted-foreground">
+                                                {rows.length > 1 ? `${rows.length} groups` : `${rows[0].works.length} work${rows[0].works.length !== 1 ? "s" : ""}`}
+                                            </CardTitle>
                                         </div>
                                     </CardHeader>
-                                    <CardContent className="pt-3">
-                                        {g.works.length === 0 ? <p className="text-sm text-muted-foreground">No works in this group yet.</p>
-                                            : <div className="flex flex-wrap gap-1.5">{g.works.map((w) => <Badge key={w.id} {...badgeColor(w.color)}>{w.label}</Badge>)}</div>}
+                                    <CardContent className="space-y-3 pt-3">
+                                        {rows.map((g) => (
+                                            <div key={g.id} className="space-y-2 rounded-md border p-3">
+                                                <div className="flex items-center gap-3">
+                                                    <span className="text-sm font-medium">{g.name || g.label}</span>
+                                                    {g.permissionId ? (
+                                                        <Badge variant="outline" className="gap-1 text-amber-700">
+                                                            <Lock size={11} /> Gated
+                                                        </Badge>
+                                                    ) : (
+                                                        <Badge variant="outline" className="text-muted-foreground">Ungated</Badge>
+                                                    )}
+                                                    <span className="ml-auto text-xs text-muted-foreground">{g.works.length} work{g.works.length !== 1 ? "s" : ""}</span>
+                                                    <Button type="button" size="sm" variant="outline" onClick={() => { setEditId(g.id); setEditForm({ name: g.name, label: g.label, color: g.color, gated: !!g.permissionId }); }}><Pencil size={13} /> Edit</Button>
+                                                    <Button type="button" size="icon-sm" variant="destructive" onClick={() => remove(g.id)} disabled={deletingId === g.id} title="Delete (works keep, ungrouped)"><Trash2 size={13} /></Button>
+                                                </div>
+                                                {g.works.length > 0 && <div className="flex flex-wrap gap-1.5">{g.works.map((w) => <Badge key={w.id} {...badgeColor(w.color)}>{w.label}</Badge>)}</div>}
+                                            </div>
+                                        ))}
                                     </CardContent>
                                 </Card>
                             ))}

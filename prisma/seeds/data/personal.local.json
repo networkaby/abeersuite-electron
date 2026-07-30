@@ -7729,6 +7729,7 @@
   "workGroups": [
     {
       "id": "G1",
+      "name": "calling",
       "label": "calling",
       "color": "#96D345",
       "order": 1,

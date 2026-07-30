@@ -5,6 +5,7 @@ import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { z } from "zod";
 
 const patchSchema = z.object({
+    name: z.string().trim().min(1).optional(),
     label: z.string().trim().min(1).optional(),
     color: z.string().trim().optional(),
     order: z.coerce.number().int().nonnegative().optional(),
@@ -46,6 +47,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         const updated = await prisma.workGroup.update({
             where: { id },
             data: {
+                ...(data.name !== undefined && { name: data.name }),
                 ...(data.label !== undefined && { label: data.label }),
                 ...(data.color !== undefined && { color: data.color }),
                 ...(data.order !== undefined && { order: data.order }),

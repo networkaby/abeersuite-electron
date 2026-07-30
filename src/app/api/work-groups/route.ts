@@ -5,6 +5,7 @@ import { generateNextOpaqueId, validateRequest, handleApiError } from "@/shared/
 import { z } from "zod";
 
 const schema = z.object({
+    name: z.string().trim().min(1, "Group name is required"),
     label: z.string().trim().min(1, "Label is required"),
     color: z.string().trim().optional(),
     order: z.coerce.number().int().nonnegative().optional(),
@@ -54,7 +55,7 @@ export async function POST(req: Request) {
         const { id, n } = await generateNextOpaqueId(prisma.workGroup, "G");
         const permissionId = data.gated ? await mintGroupPermission(id, data.label) : null;
         const created = await prisma.workGroup.create({
-            data: { id, label: data.label, color: data.color ?? "bg-gray-100 text-gray-600", order: data.order ?? n, permissionId },
+            data: { id, name: data.name, label: data.label, color: data.color ?? "bg-gray-100 text-gray-600", order: data.order ?? n, permissionId },
         });
         return NextResponse.json(created, { status: 201 });
     } catch (e) {

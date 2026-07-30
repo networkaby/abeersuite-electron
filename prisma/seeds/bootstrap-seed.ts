@@ -257,12 +257,15 @@ const PIPELINES: PipelineSeed[] = [
 ];
 
 // Work GROUPS — categories that bundle works (the Work Inbox organises group-wise).
+// `name` is the internal admin-facing name (Settings → Groups); `label` is the
+// display name shown to staff / the merge key. They match here since the generic
+// catalog has no same-label duplicates yet — a real install can add more later.
 const WORK_GROUPS = [
-    { id: "G1", label: "Calling", order: 1, color: "bg-blue-100 text-blue-600" },
-    { id: "G2", label: "Repairing", order: 2, color: "bg-green-100 text-green-700" },
-    { id: "G3", label: "Admin", order: 3, color: "bg-orange-100 text-orange-600" },
-    { id: "G4", label: "Parts & Courier", order: 4, color: "bg-purple-100 text-purple-600" },
-    { id: "G5", label: "Orders", order: 5, color: "bg-amber-100 text-amber-700" },
+    { id: "G1", name: "Calling", label: "Calling", order: 1, color: "bg-blue-100 text-blue-600" },
+    { id: "G2", name: "Repairing", label: "Repairing", order: 2, color: "bg-green-100 text-green-700" },
+    { id: "G3", name: "Admin", label: "Admin", order: 3, color: "bg-orange-100 text-orange-600" },
+    { id: "G4", name: "Parts & Courier", label: "Parts & Courier", order: 4, color: "bg-purple-100 text-purple-600" },
+    { id: "G5", name: "Orders", label: "Orders", order: 5, color: "bg-amber-100 text-amber-700" },
 ] as const;
 
 // Works — the activity each worker represents. Gated works mint a
@@ -664,8 +667,8 @@ async function main() {
     for (const g of WORK_GROUPS) {
         await prisma.workGroup.upsert({
             where:  { id: g.id },
-            update: { label: g.label, color: seedColor(g.color), order: g.order },
-            create: { id: g.id, label: g.label, color: seedColor(g.color), order: g.order },
+            update: { name: g.name, label: g.label, color: seedColor(g.color), order: g.order },
+            create: { id: g.id, name: g.name, label: g.label, color: seedColor(g.color), order: g.order },
         });
     }
     for (const w of WORKS) {

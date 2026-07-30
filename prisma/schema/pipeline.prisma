@@ -169,6 +169,11 @@ model TicketWorker {
 // Work's own permissionId, which gates who can ACT on a ticket carrying that Work.
 model WorkGroup {
   id           String          @id
+  // Internal admin-facing name — tells apart same-labeled rows (e.g. two
+  // "Calling" tags scoped to different departments) on the Groups settings
+  // page. `label` stays the DISPLAY name shown to users / merge key (see
+  // comment above); `name` is never shown outside admin settings.
+  name         String          @default("")
   label        String
   color        String          @default("bg-gray-100 text-gray-600")
   order        Int             @default(0)
