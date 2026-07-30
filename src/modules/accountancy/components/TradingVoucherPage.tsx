@@ -793,11 +793,15 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
         lineTax: boolean;
         lineDescription: boolean;
         overallDiscount: boolean;
-        /// true = PRICE column shows/accepts tax-inclusive rate;
-        /// false (default) = exclusive. On PURCHASE the MRP column is always
-        /// editable regardless of this toggle.
+        /// true = PRICE column shows/accepts tax-inclusive rate; false =
+        /// exclusive. Default depends on kind (see DEFAULT_PREFS below). On
+        /// PURCHASE the MRP column is always editable regardless of this toggle.
         rateInclTax: boolean;
     };
+    // Customer-facing kinds (party = Sundry Debtors) default to tax-inclusive
+    // rates (retail-style MRP entry); supplier-facing kinds (Sundry Creditors)
+    // default to exclusive (bills quote pre-tax rates). Derived from the
+    // existing party field rather than a separate kind list.
     const DEFAULT_PREFS: ColumnPrefs = {
         freeQty: true,
         mrpHint: true,
@@ -805,12 +809,12 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
         lineTax: true,
         lineDescription: true,
         overallDiscount: true,
-        // Retail-style default: product MRP is treated as tax-inclusive.
-        // Operator can flip via the column-prefs menu and the choice persists.
-        rateInclTax: true,
+        rateInclTax: copy.party === "Sundry Debtors",
     };
-    // v3: rateInclTax flipped to true by default (2026-05-25).
-    const PREFS_KEY = "saleVoucherPage.columnPrefs.v3";
+    // v4: prefs now keyed per voucher kind so Sale/Purchase/etc. remember
+    // their own rateInclTax (and other column prefs) independently instead
+    // of sharing one global browser setting (2026-07-30).
+    const PREFS_KEY = `saleVoucherPage.columnPrefs.v4.${kind}`;
     const [prefs, setPrefs] = useState<ColumnPrefs>(DEFAULT_PREFS);
     const prefsRef = useRef<ColumnPrefs>(DEFAULT_PREFS);
     useEffect(() => { prefsRef.current = prefs; });
