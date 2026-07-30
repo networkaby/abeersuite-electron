@@ -3,6 +3,7 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { parseRange } from "@/modules/accountancy/lib/period";
 import { aggregateRange, loadNormalBalanceMap, netProfitLoss } from "@/modules/accountancy/lib/aggregateLedger";
 import { buildGroupTree, type GroupNode } from "@/modules/accountancy/lib/groupTree";
+import { getClosingStockValue } from "@/modules/accountancy/lib/closingStock";
 import { handleApiError } from "@/shared/lib/api";
 
 // Heavy aggregation: two full-range GL aggregations (period start + end). Give
@@ -27,9 +28,13 @@ export async function GET(req: Request) {
         startBoundary.setDate(startBoundary.getDate() - 1);
         startBoundary.setHours(23, 59, 59, 999);
 
-        const [openingAgg, closingAgg] = await Promise.all([
+        const [openingAgg, closingAgg, openingStock, closingStock] = await Promise.all([
             aggregateRange(new Date("1970-01-01"), startBoundary, nbMap),
             aggregateRange(new Date("1970-01-01"), to, nbMap),
+            // Stock AS AT each boundary — same helper and same as-of semantics the
+            // Balance Sheet uses, so the two reports agree by construction.
+            getClosingStockValue(undefined, startBoundary),
+            getClosingStockValue(undefined, to),
         ]);
         const [openingTree, closingTree] = await Promise.all([
             buildGroupTree(openingAgg),
@@ -47,12 +52,29 @@ export async function GET(req: Request) {
         const closingOf = (tree: GroupNode[], name: string): number =>
             findGroup(tree, name)?.rolledUpClosing ?? 0;
 
-        // Working capital snapshots
-        const wc = (tree: GroupNode[]) =>
-            Math.abs(closingOf(tree, "Current Assets")) - Math.abs(closingOf(tree, "Current Liabilities"));
+        // Working capital snapshots.
+        //
+        // Closing Stock is a current asset but is NEVER posted per-voucher to a GL
+        // ledger (Tally convention — see bootstrap-seed.ts), so the group tree alone
+        // understates Current Assets by the whole stock value. The Balance Sheet
+        // already compensates by injecting the unposted remainder as a synthetic
+        // ledger under Stock-in-Hand (balance-sheet/route.ts); we do the same
+        // arithmetic here so both reports show the same working capital.
+        //
+        // This also keeps the statement reconciling: `netProfitLoss()` below folds
+        // in the trading stock adjustment (closingStock − openingStock), so profit
+        // already counts stock movement. Leaving it out of Working Capital made the
+        // two sides disagree by exactly that amount, which the "Unexplained
+        // (opening-balance drift)" plug then silently absorbed.
+        const unpostedStock = (tree: GroupNode[], computed: number) =>
+            computed - closingOf(tree, "Stock-in-Hand");
 
-        const openingWC = wc(openingTree);
-        const closingWC = wc(closingTree);
+        const wc = (tree: GroupNode[], stockComputed: number) =>
+            Math.abs(closingOf(tree, "Current Assets")) + unpostedStock(tree, stockComputed)
+            - Math.abs(closingOf(tree, "Current Liabilities"));
+
+        const openingWC = wc(openingTree, openingStock.computed);
+        const closingWC = wc(closingTree, closingStock.computed);
         const wcChange  = closingWC - openingWC;
 
         // Fund-flow movements = period delta on each major non-current group
@@ -132,6 +154,12 @@ export async function GET(req: Request) {
             sources, applications,
             totalSources, totalApplications,
             workingCapital: { opening: openingWC, closing: closingWC, change: wcChange },
+            // Diagnostics: the stock folded into each Working Capital snapshot above.
+            closingStock: {
+                opening: openingStock.computed,
+                closing: closingStock.computed,
+                method:  closingStock.method,
+            },
         });
     } catch (e) {
         return handleApiError(e, "Failed to compute fund flow");
