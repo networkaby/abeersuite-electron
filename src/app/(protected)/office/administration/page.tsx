@@ -2,9 +2,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { hasModuleNavAccess } from "@/shared/lib/auth/permissionScope";
 import { TaskBoard } from "@/modules/administration/components";
-
-/** Administration work board rides the seeded internal-management pipeline. */
-const ADMIN_PIPELINE_ID = "P4";
+import { ADMIN_TASKS_PIPELINE_ID as ADMIN_PIPELINE_ID } from "@/modules/administration/lib/adminPipeline";
 
 export default async function AdministrationPage() {
     const session = await auth();

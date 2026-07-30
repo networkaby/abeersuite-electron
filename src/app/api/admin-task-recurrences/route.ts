@@ -5,9 +5,8 @@ import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { createTaskRecurrenceSchema } from "@/shared/lib/schemas/taskRecurrenceSchema";
 import { buildTaskActor } from "@/modules/administration/lib/taskActor";
 import { runTaskRecurrences, nextDueAt } from "@/modules/administration/lib/runTaskRecurrences";
-
 /** Recurring tasks ride the same Administration pipeline as one-off tasks. */
-const ADMIN_PIPELINE_ID = "P4";
+import { ADMIN_TASKS_PIPELINE_ID as ADMIN_PIPELINE_ID } from "@/modules/administration/lib/adminPipeline";
 
 const ASSIGNED_POSITION_SELECT = {
     select: {

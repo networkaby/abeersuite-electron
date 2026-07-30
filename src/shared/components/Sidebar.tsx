@@ -17,7 +17,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import NotificationBell from "@/modules/message/components/NotificationBell";
 import { useInboxUnread } from "@/modules/message/hooks/useInboxUnread";
-import { useWorkInboxCounts } from "@/modules/repairing/hooks/useWorkInboxCounts";
+import { useNavCounts } from "@/shared/hooks/useNavCounts";
+import { NAV_SURFACE, WORK_INBOX_SURFACE } from "@/shared/lib/nav/navSurfaces";
 import UserAvatar from "@/shared/components/UserAvatar";
 import { useQuickTicketStore } from "@/store/quickTicketStore";
 import {
@@ -45,6 +46,40 @@ type SidebarUser = {
 
 type Pipeline = { id: string; isDefault: boolean; isActive: boolean };
 
+// ── Count badges ──────────────────────────────────────────────────────────────
+// `fresh` = new arrivals / unread (loud, primary). `total` = everything open there
+// (quiet). Used by Workspace links and module sections alike.
+
+function CountBadges({ fresh, total }: { fresh: number; total: number }) {
+    return (
+        <>
+            {fresh > 0 && (
+                <span className="shrink-0 rounded bg-primary px-1.5 py-0.5 text-[10px] font-bold leading-none text-primary-foreground">
+                    {fresh > 99 ? "99+" : fresh}
+                </span>
+            )}
+            {total > 0 && (
+                <span className="shrink-0 text-[10px] font-medium leading-none text-muted-foreground/70">
+                    {total > 99 ? "99+" : total}
+                </span>
+            )}
+        </>
+    );
+}
+
+/** The collapsed rail has no room for numbers, so a dot just says "something new". */
+function CountDot({ show }: { show: boolean }) {
+    if (!show) return null;
+    return <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-primary" aria-hidden />;
+}
+
+/** "3 new · 12 total" — the collapsed rail's tooltip, where the numbers can't show. */
+function countTitle(fresh: number, total: number, noun: string) {
+    return [fresh > 0 ? `${fresh} ${noun}` : null, total > 0 ? `${total} total` : null]
+        .filter(Boolean)
+        .join(" · ");
+}
+
 export default function Sidebar({ user }: { user?: SidebarUser }) {
     const pathname = usePathname();
     const { resolvedTheme, setTheme } = useTheme();
@@ -52,18 +87,40 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
     const isAdmin = permissions.includes(PERMISSIONS.ADMIN_BYPASS);
     const { setOpen: openQuickTicket, setInitialPipelineId } = useQuickTicketStore();
 
-    // Live counts on Workspace links, so someone working in another module sees new
-    // arrivals without refreshing: unread chat messages on Inbox, and new + total
-    // open work on Work Flow.
+    // Live counts, so someone working in another module sees new arrivals without
+    // refreshing. One poll feeds every badge (useNavCounts); chat unread is separate
+    // because it rides the Supabase broadcast for instant delivery.
     const inboxUnread = useInboxUnread();
-    const workInbox = useWorkInboxCounts();
+    const surfaceCount = useNavCounts();
+
+    // Module section → which surface's count it shows. CRM's number is its Deals
+    // board; the other three each own one board. Modules absent here get no badge.
+    const MODULE_SURFACE: Record<string, string> = {
+        repair: NAV_SURFACE.repair,
+        crm: NAV_SURFACE.deals,
+        help: NAV_SURFACE.help,
+        administration: NAV_SURFACE.administration,
+    };
 
     // `fresh` renders as a loud badge, `total` as a quiet number beside it; a link with
     // neither gets no badge. `noun` is only for the collapsed-mode tooltip.
-    const navCounts = (href: string): { fresh: number; total: number; noun: string } =>
-        href === "/office/message/inbox"    ? { fresh: inboxUnread,   total: 0,              noun: "unread" }
-        : href === "/office/work-flow-inbox" ? { fresh: workInbox.new, total: workInbox.all,  noun: "new" }
-        : { fresh: 0, total: 0, noun: "" };
+    type Counts = { fresh: number; total: number; noun: string };
+    const NO_COUNT: Counts = { fresh: 0, total: 0, noun: "" };
+
+    const fromSurface = (surface: string, noun = "new"): Counts => {
+        const c = surfaceCount(surface);
+        return { fresh: c.new, total: c.all, noun };
+    };
+
+    const workspaceCounts = (href: string): Counts =>
+        href === "/office/message/inbox" ? { fresh: inboxUnread, total: 0, noun: "unread" }
+        : href === "/office/work-flow-inbox" ? fromSurface(WORK_INBOX_SURFACE)
+        : NO_COUNT;
+
+    const moduleCounts = (moduleKey: string): Counts => {
+        const surface = MODULE_SURFACE[moduleKey];
+        return surface ? fromSurface(surface) : NO_COUNT;
+    };
 
     // usePanelStore's own `persist` middleware is the single source of truth for
     // sidebar mode (localStorage key "panel-store") — no separate bridge needed.
@@ -515,11 +572,8 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                     const hasActiveChild = visibleChildren.some((child) => isWorkspaceChildActive(child.href, visibleChildren));
                                     const isActiveParent = pathname.startsWith(item.href) || hasActiveChild;
 
-                                    const { fresh, total, noun } = navCounts(item.href);
-                                    const countTitle = [
-                                        fresh > 0 ? `${fresh} ${noun}` : null,
-                                        total > 0 ? `${total} total` : null,
-                                    ].filter(Boolean).join(" · ");
+                                    const { fresh, total, noun } = workspaceCounts(item.href);
+                                    const badgeTitle = countTitle(fresh, total, noun);
 
                                     if (!hasChildren || visibleChildren.length === 0 || collapsed) {
                                         return (
@@ -527,29 +581,16 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                                 key={item.href}
                                                 href={item.href}
                                                 className={linkClass(item.href)}
-                                                title={collapsed ? `${item.label}${countTitle ? ` (${countTitle})` : ""}` : ""}
+                                                title={collapsed ? `${item.label}${badgeTitle ? ` (${badgeTitle})` : ""}` : ""}
                                             >
                                                 <span className="relative shrink-0">
                                                     <Icon size={17} className="shrink-0" />
-                                                    {/* Collapsed: no room for numbers, so just a dot for fresh items */}
-                                                    {collapsed && fresh > 0 && (
-                                                        <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-primary" />
-                                                    )}
+                                                    <CountDot show={collapsed && fresh > 0} />
                                                 </span>
                                                 {!collapsed && (
                                                     <>
                                                         <span className="flex-1 truncate">{item.label}</span>
-                                                        {/* Fresh (unread / newly arrived) stands out; the total sits quietly beside it */}
-                                                        {fresh > 0 && (
-                                                            <span className="shrink-0 rounded bg-primary px-1.5 py-0.5 text-[10px] font-bold leading-none text-primary-foreground">
-                                                                {fresh > 99 ? "99+" : fresh}
-                                                            </span>
-                                                        )}
-                                                        {total > 0 && (
-                                                            <span className="shrink-0 text-[10px] font-medium leading-none text-muted-foreground/70">
-                                                                {total > 99 ? "99+" : total}
-                                                            </span>
-                                                        )}
+                                                        <CountBadges fresh={fresh} total={total} />
                                                     </>
                                                 )}
                                             </Link>
@@ -620,6 +661,11 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                 {visibleModules.map((mod) => {
                                     const Icon = mod.icon;
                                     const isOpen = moduleOpen[mod.key] ?? false;
+                                    // Ticket-based modules carry their own count. An open ticket shows
+                                    // here while it sits in a plain status, and moves to the Work Flow
+                                    // badge once a work-bearing sub-status takes it — never both.
+                                    const { fresh, total, noun } = moduleCounts(mod.key);
+                                    const badgeTitle = countTitle(fresh, total, noun);
 
                                     return (
                                         <div key={mod.key}>
@@ -639,7 +685,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                                 ) : (
                                                     <Link
                                                         href={mod.dashboardHref}
-                                                        title={mod.label}
+                                                        title={`${mod.label}${badgeTitle ? ` (${badgeTitle})` : ""}`}
                                                         className={[
                                                             "flex h-auto w-full items-center justify-center rounded-lg px-2 py-2 transition-colors",
                                                             pathname.startsWith(mod.dashboardHref)
@@ -647,7 +693,10 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                                                 : "text-muted-foreground hover:bg-muted",
                                                         ].join(" ")}
                                                     >
-                                                        <Icon size={17} />
+                                                        <span className="relative">
+                                                            <Icon size={17} />
+                                                            <CountDot show={fresh > 0} />
+                                                        </span>
                                                     </Link>
                                                 )
                                             ) : (
@@ -688,6 +737,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                                             >
                                                                 <Icon size={17} className="shrink-0" />
                                                                 <span className="flex-1 truncate text-left">{mod.label}</span>
+                                                                <CountBadges fresh={fresh} total={total} />
                                                             </Link>
                                                             <Button
                                                                 type="button"

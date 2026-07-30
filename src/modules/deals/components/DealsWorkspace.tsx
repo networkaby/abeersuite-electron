@@ -10,6 +10,8 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
+import { useMarkSurfaceSeen } from "@/shared/hooks/useNavCounts";
+import { NAV_SURFACE } from "@/shared/lib/nav/navSurfaces";
 import DealBoard from "./DealBoard";
 import DealTable from "./DealTable";
 import DealFormDialog from "./DealFormDialog";
@@ -27,6 +29,9 @@ export default function DealsWorkspace({
     myPositionIds: string[];
     canManage: boolean;
 }) {
+    // Opening the board IS "looking at it" — clears this module's `new` sidebar badge.
+    useMarkSurfaceSeen(NAV_SURFACE.deals);
+
     const router = useRouter();
     const searchParams = useSearchParams();
     const [deals, setDeals] = useState<DealDto[]>([]);

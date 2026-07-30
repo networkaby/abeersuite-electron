@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Input } from "@/components/ui/input";
 import { type WorkArg, isUserArg, argKey, argMatchesOutcome } from "@/modules/repairing/lib/ticketSources";
 import { navigateInApp } from "@/modules/repairing/lib/clientNav";
+import { NAV_COUNTS_CHANGED } from "@/shared/hooks/useNavCounts";
 
 interface RouteTarget { id: string; label: string }
 // isStatus → the target is a STAGE jump (statusId), not a same-stage worker.
@@ -80,8 +81,9 @@ export default function WorkActions({
     // Required outcome fields gate the confirm button until filled.
     const missingRequired = pendingArgs.some((a) => a.required && !(argValues[argKey(a)] ?? "").trim());
     const refresh = () => {
-        // Work moved → let the sidebar Work Flow badge recount now, not on its next poll.
-        window.dispatchEvent(new CustomEvent("work-inbox:changed"));
+        // Work moved — possibly out of a module and into the Work Inbox, or off both.
+        // Recount the sidebar badges now rather than on their next poll.
+        window.dispatchEvent(new CustomEvent(NAV_COUNTS_CHANGED));
         if (onChanged) onChanged(); else router.refresh();
     };
     const close = () => { setPending(null); setArgValues({}); };

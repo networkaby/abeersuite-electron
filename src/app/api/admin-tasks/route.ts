@@ -5,9 +5,7 @@ import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { createTaskSchema } from "@/shared/lib/schemas/taskSchema";
 import { buildTaskActor } from "@/modules/administration/lib/taskActor";
 import { runTaskRecurrences } from "@/modules/administration/lib/runTaskRecurrences";
-
-/** Administration work board rides the seeded internal-management pipeline. */
-const ADMIN_PIPELINE_ID = "P4";
+import { ADMIN_TASKS_PIPELINE_ID as ADMIN_PIPELINE_ID } from "@/modules/administration/lib/adminPipeline";
 
 /** Position the task is assigned to + its current live holders (resolved via
  *  UserPosition), so the board can show who'll actually do the work. */

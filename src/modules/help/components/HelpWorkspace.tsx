@@ -11,6 +11,8 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { useMarkSurfaceSeen } from "@/shared/hooks/useNavCounts";
+import { NAV_SURFACE } from "@/shared/lib/nav/navSurfaces";
 import HelpBoard from "./HelpBoard";
 import HelpFormDialog from "./HelpFormDialog";
 import HelpQuickForm from "./HelpQuickForm";
@@ -30,6 +32,9 @@ export default function HelpWorkspace({
     canManage: boolean;
     canDelete: boolean;
 }) {
+    // Opening the board IS "looking at it" — clears this module's `new` sidebar badge.
+    useMarkSurfaceSeen(NAV_SURFACE.help);
+
     const router = useRouter();
     const searchParams = useSearchParams();
     const [tickets, setTickets] = useState<HelpDto[]>([]);

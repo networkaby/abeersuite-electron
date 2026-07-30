@@ -18,11 +18,6 @@ model User {
   /// out of every tab/device at once) and available for password-change / admin
   /// force-logout later. null = never revoked.
   tokensValidFrom                  DateTime?
-  /// Work Inbox "new" marker — stamped when the user opens /office/work-flow-inbox.
-  /// Work arriving after this instant counts as new in the sidebar badge.
-  /// null = never looked, so everything is new (same semantics as
-  /// ChatRoomMember.lastReadAt, which drives the Inbox unread badge).
-  workInboxSeenAt                  DateTime?
   managerId                        Int?
   // public profile
   avatarUrl                        String?
@@ -65,6 +60,21 @@ model User {
   giftCardTxnsCreated              GiftCardTxn[]              @relation("GiftCardTxnCreatedBy")
   additionalCostAllocationsCreated AdditionalCostAllocation[] @relation("AdditionalCostAllocationCreatedBy")
   ledgersReconciled                Account[]                  @relation("AccountReconciledBy")
+  surfacesSeen                     UserSurfaceSeen[]
+}
+
+// ── UserSurfaceSeen — per-user "I have looked at this list" markers ───────────
+// Drives the `new` half of every sidebar count badge: anything arriving after
+// `seenAt` is new to THIS user. One row per user per surface (`surface` keyed the
+// same generic way as SavedFilter), so a new badge needs a registry entry, not a
+// new column on User. No row yet = never looked, so everything counts as new.
+model UserSurfaceSeen {
+  userId  Int
+  surface String
+  seenAt  DateTime @default(now())
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, surface])
 }
 
 // ── QuickNote — per-user scratch pad ──────────────────────────────────────

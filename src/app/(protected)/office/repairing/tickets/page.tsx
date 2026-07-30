@@ -8,6 +8,8 @@ import { toast } from "sonner";
 import Link from "next/link";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { REPAIR_PIPELINE_NAME } from "@/modules/repairing/lib/repairPipeline";
+import { useMarkSurfaceSeen } from "@/shared/hooks/useNavCounts";
+import { NAV_SURFACE } from "@/shared/lib/nav/navSurfaces";
 import WarrantyBadge from "@/modules/repairing/components/WarrantyBadge";
 import { PRIORITY_META } from "@/utils/constants";
 import { Button } from "@/components/ui/button";
@@ -50,6 +52,9 @@ type PriorityOption = { id: string; label: string };
 const serviceCenterName = (t: Ticket) => t.context?.shippingSlip?.partyName ?? t.serviceCenter?.name ?? null;
 
 export default function TicketsPage() {
+    // Opening the board IS "looking at it" — clears this module's `new` sidebar badge.
+    useMarkSurfaceSeen(NAV_SURFACE.repair);
+
     const [tickets, setTickets] = useState<Ticket[]>([]);
     const [filtered, setFiltered] = useState<Ticket[]>([]);
     const [loading, setLoading] = useState(true);

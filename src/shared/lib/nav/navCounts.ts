@@ -1,0 +1,140 @@
+import type { Prisma } from "@/generated/prisma/client";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
+import type { ResolvedUser } from "@/shared/lib/auth/permissions";
+import { passesWorkGate } from "@/modules/repairing/lib/workGate";
+import {
+    PIPELINE_NAV_SURFACES,
+    WORK_INBOX_SURFACE,
+    type NavCounts,
+} from "./navSurfaces";
+
+/**
+ * Every sidebar count badge in one call, so the whole sidebar polls once instead
+ * of once per badge.
+ *
+ * THE ONE-PLACE RULE — an open ticket is counted in exactly one badge:
+ *   • its MODULE while it sits in a plain status, and
+ *   • the WORK INBOX once it lands in a work-bearing sub-status,
+ * so the count hands itself over as the ticket moves and nothing is counted twice.
+ *
+ * `all`  — open (non-terminal) tickets in that place.
+ * `new`  — of those, the ones that arrived after this user's seen marker. For a
+ *          module list "arrived" is `createdAt` (a new deal / enquiry / task /
+ *          repair came in); for the Work Inbox it is `statusEnteredAt` (arrival at
+ *          a stage), because that queue is about stages, not intake. `new` is
+ *          always a subset of `all`, so a badge can never read "5 new · 3 total".
+ *
+ * Snoozed tickets (`wakeAt` in the future) are in NEITHER badge — a snooze is an
+ * explicit "don't bother me until then". They return to the Work Inbox when due.
+ *
+ * Visibility is per user: the Work Inbox only counts work whose Work-gate the user
+ * passes, and a ticket held in work the user cannot act on therefore stays counted
+ * in its module for them.
+ */
+export async function getNavCounts(user: ResolvedUser): Promise<NavCounts> {
+    const pipelineNames = PIPELINE_NAV_SURFACES
+        .map((s) => s.pipelineName)
+        .filter((n): n is string => !!n);
+
+    const [works, pipelines, seenRows] = await Promise.all([
+        prisma.work.findMany({ select: { id: true, permissionId: true } }),
+        prisma.pipeline.findMany({
+            where: { name: { in: pipelineNames } },
+            select: { id: true, name: true },
+        }),
+        prisma.userSurfaceSeen.findMany({
+            where: { userId: user.id },
+            select: { surface: true, seenAt: true },
+        }),
+    ]);
+
+    const seenBySurface = new Map(seenRows.map((r) => [r.surface, r.seenAt]));
+    const pipelineIdByName = new Map(pipelines.map((p) => [p.name, p.id]));
+
+    // surface key ← pipeline id, for both the query filter and reading results back.
+    const surfaceByPipelineId = new Map<string, string>();
+    for (const s of PIPELINE_NAV_SURFACES) {
+        const id = s.pipelineId ?? (s.pipelineName ? pipelineIdByName.get(s.pipelineName) : undefined);
+        if (id) surfaceByPipelineId.set(id, s.key);
+    }
+
+    const now = new Date();
+    const visibleWorkIds = works.filter((w) => passesWorkGate(user, w)).map((w) => w.id);
+
+    // A snooze defers the item out of every badge until wakeAt passes.
+    const notSnoozed: Prisma.TicketWhereInput = { OR: [{ wakeAt: null }, { wakeAt: { lte: now } }] };
+    // Sitting in a work-bearing sub-status this user can act on = the Work Inbox owns it.
+    const inMyWorkInbox: Prisma.TicketWhereInput = { ticketWorker: { workId: { in: visibleWorkIds } } };
+
+    const moduleBase: Prisma.TicketWhereInput = {
+        AND: [
+            {
+                pipelineId: { in: [...surfaceByPipelineId.keys()] },
+                ticketStatus: { isTerminal: false },
+            },
+            notSnoozed,
+            // The one-place rule: hand the ticket over to the Work Inbox badge.
+            ...(visibleWorkIds.length ? [{ NOT: inMyWorkInbox }] : []),
+        ],
+    };
+
+    // One clause per surface, so a single groupBy resolves every module's `new`
+    // against its own marker. No marker = never looked = all of them are new.
+    const freshClauses: Prisma.TicketWhereInput[] = [...surfaceByPipelineId].map(([pipelineId, key]) => {
+        const seenAt = seenBySurface.get(key);
+        return seenAt ? { pipelineId, createdAt: { gt: seenAt } } : { pipelineId };
+    });
+
+    const workInboxBase: Prisma.TicketWhereInput = {
+        AND: [{ ticketStatus: { isTerminal: false } }, inMyWorkInbox, notSnoozed],
+    };
+    const workSeenAt = seenBySurface.get(WORK_INBOX_SURFACE);
+    // Rows predating statusEnteredAt fall back to updatedAt, as the board's age label does.
+    const workFresh: Prisma.TicketWhereInput = workSeenAt
+        ? {
+            OR: [
+                { statusEnteredAt: { gt: workSeenAt } },
+                { statusEnteredAt: null, updatedAt: { gt: workSeenAt } },
+            ],
+        }
+        : {};
+
+    const hasSurfaces = surfaceByPipelineId.size > 0;
+    const hasWork = visibleWorkIds.length > 0;
+
+    const [moduleAll, moduleNew, workAll, workNew] = await Promise.all([
+        hasSurfaces ? prisma.ticket.groupBy({ by: ["pipelineId"], where: moduleBase, _count: { _all: true } }) : [],
+        hasSurfaces
+            ? prisma.ticket.groupBy({
+                by: ["pipelineId"],
+                where: { AND: [moduleBase, { OR: freshClauses }] },
+                _count: { _all: true },
+            })
+            : [],
+        hasWork ? prisma.ticket.count({ where: workInboxBase }) : 0,
+        hasWork ? prisma.ticket.count({ where: { AND: [workInboxBase, workFresh] } }) : 0,
+    ]);
+
+    const counts: NavCounts = { [WORK_INBOX_SURFACE]: { all: workAll, new: workNew } };
+    for (const key of surfaceByPipelineId.values()) counts[key] = { all: 0, new: 0 };
+
+    for (const row of moduleAll) {
+        const key = row.pipelineId ? surfaceByPipelineId.get(row.pipelineId) : undefined;
+        if (key) counts[key].all = row._count._all;
+    }
+    for (const row of moduleNew) {
+        const key = row.pipelineId ? surfaceByPipelineId.get(row.pipelineId) : undefined;
+        if (key) counts[key].new = row._count._all;
+    }
+
+    return counts;
+}
+
+/** Stamp "I have looked at this list now" — resets the `new` half for this user. */
+export async function markSurfaceSeen(userId: number, surface: string) {
+    await prisma.userSurfaceSeen.upsert({
+        where: { userId_surface: { userId, surface } },
+        update: { seenAt: new Date() },
+        create: { userId, surface, seenAt: new Date() },
+    });
+}

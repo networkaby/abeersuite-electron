@@ -8,6 +8,8 @@ import { Plus, RefreshCw, ClipboardList } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { useMarkSurfaceSeen } from "@/shared/hooks/useNavCounts";
+import { NAV_SURFACE } from "@/shared/lib/nav/navSurfaces";
 import TaskCard from "./TaskCard";
 import TaskFormDialog from "./TaskFormDialog";
 import TaskDetailDialog from "./TaskDetailDialog";
@@ -25,6 +27,9 @@ export default function TaskBoard({
     myPositionIds: string[];
     canManage: boolean;
 }) {
+    // Opening the board IS "looking at it" — clears this module's `new` sidebar badge.
+    useMarkSurfaceSeen(NAV_SURFACE.administration);
+
     const router = useRouter();
     const searchParams = useSearchParams();
     const [tasks, setTasks] = useState<TaskDto[]>([]);
