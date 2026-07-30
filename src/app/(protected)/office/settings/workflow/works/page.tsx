@@ -181,7 +181,7 @@ const BLANK: WorkFormValues = {
 function WorkFormBody({ form, set, groups, contextVars }: {
     form: WorkFormValues;
     set: (patch: Partial<WorkFormValues>) => void;
-    groups: { id: string; label: string }[];
+    groups: { id: string; name: string; label: string }[];
     contextVars: { key: string; label: string }[];
 }) {
     const args = form.args;
