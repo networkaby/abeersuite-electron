@@ -25,7 +25,10 @@ export async function GET(_req: Request, { params }: Params) {
         where: { id: Number(id) },
         include: {
             // 5D-2 creator + 5D-6 ref + 5D-11 type + 5D-12 branch + 5D-4 party ledger + lifecycle live on the spine.
-            universalVoucher: { select: { createdById: true, voucherNo: true, type: true, branchId: true, partyAccountId: true, status: true, deletedAt: true, cancelledAt: true, branch: { select: { id: true, name: true } } } },
+            // 5D-5/5D-10: date + description + narration + postedAt live on the spine too —
+            // without them the edit form read `v.date === undefined` and silently
+            // fell back to TODAY on every old voucher (same for the narration box).
+            universalVoucher: { select: { createdById: true, voucherNo: true, type: true, date: true, description: true, narration: true, postedAt: true, branchId: true, partyAccountId: true, status: true, deletedAt: true, cancelledAt: true, branch: { select: { id: true, name: true } } } },
             // refVoucher powers parent-link surfaces — "Replaces <old ref>"
             // for a SALE_RETURN against a SALE, or "Linked to PO-…" on a GRN.
             refVoucher: { select: { id: true, universalVoucher: { select: { voucherNo: true, type: true } } } },   // 5D-11 type on spine
@@ -67,6 +70,12 @@ export async function GET(_req: Request, { params }: Params) {
         ...voucher,
         // 5D-6/5D-11/5D-12: the user-facing number + type + branch come from the spine now.
         type:         voucher.universalVoucher?.type,
+        // 5D-10/5D-5: the document's own date + narration text. Surfaced here so
+        // edit-load and the detail page show what was SAVED, not today's date.
+        date:         voucher.universalVoucher?.date ?? null,
+        description:  voucher.universalVoucher?.description ?? "",
+        narration:    voucher.universalVoucher?.narration ?? null,
+        postedAt:     voucher.universalVoucher?.postedAt ?? null,
         branchId:     voucher.universalVoucher?.branchId ?? null,
         // Lifecycle also lives on the spine now — VoucherDetail itself carries
         // none of these, so without surfacing them here the edit form's
