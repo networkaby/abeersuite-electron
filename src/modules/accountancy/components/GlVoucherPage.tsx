@@ -317,6 +317,20 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
     const copy = PER_KIND[kind];
     const isEditing = voucherId != null && Number.isFinite(voucherId);
 
+    // Payment/Receipt only: a particulars row can go negative, Tally-style, to
+    // fold a same-side deduction (e.g. MDR charge on a card/UPI receipt) into
+    // the row list instead of needing a separate voucher. A negative row nets
+    // into the top total and, on save, flips to the top account's side.
+    const allowNegativeRows = kind === "PAYMENT" || kind === "RECEIPT";
+    const parseRowAmount = (s: string | undefined | null): number => {
+        if (!allowNegativeRows) return parseAmount(s);
+        if (!s) return 0;
+        const n = parseFloat(String(s).replace(/[,_\s]/g, ""));
+        return Number.isFinite(n) ? n : 0;
+    };
+    const isRowAmountChars = (s: string): boolean =>
+        allowNegativeRows ? /^-?[\d,.\s]*$/.test(s) : isAmountChars(s);
+
     // Close / Cancel / Back — go back if there's tab history, otherwise fall
     // Close / back behaviour:
     //   • Same-tab navigation (e.g. Day Book → form): router.back() returns
@@ -428,10 +442,10 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
     // Every cheque row must carry a cheque number before the voucher can save.
     const chequesComplete = rows.every((r) => !isChequeRow(r) || (r.chequeNo ?? "").trim().length > 0);
 
-    const rowsTotal = rows.reduce((s, r) => s + parseAmount(r.amount), 0);
+    const rowsTotal = rows.reduce((s, r) => s + parseRowAmount(r.amount), 0);
     const topTotal  = rowsTotal;  // top side auto-derives from particulars sum
     const balanced  = rowsTotal > 0
-        && rows.every((r) => r.accountId !== null && parseAmount(r.amount) > 0)
+        && rows.every((r) => r.accountId !== null && (allowNegativeRows ? parseRowAmount(r.amount) !== 0 : parseRowAmount(r.amount) > 0))
         && !!effectiveTopAccountId
         // top account can't equal any particulars account (would self-balance)
         && rows.every((r) => r.accountId !== effectiveTopAccountId)
@@ -477,15 +491,24 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
         // Map source lines back into top + particulars rows (same shape as
         // the edit-mode prefill).
         const sourceLines = dup.lines as { accountId?: number | null; type?: "DEBIT" | "CREDIT"; amount?: number | string; description?: string | null }[];
-        const topLine    = sourceLines.find((l) => l.type === copy.topSide && l.accountId != null);
+        // Extra topSide lines beyond the first are negative particulars rows
+        // (e.g. an MDR deduction) that flipped onto the top account's side on
+        // save — fold them back in as negative rows.
+        const topSideLines = sourceLines.filter((l) => l.type === copy.topSide && l.accountId != null);
+        const topLine      = topSideLines[0];
+        const extraTopLines = topSideLines.slice(1);
         const rowLines   = sourceLines.filter((l) => l.type === copy.rowSide);
         if (topLine?.accountId != null) setTopLedgerId(topLine.accountId);
-        if (rowLines.length > 0) {
-            setRows(rowLines.map((l) => ({
+        const mergedRows = [
+            ...rowLines.map((l) => ({ accountId: l.accountId ?? null, amount: l.amount, note: l.description ?? "" })),
+            ...extraTopLines.map((l) => ({ accountId: l.accountId ?? null, amount: l.amount != null ? -Number(l.amount) : null, note: l.description ?? "" })),
+        ];
+        if (mergedRows.length > 0) {
+            setRows(mergedRows.map((l) => ({
                 id:        ++rowSeq,
                 accountId: l.accountId ?? null,
                 amount:    l.amount != null ? String(Number(l.amount)) : "",
-                note:      l.description ?? "",
+                note:      l.note,
             })));
         }
         toast.success("Duplicated — review and Save to create a new voucher");
@@ -508,16 +531,25 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
 
                 // Split lines using PER_KIND[kind] — first topSide line is the
                 // "top" account; remaining rowSide lines become the particulars.
-                const topLine = v.lines.find((l) => l.type === copy.topSide);
+                // Any EXTRA topSide lines (Payment/Receipt only) are negative
+                // particulars rows (e.g. an MDR deduction) that flipped onto the
+                // top account's side on save — fold them back in as negative rows.
+                const topSideLines = v.lines.filter((l) => l.type === copy.topSide);
+                const topLine = topSideLines[0];
+                const extraTopLines = topSideLines.slice(1);
                 const rowLines = v.lines.filter((l) => l.type === copy.rowSide);
 
                 if (topLine) setTopLedgerId(topLine.accountId);
-                const mappedRows = rowLines.length > 0
-                    ? rowLines.map((l) => ({
+                const combinedRows = [
+                    ...rowLines.map((l) => ({ accountId: l.accountId, amount: Number(l.amount), note: l.description ?? "" })),
+                    ...extraTopLines.map((l) => ({ accountId: l.accountId, amount: -Number(l.amount), note: l.description ?? "" })),
+                ];
+                const mappedRows = combinedRows.length > 0
+                    ? combinedRows.map((l) => ({
                         id:        ++rowSeq,
                         accountId: l.accountId,
-                        amount:    String(Number(l.amount)),
-                        note:      l.description ?? "",
+                        amount:    String(l.amount),
+                        note:      l.note,
                     }))
                     : [newRow()];
                 setRows(mappedRows);
@@ -657,12 +689,18 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
             type:      copy.topSide,
             amount:    rowsTotal,
         };
-        const rowLines = rows.map((r) => ({
-            accountId:   r.accountId!,
-            type:        copy.rowSide,
-            amount:      parseAmount(r.amount),
-            description: r.note.trim() || undefined,
-        }));
+        const rowLines = rows.map((r) => {
+            const amt = parseRowAmount(r.amount);
+            const negative = allowNegativeRows && amt < 0;
+            return {
+                accountId:   r.accountId!,
+                // A negative row (e.g. MDR charge) posts on the TOP account's
+                // side instead — it's a deduction, not a same-side particular.
+                type:        negative ? copy.topSide : copy.rowSide,
+                amount:      Math.abs(amt),
+                description: r.note.trim() || undefined,
+            };
+        });
         const allLines = [topLine, ...rowLines];
 
         // ── Edit mode: dirty-check then PATCH ───────────────────────────────
@@ -915,7 +953,7 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
                                                     disabled={denomLocked}
                                                     title={denomLocked ? "Amount follows the denomination panel" : undefined}
                                                     onChange={(e) => {
-                                                        if (isAmountChars(e.target.value)) {
+                                                        if (isRowAmountChars(e.target.value)) {
                                                             updateRow(row.id, { amount: e.target.value });
                                                         }
                                                     }}
