@@ -16,6 +16,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import NotificationBell from "@/modules/message/components/NotificationBell";
+import { useInboxUnread } from "@/modules/message/hooks/useInboxUnread";
 import UserAvatar from "@/shared/components/UserAvatar";
 import { useQuickTicketStore } from "@/store/quickTicketStore";
 import {
@@ -49,6 +50,10 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
     const permissions = user?.permissions ?? [];
     const isAdmin = permissions.includes(PERMISSIONS.ADMIN_BYPASS);
     const { setOpen: openQuickTicket, setInitialPipelineId } = useQuickTicketStore();
+
+    // Total unread chat messages — badge on the Workspace → Inbox link, so someone
+    // working in another module sees new messages without refreshing.
+    const inboxUnread = useInboxUnread();
 
     // usePanelStore's own `persist` middleware is the single source of truth for
     // sidebar mode (localStorage key "panel-store") — no separate bridge needed.
@@ -482,23 +487,6 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
 
                         {/* <nav className="flex-1 space-y-4 overflow-y-auto overflow-x-hidden p-2"> */}
 
-                        {/* Inbox */}
-                        {/* <section>
-                        <Link href="/office/message/inbox" className={linkClass("/office/message/inbox")} title={collapsed ? "Inbox" : ""}>
-                            <Bell size={17} className="shrink-0" />
-                            {!collapsed && (
-                                <>
-                                    <span className="flex-1 truncate">Inbox</span>
-                                    {totalInboxUnread > 0 && (
-                                        <span className="bg-primary px-1.5 py-0.5 text-[10px] font-bold text-primary-foreground leading-none">
-                                            {totalInboxUnread}
-                                        </span>
-                                    )}
-                                </>
-                            )}
-                        </Link>
-                    </section> */}
-
                         {/* Workspace */}
                         <section>
                             {!collapsed && (
@@ -517,16 +505,34 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                     const hasActiveChild = visibleChildren.some((child) => isWorkspaceChildActive(child.href, visibleChildren));
                                     const isActiveParent = pathname.startsWith(item.href) || hasActiveChild;
 
+                                    // Inbox carries the live unread-message badge
+                                    const unread = item.href === "/office/message/inbox" ? inboxUnread : 0;
+
                                     if (!hasChildren || visibleChildren.length === 0 || collapsed) {
                                         return (
                                             <Link
                                                 key={item.href}
                                                 href={item.href}
                                                 className={linkClass(item.href)}
-                                                title={collapsed ? item.label : ""}
+                                                title={collapsed ? `${item.label}${unread > 0 ? ` (${unread} unread)` : ""}` : ""}
                                             >
-                                                <Icon size={17} className="shrink-0" />
-                                                {!collapsed && <span className="truncate">{item.label}</span>}
+                                                <span className="relative shrink-0">
+                                                    <Icon size={17} className="shrink-0" />
+                                                    {/* Collapsed: no room for a number, so just a dot on the icon */}
+                                                    {collapsed && unread > 0 && (
+                                                        <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-primary" />
+                                                    )}
+                                                </span>
+                                                {!collapsed && (
+                                                    <>
+                                                        <span className="flex-1 truncate">{item.label}</span>
+                                                        {unread > 0 && (
+                                                            <span className="shrink-0 rounded bg-primary px-1.5 py-0.5 text-[10px] font-bold leading-none text-primary-foreground">
+                                                                {unread > 99 ? "99+" : unread}
+                                                            </span>
+                                                        )}
+                                                    </>
+                                                )}
                                             </Link>
                                         );
                                     }

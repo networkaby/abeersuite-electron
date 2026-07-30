@@ -144,6 +144,8 @@ export default function InboxModule({
             const res = await axios.get<Message[]>(`/api/inbox/rooms/${roomId}/messages`);
             setMessages(res.data);
             setRooms((prev) => prev.map((r) => r.id === roomId ? { ...r, unreadCount: 0 } : r));
+            // GET /messages marks the room read server-side — tell the Sidebar badge to drop
+            window.dispatchEvent(new CustomEvent("inbox:read"));
         } catch {
             toast.error("Failed to load messages");
         } finally {

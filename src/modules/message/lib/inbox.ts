@@ -89,22 +89,25 @@ export async function ensureDirectMessageRoom(userA: number, userB: number) {
     return room;
 }
 
+/** Which rooms this user may see — one definition, shared by the list and the unread total. */
+const accessibleRoomsWhere = (userId: number) => ({
+    isActive: true,
+    type: { not: "PERSONAL_INBOX" as const },
+    OR: [
+        { ownerUserId: userId },
+        { type: "ORG_GROUP" as const },
+        {
+            type: "DIRECT_MESSAGE" as const,
+            members: { some: { userId } },
+        },
+    ],
+});
+
 export async function listAccessibleRooms(user: ResolvedUser) {
     await ensureCoreRoomsForUser(user);
 
     const rooms = await prisma.chatRoom.findMany({
-        where: {
-            isActive: true,
-            type: { not: "PERSONAL_INBOX" },
-            OR: [
-                { ownerUserId: user.id },
-                { type: "ORG_GROUP" },
-                {
-                    type: "DIRECT_MESSAGE",
-                    members: { some: { userId: user.id } },
-                },
-            ],
-        },
+        where: accessibleRoomsWhere(user.id),
         include: {
             members: {
                 where: { userId: user.id },
@@ -162,6 +165,37 @@ export async function listAccessibleRooms(user: ResolvedUser) {
         messageCount: room._count.messages,
         latestMessage: room.messages[0] ?? null,
     }));
+}
+
+/**
+ * Total unread across every accessible room — the number the Sidebar badge shows.
+ * Deliberately lean (ids + my lastReadAt only, no latest message / counts) because
+ * this is polled and event-refreshed from every page.
+ */
+export async function getUnreadTotal(user: ResolvedUser) {
+    const rooms = await prisma.chatRoom.findMany({
+        where: accessibleRoomsWhere(user.id),
+        select: {
+            id: true,
+            members: {
+                where: { userId: user.id },
+                select: { lastReadAt: true },
+            },
+        },
+    });
+    if (rooms.length === 0) return 0;
+
+    const counts = await Promise.all(rooms.map((room) => {
+        const lastReadAt = room.members[0]?.lastReadAt ?? null;
+        return prisma.chatMessage.count({
+            where: {
+                roomId: room.id,
+                ...(lastReadAt ? { createdAt: { gt: lastReadAt } } : {}),
+            },
+        });
+    }));
+
+    return counts.reduce((sum, n) => sum + n, 0);
 }
 
 export async function getAccessibleRoom(user: ResolvedUser, roomId: string) {
