@@ -44,6 +44,24 @@ export function hasModuleNavAccess(permissionsInput: string[], moduleKey: string
     return permissionsInput.some((p) => p.startsWith(prefix));
 }
 
+/**
+ * Split a resource's CRUD grants into the three flags a board UI needs.
+ * `resource` is the permission prefix — "tasks", "deals", "help" → checks
+ * `tasks:create` / `tasks:edit` / `tasks:delete`. The CRUD ladder applies, so
+ * holding only the top rung (`:delete`) satisfies edit and create too.
+ *
+ * Module nav access (`hasModuleNavAccess`) says whether the user may OPEN the
+ * board; these say what they may DO on it. Keep the two apart — collapsing them
+ * is what let a sidebar tick alone delete records.
+ */
+export function crudFlags(permissionsInput: string[], resource: string) {
+    return {
+        canCreate: hasPermissionWithScope(permissionsInput, `${resource}:create`),
+        canEdit: hasPermissionWithScope(permissionsInput, `${resource}:edit`),
+        canDelete: hasPermissionWithScope(permissionsInput, `${resource}:delete`),
+    };
+}
+
 export function hasPermissionWithScope(
     permissionsInput: string[],
     permissionId: string,

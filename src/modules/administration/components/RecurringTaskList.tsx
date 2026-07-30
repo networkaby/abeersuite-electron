@@ -35,10 +35,15 @@ function progressLabel(r: TaskRecurrenceDto): string {
 
 export default function RecurringTaskList({
     positions,
-    canManage,
+    canCreate,
+    canEdit,
+    canDelete,
 }: {
     positions: TaskPositionOption[];
-    canManage: boolean;
+    canCreate: boolean;
+    /** Covers Edit, the active/paused switch and "Generate now". */
+    canEdit: boolean;
+    canDelete: boolean;
 }) {
     const [rows, setRows] = useState<TaskRecurrenceDto[]>([]);
     const [loading, setLoading] = useState(true);
@@ -123,15 +128,15 @@ export default function RecurringTaskList({
                     <Button variant="outline" size="icon" onClick={load} title="Refresh">
                         <RefreshCw className="size-4" />
                     </Button>
-                    {canManage && (
-                        <>
-                            <Button variant="outline" onClick={generateNow} disabled={running}>
-                                <Play className="size-4" /> Generate now
-                            </Button>
-                            <Button onClick={openCreate}>
-                                <Plus className="size-4" /> New recurring task
-                            </Button>
-                        </>
+                    {canEdit && (
+                        <Button variant="outline" onClick={generateNow} disabled={running}>
+                            <Play className="size-4" /> Generate now
+                        </Button>
+                    )}
+                    {canCreate && (
+                        <Button onClick={openCreate}>
+                            <Plus className="size-4" /> New recurring task
+                        </Button>
                     )}
                 </div>
             </div>
@@ -200,30 +205,34 @@ export default function RecurringTaskList({
                                         <td className="px-3 py-2.5">
                                             <Switch
                                                 checked={r.isActive}
-                                                disabled={!canManage || finished}
+                                                disabled={!canEdit || finished}
                                                 onCheckedChange={(v) => togglePaused(r, v)}
                                             />
                                         </td>
                                         <td className="px-3 py-2.5">
-                                            {canManage && (
+                                            {(canEdit || canDelete) && (
                                                 <div className="flex justify-end gap-1">
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        title="Edit"
-                                                        onClick={() => openEdit(r)}
-                                                    >
-                                                        <Pencil className="size-4" />
-                                                    </Button>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        title="Remove"
-                                                        disabled={deleting}
-                                                        onClick={() => remove(r.id, r)}
-                                                    >
-                                                        <Trash2 className="size-4 text-destructive" />
-                                                    </Button>
+                                                    {canEdit && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            title="Edit"
+                                                            onClick={() => openEdit(r)}
+                                                        >
+                                                            <Pencil className="size-4" />
+                                                        </Button>
+                                                    )}
+                                                    {canDelete && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            title="Remove"
+                                                            disabled={deleting}
+                                                            onClick={() => remove(r.id, r)}
+                                                        >
+                                                            <Trash2 className="size-4 text-destructive" />
+                                                        </Button>
+                                                    )}
                                                 </div>
                                             )}
                                         </td>

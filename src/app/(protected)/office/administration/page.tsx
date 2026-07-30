@@ -1,6 +1,6 @@
 import { auth } from "@/auth";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { hasModuleNavAccess } from "@/shared/lib/auth/permissionScope";
+import { crudFlags } from "@/shared/lib/auth/permissionScope";
 import { TaskBoard } from "@/modules/administration/components";
 import { ADMIN_TASKS_PIPELINE_ID as ADMIN_PIPELINE_ID } from "@/modules/administration/lib/adminPipeline";
 
@@ -10,7 +10,9 @@ export default async function AdministrationPage() {
         | { id?: string; permissions?: string[] }
         | undefined;
     const permissions = sessionUser?.permissions ?? [];
-    const canManage = hasModuleNavAccess(permissions, "administration");
+    // The layout already gated "may you open this board". These say what you may
+    // DO on it — the sidebar tick alone must not delete tasks.
+    const { canCreate, canEdit, canDelete } = crudFlags(permissions, "tasks");
     const currentUserId = Number(sessionUser?.id ?? 0);
 
     const [stages, positionRows, myPositions] = await Promise.all([
@@ -52,7 +54,9 @@ export default async function AdministrationPage() {
                 stages={stages}
                 positions={positions}
                 myPositionIds={myPositionIds}
-                canManage={canManage}
+                canCreate={canCreate}
+                canEdit={canEdit}
+                canDelete={canDelete}
             />
         </div>
     );

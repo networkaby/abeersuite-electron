@@ -19,13 +19,18 @@ export default function TaskBoard({
     stages,
     positions,
     myPositionIds,
-    canManage,
+    canCreate,
+    canEdit,
+    canDelete,
 }: {
     stages: TaskStage[];
     positions: TaskPositionOption[];
     /** Positions the current user holds — drives the "My tasks" filter. */
     myPositionIds: string[];
-    canManage: boolean;
+    canCreate: boolean;
+    /** Covers the Edit button, the stage select and drag-between-columns. */
+    canEdit: boolean;
+    canDelete: boolean;
 }) {
     // Opening the board IS "looking at it" — clears this module's `new` sidebar badge.
     useMarkSurfaceSeen(NAV_SURFACE.administration);
@@ -62,12 +67,12 @@ export default function TaskBoard({
     // Deep-link from the module button bar: /office/administration?new=1 opens the
     // create dialog, then we strip the param so a refresh doesn't reopen it.
     useEffect(() => {
-        if (searchParams.get("new") !== null && canManage) {
+        if (searchParams.get("new") !== null && canCreate) {
             setEditingTask(null);
             setFormOpen(true);
             router.replace("/office/administration");
         }
-    }, [searchParams, canManage, router]);
+    }, [searchParams, canCreate, router]);
 
     const mySet = new Set(myPositionIds);
     const visible = myTasksOnly
@@ -143,7 +148,7 @@ export default function TaskBoard({
                     <Button variant="outline" size="icon" onClick={load} title="Refresh">
                         <RefreshCw className="size-4" />
                     </Button>
-                    {canManage && (
+                    {canCreate && (
                         <Button onClick={openCreate}>
                             <Plus className="size-4" /> New Task
                         </Button>
@@ -159,12 +164,12 @@ export default function TaskBoard({
                         <div
                             key={stage.id}
                             onDragOver={(e) => {
-                                if (!canManage) return;
+                                if (!canEdit) return;
                                 e.preventDefault();
                                 setDragOverStage(stage.id);
                             }}
                             onDragLeave={() => setDragOverStage((s) => (s === stage.id ? null : s))}
-                            onDrop={() => canManage && handleDrop(stage.id)}
+                            onDrop={() => canEdit && handleDrop(stage.id)}
                             className={`flex w-72 shrink-0 flex-col rounded-xl border bg-muted/40 transition-colors ${
                                 isOver ? "border-primary/50 bg-primary/5 ring-2 ring-primary/30" : ""
                             }`}
@@ -189,7 +194,7 @@ export default function TaskBoard({
                                         <TaskCard
                                             key={task.id}
                                             task={task}
-                                            draggable={canManage}
+                                            draggable={canEdit}
                                             onDragStart={() => setDraggedId(task.id)}
                                             onClick={() => openDetail(task.id)}
                                         />
@@ -213,7 +218,8 @@ export default function TaskBoard({
                 open={detailOpen}
                 onOpenChange={setDetailOpen}
                 stages={stages}
-                canManage={canManage}
+                canEdit={canEdit}
+                canDelete={canDelete}
                 onEdit={openEdit}
                 onChanged={load}
             />

@@ -1,7 +1,7 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { hasModuleNavAccess, hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
+import { hasModuleNavAccess, crudFlags } from "@/shared/lib/auth/permissionScope";
 import { getHelpPipeline } from "@/modules/help/lib/helpPipeline";
 import { HelpWorkspace } from "@/modules/help/components";
 
@@ -12,8 +12,9 @@ export default async function HelpDeskPage() {
     if (!hasModuleNavAccess(permissions, "help")) {
         redirect("/office/work-flow-inbox");
     }
-    const canManage = hasModuleNavAccess(permissions, "help");
-    const canDelete = permissions.includes("admin:bypass") || hasPermissionWithScope(permissions, "help:delete");
+    // Nav access above decides "may you open the board"; these decide what you may
+    // DO on it. (crudFlags already passes admin:bypass and the CRUD ladder.)
+    const { canCreate, canEdit, canDelete } = crudFlags(permissions, "help");
     const currentUserId = Number(sessionUser?.id ?? 0);
 
     const pipeline = await getHelpPipeline(prisma);
@@ -64,7 +65,8 @@ export default async function HelpDeskPage() {
                 stages={stages}
                 positions={positions}
                 myPositionIds={myPositionIds}
-                canManage={canManage}
+                canCreate={canCreate}
+                canEdit={canEdit}
                 canDelete={canDelete}
             />
         </div>

@@ -5,7 +5,8 @@ import { z } from "zod";
 import { Priority } from "@/generated/prisma/enums";
 import { Prisma } from "@/generated/prisma/client";
 import { statusHasWorkflowRole } from "@/shared/lib/constants/workflow";
-import { resolvedUserFromSession } from "@/shared/lib/auth/permissions";
+import { resolvedUserFromSession, requirePermission } from "@/shared/lib/auth/permissions";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { passesWorkGate } from "@/modules/repairing/lib/workGate";
 import { findEntryWorker } from "@/modules/repairing/lib/entryWorker";
 import { autoAdvance } from "@/modules/repairing/lib/autoAdvance";
@@ -298,5 +299,66 @@ export async function PUT(
         return NextResponse.json(ticket);
     } catch (e) {
         return handleApiError(e, "Failed to update ticket");
+    }
+}
+
+/**
+ * Hard-delete a repair ticket. Cascades take its logs, works, participants,
+ * slips and the 1:1 TicketRepair/RepairDevice rows with it.
+ *
+ * Two things it deliberately will NOT do:
+ *  - Touch the money. A posted sale is ledger truth and must survive the
+ *    workflow record that happened to produce it, so vouchers are never
+ *    deleted here. But an invoice whose `VoucherLink(kind=TICKET)` points at a
+ *    row that no longer exists is a dangling reference (that link carries no FK
+ *    — by design, the decoupling forbids GL→workflow FKs, so the DB cannot
+ *    protect us). So a BILLED ticket is refused outright; unbill it first.
+ *  - Orphan a spawn-child sub-pipeline. `TicketChildren` is SetNull-less and a
+ *    child would be left parentless, so a ticket with children is refused too.
+ */
+export async function DELETE(
+    _req: Request,
+    { params }: { params: Promise<{ id: string }> }
+) {
+    const { response } = await requirePermission(PERMISSIONS.TICKETS_DELETE);
+    if (response) return response;
+
+    const { id } = await params;
+    const ticketId = Number(id);
+    if (!Number.isInteger(ticketId)) {
+        return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+    }
+
+    try {
+        const existing = await prisma.ticket.findUnique({
+            where: { id: ticketId },
+            select: { id: true, _count: { select: { children: true } } },
+        });
+        if (!existing) return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
+
+        const linkedVouchers = await prisma.voucherLink.count({
+            where: { kind: "TICKET", targetId: String(ticketId) },
+        });
+        if (linkedVouchers > 0) {
+            return NextResponse.json(
+                {
+                    error:
+                        `This ticket has ${linkedVouchers} linked invoice${linkedVouchers === 1 ? "" : "s"}. ` +
+                        `Remove or cancel the bill first — a posted voucher is never deleted with a ticket.`,
+                },
+                { status: 409 }
+            );
+        }
+        if (existing._count.children > 0) {
+            return NextResponse.json(
+                { error: "This ticket has child tickets. Delete or detach them first." },
+                { status: 409 }
+            );
+        }
+
+        await prisma.ticket.delete({ where: { id: ticketId } });
+        return NextResponse.json({ ok: true });
+    } catch (e) {
+        return handleApiError(e, "Failed to delete ticket");
     }
 }

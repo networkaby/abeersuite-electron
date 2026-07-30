@@ -23,13 +23,16 @@ export default function HelpWorkspace({
     stages,
     positions,
     myPositionIds,
-    canManage,
+    canCreate,
+    canEdit,
     canDelete,
 }: {
     stages: HelpStage[];
     positions: HelpPositionOption[];
     myPositionIds: string[];
-    canManage: boolean;
+    canCreate: boolean;
+    /** Covers the Edit button, stage/advise/close actions and drag-between-columns. */
+    canEdit: boolean;
     canDelete: boolean;
 }) {
     // Opening the board IS "looking at it" — clears this module's `new` sidebar badge.
@@ -63,11 +66,11 @@ export default function HelpWorkspace({
 
     // Deep link: /office/help?new=1 opens the quick create dialog.
     useEffect(() => {
-        if (searchParams.get("new") !== null && canManage) {
+        if (searchParams.get("new") !== null && canCreate) {
             setQuickOpen(true);
             router.replace("/office/help");
         }
-    }, [searchParams, canManage, router]);
+    }, [searchParams, canCreate, router]);
 
     const mySet = new Set(myPositionIds);
     const q = query.trim().toLowerCase();
@@ -122,7 +125,7 @@ export default function HelpWorkspace({
                         <Label htmlFor="mine" className="cursor-pointer text-sm">My team</Label>
                     </div>
                     <Button variant="outline" size="icon" onClick={load} title="Refresh"><RefreshCw className="size-4" /></Button>
-                    {canManage && <Button onClick={openCreate}><Plus className="size-4" /> New Help</Button>}
+                    {canCreate && <Button onClick={openCreate}><Plus className="size-4" /> New Help</Button>}
                 </div>
             </div>
 
@@ -135,7 +138,7 @@ export default function HelpWorkspace({
                     <HelpBoard
                         stages={stages}
                         tickets={visible}
-                        canManage={canManage}
+                        canEdit={canEdit}
                         loading={loading}
                         onMove={onMove}
                         onOpen={openDetail}
@@ -190,7 +193,7 @@ export default function HelpWorkspace({
                 open={detailOpen}
                 onOpenChange={setDetailOpen}
                 stages={stages}
-                canManage={canManage}
+                canEdit={canEdit}
                 canDelete={canDelete}
                 onEdit={openEdit}
                 onChanged={load}

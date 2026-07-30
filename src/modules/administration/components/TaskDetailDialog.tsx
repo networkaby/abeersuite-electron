@@ -23,7 +23,8 @@ export default function TaskDetailDialog({
     open,
     onOpenChange,
     stages,
-    canManage,
+    canEdit,
+    canDelete,
     onEdit,
     onChanged,
 }: {
@@ -31,7 +32,8 @@ export default function TaskDetailDialog({
     open: boolean;
     onOpenChange: (open: boolean) => void;
     stages: TaskStage[];
-    canManage: boolean;
+    canEdit: boolean;
+    canDelete: boolean;
     onEdit: (task: TaskDto) => void;
     onChanged: () => void;
 }) {
@@ -172,7 +174,7 @@ export default function TaskDetailDialog({
                             </div>
                             <div>
                                 <div className="text-xs text-muted-foreground">Stage</div>
-                                {canManage ? (
+                                {canEdit ? (
                                     <Select value={task.status} onValueChange={moveStage}>
                                         <SelectTrigger className="mt-1 h-8">
                                             <SelectValue />
@@ -191,14 +193,18 @@ export default function TaskDetailDialog({
                             </div>
                         </div>
 
-                        {canManage && (
+                        {(canEdit || canDelete) && (
                             <div className="flex gap-2">
-                                <Button size="sm" variant="outline" onClick={() => onEdit(task)}>
-                                    <Pencil className="size-4" /> Edit
-                                </Button>
-                                <Button size="sm" variant="outline" className="text-red-600" onClick={handleDelete}>
-                                    <Trash2 className="size-4" /> Delete
-                                </Button>
+                                {canEdit && (
+                                    <Button size="sm" variant="outline" onClick={() => onEdit(task)}>
+                                        <Pencil className="size-4" /> Edit
+                                    </Button>
+                                )}
+                                {canDelete && (
+                                    <Button size="sm" variant="outline" className="text-red-600" onClick={handleDelete}>
+                                        <Trash2 className="size-4" /> Delete
+                                    </Button>
+                                )}
                             </div>
                         )}
 

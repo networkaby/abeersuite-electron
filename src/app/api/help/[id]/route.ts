@@ -1,6 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireAuth, requireModuleAccess } from "@/shared/lib/auth/permissions";
+import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { updateHelpSchema } from "@/shared/lib/schemas/helpSchema";
 import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
@@ -170,7 +171,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 }
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requireModuleAccess("help");
+    // Delete needs the delete rung, not just the module's sidebar link.
+    const { response } = await requirePermission(PERMISSIONS.HELP_DELETE);
     if (response) return response;
     const id = parseId((await params).id);
     if (id === null) return NextResponse.json({ error: "Invalid id" }, { status: 400 });

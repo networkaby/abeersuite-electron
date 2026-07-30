@@ -22,12 +22,17 @@ export default function DealsWorkspace({
     stages,
     positions,
     myPositionIds,
-    canManage,
+    canCreate,
+    canEdit,
+    canDelete,
 }: {
     stages: DealStage[];
     positions: DealPositionOption[];
     myPositionIds: string[];
-    canManage: boolean;
+    canCreate: boolean;
+    /** Covers the Edit button, the stage select and drag-between-columns. */
+    canEdit: boolean;
+    canDelete: boolean;
 }) {
     // Opening the board IS "looking at it" — clears this module's `new` sidebar badge.
     useMarkSurfaceSeen(NAV_SURFACE.deals);
@@ -58,12 +63,12 @@ export default function DealsWorkspace({
 
     // Button-bar deep link: /office/crm/deals?new=1 opens the create dialog.
     useEffect(() => {
-        if (searchParams.get("new") !== null && canManage) {
+        if (searchParams.get("new") !== null && canCreate) {
             setEditingDeal(null);
             setFormOpen(true);
             router.replace("/office/crm/deals");
         }
-    }, [searchParams, canManage, router]);
+    }, [searchParams, canCreate, router]);
 
     const mySet = new Set(myPositionIds);
     const visible = myDealsOnly
@@ -109,7 +114,7 @@ export default function DealsWorkspace({
                         <Label htmlFor="my-deals" className="cursor-pointer text-sm">My deals</Label>
                     </div>
                     <Button variant="outline" size="icon" onClick={load} title="Refresh"><RefreshCw className="size-4" /></Button>
-                    {canManage && <Button onClick={openCreate}><Plus className="size-4" /> New Deal</Button>}
+                    {canCreate && <Button onClick={openCreate}><Plus className="size-4" /> New Deal</Button>}
                 </div>
             </div>
 
@@ -122,7 +127,7 @@ export default function DealsWorkspace({
                     <DealBoard
                         stages={stages}
                         deals={visible}
-                        canManage={canManage}
+                        canEdit={canEdit}
                         loading={loading}
                         onMove={onMove}
                         onOpen={openDetail}
@@ -145,7 +150,8 @@ export default function DealsWorkspace({
                 open={detailOpen}
                 onOpenChange={setDetailOpen}
                 stages={stages}
-                canManage={canManage}
+                canEdit={canEdit}
+                canDelete={canDelete}
                 onEdit={openEdit}
                 onChanged={load}
             />

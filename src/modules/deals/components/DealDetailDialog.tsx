@@ -36,7 +36,8 @@ export default function DealDetailDialog({
     open,
     onOpenChange,
     stages,
-    canManage,
+    canEdit,
+    canDelete,
     onEdit,
     onChanged,
 }: {
@@ -44,7 +45,8 @@ export default function DealDetailDialog({
     open: boolean;
     onOpenChange: (open: boolean) => void;
     stages: DealStage[];
-    canManage: boolean;
+    canEdit: boolean;
+    canDelete: boolean;
     onEdit: (deal: DealDetailDto) => void;
     onChanged: () => void;
 }) {
@@ -195,7 +197,7 @@ export default function DealDetailDialog({
                             </div>
                             <div>
                                 <div className="text-xs text-muted-foreground">Stage</div>
-                                {canManage ? (
+                                {canEdit ? (
                                     <Select value={deal.status} onValueChange={moveStage}>
                                         <SelectTrigger className="mt-1 h-8"><SelectValue /></SelectTrigger>
                                         <SelectContent>
@@ -214,10 +216,10 @@ export default function DealDetailDialog({
 
                         {deal.notes && <p className="whitespace-pre-wrap text-sm text-muted-foreground">{deal.notes}</p>}
 
-                        {canManage && (
+                        {(canEdit || canDelete) && (
                             <div className="flex gap-2">
-                                <Button size="sm" variant="outline" onClick={() => onEdit(deal)}><Pencil className="size-4" /> Edit</Button>
-                                <Button size="sm" variant="outline" className="text-red-600" onClick={handleDelete}><Trash2 className="size-4" /> Delete</Button>
+                                {canEdit && <Button size="sm" variant="outline" onClick={() => onEdit(deal)}><Pencil className="size-4" /> Edit</Button>}
+                                {canDelete && <Button size="sm" variant="outline" className="text-red-600" onClick={handleDelete}><Trash2 className="size-4" /> Delete</Button>}
                             </div>
                         )}
 

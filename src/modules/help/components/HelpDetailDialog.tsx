@@ -29,7 +29,7 @@ export default function HelpDetailDialog({
     open,
     onOpenChange,
     stages,
-    canManage,
+    canEdit,
     canDelete,
     onEdit,
     onChanged,
@@ -38,7 +38,7 @@ export default function HelpDetailDialog({
     open: boolean;
     onOpenChange: (open: boolean) => void;
     stages: HelpStage[];
-    canManage: boolean;
+    canEdit: boolean;
     canDelete: boolean;
     onEdit: (ticket: HelpDetailDto) => void;
     onChanged: () => void;
@@ -150,7 +150,7 @@ export default function HelpDetailDialog({
                         {ticket.notes && <p className="whitespace-pre-wrap rounded-md bg-muted/50 px-3 py-2 text-sm">{ticket.notes}</p>}
 
                         {/* Actions (open tickets only) */}
-                        {canManage && !isClosed && (
+                        {canEdit && !isClosed && (
                             <div className="space-y-4 rounded-lg border p-3">
                                 {/* Stage */}
                                 <div className="flex items-center gap-2">
@@ -227,7 +227,7 @@ export default function HelpDetailDialog({
                         )}
 
                         {/* Closed ticket — reopen to work it again (or convert). */}
-                        {canManage && isClosed && (
+                        {canEdit && isClosed && (
                             <div className="flex items-center justify-between gap-2 rounded-lg border border-dashed p-3">
                                 <span className="text-sm text-muted-foreground">
                                     Closed{ticket.outcome ? ` — ${OUTCOME_LABEL[ticket.outcome]}` : ""}.
@@ -272,7 +272,7 @@ export default function HelpDetailDialog({
                                 )}
                             </div>
                             <div className="flex gap-2">
-                                {canManage && (
+                                {canEdit && (
                                     <Button variant="outline" size="sm" disabled={busy} onClick={() => onEdit(ticket)}>
                                         <Pencil className="size-4" /> Edit
                                     </Button>

@@ -8,14 +8,14 @@ import type { DealDto, DealStage } from "../lib/types";
 export default function DealBoard({
     stages,
     deals,
-    canManage,
+    canEdit,
     loading,
     onMove,
     onOpen,
 }: {
     stages: DealStage[];
     deals: DealDto[];
-    canManage: boolean;
+    canEdit: boolean;
     loading: boolean;
     onMove: (dealId: number, stageId: string) => void;
     onOpen: (dealId: number) => void;
@@ -46,9 +46,9 @@ export default function DealBoard({
                 return (
                     <div
                         key={stage.id}
-                        onDragOver={(e) => { if (!canManage) return; e.preventDefault(); setDragOverStage(stage.id); }}
+                        onDragOver={(e) => { if (!canEdit) return; e.preventDefault(); setDragOverStage(stage.id); }}
                         onDragLeave={() => setDragOverStage((s) => (s === stage.id ? null : s))}
-                        onDrop={() => canManage && handleDrop(stage.id)}
+                        onDrop={() => canEdit && handleDrop(stage.id)}
                         className={`flex w-72 shrink-0 flex-col rounded-xl border bg-muted/40 transition-colors ${
                             isOver ? "border-primary/50 bg-primary/5 ring-2 ring-primary/30" : ""
                         }`}
@@ -76,7 +76,7 @@ export default function DealBoard({
                                     <DealCard
                                         key={deal.id}
                                         deal={deal}
-                                        draggable={canManage}
+                                        draggable={canEdit}
                                         onDragStart={() => setDraggedId(deal.id)}
                                         onClick={() => onOpen(deal.id)}
                                     />

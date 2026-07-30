@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
 import { formatDate, formatDateTime } from "@/shared/lib/format/formatDate";
@@ -9,9 +9,10 @@ import {
     Clock, User, Building2, AlertTriangle,
     Printer, Lock, Eye, NotebookPen, ArrowRightLeft,
     Check, X, MessageSquare, RefreshCw, ArrowRight, CornerUpLeft, Flag,
-    GitBranch, ExternalLink, Bug, Truck, ChevronDown, Receipt, Pencil,
+    GitBranch, ExternalLink, Bug, Truck, ChevronDown, Receipt, Pencil, Trash2,
     type LucideIcon,
 } from "lucide-react";
+import { useDeleteWithConfirm } from "@/shared/hooks";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { statusHasWorkflowRole } from "@/shared/lib/constants/workflow";
 import { timeAgo } from "@/shared/lib/format/timeAgo";
@@ -194,6 +195,16 @@ export default function TicketDetailPage() {
     // Edit-ticket action is gated on tickets:edit (admin bypass passes) — the same
     // grant surfaced by the role page's Tickets CRUD row.
     const canEditTicket = perms.includes(PERMISSIONS.ADMIN_BYPASS) || perms.includes(PERMISSIONS.TICKETS_EDIT);
+    const canDeleteTicket = perms.includes(PERMISSIONS.ADMIN_BYPASS) || perms.includes(PERMISSIONS.TICKETS_DELETE);
+    // Deleting takes the whole ticket and its timeline; the server refuses when a
+    // bill or a child ticket is attached and its message comes back in the toast.
+    const router = useRouter();
+    const { remove: removeTicket, deleting } = useDeleteWithConfirm({
+        url: (tid) => `/api/tickets/${tid}`,
+        message: () => "Delete this ticket? Its notes, works and timeline go with it. This cannot be undone.",
+        successMessage: "Ticket deleted",
+        onSuccess: () => router.push("/office/repairing/tickets"),
+    });
     // TODO(rbac): repairing actions temporarily open to all staff — re-gate on
     // position-based permissions when RBAC is re-wired.
     const canConvertWarranty = true;
@@ -860,6 +871,21 @@ export default function TicketDetailPage() {
                             >
                                 <Printer size={15} /> Print Receipt
                             </Link>
+
+                            {/* Destructive — kept last and visually separated so it is
+                                never the button you hit by accident. */}
+                            {canDeleteTicket && (
+                                <div className="mt-3 border-t border-border pt-3">
+                                    <Button
+                                        onClick={() => removeTicket(ticket.id)}
+                                        variant="outline"
+                                        disabled={deleting}
+                                        className={`${actionBtnBase} text-destructive hover:bg-destructive/10`}
+                                    >
+                                        <Trash2 size={15} /> {deleting ? "Deleting…" : "Delete Ticket"}
+                                    </Button>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

@@ -1,7 +1,7 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { hasModuleNavAccess } from "@/shared/lib/auth/permissionScope";
+import { hasModuleNavAccess, crudFlags } from "@/shared/lib/auth/permissionScope";
 import { getDealsPipeline } from "@/modules/deals/lib/dealsPipeline";
 import { DealsWorkspace } from "@/modules/deals/components";
 
@@ -12,7 +12,9 @@ export default async function DealsPage() {
     if (!hasModuleNavAccess(permissions, "crm")) {
         redirect("/office/work-flow-inbox");
     }
-    const canManage = hasModuleNavAccess(permissions, "crm");
+    // Nav access above decides "may you open the board"; these decide what you may
+    // DO on it — the sidebar tick alone must not delete deals.
+    const { canCreate, canEdit, canDelete } = crudFlags(permissions, "deals");
     const currentUserId = Number(sessionUser?.id ?? 0);
 
     const pipeline = await getDealsPipeline(prisma);
@@ -63,7 +65,9 @@ export default async function DealsPage() {
                 stages={stages}
                 positions={positions}
                 myPositionIds={myPositionIds}
-                canManage={canManage}
+                canCreate={canCreate}
+                canEdit={canEdit}
+                canDelete={canDelete}
             />
         </div>
     );

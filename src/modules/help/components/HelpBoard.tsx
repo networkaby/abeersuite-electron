@@ -7,14 +7,14 @@ import type { HelpDto, HelpStage } from "../lib/types";
 export default function HelpBoard({
     stages,
     tickets,
-    canManage,
+    canEdit,
     loading,
     onMove,
     onOpen,
 }: {
     stages: HelpStage[];
     tickets: HelpDto[];
-    canManage: boolean;
+    canEdit: boolean;
     loading: boolean;
     onMove: (ticketId: number, stageId: string) => void;
     onOpen: (ticketId: number) => void;
@@ -42,9 +42,9 @@ export default function HelpBoard({
                 return (
                     <div
                         key={stage.id}
-                        onDragOver={(e) => { if (!canManage) return; e.preventDefault(); setDragOverStage(stage.id); }}
+                        onDragOver={(e) => { if (!canEdit) return; e.preventDefault(); setDragOverStage(stage.id); }}
                         onDragLeave={() => setDragOverStage((s) => (s === stage.id ? null : s))}
-                        onDrop={() => canManage && handleDrop(stage.id)}
+                        onDrop={() => canEdit && handleDrop(stage.id)}
                         className={`flex w-72 shrink-0 flex-col rounded-xl border bg-muted/40 transition-colors ${
                             isOver ? "border-primary/50 bg-primary/5 ring-2 ring-primary/30" : ""
                         }`}
@@ -67,7 +67,7 @@ export default function HelpBoard({
                                     <HelpCard
                                         key={ticket.id}
                                         ticket={ticket}
-                                        draggable={canManage}
+                                        draggable={canEdit}
                                         onDragStart={() => setDraggedId(ticket.id)}
                                         onClick={() => onOpen(ticket.id)}
                                     />
