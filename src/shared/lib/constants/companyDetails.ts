@@ -127,7 +127,7 @@ export const COMPANY_DETAILS: CompanyDetails = {
     description:
         "Computers, laptops, printers, CCTV, monitors, and PC components — curated for India with secure checkout in ₹.",
     longDescription:
-        "Network Shop is the online storefront for Network Service. Buy laptops, desktops, ink & laser printers, CCTV kits, monitors, RAM, SSDs, PSUs, and networking gear with GST invoices, fast metro dispatch, and Razorpay-secured checkout in Indian Rupees.",
+        "Network Service is a computer hardware retail and repair business, and this is its online storefront. Buy laptops, desktops, ink & laser printers, CCTV kits, monitors, RAM, SSDs, PSUs, and networking gear with GST invoices, fast metro dispatch, and Razorpay-secured checkout in Indian Rupees.",
 
     siteUrl: "https://networkservice.in",
 
@@ -152,7 +152,6 @@ export const COMPANY_DETAILS: CompanyDetails = {
         "networking",
         "GST invoice",
         "Razorpay",
-        "Network Shop",
         "Network Service",
     ],
 
