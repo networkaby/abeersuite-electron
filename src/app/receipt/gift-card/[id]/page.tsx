@@ -16,7 +16,7 @@ export default async function GiftCardPrintPage({ params }: { params: Promise<{ 
     });
     if (!card) notFound();
 
-    const org = await getOrganisation();
+    const org = getOrganisation();
     const value = Number(card.balance);
     const fmtAmt = (n: number) => n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const qrDataUrl = await QRCode.toDataURL(card.code, { width: 240, margin: 1, errorCorrectionLevel: "M" });

@@ -8,10 +8,9 @@
  * verification. It has NOT been checked by a lawyer. Have it reviewed before
  * you rely on it commercially.
  *
- * ⚠️ Placeholder company data.
- * `COMPANY_DETAILS.siteUrl` is still `http://localhost:3000` and
- * `COMPANY_DETAILS.tax.gstin` is still a dummy. These documents interpolate
- * both — fix the constants before publishing.
+ * These documents cover BOTH hostnames the business is served on (see
+ * `BOTH_SITES` below) — the company site and the store are one legal entity,
+ * split only by how we deploy them.
  *
  * Editing: change the prose here, never in the page components. Entity name,
  * address, contact and policy numbers are read from COMPANY_DETAILS so they
@@ -20,7 +19,7 @@
 
 import { formatRupees, paiseToRupees } from "@/shared/lib/format/moneyInr";
 import { LEGAL_SLUGS, type LegalSlug } from "@/shared/lib/legal/legalPaths";
-import { COMPANY_DETAILS } from "@/shared/constants/companyDetails";
+import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 
 export type LegalSection = {
     heading: string;
@@ -49,6 +48,15 @@ const POSTAL_ADDRESS = [
     .filter(Boolean)
     .join(", ");
 
+/**
+ * One business, two hostnames. We deploy the company site and the store
+ * separately for technical reasons only — legally and commercially they are the
+ * same entity, so every document here covers both. Say this in each policy so a
+ * reviewer (Google, Razorpay) or a customer is never left guessing whether a
+ * policy applies to the site they happen to be on.
+ */
+const BOTH_SITES = `This policy covers our whole website, whichever address you reached us on — ${C.sites.company} (our main site) and ${C.sites.shop} (our online store and customer portal). Both are run by ${C.legalName}; they are one business and one legal entity, hosted separately only for technical reasons.`;
+
 const RETURN_DAYS = C.policies.returnWindowDays;
 const FREE_SHIPPING_FROM = formatRupees(paiseToRupees(C.policies.freeShippingMinPaise));
 
@@ -64,7 +72,8 @@ export const PRIVACY_POLICY: LegalDoc = {
         {
             heading: "Who we are",
             body: [
-                `${C.legalName} ("we", "us") runs this online store and service portal. Our registered address is ${POSTAL_ADDRESS}. Our GSTIN is ${C.tax.gstin}.`,
+                `${C.legalName} ("we", "us") is a computer hardware retail and repair business. Our registered address is ${POSTAL_ADDRESS}. Our GSTIN is ${C.tax.gstin}.`,
+                BOTH_SITES,
                 `For any question about your personal data, write to ${C.contact.supportEmail} or call ${C.contact.phone} during ${C.hours}.`,
                 "This policy explains what we collect when you browse the store, place an order, book a repair, or sign in to the customer portal.",
             ],
@@ -112,6 +121,20 @@ export const PRIVACY_POLICY: LegalDoc = {
                 "- Cloudinary — to store and serve product images you or we upload.",
                 "- Supabase and Vercel — to host our database and application.",
                 "We also share data where a law, court order or government authority requires it.",
+            ],
+        },
+        {
+            // Google's brand verification requires the privacy policy to state
+            // exactly how the app accesses, uses, stores and shares Google user
+            // data. Keep these four verbs explicit — a reviewer looks for them.
+            heading: "Signing in with Google",
+            body: [
+                "Signing in with Google is optional. You can always use a one-time code sent to your mobile or email instead, and you will get exactly the same account either way.",
+                "What we access: when you choose Google, Google tells us your name, your email address and your profile picture. That is all we ask for. We do not request, and cannot see, your Google password, contacts, Gmail, Drive, Calendar, photos or any other Google service.",
+                "How we use it: only to identify you, create or find your customer account, and sign you in. Your email address is also used to send you order and repair updates. We do not use Google data for advertising or profiling, and we do not sell it.",
+                "How we store it: your name and email address are stored in our own customer records for as long as you have an account, exactly like the details of a customer who signed up with a one-time code. We do not keep a copy of your Google password because we never receive one.",
+                "Who we share it with: nobody, beyond the service providers listed above who need it to run the site. We do not pass Google data to advertisers or data brokers.",
+                "You can disconnect our app at any time from your Google Account permissions page. Your account and order history with us stay intact — sign in with a one-time code instead. To delete the account itself, see 'Your rights' below.",
             ],
         },
         {
@@ -178,6 +201,7 @@ export const TERMS_OF_SERVICE: LegalDoc = {
             heading: "Agreement",
             body: [
                 `These terms are between you and ${C.legalName}, ${POSTAL_ADDRESS}, GSTIN ${C.tax.gstin}. By using this website, placing an order, or booking a repair, you accept these terms.`,
+                BOTH_SITES,
                 "If you do not accept them, please do not use the site.",
             ],
         },
@@ -297,6 +321,10 @@ export const REFUND_POLICY: LegalDoc = {
     lastUpdated: LAST_UPDATED,
     sections: [
         {
+            heading: "Who this covers",
+            body: [BOTH_SITES],
+        },
+        {
             heading: "Cancelling an order",
             body: [
                 "You can cancel any order free of charge before it is dispatched. Ask us through the portal, by email, or on WhatsApp, and we will refund you in full.",
@@ -365,6 +393,10 @@ export const SHIPPING_POLICY: LegalDoc = {
     summary: `Delivery charges, timelines and coverage for orders from ${C.legalName}.`,
     lastUpdated: LAST_UPDATED,
     sections: [
+        {
+            heading: "Who this covers",
+            body: [BOTH_SITES],
+        },
         {
             heading: "Where we deliver",
             body: [

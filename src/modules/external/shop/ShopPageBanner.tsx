@@ -10,7 +10,7 @@ import {
     BreadcrumbPage,
     BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import { COMPANY_DETAILS } from "@/utils/constants-company-details";
+import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import { HERO_SLIDES } from "@/shared/lib/shop/storeContent";
 
 type CategoryPill = { name: string; count: number };

@@ -205,3 +205,49 @@ export const BRAND_LOGOS: BrandLogo[] = [
     { name: "TP-Link", logoUrl: "https://cdn.simpleicons.org/tplink/4ACBD6" },
     { name: "Seagate", logoUrl: "https://cdn.simpleicons.org/seagate/6FBE44" },
 ];
+
+/**
+ * Plain-language description of who we are and what this app does.
+ *
+ * Rendered small and quiet in the shop footer, not as a mid-page section — a
+ * customer on a storefront does not need it explained at them. It still has to
+ * exist on the home page, because Google's brand verification requires the home
+ * page to describe the app's functionality and link the privacy policy; a
+ * footer satisfies that, prominence is not part of the rule.
+ *
+ * Keep `signInNote` truthful — we request only the default `profile` + `email`
+ * scopes, and the privacy policy says the same thing in more detail.
+ */
+export type AboutApp = {
+    title: string;
+    /** Who we are and what the app is for. */
+    paragraphs: string[];
+    /** What a signed-in customer can actually do here. */
+    capabilities: { title: string; body: string }[];
+    /** Exactly what Google sign-in gives us. Must match the scopes we request. */
+    signInNote: string;
+};
+
+export const ABOUT_APP: AboutApp = {
+    title: "About Network Service",
+    paragraphs: [
+        "Network Service is a computer hardware retail and repair business in Abhayapuri, District Bongaigaon, Assam. We sell laptops, desktops, printers, CCTV kits, monitors and PC components, and we service and repair the hardware we sell.",
+        "This website is our online storefront and customer portal. It lets our customers buy hardware with a GST invoice, follow the progress of a repair they have given us, and look back at their own orders, invoices and warranties in one place.",
+    ],
+    capabilities: [
+        {
+            title: "Shop with GST invoice",
+            body: "Browse our catalogue, pay securely in Indian Rupees, and get a proper GST invoice for every purchase.",
+        },
+        {
+            title: "Track your repairs",
+            body: "See the live status of any device you have given us for service, without calling the shop.",
+        },
+        {
+            title: "Your records in one place",
+            body: "Every order, invoice and warranty tied to your account, available whenever you sign in.",
+        },
+    ],
+    signInNote:
+        "You can sign in with a one-time code sent to your mobile or email, with a password, or with your Google account. If you choose Google, we receive only your name and email address — enough to create your customer account and sign you in. We never see your Google password, and we do not read your contacts, Drive, Gmail or any other Google data.",
+};

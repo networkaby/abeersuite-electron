@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Package, Heart, GitCompare, ShoppingBag, Menu, UserRound, ShieldCheck } from "lucide-react";
 import ShopSearchBar from "./ShopSearchBar";
-import { COMPANY_DETAILS } from "@/utils/constants-company-details";
+import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import {
     DropdownMenu,
     DropdownMenuContent,

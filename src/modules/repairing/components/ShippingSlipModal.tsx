@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { Truck } from "lucide-react";
@@ -12,6 +12,10 @@ import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
 import { PartySearchAndCreate, type PickedParty } from "@/shared/components/PartySearchAndCreate";
+import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
+
+// The shop is code-owned config, not a settings row — no fetch needed.
+const SHOP_CONTACT = { name: COMPANY_DETAILS.brandName, phone: COMPANY_DETAILS.contact.phone };
 
 interface DeviceInfo { type: string; brand: string; model: string; problem: string; }
 
@@ -84,22 +88,12 @@ export default function ShippingSlipModal({ ticketId, device, owner, existing, o
 
     const set = (patch: Partial<typeof form>) => setForm((f) => ({ ...f, ...patch }));
 
-    // Company details from Settings → Organisation — the default contact.
-    const shopRef = useRef<{ name: string; phone: string }>({ name: "", phone: "" });
+    // Seed the default (shop) contact if the user hasn't typed anything yet.
+    // On edit we keep exactly what the slip stored (even if blank).
     useEffect(() => {
-        let cancelled = false;
-        axios.get<{ brandName?: string | null; phone?: string | null }>("/api/settings/organisation")
-            .then((r) => {
-                if (cancelled) return;
-                shopRef.current = { name: r.data.brandName ?? "", phone: r.data.phone ?? "" };
-                // Seed the default (shop) contact if the user hasn't typed anything yet.
-                // On edit we keep exactly what the slip stored (even if blank).
-                setForm((f) => isEdit || f.showOwner || f.contactName || f.contactPhone
-                    ? f
-                    : { ...f, contactName: shopRef.current.name, contactPhone: shopRef.current.phone });
-            })
-            .catch(() => { /* fields just start blank */ });
-        return () => { cancelled = true; };
+        setForm((f) => isEdit || f.showOwner || f.contactName || f.contactPhone
+            ? f
+            : { ...f, contactName: SHOP_CONTACT.name, contactPhone: SHOP_CONTACT.phone });
     }, [isEdit]);
 
     // Toggle swaps the prefill: owner ↔ shop. Always editable after.
@@ -107,8 +101,8 @@ export default function ShippingSlipModal({ ticketId, device, owner, existing, o
         setForm((f) => ({
             ...f,
             showOwner: checked,
-            contactName: checked ? owner.name : shopRef.current.name,
-            contactPhone: checked ? (owner.phone ?? "") : shopRef.current.phone,
+            contactName: checked ? owner.name : SHOP_CONTACT.name,
+            contactPhone: checked ? (owner.phone ?? "") : SHOP_CONTACT.phone,
         }));
     };
 

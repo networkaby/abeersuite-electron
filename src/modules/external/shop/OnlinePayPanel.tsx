@@ -5,7 +5,7 @@ import axios from "axios";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { CreditCard, Loader2 } from "lucide-react";
-import { COMPANY_DETAILS } from "@/utils/constants-company-details";
+import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 
 // The order/payment page's single "pay online" surface. Lists every enabled online
 // gateway as a selectable row (like the courier picker), pre-selecting the one the

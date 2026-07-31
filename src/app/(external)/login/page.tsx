@@ -16,7 +16,7 @@ import PortalOtpLoginForm, { type OtpStep } from "@/modules/external/portal/Port
 import { usePortalPasswordlessSignIn } from "@/modules/external/portal/usePortalPasswordlessSignIn";
 import { signInWithGoogle } from "@/shared/lib/auth/portalPasswordless";
 import { HERO_SLIDES } from "@/shared/lib/shop/storeContent";
-import { COMPANY_DETAILS } from "@/shared/constants/companyDetails";
+import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 
 /**
  * Backdrop photo — reuses the storefront hero imagery so the login matches the

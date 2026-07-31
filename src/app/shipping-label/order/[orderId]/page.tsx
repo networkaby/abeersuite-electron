@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { getVoucherTemplate } from "@/shared/lib/print/voucherTemplate";
-import { COMPANY_DETAILS } from "@/utils/constants-company-details";
+import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import OrderParcelLabel, { type ParcelLabelData, type ParcelLabelSize } from "@/shared/components/print/OrderParcelLabel";
 
 // Parcel label for a shop order shipped by OUR couriers (local delivery /

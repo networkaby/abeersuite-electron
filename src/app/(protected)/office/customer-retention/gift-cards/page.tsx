@@ -5,7 +5,7 @@ import { getOrganisation } from "@/shared/lib/org/getOrganisation";
 export const metadata = { title: "Gift Cards" };
 
 export default async function GiftCardsPage() {
-    const org = await getOrganisation();
+    const org = getOrganisation();
     return (
         <ScrollArea className="h-full" type="always">
             <div className="w-full space-y-6 px-6 pt-4 pb-10">

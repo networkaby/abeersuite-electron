@@ -49,7 +49,7 @@ export const SAMPLE_SHIPPING_SLIP: ShippingSlipBodyData = {
 // From is filled live from the edited template in the preview; these are just
 // placeholder sender lines so the fixture stands alone.
 export const SAMPLE_SHIPPING_LABEL: ShippingLabelData = {
-    from:     { name: "Network Service", address: "Main Road\nBongaigaon, Assam", phone: "88769 96969" },
+    from:     { name: "Network Service", address: "Main Road\nBongaigaon, Assam", phone: "88769 96996" },
     to:       { name: "ABC Service Centre", address: "Zone Road, Ward 5\nBongaigaon, Assam, 783380", phone: "90000 00000" },
     ticketNo: "#0042",
     date:     "18 Jul 2026",
@@ -60,7 +60,7 @@ export const SAMPLE_SHIPPING_LABEL: ShippingLabelData = {
 
 // Parcel label (DELIVERY_SHIPPING_LABEL) — an order shipped by our own courier.
 export const SAMPLE_PARCEL_LABEL: ParcelLabelData = {
-    from:    { name: "Network Service", address: "Main Road\nBongaigaon, Assam", phone: "88769 96969" },
+    from:    { name: "Network Service", address: "Main Road\nBongaigaon, Assam", phone: "88769 96996" },
     to:      { name: "Akramul Jakir", address: "Kalaprishad Market, Main Road\nAbhayapuri, Kamrup, Assam", phone: "99549 99271", pincode: "781009" },
     orderNo: "WEB-27",
     date:    "23 Jul 2026",

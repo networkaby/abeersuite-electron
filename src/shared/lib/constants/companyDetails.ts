@@ -1,8 +1,12 @@
 /**
  * Single source of truth for company / brand details used across the app
- * (root layout SEO, shop header/footer, emails, etc.).
+ * (root layout SEO, shop header/footer, emails, printed invoices, vouchers).
  *
- * These are DEMO values — replace with the real business data when ready.
+ * This is CODE-OWNED, deliberately: there is no Organisation settings table and
+ * no settings page behind it. Editing this file and deploying is how the shop's
+ * identity, address, GSTIN and bank details change. Print templates can still
+ * override any of it per document — see `mergeTemplateWithOrg.ts`.
+ *
  * Keep keys stable; consumers import the named `COMPANY_DETAILS` object.
  */
 
@@ -18,8 +22,20 @@ export type CompanyDetails = {
     /** Long-form description for About sections. */
     longDescription: string;
 
-    /** Canonical site URL. Falls back to env if you prefer; this is the demo default. */
+    /** Canonical site URL — the company home page, and the website line on invoices. */
     siteUrl: string;
+
+    /**
+     * One business, two deployments. The split is ours for technical reasons —
+     * to customers, Google and the tax authorities this is a single website and
+     * a single legal entity, and the policies below cover both.
+     */
+    sites: {
+        /** Company home page — the public face of the business. */
+        company: string;
+        /** Online store + customer portal. */
+        shop: string;
+    };
     /** Locale tag for OpenGraph (e.g. "en_IN"). */
     locale: string;
     /** Currency symbol shown in UI. */
@@ -68,6 +84,22 @@ export type CompanyDetails = {
         pan: string;
     };
 
+    /** Logo shown on the storefront and on printed documents. Empty = text brand only. */
+    logoUrl: string;
+
+    /**
+     * The shop's primary bank, printed on vouchers so customers can pay in.
+     * Opt-in per document via the print template's "Bank details" toggle.
+     */
+    bank: {
+        beneficiary: string;
+        bankName: string;
+        accountNumber: string;
+        ifsc: string;
+        branch: string;
+        upiVpa: string;
+    };
+
     /** Working-hours line shown in the footer / contact strip. */
     hours: string;
 
@@ -97,7 +129,13 @@ export const COMPANY_DETAILS: CompanyDetails = {
     longDescription:
         "Network Shop is the online storefront for Network Service. Buy laptops, desktops, ink & laser printers, CCTV kits, monitors, RAM, SSDs, PSUs, and networking gear with GST invoices, fast metro dispatch, and Razorpay-secured checkout in Indian Rupees.",
 
-    siteUrl: "http://localhost:3000",
+    siteUrl: "https://networkservice.in",
+
+    sites: {
+        company: "https://networkservice.in",
+        shop: "https://shop.networkservice.in",
+    },
+
     locale: "en_IN",
     currencySymbol: "₹",
     currencyCode: "INR",
@@ -126,8 +164,8 @@ export const COMPANY_DETAILS: CompanyDetails = {
     contact: {
         email: "hello@networkservice.in",
         supportEmail: "support@networkservice.in",
-        phone: "+91 88769 96969",
-        whatsapp: "+91 88769 96969",
+        phone: "+91 88769 96996",
+        whatsapp: "+91 88769 96996",
     },
 
     upi: {
@@ -144,8 +182,21 @@ export const COMPANY_DETAILS: CompanyDetails = {
     },
 
     tax: {
-        gstin: "00ABCDE1234F1Z5",
-        pan: "ABCDE1234F",
+        gstin: "18AXEPJ4673R1ZO",
+        pan: "AXEPJR673R",
+    },
+
+    logoUrl: "/logo.svg",
+
+    // Previously stored in the Organisation settings row. Now code-owned:
+    // changing these is a code edit + deploy, not a settings-page change.
+    bank: {
+        beneficiary: "Network Service",
+        bankName: "State Bank of India",
+        accountNumber: "33605435873",
+        ifsc: "SBIN0008462",
+        branch: "Abhayapuri",
+        upiVpa: "network.service@ybl",
     },
 
     hours: "Mon–Sat · 10:00 AM – 7:00 PM IST",

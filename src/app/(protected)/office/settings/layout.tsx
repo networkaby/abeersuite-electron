@@ -4,7 +4,6 @@ import { PathBreadcrumb } from "@/shared/components/PathBreadcrumb";
 // slugs (workers, qr-display-settings, …) from being naively title-cased.
 // Mirrors the labels in SETTINGS_NAV (utils/constants.ts).
 const SETTINGS_CRUMB_LABELS: Record<string, string> = {
-    organisation: "Organisation",
     "org-defaults": "Org Defaults",
     ecommerce: "E-Commerce",
     statuses: "Statuses",

@@ -96,41 +96,6 @@
         "loyalty": false
       }
     },
-    "organisation": {
-      "brandName": "Network Service",
-      "legalName": "Network Service",
-      "gstin": "18AXEPJ4673R1ZO",
-      "gstStateCode": "18",
-      "identityJson": {
-        "pan": "AXEPJR673R",
-        "logoUrl": "/logo.svg",
-        "tagline": "IT hardware & components — delivered fast across India"
-      },
-      "addressJson": {
-        "city": "Bongaigaon",
-        "state": "Assam",
-        "country": "India",
-        "pinCode": "783384",
-        "addressLine1": "Kalaparishad Market, Main Road",
-        "addressLine2": "Abhayapuri, District Bongaigaon"
-      },
-      "contactJson": {
-        "email": "hello@networkservice.in",
-        "hours": "Mon–Sat · 10:00 AM – 7:00 PM IST",
-        "phone": "+91 88769 96969",
-        "siteUrl": "www.networkservice.in",
-        "whatsapp": "+91 88769 96969",
-        "supportEmail": "support@networkservice.in"
-      },
-      "bankJson": {
-        "upi": "network.service@ybl",
-        "ifsc": "SBIN0008462",
-        "branch": "Abhayapuri",
-        "bankName": "State Bank of India",
-        "beneficiary": "Network Service",
-        "accountNumber": "33605435873"
-      }
-    },
     "invNamingConfig": {
       "nameFields": [
         {
@@ -4498,7 +4463,7 @@
       "id": "BR-HQ",
       "name": "Head Office",
       "address": "Kalaparishad Market, Main Road, Abhayapuri",
-      "phone": "+91 88769 96969",
+      "phone": "+91 88769 96996",
       "addressLine1": "Kalaparishad Market, Main Road",
       "addressLine2": "Abhayapuri, District Bongaigaon",
       "city": "Bongaigaon",
@@ -4828,10 +4793,6 @@
     {
       "roleId": "R2",
       "permissionId": "users:create"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:settings:organisation"
     },
     {
       "roleId": "R2",
@@ -5995,10 +5956,6 @@
     },
     {
       "roleId": "R1",
-      "permissionId": "ui:sidebar:settings:organisation"
-    },
-    {
-      "roleId": "R1",
       "permissionId": "ui:sidebar:settings:payment-methods"
     },
     {
@@ -6082,10 +6039,6 @@
     {
       "departmentId": "DEP-SALES",
       "permissionId": "ui:sidebar:help:help-desk"
-    },
-    {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:settings:organisation"
     },
     {
       "departmentId": "DEP-SALES",
@@ -6494,10 +6447,6 @@
     {
       "departmentId": "DEP-OP",
       "permissionId": "finance:voucher:delete:journal"
-    },
-    {
-      "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:settings:organisation"
     },
     {
       "departmentId": "DEP-OP",

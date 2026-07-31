@@ -13,7 +13,7 @@ export default async function CouponPrintPage({ params }: { params: Promise<{ id
     const coupon = await prisma.coupon.findUnique({ where: { id: Number(id) } });
     if (!coupon || !coupon.code) notFound();
 
-    const org = await getOrganisation();
+    const org = getOrganisation();
     const headline = couponHeadline(coupon);
     const value = couponValueText(coupon);
     const qrDataUrl = await QRCode.toDataURL(coupon.code, { width: 240, margin: 1, errorCorrectionLevel: "M" });

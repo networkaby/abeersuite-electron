@@ -1,12 +1,12 @@
 /**
- * Pure types + formatters for the Organisation singleton. Lives apart from
- * `getOrganisation.ts` (which imports Prisma) so client components can
- * consume the types/formatters without pulling the server dep tree.
+ * Pure types + formatters for the shop's own identity.
  *
- * DB storage uses three JSON blobs (identityJson / addressJson / contactJson)
- * plus four scalar columns (brandName, legalName, gstin, gstStateCode).
- * All callers see the flat OrganisationView — packing/unpacking happens only
- * in getOrganisation.ts and the API route.
+ * There is no Organisation table — the values are assembled from
+ * `COMPANY_DETAILS` in `getOrganisation.ts`. This module stays free of that
+ * import so client components can use the types and formatters on their own.
+ *
+ * `parseBankJson` survives the table's removal because Account rows carry their
+ * own `bankJson` (see `voucherReceiptSample.ts`) — it is not Organisation-only.
  */
 
 // ── Flat view (what every caller uses) ───────────────────────────────────────
@@ -47,17 +47,6 @@ export interface OrganisationView {
 
 // ── JSON blob shapes (DB internal, exported for the API route packer) ────────
 
-export interface OrgIdentityData {
-    tagline: string; logoUrl: string; pan: string;
-}
-export interface OrgAddressData {
-    addressLine1: string; addressLine2: string; city: string;
-    state: string; pinCode: string; country: string;
-}
-export interface OrgContactData {
-    email: string; supportEmail: string; phone: string;
-    whatsapp: string; siteUrl: string; hours: string;
-}
 export interface OrgBankData {
     beneficiary: string; bankName: string; accountNumber: string;
     ifsc: string; branch: string; upi: string;
@@ -74,32 +63,6 @@ function obj(v: unknown): Record<string, unknown> {
         : {};
 }
 
-export function parseIdentityJson(v: unknown): OrgIdentityData {
-    const o = obj(v);
-    return { tagline: s(o.tagline), logoUrl: s(o.logoUrl), pan: s(o.pan) };
-}
-export function parseAddressJson(v: unknown): OrgAddressData {
-    const o = obj(v);
-    return {
-        addressLine1: s(o.addressLine1),
-        addressLine2: s(o.addressLine2),
-        city:         s(o.city),
-        state:        s(o.state),
-        pinCode:      s(o.pinCode),
-        country:      s(o.country, "India"),
-    };
-}
-export function parseContactJson(v: unknown): OrgContactData {
-    const o = obj(v);
-    return {
-        email:        s(o.email),
-        supportEmail: s(o.supportEmail),
-        phone:        s(o.phone),
-        whatsapp:     s(o.whatsapp),
-        siteUrl:      s(o.siteUrl),
-        hours:        s(o.hours),
-    };
-}
 export function parseBankJson(v: unknown): OrgBankData {
     const o = obj(v);
     return {
@@ -109,32 +72,6 @@ export function parseBankJson(v: unknown): OrgBankData {
         ifsc:          s(o.ifsc),
         branch:        s(o.branch),
         upi:           s(o.upi),
-    };
-}
-
-// ── Unpack a Prisma Organisation row → flat OrganisationView ─────────────────
-
-export function unpackOrgRow(row: {
-    brandName: string; legalName: string;
-    gstin: string; gstStateCode: string;
-    identityJson: unknown; addressJson: unknown; contactJson: unknown;
-    bankJson?: unknown;
-}): OrganisationView {
-    const bank = parseBankJson(row.bankJson);
-    return {
-        brandName:    row.brandName,
-        legalName:    row.legalName,
-        gstin:        row.gstin,
-        gstStateCode: row.gstStateCode,
-        ...parseIdentityJson(row.identityJson),
-        ...parseAddressJson(row.addressJson),
-        ...parseContactJson(row.contactJson),
-        bankBeneficiary:   bank.beneficiary,
-        bankName:          bank.bankName,
-        bankAccountNumber: bank.accountNumber,
-        bankIfsc:          bank.ifsc,
-        bankBranch:        bank.branch,
-        bankUpi:           bank.upi,
     };
 }
 

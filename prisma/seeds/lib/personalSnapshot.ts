@@ -240,10 +240,9 @@ export async function exportPersonal(prisma: Db): Promise<PersonalSnapshot> {
     const idx = await buildRefIndex(prisma);
 
     // ── Config singletons (id=1) ──
-    const [orgDefaults, organisation, invNamingConfig, loyaltyConfig, couponConfig, creditLimitConfig, booksConfig] =
+    const [orgDefaults, invNamingConfig, loyaltyConfig, couponConfig, creditLimitConfig, booksConfig] =
         await Promise.all([
             prisma.orgDefaults.findFirst(),
-            prisma.organisation.findFirst(),
             prisma.invNamingConfig.findFirst(),
             prisma.loyaltyConfig.findFirst(),
             prisma.couponConfig.findFirst(),
@@ -255,7 +254,6 @@ export async function exportPersonal(prisma: Db): Promise<PersonalSnapshot> {
         orgDefaults: orgDefaults
             ? externalize(omit(orgDefaults, ["id", "updatedAt"]), { defaultUnitId: "invUnit", defaultGstRateId: "gstRate", shippingPoolGroupId: "accountGroup" }, idx)
             : null,
-        organisation: organisation ? omit(organisation, ["id", "updatedAt", "updatedById"]) : null,
         invNamingConfig: invNamingConfig ? omit(invNamingConfig, ["id", "updatedAt"]) : null,
         loyaltyConfig: loyaltyConfig
             ? externalize(omit(loyaltyConfig, ["id"]), { redeemExpenseAccountId: "account" }, idx)
@@ -499,7 +497,6 @@ export async function importPersonal(prisma: Db, snap: PersonalSnapshot): Promis
     // ── Phase 3: config singletons ──
     const s = snap.singletons;
     if (s.orgDefaults) await put(prisma.orgDefaults, { id: 1 }, { id: 1, ...internalize(s.orgDefaults, { defaultUnitId: "invUnit", defaultGstRateId: "gstRate", shippingPoolGroupId: "accountGroup" }, idx) });
-    if (s.organisation) await put(prisma.organisation, { id: 1 }, { id: 1, ...s.organisation });
     if (s.invNamingConfig) await put(prisma.invNamingConfig, { id: 1 }, { id: 1, ...s.invNamingConfig });
     if (s.loyaltyConfig) await put(prisma.loyaltyConfig, { id: 1 }, { id: 1, ...internalize(s.loyaltyConfig, { redeemExpenseAccountId: "account" }, idx) });
     if (s.couponConfig) await put(prisma.couponConfig, { id: 1 }, { id: 1, ...internalize(s.couponConfig, { couponExpenseAccountId: "account", giftCardLiabilityAccountId: "account", giftCardBreakageAccountId: "account" }, idx) });

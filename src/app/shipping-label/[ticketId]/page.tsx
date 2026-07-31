@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
 import { getVoucherTemplate } from "@/shared/lib/print/voucherTemplate";
-import { COMPANY_DETAILS } from "@/utils/constants-company-details";
+import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import ShippingLabel, { type ShippingLabelData, type LabelSize, type LabelFieldFlags } from "@/shared/components/print/ShippingLabel";
 
 // Packet address label for a device sent to a service centre — its own postcard

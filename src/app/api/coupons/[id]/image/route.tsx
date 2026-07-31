@@ -17,7 +17,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     if (!coupon) return new Response("Not found", { status: 404 });
     if (!coupon.code) return new Response("AUTO coupons have no shareable code", { status: 422 });
 
-    const org = await getOrganisation();
+    const org = getOrganisation();
     const headline = couponHeadline(coupon);
     const qr = await QRCode.toDataURL(coupon.code, { width: 240, margin: 1, errorCorrectionLevel: "M" });
     const minBill = coupon.minBillValue != null && Number(coupon.minBillValue) > 0

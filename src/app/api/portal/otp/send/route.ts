@@ -17,7 +17,7 @@ import { isLoginBlocked, recordLoginFailure } from "@/shared/lib/auth/loginRateL
 import { isEmailConfigured, sendEmail } from "@/shared/lib/email/sendEmail";
 import { isSmsConfigured, sendOtpSms } from "@/shared/lib/sms/sendSms";
 import { isWhatsAppConfigured, sendOtpWhatsApp } from "@/shared/lib/whatsapp/sendWhatsApp";
-import { COMPANY_DETAILS } from "@/utils/constants-company-details";
+import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 
 /**
  * Send a 6-digit sign-in code to a mobile or email — the customer types one

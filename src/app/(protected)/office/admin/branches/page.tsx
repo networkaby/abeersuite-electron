@@ -175,8 +175,8 @@ export default function BranchesPage() {
                     <p className="text-sm text-muted-foreground mt-1">
                         Physical and virtual locations of your organisation. Each branch has its own address and GSTIN
                         (required by Indian GST law when branches are in different states); other identity (brand, logo,
-                        website, PAN) stays on the org-wide{" "}
-                        <a className="underline hover:text-foreground" href="/office/settings/organisation">Organisation</a> page.
+                        website, PAN) is code-owned config in{" "}
+                        <code className="rounded bg-muted px-1 py-0.5 text-xs">src/shared/lib/constants/companyDetails.ts</code>.
                     </p>
                 </div>
                 <Button onClick={startAdd} disabled={addingNew}>

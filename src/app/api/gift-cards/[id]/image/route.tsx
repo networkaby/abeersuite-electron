@@ -15,7 +15,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     const card = await prisma.giftCard.findUnique({ where: { id }, include: { ownerAccount: { select: { name: true } } } });
     if (!card) return new Response("Not found", { status: 404 });
 
-    const org = await getOrganisation();
+    const org = getOrganisation();
     const balance = Number(card.balance).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const initial = Number(card.initialValue).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const qr = await QRCode.toDataURL(card.code, { width: 240, margin: 1, errorCorrectionLevel: "M" });

@@ -9,7 +9,7 @@
 // /office/admin/counters). The payee *name* shown in the customer's UPI app stays
 // company-level (COMPANY_DETAILS.upi.payeeName).
 
-import { COMPANY_DETAILS } from "@/utils/constants-company-details";
+import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import { formatInr } from "@/shared/lib/format";
 
 /// Runtime payment identity for the active counter.

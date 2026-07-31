@@ -22,7 +22,7 @@
  */
 
 import { isSupplierPartyKind, type VoucherTemplateDefaults } from "@/shared/lib/print/voucherTemplateDefaults";
-import { COMPANY_DETAILS } from "@/utils/constants-company-details";
+import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import { rupeesInWords } from "@/shared/lib/format/numberToWords";
 import type { ThermalReceiptSample } from "@/shared/components/print/ThermalReceiptPreview";
 import { BarcodeSvg } from "@/modules/inventory/components/BarcodeSvg";

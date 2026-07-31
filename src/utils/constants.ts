@@ -665,7 +665,6 @@ export const ADMIN_NAV: SettingsNavItem[] = [
 ];
 
 export const SETTINGS_NAV: SettingsNavItem[] = [
-    { label: "Organisation", href: "/office/settings/organisation", icon: Building2, permission: "settings:manage" },
     { label: "Org Defaults", href: "/office/settings/org-defaults", icon: Settings, permission: "settings:manage" },
     { label: "E-Commerce", href: "/office/settings/ecommerce", icon: ShoppingCart, permission: "settings:manage" },
     { label: "Payment Methods", href: "/office/settings/payment-methods", icon: CreditCard, permission: "settings:manage" },

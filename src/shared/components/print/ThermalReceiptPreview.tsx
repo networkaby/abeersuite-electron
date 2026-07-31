@@ -19,7 +19,7 @@
 
 import { isSupplierPartyKind, type VoucherTemplateDefaults } from "@/shared/lib/print/voucherTemplateDefaults";
 import { QrSvg } from "@/shared/components/print/QrSvg";
-import { COMPANY_DETAILS } from "@/utils/constants-company-details";
+import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import { BarcodeSvg } from "@/modules/inventory/components/BarcodeSvg";
 import { rupeesInWords } from "@/shared/lib/format/numberToWords";
 

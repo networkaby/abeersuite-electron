@@ -107,7 +107,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
         let sellerStateCode = "";
         let buyerStateCode  = "";
         if (isTradingVoucher) {
-            const org = await getOrganisation();
+            const org = getOrganisation();
             sellerStateCode = (voucher.universalVoucher?.branch?.gstStateCode || org.gstStateCode || "").trim();   // 5D-12: branch on spine
             buyerStateCode = (voucher.placeOfSupply ?? "").trim();
             if (!buyerStateCode) {

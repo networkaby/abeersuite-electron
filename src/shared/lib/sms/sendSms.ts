@@ -32,7 +32,7 @@ import "server-only";
  * Start on "q" to go live today, move to "otp" once a template is set up.
  */
 
-import { COMPANY_DETAILS } from "@/utils/constants-company-details";
+import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 
 const BULK_URL = "https://www.fast2sms.com/dev/bulkV2";
 const SEND_OTP_URL = "https://www.fast2sms.com/dev/otp/send";

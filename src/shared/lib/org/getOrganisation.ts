@@ -1,79 +1,61 @@
-import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { COMPANY_DETAILS } from "@/utils/constants-company-details";
+/**
+ * The shop's own identity — brand, legal name, address, GSTIN, contact, bank.
+ *
+ * This is built entirely from `COMPANY_DETAILS`. There is no Organisation table
+ * and no settings page behind it: changing the shop's identity is a code edit
+ * plus a deploy, on purpose. Print templates remain the per-document override
+ * layer (see `mergeTemplateWithOrg.ts`), so a single voucher can still show
+ * something different without touching this.
+ *
+ * Kept as a function rather than a bare constant because every printed document
+ * already reads it through this seam — one call site to change if the shop ever
+ * needs per-branch identity.
+ */
+
+import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import {
     formatAddressBlock,
-    unpackOrgRow,
     type OrganisationView,
 } from "@/shared/lib/org/organisationView";
 
-// Re-export the pure pieces so existing imports `from "@/shared/lib/org/getOrganisation"`
-// keep working — server-only code can grab everything from one place.
-export { formatAddressBlock, unpackOrgRow };
+// Re-exported so existing imports `from "@/shared/lib/org/getOrganisation"`
+// keep working — callers grab everything from one place.
+export { formatAddressBlock };
 export type { OrganisationView };
 
-function fallbackFromCompanyDetails(): OrganisationView {
-    const gstin = COMPANY_DETAILS.tax.gstin ?? "";
-    return {
-        brandName:    COMPANY_DETAILS.brandName,
-        legalName:    COMPANY_DETAILS.legalName,
-        tagline:      COMPANY_DETAILS.tagline,
-        logoUrl:      "",
-        pan:          COMPANY_DETAILS.tax.pan,
-        addressLine1: COMPANY_DETAILS.address.line1,
-        addressLine2: COMPANY_DETAILS.address.line2 ?? "",
-        city:         COMPANY_DETAILS.address.city,
-        state:        COMPANY_DETAILS.address.state,
-        pinCode:      COMPANY_DETAILS.address.pin,
-        country:      COMPANY_DETAILS.address.country,
-        gstin,
-        gstStateCode: gstin.length >= 2 ? gstin.slice(0, 2) : "",
-        email:        COMPANY_DETAILS.contact.email,
-        supportEmail: COMPANY_DETAILS.contact.supportEmail,
-        phone:        COMPANY_DETAILS.contact.phone,
-        whatsapp:     COMPANY_DETAILS.contact.whatsapp,
-        siteUrl:      COMPANY_DETAILS.siteUrl,
-        hours:        COMPANY_DETAILS.hours,
-        // No bank defaults in COMPANY_DETAILS — the admin fills these in Org settings.
-        bankBeneficiary:   "",
-        bankName:          "",
-        bankAccountNumber: "",
-        bankIfsc:          "",
-        bankBranch:        "",
-        bankUpi:           "",
-    };
-}
+const c = COMPANY_DETAILS;
 
-/**
- * Loads the Organisation singleton (row id=1). Auto-upserts on first call
- * (matches the `OrgDefaults` / `BooksConfig` pattern). Any blank field on
- * the row is filled in from `COMPANY_DETAILS` before returning so callers
- * never have to nullish-coalesce.
- */
-export async function getOrganisation(): Promise<OrganisationView> {
-    const row = await prisma.organisation.upsert({
-        where:  { id: 1 },
-        create: { id: 1 },
-        update: {},
-    });
-    const unpacked = unpackOrgRow(row);
-    const fb = fallbackFromCompanyDetails();
-    // For every blank field, fall back to COMPANY_DETAILS so callers never
-    // need to nullish-coalesce.
-    return (Object.keys(fb) as (keyof OrganisationView)[]).reduce(
-        (acc, key) => ({ ...acc, [key]: unpacked[key] || fb[key] }),
-        unpacked,
-    );
-}
+/** The organisation, assembled once at module load. */
+export const ORGANISATION: OrganisationView = {
+    brandName:    c.brandName,
+    legalName:    c.legalName,
+    tagline:      c.tagline,
+    logoUrl:      c.logoUrl,
+    pan:          c.tax.pan,
+    addressLine1: c.address.line1,
+    addressLine2: c.address.line2 ?? "",
+    city:         c.address.city,
+    state:        c.address.state,
+    pinCode:      c.address.pin,
+    country:      c.address.country,
+    gstin:        c.tax.gstin,
+    // Place-of-supply is the first two chars of the GSTIN.
+    gstStateCode: c.tax.gstin.length >= 2 ? c.tax.gstin.slice(0, 2) : "",
+    email:        c.contact.email,
+    supportEmail: c.contact.supportEmail,
+    phone:        c.contact.phone,
+    whatsapp:     c.contact.whatsapp,
+    siteUrl:      c.siteUrl,
+    hours:        c.hours,
+    bankBeneficiary:   c.bank.beneficiary,
+    bankName:          c.bank.bankName,
+    bankAccountNumber: c.bank.accountNumber,
+    bankIfsc:          c.bank.ifsc,
+    bankBranch:        c.bank.branch,
+    bankUpi:           c.bank.upiVpa,
+};
 
-/**
- * Returns the stored values with no COMPANY_DETAILS fallback — used by the
- * settings form so it can show the admin exactly what's stored vs empty.
- */
-export async function getOrganisationRaw(): Promise<OrganisationView> {
-    const row = await prisma.organisation.upsert({
-        where:  { id: 1 },
-        create: { id: 1 },
-        update: {},
-    });
-    return unpackOrgRow(row);
+/** The organisation used on every storefront page and printed document. */
+export function getOrganisation(): OrganisationView {
+    return ORGANISATION;
 }

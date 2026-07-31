@@ -465,7 +465,7 @@ export async function POST(req: NextRequest) {
             where: { id: branchId },
             select: { gstStateCode: true },
         });
-        const org = await getOrganisation();
+        const org = getOrganisation();
         const sellerState = (branch?.gstStateCode || org.gstStateCode || "").trim();
         let party: { gstin: string | null; gstStateCode: string | null; shippingStateCode: string | null } | null = null;
         if (partyType === "customer" && partyId) {

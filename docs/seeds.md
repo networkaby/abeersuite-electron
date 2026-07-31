@@ -53,7 +53,7 @@ the Personal bootstrap section below).
 
 `bootstrap-seed.ts` runs via `pnpm seed:generic` and is ONLY for a brand-new
 client with no captured config: it creates the generic demo world (baseline GST
-18%, ₹, demo Organisation, starter tier ladder …). **Do not run it during
+18%, ₹, starter tier ladder …). **Do not run it during
 normal development** — re-running it resets tuned settings back to generic.
 
 `bootstrap-seed.ts` is **idempotent** — safe to re-run on a fresh install. It seeds:
@@ -107,7 +107,7 @@ demo clutter. Reset staff passwords after (new users get `changeme123`).
 
 | Included (config / structure / masters) | Excluded |
 |---|---|
-| Config singletons — `OrgDefaults`, `Organisation`, `InvNamingConfig`, `LoyaltyConfig`, `CouponConfig`, `CreditLimitConfig`, `BooksConfig` | `Ticket*` (tickets) |
+| Config singletons — `OrgDefaults`, `InvNamingConfig`, `LoyaltyConfig`, `CouponConfig`, `CreditLimitConfig`, `BooksConfig` | `Ticket*` (tickets) |
 | Inventory/tax masters — `GstRate`, `InvUnit`, `InvWarrantyTerm`, `InvCategory`, `InvProductGroup`, `InvBrand`, `InvAttributeMaster`, `StrategyPoint`, `VoucherPrintTemplate` | `UniversalVoucher*` / journal / invoice / payment / stock-ledger (vouchers) |
 | Chart of accounts — `AccountGroup` + `Account` **(GL ledgers only)** | `Person` / `Company` / `Phone` / `Email` / party ledgers (customers) |
 | Spend-tier ladders — `CustomerTierPeriod` + `CustomerTier` | `InvProduct*` (products) |

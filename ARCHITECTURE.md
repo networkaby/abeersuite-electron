@@ -36,7 +36,8 @@ Cross-cutting code lives in `src/shared/` (see §12). shadcn primitives live in 
 - **`(protected)/office/*`** — staff app (requires a staff session). Segments mirror URLs 1:1: `accountancy`, `bi` (Business Intelligence reports), `inventory`, `pos` (manager shift reports), `pricing-strategy`, `customer-retention`, `customers` (Contacts), `crm`, `orders`, `repairing`, `ecommerce`, `admin`, `administration`, `settings`, `work-flow-inbox` (post-login landing).
 - **`(protected)/vouchers/pos`** — the POS register (operator surface), opened standalone. `/vouchers/pos/new` is the New Sale screen.
 - **`(external)/*`** — customer-facing: `(store)` marketing homepage, `shop` (catalogue → cart → checkout with courier + payment-method pickers), `portal` (customer self-service), `login` (portal sign-in), `(legal)` (policy pages).
-- **`(external)/(legal)/*`** — the four policy documents at flat URLs `/terms`, `/privacy`, `/refunds`, `/shipping`. Route group only: the group carries the shop chrome, the URLs stay flat because they are the links given to Razorpay activation and the Google OAuth consent screen. Prose lives in `src/shared/lib/legal/legalContent.ts` (never in the components); one renderer, `LegalDocPage`, serves all four. Slugs are declared once in `src/shared/lib/legal/legalPaths.ts`, which `proxy.ts` imports so the pages stay anonymously reachable.
+- **`(external)/(legal)/*`** — the four policy documents at flat URLs `/terms`, `/privacy`, `/refunds`, `/shipping`. Route group only: the group carries the shop chrome, the URLs stay flat because they are the links given to Razorpay activation and the Google OAuth consent screen. Prose lives in `src/shared/lib/legal/legalContent.ts` (never in the components); one renderer, `LegalDocPage`, serves all four. Slugs are declared once in `src/shared/lib/legal/legalPaths.ts`, which `proxy.ts` imports so the pages stay anonymously reachable. Each document states that it covers **both** hostnames — the company site and the store are one legal entity, split only by deployment.
+- **`app/sitemap.ts`** — one sitemap for the whole business, listing the company site and the store together. Cross-hostname entries are valid because both sit under one registrable domain verified as a single Search Console **Domain property**. Hostnames come from `COMPANY_DETAILS.sites`.
 - **`(protected)/lab`** — experimental Front/Back-office prototype. Not gated, not production.
 - Staff sign-in: `/staff/login`. Portal sign-in: `/login`.
 
@@ -172,7 +173,7 @@ Repair, deals, delivery, and refund all ride this one engine. **The `Account` is
 | `pos.prisma` | PosCounter(+PaymentAccount), PaymentGateway, PosShift, PosCashDrop, PosExpenditure, PosReceipt, PosHandover |
 | `pipeline.prisma` | Pipeline, TicketStatus, TicketWorker, WorkGroup, Work, WorkerTransition, StatusTransition |
 | `tickets.prisma` | Ticket, TicketRepair/Deal/Order(+Line)/Delivery/Refund/Help, TicketLog, TicketParticipant, Device, ServiceCenter, TaskRecurrence |
-| `org.prisma` | Branch, Department, Position, UserPosition, PositionRole, Organisation, OrgDefaults |
+| `org.prisma` | Branch, Department, Position, UserPosition, PositionRole, OrgDefaults |
 | `rbac.prisma` | Role, Permission, RolePermission, UserPermission, DepartmentPermission |
 | `users.prisma` | User, QuickNote, SavedFilter (named list views, generic on `surface`) |
 | `loyalty.prisma` / `coupons.prisma` | loyalty + coupon/gift-card models |
@@ -194,7 +195,8 @@ src/shared/
    ├─ auth/      permissions, permissionScope, posVoucherMatrix, voucherMatrix, sidebarModules,
    │             authorizeStaff/Portal, departmentPool, revokeSessions, loginRateLimit
    ├─ accountancy/ settlement, partySnapshot, checkCreditLimit, voucherBinding, outstandings, denomJson
-   ├─ constants/ ACCOUNT_GROUPS, PERMISSIONS, BUSINESS_TIME_ZONE (the shop's zone — one editable line)
+   ├─ constants/ ACCOUNT_GROUPS, PERMISSIONS, BUSINESS_TIME_ZONE (the shop's zone — one editable line),
+   │             COMPANY_DETAILS (companyDetails.ts — brand, address, GSTIN/PAN, bank; code-owned, no settings page)
    ├─ format/    moneyInr (paise), round2, numberWords; formatDate — calendar-date helpers
    │             (startOfDayUtc/endOfDayUtc query bounds, toDateOnlyUtc echo, businessToday/Iso fallback)
    ├─ prisma/    prismaClient singleton

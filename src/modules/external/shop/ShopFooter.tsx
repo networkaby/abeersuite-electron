@@ -4,7 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Package, Mail, MapPin, ShieldCheck } from "lucide-react";
 import { LEGAL_LINKS } from "@/shared/lib/legal/legalContent";
-import { COMPANY_DETAILS } from "@/shared/constants/companyDetails";
+import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
+import AboutBusinessNote from "@/modules/external/shop/AboutBusinessNote";
 
 export default function ShopFooter() {
     const pathname = usePathname();
@@ -54,8 +55,15 @@ export default function ShopFooter() {
                     <h4 className="text-sm font-semibold uppercase tracking-wide">Shop</h4>
                     <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
                         <li>
+                            {/* Same business, different hostname — a plain anchor, not
+                                next/link, because it leaves this deployment. */}
+                            <a href={COMPANY_DETAILS.sites.company} className="hover:text-foreground">
+                                Company home
+                            </a>
+                        </li>
+                        <li>
                             <Link href="/" className="hover:text-foreground">
-                                Home
+                                Store home
                             </Link>
                         </li>
                         <li>
@@ -114,6 +122,8 @@ export default function ShopFooter() {
                     </ul>
                 </div>
             </div>
+            <AboutBusinessNote />
+
             <div className="border-t border-border/60 px-4 py-6 text-xs text-muted-foreground">
                 <div className="mx-auto flex max-w-6xl flex-col items-center gap-3 sm:flex-row sm:justify-between">
                     <p className="text-center sm:text-left">

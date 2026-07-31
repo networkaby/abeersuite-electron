@@ -54,7 +54,7 @@ import {
     VOUCHER_TEMPLATE_KINDS,
     buildVoucherTemplateDefaults,
 } from "../../src/shared/lib/print/voucherTemplateDefaults";
-import { COMPANY_DETAILS } from "../../src/utils/constants-company-details";
+import { COMPANY_DETAILS } from "../../src/shared/lib/constants/companyDetails";
 import { PERMISSION_CATALOG, ensureXorCheck as ensureXorCheckShared } from "./lib/codeOwnedCatalog";
 import { upsertPositionWithRoles } from "./lib/positionSeedSync";
 import { PrismaPg } from "@prisma/adapter-pg";
@@ -1291,50 +1291,9 @@ async function main() {
     }
     console.log(`      ✓ ${VOUCHER_TEMPLATE_KINDS.length} voucher print templates seeded\n`);
 
-    // ── Section 14: Organisation singleton ────────────────────────────
-    console.log("[14/16] Organisation (your own business / legal entity)");
-    // Create-only on re-seed (mirrors VoucherSeries / VoucherPrintTemplate
-    // pattern) so admin edits via /office/settings/organisation survive a
-    // re-run of `pnpm prisma db seed`. Initial values come from
-    // src/utils/constants-company-details.ts.
-    const orgGstin = COMPANY_DETAILS.tax.gstin ?? "";
-    await prisma.organisation.upsert({
-        where:  { id: 1 },
-        create: {
-            id:          1,
-            brandName:   COMPANY_DETAILS.brandName,
-            legalName:   COMPANY_DETAILS.legalName,
-            gstin:       orgGstin,
-            gstStateCode: orgGstin.length >= 2 ? orgGstin.slice(0, 2) : "",
-            identityJson: {
-                tagline: COMPANY_DETAILS.tagline,
-                logoUrl: "",
-                pan:     COMPANY_DETAILS.tax.pan,
-            },
-            addressJson: {
-                addressLine1: COMPANY_DETAILS.address.line1,
-                addressLine2: COMPANY_DETAILS.address.line2 ?? "",
-                city:         COMPANY_DETAILS.address.city,
-                state:        COMPANY_DETAILS.address.state,
-                pinCode:      COMPANY_DETAILS.address.pin,
-                country:      COMPANY_DETAILS.address.country,
-            },
-            contactJson: {
-                email:        COMPANY_DETAILS.contact.email,
-                supportEmail: COMPANY_DETAILS.contact.supportEmail,
-                phone:        COMPANY_DETAILS.contact.phone,
-                whatsapp:     COMPANY_DETAILS.contact.whatsapp,
-                siteUrl:      COMPANY_DETAILS.siteUrl,
-                hours:        COMPANY_DETAILS.hours,
-            },
-        },
-        update: {},
-    });
-    console.log(`      ✓ Organisation singleton seeded (id=1)\n`);
-
-    // ── Section 15: GSTIN ↔ gstStateCode integrity fixup ─────────────────
-    console.log("[15/16] GSTIN ↔ state-code integrity fixup");
-    // Idempotent: for every Branch / Person / Company / Organisation row
+    // ── Section 14: GSTIN ↔ gstStateCode integrity fixup ─────────────────
+    console.log("[14/16] GSTIN ↔ state-code integrity fixup");
+    // Idempotent: for every Branch / Person / Company row
     // with a non-empty GSTIN, force gstStateCode = gstin[:2]. Safe to re-run.
     // (Doesn't touch the human-readable `state` text — admins clean those
     // via the UI, which now rejects mismatches.)
@@ -1342,12 +1301,11 @@ async function main() {
     const branchFix     = await pool.query(`UPDATE "Branch"       SET "${gstinFixupSql}`);
     const personFix     = await pool.query(`UPDATE "Person"       SET "${gstinFixupSql}`);
     const companyFix    = await pool.query(`UPDATE "Company"      SET "${gstinFixupSql}`);
-    const orgFix        = await pool.query(`UPDATE "Organisation" SET "${gstinFixupSql}`);
     const fixedTotal = (branchFix.rowCount ?? 0) + (personFix.rowCount ?? 0)
-                     + (companyFix.rowCount ?? 0) + (orgFix.rowCount ?? 0);
+                     + (companyFix.rowCount ?? 0);
     console.log(`      ✓ Re-aligned gstStateCode on ${fixedTotal} row(s) where it disagreed with GSTIN\n`);
 
-    // ── Section 16: Strategy points (the additive-margin pricing engine) ──────
+    // ── Section 15: Strategy points (the additive-margin pricing engine) ──────
     // The single org-wide additive-margin config. A product's margin% = the SUM
     // of the points for the dimensions it falls under (base + brand + category +
     // group). Seed BASE = 25 so a fresh DB keeps the org-default +25% markup that
@@ -1355,7 +1313,7 @@ async function main() {
     // category / group / band points are added by the user in
     // /office/pricing-strategy/strategies. A missing row = 0 pts.
     // create-only so an admin's edited base survives a reseed.
-    console.log("[16/16] Strategy points default (BASE = 25)");
+    console.log("[15/16] Strategy points default (BASE = 25)");
     await prisma.strategyPoint.upsert({
         where:  { dimension_refKey: { dimension: "BASE", refKey: "" } },
         update: {},
@@ -1363,7 +1321,7 @@ async function main() {
     });
     console.log("      ✓ StrategyPoint BASE row present\n");
 
-    // ── Section 17: Delivery methods (courier options at checkout) ────────────
+    // ── Section 16: Delivery methods (courier options at checkout) ────────────
     // Three couriers the storefront offers; the customer picks one at checkout and
     // its rate becomes the order's shipping charge. create-only per kind so an
     // admin's rate edits (Settings → Couriers) survive a reseed.
@@ -1371,7 +1329,7 @@ async function main() {
     //   OWN_BOY   – in-house delivery boy; starts with no pincodes (admin adds the
     //               serviceable list), flat ₹49.
     //   SHIPROCKET – live API rates; seeded INACTIVE until creds + pickup are set.
-    console.log("[17/17] Delivery methods (courier options)");
+    console.log("[16/16] Delivery methods (courier options)");
     // The hard-coded courier catalog is code-owned (deliveryMethodConfig.ts) and the
     // app self-heals it on load; this create-only pass just pre-fills a fresh DB.
     let dmCreated = 0;
