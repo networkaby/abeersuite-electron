@@ -36,9 +36,27 @@ export async function generateMetadata({
     const { handle } = await params;
     const p = await loadProduct(handle);
     if (!p) return { title: "Product" };
+
+    const description = p.subheading ?? p.description ?? undefined;
+    // A product is reachable by numeric id AND by slug. Point both at the slug
+    // form so the two URLs are not indexed as two products.
+    const canonical = productPath(p);
+    const image = p.galleryUrls[0] ?? p.imageUrl ?? undefined;
+
     return {
         title: `${p.name} · Shop`,
-        description: p.subheading ?? p.description ?? undefined,
+        description,
+        alternates: { canonical },
+        openGraph: {
+            type: "website",
+            title: p.name,
+            description,
+            url: canonical,
+            // The product's own photo beats the generic store card here — this
+            // is the one page where the share preview should show the thing
+            // being sold.
+            images: image ? [image] : undefined,
+        },
     };
 }
 
