@@ -3,18 +3,27 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Package, Mail, MapPin, ShieldCheck } from "lucide-react";
-import { COMPANY_DETAILS } from "@/utils/constants-company-details";
+import { LEGAL_LINKS } from "@/shared/lib/legal/legalContent";
+import { COMPANY_DETAILS } from "@/shared/constants/companyDetails";
 
 export default function ShopFooter() {
     const pathname = usePathname();
 
-    // Distraction-free checkout: no link farm — just a slim trust line.
+    // Distraction-free checkout: no link farm — but the policies must stay
+    // reachable from the payment step (Razorpay's activation check looks here).
     if (pathname === "/shop/checkout") {
         return (
             <footer className="mt-auto border-t border-border/60 py-6 text-center text-xs text-muted-foreground">
                 <span className="inline-flex items-center gap-1.5">
                     <ShieldCheck className="size-3.5 text-emerald-600" />
                     Secure checkout · Prices in {COMPANY_DETAILS.currencySymbol} · © {new Date().getFullYear()} {COMPANY_DETAILS.brandName}
+                </span>
+                <span className="mt-2 flex flex-wrap justify-center gap-x-4 gap-y-1">
+                    {LEGAL_LINKS.map((link) => (
+                        <Link key={link.href} href={link.href} className="hover:text-foreground hover:underline">
+                            {link.label}
+                        </Link>
+                    ))}
                 </span>
             </footer>
         );
@@ -105,8 +114,19 @@ export default function ShopFooter() {
                     </ul>
                 </div>
             </div>
-            <div className="border-t border-border/60 py-6 text-center text-xs text-muted-foreground">
-                © {new Date().getFullYear()} {COMPANY_DETAILS.brandName} · Prices in {COMPANY_DETAILS.currencySymbol} · Payments via Razorpay when configured
+            <div className="border-t border-border/60 px-4 py-6 text-xs text-muted-foreground">
+                <div className="mx-auto flex max-w-6xl flex-col items-center gap-3 sm:flex-row sm:justify-between">
+                    <p className="text-center sm:text-left">
+                        © {new Date().getFullYear()} {COMPANY_DETAILS.brandName} · Prices in {COMPANY_DETAILS.currencySymbol} · Payments via Razorpay when configured
+                    </p>
+                    <nav aria-label="Legal" className="flex flex-wrap justify-center gap-x-4 gap-y-1">
+                        {LEGAL_LINKS.map((link) => (
+                            <Link key={link.href} href={link.href} className="hover:text-foreground hover:underline">
+                                {link.label}
+                            </Link>
+                        ))}
+                    </nav>
+                </div>
             </div>
         </footer>
     );

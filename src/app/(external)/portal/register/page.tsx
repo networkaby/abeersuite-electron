@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import LegalConsentNote from "@/modules/external/legal/LegalConsentNote";
 
 export default function PortalRegisterPage() {
     const router = useRouter();
@@ -103,6 +104,9 @@ export default function PortalRegisterPage() {
                             Already have an account?
                         </Link>
                     </p>
+                    <div className="mt-3">
+                        <LegalConsentNote action="creating an account" />
+                    </div>
                 </CardContent>
             </Card>
         </div>

@@ -10,12 +10,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import LegalConsentNote from "@/modules/external/legal/LegalConsentNote";
 import PortalOnboardForm from "@/modules/external/portal/PortalOnboardForm";
 import PortalOtpLoginForm, { type OtpStep } from "@/modules/external/portal/PortalOtpLoginForm";
 import { usePortalPasswordlessSignIn } from "@/modules/external/portal/usePortalPasswordlessSignIn";
 import { signInWithGoogle } from "@/shared/lib/auth/portalPasswordless";
 import { HERO_SLIDES } from "@/shared/lib/shop/storeContent";
-import { COMPANY_DETAILS } from "@/utils/constants-company-details";
+import { COMPANY_DETAILS } from "@/shared/constants/companyDetails";
 
 /**
  * Backdrop photo — reuses the storefront hero imagery so the login matches the
@@ -314,6 +315,8 @@ function CustomerLoginForm() {
                             </Link>
                         </p>
                     )}
+
+                    <LegalConsentNote action={onboarding ? "creating an account" : "signing in"} />
                 </div>
             </div>
         </div>

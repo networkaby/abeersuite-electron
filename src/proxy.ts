@@ -1,9 +1,13 @@
 import { auth } from "@/auth";
 import { NextResponse } from "next/server";
+import { isLegalPath } from "@/shared/lib/legal/legalPaths";
 
 function isPublicPath(pathname: string): boolean {
     if (pathname === "/" || pathname === "/login") return true;
     if (pathname === "/staff/login") return true;
+    // Policy pages — Razorpay activation and Google OAuth verification fetch
+    // these anonymously, so they must never redirect to a sign-in.
+    if (isLegalPath(pathname)) return true;
     // Printer/display bridge — downloadable on the shop PC before sign-in.
     if (pathname === "/combined-bridge.zip") return true;
     if (pathname === "/combined-bridge-setup.exe") return true;

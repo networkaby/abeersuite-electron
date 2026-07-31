@@ -27,6 +27,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { LEGAL_LINKS } from "@/shared/lib/legal/legalContent";
 
 type PortalAppShellProps = {
     children: React.ReactNode;
@@ -76,11 +77,23 @@ function Sidebar({ pathname, onNavigate }: { pathname: string; onNavigate?: () =
                     );
                 })}
             </nav>
-            <div className="border-t border-border/70 p-3 text-xs text-muted-foreground">
+            <div className="space-y-2 border-t border-border/70 p-3 text-xs text-muted-foreground">
                 <Link href="/shop" className="inline-flex items-center gap-1 hover:text-foreground">
                     <CreditCard className="size-3.5" />
                     Continue shopping
                 </Link>
+                <nav aria-label="Legal" className="flex flex-wrap gap-x-3 gap-y-1">
+                    {LEGAL_LINKS.map((link) => (
+                        <Link
+                            key={link.href}
+                            href={link.href}
+                            onClick={onNavigate}
+                            className="hover:text-foreground hover:underline"
+                        >
+                            {link.label}
+                        </Link>
+                    ))}
+                </nav>
             </div>
         </div>
     );

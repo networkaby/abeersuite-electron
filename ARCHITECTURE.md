@@ -11,7 +11,7 @@ Current implementation of `service-mgmt-experiment` — an internal business OS 
 ## 1) Runtime
 
 - **Framework** — Next.js 16 App Router (`src/app`), React 19, Turbopack dev.
-- **Middleware** — `src/proxy.ts` (Next 16 renamed `middleware.ts` → `proxy.ts`; do **not** create `middleware.ts`).
+- **Middleware** — `src/proxy.ts` (Next 16 renamed `middleware.ts` → `proxy.ts`; do **not** create `middleware.ts`). Its `isPublicPath` allowlist is **deny-by-default**: any path not listed redirects anonymous visitors to a sign-in, and bounces signed-in customers to `/portal`. A new publicly-reachable page must be added there or it is invisible to the outside world.
 - **API** — route handlers under `src/app/api/*`.
 - **Data** — Prisma 7 (split schema) + PostgreSQL (Supabase). Client singleton in `src/shared/lib/prisma/`.
 - **Auth** — NextAuth v5 (JWT strategy), two independent credential providers (staff + portal).
@@ -35,7 +35,8 @@ Cross-cutting code lives in `src/shared/` (see §12). shadcn primitives live in 
 
 - **`(protected)/office/*`** — staff app (requires a staff session). Segments mirror URLs 1:1: `accountancy`, `bi` (Business Intelligence reports), `inventory`, `pos` (manager shift reports), `pricing-strategy`, `customer-retention`, `customers` (Contacts), `crm`, `orders`, `repairing`, `ecommerce`, `admin`, `administration`, `settings`, `work-flow-inbox` (post-login landing).
 - **`(protected)/vouchers/pos`** — the POS register (operator surface), opened standalone. `/vouchers/pos/new` is the New Sale screen.
-- **`(external)/*`** — customer-facing: `(store)` marketing homepage, `shop` (catalogue → cart → checkout with courier + payment-method pickers), `portal` (customer self-service), `login` (portal sign-in).
+- **`(external)/*`** — customer-facing: `(store)` marketing homepage, `shop` (catalogue → cart → checkout with courier + payment-method pickers), `portal` (customer self-service), `login` (portal sign-in), `(legal)` (policy pages).
+- **`(external)/(legal)/*`** — the four policy documents at flat URLs `/terms`, `/privacy`, `/refunds`, `/shipping`. Route group only: the group carries the shop chrome, the URLs stay flat because they are the links given to Razorpay activation and the Google OAuth consent screen. Prose lives in `src/shared/lib/legal/legalContent.ts` (never in the components); one renderer, `LegalDocPage`, serves all four. Slugs are declared once in `src/shared/lib/legal/legalPaths.ts`, which `proxy.ts` imports so the pages stay anonymously reachable.
 - **`(protected)/lab`** — experimental Front/Back-office prototype. Not gated, not production.
 - Staff sign-in: `/staff/login`. Portal sign-in: `/login`.
 
