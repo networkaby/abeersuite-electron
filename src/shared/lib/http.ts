@@ -19,7 +19,26 @@ import { todayIso } from "@/shared/lib/format/formatDate";
 
 export const http = axios.create();
 
-/** Stamp `x-active-branch` + `x-business-date` on an outgoing request.
+/** True when the request targets our own origin — a relative URL, or an absolute
+ *  one pointing back at this host.
+ *
+ *  Third-party calls must NOT be stamped. A custom header makes a cross-origin
+ *  request "non-simple", so the browser sends a preflight `OPTIONS` first; APIs
+ *  that don't allow our private headers reject it and axios reports the opaque
+ *  `Network Error`. That is what broke every Cloudinary image upload — the
+ *  global interceptor (see `SessionWrapper`) was stamping the upload POST too.
+ *  Keeping them same-origin also stops branch id / business date leaking out. */
+function isSameOrigin(config: InternalAxiosRequestConfig): boolean {
+    try {
+        return new URL(config.url ?? "", config.baseURL ?? window.location.origin).origin
+            === window.location.origin;
+    } catch {
+        // Unparseable — treat as one of ours rather than dropping the context.
+        return true;
+    }
+}
+
+/** Stamp `x-active-branch` + `x-business-date` on an outgoing same-origin request.
  *
  *  Exported because most POS/office components still call bare `axios`, so
  *  `SessionWrapper` registers this on the global instance too — otherwise a
@@ -27,6 +46,7 @@ export const http = axios.create();
  *  idea of today. */
 export function stampRequestContext(config: InternalAxiosRequestConfig): InternalAxiosRequestConfig {
     if (typeof window === "undefined") return config;
+    if (!isSameOrigin(config)) return config;
     config.headers = config.headers ?? {};
     const branchId = useActiveBranchStore.getState().activeBranchId;
     if (branchId) {

@@ -43,8 +43,15 @@ export default function ProductGalleryUploader({
                 const next = [...urls, up.data.secure_url];
                 onChange(next);
                 toast.success("Image uploaded");
-            } catch {
-                toast.error("Upload failed — check Cloudinary env");
+            } catch (err) {
+                const detail = axios.isAxiosError(err)
+                    ? (err.response?.data as { error?: { message?: string } | string } | undefined)
+                    : undefined;
+                const message =
+                    (typeof detail?.error === "string" ? detail.error : detail?.error?.message)
+                    ?? (err instanceof Error ? err.message : "unknown error");
+                toast.error(`Upload failed — ${message}`);
+                console.error("Cloudinary upload failed:", err);
             } finally {
                 setUploading(false);
             }
