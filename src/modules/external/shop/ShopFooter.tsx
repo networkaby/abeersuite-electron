@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Package, Mail, MapPin, ShieldCheck } from "lucide-react";
+import { Mail, MapPin, ShieldCheck } from "lucide-react";
 import { LEGAL_LINKS } from "@/shared/lib/legal/legalContent";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import AboutBusinessNote from "@/modules/external/shop/AboutBusinessNote";
+import ShopBrandMark from "@/modules/external/shop/ShopBrandMark";
 
 export default function ShopFooter() {
     const pathname = usePathname();
@@ -44,8 +45,8 @@ export default function ShopFooter() {
             <div className="mx-auto max-w-6xl px-4 py-12 grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
                 <div>
                     <div className="flex items-center gap-2 font-semibold text-lg">
-                        <Package className="size-5 text-primary" />
-                        {COMPANY_DETAILS.brandName}
+                        <ShopBrandMark className="h-10 w-36" />
+                        <span className="sr-only">{COMPANY_DETAILS.brandName}</span>
                     </div>
                     <p className="mt-3 text-sm text-muted-foreground leading-relaxed">
                         {COMPANY_DETAILS.description} Same session as your customer portal and service team.

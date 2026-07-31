@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import ShopHeader from "@/modules/external/shop/ShopHeader";
 import ShopFooter from "@/modules/external/shop/ShopFooter";
+import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 
 export const metadata: Metadata = {
-    title: "Shop · IT Hardware & Components",
+    title: `Shop · ${COMPANY_DETAILS.brandName}`,
     description:
-        "Computers, laptops, printers, CCTV, networking, and PC components. Browse in ₹ with secure checkout.",
+        "Network Service online shop for computers, laptops, printers, CCTV, networking, and PC components, with GST invoices and secure checkout in Indian Rupees.",
 };
 
 export default function ShopSectionLayout({ children }: { children: React.ReactNode }) {

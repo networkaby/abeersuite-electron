@@ -8,8 +8,9 @@ import { useShopWishlistStore } from "@/store/external/shopWishlistStore";
 import { useShopCompareStore } from "@/store/external/shopCompareStore";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Package, Heart, GitCompare, ShoppingBag, Menu, UserRound, ShieldCheck } from "lucide-react";
+import { Heart, GitCompare, ShoppingBag, Menu, UserRound, ShieldCheck } from "lucide-react";
 import ShopSearchBar from "./ShopSearchBar";
+import ShopBrandMark from "./ShopBrandMark";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import {
     DropdownMenu,
@@ -43,10 +44,8 @@ export default function ShopHeader() {
             <header className="sticky top-0 z-50 border-b border-border/80 bg-background/85 backdrop-blur-md supports-backdrop-filter:bg-background/70 pt-[env(safe-area-inset-top,0px)]">
                 <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
                     <Link href="/" className="flex min-w-0 items-center gap-2 font-bold text-base leading-tight tracking-tight sm:text-lg">
-                        <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary">
-                            <Package className="size-5" />
-                        </span>
-                        <span className="truncate">{COMPANY_DETAILS.brandName}</span>
+                        <ShopBrandMark className="h-8 w-28 sm:h-9 sm:w-32" />
+                        <span className="sr-only">{COMPANY_DETAILS.brandName}</span>
                     </Link>
                     <span className="inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-muted-foreground sm:text-sm">
                         <ShieldCheck className="size-4 text-emerald-600" />
@@ -107,10 +106,8 @@ export default function ShopHeader() {
                             href="/"
                             className="flex min-w-0 max-w-[min(12rem,46vw)] items-center gap-2 font-bold text-base leading-tight tracking-tight sm:max-w-none sm:text-lg"
                         >
-                            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary sm:size-9">
-                                <Package className="size-5" />
-                            </span>
-                            <span className="truncate md:whitespace-normal">{COMPANY_DETAILS.brandName}</span>
+                            <ShopBrandMark />
+                            <span className="sr-only">{COMPANY_DETAILS.brandName}</span>
                         </Link>
                     </div>
 
