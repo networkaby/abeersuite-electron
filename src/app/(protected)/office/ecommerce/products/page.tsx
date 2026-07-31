@@ -405,8 +405,8 @@ export default function EcommerceProductsPage() {
                             type="button"
                             onClick={() => setTab(t.key)}
                             className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${tab === t.key
-                                    ? "bg-background text-foreground shadow-sm"
-                                    : "text-muted-foreground hover:text-foreground"
+                                ? "bg-background text-foreground shadow-sm"
+                                : "text-muted-foreground hover:text-foreground"
                                 }`}
                         >
                             {t.label}
@@ -421,12 +421,12 @@ export default function EcommerceProductsPage() {
                 </div>
                 <div className="flex items-center gap-2">
                     <div className="flex items-center gap-2">
-                        <Button type="button" variant="outline" className="gap-2" asChild>
+                        {/* <Button type="button" variant="outline" className="gap-2" asChild>
                             <Link href="/office/settings/ecommerce">
                                 <SlidersHorizontal className="size-4" />
                                 Publish rules
                             </Link>
-                        </Button>
+                        </Button> */}
                         <Dialog open={open} onOpenChange={setOpen}>
                             <DialogTrigger asChild>
                                 <Button type="button">Add product</Button>
