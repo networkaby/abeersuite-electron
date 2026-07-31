@@ -44,7 +44,9 @@ export async function generateMetadata({
     const image = p.galleryUrls[0] ?? p.imageUrl ?? undefined;
 
     return {
-        title: `${p.name} · Shop`,
+        // Just the product name — the root template appends the brand, and
+        // "· Shop" in between only eats characters Google will truncate.
+        title: p.name,
         description,
         alternates: { canonical },
         openGraph: {

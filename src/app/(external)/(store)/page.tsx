@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { invProductToPublic as shopProductToPublic, type ShopProductPublic } from "@/shared/lib/shop/productPublic";
 import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
@@ -15,6 +16,13 @@ import DealOfTheDay from "@/modules/external/store/DealOfTheDay";
 import FeaturedRow from "@/modules/external/store/FeaturedRow";
 import BrandStrip from "@/modules/external/store/BrandStrip";
 import ShopCatalogClient from "@/modules/external/shop/ShopCatalogClient";
+
+// Title and description live in the layout. Only the canonical belongs here:
+// this page reads ?q= and ?category=, so without it every search term and
+// category filter is a separately indexable copy of the home page.
+export const metadata: Metadata = {
+    alternates: { canonical: "/" },
+};
 
 function pickFeatured(products: ShopProductPublic[], n = 8): ShopProductPublic[] {
     return [...products]
