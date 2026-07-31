@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useState } from "react";
+import { imageLoaderFor } from "@/shared/lib/cloudinaryImage";
 
 const AVATAR_COLOR: Record<string, string> = {
     R1: "bg-purple-100 text-purple-700",
@@ -38,6 +39,8 @@ export default function UserAvatar({
                     alt={name}
                     width={sizePx}
                     height={sizePx}
+                    // Avatars are Cloudinary uploads: let Cloudinary do the resize.
+                    loader={imageLoaderFor(avatarUrl)}
                     className="object-cover w-full h-full"
                     onError={() => setErr(true)}
                 />

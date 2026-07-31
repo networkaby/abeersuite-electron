@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Image from "next/image";
+import { imageLoaderFor } from "@/shared/lib/cloudinaryImage";
 import Link from "next/link";
 import axios from "axios";
 import { toast } from "sonner";
@@ -202,7 +203,7 @@ function ProfileHeader({
             {/* Cover */}
             <div className="absolute inset-0 overflow-hidden print:hidden">
                 {profile.coverUrl ? (
-                    <Image src={profile.coverUrl} alt="Cover" fill className="object-cover" />
+                    <Image src={profile.coverUrl} alt="Cover" fill className="object-cover" loader={imageLoaderFor(profile.coverUrl)} />
                 ) : (
                     <div className="absolute inset-0" style={{ background: coverBg(profile.role) }} />
                 )}
@@ -643,7 +644,7 @@ function EditProfileTab({ profile, onSaved }: { profile: UserProfile; onSaved: (
                 <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Cover Photo</h3>
                 <div className="relative h-28 overflow-hidden rounded-sm border border-border">
                     {coverPreview
-                        ? <Image src={coverPreview} alt="Cover" fill className="object-cover" />
+                        ? <Image src={coverPreview} alt="Cover" fill className="object-cover" loader={imageLoaderFor(coverPreview)} />
                         : <div className="absolute inset-0" style={{ background: "linear-gradient(135deg,#334155,#64748b)" }} />
                     }
                     {coverUploading && (

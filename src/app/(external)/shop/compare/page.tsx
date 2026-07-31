@@ -87,6 +87,7 @@ export default function ShopComparePage() {
                                                         src={(p.galleryUrls[0] ?? p.imageUrl)!}
                                                         alt=""
                                                         fill
+                                                        frame="square"
                                                         className="object-cover"
                                                         sizes="140px"
                                                     />

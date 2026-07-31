@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import axios from "axios";
 import Image from "next/image";
+import { imageLoaderFor, isCloudinaryUrl } from "@/shared/lib/cloudinaryImage";
 import Link from "next/link";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { toast } from "sonner";
@@ -594,7 +595,7 @@ export default function EcommerceProductsPage() {
                                         <TableCell>
                                             <div className="relative size-9 overflow-hidden rounded-md border bg-muted">
                                                 {img ? (
-                                                    <Image src={img} alt="" fill className="object-cover" sizes="36px" unoptimized />
+                                                    <Image src={img} alt="" fill className="object-cover" sizes="36px" loader={imageLoaderFor(img, "square")} unoptimized={!isCloudinaryUrl(img)} />
                                                 ) : null}
                                             </div>
                                         </TableCell>

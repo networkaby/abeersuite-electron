@@ -114,7 +114,7 @@ export default function ShopCartPage() {
                                                 className="relative size-24 shrink-0 overflow-hidden rounded-xl border border-border bg-muted sm:size-28"
                                             >
                                                 {img ? (
-                                                    <ShopRemoteImage src={img} alt="" fill className="object-cover" sizes="112px" />
+                                                    <ShopRemoteImage src={img} alt="" fill frame="square" className="object-cover" sizes="112px" />
                                                 ) : null}
                                             </Link>
                                             <div className="min-w-0 flex-1 flex flex-col gap-3">

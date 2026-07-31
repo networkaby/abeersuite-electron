@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { extractApiError } from "@/shared/lib/api";
@@ -51,6 +51,13 @@ export default function ProductForm({
     const [mrpRupees, setMrpRupees] = useState(initial?.mrpPaise ? rupeesFromPaise(initial.mrpPaise) : "");
     const [badge, setBadge] = useState(initial?.badge ?? "");
     const [galleryUrls, setGalleryUrls] = useState<string[]>(initial?.galleryUrls ?? []);
+    // Which gallery photo is selected in the uploader — lifted up so the live
+    // preview card can show that photo, not just index 0.
+    const [selectedImage, setSelectedImage] = useState(0);
+    const [galleryStatus, setGalleryStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+    const galleryFirstRun = useRef(true);
+    const galleryDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const gallerySeq = useRef(0);
     const [specPairs, setSpecPairs] = useState<{ k: string; v: string }[]>(() => {
         const s = initial?.specs ?? {};
         const keys = Object.keys(s);
@@ -95,6 +102,11 @@ export default function ProductForm({
         setMrpRupees(initial.mrpPaise ? rupeesFromPaise(initial.mrpPaise) : "");
         setBadge(initial.badge ?? "");
         setGalleryUrls(initial.galleryUrls ?? []);
+        setSelectedImage(0);
+        // Loading a product's own saved gallery is not a user edit — skip the
+        // next autosave run so it doesn't re-PATCH the value right back.
+        galleryFirstRun.current = true;
+        setGalleryStatus("idle");
         setStock(initial.stock === null || initial.stock === undefined ? "" : String(initial.stock));
         setLowStockThreshold(String(initial.lowStockThreshold ?? 5));
         setWeightGrams(initial.weightGrams == null ? "" : String(initial.weightGrams));
@@ -105,6 +117,45 @@ export default function ProductForm({
         setAllowBackorder(initial.allowBackorder ?? false);
         setIsActive(initial.isActive ?? true);
     }, [initial]);
+
+    // Autosave the photo block the moment it changes — add/remove/reorder/adjust/
+    // make-primary all flow through `galleryUrls`, so one effect covers every
+    // Photos action without each button wiring its own save call. Only fires for
+    // an already-saved product (there's no id to PATCH until the first full Save).
+    // Debounced so a burst of clicks (e.g. reordering twice) becomes one request.
+    useEffect(() => {
+        if (galleryFirstRun.current) {
+            galleryFirstRun.current = false;
+            return;
+        }
+        const productId = initial?.id;
+        if (!productId) return;
+
+        if (galleryDebounce.current) clearTimeout(galleryDebounce.current);
+        setGalleryStatus("saving");
+        const seq = ++gallerySeq.current;
+        galleryDebounce.current = setTimeout(() => {
+            axios
+                .patch(`/api/ecommerce/products/${productId}`, {
+                    galleryUrls,
+                    imageUrl: galleryUrls[0] ?? null,
+                })
+                .then(() => {
+                    if (gallerySeq.current === seq) setGalleryStatus("saved");
+                })
+                .catch((e: unknown) => {
+                    if (gallerySeq.current === seq) {
+                        setGalleryStatus("error");
+                        toast.error(extractApiError(e, "Couldn't save photos"));
+                    }
+                });
+        }, 500);
+
+        return () => {
+            if (galleryDebounce.current) clearTimeout(galleryDebounce.current);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- fires on gallery edits only, not every initial/id change
+    }, [galleryUrls]);
 
     // Shop price = the barcode tag the storefront actually charges (derived from
     // the saved sale price, server-side), falling back to the editable effective
@@ -127,6 +178,13 @@ export default function ProductForm({
     // A non-qualified product can never be listed; the switch is forced off.
     const listedEffective = qualified && isListedInShop;
 
+    // The live card always renders galleryUrls[0], so put the photo the user has
+    // selected in the gallery first — preview only, the saved order is untouched.
+    const previewGallery =
+        selectedImage > 0 && selectedImage < galleryUrls.length
+            ? [galleryUrls[selectedImage], ...galleryUrls.filter((_, i) => i !== selectedImage)]
+            : galleryUrls;
+
     const previewProduct: ShopProductAdmin = {
         id: initial?.id ?? 0,
         sku: sku.trim() || "SKU",
@@ -138,8 +196,8 @@ export default function ProductForm({
         pricePaise: shopPricePaise,
         mrpPaise: mrpRupees.trim() ? paiseFromRupeesInput(mrpRupees) : null,
         badge: badge.trim() || null,
-        imageUrl: galleryUrls[0] ?? null,
-        galleryUrls,
+        imageUrl: previewGallery[0] ?? null,
+        galleryUrls: previewGallery,
         specs: Object.fromEntries(specPairs.filter((x) => x.k.trim()).map((x) => [x.k.trim(), x.v.trim()])),
         stock: stock.trim() === "" ? null : parseInt(stock, 10),
         lowStockThreshold: parseInt(lowStockThreshold, 10) || 5,
@@ -311,31 +369,6 @@ export default function ProductForm({
                         );
                     })()}
                 </div>
-                <div className="rounded-lg border border-border p-3 space-y-2">
-                    <div className="flex items-center justify-between">
-                        <Label className="text-sm font-medium">Shop readiness</Label>
-                        <span className={qualified ? "text-xs font-medium text-emerald-600" : "text-xs font-medium text-amber-600"}>
-                            {qualified ? "Qualified" : "Not ready"}
-                        </span>
-                    </div>
-                    <ul className="space-y-1">
-                        {qualification.checks.map((c) => (
-                            <li key={c.key} className="flex items-center gap-2 text-sm">
-                                {c.ok ? (
-                                    <Check className="size-4 text-emerald-600" />
-                                ) : (
-                                    <X className="size-4 text-muted-foreground" />
-                                )}
-                                <span className={c.ok ? "" : "text-muted-foreground"}>{c.label}</span>
-                            </li>
-                        ))}
-                    </ul>
-                    {initial?.barcodePricePaise != null ? (
-                        <p className="text-xs text-muted-foreground">
-                            Shop price (barcode): <span className="font-medium tabular-nums">{formatRupeesFromPaise(initial.barcodePricePaise)}</span> — derived from the saved sale price.
-                        </p>
-                    ) : null}
-                </div>
                 <div className="flex items-center gap-2">
                     <Switch
                         id="listed"
@@ -344,7 +377,7 @@ export default function ProductForm({
                         onCheckedChange={setIsListedInShop}
                     />
                     <Label htmlFor="listed" className={!qualified ? "text-muted-foreground" : ""}>
-                        Listed in shop {!qualified ? "(add the items above to enable)" : ""}
+                        Listed in shop {!qualified ? "(see Shop readiness below to enable)" : ""}
                     </Label>
                 </div>
                 <div className="flex items-center gap-2">
@@ -393,11 +426,6 @@ export default function ProductForm({
                     </Button>
                 </div>
 
-                <div className="space-y-2">
-                    <Label>Gallery</Label>
-                    <ProductGalleryUploader urls={galleryUrls} onChange={setGalleryUrls} />
-                </div>
-
                 <Button type="button" onClick={() => void submit()} disabled={busy}>
                     {busy ? "Saving…" : submitLabel}
                 </Button>
@@ -407,6 +435,58 @@ export default function ProductForm({
                 <Label>Live preview</Label>
                 <div className="rounded-lg border border-dashed border-border p-4">
                     <ProductCard product={previewProduct as ShopProductPublic} />
+                </div>
+                {/* Photos sit under the live card: every change here is seen
+                    immediately in the card above, so no second preview is needed. */}
+                <div className="space-y-2 pt-2">
+                    <div className="flex items-center justify-between">
+                        <Label>Photos</Label>
+                        {initial?.id ? (
+                            <span className="text-xs text-muted-foreground">
+                                {galleryStatus === "saving"
+                                    ? "Saving…"
+                                    : galleryStatus === "saved"
+                                        ? "Saved"
+                                        : galleryStatus === "error"
+                                            ? "Save failed"
+                                            : ""}
+                            </span>
+                        ) : (
+                            <span className="text-xs text-muted-foreground">Saves after you create the product</span>
+                        )}
+                    </div>
+                    <ProductGalleryUploader
+                        urls={galleryUrls}
+                        onChange={setGalleryUrls}
+                        selected={selectedImage}
+                        onSelectedChange={setSelectedImage}
+                    />
+                </div>
+
+                <div className="rounded-lg border border-border p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                        <Label className="text-sm font-medium">Shop readiness</Label>
+                        <span className={qualified ? "text-xs font-medium text-emerald-600" : "text-xs font-medium text-amber-600"}>
+                            {qualified ? "Qualified" : "Not ready"}
+                        </span>
+                    </div>
+                    <ul className="space-y-1">
+                        {qualification.checks.map((c) => (
+                            <li key={c.key} className="flex items-center gap-2 text-sm">
+                                {c.ok ? (
+                                    <Check className="size-4 text-emerald-600" />
+                                ) : (
+                                    <X className="size-4 text-muted-foreground" />
+                                )}
+                                <span className={c.ok ? "" : "text-muted-foreground"}>{c.label}</span>
+                            </li>
+                        ))}
+                    </ul>
+                    {initial?.barcodePricePaise != null ? (
+                        <p className="text-xs text-muted-foreground">
+                            Shop price (barcode): <span className="font-medium tabular-nums">{formatRupeesFromPaise(initial.barcodePricePaise)}</span> — derived from the saved sale price.
+                        </p>
+                    ) : null}
                 </div>
             </div>
         </div>

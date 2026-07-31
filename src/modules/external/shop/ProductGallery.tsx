@@ -30,17 +30,20 @@ export default function ProductGallery({ urls, alt }: { urls: string[]; alt: str
                             i === idx ? "border-primary ring-2 ring-primary/20" : "border-transparent hover:border-border"
                         )}
                     >
-                        <ShopRemoteImage src={u} alt="" fill className="object-cover" sizes="80px" />
+                        <ShopRemoteImage src={u} alt="" fill frame="square" className="object-cover" sizes="80px" />
                     </button>
                 ))}
             </div>
-            <div className="relative min-h-[320px] flex-1 overflow-hidden rounded-2xl border border-border/80 bg-muted/20 lg:aspect-square lg:min-h-0">
+            {/* Square on every breakpoint so the CSS frame and the Cloudinary
+                aspect ratio agree — otherwise the browser re-crops on mobile. */}
+            <div className="relative aspect-square flex-1 overflow-hidden rounded-2xl border border-border/80 bg-muted/20">
                 {main ? (
                     <ShopRemoteImage
                         src={main}
                         alt={alt}
                         fill
                         priority
+                        frame="square"
                         className="object-cover"
                         sizes="(max-width:1024px)100vw,45vw"
                     />

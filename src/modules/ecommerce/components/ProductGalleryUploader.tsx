@@ -5,19 +5,42 @@ import axios from "axios";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { GripVertical, Link2, Trash2, Upload } from "lucide-react";
+import { ChevronLeft, ChevronRight, Crop, Link2, Star, Trash2, Upload } from "lucide-react";
 import { uploadImageToCloudinary } from "@/shared/lib/uploadToCloudinary";
+import { cloudinaryThumb, isCloudinaryUrl } from "@/shared/lib/cloudinaryImage";
+import ImageAdjustDialog from "@/modules/ecommerce/components/ImageAdjustDialog";
 
 export default function ProductGalleryUploader({
     urls,
     onChange,
+    selected: selectedProp,
+    onSelectedChange,
 }: {
     urls: string[];
     onChange: (urls: string[]) => void;
+    /**
+     * Which photo the action row acts on — controlled, so a parent (e.g. the
+     * live preview card) can show the same photo the user has selected here.
+     * Uncontrolled (self-managed) when omitted.
+     */
+    selected?: number;
+    onSelectedChange?: (idx: number) => void;
 }) {
     const [uploading, setUploading] = useState(false);
     const [showUrlInput, setShowUrlInput] = useState(false);
     const [urlValue, setUrlValue] = useState("");
+    const [adjustIdx, setAdjustIdx] = useState<number | null>(null);
+    const [selectedState, setSelectedState] = useState(0);
+    const selected = selectedProp ?? selectedState;
+    const setSelected = useCallback(
+        (next: number | ((s: number) => number)) => {
+            const resolved = typeof next === "function" ? next(selected) : next;
+            setSelectedState(resolved);
+            onSelectedChange?.(resolved);
+        },
+        [selected, onSelectedChange]
+    );
+    const hasSelection = selected < urls.length;
 
     const uploadSource = useCallback(
         async (source: File | string) => {
@@ -25,6 +48,7 @@ export default function ProductGalleryUploader({
             try {
                 const secureUrl = await uploadImageToCloudinary(source, "/api/upload-signature", "shop/products");
                 onChange([...urls, secureUrl]);
+                setSelected(urls.length); // select what was just added
                 toast.success("Image uploaded");
             } catch (err) {
                 const detail = axios.isAxiosError(err)
@@ -39,7 +63,7 @@ export default function ProductGalleryUploader({
                 setUploading(false);
             }
         },
-        [onChange, urls]
+        [onChange, urls, setSelected]
     );
 
     const onPick = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -60,52 +84,142 @@ export default function ProductGalleryUploader({
     const removeAt = (idx: number) => {
         const next = urls.filter((_, i) => i !== idx);
         onChange(next);
+        setSelected((s) => Math.max(0, Math.min(s > idx ? s - 1 : s, next.length - 1)));
+    };
+
+    /** Index 0 is the primary image everywhere on the shop — this is how it is chosen. */
+    const makePrimary = (idx: number) => {
+        if (idx === 0) return;
+        const next = [...urls];
+        const [picked] = next.splice(idx, 1);
+        onChange([picked, ...next]);
+        setSelected(0); // selection follows the photo that moved
+    };
+
+    const move = (idx: number, dir: -1 | 1) => {
+        const to = idx + dir;
+        if (to < 0 || to >= urls.length) return;
+        const next = [...urls];
+        [next[idx], next[to]] = [next[to], next[idx]];
+        onChange(next);
+        setSelected(to); // selection follows the photo that moved
+    };
+
+    const replaceAt = (idx: number, url: string) => {
+        onChange(urls.map((u, i) => (i === idx ? url : u)));
     };
 
     return (
         <div className="space-y-3">
+            {/* Thumbs are selection only — every action lives in the single row below. */}
             <div className="flex flex-wrap gap-2">
                 {urls.map((url, i) => (
-                    <div
+                    <button
                         key={`${url}-${i}`}
-                        className="relative flex h-24 w-24 items-center justify-center overflow-hidden rounded-md border bg-muted"
+                        type="button"
+                        onClick={() => setSelected(i)}
+                        aria-label={`Select photo ${i + 1}`}
+                        aria-pressed={selected === i}
+                        className={`relative h-20 w-24 shrink-0 overflow-hidden rounded-md border bg-muted transition-colors ${selected === i ? "ring-2 ring-primary" : "hover:border-foreground/40"
+                            }`}
                     >
+                        {/* Shown in the card frame, so the tile previews the real shop framing. */}
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={url} alt="" className="max-h-full max-w-full object-contain" />
-                        <Button
-                            type="button"
-                            variant="destructive"
-                            size="icon"
-                            className="absolute right-1 bottom-1 size-7"
-                            onClick={() => removeAt(i)}
-                        >
-                            <Trash2 className="size-3.5" />
-                        </Button>
-                        <span className="absolute left-1 top-1 rounded bg-background/80 px-1 text-[10px]">
-                            <GripVertical className="inline size-3" />
-                            {i + 1}
-                        </span>
-                    </div>
+                        <img src={cloudinaryThumb(url, 224, "card")} alt="" className="size-full object-cover" />
+                        {i === 0 ? (
+                            <span className="absolute left-1 top-1 flex items-center gap-1 rounded bg-primary px-1 py-0.5 text-[10px] font-medium text-primary-foreground">
+                                <Star className="size-3 fill-current" />
+                                Primary
+                            </span>
+                        ) : (
+                            <span className="absolute left-1 top-1 rounded bg-background/80 px-1 text-[10px]">{i + 1}</span>
+                        )}
+                    </button>
                 ))}
             </div>
+
             <div className="space-y-2">
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                     <input type="file" accept="image/*" className="hidden" id="gallery-upload" onChange={onPick} />
-                    <Button type="button" variant="outline" disabled={uploading} asChild>
+                    <Button type="button" variant="outline" size="sm" disabled={uploading} asChild>
                         <label htmlFor="gallery-upload" className="cursor-pointer">
                             <Upload className="mr-2 size-4" />
-                            {uploading ? "Uploading…" : "Add image"}
+                            {uploading ? "Uploading…" : "Add"}
                         </label>
                     </Button>
                     <Button
                         type="button"
                         variant="outline"
+                        size="sm"
                         disabled={uploading}
                         onClick={() => setShowUrlInput((v) => !v)}
                     >
                         <Link2 className="mr-2 size-4" />
-                        Add from URL
+                        From URL
                     </Button>
+
+                    {hasSelection ? (
+                        <>
+                            <span className="mx-1 h-5 w-px bg-border" aria-hidden />
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                title={
+                                    isCloudinaryUrl(urls[selected])
+                                        ? "Adjust framing"
+                                        : "Only uploaded images can be adjusted"
+                                }
+                                disabled={!isCloudinaryUrl(urls[selected])}
+                                onClick={() => setAdjustIdx(selected)}
+                            >
+                                <Crop className="mr-2 size-4" />
+                                Adjust
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                disabled={selected === 0}
+                                onClick={() => makePrimary(selected)}
+                            >
+                                <Star className="mr-2 size-4" />
+                                Make primary
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                className="size-8"
+                                title="Move earlier"
+                                disabled={selected === 0}
+                                onClick={() => move(selected, -1)}
+                            >
+                                <ChevronLeft className="size-4" />
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                className="size-8"
+                                title="Move later"
+                                disabled={selected === urls.length - 1}
+                                onClick={() => move(selected, 1)}
+                            >
+                                <ChevronRight className="size-4" />
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="text-destructive"
+                                onClick={() => removeAt(selected)}
+                            >
+                                <Trash2 className="mr-2 size-4" />
+                                Delete
+                            </Button>
+                        </>
+                    ) : null}
                 </div>
                 {showUrlInput && (
                     <div className="flex max-w-md gap-2">
@@ -128,6 +242,15 @@ export default function ProductGalleryUploader({
                     </div>
                 )}
             </div>
+            {adjustIdx !== null && urls[adjustIdx] ? (
+                <ImageAdjustDialog
+                    key={adjustIdx}
+                    url={urls[adjustIdx]}
+                    open
+                    onOpenChange={(o) => !o && setAdjustIdx(null)}
+                    onSave={(next) => replaceAt(adjustIdx, next)}
+                />
+            ) : null}
         </div>
     );
 }

@@ -691,7 +691,7 @@ export default function ShopCheckoutPage() {
                                     <li key={l.productId} className="flex gap-3">
                                         <div className="relative size-14 shrink-0 overflow-hidden rounded-lg border bg-muted">
                                             {img ? (
-                                                <ShopRemoteImage src={img} alt="" fill className="object-cover" sizes="56px" />
+                                                <ShopRemoteImage src={img} alt="" fill frame="square" className="object-cover" sizes="56px" />
                                             ) : null}
                                         </div>
                                         <div className="min-w-0 flex-1">
