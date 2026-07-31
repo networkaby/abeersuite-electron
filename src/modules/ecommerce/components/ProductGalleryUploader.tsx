@@ -3,16 +3,10 @@
 import { useCallback, useState } from "react";
 import axios from "axios";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { GripVertical, Trash2, Upload } from "lucide-react";
-
-type Sig = {
-    timestamp: number;
-    signature: string;
-    apiKey: string;
-    cloudName: string;
-    folder: string;
-};
+import { GripVertical, Link2, Trash2, Upload } from "lucide-react";
+import { uploadImageToCloudinary } from "@/shared/lib/uploadToCloudinary";
 
 export default function ProductGalleryUploader({
     urls,
@@ -22,26 +16,15 @@ export default function ProductGalleryUploader({
     onChange: (urls: string[]) => void;
 }) {
     const [uploading, setUploading] = useState(false);
+    const [showUrlInput, setShowUrlInput] = useState(false);
+    const [urlValue, setUrlValue] = useState("");
 
-    const uploadFile = useCallback(
-        async (file: File) => {
+    const uploadSource = useCallback(
+        async (source: File | string) => {
             setUploading(true);
             try {
-                const sigRes = await axios.get<Sig>("/api/upload-signature", {
-                    params: { folder: "shop/products" },
-                });
-                const { timestamp, signature, apiKey, cloudName, folder } = sigRes.data;
-                const fd = new FormData();
-                fd.append("file", file);
-                fd.append("api_key", apiKey);
-                fd.append("timestamp", String(timestamp));
-                fd.append("signature", signature);
-                fd.append("folder", folder);
-
-                const endpoint = `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`;
-                const up = await axios.post<{ secure_url: string }>(endpoint, fd);
-                const next = [...urls, up.data.secure_url];
-                onChange(next);
+                const secureUrl = await uploadImageToCloudinary(source, "/api/upload-signature", "shop/products");
+                onChange([...urls, secureUrl]);
                 toast.success("Image uploaded");
             } catch (err) {
                 const detail = axios.isAxiosError(err)
@@ -62,7 +45,16 @@ export default function ProductGalleryUploader({
     const onPick = (e: React.ChangeEvent<HTMLInputElement>) => {
         const f = e.target.files?.[0];
         e.target.value = "";
-        if (f) void uploadFile(f);
+        if (f) void uploadSource(f);
+    };
+
+    const addFromUrl = () => {
+        const trimmed = urlValue.trim();
+        if (!trimmed) return;
+        void uploadSource(trimmed).then(() => {
+            setUrlValue("");
+            setShowUrlInput(false);
+        });
     };
 
     const removeAt = (idx: number) => {
@@ -96,14 +88,45 @@ export default function ProductGalleryUploader({
                     </div>
                 ))}
             </div>
-            <div>
-                <input type="file" accept="image/*" className="hidden" id="gallery-upload" onChange={onPick} />
-                <Button type="button" variant="outline" disabled={uploading} asChild>
-                    <label htmlFor="gallery-upload" className="cursor-pointer">
-                        <Upload className="mr-2 size-4" />
-                        {uploading ? "Uploading…" : "Add image"}
-                    </label>
-                </Button>
+            <div className="space-y-2">
+                <div className="flex flex-wrap gap-2">
+                    <input type="file" accept="image/*" className="hidden" id="gallery-upload" onChange={onPick} />
+                    <Button type="button" variant="outline" disabled={uploading} asChild>
+                        <label htmlFor="gallery-upload" className="cursor-pointer">
+                            <Upload className="mr-2 size-4" />
+                            {uploading ? "Uploading…" : "Add image"}
+                        </label>
+                    </Button>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        disabled={uploading}
+                        onClick={() => setShowUrlInput((v) => !v)}
+                    >
+                        <Link2 className="mr-2 size-4" />
+                        Add from URL
+                    </Button>
+                </div>
+                {showUrlInput && (
+                    <div className="flex max-w-md gap-2">
+                        <Input
+                            type="url"
+                            placeholder="https://example.com/image.jpg"
+                            value={urlValue}
+                            onChange={(e) => setUrlValue(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    addFromUrl();
+                                }
+                            }}
+                            disabled={uploading}
+                        />
+                        <Button type="button" disabled={uploading || !urlValue.trim()} onClick={addFromUrl}>
+                            {uploading ? "Fetching…" : "Fetch"}
+                        </Button>
+                    </div>
+                )}
             </div>
         </div>
     );
