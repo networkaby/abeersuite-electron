@@ -193,6 +193,8 @@ export default function ProductForm({
         subheading: subheading.trim() || null,
         description: description.trim() || null,
         category: shopCategory.trim() || "Accessories",
+        // Live preview only — the marketing collection is not edited on this form.
+        collection: null,
         pricePaise: shopPricePaise,
         mrpPaise: mrpRupees.trim() ? paiseFromRupeesInput(mrpRupees) : null,
         badge: badge.trim() || null,

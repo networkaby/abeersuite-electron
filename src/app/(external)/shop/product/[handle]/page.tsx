@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { invProductToPublic as shopProductToPublic, productPath } from "@/shared/lib/shop/productPublic";
 import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
+import { loadShopGroupRoots } from "@/shared/lib/shop/groupCategory";
 import { loadShopStockPolicy } from "@/shared/lib/shop/stockPolicy";
 import { resolveAvailability } from "@/modules/ecommerce/lib/shopStock";
 import { invProductDb } from "@/shared/types/inventoryTypes";
@@ -31,7 +32,11 @@ import { buildProductLd } from "@/shared/lib/seo/jsonLd";
 const loadProduct = cache(async (handle: string) => {
     const decoded = decodeURIComponent(handle);
     const db = invProductDb(prisma);
-    const [bands, policy] = await Promise.all([loadBarcodeBands(), loadShopStockPolicy()]);
+    const [bands, policy, groupRoots] = await Promise.all([
+        loadBarcodeBands(),
+        loadShopStockPolicy(),
+        loadShopGroupRoots(),
+    ]);
 
     const where = /^\d+$/.test(decoded)
         ? { id: parseInt(decoded, 10), isListedInShop: true, isActive: true }
@@ -48,7 +53,7 @@ const loadProduct = cache(async (handle: string) => {
     const avail = resolveAvailability(p.stock, p.allowBackorder, policy, p.reserved);
     if (!avail.visible) return null;
 
-    return shopProductToPublic(p, bands, avail);
+    return shopProductToPublic(p, { bands, avail, groupRoots });
 });
 
 export async function generateMetadata({
@@ -93,12 +98,26 @@ export default async function ShopProductPage({ params }: { params: Promise<{ ha
     // "You may also like" renders the same ProductCard as the listing pages, so
     // it needs the same bands and availability — otherwise the related strip
     // quotes a different price than the card the customer just clicked.
-    const [bands, policy] = await Promise.all([loadBarcodeBands(), loadShopStockPolicy()]);
+    const [bands, policy, groupRoots] = await Promise.all([
+        loadBarcodeBands(),
+        loadShopStockPolicy(),
+        loadShopGroupRoots(),
+    ]);
+    // "Same category" must mirror the resolution rule in invProductToPublic:
+    // a product is in this category if its group's ROOT carries the name, or if
+    // its shopCategory override spells it. Matching the raw shopCategory column
+    // alone would miss every product that gets its category from the group tree.
+    const siblingGroupIds = [...groupRoots.entries()]
+        .filter(([, rootName]) => rootName === product.category)
+        .map(([groupId]) => groupId);
     const relatedRows = await invProductDb(prisma).findMany({
         where: {
             isListedInShop: true,
             isActive: true,
-            shopCategory: product.category,
+            OR: [
+                { shopCategory: product.category },
+                { shopCategory: null, groupId: { in: siblingGroupIds } },
+            ],
             NOT: { id: product.id },
         },
         include: { category: { select: { name: true } } },
@@ -107,7 +126,7 @@ export default async function ShopProductPage({ params }: { params: Promise<{ ha
     const related = relatedRows
         .map((p) => ({ p, avail: resolveAvailability(p.stock, p.allowBackorder, policy, p.reserved) }))
         .filter(({ avail }) => avail.visible)
-        .map(({ p, avail }) => shopProductToPublic(p, bands, avail));
+        .map(({ p, avail }) => shopProductToPublic(p, { bands, avail, groupRoots }));
 
     const canonicalPath = productPath(product);
 

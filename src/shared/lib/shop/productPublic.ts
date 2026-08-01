@@ -1,5 +1,6 @@
 import type { InvProductFull } from "@/shared/types/inventoryTypes";
 import { barcodeTagPaise, type BarcodeBand } from "@/shared/lib/pricing/barcodePrice";
+import type { GroupRootMap } from "@/shared/lib/shop/groupCategory";
 import type { StockStatus } from "@/modules/ecommerce/lib/shopStock";
 
 /** Serializable storefront shape (SSR → client, APIs). */
@@ -9,7 +10,18 @@ export type ShopProductPublic = {
     name: string;
     subheading: string | null;
     description: string | null;
+    /**
+     * Customer-facing category — sourced from the office **Group** tree (root
+     * name), NOT from office Category. Drives the category chips, showcase,
+     * shop filter, breadcrumb and JSON-LD. See groupCategory.ts.
+     */
     category: string;
+    /**
+     * Customer-facing collection — the office **Category** (marketing bucket:
+     * "Office Supplies", "Luxury Items"). A secondary merchandising axis; it
+     * deliberately does not compete with `category` for navigation.
+     */
+    collection: string | null;
     pricePaise: number;
     mrpPaise: number | null;
     badge: string | null;
@@ -26,6 +38,16 @@ export function productPath(p: Pick<ShopProductPublic, "id" | "slug">): string {
     return `/shop/product/${p.slug ?? p.id}`;
 }
 
+/** Optional reference data the mapper resolves against. */
+export type ShopProductPublicOptions = {
+    /** Org barcode bands — see `pricePaise` note below. */
+    bands?: BarcodeBand[];
+    /** Resolved stock display state. */
+    avail?: { status: StockStatus; orderable: boolean };
+    /** groupId → root group name, from `loadShopGroupRoots()`. */
+    groupRoots?: GroupRootMap;
+};
+
 /**
  * Map an InvProduct to its storefront shape.
  *
@@ -38,9 +60,9 @@ export function productPath(p: Pick<ShopProductPublic, "id" | "slug">): string {
  */
 export function invProductToPublic(
     p: InvProductFull & { category?: { name: string } | null },
-    bands?: BarcodeBand[],
-    avail?: { status: StockStatus; orderable: boolean }
+    opts: ShopProductPublicOptions = {}
 ): ShopProductPublic {
+    const { bands, avail, groupRoots } = opts;
     const rawGal = p.galleryJson;
     let galleryUrls: string[] = [];
     if (Array.isArray(rawGal)) {
@@ -62,7 +84,15 @@ export function invProductToPublic(
         name: p.name,
         subheading: p.shopSubheading,
         description: p.shopDescription,
-        category: p.shopCategory ?? p.category?.name ?? "Accessories",
+        // Storefront category comes from the office GROUP tree (root name), with
+        // shopCategory as the per-product hand-override. Office Category is
+        // deliberately NOT in this chain — it is the marketing bucket and now
+        // surfaces separately as `collection`.
+        category:
+            p.shopCategory ??
+            (p.groupId != null ? groupRoots?.get(p.groupId) : null) ??
+            "Accessories",
+        collection: p.category?.name ?? null,
         // Shop price = printed barcode tag (shelf == shop == receipt) when bands are
         // supplied, else the materialized effectiveSalePricePaise. Exposed under the
         // stable shop field name `pricePaise` so the storefront UI is unchanged.

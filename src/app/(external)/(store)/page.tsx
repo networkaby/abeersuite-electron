@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { invProductToPublic as shopProductToPublic, type ShopProductPublic } from "@/shared/lib/shop/productPublic";
 import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
+import { loadShopGroupRoots } from "@/shared/lib/shop/groupCategory";
 import { loadShopPublishRules } from "@/shared/lib/shop/publishRules";
 import { loadShopStockPolicy } from "@/shared/lib/shop/stockPolicy";
 import { shopQualification } from "@/modules/ecommerce/lib/shopQualification";
@@ -63,10 +64,11 @@ export default async function StoreHomePage({
     const sp = await searchParams;
     const initialCategory = sp.category && sp.category !== "" ? sp.category : "all";
 
-    const [bands, rules, policy] = await Promise.all([
+    const [bands, rules, policy, groupRoots] = await Promise.all([
         loadBarcodeBands(),
         loadShopPublishRules(),
         loadShopStockPolicy(),
+        loadShopGroupRoots(),
     ]);
     const rows = await invProductDb(prisma).findMany({
         where: { isListedInShop: true, isActive: true },
@@ -76,7 +78,7 @@ export default async function StoreHomePage({
     const products = rows
         .map((p) => ({ p, avail: resolveAvailability(p.stock, p.allowBackorder, policy) }))
         .filter(({ avail }) => avail.visible)
-        .map(({ p, avail }) => shopProductToPublic(p, bands, avail))
+        .map(({ p, avail }) => shopProductToPublic(p, { bands, avail, groupRoots }))
         .filter((p) => shopQualification(p, rules).qualified);
 
     const allCategories = [...new Set(products.map((p) => p.category))];
