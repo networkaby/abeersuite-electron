@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { signOut, useSession } from "next-auth/react";
+import { useSession } from "next-auth/react";
+import { signOutTo } from "@/shared/lib/auth/signOutTo";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ShieldCheck } from "lucide-react";
@@ -41,7 +42,7 @@ export default function PortalHeader() {
                         </Badge>
                     ) : null}
                     {status === "authenticated" && isCustomer ? (
-                        <Button variant="outline" size="sm" type="button" onClick={() => signOut({ callbackUrl: "/portal" })}>
+                        <Button variant="outline" size="sm" type="button" onClick={() => void signOutTo("/portal")}>
                             Sign out
                         </Button>
                     ) : (

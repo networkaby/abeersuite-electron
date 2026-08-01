@@ -3,12 +3,13 @@ import { DM_Sans, Space_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/shared/components/ThemeProvider";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
+import { CANONICAL_SITE_URL } from "@/shared/lib/appMode";
 
 const fontSans = DM_Sans({ subsets: ["latin"], variable: "--font-sans" });
 const fontMono = Space_Mono({ subsets: ["latin"], weight: ["400", "700"], variable: "--font-mono" });
 
-const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL ?? process.env.NEXTAUTH_URL ?? COMPANY_DETAILS.siteUrl;
+// Derived from APP_MODE, not from the environment — see lib/appMode.ts for why.
+const SITE_URL = CANONICAL_SITE_URL;
 
 const DEFAULT_TITLE = `${COMPANY_DETAILS.brandName} · ${COMPANY_DETAILS.tagline}`;
 

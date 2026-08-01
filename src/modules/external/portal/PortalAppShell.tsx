@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { signOut, useSession } from "next-auth/react";
+import { useSession } from "next-auth/react";
+import { signOutTo } from "@/shared/lib/auth/signOutTo";
 import {
     ChevronDown,
     CreditCard,
@@ -152,7 +153,7 @@ export default function PortalAppShell({ children }: PortalAppShellProps) {
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem
                                         variant="destructive"
-                                        onClick={() => signOut({ callbackUrl: "/portal" })}
+                                        onClick={() => void signOutTo("/portal")}
                                     >
                                         <LogOut className="size-4" />
                                         Sign out

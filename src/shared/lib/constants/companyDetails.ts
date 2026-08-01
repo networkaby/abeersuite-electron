@@ -35,6 +35,12 @@ export type CompanyDetails = {
         company: string;
         /** Online store + customer portal. */
         shop: string;
+        /**
+         * Internal staff app. Not a public site — blocked in robots.txt and
+         * never linked from the storefront. Listed here so code can name it
+         * without asking an environment variable what its own hostname is.
+         */
+        office: string;
     };
     /** Locale tag for OpenGraph (e.g. "en_IN"). */
     locale: string;
@@ -134,6 +140,7 @@ export const COMPANY_DETAILS: CompanyDetails = {
     sites: {
         company: "https://networkservice.in",
         shop: "https://shop.networkservice.in",
+        office: "https://office.networkservice.in",
     },
 
     locale: "en_IN",
