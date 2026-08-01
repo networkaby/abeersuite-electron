@@ -116,6 +116,7 @@ export type CompanyDetails = {
         x: string;
         youtube: string;
         linkedin: string;
+        threads: string;
     };
 
     /** Business policy snippets (display-only, not legal). */
@@ -208,11 +209,12 @@ export const COMPANY_DETAILS: CompanyDetails = {
     hours: "Mon–Sat · 10:00 AM – 7:00 PM IST",
 
     social: {
-        facebook: "",
-        instagram: "",
+        facebook: "https://www.facebook.com/network.service.aby",
+        instagram: "https://www.instagram.com/network.service.aby",
         x: "",
         youtube: "",
         linkedin: "",
+        threads: "https://www.threads.com/@network.service.aby",
     },
 
     policies: {

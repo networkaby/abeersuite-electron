@@ -8,6 +8,7 @@ import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import AboutBusinessNote from "@/modules/external/shop/AboutBusinessNote";
 import ShopBrandMark from "@/modules/external/shop/ShopBrandMark";
 import PaymentMethodLogos from "@/modules/external/shop/PaymentMethodLogos";
+import SocialLinks from "@/modules/external/shop/SocialLinks";
 
 export default function ShopFooter() {
     const pathname = usePathname();
@@ -122,6 +123,8 @@ export default function ShopFooter() {
                             <span>{COMPANY_DETAILS.contact.supportEmail}</span>
                         </li>
                     </ul>
+                    {/* Renders only the handles that are filled in — see SocialLinks. */}
+                    <SocialLinks className="mt-4" />
                 </div>
             </div>
             <AboutBusinessNote />
