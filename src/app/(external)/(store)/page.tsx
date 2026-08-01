@@ -7,7 +7,12 @@ import { loadShopStockPolicy } from "@/shared/lib/shop/stockPolicy";
 import { shopQualification } from "@/modules/ecommerce/lib/shopQualification";
 import { resolveAvailability } from "@/modules/ecommerce/lib/shopStock";
 import { invProductDb } from "@/shared/types/inventoryTypes";
-import { HERO_SLIDES, PROMO_BANNERS_TOP, PROMO_BANNERS_BOTTOM } from "@/shared/lib/shop/storeContent";
+import {
+    HERO_SLIDES,
+    PROMO_BANNERS_TOP,
+    PROMO_BANNERS_BOTTOM,
+    STORE_PAGE_HEADING,
+} from "@/shared/lib/shop/storeContent";
 import HeroCarousel from "@/modules/external/store/HeroCarousel";
 import TrustStrip from "@/modules/external/store/TrustStrip";
 import CategoryShowcase from "@/modules/external/store/CategoryShowcase";
@@ -16,6 +21,8 @@ import DealOfTheDay from "@/modules/external/store/DealOfTheDay";
 import FeaturedRow from "@/modules/external/store/FeaturedRow";
 import BrandStrip from "@/modules/external/store/BrandStrip";
 import ShopCatalogClient from "@/modules/external/shop/ShopCatalogClient";
+import JsonLd from "@/shared/components/JsonLd";
+import { buildSiteLd } from "@/shared/lib/seo/jsonLd";
 
 // Title and description live in the layout. Only the canonical belongs here:
 // this page reads ?q= and ?category=, so without it every search term and
@@ -90,6 +97,12 @@ export default async function StoreHomePage({
 
     return (
         <>
+            {/* Organization + WebSite + Store, emitted once for the whole site. */}
+            <JsonLd data={buildSiteLd()} />
+
+            {/* The page's single h1 — see STORE_PAGE_HEADING for why it is hidden. */}
+            <h1 className="sr-only">{STORE_PAGE_HEADING}</h1>
+
             <HeroCarousel slides={HERO_SLIDES} />
 
             <TrustStrip />

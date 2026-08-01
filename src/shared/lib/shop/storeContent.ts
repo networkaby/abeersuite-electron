@@ -36,6 +36,23 @@ export type PromoBanner = {
 
 export type BrandLogo = { name: string; logoUrl: string };
 
+/**
+ * The store home page's one true <h1>.
+ *
+ * The hero slides used to carry the h1 — three of them, one per slide, rotating
+ * on a timer. That gave the page three competing top-level headings, none of
+ * which said what the business actually is: a screen reader announced a
+ * different page title depending on when it arrived, and a crawler got a
+ * discount offer where the site's identity belongs.
+ *
+ * So the slides are h2 now (they are promotions, not the page subject) and this
+ * is the heading. It is visually hidden because the wordmark and the hero
+ * already carry the brand visually — the text exists for readers and crawlers
+ * that need the structure spelled out. Edit the string here to change it.
+ */
+export const STORE_PAGE_HEADING =
+    "Buy computers, CCTV systems and office supplies online — Network Service";
+
 /** Auto-rotating top hero. Three slides keep load light and message fresh. */
 export const HERO_SLIDES: HeroSlide[] = [
     {

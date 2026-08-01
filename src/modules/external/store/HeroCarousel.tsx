@@ -108,9 +108,12 @@ export default function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
                                     <span className={cn("inline-block size-1.5 rounded-full", ACCENT_DOT[s.accent])} />
                                     {s.eyebrow}
                                 </p>
-                                <h1 className="mt-3 text-balance text-3xl font-bold leading-[1.15] tracking-tight sm:text-5xl lg:text-6xl">
+                                {/* h2, not h1: a slide is a promotion, not the page's
+                                    subject — and three rotating h1s meant the page had
+                                    no stable heading at all. The h1 lives on the page. */}
+                                <h2 className="mt-3 text-balance text-3xl font-bold leading-[1.15] tracking-tight sm:text-5xl lg:text-6xl">
                                     {s.title}
-                                </h1>
+                                </h2>
                                 <p className="mt-3 max-w-lg text-sm leading-relaxed text-white/90 sm:mt-4 sm:text-lg">
                                     {s.subtitle}
                                 </p>
