@@ -7,6 +7,7 @@ import { LEGAL_LINKS } from "@/shared/lib/legal/legalContent";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import AboutBusinessNote from "@/modules/external/shop/AboutBusinessNote";
 import ShopBrandMark from "@/modules/external/shop/ShopBrandMark";
+import PaymentMethodLogos from "@/modules/external/shop/PaymentMethodLogos";
 
 export default function ShopFooter() {
     const pathname = usePathname();
@@ -128,7 +129,7 @@ export default function ShopFooter() {
             <div className="border-t border-border/60 px-4 py-6 text-xs text-muted-foreground">
                 <div className="mx-auto flex max-w-6xl flex-col items-center gap-3 sm:flex-row sm:justify-between">
                     <p className="text-center sm:text-left">
-                        © {new Date().getFullYear()} {COMPANY_DETAILS.brandName} · Prices in {COMPANY_DETAILS.currencySymbol} · Payments via Razorpay when configured
+                        © {new Date().getFullYear()} {COMPANY_DETAILS.brandName} · Prices in {COMPANY_DETAILS.currencySymbol}
                     </p>
                     <nav aria-label="Legal" className="flex flex-wrap justify-center gap-x-4 gap-y-1">
                         {LEGAL_LINKS.map((link) => (
@@ -137,6 +138,9 @@ export default function ShopFooter() {
                             </Link>
                         ))}
                     </nav>
+                </div>
+                <div className="mx-auto mt-4 flex max-w-6xl justify-center sm:justify-end">
+                    <PaymentMethodLogos />
                 </div>
             </div>
         </footer>
