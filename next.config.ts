@@ -15,6 +15,25 @@ const nextConfig: NextConfig = {
     contentDispositionType: "attachment",
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
   },
+  // The internal build tells every crawler, on every response, not to index it.
+  //
+  // robots.txt is a request that a crawler may ignore, and it is not read at all
+  // on a redirect — which is exactly what an anonymous hit on /office returns.
+  // This header travels with the response itself, so the instruction arrives even
+  // when no HTML (and therefore no <meta name="robots">) is rendered.
+  //
+  // Reads APP_MODE directly rather than importing lib/appMode: next.config runs
+  // outside the app's module graph, and appMode pulls in the company constants.
+  // The default-to-office fallback is deliberately the same as appMode's.
+  async headers() {
+    if (process.env.APP_MODE === "public") return [];
+    return [
+      {
+        source: "/:path*",
+        headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }],
+      },
+    ];
+  },
   // Compatibility redirects for legacy URLs that pre-date the (route-group)/route
   // restructure. Catches stored notification links and stale bookmarks while the
   // source-code refs are migrated.
