@@ -38,6 +38,11 @@ export interface SearchableSelectProps<V extends string | number> {
     triggerClassName?: string;
     /** Optional aria-label for the trigger button. */
     ariaLabel?: string;
+    /** When set, shows a pinned "+ New …" row above the list (unaffected by
+     *  search). Resolving with a value auto-selects it via onChange. */
+    onCreate?: () => Promise<V | null>;
+    /** Label for the onCreate row. Defaults to "+ New". */
+    createLabel?: string;
 }
 
 export function SearchableSelect<V extends string | number>({
@@ -48,6 +53,8 @@ export function SearchableSelect<V extends string | number>({
     clearable = true,
     triggerClassName,
     ariaLabel,
+    onCreate,
+    createLabel = "+ New",
 }: SearchableSelectProps<V>) {
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState("");
@@ -109,6 +116,13 @@ export function SearchableSelect<V extends string | number>({
     function commit(v: V) {
         onChange(v);
         setOpen(false);
+    }
+
+    async function commitCreate() {
+        if (!onCreate) return;
+        setOpen(false);
+        const v = await onCreate();
+        if (v != null) onChange(v);
     }
 
     return (
@@ -178,6 +192,17 @@ export function SearchableSelect<V extends string | number>({
                                     className="block w-full px-2 py-1 text-left text-sm text-muted-foreground hover:bg-muted"
                                 >
                                     — clear —
+                                </button>
+                            </li>
+                        ) : null}
+                        {onCreate ? (
+                            <li>
+                                <button
+                                    type="button"
+                                    onClick={() => { void commitCreate(); }}
+                                    className="block w-full px-2 py-1 text-left text-sm text-primary hover:bg-muted"
+                                >
+                                    {createLabel}
                                 </button>
                             </li>
                         ) : null}

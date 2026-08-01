@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { RefreshCw, Trash2 } from "lucide-react";
 import { flattenTree, treeLabel, type MasterKind } from "@/modules/inventory/components/InventoryMasterDropdownQuickDialog";
+import { SearchableSelect } from "@/shared/components/SearchableSelect";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -342,30 +343,18 @@ export function InvProductFormFields({
                     </div>
                     <div className="space-y-2">
                         <Label>Unit</Label>
-                        <Select
-                            value={form.unitId || "__none__"}
-                            onValueChange={async (v) => {
-                                if (v === "__new__" && onCreateMaster) {
-                                    const id = await onCreateMaster("unit");
-                                    if (id != null) setForm((f) => ({ ...f, unitId: String(id) }));
-                                    return;
-                                }
-                                setForm((f) => ({ ...f, unitId: v === "__none__" ? "" : v }));
-                            }}
-                        >
-                            <SelectTrigger>
-                                <SelectValue placeholder="Select unit" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="__none__">Select…</SelectItem>
-                                {onCreateMaster ? <SelectItem value="__new__">+ New unit…</SelectItem> : null}
-                                {units.map((u) => (
-                                    <SelectItem key={u.id} value={String(u.id)}>
-                                        {u.code} — {u.label}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        <SearchableSelect
+                            value={form.unitId ? Number(form.unitId) : null}
+                            onChange={(v) => setForm((f) => ({ ...f, unitId: v == null ? "" : String(v) }))}
+                            onCreate={onCreateMaster ? () => onCreateMaster("unit") : undefined}
+                            createLabel="+ New unit…"
+                            clearable={false}
+                            placeholder="Select unit"
+                            options={units.map((u) => ({
+                                value: u.id,
+                                label: `${u.code ?? ""} — ${u.label ?? ""}`,
+                            }))}
+                        />
                     </div>
                     <div className="space-y-2">
                         <Label>Model no.</Label>
@@ -373,111 +362,57 @@ export function InvProductFormFields({
                     </div>
                     <div className="space-y-2">
                         <Label>Category</Label>
-                        <Select
-                            value={form.categoryId || "__none__"}
-                            onValueChange={async (v) => {
-                                if (v === "__new__" && onCreateMaster) {
-                                    const id = await onCreateMaster("category");
-                                    if (id != null) setForm((f) => ({ ...f, categoryId: String(id) }));
-                                    return;
-                                }
-                                setForm((f) => ({ ...f, categoryId: v === "__none__" ? "" : v }));
-                            }}
-                        >
-                            <SelectTrigger>
-                                <SelectValue placeholder="Optional" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="__none__">None</SelectItem>
-                                {onCreateMaster ? <SelectItem value="__new__">+ New category…</SelectItem> : null}
-                                {flattenTree(categories).map((r) => (
-                                    <SelectItem key={r.id} value={String(r.id)}>
-                                        {treeLabel(r)}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        <SearchableSelect
+                            value={form.categoryId ? Number(form.categoryId) : null}
+                            onChange={(v) => setForm((f) => ({ ...f, categoryId: v == null ? "" : String(v) }))}
+                            onCreate={onCreateMaster ? () => onCreateMaster("category") : undefined}
+                            createLabel="+ New category…"
+                            placeholder="Optional"
+                            options={flattenTree(categories).map((r) => ({
+                                value: r.id,
+                                label: treeLabel(r),
+                                leaf: r.name,
+                                searchText: r.name,
+                            }))}
+                        />
                     </div>
                     <div className="space-y-2">
                         <Label>Group</Label>
-                        <Select
-                            value={form.groupId || "__none__"}
-                            onValueChange={async (v) => {
-                                if (v === "__new__" && onCreateMaster) {
-                                    const id = await onCreateMaster("group");
-                                    if (id != null) setForm((f) => ({ ...f, groupId: String(id) }));
-                                    return;
-                                }
-                                setForm((f) => ({ ...f, groupId: v === "__none__" ? "" : v }));
-                            }}
-                        >
-                            <SelectTrigger>
-                                <SelectValue placeholder="Optional" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="__none__">None</SelectItem>
-                                {onCreateMaster ? <SelectItem value="__new__">+ New group…</SelectItem> : null}
-                                {flattenTree(groups).map((r) => (
-                                    <SelectItem key={r.id} value={String(r.id)}>
-                                        {treeLabel(r)}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        <SearchableSelect
+                            value={form.groupId ? Number(form.groupId) : null}
+                            onChange={(v) => setForm((f) => ({ ...f, groupId: v == null ? "" : String(v) }))}
+                            onCreate={onCreateMaster ? () => onCreateMaster("group") : undefined}
+                            createLabel="+ New group…"
+                            placeholder="Optional"
+                            options={flattenTree(groups).map((r) => ({
+                                value: r.id,
+                                label: treeLabel(r),
+                                leaf: r.name,
+                                searchText: r.name,
+                            }))}
+                        />
                     </div>
                     <div className="space-y-2">
                         <Label>Brand</Label>
-                        <Select
-                            value={form.brandId || "__none__"}
-                            onValueChange={async (v) => {
-                                if (v === "__new__" && onCreateMaster) {
-                                    const id = await onCreateMaster("brand");
-                                    if (id != null) setForm((f) => ({ ...f, brandId: String(id) }));
-                                    return;
-                                }
-                                setForm((f) => ({ ...f, brandId: v === "__none__" ? "" : v }));
-                            }}
-                        >
-                            <SelectTrigger>
-                                <SelectValue placeholder="Optional" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="__none__">None</SelectItem>
-                                {onCreateMaster ? <SelectItem value="__new__">+ New brand…</SelectItem> : null}
-                                {brands.map((b) => (
-                                    <SelectItem key={b.id} value={String(b.id)}>
-                                        {label(b)}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        <SearchableSelect
+                            value={form.brandId ? Number(form.brandId) : null}
+                            onChange={(v) => setForm((f) => ({ ...f, brandId: v == null ? "" : String(v) }))}
+                            onCreate={onCreateMaster ? () => onCreateMaster("brand") : undefined}
+                            createLabel="+ New brand…"
+                            placeholder="Optional"
+                            options={brands.map((b) => ({ value: b.id, label: label(b) }))}
+                        />
                     </div>
                     <div className="space-y-2">
                         <Label>Warranty term</Label>
-                        <Select
-                            value={form.warrantyTermId || "__none__"}
-                            onValueChange={async (v) => {
-                                if (v === "__new__" && onCreateMaster) {
-                                    const id = await onCreateMaster("warranty");
-                                    if (id != null) setForm((f) => ({ ...f, warrantyTermId: String(id) }));
-                                    return;
-                                }
-                                setForm((f) => ({ ...f, warrantyTermId: v === "__none__" ? "" : v }));
-                            }}
-                        >
-                            <SelectTrigger>
-                                <SelectValue placeholder="Optional" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="__none__">None</SelectItem>
-                                {onCreateMaster ? <SelectItem value="__new__">+ New warranty term…</SelectItem> : null}
-                                {warrantyTerms.map((w) => (
-                                    <SelectItem key={w.id} value={String(w.id)}>
-                                        {label(w)}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        <SearchableSelect
+                            value={form.warrantyTermId ? Number(form.warrantyTermId) : null}
+                            onChange={(v) => setForm((f) => ({ ...f, warrantyTermId: v == null ? "" : String(v) }))}
+                            onCreate={onCreateMaster ? () => onCreateMaster("warranty") : undefined}
+                            createLabel="+ New warranty term…"
+                            placeholder="Optional"
+                            options={warrantyTerms.map((w) => ({ value: w.id, label: label(w) }))}
+                        />
                     </div>
                     <div className="space-y-2 sm:col-span-2">
                         <Label>Notes</Label>
