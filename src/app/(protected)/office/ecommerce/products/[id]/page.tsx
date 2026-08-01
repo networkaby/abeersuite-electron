@@ -1,27 +1,36 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import axios from "axios";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import ProductForm from "@/modules/ecommerce/components/ProductForm";
 import type { ShopProductAdmin } from "@/modules/ecommerce/lib/productAdmin";
+import { InvProductDialog } from "@/modules/inventory/components/InvProductDialog";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { SlidersHorizontal } from "lucide-react";
 
 export default function EcommerceProductEditPage() {
     const params = useParams();
     const router = useRouter();
     const id = Number(params.id);
     const [product, setProduct] = useState<ShopProductAdmin | null>(null);
+    // Deep edit = the full Inventory product master dialog (brand, warranty
+    // term, category, tax…) — fields this shop-facing form doesn't expose.
+    const [deepEditOpen, setDeepEditOpen] = useState(false);
 
-    useEffect(() => {
+    const load = useCallback(() => {
         if (!Number.isFinite(id)) return;
         axios
             .get<ShopProductAdmin>(`/api/ecommerce/products/${id}`)
             .then((r) => setProduct(r.data))
             .catch(() => setProduct(null));
     }, [id]);
+
+    useEffect(() => {
+        load();
+    }, [load]);
 
     if (!Number.isFinite(id)) {
         return <p className="text-destructive">Invalid product id.</p>;
@@ -38,7 +47,27 @@ export default function EcommerceProductEditPage() {
                     <Link href="/office/ecommerce/products">← Products</Link>
                 </Button>
                 <h1 className="text-2xl font-semibold tracking-tight">Edit product</h1>
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="ml-auto"
+                    onClick={() => setDeepEditOpen(true)}
+                >
+                    <SlidersHorizontal className="size-4" />
+                    Deep edit
+                </Button>
             </div>
+            <InvProductDialog
+                open={deepEditOpen}
+                onOpenChange={setDeepEditOpen}
+                editId={id}
+                onSaved={() => {
+                    setDeepEditOpen(false);
+                    load();
+                    toast.success("Product master updated");
+                }}
+            />
             <ProductForm
                 initial={product}
                 submitLabel="Save changes"

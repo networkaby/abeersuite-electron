@@ -28,6 +28,7 @@ import {
     type GstRateOpt,
     type InvProductFormState,
     type InvProductFormTab,
+    withDefaultCodeRows,
 } from "@/modules/inventory/components/InvProductFormFields";
 import { InventoryMasterDropdownQuickDialog, type MasterKind } from "@/modules/inventory/components/InventoryMasterDropdownQuickDialog";
 import { generateSku } from "@/modules/inventory/lib/sku";
@@ -108,7 +109,7 @@ function rowToForm(p: InvProductRow): InvProductFormState {
         brandId: p.brandId != null ? String(p.brandId) : "",
         warrantyTermId: p.warrantyTermId != null ? String(p.warrantyTermId) : "",
         modelNo: p.modelNo ?? "",
-        codes: (p.codes ?? []).map((c) => ({ kind: c.kind, value: c.value })),
+        codes: withDefaultCodeRows((p.codes ?? []).map((c) => ({ kind: c.kind, value: c.value }))),
         notes: p.notes ?? "",
         requireSaleNote: p.requireSaleNote ?? false,
         isActive: p.isActive,

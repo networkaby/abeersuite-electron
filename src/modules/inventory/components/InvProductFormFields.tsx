@@ -68,6 +68,22 @@ export type InvProductFormState = {
     taxability: string;
 };
 
+/** Row order for the blank starter rows — EAN first because it's the code we
+ *  scan/enter most; any kind not listed here follows in PRODUCT_CODE_KINDS order. */
+const CODE_ROW_ORDER: readonly ProductCodeKind[] = [
+    "EAN",
+    "UPC",
+    ...PRODUCT_CODE_KINDS.filter((k) => k !== "EAN" && k !== "UPC"),
+];
+
+/** One blank row per code kind, so every kind is ready to type into without
+ *  clicking "+ Add code" first. Existing codes keep their value and position;
+ *  only the missing kinds are appended. Blank rows are dropped on save. */
+export function withDefaultCodeRows(codes: ProductCode[]): ProductCode[] {
+    const missing = CODE_ROW_ORDER.filter((k) => !codes.some((c) => c.kind === k));
+    return [...codes, ...missing.map((kind) => ({ kind, value: "" }))];
+}
+
 export const emptyInvProductForm: InvProductFormState = {
     sku: "",
     name: "",
@@ -80,7 +96,7 @@ export const emptyInvProductForm: InvProductFormState = {
     brandId: "",
     warrantyTermId: "",
     modelNo: "",
-    codes: [],
+    codes: withDefaultCodeRows([]),
     notes: "",
     requireSaleNote: false,
     isActive: true,
@@ -128,7 +144,10 @@ function taxSourceLabel(src: EffectiveTax["gstSource"]): string {
     return String(src);
 }
 
-export type InvProductFormTab = "basics" | "pricing" | "stock" | "tax" | "opening" | "online";
+/** Three tabs: Basics · Pricing & stock · Opening & tax. Shop-listing fields
+ *  (name, slug, images, description) are edited at /office/ecommerce/products/[id],
+ *  not here — this dialog owns the inventory master only. */
+export type InvProductFormTab = "basics" | "pricing" | "tax";
 
 export function InvProductFormFields({
     form,
@@ -269,40 +288,61 @@ export function InvProductFormFields({
 
     return (
         <Tabs defaultValue={defaultTab} className="w-full">
-            {/* Horizontal scroll on narrow viewports so all 5 tab labels stay
+            {/* Horizontal scroll on narrow viewports so all tab labels stay
                 fully readable; on desktop they fit comfortably side-by-side. */}
             <TabsList className="flex w-full justify-start overflow-x-auto whitespace-nowrap">
                 <TabsTrigger value="basics">Basics</TabsTrigger>
-                <TabsTrigger value="pricing">Pricing</TabsTrigger>
-                <TabsTrigger value="stock">Stock control</TabsTrigger>
-                <TabsTrigger value="tax">Tax</TabsTrigger>
-                <TabsTrigger value="opening">Opening</TabsTrigger>
-                <TabsTrigger value="online">Online listing</TabsTrigger>
+                <TabsTrigger value="pricing">Pricing &amp; stock</TabsTrigger>
+                <TabsTrigger value="tax">Tax &amp; opening</TabsTrigger>
             </TabsList>
 
             <TabsContent value="basics" className={tabPanel}>
                 <div className="grid gap-4 sm:grid-cols-2">
+                    {/* SKU shares its row with the two product-wide switches —
+                        they're short and unrelated to the master fields below,
+                        so keeping them here saves a full row at the bottom. */}
                     <div className="space-y-2 sm:col-span-2">
                         <Label>SKU</Label>
-                        <div className="flex items-center gap-2">
-                            <Input
-                                value={form.sku}
-                                onChange={(e) => setForm((f) => ({ ...f, sku: e.target.value }))}
-                                disabled={skuDisabled}
-                                className="font-mono"
-                                placeholder="6-digit code"
-                            />
-                            {!skuDisabled && (
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="icon-sm"
-                                    onClick={() => setForm((f) => ({ ...f, sku: generateSku() }))}
-                                    title="Generate random 6-digit SKU"
-                                >
-                                    <RefreshCw className="size-4" />
-                                </Button>
-                            )}
+                        <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+                            <div className="flex min-w-[220px] flex-1 items-center gap-2">
+                                <Input
+                                    value={form.sku}
+                                    onChange={(e) => setForm((f) => ({ ...f, sku: e.target.value }))}
+                                    disabled={skuDisabled}
+                                    className="font-mono"
+                                    placeholder="6-digit code"
+                                />
+                                {!skuDisabled && (
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="icon-sm"
+                                        onClick={() => setForm((f) => ({ ...f, sku: generateSku() }))}
+                                        title="Generate random 6-digit SKU"
+                                    >
+                                        <RefreshCw className="size-4" />
+                                    </Button>
+                                )}
+                            </div>
+                            <label
+                                className="flex items-center gap-2 whitespace-nowrap text-sm"
+                                title="Cashier must fill the line note (serial / colour / config) before checkout."
+                            >
+                                <input
+                                    type="checkbox"
+                                    checked={form.requireSaleNote}
+                                    onChange={(e) => setForm((f) => ({ ...f, requireSaleNote: e.target.checked }))}
+                                />
+                                Require note on sale
+                            </label>
+                            <label className="flex items-center gap-2 whitespace-nowrap text-sm">
+                                <input
+                                    type="checkbox"
+                                    checked={form.isActive}
+                                    onChange={(e) => setForm((f) => ({ ...f, isActive: e.target.checked }))}
+                                />
+                                Active
+                            </label>
                         </div>
                         <p className="text-[11px] text-muted-foreground">Auto-filled with a random 6-digit code. Editable; must stay unique.</p>
                     </div>
@@ -501,23 +541,12 @@ export function InvProductFormFields({
                         })()}
                     </div>
 
-                    <div className="flex flex-col gap-2 sm:col-span-2">
-                        <label className="flex items-center gap-2 text-sm">
-                            <input type="checkbox" checked={form.requireSaleNote} onChange={(e) => setForm((f) => ({ ...f, requireSaleNote: e.target.checked }))} />
-                            Require note on sale
-                            <span className="text-xs text-muted-foreground">— cashier must fill the line note (serial / colour / config) before checkout.</span>
-                        </label>
-                        <label className="flex items-center gap-2 text-sm">
-                            <input type="checkbox" checked={form.isActive} onChange={(e) => setForm((f) => ({ ...f, isActive: e.target.checked }))} />
-                            Active
-                        </label>
-                    </div>
                 </div>
             </TabsContent>
 
             <TabsContent value="pricing" className={tabPanel}>
                 <p className="text-xs text-muted-foreground mb-3">
-                    All amounts in rupees (₹). Cost is derived from the Opening tab&apos;s
+                    All amounts in rupees (₹). Cost is derived from the Tax &amp; opening tab&apos;s
                     opening rate + subsequent Purchase vouchers — set it there, not here.
                 </p>
                 <div className="grid gap-4 sm:grid-cols-2">
@@ -542,10 +571,8 @@ export function InvProductFormFields({
                         <p className="text-[11px] text-muted-foreground">Maximum retail price (printed).</p>
                     </div>
                 </div>
-            </TabsContent>
 
-            <TabsContent value="stock" className={tabPanel}>
-                <div className="space-y-2">
+                <div className="space-y-2 mt-6 border-t border-border pt-4">
                     <div className="flex items-center justify-between">
                         <p className="text-sm font-semibold">Scannable codes</p>
                         <p className="text-[11px] text-muted-foreground">Barcode / EAN / UPC — each must be unique across products.</p>
@@ -701,10 +728,9 @@ export function InvProductFormFields({
                         </div>
                     </div>
                 )}
-            </TabsContent>
 
-            <TabsContent value="opening" className={tabPanel}>
-                <p className="text-xs text-muted-foreground mb-3">
+                <p className="text-sm font-semibold mt-6 border-t border-border pt-4">Opening stock</p>
+                <p className="text-xs text-muted-foreground mb-3 mt-1">
                     Books-beginning quantity for migration from another system. Saved directly to{" "}
                     <code>InvProduct.openingStock / openingRate / openingValue</code>. Always effective from
                     the start of the books; vouchers add or subtract from there.
@@ -740,69 +766,6 @@ export function InvProductFormFields({
                 </p>
             </TabsContent>
 
-            <TabsContent value="online" className={tabPanel}>
-                <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="space-y-2 sm:col-span-2">
-                        <Label>Online display name</Label>
-                        <div className="flex items-center gap-2">
-                            <Input
-                                value={form.shopSubheading}
-                                onChange={(e) => {
-                                    onlineNameDirty.current = true;
-                                    setForm((f) => ({ ...f, shopSubheading: e.target.value }));
-                                }}
-                                placeholder="Shown on /shop product cards & detail page"
-                            />
-                            {namingConfig && (
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="icon-sm"
-                                    onClick={() => regenField("onlineName")}
-                                    title="Re-generate online name from naming convention"
-                                >
-                                    <RefreshCw className="size-4" />
-                                </Button>
-                            )}
-                        </div>
-                        {namingConfig && !onlineNameDirty.current ? (
-                            <p className="text-[11px] text-muted-foreground">Auto-filled from naming convention. Type to override.</p>
-                        ) : null}
-                    </div>
-                    <div className="space-y-2 sm:col-span-2">
-                        <Label>URL slug</Label>
-                        <div className="flex items-center gap-2">
-                            <Input
-                                value={form.slug}
-                                onChange={(e) => {
-                                    slugDirty.current = true;
-                                    setForm((f) => ({ ...f, slug: e.target.value }));
-                                }}
-                                className="font-mono flex-1"
-                                placeholder="my-product-handle"
-                            />
-                            {namingConfig && (
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="icon-sm"
-                                    onClick={() => regenField("slug")}
-                                    title="Re-generate slug from naming convention"
-                                >
-                                    <RefreshCw className="size-4" />
-                                </Button>
-                            )}
-                        </div>
-                        <p className="text-[11px] text-muted-foreground">
-                            URL handle for <code>/shop/product/&lt;slug&gt;</code>. Must be unique.
-                            {namingConfig && !slugDirty.current ? " Auto-filled from naming convention; type to override." : ""}
-                        </p>
-                    </div>
-                    <p className="text-xs text-muted-foreground sm:col-span-2">
-                        Other shop fields (image, gallery, description, badge) aren&apos;t exposed here yet — use <em>Edit shop listing</em> from the product list.
-                    </p>
-                </div>
-            </TabsContent>
         </Tabs>
     );
 }
