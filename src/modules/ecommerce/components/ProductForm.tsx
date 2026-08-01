@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { extractApiError } from "@/shared/lib/api";
@@ -18,7 +18,8 @@ import {
     type ShopPublishRules,
 } from "@/modules/ecommerce/lib/shopQualification";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
-import { Check, X } from "lucide-react";
+import { Check, RefreshCw, X } from "lucide-react";
+import type { ProductNaming } from "@/modules/inventory/lib/regenerateNames";
 
 function rupeesFromPaise(p: number) {
     return (p / 100).toFixed(2);
@@ -89,6 +90,74 @@ export default function ProductForm({
             .then((r) => setRules(r.data.rules))
             .catch(() => setRules(DEFAULT_SHOP_PUBLISH_RULES));
     }, []);
+
+    // ── Naming convention (Settings → Naming Convention) ──────────────────
+    // Online display name + slug are built from the product's masters (brand /
+    // group / model / warranty / …). Those masters are edited in Deep edit, not
+    // here, so this form asks the server what the convention produces rather
+    // than re-deriving it client-side — one naming engine, no drift.
+    const [regenBusy, setRegenBusy] = useState<null | "onlineName" | "slug" | "both">(null);
+
+    const regenerate = useCallback(
+        async (which: "onlineName" | "slug" | "both", silent = false) => {
+            const productId = initial?.id;
+            if (!productId) return;
+            setRegenBusy(which);
+            try {
+                const { data } = await axios.get<ProductNaming>(`/api/inventory/products/${productId}/naming`);
+                const touched: string[] = [];
+                if (which !== "slug" && data.onlineName) {
+                    setSubheading(data.onlineName);
+                    touched.push("online name");
+                }
+                if (which !== "onlineName" && data.slugEnabled && data.slug) {
+                    setSlug(data.slug);
+                    touched.push("slug");
+                }
+                if (touched.length === 0) {
+                    if (!silent) toast.error("Naming convention produced nothing for this product");
+                } else if (silent) {
+                    toast.info(`Masters changed — ${touched.join(" and ")} rebuilt. Review, then Save.`);
+                } else {
+                    toast.success(`Rebuilt ${touched.join(" and ")} from the naming convention`);
+                }
+            } catch (e: unknown) {
+                if (!silent) toast.error(extractApiError(e, "Couldn't read the naming convention"));
+            } finally {
+                setRegenBusy(null);
+            }
+        },
+        [initial?.id]
+    );
+
+    // Auto-rebuild when a naming source actually changed — i.e. the operator
+    // came back from Deep edit having swapped the brand / group / warranty. The
+    // signature is compared across `initial` reloads, so an unrelated refetch
+    // (saving price, photos) never rewrites the fields.
+    //
+    // ONLY while the product is unpublished. Before listing, masters are still
+    // being settled and a rebuilt slug costs nothing. Once it is live the slug
+    // IS a public URL that customers and search engines hold — a brand edit must
+    // not silently move it, so we stop auto-rebuilding and say so; the ⟳ buttons
+    // still force a rebuild when the operator genuinely wants one.
+    const namingSig = [
+        initial?.brandId, initial?.groupId, initial?.categoryId,
+        initial?.warrantyTermId, initial?.unitId,
+    ].join("|");
+    const lastNamingSig = useRef<string | null>(null);
+    const published = initial?.isListedInShop ?? false;
+
+    useEffect(() => {
+        const first = lastNamingSig.current === null;
+        const changed = !first && lastNamingSig.current !== namingSig;
+        lastNamingSig.current = namingSig;
+        if (!changed) return;
+        if (published) {
+            toast.info("Masters changed. This product is live, so its slug was left alone — use ⟳ to rebuild it.");
+            return;
+        }
+        void regenerate("both", true);
+    }, [namingSig, published, regenerate]);
 
     useEffect(() => {
         if (!initial) return;
@@ -295,7 +364,21 @@ export default function ProductForm({
                 <div className="grid grid-cols-2 gap-3">
                     <div className="grid gap-2">
                         <Label>Slug (optional)</Label>
-                        <Input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="storefront URL handle" />
+                        <div className="flex items-center gap-2">
+                            <Input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="storefront URL handle" />
+                            {initial?.id ? (
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="icon-sm"
+                                    disabled={regenBusy !== null}
+                                    onClick={() => void regenerate("slug")}
+                                    title="Rebuild the slug from Settings → Naming Convention. Changing a live slug breaks its old URL."
+                                >
+                                    <RefreshCw className="size-4" />
+                                </Button>
+                            ) : null}
+                        </div>
                     </div>
                     <div className="grid gap-2">
                         <Label>Shop category</Label>
@@ -303,8 +386,22 @@ export default function ProductForm({
                     </div>
                 </div>
                 <div className="grid gap-2">
-                    <Label>Subheading</Label>
-                    <Input value={subheading} onChange={(e) => setSubheading(e.target.value)} />
+                    <Label>Subheading (online display name)</Label>
+                    <div className="flex items-center gap-2">
+                        <Input value={subheading} onChange={(e) => setSubheading(e.target.value)} />
+                        {initial?.id ? (
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="icon-sm"
+                                disabled={regenBusy !== null}
+                                onClick={() => void regenerate("onlineName")}
+                                title="Rebuild from Settings → Naming Convention"
+                            >
+                                <RefreshCw className="size-4" />
+                            </Button>
+                        ) : null}
+                    </div>
                 </div>
                 <div className="grid gap-2">
                     <Label>Description</Label>

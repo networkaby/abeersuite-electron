@@ -13,10 +13,86 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import * as Sentry from "@sentry/nextjs";
 import {
     buildOfflineName,
+    buildOnlineName,
+    buildOnlineSlug,
     DEFAULT_NAMING_CONFIG,
     type NamingConfigShape,
     type NamingMasters,
 } from "./productName";
+
+/// The master columns every naming build needs. One select, one mapper — the
+/// bulk sweep and the single-product build must see identical inputs or the
+/// two paths drift.
+const NAMING_SELECT = {
+    id: true,
+    name: true,
+    namePart: true,
+    modelNo: true,
+    attrsJson: true,
+    brand: { select: { name: true } },
+    category: { select: { name: true } },
+    group: { select: { name: true } },
+    warrantyTerm: { select: { name: true } },
+    unit: { select: { code: true } },
+} as const;
+
+type NamingRow = {
+    namePart: string | null;
+    modelNo: string | null;
+    attrsJson: unknown;
+    brand: { name: string } | null;
+    category: { name: string } | null;
+    group: { name: string } | null;
+    warrantyTerm: { name: string } | null;
+    unit: { code: string } | null;
+};
+
+function mastersOf(p: NamingRow): NamingMasters {
+    return {
+        brand: p.brand,
+        category: p.category,
+        group: p.group,
+        warranty: p.warrantyTerm,
+        unit: p.unit ? { code: p.unit.code } : null,
+        modelNo: p.modelNo,
+        attrs: (p.attrsJson as Record<string, string> | null) ?? null,
+        userPart: p.namePart,
+    };
+}
+
+/** What the naming convention WOULD produce for one product, right now. */
+export interface ProductNaming {
+    name: string;
+    onlineName: string;
+    slug: string;
+    /** False when the convention has the slug block switched off in Settings. */
+    slugEnabled: boolean;
+}
+
+/**
+ * Build all three names for a single product from its current masters.
+ *
+ * Read-only — it computes and returns, it never writes. The caller decides
+ * whether to keep the result (the shop product form shows it for review, then
+ * saves on the operator's Save). Deliberately unlike the bulk sweep, which
+ * refuses to touch online name / slug at all: rewriting one product's URL under
+ * an operator who is looking at it is a different act from rewriting a thousand.
+ */
+export async function buildProductNaming(productId: number): Promise<ProductNaming | null> {
+    const [p, config] = await Promise.all([
+        prisma.invProduct.findUnique({ where: { id: productId }, select: NAMING_SELECT }),
+        loadNamingConfig(),
+    ]);
+    if (!p) return null;
+
+    const masters = mastersOf(p);
+    return {
+        name: buildOfflineName(masters, config).trim(),
+        onlineName: buildOnlineName(masters, config).trim(),
+        slug: buildOnlineSlug(masters, config).trim(),
+        slugEnabled: config.slugEnabled !== false,
+    };
+}
 
 /// Which products to rebuild. Exactly one FK filter is set by a master rename;
 /// `all` is used when the naming convention itself changes. An empty scope is a
@@ -37,7 +113,7 @@ export interface RegenNameResult {
 
 /// Load the singleton naming config as a full NamingConfigShape (DEFAULT filled
 /// in for any missing field), matching what the API GET returns to the client.
-async function loadNamingConfig(): Promise<NamingConfigShape> {
+export async function loadNamingConfig(): Promise<NamingConfigShape> {
     const row = await prisma.invNamingConfig.findFirst({ orderBy: { id: "asc" } });
     return { ...DEFAULT_NAMING_CONFIG, ...(row ?? {}) } as unknown as NamingConfigShape;
 }
@@ -68,21 +144,7 @@ export async function regenerateProductNames(
 
     const config = cfg ?? (await loadNamingConfig());
 
-    const products = await prisma.invProduct.findMany({
-        where,
-        select: {
-            id: true,
-            name: true,
-            namePart: true,
-            modelNo: true,
-            attrsJson: true,
-            brand: { select: { name: true } },
-            category: { select: { name: true } },
-            group: { select: { name: true } },
-            warrantyTerm: { select: { name: true } },
-            unit: { select: { code: true } },
-        },
-    });
+    const products = await prisma.invProduct.findMany({ where, select: NAMING_SELECT });
 
     const updates: Array<{ id: number; name: string }> = [];
     for (const p of products) {
@@ -93,17 +155,7 @@ export async function regenerateProductNames(
         // Matches the grid / dialog rule (patchWithRegen).
         if (!p.namePart || !p.namePart.trim()) continue;
 
-        const masters: NamingMasters = {
-            brand: p.brand,
-            category: p.category,
-            group: p.group,
-            warranty: p.warrantyTerm,
-            unit: p.unit ? { code: p.unit.code } : null,
-            modelNo: p.modelNo,
-            attrs: (p.attrsJson as Record<string, string> | null) ?? null,
-            userPart: p.namePart,
-        };
-        const next = buildOfflineName(masters, config).trim();
+        const next = buildOfflineName(mastersOf(p), config).trim();
         // Skip unchanged names, and never blank a name to "".
         if (next && next !== p.name) updates.push({ id: p.id, name: next });
     }
