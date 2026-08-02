@@ -2,10 +2,6 @@ import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs";
 
 const nextConfig: NextConfig = {
-  // firebase-admin resolves its transports with dynamic requires and ships
-  // optional native deps; bundling it makes the first request to any route that
-  // touches it hang. Load it from node_modules at runtime instead.
-  serverExternalPackages: ["firebase-admin"],
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "**" },
