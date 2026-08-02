@@ -5,7 +5,7 @@ import { selectPrimaryEmail } from "@/shared/lib/prisma/fragments";
 import { findPortalPerson } from "@/shared/lib/auth/findPortalPerson";
 import { normalizePortalEmail, normalizePortalPhone } from "@/shared/lib/auth/portalIdentifier";
 import { readTicket } from "@/shared/lib/auth/otpChallenge";
-import { verifyFirebaseIdToken } from "@/shared/lib/auth/firebaseAdmin";
+import { verifyFirebaseIdToken } from "@/shared/lib/auth/firebaseToken";
 import type { PortalAuthUser } from "@/shared/lib/auth/authorizePortal";
 
 /**

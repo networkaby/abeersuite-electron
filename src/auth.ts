@@ -189,10 +189,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 const token = typeof credentials?.token === "string" ? credentials.token : "";
                 if (!token) return null;
 
-                // Imported lazily: this module pulls in firebase-admin, and
-                // `auth` is also imported by proxy.ts (middleware, every
-                // request). A top-level import would bundle the whole Admin SDK
-                // into that hot path for no reason.
+                // Imported lazily: this module pulls in jose + the portal
+                // lookup code, and `auth` is also imported by proxy.ts
+                // (middleware, every request). Keep it out of that hot path.
                 const { authorizePortalPasswordless } = await import(
                     "@/shared/lib/auth/authorizePortalPasswordless"
                 );
