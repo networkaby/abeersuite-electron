@@ -12,6 +12,7 @@ import { formatInboxTime } from "@/shared/lib/format/formatDate";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { PathBreadcrumb } from "@/shared/components/PathBreadcrumb";
+import { INBOX_MESSAGES_POLL_MS } from "@/shared/lib/constants/polling";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -274,6 +275,9 @@ export default function InboxModule({
         if (!activeRoomId) return;
 
         const poll = async () => {
+            // Broadcast delivers in real time; this is only a dropped-socket safety
+            // net, so a tab nobody is looking at need not run it at all.
+            if (document.hidden) return;
             try {
                 const res = await axios.get<Message[]>(`/api/inbox/rooms/${activeRoomId}/messages`);
                 const incoming = res.data;
@@ -315,7 +319,7 @@ export default function InboxModule({
             } catch { /* silent */ }
         };
 
-        const interval = setInterval(poll, 30_000); // 30s — fallback only
+        const interval = setInterval(poll, INBOX_MESSAGES_POLL_MS); // fallback only
         return () => clearInterval(interval);
     }, [activeRoomId, currentUserId]);
 

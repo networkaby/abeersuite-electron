@@ -198,6 +198,32 @@ export async function getUnreadTotal(user: ResolvedUser) {
     return counts.reduce((sum, n) => sum + n, 0);
 }
 
+/**
+ * Unread in this user's system room only — the notification bell badge.
+ *
+ * Unlike the /api/notifications list this does NOT call ensureCoreRoomsForUser: it
+ * rides the sidebar count poll, and a poll must never write. No room yet simply
+ * means nothing to show; the room is created the moment the bell is opened.
+ */
+export async function getNotificationUnread(userId: number) {
+    const room = await prisma.chatRoom.findUnique({
+        where: { key: `system:${userId}` },
+        select: {
+            id: true,
+            members: { where: { userId }, select: { lastReadAt: true } },
+        },
+    });
+    if (!room) return 0;
+
+    const lastReadAt = room.members[0]?.lastReadAt ?? null;
+    return prisma.chatMessage.count({
+        where: {
+            roomId: room.id,
+            ...(lastReadAt ? { createdAt: { gt: lastReadAt } } : {}),
+        },
+    });
+}
+
 export async function getAccessibleRoom(user: ResolvedUser, roomId: string) {
     const room = await prisma.chatRoom.findFirst({
         where: {

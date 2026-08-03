@@ -4,6 +4,8 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { revalidateTag } from "next/cache";
+import { NAV_MASTERS_TAG } from "@/shared/lib/nav/navCounts";
 
 const patchSchema = z.object({
     label: z.string().trim().min(1).optional(),
@@ -24,6 +26,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             where: { id },
             data: data,
         });
+        revalidateTag(NAV_MASTERS_TAG, { expire: 0 });
         return NextResponse.json(pipeline);
     } catch (e) {
         return handleApiError(e, "Failed to update pipeline");
@@ -45,6 +48,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
             return NextResponse.json({ error: `Cannot delete: ${pipeline._count.tickets} ticket(s) use this pipeline` }, { status: 400 });
         }
         await prisma.pipeline.delete({ where: { id } });
+        revalidateTag(NAV_MASTERS_TAG, { expire: 0 });
         return NextResponse.json({ ok: true });
     } catch (e) {
         return handleApiError(e, "Failed to delete pipeline");

@@ -8,4 +8,5 @@ export { useEscape } from "./useEscape";
 export { useEscapeBack } from "./useEscapeBack";
 export { useNow } from "./useNow";
 export { useDebouncedValue } from "./useDebouncedValue";
-export { useNavCounts, useMarkSurfaceSeen, NAV_COUNTS_CHANGED } from "./useNavCounts";
+export { useNavCounts, useMarkSurfaceSeen, useInboxUnread, useNotificationUnread, refreshNavCounts, NAV_COUNTS_CHANGED } from "./useNavCounts";
+export { usePolling } from "./usePolling";

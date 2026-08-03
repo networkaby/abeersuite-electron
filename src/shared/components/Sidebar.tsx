@@ -11,13 +11,12 @@ import axios from "axios";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import {
     Settings, ChevronDown, LogOut,
-    PanelLeftClose, PanelLeftOpen, Sun, Moon, ShieldCheck,
+    PanelLeftClose, PanelLeftOpen, Sun, Moon, ShieldCheck, RefreshCw,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import NotificationBell from "@/modules/message/components/NotificationBell";
-import { useInboxUnread } from "@/modules/message/hooks/useInboxUnread";
-import { useNavCounts } from "@/shared/hooks/useNavCounts";
+import { useInboxUnread, useNavCounts, refreshNavCounts } from "@/shared/hooks/useNavCounts";
 import { NAV_SURFACE, WORK_INBOX_SURFACE } from "@/shared/lib/nav/navSurfaces";
 import UserAvatar from "@/shared/components/UserAvatar";
 import { useQuickTicketStore } from "@/store/quickTicketStore";
@@ -88,8 +87,9 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
     const { setOpen: openQuickTicket, setInitialPipelineId } = useQuickTicketStore();
 
     // Live counts, so someone working in another module sees new arrivals without
-    // refreshing. One poll feeds every badge (useNavCounts); chat unread is separate
-    // because it rides the Supabase broadcast for instant delivery.
+    // refreshing. ONE poll feeds every badge here and in NotificationBell; chat
+    // unread still jumps instantly because the Supabase broadcast fires
+    // "inbox:unread", which refreshes that same shared store.
     const inboxUnread = useInboxUnread();
     const surfaceCount = useNavCounts();
 
@@ -492,6 +492,14 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                             >
                                 <PanelLeftOpen size={15} />
                             </button>
+                            <button
+                                type="button"
+                                title="Refresh counts"
+                                onClick={refreshNavCounts}
+                                className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                            >
+                                <RefreshCw size={14} />
+                            </button>
                             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">
                                 S
                             </div>
@@ -510,14 +518,24 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                         <div className="space-y-2.5">
                             <div className="flex items-center justify-between">
                                 <h1 className="truncate text-base font-bold text-primary">ServiceMgmt</h1>
-                                <button
-                                    type="button"
-                                    title="Collapse sidebar"
-                                    onClick={() => setSidebarMode("collapsed")}
-                                    className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors shrink-0"
-                                >
-                                    <PanelLeftClose size={14} />
-                                </button>
+                                <div className="flex items-center gap-0.5 shrink-0">
+                                    <button
+                                        type="button"
+                                        title="Refresh counts"
+                                        onClick={refreshNavCounts}
+                                        className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                                    >
+                                        <RefreshCw size={13} />
+                                    </button>
+                                    <button
+                                        type="button"
+                                        title="Collapse sidebar"
+                                        onClick={() => setSidebarMode("collapsed")}
+                                        className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                                    >
+                                        <PanelLeftClose size={14} />
+                                    </button>
+                                </div>
                             </div>
                             <Link
                                 href={user?.id ? `/office/social/users/${user.id}` : "/office/admin/users"}

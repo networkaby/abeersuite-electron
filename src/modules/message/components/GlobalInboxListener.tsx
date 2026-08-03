@@ -18,6 +18,8 @@
 import { useEffect, useRef } from "react";
 import axios from "axios";
 import { supabase } from "@/shared/lib/supabase/supabaseClient";
+import { usePolling } from "@/shared/hooks/usePolling";
+import { INBOX_ROOMS_POLL_MS } from "@/shared/lib/constants/polling";
 
 type Room = { id: string };
 
@@ -48,6 +50,9 @@ function playSound() {
 export default function GlobalInboxListener({ currentUserId }: { currentUserId?: number }) {
     // Tracks which room InboxModule currently has open (updated via "inbox:active-room" event)
     const activeInboxRoomRef = useRef<string | null>(null);
+    // Set by the subscribe effect below so the room re-check can be driven by
+    // usePolling (which stops while the tab is hidden) instead of a bare interval.
+    const syncRoomsRef = useRef<(() => void) | null>(null);
 
     // Ask for browser notification permission once
     useEffect(() => {
@@ -94,7 +99,13 @@ export default function GlobalInboxListener({ currentUserId }: { currentUserId?:
             window.dispatchEvent(new CustomEvent("inbox:unread"));
         }
 
+        // Mount fires this twice — once here, once from usePolling's immediate run —
+        // so drop anything that overlaps a request already in flight.
+        let syncing = false;
+
         async function syncRooms() {
+            if (syncing) return;
+            syncing = true;
             try {
                 const res = await axios.get<Room[]>("/api/inbox/rooms");
                 for (const room of res.data) {
@@ -116,19 +127,23 @@ export default function GlobalInboxListener({ currentUserId }: { currentUserId?:
 
                     channels.push(ch);
                 }
-            } catch { /* non-critical */ }
+            } catch { /* non-critical */ } finally { syncing = false; }
         }
 
+        syncRoomsRef.current = () => void syncRooms();
         void syncRooms();
 
-        // Re-check every 60 s to pick up newly created DM rooms
-        const interval = setInterval(() => void syncRooms(), 60_000);
-
         return () => {
-            clearInterval(interval);
+            syncRoomsRef.current = null;
             for (const ch of channels) void supabase.removeChannel(ch);
         };
     }, [currentUserId]);
+
+    // Periodically pick up newly created DM rooms — but only while the tab is
+    // visible. Already-subscribed rooms keep delivering over the broadcast
+    // regardless, so a hidden tab loses nothing but the discovery of brand-new rooms,
+    // which it picks up the moment it is looked at again.
+    usePolling(() => syncRoomsRef.current?.(), INBOX_ROOMS_POLL_MS, !!currentUserId);
 
     return null;
 }

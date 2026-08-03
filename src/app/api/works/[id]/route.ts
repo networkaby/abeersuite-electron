@@ -6,6 +6,8 @@ import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { Prisma } from "@/generated/prisma/client";
 import { isKnownTool } from "@/modules/repairing/lib/actionTools";
+import { revalidateTag } from "next/cache";
+import { NAV_MASTERS_TAG } from "@/shared/lib/nav/navCounts";
 
 const patchSchema = z.object({
     label: z.string().trim().min(1).optional(),
@@ -92,6 +94,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 permissionId,
             },
         });
+        revalidateTag(NAV_MASTERS_TAG, { expire: 0 });
         return NextResponse.json(updated);
     } catch (e) {
         return handleApiError(e, "Failed to update work");
@@ -107,6 +110,7 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
         // Deleting a Work detaches it from any statuses / workers using it
         // (their workId is set to null via the FK's onDelete: SetNull).
         await prisma.work.delete({ where: { id } });
+        revalidateTag(NAV_MASTERS_TAG, { expire: 0 });
         return NextResponse.json({ ok: true });
     } catch (e) {
         return handleApiError(e, "Failed to delete work");

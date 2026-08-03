@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useState, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import axios from "axios";
@@ -10,6 +10,8 @@ import { Wallet, Building2, TrendingUp, TrendingDown, RefreshCw, SquareChevronDo
 import { toast } from "sonner";
 import { usePanelStore } from "@/store/panelStore";
 import { BranchSwitcher } from "@/shared/components/BranchSwitcher";
+import { usePolling } from "@/shared/hooks/usePolling";
+import { FINANCE_BAR_POLL_MS } from "@/shared/lib/constants/polling";
 
 
 type CashPosition = {
@@ -135,12 +137,10 @@ export default function FinanceTopBar({
             .catch(() => {/* silent — non-critical UI */ });
     }, [canView]);
 
-    useEffect(() => {
-         
-        load();
-        const interval = setInterval(load, 60_000); // refresh every 60 s
-        return () => clearInterval(interval);
-    }, [load]);
+    // Ticks only while the tab is visible, and re-reads the position the moment it
+    // is looked at again. Slow on purpose — the refresh button below is the way to
+    // get the figure right now.
+    usePolling(load, FINANCE_BAR_POLL_MS, canView);
 
     const { sidebarMode, barMode, toggleSidebarVisible, toggleBarVisible } = usePanelStore();
 

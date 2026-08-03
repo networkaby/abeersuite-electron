@@ -51,3 +51,18 @@ export const ALL_NAV_SURFACES: string[] = Object.values(NAV_SURFACE);
 
 export type SurfaceCount = { all: number; new: number };
 export type NavCounts = Record<string, SurfaceCount>;
+
+/**
+ * The whole /api/nav/counts payload.
+ *
+ * The two chat badges ride along with the surface badges rather than polling for
+ * themselves — one request per tick instead of three. They are not surfaces (no
+ * seen marker, no `new` half), so they sit beside `surfaces`, not inside it.
+ */
+export type NavCountsPayload = {
+    surfaces: NavCounts;
+    /** Unread chat messages across every room this user can see. */
+    inboxUnread: number;
+    /** Unread messages in this user's system room — the notification bell badge. */
+    notificationUnread: number;
+};

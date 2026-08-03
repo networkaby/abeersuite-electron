@@ -5,7 +5,7 @@
 //   OPEN              → normal green bar with drop + close buttons.
 //   AWAITING_HANDOVER → amber bar; billing disabled; shows who B is + cancel.
 
-import { useEffect, useState, useCallback, type ReactNode } from "react";
+import { useState, useCallback, type ReactNode } from "react";
 import axios from "axios";
 import { Clock, Monitor, Lock, ArrowRightLeft, RefreshCw, Users, X, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,8 @@ import { CashDropDialog } from "@/modules/pos/components/CashDropDialog";
 import { ShiftCloseDialog } from "@/modules/pos/components/ShiftCloseDialog";
 import { extractApiError } from "@/shared/lib/api";
 import { usePosAccess } from "@/modules/pos/hooks/usePosAccess";
+import { usePolling } from "@/shared/hooks/usePolling";
+import { POS_LIVE_POLL_MS } from "@/shared/lib/constants/polling";
 
 export type ActiveShift = {
     id: number;
@@ -80,11 +82,9 @@ export function ActiveShiftBar({
             .catch(() => { /* silent */ });
     }, [shift.id]);
 
-    useEffect(() => {
-        refresh();
-        const interval = setInterval(refresh, 30_000);
-        return () => clearInterval(interval);
-    }, [refresh]);
+    // Fastest interval in the app — this is live till money someone may be looking
+    // at. It just stops while the tab is hidden, and refreshes on return.
+    usePolling(refresh, POS_LIVE_POLL_MS);
 
     const cancelHandover = async () => {
         if (!confirm("Cancel the pending handover? This returns the shift to OPEN.")) return;

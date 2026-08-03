@@ -6,6 +6,7 @@ import axios from "axios";
 import Link from "next/link";
 import { formatDateTime } from "@/shared/lib/format/formatDate";
 import { Button } from "@/components/ui/button";
+import { useNotificationUnread, NAV_COUNTS_CHANGED } from "@/shared/hooks/useNavCounts";
 
 interface Notification {
     id: number;
@@ -21,24 +22,22 @@ export default function NotificationBell() {
     const [open, setOpen] = useState(false);
     const ref = useRef<HTMLDivElement>(null);
 
-    const unread = notifications.filter((n) => !n.read).length;
+    // The badge number rides the shared sidebar poll — no timer of its own. The
+    // list itself (25 rows of message text) is only fetched when the panel is
+    // actually opened, instead of every 30 s into a closed dropdown.
+    const unread = useNotificationUnread();
 
     useEffect(() => {
-        const loadNotifications = async () => {
+        if (!open) return;
+        void (async () => {
             try {
                 const res = await axios.get("/api/notifications");
                 setNotifications(res.data);
             } catch {
                 // silent
             }
-        };
-
-        void loadNotifications();
-        const interval = setInterval(() => {
-            void loadNotifications();
-        }, 30_000);
-        return () => clearInterval(interval);
-    }, []);
+        })();
+    }, [open]);
 
     useEffect(() => {
         const handler = (e: MouseEvent) => {
@@ -48,14 +47,18 @@ export default function NotificationBell() {
         return () => document.removeEventListener("mousedown", handler);
     }, []);
 
+    // Both mark-read paths tell the shared store to recount, so the badge drops at
+    // once rather than waiting for the next poll.
     const markAllRead = async () => {
         await axios.patch("/api/notifications");
         setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+        window.dispatchEvent(new CustomEvent(NAV_COUNTS_CHANGED));
     };
 
     const markOneRead = async (id: number) => {
         await axios.patch(`/api/notifications/${id}`);
         setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+        window.dispatchEvent(new CustomEvent(NAV_COUNTS_CHANGED));
     };
 
     return (

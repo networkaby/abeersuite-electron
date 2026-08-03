@@ -5,6 +5,8 @@ import { generateNextOpaqueId } from "@/shared/lib/api";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { revalidateTag } from "next/cache";
+import { NAV_MASTERS_TAG } from "@/shared/lib/nav/navCounts";
 
 const pipelineSchema = z.object({
     name: z.string().trim().min(1, "Name is required").regex(/^[a-z0-9_-]+$/, "Name must be lowercase letters, numbers, hyphens or underscores"),
@@ -59,6 +61,7 @@ export async function POST(req: Request) {
                 order: body.order ?? nextOrder,
             },
         });
+        revalidateTag(NAV_MASTERS_TAG, { expire: 0 });
         return NextResponse.json(pipeline, { status: 201 });
     } catch (e) {
         return handleApiError(e, "Failed to create pipeline");

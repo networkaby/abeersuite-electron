@@ -1,12 +1,37 @@
 import type { Prisma } from "@/generated/prisma/client";
+import { unstable_cache } from "next/cache";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import type { ResolvedUser } from "@/shared/lib/auth/permissions";
 import { passesWorkGate } from "@/modules/repairing/lib/workGate";
+import { getUnreadTotal, getNotificationUnread } from "@/modules/message/lib/inbox";
 import {
     PIPELINE_NAV_SURFACES,
     WORK_INBOX_SURFACE,
     type NavCounts,
+    type NavCountsPayload,
 } from "./navSurfaces";
+
+/** Invalidated whenever a Work or Pipeline is created / edited / deleted. */
+export const NAV_MASTERS_TAG = "nav-masters";
+
+/**
+ * Works and Pipelines are admin-configured master data — they change a few times a
+ * year, but this function runs on a timer for every user on every page. Reading
+ * them fresh each tick was the single largest source of database egress in the app,
+ * so they are cached and invalidated by tag on write instead. Worst case a newly
+ * added Work takes up to `revalidate` seconds to appear in a sidebar badge.
+ */
+const getNavMasters = unstable_cache(
+    async () => {
+        const [works, pipelines] = await Promise.all([
+            prisma.work.findMany({ select: { id: true, permissionId: true } }),
+            prisma.pipeline.findMany({ select: { id: true, name: true } }),
+        ]);
+        return { works, pipelines };
+    },
+    ["nav:masters"],
+    { tags: [NAV_MASTERS_TAG], revalidate: 600 },
+);
 
 /**
  * Every sidebar count badge in one call, so the whole sidebar polls once instead
@@ -32,16 +57,8 @@ import {
  * in its module for them.
  */
 export async function getNavCounts(user: ResolvedUser): Promise<NavCounts> {
-    const pipelineNames = PIPELINE_NAV_SURFACES
-        .map((s) => s.pipelineName)
-        .filter((n): n is string => !!n);
-
-    const [works, pipelines, seenRows] = await Promise.all([
-        prisma.work.findMany({ select: { id: true, permissionId: true } }),
-        prisma.pipeline.findMany({
-            where: { name: { in: pipelineNames } },
-            select: { id: true, name: true },
-        }),
+    const [{ works, pipelines }, seenRows] = await Promise.all([
+        getNavMasters(),
         prisma.userSurfaceSeen.findMany({
             where: { userId: user.id },
             select: { surface: true, seenAt: true },
@@ -128,6 +145,19 @@ export async function getNavCounts(user: ResolvedUser): Promise<NavCounts> {
     }
 
     return counts;
+}
+
+/**
+ * Everything the sidebar polls for, in one response — surface badges plus the chat
+ * unread and notification-bell counts, which used to run pollers of their own.
+ */
+export async function getNavCountsPayload(user: ResolvedUser): Promise<NavCountsPayload> {
+    const [surfaces, inboxUnread, notificationUnread] = await Promise.all([
+        getNavCounts(user),
+        getUnreadTotal(user),
+        getNotificationUnread(user.id),
+    ]);
+    return { surfaces, inboxUnread, notificationUnread };
 }
 
 /** Stamp "I have looked at this list now" — resets the `new` half for this user. */

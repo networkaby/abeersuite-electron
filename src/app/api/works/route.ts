@@ -6,6 +6,8 @@ import { validateRequest, generateNextOpaqueId } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { Prisma } from "@/generated/prisma/client";
 import { isKnownTool } from "@/modules/repairing/lib/actionTools";
+import { revalidateTag } from "next/cache";
+import { NAV_MASTERS_TAG } from "@/shared/lib/nav/navCounts";
 
 const argSchema = z.array(z.object({
     key: z.string().trim().optional(),
@@ -92,6 +94,7 @@ export async function POST(req: Request) {
         const work = await prisma.work.create({
             data: { id, label, color: color ?? "bg-gray-100 text-gray-600", order: maxOrder, permissionId, successLabel: successLabel || null, failLabel: failLabel || null, prompt: prompt || null, startLabel: startLabel || null, successPopup: successPopup ?? false, failPopup: failPopup ?? false, args: (args ?? []) as unknown as Prisma.InputJsonValue, groups: { create: (groupIds ?? []).map((workGroupId) => ({ workGroupId })) }, kind: kind ?? "human", toolType: isAuto ? (toolType || null) : null, toolConfig: (toolConfig ?? {}) as Prisma.InputJsonValue },
         });
+        revalidateTag(NAV_MASTERS_TAG, { expire: 0 });
         return NextResponse.json(work, { status: 201 });
     } catch (e) {
         return handleApiError(e, "Failed to create work");

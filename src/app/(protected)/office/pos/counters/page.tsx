@@ -6,7 +6,7 @@
 // when occupied; the last close + carry-over float when free. Polls every 30s.
 // Data: GET /api/pos/counters/status (see route for the running-cash math).
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import axios from "axios";
@@ -22,6 +22,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { ShiftCloseDialog } from "@/modules/pos/components/ShiftCloseDialog";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { fmt } from "@/utils/constants";
+import { usePolling } from "@/shared/hooks/usePolling";
+import { POS_LIVE_POLL_MS } from "@/shared/lib/constants/polling";
 
 type Person = { id: number; name: string };
 
@@ -97,16 +99,14 @@ export default function CountersStatusPage() {
             .finally(() => setLoading(false));
     }, [branchScope]);
 
-    useEffect(() => {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        load();
-    }, [load]);
-
-    // Keep the board live without a full spinner — refresh quietly every 30s.
-    useEffect(() => {
-        const t = setInterval(() => load({ silent: true }), 30_000);
-        return () => clearInterval(t);
-    }, [load]);
+    // One driver for both the first paint and the 30 s refresh: the very first load
+    // shows the spinner, every later one is quiet. Polling pauses while the tab is
+    // hidden and catches up on return.
+    const loadedOnce = useRef(false);
+    usePolling(() => {
+        load(loadedOnce.current ? { silent: true } : undefined);
+        loadedOnce.current = true;
+    }, POS_LIVE_POLL_MS, true, branchScope);
 
     const counts = {
         open:     cards.filter((c) => c.status === "OPEN").length,
