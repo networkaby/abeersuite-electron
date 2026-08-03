@@ -1,10 +1,11 @@
 "use client";
 
-// Edit an existing ledger account (name, parent group, bank particulars,
-// opening balance) — PATCHes /api/accountancy/ledgers/[id]. Mirrors the
-// inline editor in Accountancy → Masters → Ledgers, packaged as a dialog so
-// it can be opened from the Bank/Cash/Loans Book and Account Ledger explorer
-// without navigating away from the register.
+// Edit an existing ledger account (name, parent group, group-specific
+// particulars, opening balance) — PATCHes /api/accountancy/ledgers/[id].
+// Used by Accountancy → Masters → Ledgers and by the Bank/Cash/Loans Book and
+// Account Ledger explorers, so a ledger can be corrected without navigating
+// away from the register. The particulars blocks come from PARTICULARS_SPECS,
+// shared with CreateLedgerDialog.
 
 import { useEffect, useState } from "react";
 import axios from "axios";
@@ -21,44 +22,14 @@ import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { GroupCombobox } from "@/modules/accountancy/components/GroupCombobox";
+import { LedgerParticularsFields } from "@/modules/accountancy/components/LedgerParticularsFields";
 import {
-    type BankFields, EMPTY_BANK, hasBankData, parseBank, BANK_FIELD_LABELS, isBankGroupName, isOdGroupName,
-} from "@/modules/accountancy/lib/bankParticulars";
+    emptyParticulars, parseParticulars, particularsPayload,
+    type ParticularsState,
+} from "@/modules/accountancy/lib/ledgerParticulars";
 import {
-    type LoanFields, EMPTY_LOAN, hasLoanData, parseLoan, LOAN_FIELD_LABELS, isLoanGroupName,
-} from "@/modules/accountancy/lib/loanParticulars";
-import {
-    type CreditCardFields, EMPTY_CREDIT_CARD, hasCreditCardData, parseCreditCard,
-    CREDIT_CARD_FIELD_LABELS, isCreditCardGroupName,
-} from "@/modules/accountancy/lib/creditCardParticulars";
-import {
-    type BnplFields, EMPTY_BNPL, hasBnplData, parseBnpl, BNPL_FIELD_LABELS, isBnplGroupName,
-} from "@/modules/accountancy/lib/bnplParticulars";
-import {
-    type WalletFields, EMPTY_WALLET, hasWalletData, parseWallet, WALLET_FIELD_LABELS, isWalletGroupName,
-} from "@/modules/accountancy/lib/walletParticulars";
-import {
-    type GatewayFields, EMPTY_GATEWAY, hasGatewayData, parseGateway, GATEWAY_FIELD_LABELS, isGatewayGroupName,
-} from "@/modules/accountancy/lib/gatewayParticulars";
-
-type GroupType = "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE";
-
-interface GroupNode {
-    id: number;
-    name: string;
-    type: GroupType;
-    children: GroupNode[];
-}
-
-interface GroupOption { id: number; name: string; type: GroupType; depth: number }
-
-function flattenGroups(nodes: GroupNode[], depth = 0, out: GroupOption[] = []): GroupOption[] {
-    for (const n of nodes) {
-        out.push({ id: n.id, name: n.name, type: n.type, depth });
-        flattenGroups(n.children ?? [], depth + 1, out);
-    }
-    return out;
-}
+    flattenGroups, type GroupNode, type GroupOption,
+} from "@/modules/accountancy/lib/groupOptions";
 
 export interface EditableLedger {
     id: number;
@@ -78,46 +49,46 @@ export function EditLedgerDialog({
     open,
     onOpenChange,
     ledger,
+    groups: groupsProp,
     onSaved,
 }: {
     open: boolean;
     onOpenChange: (v: boolean) => void;
     /** Account being edited. Dialog stays closed (no-op save) if null. */
     ledger: EditableLedger | null;
+    /** Group list to pick from. Fetched here when the caller has none. */
+    groups?: GroupOption[];
     onSaved: () => void;
 }) {
-    const [groups, setGroups] = useState<GroupOption[]>([]);
+    const [fetchedGroups, setFetchedGroups] = useState<GroupOption[]>([]);
+    const groups = groupsProp ?? fetchedGroups;
     const [saving, setSaving] = useState(false);
 
     const [name, setName] = useState("");
     const [groupId, setGroupId] = useState<number | null>(null);
-    const [bank, setBank] = useState<BankFields>(EMPTY_BANK);
-    const [loan, setLoan] = useState<LoanFields>(EMPTY_LOAN);
-    const [creditCard, setCreditCard] = useState<CreditCardFields>(EMPTY_CREDIT_CARD);
-    const [bnpl, setBnpl] = useState<BnplFields>(EMPTY_BNPL);
-    const [wallet, setWallet] = useState<WalletFields>(EMPTY_WALLET);
-    const [gateway, setGateway] = useState<GatewayFields>(EMPTY_GATEWAY);
+    const [particulars, setParticulars] = useState<ParticularsState>(emptyParticulars);
     const [openingBalance, setOpeningBalance] = useState("");
     const [openingBalanceType, setOpeningBalanceType] = useState<"DEBIT" | "CREDIT">("DEBIT");
 
-    // Reset the form from the target ledger and load the group list whenever
-    // the dialog opens.
+    // Reset the form from the target ledger whenever the dialog opens.
     useEffect(() => {
         if (!open || !ledger) return;
         setName(ledger.name);
         setGroupId(ledger.groupId);
-        setBank(parseBank(ledger.bankJson));
-        setLoan(parseLoan(ledger.loanJson));
-        setCreditCard(parseCreditCard(ledger.creditCardJson));
-        setBnpl(parseBnpl(ledger.bnplJson));
-        setWallet(parseWallet(ledger.walletJson));
-        setGateway(parseGateway(ledger.gatewayJson));
+        setParticulars(parseParticulars(ledger as unknown as Record<string, unknown>));
         setOpeningBalance(ledger.openingBalance ? String(ledger.openingBalance) : "");
         setOpeningBalanceType(ledger.openingBalanceType ?? "DEBIT");
-        axios.get<GroupNode[]>("/api/accountancy/account-groups")
-            .then((r) => setGroups(flattenGroups(r.data)))
-            .catch(() => { /* group list is optional */ });
     }, [open, ledger]);
+
+    // Only fetch the group list when the caller didn't hand one over.
+    useEffect(() => {
+        if (!open || groupsProp) return;
+        axios.get<GroupNode[]>("/api/accountancy/account-groups")
+            .then((r) => setFetchedGroups(flattenGroups(r.data)))
+            .catch(() => { /* group list is optional */ });
+    }, [open, groupsProp]);
+
+    const selectedGroupName = groups.find((g) => g.id === groupId)?.name;
 
     const save = async () => {
         if (!ledger) return;
@@ -129,33 +100,17 @@ export function EditLedgerDialog({
             return;
         }
 
-        const selectedGroupName = groups.find((g) => g.id === groupId)?.name;
-        const groupIsBank = isBankGroupName(selectedGroupName);
-        const groupIsLoan = isLoanGroupName(selectedGroupName);
-        const groupIsCreditCard = isCreditCardGroupName(selectedGroupName);
-        const groupIsBnpl = isBnplGroupName(selectedGroupName);
-        const groupIsWallet = isWalletGroupName(selectedGroupName);
-        const groupIsGateway = isGatewayGroupName(selectedGroupName);
-
         setSaving(true);
         try {
             const payload: Record<string, unknown> = {
                 name: name.trim(),
                 groupId,
-                bankJson: groupIsBank && hasBankData(bank) ? bank : null,
-                loanJson: groupIsLoan && hasLoanData(loan) ? loan : null,
-                creditCardJson: groupIsCreditCard && hasCreditCardData(creditCard) ? creditCard : null,
-                bnplJson: groupIsBnpl && hasBnplData(bnpl) ? bnpl : null,
-                walletJson: groupIsWallet && hasWalletData(wallet) ? wallet : null,
-                gatewayJson: groupIsGateway && hasGatewayData(gateway) ? gateway : null,
+                // Particulars for kinds the chosen group doesn't match are sent
+                // as null, so moving a ledger between groups clears the stale set.
+                ...particularsPayload(selectedGroupName, particulars),
+                openingBalance: hasOpening ? amount : null,
+                openingBalanceType: hasOpening ? openingBalanceType : null,
             };
-            if (hasOpening) {
-                payload.openingBalance = amount;
-                payload.openingBalanceType = openingBalanceType;
-            } else {
-                payload.openingBalance = null;
-                payload.openingBalanceType = null;
-            }
             await axios.patch(`/api/accountancy/ledgers/${ledger.id}`, payload);
             toast.success("Ledger updated");
             onOpenChange(false);
@@ -167,21 +122,14 @@ export function EditLedgerDialog({
         }
     };
 
-    const selectedGroupName = groups.find((g) => g.id === groupId)?.name;
-    const selectedGroupIsBank = isBankGroupName(selectedGroupName);
-    const selectedGroupIsOd = isOdGroupName(selectedGroupName);
-    const selectedGroupIsLoan = isLoanGroupName(selectedGroupName);
-    const selectedGroupIsCreditCard = isCreditCardGroupName(selectedGroupName);
-    const selectedGroupIsBnpl = isBnplGroupName(selectedGroupName);
-    const selectedGroupIsWallet = isWalletGroupName(selectedGroupName);
-    const selectedGroupIsGateway = isGatewayGroupName(selectedGroupName);
-
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-xl">
+            <DialogContent className="sm:max-w-xl max-h-[85vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle>Edit Ledger Account</DialogTitle>
-                    <DialogDescription>Update the ledger&apos;s name, group, bank particulars, or opening balance.</DialogDescription>
+                    <DialogDescription>
+                        Update the ledger&apos;s name, group, particulars, or opening balance.
+                    </DialogDescription>
                 </DialogHeader>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -229,197 +177,12 @@ export function EditLedgerDialog({
                             </div>
                         </div>
                     </div>
-                    {selectedGroupIsBank && (
-                        <div className="col-span-2 space-y-3 rounded-md border border-border bg-muted/30 p-4">
-                            <p className="text-sm font-medium text-foreground">
-                                Bank Details <span className="font-normal text-muted-foreground">— printed on the deposit slip</span>
-                            </p>
-                            <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
-                                {BANK_FIELD_LABELS.map(({ key, label, placeholder }) => (
-                                    <div key={key} className="space-y-1.5">
-                                        <Label>{label}</Label>
-                                        <Input
-                                            value={bank[key]}
-                                            onChange={(e) => setBank((b) => ({ ...b, [key]: e.target.value }))}
-                                            placeholder={placeholder}
-                                        />
-                                    </div>
-                                ))}
-                                {selectedGroupIsOd && (
-                                    <>
-                                        <div className="space-y-1.5">
-                                            <Label>OD Limit (₹) <span className="font-normal text-muted-foreground">— optional</span></Label>
-                                            <Input
-                                                value={bank.limit}
-                                                onChange={(e) => setBank((b) => ({ ...b, limit: e.target.value }))}
-                                                placeholder="500000"
-                                            />
-                                        </div>
-                                        <div className="space-y-1.5">
-                                            <Label>Usable Fund Tier</Label>
-                                            <Select
-                                                value={bank.fundTier || "INSTANT"}
-                                                onValueChange={(v) => setBank((b) => ({ ...b, fundTier: v === "INSTANT" ? "" : v }))}
-                                            >
-                                                <SelectTrigger><SelectValue /></SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="INSTANT">Instant</SelectItem>
-                                                    <SelectItem value="OTHER">Other</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-                                    </>
-                                )}
-                            </div>
-                        </div>
-                    )}
-                    {selectedGroupIsLoan && (
-                        <div className="col-span-2 space-y-3 rounded-md border border-border bg-muted/30 p-4">
-                            <p className="text-sm font-medium text-foreground">
-                                Loan Details <span className="font-normal text-muted-foreground">— optional, informational</span>
-                            </p>
-                            <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
-                                {LOAN_FIELD_LABELS.map(({ key, label, placeholder }) => (
-                                    <div key={key} className="space-y-1.5">
-                                        <Label>{label}</Label>
-                                        <Input
-                                            value={loan[key]}
-                                            onChange={(e) => setLoan((l) => ({ ...l, [key]: e.target.value }))}
-                                            placeholder={placeholder}
-                                        />
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-                    {selectedGroupIsCreditCard && (
-                        <div className="col-span-2 space-y-3 rounded-md border border-border bg-muted/30 p-4">
-                            <p className="text-sm font-medium text-foreground">
-                                Credit Card Details <span className="font-normal text-muted-foreground">— optional, informational</span>
-                            </p>
-                            <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
-                                {CREDIT_CARD_FIELD_LABELS.map(({ key, label, placeholder }) => (
-                                    <div key={key} className="space-y-1.5">
-                                        <Label>{label}</Label>
-                                        <Input
-                                            value={creditCard[key]}
-                                            onChange={(e) => setCreditCard((c) => ({ ...c, [key]: e.target.value }))}
-                                            placeholder={placeholder}
-                                        />
-                                    </div>
-                                ))}
-                                <div className="space-y-1.5">
-                                    <Label>Usable Fund Tier</Label>
-                                    <Select
-                                        value={creditCard.fundTier || "OTHER"}
-                                        onValueChange={(v) => setCreditCard((c) => ({ ...c, fundTier: v === "OTHER" ? "" : v }))}
-                                    >
-                                        <SelectTrigger><SelectValue /></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="INSTANT">Instant</SelectItem>
-                                            <SelectItem value="OTHER">Other</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                    {selectedGroupIsBnpl && (
-                        <div className="col-span-2 space-y-3 rounded-md border border-border bg-muted/30 p-4">
-                            <p className="text-sm font-medium text-foreground">
-                                BNPL Details <span className="font-normal text-muted-foreground">— optional, informational</span>
-                            </p>
-                            <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
-                                {BNPL_FIELD_LABELS.map(({ key, label, placeholder }) => (
-                                    <div key={key} className="space-y-1.5">
-                                        <Label>{label}</Label>
-                                        <Input
-                                            value={bnpl[key]}
-                                            onChange={(e) => setBnpl((b) => ({ ...b, [key]: e.target.value }))}
-                                            placeholder={placeholder}
-                                        />
-                                    </div>
-                                ))}
-                                <div className="space-y-1.5">
-                                    <Label>Usable Fund Tier</Label>
-                                    <Select
-                                        value={bnpl.fundTier || "OTHER"}
-                                        onValueChange={(v) => setBnpl((b) => ({ ...b, fundTier: v === "OTHER" ? "" : v }))}
-                                    >
-                                        <SelectTrigger><SelectValue /></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="INSTANT">Instant</SelectItem>
-                                            <SelectItem value="OTHER">Other</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                    {selectedGroupIsWallet && (
-                        <div className="col-span-2 space-y-3 rounded-md border border-border bg-muted/30 p-4">
-                            <p className="text-sm font-medium text-foreground">
-                                Wallet Details <span className="font-normal text-muted-foreground">— optional, informational</span>
-                            </p>
-                            <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
-                                {WALLET_FIELD_LABELS.map(({ key, label, placeholder }) => (
-                                    <div key={key} className="space-y-1.5">
-                                        <Label>{label}</Label>
-                                        <Input
-                                            value={wallet[key]}
-                                            onChange={(e) => setWallet((w) => ({ ...w, [key]: e.target.value }))}
-                                            placeholder={placeholder}
-                                        />
-                                    </div>
-                                ))}
-                                <div className="space-y-1.5">
-                                    <Label>Usable Fund Tier</Label>
-                                    <Select
-                                        value={wallet.fundTier || "OTHER"}
-                                        onValueChange={(v) => setWallet((w) => ({ ...w, fundTier: v === "OTHER" ? "" : v }))}
-                                    >
-                                        <SelectTrigger><SelectValue /></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="INSTANT">Instant</SelectItem>
-                                            <SelectItem value="OTHER">Other</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                    {selectedGroupIsGateway && (
-                        <div className="col-span-2 space-y-3 rounded-md border border-border bg-muted/30 p-4">
-                            <p className="text-sm font-medium text-foreground">
-                                Payment Gateway Details <span className="font-normal text-muted-foreground">— optional, informational</span>
-                            </p>
-                            <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
-                                {GATEWAY_FIELD_LABELS.map(({ key, label, placeholder }) => (
-                                    <div key={key} className="space-y-1.5">
-                                        <Label>{label}</Label>
-                                        <Input
-                                            value={gateway[key]}
-                                            onChange={(e) => setGateway((g) => ({ ...g, [key]: e.target.value }))}
-                                            placeholder={placeholder}
-                                        />
-                                    </div>
-                                ))}
-                                <div className="space-y-1.5">
-                                    <Label>Usable Fund Tier</Label>
-                                    <Select
-                                        value={gateway.fundTier || "OTHER"}
-                                        onValueChange={(v) => setGateway((g) => ({ ...g, fundTier: v === "OTHER" ? "" : v }))}
-                                    >
-                                        <SelectTrigger><SelectValue /></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="INSTANT">Instant</SelectItem>
-                                            <SelectItem value="OTHER">Other</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                            </div>
-                        </div>
-                    )}
+
+                    <LedgerParticularsFields
+                        groupName={selectedGroupName}
+                        value={particulars}
+                        onChange={(key, next) => setParticulars((p) => ({ ...p, [key]: next }))}
+                    />
                 </div>
 
                 <DialogFooter>

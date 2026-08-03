@@ -4,8 +4,9 @@
 // /api/accountancy/ledgers and hands the created account back via onCreated.
 // Fields mirror the create schema in that route — note there is no per-account
 // "type"; the accounting nature is inherited from the chosen group.
-// Opening balance fields (amount, Dr/Cr, date) are optional; if any are set
-// all three are required and reconciled against the suspense ledger.
+// Opening balance is optional and reconciled against the suspense ledger.
+// Group-specific particulars come from PARTICULARS_SPECS, shared with
+// EditLedgerDialog.
 
 import { useEffect, useState } from "react";
 import axios from "axios";
@@ -22,17 +23,13 @@ import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { GroupCombobox } from "@/modules/accountancy/components/GroupCombobox";
-
-type GroupType = "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE";
-
-interface GroupNode {
-    id: number;
-    name: string;
-    type: GroupType;
-    children: GroupNode[];
-}
-
-interface GroupOption { id: number; name: string; type: GroupType; depth: number }
+import { LedgerParticularsFields } from "@/modules/accountancy/components/LedgerParticularsFields";
+import {
+    emptyParticulars, particularsPayload, type ParticularsState,
+} from "@/modules/accountancy/lib/ledgerParticulars";
+import {
+    flattenGroups, inheritedNormalBalance, type GroupNode, type GroupOption,
+} from "@/modules/accountancy/lib/groupOptions";
 
 export interface CreatedLedger {
     id: number;
@@ -40,34 +37,23 @@ export interface CreatedLedger {
     groupId: number | null;
 }
 
-// Flatten the tree preserving depth so the picker can render an indented
-// bullet hierarchy (parent group › sub-group).
-function flattenGroups(nodes: GroupNode[], depth = 0, out: GroupOption[] = []): GroupOption[] {
-    for (const n of nodes) {
-        out.push({ id: n.id, name: n.name, type: n.type, depth });
-        flattenGroups(n.children ?? [], depth + 1, out);
-    }
-    return out;
-}
-
-// A ledger's normal balance is inherited from its group's accounting nature.
-function inheritedNormalBalance(type: GroupType): "Debit" | "Credit" {
-    return type === "ASSET" || type === "EXPENSE" ? "Debit" : "Credit";
-}
-
 export function CreateLedgerDialog({
     open,
     onOpenChange,
     onCreated,
+    groups: groupsProp,
     defaultGroupId = null,
 }: {
     open: boolean;
     onOpenChange: (v: boolean) => void;
     onCreated: (account: CreatedLedger) => void;
+    /** Group list to pick from. Fetched here when the caller has none. */
+    groups?: GroupOption[];
     /** Pre-select this group when the dialog opens. */
     defaultGroupId?: number | null;
 }) {
-    const [groups, setGroups] = useState<GroupOption[]>([]);
+    const [fetchedGroups, setFetchedGroups] = useState<GroupOption[]>([]);
+    const groups = groupsProp ?? fetchedGroups;
     const [saving, setSaving] = useState(false);
     const [form, setForm] = useState<{
         name: string;
@@ -82,8 +68,9 @@ export function CreateLedgerDialog({
         openingBalance: "",
         openingBalanceType: "DEBIT",
     });
+    const [particulars, setParticulars] = useState<ParticularsState>(emptyParticulars);
 
-    // Reset the form and load the group list whenever the dialog opens.
+    // Reset to a blank form whenever the dialog opens.
     useEffect(() => {
         if (!open) return;
         setForm({
@@ -93,10 +80,16 @@ export function CreateLedgerDialog({
             openingBalance: "",
             openingBalanceType: "DEBIT",
         });
-        axios.get<GroupNode[]>("/api/accountancy/account-groups")
-            .then((r) => setGroups(flattenGroups(r.data)))
-            .catch(() => { /* group list is optional */ });
+        setParticulars(emptyParticulars());
     }, [open, defaultGroupId]);
+
+    // Only fetch the group list when the caller didn't hand one over.
+    useEffect(() => {
+        if (!open || groupsProp) return;
+        axios.get<GroupNode[]>("/api/accountancy/account-groups")
+            .then((r) => setFetchedGroups(flattenGroups(r.data)))
+            .catch(() => { /* group list is optional */ });
+    }, [open, groupsProp]);
 
     const selectedGroup = groups.find((g) => g.id === form.groupId);
 
@@ -108,9 +101,8 @@ export function CreateLedgerDialog({
         // the amount alone decides whether an opening balance was entered.
         // Universal opening — no date; always effective from the start of the books.
         const obAmount = form.openingBalance.trim();
-        const obType = form.openingBalanceType;
-        const hasAny = obAmount !== "";
-        if (hasAny) {
+        const hasOpening = obAmount !== "";
+        if (hasOpening) {
             const amount = Number(obAmount);
             if (!Number.isFinite(amount) || amount <= 0) {
                 toast.error("Opening balance must be greater than zero");
@@ -122,20 +114,15 @@ export function CreateLedgerDialog({
         try {
             // normalBalance is left unset → inherited from the group's nature
             // (loadNormalBalanceMap infers it from group.type at read time).
-            const payload: {
-                name: string;
-                groupId: number;
-                description: string | null;
-                openingBalance?: number;
-                openingBalanceType?: "DEBIT" | "CREDIT";
-            } = {
+            const payload: Record<string, unknown> = {
                 name: form.name.trim(),
                 groupId: form.groupId,
                 description: form.description.trim() || null,
+                ...particularsPayload(selectedGroup?.name, particulars),
             };
-            if (hasAny) {
+            if (hasOpening) {
                 payload.openingBalance = Number(obAmount);
-                payload.openingBalanceType = obType;
+                payload.openingBalanceType = form.openingBalanceType;
             }
             const r = await axios.post<CreatedLedger>("/api/accountancy/ledgers", payload);
             toast.success("Ledger created");
@@ -150,7 +137,7 @@ export function CreateLedgerDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-xl">
+            <DialogContent className="sm:max-w-xl max-h-[85vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle>New Ledger Account</DialogTitle>
                     <DialogDescription>
@@ -197,7 +184,7 @@ export function CreateLedgerDialog({
                     </div>
                     <div className="col-span-2 space-y-3 rounded-md border border-border bg-muted/30 p-4">
                         <p className="text-sm font-medium text-foreground">
-                            Opening Balance <span className="font-normal text-muted-foreground">— optional, set both if used</span>
+                            Opening Balance <span className="font-normal text-muted-foreground">— optional</span>
                         </p>
                         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                             <div className="space-y-1.5">
@@ -228,6 +215,12 @@ export function CreateLedgerDialog({
                             </div>
                         </div>
                     </div>
+
+                    <LedgerParticularsFields
+                        groupName={selectedGroup?.name}
+                        value={particulars}
+                        onChange={(key, next) => setParticulars((p) => ({ ...p, [key]: next }))}
+                    />
                 </div>
 
                 <DialogFooter>

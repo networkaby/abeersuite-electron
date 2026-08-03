@@ -6,37 +6,13 @@ import Link from "next/link";
 import axios from "axios";
 import { toast } from "sonner";
 import {
-    ChevronRight, ChevronDown, Plus, Loader2, ArrowRight,
-    Pencil, Check, X, Trash2,
+    ChevronRight, ChevronDown, Plus, Loader2, ArrowRight, Pencil, Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
 import { fmt } from "@/utils/constants";
-import { GroupCombobox } from "@/modules/accountancy/components/GroupCombobox";
-import {
-    type BankFields, EMPTY_BANK, hasBankData, parseBank, BANK_FIELD_LABELS, isBankGroupName, isOdGroupName,
-} from "@/modules/accountancy/lib/bankParticulars";
-import {
-    type LoanFields, EMPTY_LOAN, hasLoanData, parseLoan, LOAN_FIELD_LABELS, isLoanGroupName,
-} from "@/modules/accountancy/lib/loanParticulars";
-import {
-    type CreditCardFields, EMPTY_CREDIT_CARD, hasCreditCardData, parseCreditCard,
-    CREDIT_CARD_FIELD_LABELS, isCreditCardGroupName,
-} from "@/modules/accountancy/lib/creditCardParticulars";
-import {
-    type BnplFields, EMPTY_BNPL, hasBnplData, parseBnpl, BNPL_FIELD_LABELS, isBnplGroupName,
-} from "@/modules/accountancy/lib/bnplParticulars";
-import {
-    type WalletFields, EMPTY_WALLET, hasWalletData, parseWallet, WALLET_FIELD_LABELS, isWalletGroupName,
-} from "@/modules/accountancy/lib/walletParticulars";
-import {
-    type GatewayFields, EMPTY_GATEWAY, hasGatewayData, parseGateway, GATEWAY_FIELD_LABELS, isGatewayGroupName,
-} from "@/modules/accountancy/lib/gatewayParticulars";
+import { CreateLedgerDialog } from "@/modules/accountancy/components/CreateLedgerDialog";
+import { EditLedgerDialog, type EditableLedger } from "@/modules/accountancy/components/EditLedgerDialog";
+import { flattenGroups } from "@/modules/accountancy/lib/groupOptions";
 
 type GroupType = "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE";
 
@@ -50,38 +26,17 @@ interface LedgerRow {
     companyId: number | null;
     groupId: number | null;
     balance: number;
-    /** Bank-ledger particulars (Bank-group ledgers only) — printed on the
-     *  Contra deposit slip. */
+    /** Group-specific particulars — see PARTICULARS_SPECS. Carried straight
+     *  through to the edit dialog. */
     bankJson: unknown;
-    /** Loan-ledger particulars (Loans (Liability) / Secured / Unsecured Loans). */
     loanJson: unknown;
-    /** Credit-card-ledger particulars (Credit Card group). */
     creditCardJson: unknown;
-    /** BNPL-ledger particulars (BNPL A/c group). */
     bnplJson: unknown;
-    /** Wallet-ledger particulars (Wallets group). */
     walletJson: unknown;
-    /** Payment-gateway-ledger particulars (Payment Gateway group). */
     gatewayJson: unknown;
     openingBalance: number | null;
     openingBalanceType: "DEBIT" | "CREDIT" | null;
 }
-
-type NewLedgerForm = {
-    name: string;
-    groupId: number | null;
-    description: string;
-    openingBalance: string;
-    openingBalanceType: "DEBIT" | "CREDIT";
-};
-
-const createNewLedgerForm = (): NewLedgerForm => ({
-    name: "",
-    groupId: null,
-    description: "",
-    openingBalance: "",
-    openingBalanceType: "DEBIT",
-});
 
 interface GroupNode {
     id: number;
@@ -153,41 +108,17 @@ function drCr(balance: number): string {
     return balance > 0 ? `${abs} Dr` : `${abs} Cr`;
 }
 
-// A ledger's normal balance is inherited from its group's accounting nature.
-function inheritedNormalBalance(type: GroupType): "Debit" | "Credit" {
-    return type === "ASSET" || type === "EXPENSE" ? "Debit" : "Credit";
-}
-
 export default function LedgersPage() {
     const router = useRouter();
 
     const [tree, setTree] = useState<GroupNode[]>([]);
     const [expanded, setExpanded] = useState<Set<number>>(new Set());
     const [loading, setLoading] = useState(true);
-    const [showAdd, setShowAdd] = useState(false);
-    const [saving, setSaving] = useState(false);
 
-    const [newForm, setNewForm] = useState<NewLedgerForm>(createNewLedgerForm);
-    const [newBank, setNewBank] = useState<BankFields>(EMPTY_BANK);
-    const [newLoan, setNewLoan] = useState<LoanFields>(EMPTY_LOAN);
-    const [newCreditCard, setNewCreditCard] = useState<CreditCardFields>(EMPTY_CREDIT_CARD);
-    const [newBnpl, setNewBnpl] = useState<BnplFields>(EMPTY_BNPL);
-    const [newWallet, setNewWallet] = useState<WalletFields>(EMPTY_WALLET);
-    const [newGateway, setNewGateway] = useState<GatewayFields>(EMPTY_GATEWAY);
-
-    // Inline ledger edit (name + parent group + bank particulars + opening balance)
-    const [editLedgerId, setEditLedgerId] = useState<number | null>(null);
-    const [editName, setEditName] = useState("");
-    const [editGroupId, setEditGroupId] = useState<number | null>(null);
-    const [editBank, setEditBank] = useState<BankFields>(EMPTY_BANK);
-    const [editLoan, setEditLoan] = useState<LoanFields>(EMPTY_LOAN);
-    const [editCreditCard, setEditCreditCard] = useState<CreditCardFields>(EMPTY_CREDIT_CARD);
-    const [editBnpl, setEditBnpl] = useState<BnplFields>(EMPTY_BNPL);
-    const [editWallet, setEditWallet] = useState<WalletFields>(EMPTY_WALLET);
-    const [editGateway, setEditGateway] = useState<GatewayFields>(EMPTY_GATEWAY);
-    const [editOpeningBalance, setEditOpeningBalance] = useState("");
-    const [editOpeningBalanceType, setEditOpeningBalanceType] = useState<"DEBIT" | "CREDIT">("DEBIT");
-    const [savingLedger, setSavingLedger] = useState(false);
+    // Create and edit both run in dialogs. An inline form would push the rows
+    // below it down the page, moving whatever the user was looking at.
+    const [addOpen, setAddOpen] = useState(false);
+    const [editTarget, setEditTarget] = useState<EditableLedger | null>(null);
 
     // Refetch without flipping `loading` — the full-page spinner is for the
     // first load only. Re-showing it after every save unmounted the whole
@@ -215,70 +146,10 @@ export default function LedgersPage() {
         });
 
     const allFlat = allGroupsFlat(tree);
+    // Depth-tagged copy for the dialogs' group picker (indents sub-groups).
+    const groupOptions = flattenGroups(tree);
     const flat = flattenVisible(tree, expanded);
     const ledgerCount = countLedgers(tree);
-
-    const startEditLedger = (l: LedgerRow) => {
-        setEditLedgerId(l.id);
-        setEditName(l.name);
-        setEditGroupId(l.groupId);
-        setEditBank(parseBank(l.bankJson));
-        setEditLoan(parseLoan(l.loanJson));
-        setEditCreditCard(parseCreditCard(l.creditCardJson));
-        setEditBnpl(parseBnpl(l.bnplJson));
-        setEditWallet(parseWallet(l.walletJson));
-        setEditGateway(parseGateway(l.gatewayJson));
-        setEditOpeningBalance(l.openingBalance ? String(l.openingBalance) : "");
-        setEditOpeningBalanceType(l.openingBalanceType ?? "DEBIT");
-    };
-
-    const saveLedger = async (id: number) => {
-        if (!editName.trim()) { toast.error("Name is required"); return; }
-        const hasOpeningBalance = editOpeningBalance.trim() !== "";
-        const openingBalance = Number(editOpeningBalance);
-        if (hasOpeningBalance && (!Number.isFinite(openingBalance) || openingBalance < 0)) {
-            toast.error("Opening balance must be a valid non-negative number");
-            return;
-        }
-        setSavingLedger(true);
-        const editGroupName = allFlat.find((g) => g.id === editGroupId)?.name;
-        const editGroupIsBank = isBankGroupName(editGroupName);
-        const editGroupIsLoan = isLoanGroupName(editGroupName);
-        const editGroupIsCreditCard = isCreditCardGroupName(editGroupName);
-        const editGroupIsBnpl = isBnplGroupName(editGroupName);
-        const editGroupIsWallet = isWalletGroupName(editGroupName);
-        const editGroupIsGateway = isGatewayGroupName(editGroupName);
-        try {
-            const payload: Record<string, unknown> = {
-                name: editName.trim(),
-                groupId: editGroupId,
-                // Group-specific particulars; moving a ledger out of the
-                // matching group clears them.
-                bankJson: editGroupIsBank && hasBankData(editBank) ? editBank : null,
-                loanJson: editGroupIsLoan && hasLoanData(editLoan) ? editLoan : null,
-                creditCardJson: editGroupIsCreditCard && hasCreditCardData(editCreditCard) ? editCreditCard : null,
-                bnplJson: editGroupIsBnpl && hasBnplData(editBnpl) ? editBnpl : null,
-                walletJson: editGroupIsWallet && hasWalletData(editWallet) ? editWallet : null,
-                gatewayJson: editGroupIsGateway && hasGatewayData(editGateway) ? editGateway : null,
-            };
-            if (hasOpeningBalance) {
-                payload.openingBalance = openingBalance;
-                payload.openingBalanceType = editOpeningBalanceType;
-            } else {
-                payload.openingBalance = null;
-                payload.openingBalanceType = null;
-            }
-            await axios.patch(`/api/accountancy/ledgers/${id}`, payload);
-            toast.success("Ledger updated");
-            setEditLedgerId(null);
-            load();
-        } catch (err: unknown) {
-            const msg = axios.isAxiosError(err) ? err.response?.data?.error : "Failed";
-            toast.error(msg ?? "Failed to update ledger");
-        } finally {
-            setSavingLedger(false);
-        }
-    };
 
     const deleteLedger = async (l: LedgerRow) => {
         if (!confirm(`Delete ledger "${l.name}"?`)) return;
@@ -292,833 +163,259 @@ export default function LedgersPage() {
         }
     };
 
-    const addLedger = async () => {
-        if (!newForm.name.trim()) { toast.error("Name is required"); return; }
-        if (!newForm.groupId) { toast.error("Group is required"); return; }
-        const hasOpeningBalance = newForm.openingBalance.trim() !== "";
-        const openingBalance = Number(newForm.openingBalance);
-        if (hasOpeningBalance && (!Number.isFinite(openingBalance) || openingBalance <= 0)) {
-            toast.error("Opening balance must be greater than zero");
-            return;
-        }
-        setSaving(true);
-        const newGroupName = allFlat.find((g) => g.id === newForm.groupId)?.name;
-        const newGroupIsBank = isBankGroupName(newGroupName);
-        const newGroupIsLoan = isLoanGroupName(newGroupName);
-        const newGroupIsCreditCard = isCreditCardGroupName(newGroupName);
-        const newGroupIsBnpl = isBnplGroupName(newGroupName);
-        const newGroupIsWallet = isWalletGroupName(newGroupName);
-        const newGroupIsGateway = isGatewayGroupName(newGroupName);
-        try {
-            // normalBalance is left unset → inherited from the group's nature.
-            await axios.post("/api/accountancy/ledgers", {
-                name: newForm.name.trim(),
-                groupId: newForm.groupId,
-                description: newForm.description.trim() || null,
-                ...(newGroupIsBank && hasBankData(newBank) ? { bankJson: newBank } : {}),
-                ...(newGroupIsLoan && hasLoanData(newLoan) ? { loanJson: newLoan } : {}),
-                ...(newGroupIsCreditCard && hasCreditCardData(newCreditCard) ? { creditCardJson: newCreditCard } : {}),
-                ...(newGroupIsBnpl && hasBnplData(newBnpl) ? { bnplJson: newBnpl } : {}),
-                ...(newGroupIsWallet && hasWalletData(newWallet) ? { walletJson: newWallet } : {}),
-                ...(newGroupIsGateway && hasGatewayData(newGateway) ? { gatewayJson: newGateway } : {}),
-                ...(hasOpeningBalance ? {
-                    openingBalance,
-                    openingBalanceType: newForm.openingBalanceType,
-                } : {}),
-            });
-            toast.success("Ledger created");
-            setShowAdd(false);
-            setNewForm(createNewLedgerForm());
-            setNewBank(EMPTY_BANK);
-            setNewLoan(EMPTY_LOAN);
-            setNewCreditCard(EMPTY_CREDIT_CARD);
-            setNewBnpl(EMPTY_BNPL);
-            setNewWallet(EMPTY_WALLET);
-            setNewGateway(EMPTY_GATEWAY);
-            load();
-        } catch (err: unknown) {
-            const msg = axios.isAxiosError(err) ? err.response?.data?.error : "Failed";
-            toast.error(msg ?? "Failed to create ledger");
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    if (loading) return (
-        <div className="flex items-center justify-center h-64">
-            <Loader2 className="animate-spin text-muted-foreground" size={32} />
-        </div>
-    );
-
     return (
-        <ScrollArea className="h-full" type="always">
-            <div className="max-w-5xl mx-auto space-y-6 px-6 pt-3 pb-6">
-                {/* Header */}
-                <div className="flex items-center justify-between">
+        // Header sits outside the scroller so "New Ledger" stays reachable no
+        // matter how far down the tree the user has scrolled.
+        <div className="flex h-full flex-col">
+            <div className="shrink-0 bg-background px-6 py-3">
+                <div className="mx-auto flex max-w-5xl items-center justify-between">
                     <div>
                         <h1 className="text-2xl font-bold text-foreground">Ledgers</h1>
                         <p className="text-sm text-muted-foreground mt-0.5">
                             {allFlat.length} groups · {ledgerCount} ledgers — expand a group to see its ledgers
                         </p>
                     </div>
-                    <Button onClick={() => setShowAdd((v) => !v)}>
+                    <Button onClick={() => setAddOpen(true)}>
                         <Plus size={16} /> New Ledger
                     </Button>
                 </div>
+            </div>
 
-                {/* Add ledger form */}
-                {showAdd && (
-                    <div className="space-y-4 rounded-lg border border-border bg-card p-5 shadow">
-                        <h2 className="font-semibold text-foreground">New Ledger Account</h2>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-1.5">
-                                <Label>Name <span className="text-destructive">*</span></Label>
-                                <Input
-                                    value={newForm.name}
-                                    onChange={(e) => setNewForm((f) => ({ ...f, name: e.target.value }))}
-                                    placeholder="Account name"
-                                    autoFocus
-                                />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label>Under (Group) <span className="text-destructive">*</span></Label>
-                                <GroupCombobox
-                                    value={newForm.groupId}
-                                    onChange={(groupId) => setNewForm((f) => ({ ...f, groupId }))}
-                                    groups={allFlat}
-                                    allowNone={false}
-                                />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label>Normal Balance</Label>
-                                {(() => {
-                                    const selectedGroup = allFlat.find((g) => g.id === newForm.groupId);
-                                    return (
-                                        <div className="flex h-9 items-center rounded-md border border-input bg-muted/40 px-3 text-sm text-muted-foreground">
-                                            {selectedGroup
-                                                ? `${inheritedNormalBalance(selectedGroup.type)} — inherited from ${selectedGroup.name}`
-                                                : "Inherited from group"}
-                                        </div>
-                                    );
-                                })()}
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label>Description</Label>
-                                <Input
-                                    value={newForm.description}
-                                    onChange={(e) => setNewForm((f) => ({ ...f, description: e.target.value }))}
-                                    placeholder="Optional"
-                                />
-                            </div>
-                            <div className="col-span-2 space-y-3 rounded-md border border-border bg-muted/30 p-4">
-                                <p className="text-sm font-medium text-foreground">
-                                    Opening Balance <span className="font-normal text-muted-foreground">— optional</span>
-                                </p>
-                                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                                    <div className="space-y-1.5">
-                                        <Label>Amount (₹)</Label>
-                                        <Input
-                                            type="text"
-                                            inputMode="decimal"
-                                            value={newForm.openingBalance}
-                                            onChange={(e) => setNewForm((f) => ({ ...f, openingBalance: e.target.value }))}
-                                            placeholder="0.00"
-                                        />
-                                    </div>
-                                    <div className="space-y-1.5">
-                                        <Label>Dr / Cr</Label>
-                                        <Select
-                                            value={newForm.openingBalanceType}
-                                            onValueChange={(value) => setNewForm((f) => ({
-                                                ...f,
-                                                openingBalanceType: value as "DEBIT" | "CREDIT",
-                                            }))}
-                                        >
-                                            <SelectTrigger><SelectValue /></SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="DEBIT">Debit</SelectItem>
-                                                <SelectItem value="CREDIT">Credit</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                </div>
-                            </div>
+            {/* min-h-0 lets this flex child shrink so the card — and the
+                scroller inside it — get a real bounded height instead of
+                growing to fit every row. */}
+            <div className="min-h-0 flex-1 px-6 pt-4 pb-6">
+                <div className="mx-auto flex h-full max-w-5xl flex-col overflow-hidden rounded-lg border border-border bg-card shadow">
+                    {loading ? (
+                        <div className="flex flex-1 items-center justify-center">
+                            <Loader2 className="animate-spin text-muted-foreground" size={32} />
                         </div>
-                        {/* Bank particulars — only for ledgers under a Bank group;
-                        printed on the Contra deposit slip. */}
-                        {isBankGroupName(allFlat.find((g) => g.id === newForm.groupId)?.name) && (
-                            <div className="space-y-3 rounded-md border border-border bg-muted/30 p-4">
-                                <p className="text-sm font-medium text-foreground">Bank Details <span className="font-normal text-muted-foreground">— printed on the deposit slip</span></p>
-                                <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
-                                    {BANK_FIELD_LABELS.map(({ key, label, placeholder }) => (
-                                        <div key={key} className="space-y-1.5">
-                                            <Label>{label}</Label>
-                                            <Input
-                                                value={newBank[key]}
-                                                onChange={(e) => setNewBank((b) => ({ ...b, [key]: e.target.value }))}
-                                                placeholder={placeholder}
-                                            />
-                                        </div>
-                                    ))}
-                                    {isOdGroupName(allFlat.find((g) => g.id === newForm.groupId)?.name) && (
-                                        <>
-                                            <div className="space-y-1.5">
-                                                <Label>OD Limit (₹) <span className="font-normal text-muted-foreground">— optional</span></Label>
-                                                <Input
-                                                    value={newBank.limit}
-                                                    onChange={(e) => setNewBank((b) => ({ ...b, limit: e.target.value }))}
-                                                    placeholder="500000"
-                                                />
-                                            </div>
-                                            <div className="space-y-1.5">
-                                                <Label>Usable Fund Tier</Label>
-                                                <Select
-                                                    value={newBank.fundTier || "INSTANT"}
-                                                    onValueChange={(v) => setNewBank((b) => ({ ...b, fundTier: v === "INSTANT" ? "" : v }))}
+                    ) : (
+                        // A native scroller, not <ScrollArea>: Radix wraps its
+                        // viewport's children in a `display: table` element,
+                        // which makes `position: sticky` headers unreliable.
+                        <div className="flex-1 overflow-y-auto">
+                            <table className="w-full text-sm">
+                                {/* Sticky column headers — the rows scroll under
+                                    them, so they stay readable all the way down.
+                                    Sticky goes on the cells, not <thead>, for
+                                    Safari; each needs its own background or the
+                                    rows show through. */}
+                                <thead>
+                                    <tr className="text-xs text-muted-foreground [&>th]:sticky [&>th]:top-0 [&>th]:z-10 [&>th]:border-b [&>th]:border-border [&>th]:bg-muted">
+                                        <th className="px-4 py-2.5 text-left font-medium w-8" />
+                                        <th className="px-4 py-2.5 text-left font-medium">Name of Group</th>
+                                        <th className="px-4 py-2.5 text-left font-medium w-28">Type</th>
+                                        <th className="px-4 py-2.5 text-right font-medium w-24">Accounts</th>
+                                        <th className="px-4 py-2.5 text-right font-medium w-36">Balance</th>
+                                        <th className="px-4 py-2.5 w-16" />
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {flat.map((row) => {
+                                        // ── Group header row ──────────────────────────────
+                                        if (row.kind === "group") {
+                                            const g = row.group;
+                                            return (
+                                                <tr
+                                                    key={`g-${g.id}`}
+                                                    className="border-b last:border-0 hover:bg-muted/40"
                                                 >
-                                                    <SelectTrigger><SelectValue /></SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="INSTANT">Instant</SelectItem>
-                                                        <SelectItem value="OTHER">Other</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                        </>
-                                    )}
-                                </div>
-                            </div>
-                        )}
-                        {/* Loan particulars — Loans (Liability) / Secured / Unsecured Loans. */}
-                        {isLoanGroupName(allFlat.find((g) => g.id === newForm.groupId)?.name) && (
-                            <div className="space-y-3 rounded-md border border-border bg-muted/30 p-4">
-                                <p className="text-sm font-medium text-foreground">Loan Details <span className="font-normal text-muted-foreground">— optional, informational</span></p>
-                                <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
-                                    {LOAN_FIELD_LABELS.map(({ key, label, placeholder }) => (
-                                        <div key={key} className="space-y-1.5">
-                                            <Label>{label}</Label>
-                                            <Input
-                                                value={newLoan[key]}
-                                                onChange={(e) => setNewLoan((l) => ({ ...l, [key]: e.target.value }))}
-                                                placeholder={placeholder}
-                                            />
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-                        {/* Credit card particulars — Credit Card group only. */}
-                        {isCreditCardGroupName(allFlat.find((g) => g.id === newForm.groupId)?.name) && (
-                            <div className="space-y-3 rounded-md border border-border bg-muted/30 p-4">
-                                <p className="text-sm font-medium text-foreground">Credit Card Details <span className="font-normal text-muted-foreground">— optional, informational</span></p>
-                                <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
-                                    {CREDIT_CARD_FIELD_LABELS.map(({ key, label, placeholder }) => (
-                                        <div key={key} className="space-y-1.5">
-                                            <Label>{label}</Label>
-                                            <Input
-                                                value={newCreditCard[key]}
-                                                onChange={(e) => setNewCreditCard((c) => ({ ...c, [key]: e.target.value }))}
-                                                placeholder={placeholder}
-                                            />
-                                        </div>
-                                    ))}
-                                    <div className="space-y-1.5">
-                                        <Label>Usable Fund Tier</Label>
-                                        <Select
-                                            value={newCreditCard.fundTier || "OTHER"}
-                                            onValueChange={(v) => setNewCreditCard((c) => ({ ...c, fundTier: v === "OTHER" ? "" : v }))}
-                                        >
-                                            <SelectTrigger><SelectValue /></SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="INSTANT">Instant</SelectItem>
-                                                <SelectItem value="OTHER">Other</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                        {/* BNPL particulars — BNPL A/c group only. */}
-                        {isBnplGroupName(allFlat.find((g) => g.id === newForm.groupId)?.name) && (
-                            <div className="space-y-3 rounded-md border border-border bg-muted/30 p-4">
-                                <p className="text-sm font-medium text-foreground">BNPL Details <span className="font-normal text-muted-foreground">— optional, informational</span></p>
-                                <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
-                                    {BNPL_FIELD_LABELS.map(({ key, label, placeholder }) => (
-                                        <div key={key} className="space-y-1.5">
-                                            <Label>{label}</Label>
-                                            <Input
-                                                value={newBnpl[key]}
-                                                onChange={(e) => setNewBnpl((b) => ({ ...b, [key]: e.target.value }))}
-                                                placeholder={placeholder}
-                                            />
-                                        </div>
-                                    ))}
-                                    <div className="space-y-1.5">
-                                        <Label>Usable Fund Tier</Label>
-                                        <Select
-                                            value={newBnpl.fundTier || "OTHER"}
-                                            onValueChange={(v) => setNewBnpl((b) => ({ ...b, fundTier: v === "OTHER" ? "" : v }))}
-                                        >
-                                            <SelectTrigger><SelectValue /></SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="INSTANT">Instant</SelectItem>
-                                                <SelectItem value="OTHER">Other</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                        {/* Wallet particulars — Wallets group only. */}
-                        {isWalletGroupName(allFlat.find((g) => g.id === newForm.groupId)?.name) && (
-                            <div className="space-y-3 rounded-md border border-border bg-muted/30 p-4">
-                                <p className="text-sm font-medium text-foreground">Wallet Details <span className="font-normal text-muted-foreground">— optional, informational</span></p>
-                                <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
-                                    {WALLET_FIELD_LABELS.map(({ key, label, placeholder }) => (
-                                        <div key={key} className="space-y-1.5">
-                                            <Label>{label}</Label>
-                                            <Input
-                                                value={newWallet[key]}
-                                                onChange={(e) => setNewWallet((w) => ({ ...w, [key]: e.target.value }))}
-                                                placeholder={placeholder}
-                                            />
-                                        </div>
-                                    ))}
-                                    <div className="space-y-1.5">
-                                        <Label>Usable Fund Tier</Label>
-                                        <Select
-                                            value={newWallet.fundTier || "OTHER"}
-                                            onValueChange={(v) => setNewWallet((w) => ({ ...w, fundTier: v === "OTHER" ? "" : v }))}
-                                        >
-                                            <SelectTrigger><SelectValue /></SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="INSTANT">Instant</SelectItem>
-                                                <SelectItem value="OTHER">Other</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                        {/* Payment gateway particulars — Payment Gateway group only. */}
-                        {isGatewayGroupName(allFlat.find((g) => g.id === newForm.groupId)?.name) && (
-                            <div className="space-y-3 rounded-md border border-border bg-muted/30 p-4">
-                                <p className="text-sm font-medium text-foreground">Payment Gateway Details <span className="font-normal text-muted-foreground">— optional, informational</span></p>
-                                <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
-                                    {GATEWAY_FIELD_LABELS.map(({ key, label, placeholder }) => (
-                                        <div key={key} className="space-y-1.5">
-                                            <Label>{label}</Label>
-                                            <Input
-                                                value={newGateway[key]}
-                                                onChange={(e) => setNewGateway((g) => ({ ...g, [key]: e.target.value }))}
-                                                placeholder={placeholder}
-                                            />
-                                        </div>
-                                    ))}
-                                    <div className="space-y-1.5">
-                                        <Label>Usable Fund Tier</Label>
-                                        <Select
-                                            value={newGateway.fundTier || "OTHER"}
-                                            onValueChange={(v) => setNewGateway((g) => ({ ...g, fundTier: v === "OTHER" ? "" : v }))}
-                                        >
-                                            <SelectTrigger><SelectValue /></SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="INSTANT">Instant</SelectItem>
-                                                <SelectItem value="OTHER">Other</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                        <div className="flex gap-2 justify-end">
-                            <Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button>
-                            <Button onClick={addLedger} disabled={saving}>
-                                {saving && <Loader2 size={14} className="animate-spin" />} Save
-                            </Button>
-                        </div>
-                    </div>
-                )}
+                                                    {/* Expand chevron */}
+                                                    <td className="px-2 py-2.5 text-center w-8">
+                                                        {row.hasChildren ? (
+                                                            <button
+                                                                onClick={() => toggle(g.id)}
+                                                                className="text-muted-foreground hover:text-foreground transition-colors"
+                                                            >
+                                                                {expanded.has(g.id)
+                                                                    ? <ChevronDown size={14} />
+                                                                    : <ChevronRight size={14} />}
+                                                            </button>
+                                                        ) : null}
+                                                    </td>
 
-                {/* Group tree table */}
-                <div className="overflow-hidden rounded-lg border border-border bg-card shadow">
-                    <table className="w-full text-sm">
-                        <thead>
-                            <tr className="border-b border-border bg-muted text-xs text-muted-foreground">
-                                <th className="px-4 py-2.5 text-left font-medium w-8" />
-                                <th className="px-4 py-2.5 text-left font-medium">Name of Group</th>
-                                <th className="px-4 py-2.5 text-left font-medium w-28">Type</th>
-                                <th className="px-4 py-2.5 text-right font-medium w-24">Accounts</th>
-                                <th className="px-4 py-2.5 text-right font-medium w-36">Balance</th>
-                                <th className="px-4 py-2.5 w-16" />
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {flat.map((row) => {
-                                // ── Group header row ──────────────────────────────
-                                if (row.kind === "group") {
-                                    const g = row.group;
-                                    return (
-                                        <tr
-                                            key={`g-${g.id}`}
-                                            className="border-b last:border-0 hover:bg-muted/40"
-                                        >
-                                            {/* Expand chevron */}
-                                            <td className="px-2 py-2.5 text-center w-8">
-                                                {row.hasChildren ? (
-                                                    <button
-                                                        onClick={() => toggle(g.id)}
-                                                        className="text-muted-foreground hover:text-foreground transition-colors"
-                                                    >
-                                                        {expanded.has(g.id)
-                                                            ? <ChevronDown size={14} />
-                                                            : <ChevronRight size={14} />}
-                                                    </button>
-                                                ) : null}
-                                            </td>
+                                                    {/* Name (indented by depth) */}
+                                                    <td className="py-2.5 pr-4">
+                                                        <div style={{ paddingLeft: row.depth * 20 }}>
+                                                            {g._count.accounts > 0 ? (
+                                                                <Link
+                                                                    href={`/office/accountancy/masters/ledgers/${g.id}`}
+                                                                    className={`font-medium hover:underline hover:text-primary ${row.depth === 0 ? "text-foreground" : "text-muted-foreground"}`}
+                                                                >
+                                                                    {g.name}
+                                                                </Link>
+                                                            ) : (
+                                                                <span className={`font-medium ${row.depth === 0 ? "text-foreground" : "text-muted-foreground"}`}>
+                                                                    {g.name}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </td>
 
-                                            {/* Name (indented by depth) */}
-                                            <td className="py-2.5 pr-4">
-                                                <div style={{ paddingLeft: row.depth * 20 }}>
-                                                    {g._count.accounts > 0 ? (
-                                                        <Link
-                                                            href={`/office/accountancy/masters/ledgers/${g.id}`}
-                                                            className={`font-medium hover:underline hover:text-primary ${row.depth === 0 ? "text-foreground" : "text-muted-foreground"}`}
-                                                        >
-                                                            {g.name}
-                                                        </Link>
-                                                    ) : (
-                                                        <span className={`font-medium ${row.depth === 0 ? "text-foreground" : "text-muted-foreground"}`}>
-                                                            {g.name}
+                                                    {/* Type badge */}
+                                                    <td className="px-4 py-2.5">
+                                                        <span className={`text-xs px-2 py-0.5 border font-medium rounded-sm ${TYPE_COLORS[g.type]}`}>
+                                                            {g.type}
                                                         </span>
-                                                    )}
-                                                </div>
-                                            </td>
+                                                    </td>
 
-                                            {/* Type badge */}
-                                            <td className="px-4 py-2.5">
-                                                <span className={`text-xs px-2 py-0.5 border font-medium rounded-sm ${TYPE_COLORS[g.type]}`}>
-                                                    {g.type}
-                                                </span>
-                                            </td>
+                                                    {/* Account count */}
+                                                    <td className="px-4 py-2.5 text-right text-muted-foreground text-xs">
+                                                        {g._count.accounts > 0
+                                                            ? <span className="font-medium text-foreground">{g._count.accounts}</span>
+                                                            : <span className="text-muted-foreground/50">—</span>}
+                                                    </td>
 
-                                            {/* Account count */}
-                                            <td className="px-4 py-2.5 text-right text-muted-foreground text-xs">
-                                                {g._count.accounts > 0
-                                                    ? <span className="font-medium text-foreground">{g._count.accounts}</span>
-                                                    : <span className="text-muted-foreground/50">—</span>}
-                                            </td>
+                                                    {/* Balance (rolled up) */}
+                                                    <td className="px-4 py-2.5 text-right font-mono text-xs">
+                                                        {g._count.accounts > 0
+                                                            ? <span className={g.totalBalance < 0 ? "text-destructive" : "text-foreground"}>
+                                                                {drCr(g.totalBalance)}
+                                                            </span>
+                                                            : <span className="text-muted-foreground/50">—</span>}
+                                                    </td>
 
-                                            {/* Balance (rolled up) */}
-                                            <td className="px-4 py-2.5 text-right font-mono text-xs">
-                                                {g._count.accounts > 0
-                                                    ? <span className={g.totalBalance < 0 ? "text-destructive" : "text-foreground"}>
-                                                        {drCr(g.totalBalance)}
-                                                    </span>
-                                                    : <span className="text-muted-foreground/50">—</span>}
-                                            </td>
-
-                                            {/* View accounts link */}
-                                            <td className="px-4 py-2.5 text-right">
-                                                {g._count.accounts > 0 && (
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        className="h-7 px-2 text-xs text-muted-foreground hover:text-primary gap-1"
-                                                        onClick={() => router.push(`/office/accountancy/masters/ledgers/${g.id}`)}
-                                                    >
-                                                        View <ArrowRight size={12} />
-                                                    </Button>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    );
-                                }
-
-                                // ── "View all" footer when the ledger list is capped ──
-                                if (row.kind === "more") {
-                                    const g = row.group;
-                                    return (
-                                        <tr key={`m-${g.id}`} className="border-b last:border-0 bg-muted/10">
-                                            <td className="px-2 py-2 w-8" />
-                                            <td className="py-2 pr-4" colSpan={5}>
-                                                <div style={{ paddingLeft: row.depth * 20 }}>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => router.push(`/office/accountancy/masters/ledgers/${g.id}`)}
-                                                        className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary hover:underline"
-                                                    >
-                                                        Showing {g.ledgers.length} of {g.ledgerTotal} ledgers — View all
-                                                        <ArrowRight size={12} />
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    );
-                                }
-
-                                // ── Ledger (leaf) row ─────────────────────────────
-                                const l = row.ledger;
-                                const isEditing = editLedgerId === l.id;
-                                const isIdentity = l.personId !== null || l.companyId !== null;
-                                if (isEditing) {
-                                    return (
-                                        <tr
-                                            key={`l-${l.id}`}
-                                            className="border-b last:border-0 bg-muted/20"
-                                        >
-                                            <td className="px-2 py-3 w-8 align-top" />
-                                            <td colSpan={5} className="py-3 pr-4 align-top">
-                                                <div style={{ paddingLeft: row.depth * 20 }}>
-                                                    <div className="rounded-lg border border-border bg-card p-4 shadow-sm space-y-3">
-                                                        <div className="grid grid-cols-2 gap-4">
-                                                            <div className="space-y-1.5">
-                                                                <Label className="text-xs">Name <span className="text-destructive">*</span></Label>
-                                                                <Input
-                                                                    value={editName}
-                                                                    onChange={(e) => setEditName(e.target.value)}
-                                                                    placeholder="Ledger name"
-                                                                    autoFocus
-                                                                    className="h-8 text-sm"
-                                                                />
-                                                            </div>
-                                                            <div className="space-y-1.5">
-                                                                <Label className="text-xs">Under (Group)</Label>
-                                                                <GroupCombobox
-                                                                    value={editGroupId}
-                                                                    onChange={setEditGroupId}
-                                                                    groups={allFlat}
-                                                                />
-                                                            </div>
-                                                        </div>
-                                                        {/* Opening Balance */}
-                                                        <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3">
-                                                            <p className="text-sm font-medium text-foreground">
-                                                                Opening Balance <span className="font-normal text-muted-foreground">— leave blank to clear</span>
-                                                            </p>
-                                                            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                                                                <div className="space-y-1.5">
-                                                                    <Label className="text-xs">Amount (₹)</Label>
-                                                                    <Input
-                                                                        type="text"
-                                                                        inputMode="decimal"
-                                                                        value={editOpeningBalance}
-                                                                        onChange={(e) => setEditOpeningBalance(e.target.value)}
-                                                                        placeholder="0.00"
-                                                                        className="h-8 text-sm"
-                                                                    />
-                                                                </div>
-                                                                <div className="space-y-1.5">
-                                                                    <Label className="text-xs">Dr / Cr</Label>
-                                                                    <Select
-                                                                        value={editOpeningBalanceType}
-                                                                        onValueChange={(value) => setEditOpeningBalanceType(value as "DEBIT" | "CREDIT")}
-                                                                    >
-                                                                        <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-                                                                        <SelectContent>
-                                                                            <SelectItem value="DEBIT">Debit</SelectItem>
-                                                                            <SelectItem value="CREDIT">Credit</SelectItem>
-                                                                        </SelectContent>
-                                                                    </Select>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                        {/* Bank particulars — Bank-group ledgers only. */}
-                                                        {isBankGroupName(allFlat.find((g) => g.id === editGroupId)?.name) && (
-                                                            <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3">
-                                                                <p className="text-sm font-medium text-foreground">Bank Details <span className="font-normal text-muted-foreground">— printed on the deposit slip</span></p>
-                                                                <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-                                                                    {BANK_FIELD_LABELS.map(({ key, label, placeholder }) => (
-                                                                        <div key={key} className="space-y-1.5">
-                                                                            <Label className="text-xs">{label}</Label>
-                                                                            <Input
-                                                                                value={editBank[key]}
-                                                                                onChange={(e) => setEditBank((b) => ({ ...b, [key]: e.target.value }))}
-                                                                                placeholder={placeholder}
-                                                                                className="h-8 text-sm"
-                                                                            />
-                                                                        </div>
-                                                                    ))}
-                                                                    {isOdGroupName(allFlat.find((g) => g.id === editGroupId)?.name) && (
-                                                                        <>
-                                                                            <div className="space-y-1.5">
-                                                                                <Label className="text-xs">OD Limit (₹) <span className="font-normal text-muted-foreground">— optional</span></Label>
-                                                                                <Input
-                                                                                    value={editBank.limit}
-                                                                                    onChange={(e) => setEditBank((b) => ({ ...b, limit: e.target.value }))}
-                                                                                    placeholder="500000"
-                                                                                    className="h-8 text-sm"
-                                                                                />
-                                                                            </div>
-                                                                            <div className="space-y-1.5">
-                                                                                <Label className="text-xs">Usable Fund Tier</Label>
-                                                                                <Select
-                                                                                    value={editBank.fundTier || "INSTANT"}
-                                                                                    onValueChange={(v) => setEditBank((b) => ({ ...b, fundTier: v === "INSTANT" ? "" : v }))}
-                                                                                >
-                                                                                    <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-                                                                                    <SelectContent>
-                                                                                        <SelectItem value="INSTANT">Instant</SelectItem>
-                                                                                        <SelectItem value="OTHER">Other</SelectItem>
-                                                                                    </SelectContent>
-                                                                                </Select>
-                                                                            </div>
-                                                                        </>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                        {/* Loan particulars — Loans (Liability) / Secured / Unsecured Loans. */}
-                                                        {isLoanGroupName(allFlat.find((g) => g.id === editGroupId)?.name) && (
-                                                            <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3">
-                                                                <p className="text-sm font-medium text-foreground">Loan Details <span className="font-normal text-muted-foreground">— optional, informational</span></p>
-                                                                <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-                                                                    {LOAN_FIELD_LABELS.map(({ key, label, placeholder }) => (
-                                                                        <div key={key} className="space-y-1.5">
-                                                                            <Label className="text-xs">{label}</Label>
-                                                                            <Input
-                                                                                value={editLoan[key]}
-                                                                                onChange={(e) => setEditLoan((l) => ({ ...l, [key]: e.target.value }))}
-                                                                                placeholder={placeholder}
-                                                                                className="h-8 text-sm"
-                                                                            />
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                        {/* Credit card particulars — Credit Card group only. */}
-                                                        {isCreditCardGroupName(allFlat.find((g) => g.id === editGroupId)?.name) && (
-                                                            <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3">
-                                                                <p className="text-sm font-medium text-foreground">Credit Card Details <span className="font-normal text-muted-foreground">— optional, informational</span></p>
-                                                                <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-                                                                    {CREDIT_CARD_FIELD_LABELS.map(({ key, label, placeholder }) => (
-                                                                        <div key={key} className="space-y-1.5">
-                                                                            <Label className="text-xs">{label}</Label>
-                                                                            <Input
-                                                                                value={editCreditCard[key]}
-                                                                                onChange={(e) => setEditCreditCard((c) => ({ ...c, [key]: e.target.value }))}
-                                                                                placeholder={placeholder}
-                                                                                className="h-8 text-sm"
-                                                                            />
-                                                                        </div>
-                                                                    ))}
-                                                                    <div className="space-y-1.5">
-                                                                        <Label className="text-xs">Usable Fund Tier</Label>
-                                                                        <Select
-                                                                            value={editCreditCard.fundTier || "OTHER"}
-                                                                            onValueChange={(v) => setEditCreditCard((c) => ({ ...c, fundTier: v === "OTHER" ? "" : v }))}
-                                                                        >
-                                                                            <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-                                                                            <SelectContent>
-                                                                                <SelectItem value="INSTANT">Instant</SelectItem>
-                                                                                <SelectItem value="OTHER">Other</SelectItem>
-                                                                            </SelectContent>
-                                                                        </Select>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                        {/* BNPL particulars — BNPL A/c group only. */}
-                                                        {isBnplGroupName(allFlat.find((g) => g.id === editGroupId)?.name) && (
-                                                            <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3">
-                                                                <p className="text-sm font-medium text-foreground">BNPL Details <span className="font-normal text-muted-foreground">— optional, informational</span></p>
-                                                                <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-                                                                    {BNPL_FIELD_LABELS.map(({ key, label, placeholder }) => (
-                                                                        <div key={key} className="space-y-1.5">
-                                                                            <Label className="text-xs">{label}</Label>
-                                                                            <Input
-                                                                                value={editBnpl[key]}
-                                                                                onChange={(e) => setEditBnpl((b) => ({ ...b, [key]: e.target.value }))}
-                                                                                placeholder={placeholder}
-                                                                                className="h-8 text-sm"
-                                                                            />
-                                                                        </div>
-                                                                    ))}
-                                                                    <div className="space-y-1.5">
-                                                                        <Label className="text-xs">Usable Fund Tier</Label>
-                                                                        <Select
-                                                                            value={editBnpl.fundTier || "OTHER"}
-                                                                            onValueChange={(v) => setEditBnpl((b) => ({ ...b, fundTier: v === "OTHER" ? "" : v }))}
-                                                                        >
-                                                                            <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-                                                                            <SelectContent>
-                                                                                <SelectItem value="INSTANT">Instant</SelectItem>
-                                                                                <SelectItem value="OTHER">Other</SelectItem>
-                                                                            </SelectContent>
-                                                                        </Select>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                        {/* Wallet particulars — Wallets group only. */}
-                                                        {isWalletGroupName(allFlat.find((g) => g.id === editGroupId)?.name) && (
-                                                            <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3">
-                                                                <p className="text-sm font-medium text-foreground">Wallet Details <span className="font-normal text-muted-foreground">— optional, informational</span></p>
-                                                                <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-                                                                    {WALLET_FIELD_LABELS.map(({ key, label, placeholder }) => (
-                                                                        <div key={key} className="space-y-1.5">
-                                                                            <Label className="text-xs">{label}</Label>
-                                                                            <Input
-                                                                                value={editWallet[key]}
-                                                                                onChange={(e) => setEditWallet((w) => ({ ...w, [key]: e.target.value }))}
-                                                                                placeholder={placeholder}
-                                                                                className="h-8 text-sm"
-                                                                            />
-                                                                        </div>
-                                                                    ))}
-                                                                    <div className="space-y-1.5">
-                                                                        <Label className="text-xs">Usable Fund Tier</Label>
-                                                                        <Select
-                                                                            value={editWallet.fundTier || "OTHER"}
-                                                                            onValueChange={(v) => setEditWallet((w) => ({ ...w, fundTier: v === "OTHER" ? "" : v }))}
-                                                                        >
-                                                                            <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-                                                                            <SelectContent>
-                                                                                <SelectItem value="INSTANT">Instant</SelectItem>
-                                                                                <SelectItem value="OTHER">Other</SelectItem>
-                                                                            </SelectContent>
-                                                                        </Select>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                        {/* Payment gateway particulars — Payment Gateway group only. */}
-                                                        {isGatewayGroupName(allFlat.find((g) => g.id === editGroupId)?.name) && (
-                                                            <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3">
-                                                                <p className="text-sm font-medium text-foreground">Payment Gateway Details <span className="font-normal text-muted-foreground">— optional, informational</span></p>
-                                                                <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-                                                                    {GATEWAY_FIELD_LABELS.map(({ key, label, placeholder }) => (
-                                                                        <div key={key} className="space-y-1.5">
-                                                                            <Label className="text-xs">{label}</Label>
-                                                                            <Input
-                                                                                value={editGateway[key]}
-                                                                                onChange={(e) => setEditGateway((g) => ({ ...g, [key]: e.target.value }))}
-                                                                                placeholder={placeholder}
-                                                                                className="h-8 text-sm"
-                                                                            />
-                                                                        </div>
-                                                                    ))}
-                                                                    <div className="space-y-1.5">
-                                                                        <Label className="text-xs">Usable Fund Tier</Label>
-                                                                        <Select
-                                                                            value={editGateway.fundTier || "OTHER"}
-                                                                            onValueChange={(v) => setEditGateway((g) => ({ ...g, fundTier: v === "OTHER" ? "" : v }))}
-                                                                        >
-                                                                            <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-                                                                            <SelectContent>
-                                                                                <SelectItem value="INSTANT">Instant</SelectItem>
-                                                                                <SelectItem value="OTHER">Other</SelectItem>
-                                                                            </SelectContent>
-                                                                        </Select>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                        <div className="flex gap-2 justify-end pt-1">
+                                                    {/* View accounts link */}
+                                                    <td className="px-4 py-2.5 text-right">
+                                                        {g._count.accounts > 0 && (
                                                             <Button
-                                                                variant="outline"
+                                                                variant="ghost"
                                                                 size="sm"
-                                                                onClick={() => setEditLedgerId(null)}
-                                                                className="h-8"
+                                                                className="h-7 px-2 text-xs text-muted-foreground hover:text-primary gap-1"
+                                                                onClick={() => router.push(`/office/accountancy/masters/ledgers/${g.id}`)}
                                                             >
-                                                                <X size={14} className="mr-1" /> Cancel
+                                                                View <ArrowRight size={12} />
                                                             </Button>
-                                                            <Button
-                                                                size="sm"
-                                                                className="h-8 text-white"
-                                                                onClick={() => saveLedger(l.id)}
-                                                                disabled={savingLedger}
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        }
+
+                                        // ── "View all" footer when the ledger list is capped ──
+                                        if (row.kind === "more") {
+                                            const g = row.group;
+                                            return (
+                                                <tr key={`m-${g.id}`} className="border-b last:border-0 bg-muted/10">
+                                                    <td className="px-2 py-2 w-8" />
+                                                    <td className="py-2 pr-4" colSpan={5}>
+                                                        <div style={{ paddingLeft: row.depth * 20 }}>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => router.push(`/office/accountancy/masters/ledgers/${g.id}`)}
+                                                                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary hover:underline"
                                                             >
-                                                                {savingLedger ? <Loader2 size={14} className="mr-1 animate-spin" /> : <Check size={14} className="mr-1" />} Save
-                                                            </Button>
+                                                                Showing {g.ledgers.length} of {g.ledgerTotal} ledgers — View all
+                                                                <ArrowRight size={12} />
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        }
+
+                                        // ── Ledger (leaf) row ─────────────────────────────
+                                        const l = row.ledger;
+                                        const isIdentity = l.personId !== null || l.companyId !== null;
+                                        return (
+                                            <tr
+                                                key={`l-${l.id}`}
+                                                className={`border-b last:border-0 hover:bg-muted/30 ${!l.isActive ? "opacity-60" : ""}`}
+                                            >
+                                                {/* No chevron for leaves */}
+                                                <td className="px-2 py-2 w-8" />
+
+                                                {/* Ledger name (one level deeper than its group) */}
+                                                <td className="py-2 pr-4">
+                                                    <div style={{ paddingLeft: row.depth * 20 }}>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-foreground">{l.name}</span>
+                                                            {l.code && (
+                                                                <span className="font-mono text-xs text-muted-foreground/70">{l.code}</span>
+                                                            )}
+                                                            {isIdentity && (
+                                                                <span className="text-xs px-1.5 py-0.5 bg-muted text-muted-foreground border border-border rounded-sm">
+                                                                    {l.personId ? "Customer" : "Company"}
+                                                                </span>
+                                                            )}
+                                                            {!l.isActive && (
+                                                                <span className="text-xs px-1.5 py-0.5 bg-muted text-muted-foreground border border-border rounded-sm">
+                                                                    Inactive
+                                                                </span>
+                                                            )}
                                                         </div>
                                                     </div>
-                                                </div>
+                                                </td>
+
+                                                {/* Type column — blank for ledgers */}
+                                                <td className="px-4 py-2" />
+
+                                                {/* Account count — blank for ledgers */}
+                                                <td className="px-4 py-2" />
+
+                                                {/* Balance */}
+                                                <td className="px-4 py-2 text-right font-mono text-xs">
+                                                    {l.balance !== 0
+                                                        ? <span className={l.balance < 0 ? "text-destructive" : "text-foreground"}>
+                                                            {drCr(l.balance)}
+                                                        </span>
+                                                        : <span className="text-muted-foreground/50">0.00</span>}
+                                                </td>
+
+                                                {/* Edit / delete buttons */}
+                                                <td className="px-4 py-2 text-right">
+                                                    <div className="flex items-center gap-1 justify-end">
+                                                        <Button
+                                                            variant="ghost" size="icon-sm"
+                                                            className="text-muted-foreground hover:bg-primary/10 hover:text-primary"
+                                                            onClick={() => setEditTarget(l)}
+                                                            aria-label={`Edit ${l.name}`}
+                                                        >
+                                                            <Pencil size={14} />
+                                                        </Button>
+                                                        <Button
+                                                            variant="ghost" size="icon-sm"
+                                                            className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                                                            onClick={() => deleteLedger(l)}
+                                                            disabled={isIdentity}
+                                                            aria-label={`Delete ${l.name}`}
+                                                        >
+                                                            <Trash2 size={14} />
+                                                        </Button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                    {flat.length === 0 && (
+                                        <tr>
+                                            <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground text-sm">
+                                                No groups found.
                                             </td>
                                         </tr>
-                                    );
-                                }
-                                return (
-                                    <tr
-                                        key={`l-${l.id}`}
-                                        className={`border-b last:border-0 hover:bg-muted/30 ${!l.isActive ? "opacity-60" : ""}`}
-                                    >
-                                        {/* No chevron for leaves */}
-                                        <td className="px-2 py-2 w-8" />
-
-                                        {/* Ledger name (one level deeper than its group) */}
-                                        <td className="py-2 pr-4">
-                                            <div style={{ paddingLeft: row.depth * 20 }}>
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-foreground">{l.name}</span>
-                                                    {l.code && (
-                                                        <span className="font-mono text-xs text-muted-foreground/70">{l.code}</span>
-                                                    )}
-                                                    {isIdentity && (
-                                                        <span className="text-xs px-1.5 py-0.5 bg-muted text-muted-foreground border border-border rounded-sm">
-                                                            {l.personId ? "Customer" : "Company"}
-                                                        </span>
-                                                    )}
-                                                    {!l.isActive && (
-                                                        <span className="text-xs px-1.5 py-0.5 bg-muted text-muted-foreground border border-border rounded-sm">
-                                                            Inactive
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </td>
-
-                                        {/* Type column — blank for ledgers */}
-                                        <td className="px-4 py-2" />
-
-                                        {/* Account count — blank for ledgers */}
-                                        <td className="px-4 py-2" />
-
-                                        {/* Balance */}
-                                        <td className="px-4 py-2 text-right font-mono text-xs">
-                                            {l.balance !== 0
-                                                ? <span className={l.balance < 0 ? "text-destructive" : "text-foreground"}>
-                                                    {drCr(l.balance)}
-                                                </span>
-                                                : <span className="text-muted-foreground/50">0.00</span>}
-                                        </td>
-
-                                        {/* Edit / delete buttons */}
-                                        <td className="px-4 py-2 text-right">
-                                            <div className="flex items-center gap-1 justify-end">
-                                                <Button
-                                                    variant="ghost" size="icon-sm"
-                                                    className="text-muted-foreground hover:bg-primary/10 hover:text-primary"
-                                                    onClick={() => startEditLedger(l)}
-                                                    aria-label={`Edit ${l.name}`}
-                                                >
-                                                    <Pencil size={14} />
-                                                </Button>
-                                                <Button
-                                                    variant="ghost" size="icon-sm"
-                                                    className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                                                    onClick={() => deleteLedger(l)}
-                                                    disabled={isIdentity}
-                                                    aria-label={`Delete ${l.name}`}
-                                                >
-                                                    <Trash2 size={14} />
-                                                </Button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                            {flat.length === 0 && (
-                                <tr>
-                                    <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground text-sm">
-                                        No groups found.
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
                 </div>
             </div>
-        </ScrollArea>
+
+            <CreateLedgerDialog
+                open={addOpen}
+                onOpenChange={setAddOpen}
+                groups={groupOptions}
+                onCreated={load}
+            />
+
+            <EditLedgerDialog
+                open={editTarget !== null}
+                onOpenChange={(v) => { if (!v) setEditTarget(null); }}
+                ledger={editTarget}
+                groups={groupOptions}
+                onSaved={load}
+            />
+        </div>
     );
 }
