@@ -10,6 +10,8 @@ import { formatDate } from "@/shared/lib/format/formatDate";
 import { REPAIR_PIPELINE_NAME } from "@/modules/repairing/lib/repairPipeline";
 import { useMarkSurfaceSeen } from "@/shared/hooks/useNavCounts";
 import { NAV_SURFACE } from "@/shared/lib/nav/navSurfaces";
+import { PathBreadcrumb } from "@/shared/components/PathBreadcrumb";
+import { PaginationBar } from "@/shared/components/PaginationBar";
 import WarrantyBadge from "@/modules/repairing/components/WarrantyBadge";
 import { PRIORITY_META } from "@/utils/constants";
 import { Button } from "@/components/ui/button";
@@ -48,6 +50,8 @@ interface Ticket {
 type StatusOption = { id: string; label: string };
 type PriorityOption = { id: string; label: string };
 
+const PAGE_SIZE = 25;
+
 /** The centre a device was sent to — new shipping-slip party first, else the legacy ServiceCenter. */
 const serviceCenterName = (t: Ticket) => t.context?.shippingSlip?.partyName ?? t.serviceCenter?.name ?? null;
 
@@ -69,6 +73,8 @@ export default function TicketsPage() {
     const [dateFrom, setDateFrom] = useState("");
     const [dateTo, setDateTo] = useState("");
     const [warrantyFilter, setWarrantyFilter] = useState("");
+    const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(PAGE_SIZE);
 
     useEffect(() => {
         axios.get("/api/priorities").then((r) => setPriorityOptions(r.data));
@@ -122,6 +128,8 @@ export default function TicketsPage() {
         if (warrantyFilter === "non_warranty") result = result.filter((t) => !t.isWarranty);
         // eslint-disable-next-line react-hooks/set-state-in-effect
         setFiltered(result);
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setPage(1);
     }, [tickets, search, statusFilter, priorityFilter, serviceCenterFilter, dateFrom, dateTo, warrantyFilter]);
 
     const clearFilters = () => {
@@ -141,12 +149,20 @@ export default function TicketsPage() {
     // Service-centre options come from the tickets themselves (either flow), not a master list.
     const serviceCenterOptions = Array.from(new Set(tickets.map(serviceCenterName).filter(Boolean))) as string[];
 
+    const pageRows = filtered.slice((page - 1) * pageSize, page * pageSize);
+
     return (
-        <div>
-            <div className="flex items-center justify-between mb-6">
+        <div className="flex h-full flex-col overflow-hidden">
+            <PathBreadcrumb
+                root={{ href: "/office/repairing", label: "Repairs" }}
+                labels={{ tickets: "Tickets" }}
+                escapeBack
+            />
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-4">
+            {/* <div className="flex items-center justify-between mb-6">
                 <h1 className="text-3xl font-bold">Tickets</h1>
                 <span className="text-sm text-muted-foreground">{tickets.length} total</span>
-            </div>
+            </div> */}
 
             {/* Search & Filters */}
             <div className="mb-4 space-y-3 rounded-lg border border-border bg-card p-4 shadow">
@@ -213,74 +229,89 @@ export default function TicketsPage() {
             </div>
 
             {/* Table */}
-            {loading ? (
-                <p className="text-muted-foreground">Loading...</p>
-            ) : filtered.length === 0 ? (
-                <div className="rounded-lg border border-border p-12 text-center text-muted-foreground shadow">
-                    {hasFilters ? "No tickets match your filters." : "No tickets yet. Create your first one!"}
-                </div>
-            ) : (
-                <div className="overflow-hidden rounded-lg border border-border shadow">
-                    <table className="w-full text-sm">
-                        <thead className="border-b border-border bg-muted text-xs text-muted-foreground uppercase">
-                            <tr>
-                                <th className="px-6 py-3 text-left">#</th>
-                                <th className="px-6 py-3 text-left">Customer</th>
-                                <th className="px-6 py-3 text-left">Device</th>
-                                <th className="px-6 py-3 text-left">Problem</th>
-                                <th className="px-6 py-3 text-left">Priority</th>
-                                <th className="px-6 py-3 text-left">Status</th>
-                                <th className="px-6 py-3 text-left">Date</th>
-                                <th className="px-6 py-3 text-left">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-border">
-                            {filtered.map((t) => (
-                                <tr key={t.id} className="hover:bg-muted/50">
-                                    <td className="px-6 py-4 text-muted-foreground">{t.id}</td>
-                                    <td className="px-6 py-4">
-                                        <p className="font-medium">{t.device.account?.name}</p>
-                                        <p className="text-muted-foreground text-xs">{t.device.account?.phone}</p>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <p>{t.device.brand} {t.device.model}</p>
-                                        <p className="text-muted-foreground text-xs">{t.device.type}</p>
-                                    </td>
-                                    <td className="px-6 py-4 max-w-[150px] truncate text-muted-foreground">
-                                        {t.device.problem}
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <span className={`px-2 py-0.5 text-xs font-medium ${PRIORITY_META[t.priority]?.color ?? ""}`}>
-                                            {PRIORITY_META[t.priority]?.label ?? t.priority}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <div className="flex flex-col gap-1">
-                                            <span className={`px-2 py-0.5 text-xs font-medium w-fit ${t.ticketStatus.color}`}>
-                                                {t.ticketStatus.label}
-                                            </span>
-                                            {t.ticketWorker && (
-                                                <span className={`px-2 py-0.5 text-xs font-medium w-fit ${badgeColor(t.ticketWorker.color).className}`} style={badgeColor(t.ticketWorker.color).style}>
-                                                    {t.ticketWorker.label}
-                                                </span>
-                                            )}
-                                            <WarrantyBadge isWarranty={t.isWarranty} warrantyStatus={t.warrantyStatus} />
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4 text-muted-foreground">{formatDate(t.createdAt)}</td>
-                                    <td className="px-6 py-4">
-                                        <Button asChild variant="outline" size="sm">
-                                            <Link href={`/office/repairing/tickets/${t.id}`}>
-                                                <Eye /> View
-                                            </Link>
-                                        </Button>
-                                    </td>
+            <div className="flex-1 overflow-y-auto">
+                {loading ? (
+                    <p className="text-muted-foreground">Loading...</p>
+                ) : filtered.length === 0 ? (
+                    <div className="rounded-lg border border-border p-12 text-center text-muted-foreground shadow">
+                        {hasFilters ? "No tickets match your filters." : "No tickets yet. Create your first one!"}
+                    </div>
+                ) : (
+                    <div className="rounded-lg border border-border shadow">
+                        <table className="w-full text-sm">
+                            <thead className="sticky top-0 z-10 rounded-t-lg border-b border-border bg-muted text-xs text-muted-foreground uppercase">
+                                <tr>
+                                    <th className="px-6 py-3 text-left">#</th>
+                                    <th className="px-6 py-3 text-left">Customer</th>
+                                    <th className="px-6 py-3 text-left">Device</th>
+                                    <th className="px-6 py-3 text-left">Problem</th>
+                                    <th className="px-6 py-3 text-left">Priority</th>
+                                    <th className="px-6 py-3 text-left">Status</th>
+                                    <th className="px-6 py-3 text-left">Date</th>
+                                    <th className="px-6 py-3 text-left">Actions</th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
+                            </thead>
+                            <tbody className="divide-y divide-border">
+                                {pageRows.map((t) => (
+                                    <tr key={t.id} className="hover:bg-muted/50">
+                                        <td className="px-6 py-4 text-muted-foreground">{t.id}</td>
+                                        <td className="px-6 py-4">
+                                            <p className="font-medium">{t.device.account?.name}</p>
+                                            <p className="text-muted-foreground text-xs">{t.device.account?.phone}</p>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <p>{t.device.brand} {t.device.model}</p>
+                                            <p className="text-muted-foreground text-xs">{t.device.type}</p>
+                                        </td>
+                                        <td className="px-6 py-4 max-w-[150px] truncate text-muted-foreground">
+                                            {t.device.problem}
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <span className={`px-2 py-0.5 text-xs font-medium ${PRIORITY_META[t.priority]?.color ?? ""}`}>
+                                                {PRIORITY_META[t.priority]?.label ?? t.priority}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <div className="flex flex-col gap-1">
+                                                <span className={`px-2 py-0.5 text-xs font-medium w-fit ${t.ticketStatus.color}`}>
+                                                    {t.ticketStatus.label}
+                                                </span>
+                                                {t.ticketWorker && (
+                                                    <span className={`px-2 py-0.5 text-xs font-medium w-fit ${badgeColor(t.ticketWorker.color).className}`} style={badgeColor(t.ticketWorker.color).style}>
+                                                        {t.ticketWorker.label}
+                                                    </span>
+                                                )}
+                                                <WarrantyBadge isWarranty={t.isWarranty} warrantyStatus={t.warrantyStatus} />
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4 text-muted-foreground">{formatDate(t.createdAt)}</td>
+                                        <td className="px-6 py-4">
+                                            <Button asChild variant="outline" size="sm">
+                                                <Link href={`/office/repairing/tickets/${t.id}`}>
+                                                    <Eye /> View
+                                                </Link>
+                                            </Button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </div>
+
+            {filtered.length > 0 && (
+                <PaginationBar
+                    total={filtered.length}
+                    page={page}
+                    pageSize={pageSize}
+                    onPageChange={setPage}
+                    onPageSizeChange={setPageSize}
+                    unitLabel="ticket"
+                    className="pt-3"
+                />
             )}
+            </div>
         </div>
     );
 }

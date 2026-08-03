@@ -1,9 +1,10 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import Link from "next/link";
-import { Truck, Package, ArrowLeft } from "lucide-react";
+import { Truck, Package } from "lucide-react";
 import { timeAgo } from "@/shared/lib/format/timeAgo";
 import { getRepairPipeline } from "@/modules/repairing/lib/repairPipeline";
 import { WORKFLOW_STATUS } from "@/shared/lib/constants/workflow";
+import { PathBreadcrumb } from "@/shared/components/PathBreadcrumb";
 
 // Where every open device physically is — the ones still IN HAND at the shop and
 // the ones OUT at a service centre, grouped by the latest shipping-slip party.
@@ -76,11 +77,14 @@ export default async function DeviceLocationPage() {
     const outCount = tickets.length - inHand.length;
 
     return (
-        <div className="space-y-6 p-4">
+        <div className="flex h-full flex-col overflow-hidden">
+            <PathBreadcrumb
+                root={{ href: "/office/repairing", label: "Repairs" }}
+                labels={{ "device-location": "Device Locations" }}
+                escapeBack
+            />
+            <div className="space-y-6 overflow-y-auto p-4">
             <div>
-                <Link href="/office/repairing" className="mb-1 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-                    <ArrowLeft size={12} /> Repairs
-                </Link>
                 <h1 className="text-2xl font-bold">Device Locations</h1>
                 <p className="text-sm text-muted-foreground">
                     {inHand.length} in hand · {outCount} out across {centres.length} centre{centres.length === 1 ? "" : "s"}
@@ -107,6 +111,7 @@ export default async function DeviceLocationPage() {
                         showPending
                     />
                 ))}
+            </div>
             </div>
         </div>
     );
