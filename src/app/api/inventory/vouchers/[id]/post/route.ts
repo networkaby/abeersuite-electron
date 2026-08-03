@@ -2,7 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth, userCanVoucherKind } from "@/shared/lib/auth/permissions";
 import { toNumber } from "@/modules/accountancy/lib/balance";
-import { recordStockMovement } from "@/modules/inventory/lib/stockMovement";
+import { recordStockMovement, stockDirectionForType } from "@/modules/inventory/lib/stockMovement";
 import { valueStockBatch } from "@/modules/inventory/lib/valuation";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import { saleToSpec } from "@/modules/accountancy/lib/voucherMappers";
@@ -73,8 +73,12 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     //   per-line direction: MANUFACTURING_JOURNAL (line.direction "CONSUME"|"PRODUCE")
     //   start-of-day reset: PHYSICAL_STOCK (line.quantity = counted opening qty)
     //   commitments:   SALES_ORDER, PURCHASE_ORDER — no stock movement at all on POST.
-    const isPurchase = ["PURCHASE", "GRN", "REJECTION_IN", "SALE_RETURN"].includes(voucher.type);
-    const isSale     = ["SALE", "ONLINE_INVOICE", "CHALLAN", "REJECTION_OUT", "PURCHASE_RETURN"].includes(voucher.type);
+    // Direction comes from ONE shared list (stockMovement.ts) that the reversal
+    // paths read too — the copies used to be inline here and in cancel/delete, and
+    // they drifted apart (cancel never reversed SALE_RETURN / returns / rejections).
+    const stockDirection = stockDirectionForType(voucher.type);
+    const isPurchase = stockDirection === "IN";
+    const isSale     = stockDirection === "OUT";
     // POS_ESTIMATE / POS_ORDER / ONLINE_ORDER are counter/online quotations & orders
     // — like SALES_ORDER they NEVER move stock or post GL here (defensive; orders are
     // created DRAFT via their own endpoints and fulfil into a sale invoice).

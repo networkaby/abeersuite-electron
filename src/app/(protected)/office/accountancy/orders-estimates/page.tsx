@@ -36,7 +36,6 @@ type ListRow = {
     partyAccountId?: number | null;
     totalAmount:     number | string;
     status:          "DRAFT" | "POSTED" | "CANCELLED";
-    deletedAt:       string | null;
     cancelledAt?:    string | null;
     branch?:         { id: string; name: string } | null;
     createdBy:       { name: string } | null;
@@ -54,7 +53,6 @@ export default function OrdersEstimatesPage() {
     useEffect(() => {
         setLoading(true);
         const params = new URLSearchParams({ types: TYPES });
-        if (filters.showDeleted) params.set("includeDeleted", "1");
 
         axios.get<ListRow[]>(`/api/inventory/vouchers?${params}`)
             .then((r) => {
@@ -70,7 +68,6 @@ export default function OrdersEstimatesPage() {
                     narration:      v.description,
                     totalAmount:    Number(v.totalAmount),
                     status:         v.status,
-                    deletedAt:      v.deletedAt ?? null,
                     cancelledAt:    v.cancelledAt ?? null,
                     branchId:       v.branch?.id   ?? null,
                     branchName:     v.branch?.name ?? null,
@@ -81,7 +78,7 @@ export default function OrdersEstimatesPage() {
             })
             .catch(() => toast.error("Failed to load orders & estimates"))
             .finally(() => setLoading(false));
-    }, [filters.showDeleted, tick]);
+    }, [tick]);
 
     const availableBranches = useMemo(() => {
         const seen = new Map<string, string>();
@@ -94,7 +91,7 @@ export default function OrdersEstimatesPage() {
     const filtered = useMemo(
         () => applyRegisterFilters(allRows, filters),
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [allRows, filters.from, filters.to, filters.search, filters.statuses, filters.showDeleted, filters.branchFilter],
+        [allRows, filters.from, filters.to, filters.search, filters.statuses, filters.branchFilter],
     );
 
     const postedTotal = useMemo(

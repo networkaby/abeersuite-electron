@@ -10,14 +10,13 @@ import { engineCreateSpine } from "@/modules/accountancy/lib/transactionEngine";
 import { syncVoucherLinks } from "@/modules/accountancy/lib/voucherLinks";
 import { resolveActiveBranchId, requireBranchAccess, BranchAccessError } from "@/shared/lib/auth/activeBranch";
 import { auth } from "@/auth";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { getOrganisation } from "@/shared/lib/org/getOrganisation";
 import { resolveBuyerStateCode } from "@/shared/lib/gst/resolveBuyerState";
 import { isValidStateCode } from "@/shared/lib/gst/indianStates";
 import { getOrderPipeline, orderEntryStatus } from "@/modules/order/lib/orderPipeline";
 
-// GET /api/inventory/vouchers?type=PURCHASE|SALE&status=DRAFT|POSTED|CANCELLED&branchId=BR-HQ|all&includeDeleted=1
+// GET /api/inventory/vouchers?type=PURCHASE|SALE&status=DRAFT|POSTED|CANCELLED&branchId=BR-HQ|all
 //
 // Branch handling:
 //   • No `branchId` param → org-wide (no branch filter). Reports default here.
@@ -27,7 +26,7 @@ import { getOrderPipeline, orderEntryStatus } from "@/modules/order/lib/orderPip
 // active-branch cookie is no longer consulted by this GET — top bar represents
 // the working branch for writes; reports default to org-wide.
 export async function GET(req: NextRequest) {
-    const { response, user } = await requireAuth();
+    const { response } = await requireAuth();
     if (response) return response;
 
     const session = await auth();
@@ -56,13 +55,6 @@ export async function GET(req: NextRequest) {
     } else if (typeParam && ALLOWED_TYPES.has(typeParam as InvVoucherType)) {
         typeList.push(typeParam as InvVoucherType);
     }
-    // includeDeleted is opt-in and gated on the delete permission so casual
-    // viewers don't see soft-deleted rows. The All Vouchers register passes
-    // includeDeleted=1 when the user ticks the "Deleted" status filter.
-    const includeDeletedParam = searchParams.get("includeDeleted") === "1";
-    const canSeeDeleted = !!user && user.permissions.includes(PERMISSIONS.ADMIN_BYPASS);
-    const includeDeleted = includeDeletedParam && canSeeDeleted;
-
     let branchScopeId: string | undefined;
     if (branchParam === "all" || !branchParam) {
         // No branch filter — org-wide. Reports land here by omitting the param.
@@ -80,7 +72,9 @@ export async function GET(req: NextRequest) {
     const spineFilter: Prisma.UniversalVoucherWhereInput = {
         ...(typeList.length > 0 ? { type: { in: typeList } } : {}),
         ...(status ? { status } : {}),
-        ...(includeDeleted ? {} : { deletedAt: null }),
+        // Always-true guard: nothing writes `deletedAt` since soft-delete was
+        // removed (2026-08-01). Kept as a cheap safety net for legacy rows.
+        deletedAt: null,
         ...(accountIdParam ? { partyAccountId: Number(accountIdParam) } : {}),
         ...(branchScopeId ? { branchId: branchScopeId } : {}),
     };

@@ -28,7 +28,6 @@ interface RawEntry {
     status:       "DRAFT" | "POSTED" | "CANCELLED";
     totalAmount?: number | string;
     totalDebit?:  number | string;
-    deletedAt?:   string | null;
     cancelledAt?: string | null;
     createdBy:    { name: string };
 }
@@ -44,7 +43,6 @@ export function JournalEntriesRegister() {
     useEffect(() => {
         setLoading(true);
         const params = new URLSearchParams();
-        if (filters.showDeleted) params.set("includeDeleted", "1");
 
         axios.get<RawEntry[] | { rows: RawEntry[] }>(`/api/accountancy/journal-entries?${params}`)
             .then((r) => {
@@ -62,7 +60,6 @@ export function JournalEntriesRegister() {
                     narration:   e.description,
                     totalAmount: Number(e.totalDebit ?? e.totalAmount ?? 0),
                     status:      e.status,
-                    deletedAt:   e.deletedAt ?? null,
                     cancelledAt: e.cancelledAt ?? null,
                     createdBy:   e.createdBy?.name ?? null,
                 }));
@@ -71,12 +68,12 @@ export function JournalEntriesRegister() {
             .catch(() => toast.error("Failed to load journal entries"))
             .finally(() => setLoading(false));
      
-    }, [filters.showDeleted, tick]);
+    }, [tick]);
 
     const filtered = useMemo(
         () => applyRegisterFilters(allRows, filters),
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [allRows, filters.from, filters.to, filters.search, filters.statuses, filters.showDeleted],
+        [allRows, filters.from, filters.to, filters.search, filters.statuses],
     );
 
     const postedTotal = useMemo(
@@ -117,11 +114,7 @@ export function JournalEntriesRegister() {
                     onChanged={reload}
                     hideKind
                     statusInline
-                    emptyMessage={
-                        filters.showDeleted
-                            ? "No deleted journal entries."
-                            : "No journal entries yet."
-                    }
+                    emptyMessage="No journal entries yet."
                 />
             )}
         </div>

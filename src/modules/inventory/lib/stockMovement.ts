@@ -13,6 +13,42 @@ import { toNumber } from "@/modules/accountancy/lib/balance";
 
 type Numeric = number | string | { toString(): string };
 
+// ── Which way does a voucher type move stock? ────────────────────────────────
+//
+// ONE list, read by the posting path AND every reversal path. They used to be
+// copied by hand into each route, and the copies drifted: post moved stock for
+// SALE_RETURN / PURCHASE_RETURN / REJECTION_* / ONLINE_INVOICE while cancel only
+// knew PURCHASE|GRN and SALE|POS|CHALLAN — so cancelling a POS return (a
+// SALE_RETURN) reversed the GL and silently left the stock in.
+//
+//   IN       — goods arrive        (direction fixed by type)
+//   OUT      — goods leave         (direction fixed by type)
+//   BESPOKE  — direction is computed per line at post time (PHYSICAL_STOCK delta,
+//              MANUFACTURING_JOURNAL line.direction, BRANCH_TRANSFER two-sided).
+//              Reversal must MIRROR the written ledger rows, never re-derive.
+//   NONE     — commitments / quotations; never move stock.
+export type StockDirection = "IN" | "OUT" | "BESPOKE" | "NONE";
+
+const STOCK_IN_TYPES      = ["PURCHASE", "GRN", "REJECTION_IN", "SALE_RETURN"];
+const STOCK_OUT_TYPES     = ["SALE", "POS", "ONLINE_INVOICE", "CHALLAN", "REJECTION_OUT", "PURCHASE_RETURN"];
+const STOCK_BESPOKE_TYPES = ["PHYSICAL_STOCK", "MANUFACTURING_JOURNAL", "BRANCH_TRANSFER"];
+
+export function stockDirectionForType(type: string): StockDirection {
+    if (STOCK_IN_TYPES.includes(type))      return "IN";
+    if (STOCK_OUT_TYPES.includes(type))     return "OUT";
+    if (STOCK_BESPOKE_TYPES.includes(type)) return "BESPOKE";
+    return "NONE";
+}
+
+/**
+ * Units a goods line actually moves = quantity + freeQty. Complimentary units
+ * leave the shelf like any other, so every reversal must put them back too —
+ * reversing `quantity` alone leaked the free units out of stock permanently.
+ */
+export function movedQty(line: { quantity: Numeric; freeQty?: Numeric | null }): number {
+    return toNumber(line.quantity) + (line.freeQty != null ? toNumber(line.freeQty) : 0);
+}
+
 export interface RecordStockMovementArgs {
     // Phase 5 5C: stock rows hang off the spine — callers pass the universalVoucherId.
     universalVoucherId: number;
@@ -249,12 +285,30 @@ export async function recomputeProductStock(
         await tx.invProduct.update({ where: { id: p.id }, data: { stock } });
     }
 
+    const rebuilt = new Set<string>();
     for (const r of byBranch) {
         const stock = toNumber(r._sum.inQty ?? 0) - toNumber(r._sum.outQty ?? 0);
+        rebuilt.add(`${r.productId}|${r.branchId}`);
         await tx.invProductBranch.upsert({
             where:  { productId_branchId: { productId: r.productId, branchId: r.branchId } },
             create: { productId: r.productId, branchId: r.branchId, stock },
             update: { stock },
+        });
+    }
+
+    // A product whose LAST ledger row in a branch just got deleted produces no
+    // groupBy row at all — the loop above can never reach it, so without this the
+    // stale balance survives. Truth for those rows is zero.
+    const staleBranchRows = await tx.invProductBranch.findMany({
+        where:  { productId: { in: ids } },
+        select: { productId: true, branchId: true, stock: true },
+    });
+    for (const row of staleBranchRows) {
+        if (rebuilt.has(`${row.productId}|${row.branchId}`)) continue;
+        if (toNumber(row.stock ?? 0) === 0) continue;
+        await tx.invProductBranch.update({
+            where: { productId_branchId: { productId: row.productId, branchId: row.branchId } },
+            data:  { stock: 0 },
         });
     }
 }

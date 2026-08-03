@@ -33,7 +33,6 @@ type RawRow = {
     narration:    string | null;
     totalAmount:  number | string;
     status:       "DRAFT" | "POSTED" | "CANCELLED";
-    deletedAt:    string | null;
     cancelledAt?: string | null;
     createdBy:    { name: string };
     partyAccount: { id: number; code: string; name: string } | null;
@@ -60,7 +59,6 @@ export function GlVoucherList({
     useEffect(() => {
         setLoading(true);
         const params = new URLSearchParams({ type });
-        if (filters.showDeleted) params.set("includeDeleted", "1");
 
         axios.get<RawRow[]>(`/api/accountancy/vouchers?${params}`)
             .then((r) => {
@@ -75,7 +73,6 @@ export function GlVoucherList({
                     narration:   v.narration,
                     totalAmount: Number(v.totalAmount),
                     status:      v.status,
-                    deletedAt:   v.deletedAt ?? null,
                     cancelledAt: v.cancelledAt ?? null,
                     createdBy:   v.createdBy?.name ?? null,
                 }));
@@ -84,12 +81,12 @@ export function GlVoucherList({
             .catch(() => toast.error("Failed to load"))
             .finally(() => setLoading(false));
      
-    }, [type, filters.showDeleted, tick]);
+    }, [type, tick]);
 
     const filtered = useMemo(
         () => applyRegisterFilters(allRows, filters),
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [allRows, filters.from, filters.to, filters.search, filters.statuses, filters.showDeleted],
+        [allRows, filters.from, filters.to, filters.search, filters.statuses],
     );
 
     const postedTotal = useMemo(
@@ -128,11 +125,7 @@ export function GlVoucherList({
                     onChanged={reload}
                     hideKind
                     statusInline
-                    emptyMessage={
-                        filters.showDeleted
-                            ? `No deleted ${title.toLowerCase()}.`
-                            : `No ${title.toLowerCase()} yet.`
-                    }
+                    emptyMessage={`No ${title.toLowerCase()} yet.`}
                 />
             )}
         </div>

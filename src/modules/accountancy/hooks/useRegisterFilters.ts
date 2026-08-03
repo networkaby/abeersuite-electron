@@ -26,31 +26,19 @@ export function applyRegisterFilters<T extends {
     party: string | null;
     narration: string | null;
     status: string;
-    deletedAt: string | null;
     branchId?: string | null;
 }>(rows: T[], filters: {
     from: string;
     to: string;
     search: string;
     statuses: Set<string>;
-    showDeleted: boolean;
     branchFilter?: string;
 }): T[] {
-    const { from, to, search, statuses, showDeleted, branchFilter } = filters;
+    const { from, to, search, statuses, branchFilter } = filters;
     const q = search.toLowerCase();
 
     return rows.filter((r) => {
-        const isDeleted = !!r.deletedAt;
-
-        if (showDeleted) {
-            if (!isDeleted) return false;
-        } else {
-            if (isDeleted) return false;
-            if (statuses.size > 0) {
-                const realStatuses = new Set([...statuses].filter((s) => s !== "DELETED"));
-                if (realStatuses.size > 0 && !realStatuses.has(r.status)) return false;
-            }
-        }
+        if (statuses.size > 0 && !statuses.has(r.status)) return false;
 
         const d = r.date.slice(0, 10);
         if (from && d < from) return false;
@@ -100,15 +88,20 @@ export function useRegisterFilters(storageKey: string) {
 
     const [statuses, setStatuses] = useState<Set<string>>(() => {
         const saved = get(`${storageKey}:statuses`);
-        try { return saved ? new Set(JSON.parse(saved) as string[]) : new Set(); }
+        try {
+            // "DELETED" was a status option until soft-delete was removed (2026-08-01).
+            // It still sits in the localStorage of anyone who had ticked it, and it
+            // matches no row — leaving it in would silently show them an empty
+            // register forever. Drop it on hydrate.
+            const parsed = saved ? (JSON.parse(saved) as string[]) : [];
+            return new Set(parsed.filter((s) => s !== "DELETED"));
+        }
         catch { return new Set(); }
     });
 
     const toggleStatus  = (s: string) =>
         setStatuses((prev) => { const n = new Set(prev); if (n.has(s)) n.delete(s); else n.add(s); return n; });
     const clearStatuses = () => setStatuses(new Set());
-
-    const showDeleted = statuses.has("DELETED");
 
     const [branchFilter, setBranchFilter] = useState<string>(
         () => get(`${storageKey}:branch`) ?? "__all__",
@@ -134,7 +127,6 @@ export function useRegisterFilters(storageKey: string) {
         to, handleTo,
         search, setSearch,
         statuses, toggleStatus, clearStatuses,
-        showDeleted,
         branchFilter, setBranchFilter,
         clearFilters,
     };

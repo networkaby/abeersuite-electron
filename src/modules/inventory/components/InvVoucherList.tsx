@@ -4,8 +4,7 @@
 // In/Out, Branch Transfer).
 //
 // Renders via the shared <VoucherRegisterTable> so every register inherits
-// the same row markup, click-to-edit Reference link, ⋮ action menu, and
-// Restore + Hard-Delete UX on soft-deleted rows.
+// the same row markup, click-to-edit Reference link, and ⋮ action menu.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
@@ -45,7 +44,6 @@ type ListRow = {
     totalAmount:     number | string;
     amountReceived?: number | string;
     status:          "DRAFT" | "POSTED" | "CANCELLED";
-    deletedAt:       string | null;
     cancelledAt?:    string | null;
     branch?:         { id: string; name: string } | null;
     _count:          { lines: number };
@@ -92,7 +90,6 @@ export function InvVoucherList({
     useEffect(() => {
         setLoading(true);
         const params = new URLSearchParams({ type });
-        if (filters.showDeleted) params.set("includeDeleted", "1");
 
         axios.get<ListRow[]>(`/api/inventory/vouchers?${params}`)
             .then((r) => {
@@ -111,7 +108,6 @@ export function InvVoucherList({
                     paymentMode:    v.paymentMode ?? null,
                     lineCount:      v._count?.lines ?? 0,
                     status:         v.status,
-                    deletedAt:      v.deletedAt ?? null,
                     cancelledAt:    v.cancelledAt ?? null,
                     branchId:       v.branch?.id   ?? null,
                     branchName:     v.branch?.name ?? null,
@@ -122,7 +118,7 @@ export function InvVoucherList({
             .catch(() => toast.error("Failed to load"))
             .finally(() => setLoading(false));
      
-    }, [type, filters.showDeleted, tick]);
+    }, [type, tick]);
 
     const availableBranches = useMemo(() => {
         const seen = new Map<string, string>();
@@ -135,7 +131,7 @@ export function InvVoucherList({
     const filtered = useMemo(
         () => applyRegisterFilters(allRows, filters),
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [allRows, filters.from, filters.to, filters.search, filters.statuses, filters.showDeleted, filters.branchFilter],
+        [allRows, filters.from, filters.to, filters.search, filters.statuses, filters.branchFilter],
     );
 
     const postedTotal = useMemo(
@@ -179,11 +175,7 @@ export function InvVoucherList({
                     statusInline
                     showBranch={availableBranches.length > 0}
                     extraColumns={extraColumns}
-                    emptyMessage={
-                        filters.showDeleted
-                            ? `No deleted ${emptyLabel ?? title.toLowerCase()}.`
-                            : `No ${emptyLabel ?? title.toLowerCase()} yet.`
-                    }
+                    emptyMessage={`No ${emptyLabel ?? title.toLowerCase()} yet.`}
                 />
             )}
         </div>

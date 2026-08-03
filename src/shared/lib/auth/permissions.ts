@@ -81,6 +81,24 @@ export function userCanVoucherKind(user: ResolvedUser, type: VoucherType | strin
 }
 
 /**
+ * Recycle-bin gate: **whoever may delete a voucher kind may restore it.** Restore
+ * is the exact inverse of the delete that created the snapshot, so it rides the
+ * same per-kind `delete` key the hard-delete routes check — no separate grant.
+ *
+ * Previously both `/api/audit` and `/api/audit/[id]/restore` demanded
+ * `admin:bypass`, which is not granted to the Admin role — the recycle bin
+ * listed nothing and Restore 403'd for everyone (verified 2026-08-01).
+ *
+ * `subtype` is the removed voucher's concrete kind (SALE / PAYMENT / …). It is
+ * null for journal entries, whose kind is JOURNAL.
+ */
+export function userCanRestoreAudit(user: ResolvedUser, entityType: string, subtype: string | null): boolean {
+    const kind = subtype ?? (entityType === "JOURNAL_ENTRY" ? "JOURNAL" : null);
+    if (kind == null) return false;
+    return userCanVoucherKind(user, kind, "delete");
+}
+
+/**
  * True if the user may author (create) at least one voucher kind. Used to grant
  * read access to the supporting data every voucher form needs — the GL account
  * list and the next-reference preview — without demanding the broad

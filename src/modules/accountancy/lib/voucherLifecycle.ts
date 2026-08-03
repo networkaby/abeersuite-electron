@@ -1,11 +1,18 @@
 // Voucher lifecycle helpers — shared between JournalEntry, InvVoucher, and
-// the finance Voucher table. Tally-style three-tier model:
+// the finance Voucher table. Two tiers:
 //
 //   POSTED  ──cancel──►  CANCELLED   (reference number kept, GL reversed)
 //      │
-//      └─delete──► (deletedAt set, hidden from views, GL reversed; restore flips it back)
-//                  │
-//                  └─hard-delete──► row removed, snapshot to audit table
+//      └─delete──► row REMOVED, whole graph snapshotted to AuditLog = the
+//                  Recycle Bin (restore via POST /api/audit/[id]/restore)
+//
+// There is only ONE delete. The middle soft-delete tier (set `deletedAt`, hide
+// from views, restore flips it back) was removed on 2026-08-01: it had no UI
+// entry point, no route left, and zero rows in the database — Cancel already
+// covers "undo but keep it visible" and hard-delete covers "remove recoverably".
+// The `deletedAt` COLUMNS and the `deletedAt: null` read filters deliberately
+// remain (dropping them needs a schema push and a sweep through Balance Sheet /
+// valuation); they are now always-true guards. Nothing writes `deletedAt`.
 //
 // The GL / stock reversal logic itself stays in each route handler since it
 // differs per voucher type. These helpers cover the bookkeeping boilerplate
@@ -62,20 +69,6 @@ export function ensureCancelable(v: LifecycleVoucher): void {
   if (!isPosted(v)) throw new LifecycleError(409, "Only POSTED vouchers can be cancelled");
 }
 
-export function ensureDeletable(v: LifecycleVoucher): void {
-  if (isDeleted(v)) throw new LifecycleError(409, "Voucher is already deleted");
-  if (isCancelled(v)) {
-    throw new LifecycleError(
-      409,
-      "Cannot delete a cancelled voucher — its GL impact is already reversed (marked CANCELLED). Hard-delete instead.",
-    );
-  }
-}
-
-export function ensureRestorable(v: LifecycleVoucher): void {
-  if (!isDeleted(v)) throw new LifecycleError(409, "Voucher is not deleted");
-}
-
 // ── Field-shape helpers for prisma `data` payloads ────────────────────────
 
 /** Cancel-tier field updates for vouchers using VoucherStatus (every voucher kind, post-2026-05-24). */
@@ -85,24 +78,6 @@ export function cancelFields(userId: number, reason: string) {
     cancelledAt: new Date(),
     cancelledById: userId,
     cancelReason: reason,
-  };
-}
-
-/** Delete-tier field updates. Status is left untouched (still POSTED/SENT/whatever). */
-export function deleteFields(userId: number, reason: string) {
-  return {
-    deletedAt: new Date(),
-    deletedById: userId,
-    deleteReason: reason,
-  };
-}
-
-/** Inverse of delete — clears the soft-delete metadata. */
-export function restoreFields() {
-  return {
-    deletedAt: null,
-    deletedById: null,
-    deleteReason: null,
   };
 }
 

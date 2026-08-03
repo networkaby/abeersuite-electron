@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth, userCanVoucherKind } from "@/shared/lib/auth/permissions";
 import { toNumber, balanceDelta } from "@/modules/accountancy/lib/balance";
 import { setSpineLifecycle } from "@/modules/accountancy/lib/transactionEngine";
-import { recordStockMovement, reverseStockMovement } from "@/modules/inventory/lib/stockMovement";
+import { reverseStockMovement, recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import { ensureCancelable, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
 import * as Sentry from "@sentry/nextjs";
@@ -40,88 +40,37 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         return NextResponse.json({ error: "You do not have permission to cancel this voucher kind." }, { status: 403 });
     }
 
-    const isPurchase = voucher.type === "PURCHASE" || voucher.type === "GRN";
-    // POS = counter sale: it moves stock OUT like SALE, so reversing it must put
-    // the stock back. Omitting POS here left the GL reversed but stock un-restored
-    // → inventory (a Balance-Sheet asset) came out wrong.
-    const isSale     = voucher.type === "SALE"     || voucher.type === "POS" || voucher.type === "CHALLAN";
-    const isBranchTransfer = voucher.type === "BRANCH_TRANSFER";
-    // Voucher types whose stock impact is computed at post-time (per-line
-    // delta vs running stock), not driven by a fixed in/out direction.
-    // For these, the cancel reversal must mirror the original ledger rows
-    // so we don't have to recompute what the post wrote.
-    const isLedgerMirror = voucher.type === "PHYSICAL_STOCK" || voucher.type === "MANUFACTURING_JOURNAL";
-
     try {
         ensureCancelable(voucher);
 
         await prisma.$transaction(async (tx) => {
             // ── 1. Reverse stock ledger + cached InvProduct.stock ─────────────
-            if (isLedgerMirror) {
-                // Generic reversal — look up the InvStockLedger rows the
-                // original post wrote against this voucher and append counter-
-                // entries via the shared helper. Works regardless of the per-
-                // line direction logic used at post time.
-                const origRows = await tx.invStockLedger.findMany({
-                    where:  { universalVoucherId: voucher.universalVoucherId ?? -1, amount: { gte: 0 } },
-                    select: { id: true, productId: true, branchId: true, universalVoucherId: true, inQty: true, outQty: true, rate: true, amount: true },
-                });
-                const now = new Date();
-                for (const row of origRows) {
-                    await reverseStockMovement(tx, { ledgerRow: row, reversalDate: now });
-                }
-            } else if (isBranchTransfer && voucher.destinationBranchId) {
-                // Reverse both sides: put units back on source, take them off dest.
-                const now = new Date();
-                for (const line of voucher.lines) {
-                    const qty  = toNumber(line.quantity);
-                    if (!(qty > 0)) continue;
-
-                    await recordStockMovement(tx, {
-                        universalVoucherId: voucher.universalVoucherId!,
-                        productId: line.productId,
-                        branchId:  voucher.branchId,
-                        date:      now,
-                        inQty:     qty,
-                        outQty:    0,
-                        rate:      line.rate,
-                        amount:    -toNumber(line.amount),
-                        updateOrgWideStock: false,
-                    });
-
-                    await recordStockMovement(tx, {
-                        universalVoucherId: voucher.universalVoucherId!,
-                        productId: line.productId,
-                        branchId:  voucher.destinationBranchId,
-                        date:      now,
-                        inQty:     0,
-                        outQty:    qty,
-                        rate:      line.rate,
-                        amount:    -toNumber(line.amount),
-                        updateOrgWideStock: false,
-                    });
-                }
-            } else {
-                const now = new Date();
-                for (const line of voucher.lines) {
-                    const qty = toNumber(line.quantity);
-
-                    // Non-sale, non-purchase types (e.g. SALES_ORDER) still
-                    // write a zero-qty audit row; the helper's delta === 0
-                    // guard skips the cache updates.
-                    await recordStockMovement(tx, {
-                        universalVoucherId: voucher.universalVoucherId!,
-                        productId: line.productId,
-                        branchId:  voucher.branchId,
-                        date:      now,
-                        inQty:     isSale     ? qty : 0,
-                        outQty:    isPurchase ? qty : 0,
-                        rate:      line.rate,
-                        amount:    -toNumber(line.amount),
-                        updateBranchBalance: isPurchase || isSale,
-                    });
-                }
+            // MIRROR whatever this voucher actually wrote — one counter-entry per
+            // original row — instead of re-deriving the direction from the type.
+            // The old code kept three hand-maintained type lists (sale / purchase /
+            // ledger-mirror / branch-transfer) that had drifted out of step with the
+            // posting path: SALE_RETURN (every POS return), PURCHASE_RETURN,
+            // REJECTION_IN/OUT and ONLINE_INVOICE all moved stock on post but matched
+            // NO list here, so cancel reversed the GL and silently left the stock
+            // wrong. It also reversed `quantity` only, leaking `freeQty` units.
+            // Mirroring is immune to both: it cannot disagree with what was posted,
+            // and it covers PHYSICAL_STOCK / MANUFACTURING_JOURNAL / BRANCH_TRANSFER
+            // (whose two rows net to zero org-wide) without special cases.
+            //
+            // `amount >= 0` selects the ORIGINAL rows — counter-entries carry a
+            // negated amount, so a re-run can never reverse a reversal.
+            const origRows = await tx.invStockLedger.findMany({
+                where:  { universalVoucherId: voucher.universalVoucherId ?? -1, amount: { gte: 0 } },
+                select: { id: true, productId: true, branchId: true, universalVoucherId: true, inQty: true, outQty: true, rate: true, amount: true },
+            });
+            const now = new Date();
+            for (const row of origRows) {
+                await reverseStockMovement(tx, { ledgerRow: row, reversalDate: now });
             }
+            // Rebuild the caches from the ledger rather than trusting the
+            // increment/decrement deltas just applied (same safety net the
+            // in-place edit path uses).
+            await recomputeProductStock(tx, origRows.map((r) => r.productId));
 
             // ── 2. Reverse the spine GL posting if one was created (G5) ────────
             if (voucher.universalVoucherId) {

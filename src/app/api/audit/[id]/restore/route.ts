@@ -1,17 +1,8 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAuth, userCanRestoreAudit } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { restoreFromAudit } from "@/modules/accountancy/lib/auditRestore";
-
-// Recycle-bin restore is admin-only across all entity types — the per-kind
-// hard-delete permissions were retired (not UI-assignable).
-const PERM_BY_TYPE: Record<string, string> = {
-    INV_VOUCHER:   PERMISSIONS.ADMIN_BYPASS,
-    GL_VOUCHER:    PERMISSIONS.ADMIN_BYPASS,
-    JOURNAL_ENTRY: PERMISSIONS.ADMIN_BYPASS,
-};
 
 // POST /api/audit/[id]/restore
 // Faithfully rebuild a hard-deleted entity from its AuditLog snapshot (the recycle bin).
@@ -28,11 +19,13 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     if (!audit) return NextResponse.json({ error: "Not found" }, { status: 404 });
     if (audit.restoredAt) return NextResponse.json({ error: "Already restored" }, { status: 409 });
 
-    const perm = PERM_BY_TYPE[audit.entityType];
-    if (!perm) return NextResponse.json({ error: `Cannot restore entity type ${audit.entityType}` }, { status: 400 });
-
-    const { response, user } = await requirePermission(perm);
+    // Restore rides the same per-kind DELETE key that authorised the removal —
+    // whoever could delete this voucher kind may put it back.
+    const { response, user } = await requireAuth();
     if (response) return response;
+    if (!userCanRestoreAudit(user!, audit.entityType, audit.subtype)) {
+        return NextResponse.json({ error: "You do not have permission to restore this voucher kind." }, { status: 403 });
+    }
 
     try {
         const reference = await prisma.$transaction(async (tx) => {

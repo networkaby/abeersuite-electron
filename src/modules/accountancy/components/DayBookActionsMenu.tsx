@@ -3,25 +3,24 @@
 // Cross-source 3-dot row menu — used by the Day Book, the All Vouchers
 // register, and (after the DRY migration) every per-kind voucher register.
 //
-// The menu shape depends on whether the row is soft-deleted:
+//   Edit · Cancel · Delete · Duplicate · Convert
 //
-//   • LIVE row (deletedAt == null):
-//       Edit · Cancel · Delete · (Duplicate, all sources via client-side preload)
+// "Delete" is the ONE delete: it posts to `${apiBase}/hard-delete`, which removes
+// the row and snapshots the whole graph to AuditLog = the Recycle Bin (restore via
+// POST /api/audit/[id]/restore). There is no soft-delete tier — it was removed on
+// 2026-08-01 along with this menu's Restore branch.
 //
-//   • DELETED row (deletedAt != null):
-//       Restore · Hard Delete
-//
-// All four lifecycle actions hit `${apiBase}/<verb>` on the source's API
-// (see voucherUrls.ts).  Duplicate is purely client-side: it stashes a
-// payload in sessionStorage and navigates to the matching `/new` form —
-// no DB row is created until the user explicitly hits Save.
+// Lifecycle actions hit `${apiBase}/<verb>` on the source's API (see
+// voucherUrls.ts).  Duplicate is purely client-side: it stashes a payload in
+// sessionStorage and navigates to the matching `/new` form — no DB row is
+// created until the user explicitly hits Save.
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
 import { extractApiError } from "@/shared/lib/api";
-import { MoreVertical, Pencil, Ban, Trash2, Copy, Undo2, AlertTriangle, Printer, FileText, ArrowRightLeft } from "lucide-react";
+import { MoreVertical, Pencil, Ban, Trash2, Copy, Printer, FileText, ArrowRightLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -44,9 +43,6 @@ interface Props {
     source:     CombinedSource;
     kind:       string;
     reference:  string;
-    /** Soft-deleted? When set, the menu offers Restore + Hard Delete instead
-     *  of Edit / Cancel / Delete / Duplicate. */
-    deletedAt?: string | null;
     /** Already converted (a live voucher references it)? Hides the Convert action
      *  — delete that target to convert again. */
     converted?: boolean;
@@ -59,14 +55,13 @@ type ConfirmAction = "cancel" | "hard-delete" | null;
 // ── Component ─────────────────────────────────────────────────────────────
 
 export function DayBookActionsMenu({
-    rawId, source, kind, reference, deletedAt, converted, onChanged,
+    rawId, source, kind, reference, converted, onChanged,
 }: Props) {
     const router = useRouter();
     const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
     const [reason, setReason] = useState("");
     const [busy, setBusy] = useState(false);
 
-    const isDeleted = !!deletedAt;
     const base = apiBase(source, rawId);
 
     // ── Print / PDF (opens a print tab; user picks printer or "Save as PDF") ──
@@ -96,20 +91,6 @@ export function DayBookActionsMenu({
             onChanged?.();
         } catch (e: unknown) {
             toast.error(extractApiError(e, `Failed to ${confirmAction}`));
-        } finally {
-            setBusy(false);
-        }
-    };
-
-    // ── Restore (no reason needed) ─────────────────────────────────────────
-    const restore = async () => {
-        setBusy(true);
-        try {
-            await axios.post(`${base}/restore`);
-            toast.success("Voucher restored");
-            onChanged?.();
-        } catch (e: unknown) {
-            toast.error(extractApiError(e, "Failed to restore"));
         } finally {
             setBusy(false);
         }
@@ -242,41 +223,27 @@ export function DayBookActionsMenu({
                         <FileText className="size-4" /> PDF A4
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    {isDeleted ? (
+                    <DropdownMenuItem onSelect={goEdit} disabled={busy}>
+                        <Pencil className="size-4" /> Edit
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={startCancel} disabled={busy}>
+                        <Ban className="size-4" /> Cancel
+                    </DropdownMenuItem>
+                    <DropdownMenuItem variant="destructive" onSelect={startHardDelete} disabled={busy}>
+                        <Trash2 className="size-4" /> Delete
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onSelect={() => void duplicate()} disabled={busy}>
+                        <Copy className="size-4" /> Duplicate
+                    </DropdownMenuItem>
+                    {targets.length > 0 && (
                         <>
-                            <DropdownMenuItem onSelect={() => void restore()} disabled={busy}>
-                                <Undo2 className="size-4" /> Restore
-                            </DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem variant="destructive" onSelect={startHardDelete} disabled={busy}>
-                                <AlertTriangle className="size-4" /> Hard Delete
-                            </DropdownMenuItem>
-                        </>
-                    ) : (
-                        <>
-                            <DropdownMenuItem onSelect={goEdit} disabled={busy}>
-                                <Pencil className="size-4" /> Edit
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onSelect={startCancel} disabled={busy}>
-                                <Ban className="size-4" /> Cancel
-                            </DropdownMenuItem>
-                            <DropdownMenuItem variant="destructive" onSelect={startHardDelete} disabled={busy}>
-                                <Trash2 className="size-4" /> Delete
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onSelect={() => void duplicate()} disabled={busy}>
-                                <Copy className="size-4" /> Duplicate
-                            </DropdownMenuItem>
-                            {targets.length > 0 && (
-                                <>
-                                    <DropdownMenuSeparator />
-                                    {targets.map((t) => (
-                                        <DropdownMenuItem key={t.kind} onSelect={() => void convert(t.kind)} disabled={busy}>
-                                            <ArrowRightLeft className="size-4" /> Convert to {t.label}
-                                        </DropdownMenuItem>
-                                    ))}
-                                </>
-                            )}
+                            {targets.map((t) => (
+                                <DropdownMenuItem key={t.kind} onSelect={() => void convert(t.kind)} disabled={busy}>
+                                    <ArrowRightLeft className="size-4" /> Convert to {t.label}
+                                </DropdownMenuItem>
+                            ))}
                         </>
                     )}
                 </DropdownMenuContent>

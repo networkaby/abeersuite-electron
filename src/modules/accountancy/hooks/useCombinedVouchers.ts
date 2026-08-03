@@ -45,9 +45,6 @@ export type CombinedRow = {
     narration:   string | null;
     totalAmount: number;
     status:      "DRAFT" | "POSTED" | "CANCELLED";
-    /** ISO timestamp when the row was soft-deleted, or null. Surfaced so the
-     *  shared register table can show Restore + Hard-Delete in the row menu. */
-    deletedAt:   string | null;
     cancelledAt: string | null;
     /** ISO timestamp when the row was created — used as the secondary sort
      *  key in the Day Book so rows on the same date stay in true creation
@@ -62,13 +59,6 @@ export type CombinedRow = {
     converted?:  boolean;
 };
 
-interface UseCombinedVouchersOptions {
-    /** When true, fetches with `includeDeleted=1` on all three endpoints so
-     *  soft-deleted rows are returned in addition to live ones. The caller is
-     *  responsible for client-side filtering (e.g. "show only deleted"). */
-    includeDeleted?: boolean;
-}
-
 // Raw shapes as returned by each endpoint — only the fields we read.
 type RawInv = {
     id: number; type: string; reference: string; date: string;
@@ -78,8 +68,8 @@ type RawInv = {
     partyPersonId?:  number | null;
     partyCompanyId?: number | null;
     converted?: boolean;
+    cancelledAt?: string | null;
     totalAmount: number | string;
-    deletedAt?: string | null; cancelledAt?: string | null;
     createdAt: string;
     createdBy?: { name: string } | null;
     branch?: { id: string; name: string } | null;
@@ -88,8 +78,8 @@ type RawGl = {
     id: number; type: string; voucherNo: string | null; date: string;
     narration: string | null; status: "DRAFT" | "POSTED" | "CANCELLED";
     partyAccount?: { id: number; name: string; personId: number | null; companyId: number | null } | null;
+    cancelledAt?: string | null;
     totalAmount: number | string;
-    deletedAt?: string | null; cancelledAt?: string | null;
     createdAt: string;
     createdBy?: { name: string } | null;
     // Branch derived from the voucher's JE lines (POS receipts/expenditures
@@ -100,13 +90,12 @@ type RawJe = {
     id: number | string; voucherNo: string | null; date: string;
     description: string | null; status: "DRAFT" | "POSTED" | "CANCELLED";
     totalDebit?: number | string; totalAmount?: number | string;
-    deletedAt?: string | null; cancelledAt?: string | null;
+    cancelledAt?: string | null;
     createdAt: string;
     createdBy?: { name: string } | null;
 };
 
-export function useCombinedVouchers(options: UseCombinedVouchersOptions = {}) {
-    const { includeDeleted = false } = options;
+export function useCombinedVouchers() {
     const [rows,    setRows]    = useState<CombinedRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [error,   setError]   = useState<string | null>(null);
@@ -123,12 +112,10 @@ export function useCombinedVouchers(options: UseCombinedVouchersOptions = {}) {
         // Reports default to org-wide. The inventory vouchers route returns
         // every branch when `branchId` is omitted (post the top-bar / report
         // split); GL voucher and JE endpoints have never been branch-scoped.
-        const qs = includeDeleted ? "?includeDeleted=1" : "";
-
         Promise.all([
-            axios.get<RawInv[]>(`/api/inventory/vouchers${qs}`),
-            axios.get<RawGl[]>(`/api/accountancy/vouchers${qs}`),
-            axios.get<RawJe[]>(`/api/accountancy/journal-entries${qs}`),
+            axios.get<RawInv[]>("/api/inventory/vouchers"),
+            axios.get<RawGl[]>("/api/accountancy/vouchers"),
+            axios.get<RawJe[]>("/api/accountancy/journal-entries"),
         ])
             .then(([invRes, glRes, jeRes]) => {
                 if (cancelled) return;
@@ -149,7 +136,6 @@ export function useCombinedVouchers(options: UseCombinedVouchersOptions = {}) {
                     narration:   v.description,
                     totalAmount: Number(v.totalAmount),
                     status:      v.status,
-                    deletedAt:   v.deletedAt ?? null,
                     cancelledAt: v.cancelledAt ?? null,
                     createdAt:   v.createdAt,
                     createdBy:   v.createdBy?.name ?? null,
@@ -175,7 +161,6 @@ export function useCombinedVouchers(options: UseCombinedVouchersOptions = {}) {
                     narration:   v.narration,
                     totalAmount: Number(v.totalAmount),
                     status:      v.status,
-                    deletedAt:   v.deletedAt ?? null,
                     cancelledAt: v.cancelledAt ?? null,
                     createdAt:   v.createdAt,
                     createdBy:   v.createdBy?.name ?? null,
@@ -194,7 +179,6 @@ export function useCombinedVouchers(options: UseCombinedVouchersOptions = {}) {
                     narration:   e.description,
                     totalAmount: Number(e.totalDebit ?? e.totalAmount ?? 0),
                     status:      e.status,
-                    deletedAt:   e.deletedAt ?? null,
                     cancelledAt: e.cancelledAt ?? null,
                     createdAt:   e.createdAt,
                     createdBy:   e.createdBy?.name ?? null,
@@ -216,7 +200,7 @@ export function useCombinedVouchers(options: UseCombinedVouchersOptions = {}) {
             .finally(() => { if (!cancelled) setLoading(false); });
 
         return () => { cancelled = true; };
-    }, [tick, includeDeleted]);
+    }, [tick]);
 
     return { rows, loading, error, reload };
 }

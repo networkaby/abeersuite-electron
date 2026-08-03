@@ -9,7 +9,6 @@ import { parseDenomJson } from "@/shared/lib/accountancy/denomJson";
 import { engineCreateVoucher } from "@/modules/accountancy/lib/transactionEngine";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const lineSchema = z.object({
     accountId:   z.number().int().positive(),
@@ -38,9 +37,9 @@ const createSchema = z.object({
     denomJson:      denomJsonSchema.nullable().optional(),
 });
 
-// GET /api/accountancy/vouchers?type=CONTRA&status=DRAFT&includeDeleted=1
+// GET /api/accountancy/vouchers?type=CONTRA&status=DRAFT
 export async function GET(req: Request) {
-    const { user, response } = await requireAuth();
+    const { response } = await requireAuth();
     if (response) return response;
 
     const { searchParams } = new URL(req.url);
@@ -48,10 +47,6 @@ export async function GET(req: Request) {
     const status = searchParams.get("status") as "DRAFT" | "POSTED" | "CANCELLED" | null;
     const from = searchParams.get("from");
     const to = searchParams.get("to");
-    const includeDeleted =
-        searchParams.get("includeDeleted") === "1" &&
-        user!.permissions.includes(PERMISSIONS.ADMIN_BYPASS);
-
     // Phase 5 5E: the spine IS the financial voucher (Voucher table dropped). Filter
     // to the financial kinds that used to live in Voucher (the spine also holds
     // SALE/POS/etc., which belong to the inventory registers).
@@ -62,7 +57,8 @@ export async function GET(req: Request) {
             where: {
                 ...(type ? { type } : { type: { in: FINANCIAL_TYPES } }),
                 ...(status ? { status } : {}),
-                ...(includeDeleted ? {} : { deletedAt: null }),
+                // Always-true guard — nothing writes `deletedAt` (soft-delete removed 2026-08-01).
+                deletedAt: null,
                 ...(from || to ? {
                     date: {
                         ...(from ? { gte: new Date(from) } : {}),

@@ -6,7 +6,10 @@
 // Actions:
 //   • Edit       — router.push to the voucher's edit page
 //   • Cancel     — POST /api/inventory/vouchers/[id]/cancel  (reason required)
-//   • Delete     — POST /api/inventory/vouchers/[id]/delete  (reason required)
+//   • Delete     — POST /api/inventory/vouchers/[id]/hard-delete  (reason required)
+//                  There is only ONE delete: the row is removed and the whole
+//                  graph is snapshotted to AuditLog = the Recycle Bin, which
+//                  restores via POST /api/audit/[id]/restore.
 //   • Duplicate  — POST /api/inventory/vouchers/[id]/duplicate → navigate to draft
 
 import { useState } from "react";

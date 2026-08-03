@@ -66,9 +66,18 @@ export async function reapplyTradingVoucherInPlace(
     // (self-ref since G5). Re-apply is only called for posted trading vouchers (JE present).
     const spineId = journalEntryId;
     if (spineId != null) {
+        // Products on the OLD rows must be recomputed too. If the edit removed a
+        // line (or swapped product A → B), A's ledger rows vanish here but A is
+        // not in spec.stockMoves — without this its cached stock keeps the old
+        // sale's decrement forever (phantom on-hand with no transactions).
+        const oldProductIds = (await tx.invStockLedger.findMany({
+            where:  { universalVoucherId: spineId },
+            select: { productId: true },
+        })).map((r) => r.productId);
+
         await tx.invStockLedger.deleteMany({ where: { universalVoucherId: spineId } });
         for (const move of spec.stockMoves) await recordStockMovement(tx, { ...move, universalVoucherId: spineId });
-        await recomputeProductStock(tx, [...new Set(spec.stockMoves.map((m) => m.productId))]);
+        await recomputeProductStock(tx, [...oldProductIds, ...spec.stockMoves.map((m) => m.productId)]);
     }
 
     return journalEntryId;

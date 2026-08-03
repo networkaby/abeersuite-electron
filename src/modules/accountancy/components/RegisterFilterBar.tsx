@@ -11,7 +11,7 @@ import {
 import { fmt } from "@/utils/constants";
 import type { DatePreset } from "@/modules/accountancy/hooks/useRegisterFilters";
 
-const STATUS_OPTS = ["DRAFT", "POSTED", "CANCELLED", "DELETED"] as const;
+const STATUS_OPTS = ["DRAFT", "POSTED", "CANCELLED"] as const;
 
 type Props = {
     preset: DatePreset;
@@ -129,10 +129,7 @@ export function RegisterFilterBar({
                                     checked={statuses.has(s)}
                                     onCheckedChange={() => toggleStatus(s)}
                                 />
-                                <Label
-                                    htmlFor={`rf-status-${s}`}
-                                    className={`cursor-pointer text-xs ${s === "DELETED" ? "text-destructive" : ""}`}
-                                >
+                                <Label htmlFor={`rf-status-${s}`} className="cursor-pointer text-xs">
                                     {s.charAt(0) + s.slice(1).toLowerCase()}
                                 </Label>
                             </div>

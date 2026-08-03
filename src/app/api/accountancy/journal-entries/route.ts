@@ -2,7 +2,6 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 // GET /api/accountancy/journal-entries
 //
@@ -14,23 +13,21 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 // duplicate every transaction. Set `?includeEngine=1` to list all spine rows
 // for debugging / admin views.
 export async function GET(req: Request) {
-    const { user, response } = await requireAuth();
+    const { response } = await requireAuth();
     if (response) return response;
 
     const { searchParams } = new URL(req.url);
     const status = searchParams.get("status");
     const from = searchParams.get("from");
     const to = searchParams.get("to");
-    const includeDeletedParam = searchParams.get("includeDeleted") === "1";
-    const canSeeDeleted = user!.permissions.includes(PERMISSIONS.ADMIN_BYPASS) || user!.permissions.includes(PERMISSIONS.FINANCE_VOUCHER_DELETE_JOURNAL);
-    const includeDeleted = includeDeletedParam && canSeeDeleted;
     const includeEngine = searchParams.get("includeEngine") === "1";
 
     try {
         const entries = await prisma.universalVoucher.findMany({
             where: {
                 ...(status ? { status: status as "DRAFT" | "POSTED" | "CANCELLED" } : {}),
-                ...(includeDeleted ? {} : { deletedAt: null }),
+                // Always-true guard — nothing writes `deletedAt` (soft-delete removed 2026-08-01).
+                deletedAt: null,
                 ...(from || to ? {
                     date: {
                         ...(from ? { gte: new Date(from) } : {}),

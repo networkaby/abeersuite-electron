@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth, userCanVoucherKind } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { toNumber, balanceDelta } from "@/modules/accountancy/lib/balance";
+import { recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
 import { retreatReconciliation } from "@/modules/accountancy/lib/reconciliation";
 import { auditSnapshot, isPosted, isDeleted, isCancelled, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
 import { validateRequest } from "@/shared/lib/api";
@@ -79,27 +80,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 : null;
 
             if (needsReversal) {
-                // Type-agnostic stock-cache restore — undo each recorded InvStockLedger
-                // row's net effect (round(inQty) - round(outQty)) on BOTH the org-wide
-                // (InvProduct.stock) and per-branch (InvProductBranch.stock) caches. A
-                // branch transfer's two rows net to zero on the org cache but split per
-                // branch; returns / physical-stock / MJ all reverse correctly.
-                for (const row of voucher.stockEntries) {
-                    const reverseDelta = -(Math.round(toNumber(row.inQty)) - Math.round(toNumber(row.outQty)));
-                    if (reverseDelta === 0) continue;
-                    const cacheUpdate = reverseDelta > 0
-                        ? { increment: reverseDelta }
-                        : { decrement: -reverseDelta };
-                    await tx.invProductBranch.upsert({
-                        where:  { productId_branchId: { productId: row.productId, branchId: row.branchId } },
-                        create: { productId: row.productId, branchId: row.branchId, stock: reverseDelta },
-                        update: { stock: cacheUpdate },
-                    });
-                    await tx.invProduct.update({
-                        where: { id: row.productId },
-                        data:  { stock: cacheUpdate },
-                    });
-                }
+                // Stock needs no hand-rolled reversal here — the ledger rows themselves
+                // are deleted below, and `recomputeProductStock` then rebuilds both
+                // caches from what remains. That is correct for EVERY type (branch
+                // transfer's two rows, physical stock, MJ, returns) and, unlike the
+                // increment/decrement math it replaces, cannot drift.
 
                 // Restore the cached Account.balance (denormalised column read by the
                 // ledgers list / summary bar — NOT recomputed on row delete). Only when
@@ -147,6 +132,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             if (origJe) await tx.universalVoucher.delete({ where: { id: origJe.id } });
             await tx.invStockLedger.deleteMany({ where: { universalVoucherId: voucher.universalVoucherId ?? -1 } });
             await tx.voucherDetail.delete({ where: { id: voucher.id } });
+            // Rows are gone — rebuild on-hand from what's left. Products that were on
+            // the removed voucher and nowhere else drop to their opening stock instead
+            // of keeping a phantom balance.
+            await recomputeProductStock(tx, voucher.stockEntries.map((r) => r.productId));
             return created;
         // Reverse stock + GL over the Supabase pooler can exceed the default 5s
         // interactive-tx ceiling (P2028) — match the 30s headroom used by post/PATCH.

@@ -2,11 +2,6 @@
 // Unified register that lists every voucher across the three voucher tables
 // (InvVoucher / Voucher / JournalEntry).
 //
-// This is the **canonical surface for soft-deleted vouchers** — the "Deleted"
-// status filter opts the user into `includeDeleted=1` on all three list APIs
-// and the row menu (DayBookActionsMenu) automatically swaps to Restore +
-// Hard Delete for those rows.
-//
 // All row layout / lifecycle behaviour lives in <VoucherRegisterTable>; this
 // page only owns the filter chrome.
 
@@ -20,8 +15,8 @@ import { fmt } from "@/utils/constants";
 import { useCombinedVouchers } from "@/modules/accountancy/hooks/useCombinedVouchers";
 import { VoucherRegisterTable } from "@/modules/accountancy/components/VoucherRegisterTable";
 
-type StatusFilter = "" | "DRAFT" | "POSTED" | "CANCELLED" | "DELETED";
-const STATUSES: StatusFilter[] = ["", "DRAFT", "POSTED", "CANCELLED", "DELETED"];
+type StatusFilter = "" | "DRAFT" | "POSTED" | "CANCELLED";
+const STATUSES: StatusFilter[] = ["", "DRAFT", "POSTED", "CANCELLED"];
 
 export default function AllVouchersPage() {
     const [status, setStatus] = useState<StatusFilter>("");
@@ -29,32 +24,20 @@ export default function AllVouchersPage() {
     const [to, setTo] = useState("");
     const [kindQuery, setKindQuery] = useState("");
 
-    // Fetch with deleted rows included whenever the user picks the Deleted
-    // filter — otherwise the three APIs strip them out by default.
-    const showDeleted = status === "DELETED";
-    const { rows, loading, error, reload } = useCombinedVouchers({ includeDeleted: showDeleted });
+    const { rows, loading, error, reload } = useCombinedVouchers();
 
     const filtered = useMemo(() => {
         return rows.filter((r) => {
-            const isDeleted = !!r.deletedAt;
-            if (showDeleted) {
-                // "Deleted" filter: only show deleted rows.
-                if (!isDeleted) return false;
-            } else {
-                // Any other filter excludes deleted rows (defence in depth —
-                // the API already strips them, but a stale cache could leak).
-                if (isDeleted) return false;
-                if (status && r.status !== status) return false;
-            }
+            if (status && r.status !== status) return false;
             if (from && r.date < from) return false;
             if (to && r.date > to) return false;
             if (kindQuery && !r.kind.toLowerCase().includes(kindQuery.toLowerCase())) return false;
             return true;
         });
-    }, [rows, status, showDeleted, from, to, kindQuery]);
+    }, [rows, status, from, to, kindQuery]);
 
     const totalDebit = filtered
-        .filter((r) => r.status === "POSTED" && !r.deletedAt)
+        .filter((r) => r.status === "POSTED")
         .reduce((s, r) => s + r.totalAmount, 0);
 
     return (
@@ -99,9 +82,7 @@ export default function AllVouchersPage() {
                                     size="xs"
                                     onClick={() => setStatus(s)}
                                     className={`h-8 px-3 text-xs font-medium ${status === s
-                                            ? (s === "DELETED"
-                                                ? "border-rose-600 bg-rose-600 text-white"
-                                                : "border-primary bg-primary text-primary-foreground")
+                                            ? "border-primary bg-primary text-primary-foreground"
                                             : "border-border bg-card text-muted-foreground hover:bg-muted"
                                         }`}
                                 >
@@ -129,11 +110,7 @@ export default function AllVouchersPage() {
                         rows={filtered}
                         showSource
                         onChanged={reload}
-                        emptyMessage={
-                            showDeleted
-                                ? "No deleted vouchers."
-                                : "No vouchers match the current filters."
-                        }
+                        emptyMessage="No vouchers match the current filters."
                     />
                 )}
             </div>

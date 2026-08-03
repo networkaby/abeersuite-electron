@@ -207,7 +207,6 @@ export function VoucherRegisterTable({
                 <tbody>
                     {rows.map((r) => {
                         const href        = referenceHref(r.source, r.rawId, r.kind);
-                        const isDeleted   = !!r.deletedAt;
                         const isOpt       = optionalKinds?.has(r.kind) ?? false;
                         const isDraft     = r.status === "DRAFT";
                         const isCancelled = r.status === "CANCELLED";
@@ -222,10 +221,9 @@ export function VoucherRegisterTable({
                                 <tr
                                     className={[
                                         "border-b last:border-0 hover:bg-muted/40 transition-opacity cursor-pointer",
-                                        isDeleted                 ? "opacity-60 italic" : "",
-                                        !isDeleted && isDraft     ? "opacity-50"        : "",
-                                        !isDeleted && isCancelled ? "opacity-30"        : "",
-                                        isOpt                     ? "bg-muted/10"       : "",
+                                        isDraft     ? "opacity-50"  : "",
+                                        isCancelled ? "opacity-30"  : "",
+                                        isOpt       ? "bg-muted/10" : "",
                                     ].filter(Boolean).join(" ")}
                                     title="Click to expand lines · Click reference to edit"
                                     onClick={() => toggleExpand(r)}
@@ -342,7 +340,7 @@ export function VoucherRegisterTable({
                                     {/* Status column — hidden when statusInline */}
                                     {!statusInline && (
                                         <td className="px-3 py-2.5 text-center">
-                                            <StatusBadge kind="journal" value={isDeleted ? "DELETED" : r.status} />
+                                            <StatusBadge kind="journal" value={r.status} />
                                         </td>
                                     )}
 
@@ -357,7 +355,6 @@ export function VoucherRegisterTable({
                                                 source={r.source}
                                                 kind={r.kind}
                                                 reference={r.reference}
-                                                deletedAt={r.deletedAt}
                                                 converted={r.converted}
                                                 onChanged={onChanged}
                                             />
