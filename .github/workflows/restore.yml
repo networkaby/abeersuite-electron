@@ -99,7 +99,7 @@ jobs:
       - name: Sync schema to current code (additive only)
         env:
           DIRECT_URL: ${{ secrets.DIRECT_DATABASE_URL }}
-        run: pnpm prisma db push --skip-generate
+        run: pnpm prisma db push
 
       - name: Append run to Dropbox log
         if: always()

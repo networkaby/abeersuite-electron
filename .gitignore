@@ -67,3 +67,9 @@ tools/thermal-relay/node_modules/
 block.env.local
 .block.env.local
 .block.env
+.block.experimant.env
+.block.office.env.local
+
+# Database dumps pulled down from Dropbox for local restore testing. These are
+# full production dumps (real customer + ledger data) — never commit them.
+*.dump
