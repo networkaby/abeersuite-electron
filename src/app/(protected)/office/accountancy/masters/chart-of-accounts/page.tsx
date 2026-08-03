@@ -5,14 +5,12 @@ import axios from "axios";
 import { toast } from "sonner";
 import { Plus, Pencil, Check, X, Loader2, TrendingUp, TrendingDown, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { fmt, GL_TYPE_COLORS, GL_TYPE_ORDER, type GlAccountType } from "@/utils/constants";
-import { defaultNormalBalanceForGroupType, type GroupTypeStr } from "@/modules/accountancy/lib/groupNature";
+import { CreateGlAccountDialog } from "@/modules/accountancy/components/CreateGlAccountDialog";
+import type { GroupTypeStr } from "@/modules/accountancy/lib/groupNature";
 
 type NormalBalance = "DEBIT" | "CREDIT";
 
@@ -39,17 +37,12 @@ export default function ChartOfAccountsPage() {
     const [accounts, setAccounts] = useState<GlAccount[]>([]);
     const [groups, setGroups] = useState<AccountGroupLite[]>([]);
     const [loading, setLoading] = useState(true);
-    const [showAdd, setShowAdd] = useState(false);
+    const [addOpen, setAddOpen] = useState(false);
     const [editingId, setEditingId] = useState<number | null>(null);
     const [editName, setEditName] = useState("");
     const [editDesc, setEditDesc] = useState("");
     const [editNormalBalance, setEditNormalBalance] = useState<NormalBalance>("DEBIT");
     const [saving, setSaving] = useState(false);
-
-    const [newForm, setNewForm] = useState({
-        code: "", name: "", groupId: 0,
-        normalBalance: "DEBIT" as NormalBalance, description: "",
-    });
 
     // Refetch without flipping `loading` — the full-page spinner is for the
     // first load only. Re-showing it after every save unmounted the whole
@@ -130,139 +123,60 @@ export default function ChartOfAccountsPage() {
         }
     };
 
-    const addAccount = async () => {
-        if (!newForm.code || !newForm.name || !newForm.groupId) {
-            toast.error("Code, name, and group required");
-            return;
-        }
-        setSaving(true);
-        try {
-            await axios.post("/api/accountancy/gl-accounts", newForm);
-            toast.success("Account created");
-            setShowAdd(false);
-            setNewForm({ code: "", name: "", groupId: 0, normalBalance: "DEBIT", description: "" });
-            load();
-        } catch (err: unknown) {
-            const msg = axios.isAxiosError(err) ? err.response?.data?.error : "Failed";
-            toast.error(msg ?? "Failed to create account");
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    if (loading) return (
-        <div className="flex items-center justify-center h-64">
-            <Loader2 className="animate-spin text-muted-foreground" size={32} />
-        </div>
-    );
-
     return (
-        <ScrollArea className="h-full" type="always">
-            <div className="max-w-5xl mx-auto space-y-6 px-6 pt-3 pb-6">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-2xl font-bold text-foreground">Chart of Accounts</h1>
-                    <p className="text-sm text-muted-foreground mt-0.5">General Ledger master list</p>
+        // Header sits outside the scroller so "New Account" stays reachable no
+        // matter how far down the list the user has scrolled.
+        <div className="flex h-full flex-col">
+            <div className="shrink-0 bg-background px-6 py-3">
+                <div className="mx-auto flex max-w-5xl items-center justify-between">
+                    <div>
+                        <h1 className="text-2xl font-bold text-foreground">Chart of Accounts</h1>
+                        <p className="text-sm text-muted-foreground mt-0.5">General Ledger master list</p>
+                    </div>
+                    <Button onClick={() => setAddOpen(true)}>
+                        <Plus size={16} /> New Account
+                    </Button>
                 </div>
-                <Button onClick={() => setShowAdd((v) => !v)}>
-                    <Plus size={16} /> New Account
-                </Button>
             </div>
 
-            {/* Add form */}
-            {showAdd && (
-                <div className="space-y-4 rounded-lg border border-border bg-card p-5 shadow">
-                    <h2 className="font-semibold text-foreground">New GL Account</h2>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-1.5">
-                            <Label>Code</Label>
-                            <Input
-                                value={newForm.code}
-                                onChange={(e) => setNewForm((f) => ({ ...f, code: e.target.value }))}
-                                placeholder="e.g. 1100"
-                            />
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 pt-4 pb-6">
+                <div className="max-w-5xl mx-auto space-y-6">
+                    {loading ? (
+                        <div className="flex items-center justify-center h-64">
+                            <Loader2 className="animate-spin text-muted-foreground" size={32} />
                         </div>
-                        <div className="space-y-1.5">
-                            <Label>Name</Label>
-                            <Input
-                                value={newForm.name}
-                                onChange={(e) => setNewForm((f) => ({ ...f, name: e.target.value }))}
-                                placeholder="Account name"
-                            />
-                        </div>
-                        <div className="space-y-1.5">
-                            <Label>Group</Label>
-                            <Select
-                                value={newForm.groupId ? String(newForm.groupId) : ""}
-                                onValueChange={(v) => {
-                                    const g = groups.find((x) => x.id === Number(v));
-                                    if (!g) return;
-                                    setNewForm((f) => ({
-                                        ...f,
-                                        groupId: g.id,
-                                        normalBalance: defaultNormalBalanceForGroupType(g.type),
-                                    }));
-                                }}
-                            >
-                                <SelectTrigger><SelectValue placeholder="Pick a group" /></SelectTrigger>
-                                <SelectContent>
-                                    {groups.map((g) => (
-                                        <SelectItem key={g.id} value={String(g.id)}>
-                                            {g.name} <span className="text-xs text-muted-foreground ml-1">({g.type})</span>
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="space-y-1.5">
-                            <Label>Normal Balance</Label>
-                            <Select
-                                value={newForm.normalBalance}
-                                onValueChange={(v) => setNewForm((f) => ({ ...f, normalBalance: v as NormalBalance }))}
-                            >
-                                <SelectTrigger><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="DEBIT">DEBIT</SelectItem>
-                                    <SelectItem value="CREDIT">CREDIT</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="col-span-2 space-y-1.5">
-                            <Label>Description</Label>
-                            <Input
-                                value={newForm.description}
-                                onChange={(e) => setNewForm((f) => ({ ...f, description: e.target.value }))}
-                                placeholder="Optional"
-                            />
-                        </div>
-                    </div>
-                    <div className="flex gap-2 justify-end">
-                        <Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button>
-                        <Button onClick={addAccount} disabled={saving}>
-                            {saving && <Loader2 size={14} className="animate-spin" />} Save
-                        </Button>
-                    </div>
+                    ) : (
+                        <>
+                            {/* Account groups — each section is its own bounded
+                                table with a sticky header, so scrolling past a
+                                long section keeps its column labels in view. */}
+                            {grouped.map(({ type, rows }) => rows.length === 0 ? null : (
+                                <AccountSection key={type} type={type} rows={rows} editingId={editingId} editName={editName} editDesc={editDesc}
+                                    editNormalBalance={editNormalBalance} saving={saving}
+                                    onStartEdit={startEdit} onSetEditName={setEditName} onSetEditDesc={setEditDesc}
+                                    onSetEditNormalBalance={setEditNormalBalance}
+                                    onSaveEdit={saveEdit} onCancelEdit={() => setEditingId(null)} onToggleActive={toggleActive} onDelete={deleteAccount} />
+                            ))}
+
+                            {ungrouped.length > 0 && (
+                                <AccountSection type={null} rows={ungrouped} editingId={editingId} editName={editName} editDesc={editDesc}
+                                    editNormalBalance={editNormalBalance} saving={saving}
+                                    onStartEdit={startEdit} onSetEditName={setEditName} onSetEditDesc={setEditDesc}
+                                    onSetEditNormalBalance={setEditNormalBalance}
+                                    onSaveEdit={saveEdit} onCancelEdit={() => setEditingId(null)} onToggleActive={toggleActive} onDelete={deleteAccount} />
+                            )}
+                        </>
+                    )}
                 </div>
-            )}
-
-            {/* Account groups */}
-            {grouped.map(({ type, rows }) => rows.length === 0 ? null : (
-                <AccountSection key={type} type={type} rows={rows} editingId={editingId} editName={editName} editDesc={editDesc}
-                    editNormalBalance={editNormalBalance} saving={saving}
-                    onStartEdit={startEdit} onSetEditName={setEditName} onSetEditDesc={setEditDesc}
-                    onSetEditNormalBalance={setEditNormalBalance}
-                    onSaveEdit={saveEdit} onCancelEdit={() => setEditingId(null)} onToggleActive={toggleActive} onDelete={deleteAccount} />
-            ))}
-
-            {ungrouped.length > 0 && (
-                <AccountSection type={null} rows={ungrouped} editingId={editingId} editName={editName} editDesc={editDesc}
-                    editNormalBalance={editNormalBalance} saving={saving}
-                    onStartEdit={startEdit} onSetEditName={setEditName} onSetEditDesc={setEditDesc}
-                    onSetEditNormalBalance={setEditNormalBalance}
-                    onSaveEdit={saveEdit} onCancelEdit={() => setEditingId(null)} onToggleActive={toggleActive} onDelete={deleteAccount} />
-            )}
             </div>
-        </ScrollArea>
+
+            <CreateGlAccountDialog
+                open={addOpen}
+                onOpenChange={setAddOpen}
+                groups={groups}
+                onCreated={load}
+            />
+        </div>
     );
 }
 
@@ -297,8 +211,12 @@ function AccountSection({
                 <span className="text-xs opacity-70">{rows.length} accounts</span>
             </div>
             <table className="w-full text-sm">
+                {/* Sticky within the page's shared scroller — pins to the top
+                    while this section's rows are in view, then the next
+                    section's header takes over. Sticky goes on the cells,
+                    not <thead>, for Safari; each needs its own background. */}
                 <thead>
-                    <tr className="border-b border-border bg-muted text-xs text-muted-foreground">
+                    <tr className="text-xs text-muted-foreground [&>th]:sticky [&>th]:top-0 [&>th]:z-10 [&>th]:border-b [&>th]:border-border [&>th]:bg-muted">
                         <th className="px-5 py-2 text-left font-medium">Name</th>
                         <th className="px-5 py-2 text-left font-medium">Group</th>
                         <th className="px-5 py-2 text-left font-medium">Normal Balance</th>
