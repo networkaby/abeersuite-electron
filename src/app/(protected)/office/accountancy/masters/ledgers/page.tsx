@@ -189,8 +189,10 @@ export default function LedgersPage() {
     const [editOpeningBalanceType, setEditOpeningBalanceType] = useState<"DEBIT" | "CREDIT">("DEBIT");
     const [savingLedger, setSavingLedger] = useState(false);
 
+    // Refetch without flipping `loading` — the full-page spinner is for the
+    // first load only. Re-showing it after every save unmounted the whole
+    // table (page blink + lost scroll position).
     const load = useCallback(() => {
-        setLoading(true);
         axios.get<GroupNode[]>("/api/accountancy/account-groups?withLedgers=1")
             .then((r) => {
                 setTree(r.data);
