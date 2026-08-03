@@ -72,8 +72,9 @@ export default function WorkGroupsPage() {
     const [saving, setSaving] = useState(false);
     const [deletingId, setDeletingId] = useState<string | null>(null);
 
+    // No `setLoading(true)` here — the spinner is for the first load only.
+    // Re-showing it after every save blanked the list (blink).
     const load = async () => {
-        setLoading(true);
         try { setGroups((await axios.get("/api/work-groups")).data); }
         catch { toast.error("Failed to load groups"); }
         finally { setLoading(false); }

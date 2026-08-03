@@ -56,8 +56,9 @@ export default function InventoryBomsPage() {
     const [form, setForm] = useState(emptyForm);
     const [saving, setSaving] = useState(false);
 
+    // No `setLoading(true)` here — the spinner is for the first load only.
+    // Re-showing it after every save blanked the list (blink).
     const load = () => {
-        setLoading(true);
         axios
             .get<Row[]>("/api/inventory/boms")
             .then((r) => setRows(r.data))

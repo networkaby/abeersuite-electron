@@ -395,8 +395,9 @@ export default function WorksPage() {
 
     const pipelineLabel = Object.fromEntries(pipelines.map((p) => [p.id, p.label]));
 
+    // No `setLoading(true)` here — the spinner is for the first load only.
+    // Re-showing it after every save blanked the list (blink).
     const load = async () => {
-        setLoading(true);
         try {
             const [worksRes, pipelinesRes, groupsRes] = await Promise.all([
                 axios.get("/api/works"),

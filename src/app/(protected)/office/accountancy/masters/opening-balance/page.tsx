@@ -54,8 +54,10 @@ export default function OpeningBalancePage() {
     const [allAccounts, setAllAccounts] = useState<AllAccount[]>([]);
     const [allProducts, setAllProducts] = useState<AllProduct[]>([]);
 
+    // Refetch without flipping `loading` — the full-page spinner is for the
+    // first load only. `onChanged={load}` fires after every edit, and
+    // re-showing it unmounted the whole summary (page blink).
     const load = useCallback(() => {
-        setLoading(true);
         axios.get<Summary>("/api/accountancy/opening-balance")
             .then((r) => setData(r.data))
             .catch(() => toast.error("Failed to load summary"))

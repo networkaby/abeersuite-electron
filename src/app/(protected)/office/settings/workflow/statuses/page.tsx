@@ -134,8 +134,11 @@ export default function StatusesPage() {
 
     const worksById = Object.fromEntries(works.map((w) => [w.id, w]));
 
-    const fetchData = async (pipelineId: string) => {
-        setLoading(true);
+    // `silent` refetches keep the current list on screen — used after a save,
+    // where blanking the list to a spinner reads as a page blink. The spinner
+    // still shows on first load and when switching pipeline.
+    const fetchData = async (pipelineId: string, opts?: { silent?: boolean }) => {
+        if (!opts?.silent) setLoading(true);
         try {
             const [statusesResponse, worksResponse, pipelinesResponse, groupsResponse] = await Promise.all([
                 axios.get(`/api/ticket-statuses?pipelineId=${pipelineId}`),
@@ -212,7 +215,7 @@ export default function StatusesPage() {
             });
             toast.success("Status updated");
             setEditModalId(null);
-            await fetchData(activePipelineId);
+            await fetchData(activePipelineId, { silent: true });
         } catch {
             toast.error("Failed to update status");
         } finally {
@@ -231,7 +234,7 @@ export default function StatusesPage() {
         try {
             await axios.delete(`/api/ticket-statuses/${id}`);
             toast.success("Status deleted");
-            await fetchData(activePipelineId);
+            await fetchData(activePipelineId, { silent: true });
         } catch (err: unknown) {
             const message = axios.isAxiosError(err) ? err.response?.data?.error : null;
             toast.error(message ?? "Failed to delete status");
@@ -250,7 +253,7 @@ export default function StatusesPage() {
             await axios.put(`/api/ticket-statuses/${transitionModalId}/transitions`, { toIds: selectedToIds });
             toast.success("Transitions saved");
             setTransitionModalId(null);
-            await fetchData(activePipelineId);
+            await fetchData(activePipelineId, { silent: true });
         } catch {
             toast.error("Failed to save transitions");
         } finally {
@@ -275,7 +278,7 @@ export default function StatusesPage() {
             toast.success("Status added");
             setAddingNew(false);
             setNewStatus({ label: "", color: "bg-gray-100 text-gray-600", isTerminal: false });
-            await fetchData(activePipelineId);
+            await fetchData(activePipelineId, { silent: true });
         } catch {
             toast.error("Failed to create status");
         }

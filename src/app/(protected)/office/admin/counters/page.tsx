@@ -130,8 +130,9 @@ export default function CountersAdminPage() {
         }
     };
 
+    // No `setLoading(true)` here — the spinner is for the first load only.
+    // Re-showing it after every save blanked the list (blink).
     const load = async () => {
-        setLoading(true);
         try {
             const [cRes, bRes] = await Promise.all([
                 axios.get<Counter[]>("/api/pos/counters?scope=all"),

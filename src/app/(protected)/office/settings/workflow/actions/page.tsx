@@ -237,8 +237,9 @@ export default function ActionsPage() {
     const [form, setForm] = useState<ActionForm>({ ...BLANK });
     const set = (p: Partial<ActionForm>) => setForm((f) => ({ ...f, ...p }));
 
+    // No `setLoading(true)` here — the spinner is for the first load only.
+    // Re-showing it after every save blanked the list (blink).
     const load = async () => {
-        setLoading(true);
         try {
             const res = await axios.get("/api/works");
             setActions((res.data as ActionRow[]).filter((w) => w.kind === "auto"));

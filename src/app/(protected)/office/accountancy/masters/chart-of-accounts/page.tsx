@@ -51,8 +51,10 @@ export default function ChartOfAccountsPage() {
         normalBalance: "DEBIT" as NormalBalance, description: "",
     });
 
+    // Refetch without flipping `loading` — the full-page spinner is for the
+    // first load only. Re-showing it after every save unmounted the whole
+    // table (page blink + lost scroll position).
     const load = () => {
-        setLoading(true);
         Promise.all([
             axios.get<GlAccount[]>("/api/accountancy/gl-accounts?activeOnly=false"),
             axios.get<AccountGroupLite[]>("/api/accountancy/account-groups"),

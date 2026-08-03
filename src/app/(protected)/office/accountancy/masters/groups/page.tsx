@@ -85,8 +85,10 @@ export default function AccountGroupsPage() {
     const [editParent, setEditParent]   = useState<string>("none");
     const [editSort, setEditSort]       = useState("0");
 
+    // Refetch without flipping `loading` — the full-page spinner is for the
+    // first load only. Re-showing it after every save unmounted the whole
+    // tree (page blink + lost scroll position).
     const load = useCallback(() => {
-        setLoading(true);
         axios.get<GroupNode[]>("/api/accountancy/account-groups")
             .then((r) => {
                 setTree(r.data);
