@@ -38,7 +38,7 @@ export default function ProductCard({ product, className }: { product: ShopProdu
             >
                 <div className="relative aspect-4/3 overflow-hidden bg-muted">
                     {mainImg ? (
-                        <Link href={href} className="block size-full">
+                        <Link href={href} className="relative block size-full">
                             <ShopRemoteImage
                                 src={mainImg}
                                 alt={product.name}
