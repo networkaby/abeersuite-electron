@@ -79,6 +79,15 @@ const LOGO_SLUGS: Record<string, string> = {
     Nvidia: "nvidia/76B900",
 };
 
+/** Plain URL-safe slug for a brand's own storefront page ("TP-Link" -> "tp-link"). */
+function slugifyBrand(name: string): string {
+    return name
+        .toLowerCase()
+        .normalize("NFKD")
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+}
+
 async function main(): Promise<void> {
     console.log("\n━━━ HELPER SEED — trade-specific brands ━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
@@ -86,16 +95,21 @@ async function main(): Promise<void> {
     let brandsCreated = 0;
     let logosSet = 0;
     for (const name of uniqueBrands) {
-        const slug = LOGO_SLUGS[name];
-        const imageUrl = slug ? `https://cdn.simpleicons.org/${slug}` : undefined;
+        const logoSlug = LOGO_SLUGS[name];
+        const imageUrl = logoSlug ? `https://cdn.simpleicons.org/${logoSlug}` : undefined;
+        const brandSlug = slugifyBrand(name);
         const existing = await prisma.invBrand.findFirst({ where: { name } });
         if (existing) {
             await prisma.invBrand.update({
                 where: { id: existing.id },
-                data: { isActive: true, ...(imageUrl && !existing.imageUrl ? { imageUrl } : {}) },
+                data: {
+                    isActive: true,
+                    ...(imageUrl && !existing.imageUrl ? { imageUrl } : {}),
+                    ...(!existing.slug ? { slug: brandSlug } : {}),
+                },
             });
         } else {
-            await prisma.invBrand.create({ data: { name, isActive: true, imageUrl } });
+            await prisma.invBrand.create({ data: { name, isActive: true, imageUrl, slug: brandSlug } });
             brandsCreated++;
         }
         if (imageUrl) logosSet++;

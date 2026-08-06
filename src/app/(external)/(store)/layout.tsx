@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
-import ShopHeader from "@/modules/external/shop/ShopHeader";
-import ShopFooter from "@/modules/external/shop/ShopFooter";
+import StorefrontChrome from "@/modules/external/shop/StorefrontChrome";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 
 export const metadata: Metadata = {
@@ -20,11 +19,5 @@ export const metadata: Metadata = {
 };
 
 export default function StoreLayout({ children }: { children: React.ReactNode }) {
-    return (
-        <div className="min-h-screen flex flex-col bg-background text-foreground">
-            <ShopHeader />
-            <div className="flex-1">{children}</div>
-            <ShopFooter />
-        </div>
-    );
+    return <StorefrontChrome>{children}</StorefrontChrome>;
 }

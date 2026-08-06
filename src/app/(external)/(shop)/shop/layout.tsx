@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
-import ShopHeader from "@/modules/external/shop/ShopHeader";
-import ShopFooter from "@/modules/external/shop/ShopFooter";
 
+// Header/footer come from the `(shop)` group layout, shared with the
+// root-level brand slug pages. This layout exists only to name the catalog
+// section — a brand page must NOT inherit the "Shop" title.
 export const metadata: Metadata = {
     // Bare word on purpose — the root title template appends the brand.
     title: "Shop",
@@ -10,11 +11,5 @@ export const metadata: Metadata = {
 };
 
 export default function ShopSectionLayout({ children }: { children: React.ReactNode }) {
-    return (
-        <div className="min-h-screen flex flex-col bg-background text-foreground">
-            <ShopHeader />
-            <div className="flex-1">{children}</div>
-            <ShopFooter />
-        </div>
-    );
+    return children;
 }

@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import { NextResponse } from "next/server";
 import { isLegalPath } from "@/shared/lib/legal/legalPaths";
+import { isStorefrontSlugPath } from "@/shared/lib/shop/storefrontSlugPath";
 
 function isPublicPath(pathname: string): boolean {
     if (pathname === "/" || pathname === "/login") return true;
@@ -16,6 +17,9 @@ function isPublicPath(pathname: string): boolean {
     if (pathname.startsWith("/portal")) return true;
     if (pathname.startsWith("/shop")) return true;
     if (pathname === "/public/login") return true;
+    // Root-level storefront slugs (/hp, /dell) — brand pages are part of the
+    // shop and must stay browsable signed-out and as a signed-in customer.
+    if (isStorefrontSlugPath(pathname)) return true;
     return false;
 }
 
