@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,9 @@ import { cn } from "@/shared/lib/format/utils";
 import { Suspense } from "react";
 
 type SortKey = "featured" | "price-asc" | "price-desc" | "name" | "rating";
+
+/** Products revealed per "page" — also the initial render size and scroll-load chunk. */
+const PAGE_SIZE = 24;
 
 /** The facet axes a product can be narrowed by. Counts are computed per axis. */
 type FacetKey =
@@ -350,15 +353,45 @@ function ShopCatalogInner({
         return list;
     }, [products, predicates, sort]);
 
+    // Reveal `filtered` in pages instead of rendering the whole result set at
+    // once — resets to the first page whenever the result set itself changes
+    // (a new filter/sort/search). Derived during render (not an effect) so the
+    // reset lands in the same commit as the new `filtered` array.
+    const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+    const [pagedFor, setPagedFor] = useState(filtered);
+    if (pagedFor !== filtered) {
+        setPagedFor(filtered);
+        setVisibleCount(PAGE_SIZE);
+    }
+
+    const visible = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount]);
+    const hasMore = visibleCount < filtered.length;
+
+    const loadMoreRef = useRef<HTMLDivElement | null>(null);
+    useEffect(() => {
+        const el = loadMoreRef.current;
+        if (!el || !hasMore) return;
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (entries[0]?.isIntersecting) {
+                    setVisibleCount((c) => Math.min(c + PAGE_SIZE, filtered.length));
+                }
+            },
+            { rootMargin: "600px" }
+        );
+        observer.observe(el);
+        return () => observer.disconnect();
+    }, [hasMore, filtered.length]);
+
     const grouped = useMemo(() => {
         const map = new Map<string, ShopProductPublic[]>();
-        for (const p of filtered) {
+        for (const p of visible) {
             const arr = map.get(p.category) ?? [];
             arr.push(p);
             map.set(p.category, arr);
         }
         return map;
-    }, [filtered]);
+    }, [visible]);
 
     // Keep the shareable URL in step with the search box and a single-category
     // pick (the server page reads only `q` and `category`).
@@ -586,8 +619,10 @@ function ShopCatalogInner({
                         <div>
                             <h2 className="text-xl font-bold tracking-tight sm:text-2xl">Catalog</h2>
                             <p className="mt-1 text-sm text-muted-foreground">
-                                {filtered.length} product{filtered.length === 1 ? "" : "s"} · filter, compare, and
-                                checkout securely
+                                {hasMore
+                                    ? `Showing ${visible.length} of ${filtered.length} products`
+                                    : `${filtered.length} product${filtered.length === 1 ? "" : "s"}`}{" "}
+                                · filter, compare, and checkout securely
                             </p>
                         </div>
                         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
@@ -702,6 +737,20 @@ function ShopCatalogInner({
                             </section>
                         ))
                     )}
+
+                    {hasMore ? (
+                        <div ref={loadMoreRef} className="flex justify-center pt-2">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="lg"
+                                className="h-11 touch-manipulation"
+                                onClick={() => setVisibleCount((c) => Math.min(c + PAGE_SIZE, filtered.length))}
+                            >
+                                Load more ({filtered.length - visible.length} left)
+                            </Button>
+                        </div>
+                    ) : null}
                 </div>
             </div>
         </div>
