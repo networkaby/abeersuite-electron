@@ -40,7 +40,12 @@ const callPayloadSchema = z.object({
     amount: z.coerce.number().finite().optional(),
     status: z.string().trim().optional(),
     timestamp: z.string().trim().optional(),
-    raw: z.string().optional(),
+    // Strip control characters before this ever reaches Postgres: a text column
+    // rejects a literal NUL outright, which surfaced as HTTP 500 (and a retry
+    // storm) when a port scanner sent a TLS handshake at the bridge. Genuine
+    // SMDR is printable ASCII, so this is a no-op for real records. Applied
+    // before the de-dupe uses `raw` as its key, so the key stays consistent.
+    raw: z.string().optional().transform((v) => v?.replace(/[\u0000-\u001F\u007F]/g, "")),
     // Hostname of the counter PC whose bridge pushed this record. Optional — an
     // older bridge that predates the field simply sends nothing.
     sourceHost: z.string().trim().max(255).optional(),
@@ -73,11 +78,16 @@ function parseOccurredAt(date?: string, time?: string): Date | null {
 }
 
 function mapPayloadToCall(p: CallPayload, occurredAt: Date, receivedAt: Date): Prisma.CallCreateInput {
-    const rawNumber = p.callType === "OUTGOING" ? p.dialedNumber : p.callType === "INCOMING" ? p.callerNumber : undefined;
+    const sent = p.callType === "OUTGOING" ? p.dialedNumber : p.callType === "INCOMING" ? p.callerNumber : undefined;
+    // Normalise "no number" to NULL. The PBX sends the field as spaces (trimmed
+    // to "") when CLI wasn't delivered or an outgoing call went unanswered, and
+    // `?? null` would keep that empty string — leaving two different spellings
+    // of "absent" in the column and breaking any `rawNumber: null` filter.
+    const rawNumber = sent?.trim() || null;
     return {
         direction: p.callType as CallDirection,
-        phone: phoneMatchKey(rawNumber ?? null),
-        rawNumber: rawNumber ?? null,
+        phone: phoneMatchKey(rawNumber),
+        rawNumber,
         fromExt: p.fromExt ?? null,
         // Incoming: the extension that answered is `connectedExt`.
         toExt: p.callType === "INCOMING" ? (p.connectedExt ?? null) : (p.toExt ?? null),
@@ -132,18 +142,17 @@ export async function POST(req: Request) {
     const { data, error } = await validateRequest(req, callPayloadSchema);
     if (error) return error;
 
-    // An external call with no caller number at all (CLI not delivered by the
-    // telecom trunk — confirmed from raw SMDR, not something we failed to parse)
-    // carries no identifying value. Skip storing it rather than accumulate rows
-    // that can never match a customer. INTERNAL/UNKNOWN calls are untouched —
-    // they never carry a customer number in the first place, so blank there is
-    // normal, not this case.
-    if (data.callType === "INCOMING" && !data.callerNumber?.trim()) {
-        return NextResponse.json({ success: true, skipped: true, reason: "no caller number" });
-    }
-    if (data.callType === "OUTGOING" && !data.dialedNumber?.trim()) {
-        return NextResponse.json({ success: true, skipped: true, reason: "no dialed number" });
-    }
+    // Every genuine SMDR record is stored, including ones the PBX sent with no
+    // number — call-volume and per-extension workload stats are only correct if
+    // nothing is silently dropped. Two cases legitimately arrive numberless and
+    // must NOT be discarded:
+    //   • INCOMING where the trunk didn't deliver CLI (~10% here).
+    //   • OUTGOING unanswered — the Matrix only commits the dialled digits once
+    //     the call is answered, so every unanswered outgoing call is numberless
+    //     by design. Dropping them would erase the whole no-answer signal.
+    // The Call Log hides numberless external calls behind a toggle instead, so
+    // the list stays actionable without the data being lost. Scanner junk is
+    // filtered upstream in epbx.js, so nothing bogus reaches here.
 
     try {
         const receivedAt = data.timestamp ? new Date(data.timestamp) : new Date();
@@ -227,6 +236,28 @@ export async function GET(req: Request) {
         }
         if (spam === "1") and.push({ spam: true });
         else and.push({ spam: false });
+
+        // Numberless calls are stored (see POST) but hidden by default: you can't
+        // call back or identify a caller with no number, so they'd only clutter
+        // the working list. `noNumber=1` brings them back for volume and
+        // no-answer analysis. Covers OUTGOING/INCOMING (blank CLI) and UNKNOWN
+        // (unclassified lines — scanner junk, or a PBX record shape we don't
+        // recognise yet) alike, since none of them carry a usable number.
+        // INTERNAL is unaffected — ext↔ext calls never carry an outside number,
+        // so folding it into this filter would wrongly hide the lot regardless
+        // of the toggle.
+        if (sp.get("noNumber") !== "1") {
+            and.push({
+                NOT: {
+                    AND: [
+                        { direction: { in: ["INCOMING", "OUTGOING", "UNKNOWN"] } },
+                        // Both spellings of "absent": NULL, and the empty string
+                        // older rows were written with before normalisation.
+                        { OR: [{ rawNumber: null }, { rawNumber: "" }] },
+                    ],
+                },
+            });
+        }
 
         // Date range on the call's own occurredAt (IST wall-clock, as the PBX
         // recorded it). `from`/`to` are yyyy-mm-dd; `to` is inclusive of that

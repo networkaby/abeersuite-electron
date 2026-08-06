@@ -92,6 +92,11 @@ export default function CallLogWorkspace() {
     const [showInternal, setShowInternal] = useState(false);
     const [dateFrom, setDateFrom] = useState("");
     const [dateTo, setDateTo] = useState("");
+    // Calls the PBX sent with no number — incoming without CLI, and every
+    // unanswered outgoing call (the Matrix only records dialled digits on
+    // answer). Stored for accurate volume stats, hidden by default because
+    // they can't be called back or matched to a customer.
+    const [showNoNumber, setShowNoNumber] = useState(false);
 
     // Which physical PC's bridge pushed each call. Off by default — it's a
     // diagnostic, not something staff need while working the list.
@@ -117,6 +122,7 @@ export default function CallLogWorkspace() {
             if (showInternal) params.set("direction", "all");
             if (dateFrom) params.set("from", dateFrom);
             if (dateTo) params.set("to", dateTo);
+            if (showNoNumber) params.set("noNumber", "1");
             const { data } = await axios.get<CallsResponse>(`/api/calls?${params.toString()}`);
             setItems((prev) => (targetPage === 1 ? data.items : [...prev, ...data.items]));
             setTotal(data.pagination.total);
@@ -126,7 +132,7 @@ export default function CallLogWorkspace() {
         } finally {
             setLoading(false);
         }
-    }, [search, missedMode, showSpam, showInternal, dateFrom, dateTo]);
+    }, [search, missedMode, showSpam, showInternal, dateFrom, dateTo, showNoNumber]);
 
     // `load` changes identity whenever a filter changes, which restarts the list
     // from page 1 — no separate page-reset effect needed.
@@ -216,6 +222,9 @@ export default function CallLogWorkspace() {
                 </label>
                 <label className="flex items-center gap-2 text-sm">
                     <Checkbox checked={showSpam} onCheckedChange={(v) => setShowSpam(v === true)} /> Spam
+                </label>
+                <label className="flex items-center gap-2 text-sm" title="Calls the PBX sent with no number — incoming without caller ID, and unanswered outgoing calls">
+                    <Checkbox checked={showNoNumber} onCheckedChange={(v) => setShowNoNumber(v === true)} /> No-number calls
                 </label>
                 <label className="flex items-center gap-2 text-sm" title="Show which counter PC's bridge pushed each call">
                     <Checkbox checked={showHost} onCheckedChange={(v) => setShowHost(v === true)} /> Pushed by
