@@ -589,10 +589,10 @@ export default function EcommerceProductsPage() {
                                                 {!p.isActive ? " · inactive" : ""}
                                             </div>
                                         </TableCell>
-                                        <TableCell className="text-muted-foreground max-w-[8rem] truncate text-sm">
+                                        <TableCell className="text-muted-foreground max-w-32 truncate text-sm">
                                             {p.brandName ?? "—"}
                                         </TableCell>
-                                        <TableCell className="text-muted-foreground max-w-[8rem] truncate text-sm">
+                                        <TableCell className="text-muted-foreground max-w-32 truncate text-sm">
                                             {p.groupName ?? "—"}
                                         </TableCell>
                                         <TableCell>

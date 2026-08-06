@@ -512,13 +512,17 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         label: "E-Commerce",
         icon: ShoppingCart,
         key: "e-commerce",
-        dashboardHref: "/office/ecommerce",
+        dashboardHref: "/office/ecommerce/orders",
         pathPrefixes: ["/office/ecommerce"],
         children: [
-            // Dashboard is the module index (dashboardHref). Categories live in
-            // Inventory → Masters; coupons live in Customer Retention.
+            // Dashboard is the module index (dashboardHref). Group/Category/Brand
+            // MASTER DATA (name, hierarchy, GST) lives in Inventory → Masters;
+            // this Masters link is the storefront-PRESENTATION editor (slug,
+            // image, description) for those same rows — see the ecommerce
+            // masters page's own doc comment. Coupons live in Customer Retention.
             { label: "Orders", icon: ClipboardList, href: "/office/ecommerce/orders" },
             { label: "Products", icon: Box, href: "/office/ecommerce/products" },
+            { label: "Masters", icon: LayoutGrid, href: "/office/ecommerce/masters" },
         ],
     },
 

@@ -34,8 +34,6 @@ export type PromoBanner = {
     height?: "sm" | "md" | "lg";
 };
 
-export type BrandLogo = { name: string; logoUrl: string };
-
 /**
  * The store home page's one true <h1>.
  *
@@ -201,26 +199,6 @@ export const PROMO_BANNERS_BOTTOM: PromoBanner[] = [
         ctaHref: "#cat-Components",
         height: "sm",
     },
-];
-
-/** Brand strip — Simple Icons CDN. Greyscale on hover until coloured. */
-export const BRAND_LOGOS: BrandLogo[] = [
-    { name: "Apple", logoUrl: "https://cdn.simpleicons.org/apple/000000" },
-    { name: "Samsung", logoUrl: "https://cdn.simpleicons.org/samsung/1428A0" },
-    { name: "Dell", logoUrl: "https://cdn.simpleicons.org/dell/007DB8" },
-    { name: "HP", logoUrl: "https://cdn.simpleicons.org/hp/0096D6" },
-    { name: "Lenovo", logoUrl: "https://cdn.simpleicons.org/lenovo/E2231A" },
-    { name: "Asus", logoUrl: "https://cdn.simpleicons.org/asus/000000" },
-    { name: "Acer", logoUrl: "https://cdn.simpleicons.org/acer/83B81A" },
-    { name: "MSI", logoUrl: "https://cdn.simpleicons.org/msibusiness/FF0000" },
-    { name: "Intel", logoUrl: "https://cdn.simpleicons.org/intel/0071C5" },
-    { name: "AMD", logoUrl: "https://cdn.simpleicons.org/amd/ED1C24" },
-    { name: "NVIDIA", logoUrl: "https://cdn.simpleicons.org/nvidia/76B900" },
-    { name: "Razer", logoUrl: "https://cdn.simpleicons.org/razer/00FF00" },
-    { name: "Sony", logoUrl: "https://cdn.simpleicons.org/sony/000000" },
-    { name: "LG", logoUrl: "https://cdn.simpleicons.org/lg/A50034" },
-    { name: "TP-Link", logoUrl: "https://cdn.simpleicons.org/tplink/4ACBD6" },
-    { name: "Seagate", logoUrl: "https://cdn.simpleicons.org/seagate/6FBE44" },
 ];
 
 /**

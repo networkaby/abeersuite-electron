@@ -27,6 +27,7 @@ Databases:
 
 - Two separate DBs: **demo db** and **live DB**.
 - `CURRENT_DB = demo DB` → may reset freely. _(Change to_ `live` _on production data — then no full reset. Update when connected DB changes.) we are using [localhost](http://localhost) with local PGSQL demo data_
+- _Create migration for Live DB, running on another deployment. in origin/dev or main should contain migration. push to remote + deploment not create any problem._
 
 ### Evolving concepts
 

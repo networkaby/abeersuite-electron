@@ -19,11 +19,18 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         const { data, error } = await validateRequest(req, invBrandUpdateSchema);
         if (error) return error;
         const b = data;
+        if (b.slug !== undefined && b.slug !== null) {
+            const clash = await prisma.invBrand.findFirst({ where: { slug: b.slug, NOT: { id } } });
+            if (clash) return NextResponse.json({ error: "Slug already in use" }, { status: 409 });
+        }
         const row = await prisma.invBrand.update({
             where: { id },
             data: pickDefined({
                 name: b.name,
                 isActive: b.isActive,
+                slug: b.slug,
+                imageUrl: b.imageUrl,
+                description: b.description,
             }),
         });
         // A renamed brand changes the generated name of every product using it.

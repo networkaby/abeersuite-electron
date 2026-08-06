@@ -5,9 +5,15 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
  *
  * Vocabulary bridge between the two sides of the app:
  *
- *   office InvProductGroup  → customer-facing "Category"  (Mouse, HD Dome)
- *   office InvCategory      → office-only classification  (pricing strategy,
- *                             loyalty + coupon rules, movement bands)
+ *   office InvProductGroup  → customer-facing "Category"    (Mouse, HD Dome)
+ *   office InvCategory      → customer-facing "Collection"  (Office Supplies)
+ *
+ * Both are customer-facing, on two DIFFERENT axes: Group is the strict
+ * where-does-this-thing-live tree that drives navigation and breadcrumbs;
+ * Category is the cross-cutting merchandising bucket a product also belongs to.
+ * Category additionally carries office-side weight (it keys InvAttributeMaster,
+ * loyalty + coupon rules, and the BRAND → GROUP → CATEGORY → ORG pricing chain),
+ * so it may be edited but must not be re-keyed or restructured casually.
  *
  * The office keeps its own words: Group is the GST/HSN classification. But a
  * customer navigates by the *thing*, which is what the Group tree already

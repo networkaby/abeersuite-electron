@@ -41,6 +41,10 @@ export async function POST(req: Request) {
             const gr = await prisma.gstRate.findUnique({ where: { id: b.gstRateId } });
             if (!gr) return NextResponse.json({ error: "GST rate not found" }, { status: 400 });
         }
+        if (b.slug) {
+            const clash = await prisma.invProductGroup.findUnique({ where: { slug: b.slug } });
+            if (clash) return NextResponse.json({ error: "Slug already in use" }, { status: 409 });
+        }
         const row = await prisma.invProductGroup.create({
             data: {
                 name: b.name,
@@ -49,6 +53,9 @@ export async function POST(req: Request) {
                 gstRateId:  b.gstRateId  ?? null,
                 hsnCode:    b.hsnCode    ?? null,
                 taxability: b.taxability ?? null,
+                slug:        b.slug        ?? null,
+                imageUrl:    b.imageUrl    ?? null,
+                description: b.description ?? null,
                 slowAfterDays:      b.slowAfterDays      ?? null,
                 nonMovingAfterDays: b.nonMovingAfterDays ?? null,
                 deadAfterDays:      b.deadAfterDays      ?? null,

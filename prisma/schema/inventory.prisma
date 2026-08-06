@@ -63,6 +63,15 @@ model InvCategory {
   id        Int           @id @default(autoincrement())
   name      String
   slug      String?       @unique
+  /// Ecommerce-module-owned shop presentation fields (edited at
+  /// /office/ecommerce/masters, not the inventory master page). InvCategory is
+  /// the customer-facing **Collection** — the cross-cutting merchandising axis
+  /// beside Group's navigation tree (see groupCategory.ts). It ALSO keys
+  /// InvAttributeMaster, loyalty/coupon rules and the
+  /// BRAND → GROUP → CATEGORY → ORG pricing chain, so its rows may be edited
+  /// freely but must not be re-keyed or restructured casually.
+  imageUrl    String?
+  description String?
   parentId  Int?
   parent    InvCategory?  @relation("InvCategoryHierarchy", fields: [parentId], references: [id])
   children  InvCategory[] @relation("InvCategoryHierarchy")
@@ -91,6 +100,16 @@ model InvProductGroup {
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // ── Shop presentation (ecommerce-module-owned; edited at
+  // /office/ecommerce/masters) ──────────────────────────────────────────────
+  // Group is the customer-facing storefront CATEGORY (see groupCategory.ts) —
+  // `slug` drives its future /[slug] page, `imageUrl`/`description` its tile
+  // and page header. Only meaningful on a root or any group actually shown as
+  // a category; a deep leaf can leave these null and fall back at render time.
+  slug        String? @unique
+  imageUrl    String?
+  description String?
 
   // ── Hierarchy ──────────────────────────────────────────────────────────────
   // Self-referential parent chain drives the GST / HSN / Taxability cascade
@@ -126,6 +145,12 @@ model InvBrand {
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // ── Shop presentation (ecommerce-module-owned; edited at
+  // /office/ecommerce/masters) — logo + blurb for a future /[slug] brand page.
+  slug        String? @unique
+  imageUrl    String?
+  description String?
 
   products    InvProduct[]
   couponRules CouponProductRule[] @relation("CouponRuleBrand")

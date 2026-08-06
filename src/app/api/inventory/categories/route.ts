@@ -39,6 +39,8 @@ export async function POST(req: Request) {
             data: {
                 name: b.name,
                 slug: b.slug ?? null,
+                imageUrl: b.imageUrl ?? null,
+                description: b.description ?? null,
                 parentId: b.parentId ?? null,
                 isActive: b.isActive ?? true,
                 slowAfterDays:      b.slowAfterDays      ?? null,

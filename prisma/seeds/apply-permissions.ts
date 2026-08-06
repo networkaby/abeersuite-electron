@@ -52,6 +52,16 @@ const ADDITIONS: { id: string; label: string; module: string; description: strin
         module: "ui",
         description: 'Show the "Usable Fund" link under Accountancy in the sidebar.',
     },
+    // E-Commerce → Masters nav link (storefront presentation editor for
+    // Group/Category/Brand — slug/image/description). Derived automatically by
+    // sidebarPermissionSeeds() from the MODULE_SECTIONS child in utils/constants.ts;
+    // mirrored here so an existing DB gets it without a full seed.
+    {
+        id: "ui:sidebar:e-commerce:masters",
+        label: "E-Commerce → Masters",
+        module: "ui",
+        description: 'Show the "Masters" link under E-Commerce in the sidebar.',
+    },
 ];
 
 const ADMIN_ROLE_ID = "R1";

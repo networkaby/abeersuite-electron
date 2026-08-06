@@ -76,6 +76,8 @@ const movementBandFields = {
 
 export const invCategoryCreateSchema = nameIsActiveSchema.extend({
     slug: zOptStr(120),
+    imageUrl: zOptStr(2000),
+    description: zOptStr(2000),
     parentId: z.number().int().positive().nullish(),
     ...movementBandFields,
 });
@@ -95,12 +97,24 @@ export const invProductGroupCreateSchema = nameIsActiveSchema.extend({
     gstRateId:  z.number().int().positive().nullish(),
     hsnCode:    zOptStr(32),
     taxability: z.enum(TAXABILITY).nullish(),
+    slug:        zOptStr(120),
+    imageUrl:    zOptStr(2000),
+    description: zOptStr(2000),
     ...movementBandFields,
 });
 
 export const invProductGroupUpdateSchema = invProductGroupCreateSchema.partial();
 
-export const invBrandCreateSchema = nameIsActiveSchema;
+// Shop presentation fields ALONE — the ecommerce masters page's PATCH body
+// touches only these, never name/hierarchy/GST, so it never needs to carry
+// (or accidentally clear) the tax-classification fields above.
+export const SHOP_PRESENTATION_FIELDS = ["slug", "imageUrl", "description"] as const;
+
+export const invBrandCreateSchema = nameIsActiveSchema.extend({
+    slug:        zOptStr(120),
+    imageUrl:    zOptStr(2000),
+    description: zOptStr(2000),
+});
 
 export const invBrandUpdateSchema = invBrandCreateSchema.partial();
 

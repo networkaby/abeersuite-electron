@@ -45,21 +45,62 @@ const BRANDS = [
     "Logitech", "Luminous", "Microtek", "Nvidia", "Stanley", "Zebronics",
 ];
 
+// Simple Icons CDN slugs — verified to resolve (HTTP 200) at seed-authoring
+// time. Only global tech brands are covered by Simple Icons; regional/niche
+// brands (CP Plus, Zicom, Hola, iBall, Beetel, …) have no icon here and stay
+// logo-less until someone uploads one via /office/ecommerce/masters. Hex
+// suffix pins the brand's official colour where known; omitted = CDN default.
+const LOGO_SLUGS: Record<string, string> = {
+    Acer: "acer/83B81A",
+    AMD: "amd/ED1C24",
+    Apple: "apple/000000",
+    Asus: "asus/000000",
+    Dell: "dell/007DB8",
+    HP: "hp/0096D6",
+    HCL: "hcl",
+    Intel: "intel/0071C5",
+    Lenovo: "lenovo/E2231A",
+    LG: "lg/A50034",
+    MSI: "msibusiness/FF0000",
+    Samsung: "samsung/1428A0",
+    Sony: "sony/000000",
+    Corsair: "corsair",
+    Seagate: "seagate/6FBE44",
+    Toshiba: "toshiba",
+    Epson: "epson",
+    Kyocera: "kyocera",
+    Panasonic: "panasonic",
+    Bosch: "bosch",
+    Cisco: "cisco",
+    Netgear: "netgear",
+    "TP-Link": "tplink/4ACBD6",
+    Ubiquiti: "ubiquiti",
+    Boat: "boat",
+    Nvidia: "nvidia/76B900",
+};
+
 async function main(): Promise<void> {
     console.log("\n━━━ HELPER SEED — trade-specific brands ━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
     const uniqueBrands = [...new Set(BRANDS)];
     let brandsCreated = 0;
+    let logosSet = 0;
     for (const name of uniqueBrands) {
+        const slug = LOGO_SLUGS[name];
+        const imageUrl = slug ? `https://cdn.simpleicons.org/${slug}` : undefined;
         const existing = await prisma.invBrand.findFirst({ where: { name } });
         if (existing) {
-            await prisma.invBrand.update({ where: { id: existing.id }, data: { isActive: true } });
+            await prisma.invBrand.update({
+                where: { id: existing.id },
+                data: { isActive: true, ...(imageUrl && !existing.imageUrl ? { imageUrl } : {}) },
+            });
         } else {
-            await prisma.invBrand.create({ data: { name, isActive: true } });
+            await prisma.invBrand.create({ data: { name, isActive: true, imageUrl } });
             brandsCreated++;
         }
+        if (imageUrl) logosSet++;
     }
-    console.log(`  ✓ Brands: ${uniqueBrands.length} total (${brandsCreated} new)`);
+    console.log(`  ✓ Brands: ${uniqueBrands.length} total (${brandsCreated} new, ${logosSet} with a seeded logo)`);
 
     console.log("━━━ Done ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
 }

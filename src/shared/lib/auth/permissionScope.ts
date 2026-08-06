@@ -45,6 +45,19 @@ export function hasModuleNavAccess(permissionsInput: string[], moduleKey: string
 }
 
 /**
+ * Single sidebar-LINK gate (as opposed to `hasModuleNavAccess`'s whole-module
+ * check) — does the user hold this exact `ui:sidebar:<module>:<link>` id, or
+ * admin bypass. For in-page tab bars that mirror the left sidebar's own child
+ * links (e.g. E-Commerce's Orders/Products/Masters tabs): the sidebar already
+ * hides an ungranted link, so a tab bar showing it anyway is the one place the
+ * two surfaces can disagree — an order-processor granted only Orders would
+ * otherwise still see Products/Masters tabs once inside the module.
+ */
+export function hasSidebarLinkAccess(permissionsInput: string[], permissionId: string): boolean {
+    return permissionsInput.includes("admin:bypass") || permissionsInput.includes(permissionId);
+}
+
+/**
  * Split a resource's CRUD grants into the three flags a board UI needs.
  * `resource` is the permission prefix — "tasks", "deals", "help" → checks
  * `tasks:create` / `tasks:edit` / `tasks:delete`. The CRUD ladder applies, so

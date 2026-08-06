@@ -32,6 +32,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             data: pickDefined({
                 name: b.name,
                 slug: b.slug,
+                imageUrl: b.imageUrl,
+                description: b.description,
                 parentId: b.parentId,
                 isActive: b.isActive,
                 // Movement-band overrides (null = inherit up the chain).

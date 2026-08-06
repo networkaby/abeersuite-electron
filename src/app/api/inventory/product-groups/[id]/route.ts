@@ -66,6 +66,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             const gr = await prisma.gstRate.findUnique({ where: { id: b.gstRateId } });
             if (!gr) return NextResponse.json({ error: "GST rate not found" }, { status: 400 });
         }
+        if (b.slug !== undefined && b.slug !== null) {
+            const clash = await prisma.invProductGroup.findFirst({ where: { slug: b.slug, NOT: { id } } });
+            if (clash) return NextResponse.json({ error: "Slug already in use" }, { status: 409 });
+        }
         const row = await prisma.invProductGroup.update({
             where: { id },
             data: pickDefined({
@@ -75,6 +79,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 gstRateId: b.gstRateId,
                 hsnCode: b.hsnCode,
                 taxability: b.taxability,
+                slug: b.slug,
+                imageUrl: b.imageUrl,
+                description: b.description,
                 // Movement-band overrides (null = inherit up the chain).
                 slowAfterDays: b.slowAfterDays,
                 nonMovingAfterDays: b.nonMovingAfterDays,

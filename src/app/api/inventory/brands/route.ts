@@ -25,8 +25,18 @@ export async function POST(req: Request) {
         const { data, error } = await validateRequest(req, invBrandCreateSchema);
         if (error) return error;
         const b = data;
+        if (b.slug) {
+            const clash = await prisma.invBrand.findUnique({ where: { slug: b.slug } });
+            if (clash) return NextResponse.json({ error: "Slug already in use" }, { status: 409 });
+        }
         const row = await prisma.invBrand.create({
-            data: { name: b.name, isActive: b.isActive ?? true },
+            data: {
+                name: b.name,
+                isActive: b.isActive ?? true,
+                slug: b.slug ?? null,
+                imageUrl: b.imageUrl ?? null,
+                description: b.description ?? null,
+            },
         });
         return NextResponse.json(row, { status: 201 });
     } catch (e: unknown) {

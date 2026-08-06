@@ -109,7 +109,7 @@ export default async function StoreHomePage({
 
             <TrustStrip />
 
-            <CategoryShowcase categories={categoryEntries} />
+            {/* <CategoryShowcase categories={categoryEntries} /> */}
 
             <PromoBanners banners={PROMO_BANNERS_TOP} columns={2} />
 
