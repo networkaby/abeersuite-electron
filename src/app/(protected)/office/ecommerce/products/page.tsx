@@ -13,19 +13,12 @@ import {
     DEFAULT_SHOP_PUBLISH_RULES,
     type ShopPublishRules,
 } from "@/modules/ecommerce/lib/shopQualification";
-import ProductForm from "@/modules/ecommerce/components/ProductForm";
+import { InvProductDialog } from "@/modules/inventory/components/InvProductDialog";
 import { PaginationBar } from "@/shared/components/PaginationBar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-} from "@/components/ui/dialog";
 import {
     Select,
     SelectContent,
@@ -428,25 +421,15 @@ export default function EcommerceProductsPage() {
                                 Publish rules
                             </Link>
                         </Button> */}
-                        <Dialog open={open} onOpenChange={setOpen}>
-                            <DialogTrigger asChild>
-                                <Button type="button">Add product</Button>
-                            </DialogTrigger>
-                            <DialogContent className="max-h-[90vh] w-full max-w-2xl overflow-y-auto">
-                                <DialogHeader>
-                                    <DialogTitle>New product</DialogTitle>
-                                </DialogHeader>
-                                <div className="mt-4">
-                                    <ProductForm
-                                        submitLabel="Create product"
-                                        onSaved={() => {
-                                            setOpen(false);
-                                            load();
-                                        }}
-                                    />
-                                </div>
-                            </DialogContent>
-                        </Dialog>
+                        <Button type="button" onClick={() => setOpen(true)}>
+                            Add product
+                        </Button>
+                        <InvProductDialog
+                            open={open}
+                            onOpenChange={setOpen}
+                            editId={null}
+                            onSaved={load}
+                        />
                     </div>
                     <div className="relative w-full sm:w-64">
                         <Search className="text-muted-foreground absolute left-2.5 top-1/2 size-4 -translate-y-1/2" />
