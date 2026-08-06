@@ -25,6 +25,7 @@ import {
     Ruler,
     Tag,
     LayoutGrid,
+    LayoutTemplate,
     Grid2x2,
     Calendar,
     Clock,
@@ -523,6 +524,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Orders", icon: ClipboardList, href: "/office/ecommerce/orders" },
             { label: "Products", icon: Box, href: "/office/ecommerce/products" },
             { label: "Masters", icon: LayoutGrid, href: "/office/ecommerce/masters" },
+            { label: "Customize Home", icon: LayoutTemplate, href: "/office/ecommerce/home" },
         ],
     },
 

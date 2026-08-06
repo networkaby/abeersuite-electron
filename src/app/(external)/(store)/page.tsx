@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Fragment, type ReactNode } from "react";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { invProductToPublic as shopProductToPublic, type ShopProductPublic } from "@/shared/lib/shop/productPublic";
 import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
@@ -14,6 +15,8 @@ import {
     PROMO_BANNERS_BOTTOM,
     STORE_PAGE_HEADING,
 } from "@/shared/lib/shop/storeContent";
+import type { HomeSectionKey } from "@/shared/lib/shop/homeLayout";
+import { loadHomeLayout } from "@/shared/lib/shop/loadHomeLayout";
 import HeroCarousel from "@/modules/external/store/HeroCarousel";
 import TrustStrip from "@/modules/external/store/TrustStrip";
 import CategoryShowcase from "@/modules/external/store/CategoryShowcase";
@@ -21,7 +24,7 @@ import PromoBanners from "@/modules/external/store/PromoBanners";
 import DealOfTheDay from "@/modules/external/store/DealOfTheDay";
 import ProductRail from "@/modules/external/shop/ProductRail";
 import BrandStrip from "@/modules/external/store/BrandStrip";
-// import ShopCatalogClient from "@/modules/external/shop/ShopCatalogClient";
+import ShopCatalogClient from "@/modules/external/shop/ShopCatalogClient";
 import JsonLd from "@/shared/components/JsonLd";
 import { buildSiteLd } from "@/shared/lib/seo/jsonLd";
 
@@ -62,13 +65,14 @@ export default async function StoreHomePage({
     searchParams: Promise<{ q?: string; category?: string }>;
 }) {
     const sp = await searchParams;
-    // const initialCategory = sp.category && sp.category !== "" ? sp.category : "all";
+    const initialCategory = sp.category && sp.category !== "" ? sp.category : "all";
 
-    const [bands, rules, policy, groupIndex] = await Promise.all([
+    const [bands, rules, policy, groupIndex, layout] = await Promise.all([
         loadBarcodeBands(),
         loadShopPublishRules(),
         loadShopStockPolicy(),
         loadShopGroupIndex(),
+        loadHomeLayout(),
     ]);
     const rows = await invProductDb(prisma).findMany({
         where: { isListedInShop: true, isActive: true },
@@ -97,22 +101,15 @@ export default async function StoreHomePage({
     const deals = pickDeals(products);
     const dealOfTheDay = pickDealOfTheDay(products);
 
-    return (
-        <>
-            {/* Organization + WebSite + Store, emitted once for the whole site. */}
-            <JsonLd data={buildSiteLd()} />
-
-            {/* The page's single h1 — see STORE_PAGE_HEADING for why it is hidden. */}
-            <h1 className="sr-only">{STORE_PAGE_HEADING}</h1>
-
-            <HeroCarousel slides={HERO_SLIDES} />
-
-            <TrustStrip />
-
-            {/* <CategoryShowcase categories={categoryEntries} /> */}
-
-            <PromoBanners banners={PROMO_BANNERS_TOP} columns={2} />
-
+    // One render branch per known section key. Order and visibility come
+    // entirely from `layout` (Ecommerce → Customize Home) — this switch never
+    // reorders or filters anything itself.
+    const sections: Record<HomeSectionKey, ReactNode> = {
+        hero: <HeroCarousel slides={HERO_SLIDES} />,
+        trustStrip: <TrustStrip />,
+        categoryShowcase: <CategoryShowcase categories={categoryEntries} />,
+        promoBannersTop: <PromoBanners banners={PROMO_BANNERS_TOP} columns={2} />,
+        topPicks: (
             <ProductRail
                 id="featured"
                 eyebrow="Trending"
@@ -120,11 +117,10 @@ export default async function StoreHomePage({
                 subtitle="Hand-picked best sellers across categories."
                 products={featured}
             />
-
-            <DealOfTheDay product={dealOfTheDay} />
-
-            <PromoBanners banners={PROMO_BANNERS_BOTTOM} columns={3} />
-
+        ),
+        dealOfTheDay: <DealOfTheDay product={dealOfTheDay} />,
+        promoBannersBottom: <PromoBanners banners={PROMO_BANNERS_BOTTOM} columns={3} />,
+        todaysDeals: (
             <ProductRail
                 id="deals"
                 eyebrow="Today's deals"
@@ -133,15 +129,31 @@ export default async function StoreHomePage({
                 products={deals}
                 accent="emerald"
             />
-
-            <BrandStrip />
-
-            {/* <ShopCatalogClient
+        ),
+        brandStrip: <BrandStrip />,
+        fullCatalog: (
+            <ShopCatalogClient
                 products={products}
                 allCategories={allCategories}
                 initialQuery={sp.q ?? ""}
                 initialCategory={initialCategory}
-            /> */}
+            />
+        ),
+    };
+
+    return (
+        <>
+            {/* Organization + WebSite + Store, emitted once for the whole site. */}
+            <JsonLd data={buildSiteLd()} />
+
+            {/* The page's single h1 — see STORE_PAGE_HEADING for why it is hidden. */}
+            <h1 className="sr-only">{STORE_PAGE_HEADING}</h1>
+
+            {layout
+                .filter((s) => s.enabled)
+                .map((s) => (
+                    <Fragment key={s.key}>{sections[s.key]}</Fragment>
+                ))}
         </>
     );
 }

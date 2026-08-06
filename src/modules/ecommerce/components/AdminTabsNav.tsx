@@ -17,6 +17,7 @@ const tabs = [
     { href: "/office/ecommerce/orders", label: "Orders", sidebarKey: "orders" },
     { href: "/office/ecommerce/products", label: "Products", sidebarKey: "products" },
     { href: "/office/ecommerce/masters", label: "Masters", sidebarKey: "masters" },
+    { href: "/office/ecommerce/home", label: "Customize Home", sidebarKey: "customize-home" },
 ] as const;
 
 export default function AdminTabsNav({ permissions }: { permissions: string[] }) {

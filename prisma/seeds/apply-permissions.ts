@@ -62,6 +62,16 @@ const ADDITIONS: { id: string; label: string; module: string; description: strin
         module: "ui",
         description: 'Show the "Masters" link under E-Commerce in the sidebar.',
     },
+    // E-Commerce → Customize Home nav link (on/off + reorder for the storefront
+    // home page's existing sections). Derived automatically by
+    // sidebarPermissionSeeds() from the MODULE_SECTIONS child in utils/constants.ts;
+    // mirrored here so an existing DB gets it without a full seed.
+    {
+        id: "ui:sidebar:e-commerce:customize-home",
+        label: "E-Commerce → Customize Home",
+        module: "ui",
+        description: 'Show the "Customize Home" link under E-Commerce in the sidebar.',
+    },
 ];
 
 const ADMIN_ROLE_ID = "R1";
